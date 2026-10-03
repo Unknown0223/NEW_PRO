@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useCallback, useState, type MouseEvent } from "react";
 import { useRouter } from "next/navigation";
+import { History, Settings2, UserRoundSearch } from "lucide-react";
 import { SoftVoidConfirmDialog } from "@/components/shared/soft-void-confirm-dialog";
 import { buttonVariants } from "@/components/ui/button-variants";
 import { cn } from "@/lib/utils";
@@ -13,9 +14,21 @@ import { AccessWorkspaceUserPickerModal } from "./access-workspace-user-picker-m
 import { AccessEntityRoleLinkModal } from "./access-entity-role-link-modal";
 import { AccessUserDetailPanel } from "@/components/access/access-user-detail-panel";
 import type { AccessLeaveGuard } from "@/components/access/access-user-detail/access-user-detail-panel-view";
-import { AccessUsersTable } from "./access-users-table";
+import { AccessUsersSidebar } from "./access-users-sidebar";
 import { useAccessWorkspace } from "./use-access-workspace";
 import { isScopeDimensionTab } from "./access-workspace.shared";
+
+type WorkspaceTab = ReturnType<typeof useAccessWorkspace>["tab"];
+
+const WORKSPACE_TABS: { key: WorkspaceTab; label: string }[] = [
+  { key: "users", label: "Пользователи" },
+  { key: "operations", label: "Операции" },
+  { key: "cash_desks", label: "Кассы" },
+  { key: "warehouses", label: "Склады" },
+  { key: "branches", label: "Филиалы" },
+  { key: "payment_methods", label: "Способ оплаты" },
+  { key: "trade_directions", label: "Направления" }
+];
 
 const ACCESS_RESET_CONSEQUENCES = [
   "Персональные разрешения и доп. роли будут сброшены к роли по умолчанию",
@@ -40,65 +53,70 @@ export function AccessWorkspace({ tenantSlug }: { tenantSlug: string }) {
     ws.tab === "users" && ws.selectedKey && Number.isFinite(Number(ws.selectedKey)) ? Number(ws.selectedKey) : null;
 
   return (
-    <div className="access-surface flex min-h-0 w-full max-w-full flex-1 flex-col gap-3 p-3">
-      <div className="access-hub-toolbar w-full shrink-0">
-        <div className="flex flex-wrap gap-1">
-          {[
-            { key: "users", label: "Пользователи" },
-            { key: "operations", label: "Операции" },
-            { key: "cash_desks", label: "Кассы" },
-            { key: "warehouses", label: "Склады" },
-            { key: "branches", label: "Филиалы" },
-            { key: "payment_methods", label: "Способы оплаты" },
-            { key: "trade_directions", label: "Направления" }
-          ].map((x) => (
+    <div className="flex min-h-0 w-full max-w-full flex-1 flex-col gap-3">
+      <header className="shrink-0 space-y-2.5 rounded-xl border border-border/70 bg-card px-4 py-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h1 className="text-lg font-semibold tracking-tight">Доступ</h1>
+          <div className="flex flex-wrap items-center gap-2">
+            <Link
+              href="/access/role-defaults"
+              onClick={(e) => guardLink(e, "/access/role-defaults")}
+              className={cn(buttonVariants({ variant: "outline", size: "sm" }), "h-8 gap-1.5 text-xs no-underline")}
+            >
+              <Settings2 className="h-3.5 w-3.5" aria-hidden />
+              Состав ролей по умолчанию
+            </Link>
+            <Link
+              href="/access/history"
+              onClick={(e) => guardLink(e, "/access/history")}
+              className={cn(buttonVariants({ variant: "outline", size: "sm" }), "h-8 gap-1.5 text-xs no-underline")}
+            >
+              <History className="h-3.5 w-3.5" aria-hidden />
+              История изменения доступов
+            </Link>
+          </div>
+        </div>
+        <nav className="flex flex-wrap gap-1" role="tablist" aria-label="Разделы доступа">
+          {WORKSPACE_TABS.map((x) => (
             <button
               key={x.key}
-              data-active={ws.tab === x.key}
-              className={`access-tab-chip ${ws.tab === x.key ? "" : "text-muted-foreground hover:bg-muted/50"}`}
+              type="button"
+              role="tab"
+              aria-selected={ws.tab === x.key}
+              className={cn(
+                "rounded-md px-3 py-1.5 text-xs font-medium transition-colors",
+                ws.tab === x.key ? "bg-teal-700 text-white shadow-sm" : "text-muted-foreground hover:bg-muted hover:text-foreground"
+              )}
               onClick={() =>
                 runGuarded(() => {
-                  ws.setTab(x.key as typeof ws.tab);
+                  ws.setTab(x.key);
                   ws.startListNavTransition(() => ws.setSelectedKey(null));
                 })
               }
-              type="button"
             >
               {x.label}
             </button>
           ))}
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Link
-            href="/access/role-defaults"
-            onClick={(e) => guardLink(e, "/access/role-defaults")}
-            className={cn(buttonVariants({ variant: "outline", size: "sm" }), "h-8 text-xs no-underline")}
-          >
-            Состав ролей по умолчанию
-          </Link>
-          <Link
-            href="/access/history"
-            onClick={(e) => guardLink(e, "/access/history")}
-            className={cn(buttonVariants({ variant: "outline", size: "sm" }), "h-8 text-xs no-underline")}
-          >
-            История изменения доступов
-          </Link>
-        </div>
-      </div>
+        </nav>
+      </header>
 
-      {ws.tab === "users" && !selectedUserId ? (
-        <AccessUsersTable ws={ws} onOpenUser={(id) => ws.selectSideRowKey(String(id))} />
-      ) : (
       <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden lg:flex-row lg:items-stretch">
-        {ws.tab !== "users" ? <AccessWorkspaceLeftPanel ws={ws} /> : null}
-        <div className="access-right-panel flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+        {ws.tab === "users" ? (
+          <AccessUsersSidebar
+            ws={ws}
+            selectedId={selectedUserId}
+            onSelect={(id) => runGuarded(() => ws.selectSideRowKey(String(id)))}
+          />
+        ) : (
+          <AccessWorkspaceLeftPanel ws={ws} />
+        )}
+        <div className={cn("flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden", ws.tab !== "users" && "access-right-panel")}>
           {ws.tab === "users" && selectedUserId ? (
             <div className="min-h-0 flex-1 overflow-hidden">
               <AccessUserDetailPanel
                 tenantSlug={ws.tenantSlug}
                 userId={selectedUserId}
                 onInvalidateUsers={ws.scheduleAccessUsersListRefresh}
-                onBack={() => ws.setSelectedKey(null)}
                 onGuardChange={setLeaveGuard}
                 userAccountControls={
                   ws.selected
@@ -131,6 +149,11 @@ export function AccessWorkspace({ tenantSlug }: { tenantSlug: string }) {
                 <AccessWorkspaceScopePanel ws={ws} />
               ) : null}
             </div>
+          ) : ws.tab === "users" ? (
+            <div className="flex flex-1 flex-col items-center justify-center gap-3 rounded-xl border border-border/70 bg-card p-8 text-center">
+              <UserRoundSearch className="h-12 w-12 text-muted-foreground/60" aria-hidden />
+              <p className="max-w-xs text-sm text-muted-foreground">Выберите пользователя слева, чтобы посмотреть и изменить его доступы.</p>
+            </div>
           ) : (
             <div className="flex flex-1 flex-col items-center justify-center gap-2 p-8 text-center">
               <p className="text-sm text-muted-foreground">
@@ -140,7 +163,6 @@ export function AccessWorkspace({ tenantSlug }: { tenantSlug: string }) {
           )}
         </div>
       </div>
-      )}
       <AccessWorkspaceUserPickerModal ws={ws} />
       <AccessEntityRoleLinkModal ws={ws} />
 

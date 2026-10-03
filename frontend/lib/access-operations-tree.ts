@@ -131,6 +131,37 @@ export function buildOperationsDraftPatch(
   return body;
 }
 
+/** «Фильтр» kartochkasi: Родитель (modul) / Статус (manba) / Предоставление доступа. */
+export type AccessOpsFilter = {
+  module: string;
+  source: "all" | "role" | "personal" | "denied";
+  grant: "all" | "yes" | "no";
+};
+
+export const EMPTY_OPS_FILTER: AccessOpsFilter = { module: "", source: "all", grant: "all" };
+
+/** «Запрещено» tanlanmasa — faqat amaldagi (effective) operatsiyalar ko'rinadi. */
+export function opMatchesFilter(row: AccessOpMatrixState | undefined, canGrant: boolean, f: AccessOpsFilter): boolean {
+  const label = opStateLabel(row);
+  if (f.source === "denied") {
+    if (label !== "Запрещено") return false;
+  } else {
+    if (!row?.effective) return false;
+    if (f.source === "role" && label !== "Из роли") return false;
+    if (f.source === "personal" && label !== "Лично") return false;
+  }
+  if (f.grant !== "all" && canGrant !== (f.grant === "yes")) return false;
+  return true;
+}
+
+export function patchForKeys(
+  stateByKey: ReadonlyMap<string, AccessOpMatrixState>,
+  keys: readonly string[],
+  want: boolean
+): ReturnType<typeof buildOperationsDraftPatch> {
+  return buildOperationsDraftPatch(stateByKey, new Map(keys.map((k) => [k, want] as const)));
+}
+
 /** Faqat haqiqiy farqlar (qoralamadagi qiymat joriy holatdan farq qiladi). */
 export function draftChangedKeys(
   stateByKey: ReadonlyMap<string, AccessOpMatrixState>,

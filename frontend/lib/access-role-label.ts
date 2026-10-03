@@ -7,7 +7,8 @@ const EXTRA_ROLE_LABELS: Record<string, string> = {
   expeditor: "Экспедитор",
   collector: "Инкассатор",
   auditor: "Аудитор",
-  storekeeper: "Складчик"
+  storekeeper: "Складчик",
+  skladchik: "Складчик"
 };
 
 export function accessRoleLabel(role: string | null | undefined): string {

@@ -3,15 +3,18 @@ import {
   accessOpKind,
   buildOperationsDraftPatch,
   draftChangedKeys,
+  EMPTY_OPS_FILTER,
   filterAccessTree,
+  opMatchesFilter,
   opStateLabel,
+  patchForKeys,
   treeKeys,
   triState,
   type AccessOpMatrixState,
   type AccessTreeModule
 } from "@/lib/access-operations-tree";
 import { summarizeAccessLogNew, summarizeAccessLogOld } from "@/lib/access-history-summary";
-import { filterAccessUsers } from "@/components/access/access-users-table";
+import { filterAccessUsers } from "@/components/access/access-users-sidebar";
 import type { AccessUserRow } from "@/components/access/access-workspace.shared";
 
 const TREE: AccessTreeModule[] = [
@@ -115,7 +118,7 @@ describe("access history summary", () => {
     expect(summarizeAccessLogNew({ grant_delegation_allow: ["a"] })).toEqual(["Может выдавать: +1 операция"]);
     expect(summarizeAccessLogNew({ is_active: false })).toEqual(["Пользователь деактивирован"]);
     expect(summarizeAccessLogNew({ role_key: "operator", added: ["a", "b", "c", "d", "e"] })).toEqual(["Добавлено в роль: 5 операций"]);
-    expect(summarizeAccessLogOld({ role: "operator", is_active: true })).toEqual(["Роль: operator", "Активен"]);
+    expect(summarizeAccessLogOld({ role: "operator", is_active: true })).toEqual(["Роль: Оператор", "Активен"]);
     expect(summarizeAccessLogNew(null)).toEqual([]);
   });
 });
@@ -140,5 +143,37 @@ describe("access users filter", () => {
     expect(filterAccessUsers(rows, { role: "", status: "active", manage: "all" }).map((r) => r.id)).toEqual([1, 3]);
     expect(filterAccessUsers(rows, { role: "", status: "all", manage: "yes" }).map((r) => r.id)).toEqual([1]);
     expect(filterAccessUsers(rows, { role: "", status: "active", manage: "no" }).map((r) => r.id)).toEqual([3]);
+  });
+});
+
+describe("«Фильтр» operatsiyalar paneli", () => {
+  const role: AccessOpMatrixState = { from_role: true, user_effect: "none", effective: true };
+  const personal: AccessOpMatrixState = { from_role: false, user_effect: "allow", effective: true };
+  const denied: AccessOpMatrixState = { from_role: true, user_effect: "deny", effective: false };
+  const none: AccessOpMatrixState = { from_role: false, user_effect: "none", effective: false };
+
+  it("default: faqat amaldagi operatsiyalar", () => {
+    expect([role, personal, denied, none].map((r) => opMatchesFilter(r, false, EMPTY_OPS_FILTER))).toEqual([true, true, false, false]);
+  });
+
+  it("Статус va Предоставление доступа", () => {
+    expect(opMatchesFilter(role, false, { ...EMPTY_OPS_FILTER, source: "role" })).toBe(true);
+    expect(opMatchesFilter(personal, false, { ...EMPTY_OPS_FILTER, source: "role" })).toBe(false);
+    expect(opMatchesFilter(personal, false, { ...EMPTY_OPS_FILTER, source: "personal" })).toBe(true);
+    expect(opMatchesFilter(denied, false, { ...EMPTY_OPS_FILTER, source: "denied" })).toBe(true);
+    expect(opMatchesFilter(role, false, { ...EMPTY_OPS_FILTER, source: "denied" })).toBe(false);
+    expect(opMatchesFilter(role, true, { ...EMPTY_OPS_FILTER, grant: "yes" })).toBe(true);
+    expect(opMatchesFilter(role, false, { ...EMPTY_OPS_FILTER, grant: "yes" })).toBe(false);
+    expect(opMatchesFilter(role, false, { ...EMPTY_OPS_FILTER, grant: "no" })).toBe(true);
+  });
+
+  it("открепить: roldan → deny, shaxsiy → remove; запрет снять → remove", () => {
+    const m = new Map([
+      ["a", role],
+      ["b", personal],
+      ["c", denied]
+    ]);
+    expect(patchForKeys(m, ["a", "b"], false)).toEqual({ remove_permission_keys: ["b"], merge_permissions: true, denied_permissions: ["a"] });
+    expect(patchForKeys(m, ["c"], true)).toEqual({ remove_permission_keys: ["c"] });
   });
 });

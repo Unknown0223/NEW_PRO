@@ -1,6 +1,6 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useId, type ReactNode } from "react";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { IndeterminateCheckbox } from "@/components/access/access-user-detail/access-user-detail-territory-ui";
@@ -24,6 +24,8 @@ export type PermissionTreeProps = {
   onExpandedChange: (next: Set<string>) => void;
   /** Qidiruv faol bo'lsa — hamma narsa ochiq ko'rsatiladi. */
   forceExpanded?: boolean;
+  /** "total" — guruhdagi operatsiyalar soni (belgilash ommaviy tanlov uchun bo'lsa). */
+  countMode?: "selected" | "total";
 };
 
 export function OpKindBadge({ action }: { action: AccessTreeOperation["action"] }) {
@@ -82,8 +84,32 @@ export function PermissionTree({
   renderOpExtra,
   expanded,
   onExpandedChange,
-  forceExpanded
+  forceExpanded,
+  countMode = "selected"
 }: PermissionTreeProps) {
+  const fmt = (on: number, total: number) => (countMode === "total" ? String(total) : `${on} / ${total}`);
+  const idPrefix = useId();
+  const opContent = (op: AccessTreeOperation) => {
+    const disabled = isDisabled?.(op.key) ?? false;
+    const id = `${idPrefix}-${op.key}`;
+    return (
+      <div className="flex flex-wrap items-center gap-2 rounded px-1.5 py-1 hover:bg-background/70">
+        <input
+          id={id}
+          type="checkbox"
+          className="h-4 w-4 shrink-0 accent-teal-700"
+          checked={isOn(op.key)}
+          disabled={disabled}
+          onChange={(e) => onToggle([op.key], e.target.checked)}
+        />
+        <label htmlFor={id} className={cn("min-w-0 flex-1 text-[13px] leading-snug", disabled && "text-muted-foreground")} title={op.key}>
+          {op.label}
+        </label>
+        <OpKindBadge action={op.action} />
+        {renderOpExtra?.(op)}
+      </div>
+    );
+  };
   const toggleExpand = (id: string) => {
     const next = new Set(expanded);
     if (next.has(id)) next.delete(id);
@@ -117,12 +143,20 @@ export function PermissionTree({
                 <span className="truncate">{mod.label}</span>
               </button>
               <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
-                {mOn} / {mKeys.length}
+                {fmt(mOn, mKeys.length)}
               </span>
             </div>
             {modOpen ? (
               <ul role="group" className="space-y-1 border-t border-border/60 px-2 py-2">
                 {mod.sections.map((sec) => {
+                  if (sec.operations.length === 1) {
+                    const op = sec.operations[0];
+                    return (
+                      <li key={sec.id} role="treeitem" aria-selected={isOn(op.key)} className="rounded-md bg-muted/30 px-2 py-0.5">
+                        {opContent(op)}
+                      </li>
+                    );
+                  }
                   const secOpen = forceExpanded || expanded.has(sec.id);
                   const sKeys = sectionKeys(sec);
                   const sOn = sKeys.filter(isOn).length;
@@ -144,41 +178,16 @@ export function PermissionTree({
                           <span className="truncate">{sec.label}</span>
                         </button>
                         <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground">
-                          {sOn} / {sKeys.length}
+                          {fmt(sOn, sKeys.length)}
                         </span>
                       </div>
                       {secOpen ? (
                         <ul role="group" className="pb-1.5 pl-8 pr-2">
-                          {sec.operations.map((op) => {
-                            const disabled = isDisabled?.(op.key) ?? false;
-                            const id = `op-${op.key}`;
-                            return (
-                              <li
-                                key={op.key}
-                                role="treeitem"
-                                aria-selected={isOn(op.key)}
-                                className="flex flex-wrap items-center gap-2 rounded px-1.5 py-1 hover:bg-background/70"
-                              >
-                                <input
-                                  id={id}
-                                  type="checkbox"
-                                  className="h-4 w-4 shrink-0 accent-teal-700"
-                                  checked={isOn(op.key)}
-                                  disabled={disabled}
-                                  onChange={(e) => onToggle([op.key], e.target.checked)}
-                                />
-                                <label
-                                  htmlFor={id}
-                                  className={cn("min-w-0 flex-1 text-[13px] leading-snug", disabled && "text-muted-foreground")}
-                                  title={op.key}
-                                >
-                                  {op.label}
-                                </label>
-                                <OpKindBadge action={op.action} />
-                                {renderOpExtra?.(op)}
-                              </li>
-                            );
-                          })}
+                          {sec.operations.map((op) => (
+                            <li key={op.key} role="treeitem" aria-selected={isOn(op.key)}>
+                              {opContent(op)}
+                            </li>
+                          ))}
                         </ul>
                       ) : null}
                     </li>

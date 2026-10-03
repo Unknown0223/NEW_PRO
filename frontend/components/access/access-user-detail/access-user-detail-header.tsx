@@ -11,6 +11,7 @@ import type { AccessUserDetailVm } from "./hooks/use-access-user-detail-panel";
 
 export type AccessUserDetailTab =
   | "operations"
+  | "roles"
   | "territories"
   | "branches"
   | "cash_desks"
@@ -22,29 +23,42 @@ export type AccessUserDetailTab =
   | "history";
 
 export const ACCESS_USER_DETAIL_TABS: { id: AccessUserDetailTab; label: string }[] = [
-  { id: "operations", label: "Операции" },
   { id: "territories", label: "Территории" },
-  { id: "branches", label: "Филиалы" },
-  { id: "cash_desks", label: "Кассы" },
-  { id: "payment_methods", label: "Способы оплаты" },
-  { id: "warehouses", label: "Склады" },
-  { id: "trade_directions", label: "Направления" },
   { id: "staff", label: "Сотрудники" },
+  { id: "roles", label: "Роли" },
+  { id: "operations", label: "Операции" },
+  { id: "cash_desks", label: "Кассы" },
+  { id: "warehouses", label: "Склады" },
+  { id: "branches", label: "Филиал" },
+  { id: "payment_methods", label: "Способ оплаты" },
+  { id: "trade_directions", label: "Направления" },
   { id: "delegation", label: "Делегирование" },
   { id: "history", label: "История" }
 ];
 
-export function AccessUserDetailHeader({
-  vm,
-  tab,
-  onTab,
-  onBack
-}: {
-  vm: AccessUserDetailVm;
-  tab: AccessUserDetailTab;
-  onTab: (t: AccessUserDetailTab) => void;
-  onBack?: () => void;
-}) {
+export function AccessUserDetailTabs({ tab, onTab }: { tab: AccessUserDetailTab; onTab: (t: AccessUserDetailTab) => void }) {
+  return (
+    <nav className="flex flex-wrap gap-0.5 rounded-lg border border-border/70 bg-muted/40 p-0.5" role="tablist" aria-label="Разделы доступа пользователя">
+      {ACCESS_USER_DETAIL_TABS.map((t) => (
+        <button
+          key={t.id}
+          type="button"
+          role="tab"
+          aria-selected={tab === t.id}
+          className={cn(
+            "rounded-md px-2.5 py-1 text-xs transition-colors",
+            tab === t.id ? "bg-background font-semibold text-foreground shadow-sm ring-1 ring-border" : "text-muted-foreground hover:text-foreground"
+          )}
+          onClick={() => onTab(t.id)}
+        >
+          {t.label}
+        </button>
+      ))}
+    </nav>
+  );
+}
+
+export function AccessUserDetailHeader({ vm, onBack }: { vm: AccessUserDetailVm; onBack?: () => void }) {
   const user = vm.user!;
   const controls = vm.userAccountControls;
   const treeQ = useAccessOperationsTree(vm.tenantSlug);
@@ -57,8 +71,8 @@ export function AccessUserDetailHeader({
   const active = user.status === "active";
 
   return (
-    <div className="shrink-0 border-b border-border/60 bg-card">
-      <div className="flex flex-wrap items-start justify-between gap-3 px-3 pb-2 pt-3">
+    <div className="shrink-0 rounded-xl border border-border/70 bg-card">
+      <div className="flex flex-wrap items-start justify-between gap-3 px-4 py-3">
         <div className="flex min-w-0 items-start gap-2">
           {onBack ? (
             <Button type="button" size="sm" variant="ghost" className="h-8 w-8 shrink-0 p-0" onClick={onBack} aria-label="Назад к списку пользователей">
@@ -127,21 +141,6 @@ export function AccessUserDetailHeader({
           </div>
         ) : null}
       </div>
-      <nav className="flex gap-1 overflow-x-auto px-3 pb-2" role="tablist" aria-label="Разделы доступа пользователя">
-        {ACCESS_USER_DETAIL_TABS.map((t) => (
-          <button
-            key={t.id}
-            type="button"
-            role="tab"
-            aria-selected={tab === t.id}
-            data-active={tab === t.id}
-            className={cn("access-tab-chip shrink-0 text-xs", tab === t.id ? "" : "text-muted-foreground hover:bg-muted/50")}
-            onClick={() => onTab(t.id)}
-          >
-            {t.label}
-          </button>
-        ))}
-      </nav>
     </div>
   );
 }

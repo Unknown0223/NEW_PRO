@@ -6,8 +6,12 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useAppConfirm } from "@/components/ui/app-confirm-dialog";
 import { LEAVE_UNSAVED_MESSAGE } from "@/components/access/permission-tree/access-save-bar";
 import { AccessUserDetailModals } from "./access-user-detail-modals";
-import { AccessUserDetailHeader, type AccessUserDetailTab } from "./access-user-detail-header";
-import { AccessUserOperationsEditor } from "./access-user-operations-editor";
+import { EMPTY_OPS_FILTER, type AccessOpsFilter } from "@/lib/access-operations-tree";
+import { useAccessOperationsTree } from "@/components/access/permission-tree/use-access-operations-tree";
+import { AccessUserDetailHeader, AccessUserDetailTabs, type AccessUserDetailTab } from "./access-user-detail-header";
+import { AccessOpsFilterCard } from "./access-ops-filter-card";
+import { AccessUserOperationsPanel } from "./access-user-operations-panel";
+import { AccessUserRolesTab } from "./access-user-roles-tab";
 import { AccessUserDelegationTab } from "./access-user-delegation-tab";
 import { AccessUserHistoryTab } from "./access-user-history-tab";
 import { AccessUserScopeSummary, isAccessScopeTab } from "./access-user-scope-summary";
@@ -33,7 +37,9 @@ export function AccessUserDetailPanel({
   onGuardChange?: (guard: AccessLeaveGuard | null) => void;
 }) {
   const vm = useAccessUserDetailPanel({ tenantSlug, userId, onInvalidateUsers, userAccountControls });
+  const treeQ = useAccessOperationsTree(tenantSlug);
   const [tab, setTab] = useState<AccessUserDetailTab>("operations");
+  const [opsFilter, setOpsFilter] = useState<AccessOpsFilter>(EMPTY_OPS_FILTER);
   const [dirty, setDirty] = useState(false);
   const dirtyRef = useRef(false);
   dirtyRef.current = dirty;
@@ -65,7 +71,6 @@ export function AccessUserDetailPanel({
   }, [guard, onGuardChange]);
 
   useEffect(() => {
-    setTab("operations");
     setDirty(false);
   }, [userId]);
 
@@ -90,20 +95,20 @@ export function AccessUserDetailPanel({
           <Skeleton className="h-64 w-full" />
         </div>
       ) : (
-        <>
-          <AccessUserDetailHeader
-            vm={vm}
-            tab={tab}
-            onTab={(t) => guard(() => setTab(t))}
-            onBack={onBack ? () => guard(onBack) : undefined}
-          />
-          <div className="flex min-h-0 flex-1 flex-col overflow-hidden overscroll-y-contain p-3">
-            {tab === "operations" ? <AccessUserOperationsEditor key={userId} vm={vm} onDirtyChange={setDirty} /> : null}
-            {tab === "delegation" ? <AccessUserDelegationTab key={userId} vm={vm} onDirtyChange={setDirty} /> : null}
-            {tab === "history" ? <AccessUserHistoryTab tenantSlug={tenantSlug} userId={userId} /> : null}
-            {isAccessScopeTab(tab) ? <AccessUserScopeSummary vm={vm} tab={tab} readOnly={readOnly} /> : null}
-          </div>
-        </>
+        <div className="flex min-h-0 flex-1 flex-col gap-3">
+          <AccessUserDetailHeader vm={vm} onBack={onBack ? () => guard(onBack) : undefined} />
+          {tab === "operations" ? <AccessOpsFilterCard tree={treeQ.data ?? []} value={opsFilter} onApply={setOpsFilter} /> : null}
+          <section className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden rounded-xl border border-border/70 bg-card p-3">
+            <AccessUserDetailTabs tab={tab} onTab={(t) => guard(() => setTab(t))} />
+            <div className="flex min-h-0 flex-1 flex-col overflow-hidden overscroll-y-contain">
+              {tab === "operations" ? <AccessUserOperationsPanel key={userId} vm={vm} filter={opsFilter} /> : null}
+              {tab === "roles" ? <AccessUserRolesTab vm={vm} readOnly={readOnly} /> : null}
+              {tab === "delegation" ? <AccessUserDelegationTab key={userId} vm={vm} onDirtyChange={setDirty} /> : null}
+              {tab === "history" ? <AccessUserHistoryTab tenantSlug={tenantSlug} userId={userId} /> : null}
+              {isAccessScopeTab(tab) ? <AccessUserScopeSummary key={tab} vm={vm} tab={tab} readOnly={readOnly} /> : null}
+            </div>
+          </section>
+        </div>
       )}
       <AccessUserDetailModals vm={vm} />
       {dialog}

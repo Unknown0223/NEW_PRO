@@ -360,6 +360,7 @@ export function formatTerritoryAssigneeSubtitle(u: DetailResponse["user"]): stri
 
 export function patchTouchesUserDirectory(body: Record<string, unknown>): boolean {
   if (body.role != null || body.is_active != null || body.extra_role_keys != null) return true;
+  if (body.permissions != null || body.denied_permissions != null || body.remove_permission_keys != null) return true;
   if (
     body.branch_codes != null ||
     body.warehouse_ids != null ||

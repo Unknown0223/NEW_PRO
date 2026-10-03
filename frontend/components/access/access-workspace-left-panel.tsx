@@ -1,23 +1,10 @@
 "use client";
 
 import { Search } from "lucide-react";
-import { TableSortButton } from "@/components/ui/table-sort-button";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { SearchableMultiSelectPanel } from "@/components/ui/searchable-multi-select-panel";
 import { cn } from "@/lib/utils";
-import { AccessBulkBottomBar } from "@/components/access/access-bulk-bottom-bar";
-import {
-  ACCESS_FILTER_MULTI_SEARCH_MIN,
-  ACCESS_MANAGE_KEY,
-  OP_ACTIVITY_FILTER_ITEMS,
-  OP_GRANT_FILTER_ITEMS,
-  buildScopeDimensionPatchBody,
-  formatAccessFilterTriggerSummary,
-  type ScopeDimensionTab,
-  type SideRow,
-} from "./access-workspace.shared";
-import { AccessDimUsersColGroup } from "./access-workspace.shared-ui";
+import type { SideRow } from "./access-workspace.shared";
 import type { UseAccessWorkspaceReturn } from "./use-access-workspace";
 
 export function AccessWorkspaceLeftPanel({ ws }: { ws: UseAccessWorkspaceReturn }) {
@@ -28,23 +15,21 @@ export function AccessWorkspaceLeftPanel({ ws }: { ws: UseAccessWorkspaceReturn 
             <div className="space-y-2">
               <div className="space-y-1">
                 <label className="access-filter-field-label">Статус</label>
-                <div className="flex gap-1">
-                  <button
-                    type="button"
-                    data-active={status === "active"}
-                    className={`access-ws.status-pill flex-1 ${status === "active" ? "" : "text-muted-foreground hover:bg-muted/40"}`}
-                    onClick={() => ws.setStatus("active")}
-                  >
-                    Активные
-                  </button>
-                  <button
-                    type="button"
-                    data-active={status === "inactive"}
-                    className={`access-ws.status-pill flex-1 ${status === "inactive" ? "" : "text-muted-foreground hover:bg-muted/40"}`}
-                    onClick={() => ws.setStatus("inactive")}
-                  >
-                    Неактивные
-                  </button>
+                <div className="grid grid-cols-2 gap-1 rounded-lg bg-muted/60 p-1" role="group" aria-label="Статус">
+                  {(["active", "inactive"] as const).map((s) => (
+                    <button
+                      key={s}
+                      type="button"
+                      aria-pressed={ws.status === s}
+                      className={cn(
+                        "rounded-md px-2 py-1.5 text-xs font-medium transition-colors",
+                        ws.status === s ? "bg-teal-700 text-white shadow-sm" : "text-muted-foreground hover:text-foreground"
+                      )}
+                      onClick={() => ws.setStatus(s)}
+                    >
+                      {s === "active" ? "Активные" : "Неактивные"}
+                    </button>
+                  ))}
                 </div>
               </div>
               <div className="space-y-1">
