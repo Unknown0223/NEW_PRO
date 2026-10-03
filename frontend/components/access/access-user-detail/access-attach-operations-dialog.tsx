@@ -129,7 +129,7 @@ export function AccessAttachOperationsDialog({ open, onOpenChange, vm, tree, sta
         changes.added.length ? `прикреплено ${formatOpsCount(changes.added.length)}` : "",
         changes.removed.length ? `откреплено ${formatOpsCount(changes.removed.length)}` : ""
       ].filter(Boolean);
-      onSaved(`Сохранено: ${parts.join(", ")}`);
+      onSaved(`Изменения сохранены: ${parts.join(", ")}`);
       onOpenChange(false);
     } catch (err) {
       await vm.detailQ.refetch();

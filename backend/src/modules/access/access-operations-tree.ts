@@ -8,6 +8,7 @@ import {
   type PermissionAction,
   type StructuredPermissionEntry
 } from "./permission-model";
+import { PERMISSION_OP_LABEL_RU } from "./permission-op-labels";
 
 export type AccessTreeOperation = { key: string; action: PermissionAction; label: string };
 export type AccessTreeSection = { id: string; label: string; operations: AccessTreeOperation[] };
@@ -23,11 +24,14 @@ export function buildAccessOperationsTree(): AccessTreeModule[] {
       mod = { id: label, label, sections: [] };
       modules.set(label, mod);
     }
+    const single = def.actions.length === 1;
     const operations = [...def.actions]
       .sort((a, b) => PERMISSION_ACTION_ORDER[a] - PERMISSION_ACTION_ORDER[b])
       .map((action) => {
         const key = permissionKey(def.module, def.section, action);
-        return { key, action, label: permissionOperationLabel(key, action) };
+        const label =
+          single && !PERMISSION_OP_LABEL_RU[key] ? def.labelRu : permissionOperationLabel(key, action);
+        return { key, action, label };
       });
     mod.sections.push({ id: `${def.module}.${def.section}`, label: def.labelRu, operations });
   }
