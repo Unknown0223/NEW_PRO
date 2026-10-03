@@ -614,6 +614,36 @@ export function flattenMobileNavItems(): NavItem[] {
   return out;
 }
 
+/** Yon menyu qidiruvi — har bir band o'z bo'limi nomi bilan (menyu tartibida). */
+export type NavSearchEntry = { item: NavItem; section: string | null };
+
+export function flattenNavSearchEntries(): NavSearchEntry[] {
+  const out: NavSearchEntry[] = [];
+  const seen = new Set<string>();
+  const push = (section: string | null, items: NavItem[]) => {
+    for (const item of items) {
+      if (item.disabled || item.placeholder || item.href === "#" || seen.has(item.href)) continue;
+      seen.add(item.href);
+      out.push({ item, section });
+    }
+  };
+  for (const e of dashboardSidebarLayout) {
+    if (e.kind === "dashboard") push(dashboardHomeNav.sectionTitle, dashboardHomeNav.items);
+    else if (e.kind === "orders") push(dashboardOrdersNav.sectionTitle, dashboardOrdersNavFlatItems());
+    else if (e.kind === "clients") push(dashboardClientsNav.sectionTitle, dashboardClientsNav.items);
+    else if (e.kind === "invoices") push(dashboardInvoicesNav.sectionTitle, dashboardInvoicesNav.items);
+    else if (e.kind === "kassa") push(dashboardKassaNav.sectionTitle, dashboardKassaNavFlatItems());
+    else if (e.kind === "stock") push(dashboardStockNav.sectionTitle, dashboardStockNav.items);
+    else if (e.kind === "suppliers") push(dashboardSuppliersNav.sectionTitle, dashboardSuppliersNav.items);
+    else if (e.kind === "plans") push(dashboardPlansNav.sectionTitle, dashboardPlansNav.items);
+    else if (e.kind === "reports") push(dashboardReportsNav.sectionTitle, dashboardReportsNav.items);
+    else if (e.kind === "users") push(dashboardUsersNav.sectionTitle, dashboardUsersNavFlatItems());
+    else if (e.kind === "payroll") push(dashboardPayrollNav.sectionTitle, dashboardPayrollNavFlatItems());
+    else if (e.kind === "link") push(null, [e.item]);
+  }
+  return out;
+}
+
 /** Tepa header uchun: joriy yo'lga mos «bo'lim → sahifa» nomi. */
 export type PageBreadcrumb = { section: string | null; label: string };
 

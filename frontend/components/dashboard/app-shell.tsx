@@ -16,7 +16,7 @@ import {
   dashboardStockNav,
   dashboardSuppliersNav,
   dashboardUsersNav,
-  flattenMobileNavItems,
+  flattenNavSearchEntries,
   resolvePageBreadcrumb,
   type NavItem
 } from "@/components/dashboard/nav-config";
@@ -44,8 +44,9 @@ import { WorkSlotsPendingBell } from "@/components/work-slots/work-slots-pending
 import { WorkSlotProfileBadge } from "@/components/work-slots/work-slot-profile-badge";
 import { UserMenu } from "@/components/dashboard/user-menu";
 import { SidebarGroupedSection } from "@/components/dashboard/sidebar-grouped-section";
+import { SidebarNavSearch } from "@/components/dashboard/sidebar-nav-search";
+import { MobileNavDrawer } from "@/components/dashboard/mobile-nav-drawer";
 import { TenantSidebarClock } from "@/components/dashboard/tenant-sidebar-clock";
-import { ScrollEdgeHints } from "@/components/ui/scroll-edge-hints";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Banknote,
@@ -57,6 +58,7 @@ import {
   LayoutDashboard,
   Loader2,
   Lightbulb,
+  Menu,
   Package,
   Radar,
   Receipt,
@@ -74,7 +76,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 /**
  * Ba'zi ildiz yo‘llar — exact match only.
@@ -371,6 +373,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const [reportsSettingsOpen, setReportsSettingsOpen] = useState(false);
   const [reportsSearch, setReportsSearch] = useState("");
   const [localHiddenOverride, setLocalHiddenOverride] = useState<Set<string> | null>(null);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const closeMobileNav = useCallback(() => setMobileNavOpen(false), []);
+  useEffect(() => {
+    setMobileNavOpen(false);
+  }, [pathname]);
   const dashboardOpen = openSection === "dashboard";
   const clientsOpen = openSection === "clients";
   const usersOpen = openSection === "users";
@@ -505,12 +512,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     [effectiveRole, permissionKeySet, hiddenReportsCurrent]
   );
 
-  const mobileItems = flattenMobileNavItems().filter((item) => {
-    if (!navItemVisible(item, effectiveRole, permissionKeySet)) return false;
-    if (!reportItemHrefSet.has(item.href)) return true;
-    if (item.href === "/reports/settings") return true;
-    return !hiddenReportsCurrent.has(item.href);
-  });
+  const navSearchEntries = useMemo(
+    () =>
+      flattenNavSearchEntries().filter(({ item }) => {
+        if (!navItemVisible(item, effectiveRole, permissionKeySet)) return false;
+        if (!reportItemHrefSet.has(item.href)) return true;
+        return !hiddenReportsCurrent.has(item.href);
+      }),
+    [effectiveRole, permissionKeySet, reportItemHrefSet, hiddenReportsCurrent]
+  );
 
   const reportsSettingsItems = useMemo(
     () =>
@@ -552,31 +562,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     setLocalHiddenOverride((prev) => updater(prev ? new Set(prev) : new Set(hiddenReportHrefs)));
   };
 
-  return (
-    <div className="flex h-dvh w-full overflow-hidden">
-      <OrderSseListener />
-      <aside className="scrollbar-none hidden min-h-0 w-[15.5rem] shrink-0 flex-col overflow-hidden border-r border-sidebar-border bg-sidebar text-sidebar-foreground shadow-[2px_0_12px_rgba(0,0,0,0.06)] md:flex">
-        <div className="border-b border-sidebar-border/80 px-3 py-4">
-          <Link
-            href="/dashboard"
-            title="Дашборд - Супервайзер"
-            aria-label="SalesArena — на главную"
-            className="mb-2.5 block w-full max-w-[220px] rounded-md transition-opacity hover:opacity-85 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring"
-          >
-            <SalesArenaLogo variant="dark" height={48} className="w-full" />
-          </Link>
-          <div className="flex items-center justify-between gap-2">
-            <p className="min-w-0 truncate text-sm font-semibold text-sidebar-foreground" title={tenantSlug ?? undefined}>
-              {tenantSlug ?? "—"}
-            </p>
-            <TenantSidebarClock />
-          </div>
-        </div>
-        <ScrollEdgeHints
-          watch={openSection}
-          contentClassName="scrollbar-none flex flex-col gap-0.5 p-2"
-        >
-          {dashboardSidebarLayout.map((entry, idx) => {
+  const openReportsSettings = () => {
+    setReportsSettingsOpen(true);
+    setReportsSearch("");
+    setLocalHiddenOverride(null);
+  };
+
+  const sidebarTree = dashboardSidebarLayout.map((entry, idx) => {
             if (entry.kind === "link") {
               if (!navItemVisible(entry.item, effectiveRole, permissionKeySet)) return null;
               const { href, label, disabled } = entry.item;
@@ -1334,9 +1326,46 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             }
 
             return null;
-          })}
-        </ScrollEdgeHints>
+          });
+
+  const sidebarPanel = (
+    <>
+      <div className="border-b border-sidebar-border/80 px-3 py-4">
+        <Link
+          href="/dashboard"
+          title="Дашборд - Супервайзер"
+          aria-label="SalesArena — на главную"
+          className="mb-2.5 block w-full max-w-[220px] rounded-md transition-opacity hover:opacity-85 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring"
+        >
+          <SalesArenaLogo variant="dark" height={48} className="w-full" />
+        </Link>
+        <div className="flex items-center justify-between gap-2">
+          <p className="min-w-0 truncate text-sm font-semibold text-sidebar-foreground" title={tenantSlug ?? undefined}>
+            {tenantSlug ?? "—"}
+          </p>
+          <TenantSidebarClock />
+        </div>
+      </div>
+      <SidebarNavSearch
+        entries={navSearchEntries}
+        isActive={(href) => orderNavItemActive(pathname, searchParams, href)}
+        onOpenReportsSettings={openReportsSettings}
+        watch={openSection}
+      >
+        {sidebarTree}
+      </SidebarNavSearch>
+    </>
+  );
+
+  return (
+    <div className="flex h-dvh w-full overflow-hidden">
+      <OrderSseListener />
+      <aside className="scrollbar-none hidden min-h-0 w-[15.5rem] shrink-0 flex-col overflow-hidden border-r border-sidebar-border bg-sidebar text-sidebar-foreground shadow-[2px_0_12px_rgba(0,0,0,0.06)] md:flex">
+        {sidebarPanel}
       </aside>
+      <MobileNavDrawer open={mobileNavOpen} onClose={closeMobileNav}>
+        {sidebarPanel}
+      </MobileNavDrawer>
 
       <div
         className={cn(
@@ -1389,9 +1418,20 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </div>
         </header>
 
-        <header className="sticky top-0 z-10 flex shrink-0 flex-col gap-2 border-b border-border/80 bg-card/95 px-4 py-3 shadow-sm backdrop-blur-md md:hidden">
+        <header className="sticky top-0 z-10 flex shrink-0 flex-col gap-2 border-b border-border/80 bg-card/95 px-3 py-2.5 shadow-sm backdrop-blur-md md:hidden">
           <div className="flex items-center justify-between gap-2">
-            <div className="min-w-0">
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              className="h-10 w-10 shrink-0"
+              onClick={() => setMobileNavOpen(true)}
+              aria-label="Открыть меню"
+              aria-expanded={mobileNavOpen}
+            >
+              <Menu className="size-5" />
+            </Button>
+            <div className="min-w-0 flex-1">
               <Link
                 href="/dashboard"
                 title="Дашборд - Супервайзер"
@@ -1429,41 +1469,21 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               </Button>
             </div>
           </div>
-          <nav className="scrollbar-none flex gap-1.5 overflow-x-auto pb-0.5">
-            {mobileItems.map((item) => {
-              const active = orderNavItemActive(pathname, searchParams, item.href);
-              if (item.href === "/reports/settings") {
-                return (
-                  <button
-                    key={`${item.label}-${item.href}`}
-                    type="button"
-                    onClick={() => {
-                      setReportsSettingsOpen(true);
-                      setReportsSearch("");
-                      setLocalHiddenOverride(null);
-                    }}
-                    className="shrink-0 rounded-lg bg-muted px-2.5 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted/80"
-                  >
-                    {item.label}
-                  </button>
-                );
-              }
-              return (
-                <Link
-                  key={`${item.label}-${item.href}`}
-                  href={item.href}
-                  className={cn(
-                    "shrink-0 rounded-lg px-2.5 py-1.5 text-xs font-medium transition-colors",
-                    active
-                      ? "bg-primary text-primary-foreground"
-                      : "bg-muted text-muted-foreground hover:bg-muted/80"
-                  )}
-                >
-                  {item.label}
-                </Link>
-              );
-            })}
-          </nav>
+          {breadcrumb ? (
+            <button
+              type="button"
+              onClick={() => setMobileNavOpen(true)}
+              className="flex min-w-0 items-center gap-1.5 text-left"
+            >
+              {breadcrumb.section ? (
+                <>
+                  <span className="truncate text-xs font-medium text-muted-foreground">{breadcrumb.section}</span>
+                  <ChevronRight className="size-3.5 shrink-0 text-muted-foreground/50" aria-hidden />
+                </>
+              ) : null}
+              <span className="truncate text-sm font-semibold text-foreground">{breadcrumb.label}</span>
+            </button>
+          ) : null}
         </header>
 
         <div
