@@ -259,7 +259,7 @@ const ROUTE_PERMISSION_RULES: RoutePermissionRule[] = [
   r(["DELETE"], /\/api\/(?::slug|[^/]+)\/products\/:id$/, "settings.tovar.delete"),
   r(READ, /\/api\/(?::slug|[^/]+)\/products(\/|$)/, "settings.tovar.view"),
   r(WRITE, /\/settings\/profile$/, "settings.profil_kompanii.update"),
-  r(READ, /\/settings\/profile$/, "settings.profil_kompanii.view"),
+  r(READ, /\/settings\/profile$/, "settings.profil_kompanii.view", "settings.tipy_zadach.view"),
   r(["POST"], /\/settings\/mobile-app-release\/notify$/, "settings.mobile_app.transfer"),
   r(["POST"], /\/settings\/mobile-app-release\/upload$/, "settings.mobile_app.import"),
   r(WRITE, /\/settings\/mobile-app-release/, "settings.mobile_app.update"),
