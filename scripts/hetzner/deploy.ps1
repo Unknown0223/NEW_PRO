@@ -156,6 +156,8 @@ docker network connect coolify salec-backend-1 2>/dev/null || true
 docker network connect coolify salec-frontend-1 2>/dev/null || true
 sleep 8
 docker compose -f $composeFile --env-file $composeEnvFile ps
+docker builder prune -af --filter until=72h 2>&1 | tail -1 || true
+df -h / | tail -1
 echo BUILD_UP_OK
 "@
 
