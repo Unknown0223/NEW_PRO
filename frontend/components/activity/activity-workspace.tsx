@@ -4,6 +4,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { api } from "@/lib/api";
+import { usePermissions } from "@/lib/use-permissions";
+import { cn } from "@/lib/utils";
 import { STALE } from "@/lib/query-stale";
 import { HISTORY_EVENT_LABEL } from "@/lib/use-entity-history";
 import { humanizeAction, humanizeEntity, summarizePayload } from "@/lib/history-labels";
@@ -63,6 +65,7 @@ function downloadCsv(filename: string, headers: string[], rows: (string | number
 }
 
 export function ActivityWorkspace({ tenantSlug }: { tenantSlug: string }) {
+  const canExport = usePermissions().has("activity.history.export");
   const [tab, setTab] = useState<Tab>("behavior");
   const [page, setPage] = useState(1);
   const [moduleFilter, setModuleFilter] = useState("");
@@ -187,7 +190,7 @@ export function ActivityWorkspace({ tenantSlug }: { tenantSlug: string }) {
         {tabBtn("behavior", "Действия пользователей")}
         {tabBtn("mutations", "Изменения данных")}
         <div className="ml-auto">
-          <Button type="button" variant="outline" size="sm" className="gap-1" onClick={exportCsv}>
+          <Button type="button" variant="outline" size="sm" className={cn("gap-1", !canExport && "hidden")} onClick={exportCsv}>
             <Download className="size-3.5" /> CSV
           </Button>
         </div>

@@ -33,8 +33,14 @@ export function reportQueryRaw(request: FastifyRequest): Record<string, string |
 export function createReportRouteGuards() {
   return {
     reportViewPreHandler: [jwtAccessVerify, requirePermission("reports.view")],
-    reportExportPreHandler: [jwtAccessVerify, requirePermission("reports.export")],
+    reportExportPreHandler: [
+      jwtAccessVerify,
+      requireAnyPermission(["reports.export", "reports.otchety.copy", "reports.konstruktor.copy", "cash.otchety.export"])
+    ],
     incomeViewPreHandler: [jwtAccessVerify, requireAnyPermission(["cashbox.income_report.view", "reports.view"])],
-    incomeExportPreHandler: [jwtAccessVerify, requireAnyPermission(["cashbox.income_report.export", "reports.export"])]
+    incomeExportPreHandler: [
+      jwtAccessVerify,
+      requireAnyPermission(["cashbox.income_report.export", "reports.export", "cash.otchety.export"])
+    ]
   };
 }

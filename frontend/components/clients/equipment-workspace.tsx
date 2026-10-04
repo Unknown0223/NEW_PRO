@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { TableColumnSettingsDialog } from "@/components/data-table/table-column-settings-dialog";
 import { useUserTablePrefs } from "@/hooks/use-user-table-prefs";
 import { api } from "@/lib/api";
+import { usePermissions } from "@/lib/use-permissions";
 import { useAuthStore } from "@/lib/auth-store";
 import { downloadXlsxSheet } from "@/lib/download-xlsx";
 import { CalendarDays, Download, Filter, History, Plus, Search, SlidersHorizontal } from "lucide-react";
@@ -79,6 +80,7 @@ function fmtDate(iso: string): string {
 }
 
 export function EquipmentWorkspace({ view = "equipment" }: { view?: "equipment" | "history" }) {
+  const canExport = usePermissions().has("clients.oborudovanie.export");
   const isHistory = view === "history";
   const tenantSlug = useAuthStore((s) => s.tenantSlug);
   const [rows, setRows] = useState<EquipmentRow[]>([]);
@@ -421,14 +423,16 @@ export function EquipmentWorkspace({ view = "equipment" }: { view?: "equipment" 
                   placeholder="Поиск"
                 />
               </div>
-              <Button
-                variant="outline"
-                className="h-8 text-xs"
-                onClick={() => exportEquipmentExcel(rows, isHistory ? "equipment_history" : "equipment_list")}
-              >
-                <Download className="mr-1.5 h-3.5 w-3.5" />
-                Excel
-              </Button>
+              {canExport ? (
+                <Button
+                  variant="outline"
+                  className="h-8 text-xs"
+                  onClick={() => exportEquipmentExcel(rows, isHistory ? "equipment_history" : "equipment_list")}
+                >
+                  <Download className="mr-1.5 h-3.5 w-3.5" />
+                  Excel
+                </Button>
+              ) : null}
               <Button variant="ghost" className="h-8 text-xs" onClick={resetFilters}>
                 <Filter className="mr-1 h-3.5 w-3.5" />
                 Сброс

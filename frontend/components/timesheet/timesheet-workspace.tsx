@@ -736,7 +736,7 @@ export function TimesheetWorkspace() {
             <option key={s} value={s}>{s}</option>
           ))}
         </select>
-        <Button variant="outline" size="sm" className="border-emerald-300 text-emerald-700 hover:bg-emerald-50 dark:border-emerald-700 dark:text-emerald-400" onClick={() => setExportOpen(true)}>
+        <Button variant="outline" size="sm" className={cn("border-emerald-300 text-emerald-700 hover:bg-emerald-50 dark:border-emerald-700 dark:text-emerald-400", !perms.has("staff.tabel.export") && "hidden")} onClick={() => setExportOpen(true)}>
           <FileSpreadsheet className="mr-1 size-3.5" /> Excel
         </Button>
         <Button variant="ghost" size="icon-sm" onClick={() => void matrixQ.refetch()} title="Обновить" aria-label="Обновить">

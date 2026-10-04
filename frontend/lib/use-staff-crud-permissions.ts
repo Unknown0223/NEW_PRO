@@ -31,7 +31,7 @@ export type StaffCrudPermissions = {
  * Default-deny: loading paytida false.
  */
 export function useStaffCrudPermissions(section: StaffCrudSection): StaffCrudPermissions {
-  const { has, hasAny, isLoading } = usePermissions();
+  const { has, isLoading } = usePermissions();
 
   return useMemo(() => {
     if (isLoading) {
@@ -51,7 +51,7 @@ export function useStaffCrudPermissions(section: StaffCrudSection): StaffCrudPer
     const canUpdate = has(`${base}.update`);
     const canActivate = has(`${base}.activate`);
     const canDeactivate = has(`${base}.deactivate`) || canActivate;
-    const canExport = hasAny(`${base}.history`, `${base}.copy`);
+    const canExport = has(`${base}.export`);
     const canImport = canCreate || canUpdate;
     return {
       isLoading: false,
@@ -63,5 +63,5 @@ export function useStaffCrudPermissions(section: StaffCrudSection): StaffCrudPer
       canImport,
       canAnyRowAction: canUpdate || canDeactivate || canActivate
     };
-  }, [has, hasAny, isLoading, section]);
+  }, [has, isLoading, section]);
 }

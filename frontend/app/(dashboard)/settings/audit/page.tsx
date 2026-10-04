@@ -7,6 +7,8 @@ import { useAuthStore, useAuthStoreHydrated, useEffectiveRole } from "@/lib/auth
 import { api } from "@/lib/api";
 import { ENTITY_TYPE_LABEL, humanizeAction } from "@/lib/history-labels";
 import { STALE } from "@/lib/query-stale";
+import { usePermissions } from "@/lib/use-permissions";
+import { cn } from "@/lib/utils";
 import { useUserTablePrefs } from "@/hooks/use-user-table-prefs";
 import { useQuery } from "@tanstack/react-query";
 import { ListOrdered } from "lucide-react";
@@ -38,6 +40,7 @@ const AUDIT_COLUMN_META = [
 
 export default function AuditJournalPage() {
   const tenantSlug = useAuthStore((s) => s.tenantSlug);
+  const canExport = usePermissions().has("audit.log.export");
   const role = useEffectiveRole();
   const hydrated = useAuthStoreHydrated();
   const [page, setPage] = useState(1);
@@ -182,7 +185,7 @@ export default function AuditJournalPage() {
           type="button"
           variant="outline"
           size="sm"
-          className="h-8"
+          className={cn("h-8", !canExport && "hidden")}
           disabled={!tenantSlug || exportBusy}
           onClick={() => {
             void (async () => {

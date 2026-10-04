@@ -7,6 +7,7 @@ import {
   ShieldCheck, Users, MapPin, Wifi, WifiOff, ArrowRight, BatteryMedium, Banknote, PackageCheck,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { usePermissions } from "@/lib/use-permissions";
 import type { Employee, SupervisorOption, VisitModule, VisitPoint } from "./types";
 import {
   STATUS_META, ROLE_META, regionOf, payMethodLabel,
@@ -834,6 +835,7 @@ function MiniTab({ employee, visited, total, date, toast, role }: {
   toast: (m: string) => void;
   role: Employee["type"];
 }) {
+  const canExport = usePermissions().has("gps.gps.export");
   const [query, setQuery] = useState("");
   const [spinning, setSpinning] = useState(false);
 
@@ -886,7 +888,7 @@ function MiniTab({ employee, visited, total, date, toast, role }: {
             <RefreshCw className={cn("h-4 w-4", spinning && "animate-spin")} />
           </button>
           <button onClick={exportCsv}
-            className="flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 text-[12px] font-bold text-ink transition-all hover:-translate-y-0.5 hover:border-emerald-400 hover:text-emerald-700">
+            className={cn("flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 text-[12px] font-bold text-ink transition-all hover:-translate-y-0.5 hover:border-emerald-400 hover:text-emerald-700", !canExport && "hidden")}>
             <FileSpreadsheet className="h-4 w-4 text-emerald-600" /> Excel
           </button>
         </div>
@@ -990,6 +992,7 @@ function SupervisorMode({ supervisor, subRoutes, hour, date, onDate, onBack, onO
   toast: (m: string) => void;
   initialTab: "report" | "mini";
 }) {
+  const canExport = usePermissions().has("gps.gps.export");
   const [tab, setTab] = useState<"report" | "mini">(initialTab);
   const [pill, setPill] = useState<"all" | "offline">("all");
   const [query, setQuery] = useState("");
@@ -1213,7 +1216,7 @@ function SupervisorMode({ supervisor, subRoutes, hour, date, onDate, onBack, onO
                   <RefreshCw className={cn("h-4 w-4", spinning && "animate-spin")} />
                 </button>
                 <button onClick={exportCsv}
-                  className="flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 text-[12px] font-bold text-ink transition-all hover:-translate-y-0.5 hover:border-emerald-400 hover:text-emerald-700">
+                  className={cn("flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 text-[12px] font-bold text-ink transition-all hover:-translate-y-0.5 hover:border-emerald-400 hover:text-emerald-700", !canExport && "hidden")}>
                   <FileSpreadsheet className="h-4 w-4 text-emerald-600" /> Excel
                 </button>
               </div>

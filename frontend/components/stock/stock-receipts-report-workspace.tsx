@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { useUserTablePrefs } from "@/hooks/use-user-table-prefs";
 import { api } from "@/lib/api";
 import { STALE } from "@/lib/query-stale";
+import { usePermissions } from "@/lib/use-permissions";
 import { cn } from "@/lib/utils";
 import { useQuery } from "@tanstack/react-query";
 import { ArrowDown, ArrowUp, ArrowUpDown, CalendarDays, Download, LayoutGrid, ListFilter, RefreshCw, Search } from "lucide-react";
@@ -102,6 +103,7 @@ export function StockReceiptsReportWorkspace({
   tenantSlug: string;
   daily?: boolean;
 }) {
+  const canExport = usePermissions().has("warehouse.postuplenie.export");
   const [draftFrom, setDraftFrom] = useState(monthStartYmd);
   const [draftTo, setDraftTo] = useState(localYmd(new Date()));
   const [draftWarehouse, setDraftWarehouse] = useState("");
@@ -515,7 +517,7 @@ export function StockReceiptsReportWorkspace({
                     onKeyDown={(e) => e.key === "Enter" && applyFilters()}
                   />
                 </div>
-                {!isDaily ? (
+                {!isDaily && canExport ? (
                   <Button type="button" variant="outline" size="sm" className="h-9" disabled={exporting} onClick={() => void downloadExcel()}>
                     <Download className="mr-1 size-3.5" />
                     {exporting ? "…" : "Excel"}

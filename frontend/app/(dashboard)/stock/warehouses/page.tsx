@@ -11,7 +11,7 @@ export default function StockWarehousesPage() {
   const canCreate = has("warehouse.sklady.create");
   const canUpdate = has("warehouse.sklady.update");
   const canDelete = has("warehouse.sklady.delete");
-  const canExport = has("warehouse.sklady.history") || has("warehouse.sklady.copy");
+  const canExport = has("warehouse.sklady.export");
 
   if (!hydrated || isLoading || !tenantSlug) {
     return <p className="text-sm text-muted-foreground">Загрузка…</p>;

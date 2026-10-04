@@ -5,6 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { CalendarDays, FileSpreadsheet, Map, RotateCcw, Search } from "lucide-react";
 import { api } from "@/lib/api";
+import { usePermissions } from "@/lib/use-permissions";
 import { STALE } from "@/lib/query-stale";
 import { useAuthStore, useAuthStoreHydrated } from "@/lib/auth-store";
 import { SearchableMultiSelectPanel } from "@/components/ui/searchable-multi-select-panel";
@@ -171,6 +172,7 @@ function appendParams(
 }
 
 export default function ReportGpsPage() {
+  const canExport = usePermissions().has("reports.otchety.copy");
   const tenantSlug = useAuthStore((s) => s.tenantSlug);
   const hydrated = useAuthStoreHydrated();
   const bounds = useMemo(() => defaultRange(), []);
@@ -376,16 +378,18 @@ export default function ReportGpsPage() {
                 className="h-8 w-[160px] pl-7 text-xs"
               />
             </div>
-            <Button
-              type="button"
-              size="sm"
-              className="h-8 gap-1.5 bg-emerald-600 text-xs font-semibold hover:bg-emerald-700"
-              disabled={exporting || reportQ.isFetching}
-              onClick={() => void exportExcel()}
-            >
-              <FileSpreadsheet className="size-3.5" />
-              Excel
-            </Button>
+            {canExport ? (
+              <Button
+                type="button"
+                size="sm"
+                className="h-8 gap-1.5 bg-emerald-600 text-xs font-semibold hover:bg-emerald-700"
+                disabled={exporting || reportQ.isFetching}
+                onClick={() => void exportExcel()}
+              >
+                <FileSpreadsheet className="size-3.5" />
+                Excel
+              </Button>
+            ) : null}
           </div>
         </CardHeader>
         <CardContent className="pt-0">

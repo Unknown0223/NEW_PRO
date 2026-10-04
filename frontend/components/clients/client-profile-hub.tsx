@@ -438,6 +438,7 @@ function ClientProfileHubInner({ tenantSlug, clientId }: Props) {
   const { has } = usePermissions();
   const canEdit = has("clients.klient.update");
   const canHistory = has("clients.klient.history");
+  const canExport = has("clients.klient.copy");
   const canEquipment = has("clients.oborudovanie.view");
   const canPhotos = has("clients.foto.view");
   const { agentFilter } = useClientProfileLedgerFilters();
@@ -1051,19 +1052,21 @@ function ClientProfileHubInner({ tenantSlug, clientId }: Props) {
                       </div>
                     </div>
                     <div className="flex flex-wrap items-center justify-end gap-2">
-                      <button
-                        type="button"
-                        className={cn(
-                          buttonVariants({ variant: "outline", size: "sm" }),
-                          "h-8 gap-1 border-border bg-background px-2.5 text-xs"
-                        )}
-                        disabled={ordersExcelBusy}
-                        title="Экспорт в Excel (до 5000 строк по текущим фильтрам)"
-                        onClick={() => void exportClientOrdersExcel()}
-                      >
-                        <FileSpreadsheet className="h-3.5 w-3.5" />
-                        {ordersExcelBusy ? "…" : "Excel"}
-                      </button>
+                      {canExport ? (
+                        <button
+                          type="button"
+                          className={cn(
+                            buttonVariants({ variant: "outline", size: "sm" }),
+                            "h-8 gap-1 border-border bg-background px-2.5 text-xs"
+                          )}
+                          disabled={ordersExcelBusy}
+                          title="Экспорт в Excel (до 5000 строк по текущим фильтрам)"
+                          onClick={() => void exportClientOrdersExcel()}
+                        >
+                          <FileSpreadsheet className="h-3.5 w-3.5" />
+                          {ordersExcelBusy ? "…" : "Excel"}
+                        </button>
+                      ) : null}
                       <button
                         type="button"
                         className={cn(

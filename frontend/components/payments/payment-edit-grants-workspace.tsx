@@ -10,6 +10,7 @@ import {
 } from "@/components/payments/payment-edit-grants-filters-panel";
 import { RestorePaymentModal } from "@/components/payments/client-payments/restore-payment-modal";
 import { api } from "@/lib/api";
+import { usePermissions } from "@/lib/use-permissions";
 import { useAuthStore, useAuthStoreHydrated, useEffectiveRole } from "@/lib/auth-store";
 import { downloadXlsxSheet } from "@/lib/download-xlsx";
 import { getUserFacingError } from "@/lib/error-utils";
@@ -134,6 +135,7 @@ function downloadEditGrantsExcel(rows: GrantRow[], reasonLabel: (ref: string | n
 }
 
 export function PaymentEditGrantsWorkspace() {
+  const canExport = usePermissions().has("cash.oplaty_klientov.export");
   const tenantSlug = useAuthStore((s) => s.tenantSlug);
   const hydrated = useAuthStoreHydrated();
   const effectiveRole = useEffectiveRole();
@@ -322,15 +324,17 @@ export function PaymentEditGrantsWorkspace() {
               }}
               className="min-w-[9rem] flex-1"
             />
-            <button
-              type="button"
-              disabled={!rows.length}
-              onClick={() => downloadEditGrantsExcel(rows, reasonLabel)}
-              className="flex h-8 shrink-0 items-center gap-1.5 rounded-md border border-border bg-card px-2.5 text-xs font-medium text-gray-800 transition-colors hover:border-border hover:bg-muted disabled:opacity-50"
-            >
-              <Download className="h-4 w-4 text-emerald-600" />
-              Excel
-            </button>
+            {canExport ? (
+              <button
+                type="button"
+                disabled={!rows.length}
+                onClick={() => downloadEditGrantsExcel(rows, reasonLabel)}
+                className="flex h-8 shrink-0 items-center gap-1.5 rounded-md border border-border bg-card px-2.5 text-xs font-medium text-gray-800 transition-colors hover:border-border hover:bg-muted disabled:opacity-50"
+              >
+                <Download className="h-4 w-4 text-emerald-600" />
+                Excel
+              </button>
+            ) : null}
             <button
               type="button"
               onClick={() => void listQ.refetch()}

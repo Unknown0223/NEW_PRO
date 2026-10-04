@@ -107,6 +107,7 @@ import {
   type PivotConfig
 } from "@salec/pivot-engine";
 import { api } from "@/lib/api";
+import { usePermissions } from "@/lib/use-permissions";
 import { canSavePivotConfig, resolveLayoutForm, type PivotLayoutForm } from "@/lib/pivot-layout-form";
 import {
   aoaToFlatPivotData,
@@ -276,6 +277,7 @@ const LAYOUT_FORM_OPTIONS = [
 ] as const;
 
 export function VirtualPivotReportBuilder() {
+  const canExport = usePermissions().hasAny("reports.konstruktor.copy", "reports.otchety.copy");
   const rb = getPivotStrings().reportBuilder;
   const tenantSlug = useAuthStore((s) => s.tenantSlug);
   const hydrated = useAuthStoreHydrated();
@@ -1289,7 +1291,9 @@ export function VirtualPivotReportBuilder() {
             <div className="relative flex">
               <ToolbarButton icon={<FolderOpen />} label="Отчёты" onClick={() => setReportsDialogOpen(true)} />
               <ToolbarButton icon={<Save />} label="Сохр. как" onClick={() => openSaveDialog("create")} disabled={!canSavePivotConfig(config) || saveMut.isPending} />
-              <ToolbarButton icon={<Download />} label="Экспорт" onClick={() => setToolbarMenu(toolbarMenu === "export" ? null : "export")} disabled={!hasData || isComputing || isLoadingFullForExport} />
+              {canExport ? (
+                <ToolbarButton icon={<Download />} label="Экспорт" onClick={() => setToolbarMenu(toolbarMenu === "export" ? null : "export")} disabled={!hasData || isComputing || isLoadingFullForExport} />
+              ) : null}
               <ToolbarButton
                 icon={<Copy />}
                 label="Копировать"
@@ -1304,7 +1308,7 @@ export function VirtualPivotReportBuilder() {
                 disabled={isComputing || !hasData || expandableRowKeys.length === 0 || currentLayoutForm === "flat"}
                 active={hierarchyExpanded}
               />
-              {toolbarMenu === "export" ? (
+              {canExport && toolbarMenu === "export" ? (
                 <div className="absolute left-24 top-full z-30 mt-1 w-44 rounded-sm border border-border bg-popover p-1 text-xs shadow-lg">
                   <button className="block w-full rounded px-2 py-1.5 text-left hover:bg-muted" onClick={() => { void handleExportExcel(); setToolbarMenu(null); }}>{getPivotStrings().toolbar.excel}</button>
                   <button className="block w-full rounded px-2 py-1.5 text-left hover:bg-muted" onClick={() => { void handleExportCsv(); setToolbarMenu(null); }}>{getPivotStrings().toolbar.csv}</button>
@@ -1621,6 +1625,7 @@ export function VirtualPivotReportBuilder() {
           records={drillRecords}
           fields={drillFields}
           cellContext={drillCell?.drillContext}
+          canExport={canExport}
           onClose={closeDrillThrough}
         />
 

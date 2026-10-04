@@ -27,6 +27,7 @@ import { STALE } from "@/lib/query-stale";
 import { useAuthStore, useAuthStoreHydrated, useEffectiveRole } from "@/lib/auth-store";
 import { PRODUCT_UNIT_OPTIONS } from "@/lib/product-units";
 import { cn } from "@/lib/utils";
+import { usePermissions } from "@/lib/use-permissions";
 import { downloadXlsxSheet } from "@/lib/download-xlsx";
 import { FilterSelect } from "@/components/ui/filter-select";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -92,6 +93,7 @@ export default function ProductCategoriesSettingsPage() {
   const hydrated = useAuthStoreHydrated();
   const role = useEffectiveRole();
   const isAdmin = role === "admin";
+  const canExport = usePermissions().has("settings.kategoriya_tovara.export");
   const qc = useQueryClient();
 
   const [mainTab, setMainTab] = useState<MainTab>("category");
@@ -402,9 +404,11 @@ export default function ProductCategoriesSettingsPage() {
             <Button size="sm" disabled={!isAdmin} onClick={openAdd}>
               {addLabel}
             </Button>
-            <Button type="button" size="sm" variant="outline" onClick={exportExcel}>
-              Excel
-            </Button>
+            {canExport ? (
+              <Button type="button" size="sm" variant="outline" onClick={exportExcel}>
+                Excel
+              </Button>
+            ) : null}
             <Link href="/settings" className={cn(buttonVariants({ variant: "outline", size: "sm" }))}>
               Каталог
             </Link>

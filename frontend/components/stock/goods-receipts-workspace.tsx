@@ -186,6 +186,7 @@ export function GoodsReceiptsWorkspace({ tenantSlug }: Props) {
     has("warehouse.postuplenie.create") ||
     has("warehouse.postuplenie.update") ||
     has("warehouse.postuplenie.status");
+  const canExport = has("warehouse.postuplenie.export");
   const qc = useQueryClient();
 
   const [draftWh, setDraftWh] = useState("");
@@ -484,10 +485,12 @@ export function GoodsReceiptsWorkspace({ tenantSlug }: Props) {
               >
                 Добавить
               </Link>
-              <Button type="button" variant="outline" size="sm" onClick={() => setExportOpen(true)}>
-                <Download className="mr-1 size-3.5" />
-                Excel
-              </Button>
+              {canExport ? (
+                <Button type="button" variant="outline" size="sm" onClick={() => setExportOpen(true)}>
+                  <Download className="mr-1 size-3.5" />
+                  Excel
+                </Button>
+              ) : null}
               <input
                 ref={importFileRef}
                 type="file"
@@ -660,10 +663,12 @@ export function GoodsReceiptsWorkspace({ tenantSlug }: Props) {
             }}
           />
         </div>
-        <Button type="button" variant="outline" size="sm" className="h-9" onClick={() => setExportOpen(true)}>
-          <Download className="mr-1 size-3.5" />
-          Excel
-        </Button>
+        {canExport ? (
+          <Button type="button" variant="outline" size="sm" className="h-9" onClick={() => setExportOpen(true)}>
+            <Download className="mr-1 size-3.5" />
+            Excel
+          </Button>
+        ) : null}
         <Button
           type="button"
           variant="outline"

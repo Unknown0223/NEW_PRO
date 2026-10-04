@@ -17,6 +17,7 @@ import { isAdminOrOperatorLikeRole } from "@/lib/distribution-roles";
 import { getUserFacingError } from "@/lib/error-utils";
 import { isSoftVoidUiEnabled } from "@/lib/feature-flags";
 import { cn } from "@/lib/utils";
+import { usePermissions } from "@/lib/use-permissions";
 import { downloadXlsxSheet } from "@/lib/download-xlsx";
 import { QueryErrorState } from "@/components/common/query-error-state";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -88,6 +89,7 @@ function EquipmentItemsTab({
   search: string;
 }) {
   const qc = useQueryClient();
+  const canExport = usePermissions().has("settings.tovar.copy");
   const [savingId, setSavingId] = useState<number | null>(null);
   const [addOpen, setAddOpen] = useState(false);
   const [pickerSearch, setPickerSearch] = useState("");
@@ -241,6 +243,7 @@ function EquipmentItemsTab({
             type="button"
             size="sm"
             variant="outline"
+            className={cn(!canExport && "hidden")}
             onClick={exportEquipmentItemsExcel}
             disabled={rows.length === 0}
           >
@@ -459,6 +462,7 @@ function EquipmentItemsTab({
 
 function ItemsTab({ tenantSlug, isAdmin, statusTab, search }: ItemsProps) {
   const router = useRouter();
+  const canExport = usePermissions().has("settings.tovar.copy");
   const pathname = usePathname();
   const productsBasePath = "/settings/products";
   const settingsAsidePx = pathname.startsWith("/settings/") ? 300 : 0;
@@ -963,7 +967,7 @@ function ItemsTab({ tenantSlug, isAdmin, statusTab, search }: ItemsProps) {
           type="button"
           size="sm"
           variant="outline"
-          className="h-9"
+          className={cn("h-9", !canExport && "hidden")}
           onClick={exportExcel}
           disabled={rows.length === 0}
         >

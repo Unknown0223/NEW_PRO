@@ -2,6 +2,7 @@
 
 import { useMemo, useState, type ReactNode } from "react";
 import { ArrowDown, ArrowUp, ArrowUpDown, FileSpreadsheet, Loader2, Search, X } from "lucide-react";
+import { usePermissions } from "@/lib/use-permissions";
 import { downloadXlsxSheet } from "@/lib/download-xlsx";
 import { cn } from "@/lib/utils";
 import type { DailyKpiAgentSummary } from "./daily-kpi-api";
@@ -268,6 +269,7 @@ export function DailyKpiMonthTable({
   options: { branches: string[]; supervisors: string[]; statuses: string[] };
   onPickDay?: (ymd: string) => void;
 }) {
+  const canExport = usePermissions().has("reports.dnevnye_kpi_plany.export");
   const [exporting, setExporting] = useState(false);
   const [sort, setSort] = useState<DailyKpiSort>({ key: "name", dir: "asc" });
 
@@ -435,15 +437,17 @@ export function DailyKpiMonthTable({
               {agents.length} из {totalAgents}
             </span>
           ) : null}
-          <button
-            type="button"
-            disabled={exporting || rows.length === 0}
-            onClick={() => void exportExcel()}
-            className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 text-xs font-semibold text-emerald-800 hover:bg-emerald-100 disabled:opacity-50"
-          >
-            {exporting ? <Loader2 className="size-3.5 animate-spin" /> : <FileSpreadsheet className="size-3.5" />}
-            Excel
-          </button>
+          {canExport ? (
+            <button
+              type="button"
+              disabled={exporting || rows.length === 0}
+              onClick={() => void exportExcel()}
+              className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 text-xs font-semibold text-emerald-800 hover:bg-emerald-100 disabled:opacity-50"
+            >
+              {exporting ? <Loader2 className="size-3.5 animate-spin" /> : <FileSpreadsheet className="size-3.5" />}
+              Excel
+            </button>
+          ) : null}
         </div>
       </div>
 

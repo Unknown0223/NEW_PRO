@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
+import { usePermissions } from "@/lib/use-permissions";
 import { STALE } from "@/lib/query-stale";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -201,6 +202,7 @@ function parseSum(nums: (string | null | undefined)[]): string {
 
 export function ConsignmentWorkspace({ tenantSlug }: { tenantSlug: string }) {
   const qc = useQueryClient();
+  const canExport = usePermissions().has("staff.konsignatsiya.export");
   const importInputRef = useRef<HTMLInputElement>(null);
   const monthPickerAnchorRef = useRef<HTMLButtonElement>(null);
   const [monthPickerOpen, setMonthPickerOpen] = useState(false);
@@ -755,7 +757,7 @@ export function ConsignmentWorkspace({ tenantSlug }: { tenantSlug: string }) {
             type="button"
             variant="outline"
             size="sm"
-            className="gap-1.5"
+            className={cn("gap-1.5", !canExport && "hidden")}
             onClick={() => void exportExcel()}
             disabled={!directionSelected || rows.length === 0}
           >
@@ -768,7 +770,7 @@ export function ConsignmentWorkspace({ tenantSlug }: { tenantSlug: string }) {
               type="button"
               variant="outline"
               size="sm"
-              className="gap-1.5"
+              className={cn("gap-1.5", !canExport && "hidden")}
               onClick={() => void exportExcel()}
               disabled={!directionSelected || rows.length === 0}
             >

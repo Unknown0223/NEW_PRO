@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { ArrowDown, ArrowUp, ArrowUpDown, Columns3, FileSpreadsheet, Loader2 } from "lucide-react";
+import { usePermissions } from "@/lib/use-permissions";
 import { downloadXlsxAoa } from "@/lib/download-xlsx";
 import { cn } from "@/lib/utils";
 import type { DailyKpiDayMatrix } from "./daily-kpi-api";
@@ -104,6 +105,7 @@ export function DailyKpiDayTable({
   toolbar?: ReactNode;
 }) {
   const isRange = (data.days_count ?? 1) > 1;
+  const canExport = usePermissions().has("reports.dnevnye_kpi_plany.export");
   const [exporting, setExporting] = useState(false);
   const [colsOpen, setColsOpen] = useState(false);
   const [visible, setVisible] = useState<VisibleMetrics>(DEFAULT_VISIBLE);
@@ -322,19 +324,21 @@ export function DailyKpiDayTable({
               </>
             ) : null}
           </div>
-          <button
-            type="button"
-            disabled={exporting || agents.length === 0}
-            onClick={() => void exportExcel()}
-            className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 text-xs font-semibold text-emerald-800 hover:bg-emerald-100 disabled:opacity-50"
-          >
-            {exporting ? (
-              <Loader2 className="size-3.5 animate-spin" />
-            ) : (
-              <FileSpreadsheet className="size-3.5" />
-            )}
-            Excel
-          </button>
+          {canExport ? (
+            <button
+              type="button"
+              disabled={exporting || agents.length === 0}
+              onClick={() => void exportExcel()}
+              className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 text-xs font-semibold text-emerald-800 hover:bg-emerald-100 disabled:opacity-50"
+            >
+              {exporting ? (
+                <Loader2 className="size-3.5 animate-spin" />
+              ) : (
+                <FileSpreadsheet className="size-3.5" />
+              )}
+              Excel
+            </button>
+          ) : null}
         </div>
       </div>
 

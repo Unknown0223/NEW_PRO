@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Download, Upload, Users } from "lucide-react";
 import { api } from "@/lib/api";
+import { usePermissions } from "@/lib/use-permissions";
 import { TableColumnSettingsDialog } from "@/components/data-table/table-column-settings-dialog";
 import { useUserTablePrefs } from "@/hooks/use-user-table-prefs";
 import { Badge } from "@/components/ui/badge";
@@ -95,6 +96,7 @@ const defaultFilterState = (): WorkSlotsFilterState => ({
 
 export function WorkSlotsWorkspace() {
   const router = useRouter();
+  const canExport = usePermissions().has("work_slots.raboche_mesto.export");
   const { tenant, ready, hydrated } = useTenantReady();
   const [rows, setRows] = useState<WorkSlotListItem[]>([]);
   const [total, setTotal] = useState(0);
@@ -552,10 +554,12 @@ export function WorkSlotsWorkspace() {
             {pendingCount > 0 ? (
               <Badge variant="destructive">{pendingCount} ожидают</Badge>
             ) : null}
-            <Button type="button" variant="outline" size="sm" onClick={() => void exportExcel()}>
-              <Download className="mr-1 h-4 w-4" />
-              Excel
-            </Button>
+            {canExport ? (
+              <Button type="button" variant="outline" size="sm" onClick={() => void exportExcel()}>
+                <Download className="mr-1 h-4 w-4" />
+                Excel
+              </Button>
+            ) : null}
             <ExcelDropTarget onFile={(f) => void importExcel(f)}>
               <Button
                 type="button"

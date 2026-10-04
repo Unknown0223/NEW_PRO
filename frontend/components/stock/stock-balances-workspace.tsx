@@ -10,6 +10,7 @@ import { cn } from "@/lib/utils";
 import { buttonVariants } from "@/components/ui/button-variants";
 import { api } from "@/lib/api";
 import { getUserFacingError } from "@/lib/error-utils";
+import { usePermissions } from "@/lib/use-permissions";
 import { formatNumberGrouped } from "@/lib/format-numbers";
 import { STALE } from "@/lib/query-stale";
 import { priceTypeOptionsFromResponse, type PriceTypeOption } from "@/lib/price-type-label";
@@ -403,6 +404,7 @@ function renderValuationTotalCell(colId: string, totals: TotalsBase): ReactNode 
 }
 
 export function StockBalancesWorkspace({ tenantSlug }: Props) {
+  const canExport = usePermissions().has("warehouse.ostatki.copy");
   const [purpose, setPurpose] = useState<WarehouseStockPurpose>("sales");
   const [balanceView, setBalanceView] = useState<BalanceView>("summary");
   const [draftWh, setDraftWh] = useState("");
@@ -938,17 +940,19 @@ export function StockBalancesWorkspace({ tenantSlug }: Props) {
                     }}
                   />
                 </div>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="h-9"
-                  disabled={exporting || (balanceView === "valuation" && !applied.priceType.trim())}
-                  onClick={() => void downloadExcel()}
-                >
-                  <Download className="mr-1 size-3.5" />
-                  {exporting ? "…" : "Excel"}
-                </Button>
+                {canExport ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-9"
+                    disabled={exporting || (balanceView === "valuation" && !applied.priceType.trim())}
+                    onClick={() => void downloadExcel()}
+                  >
+                    <Download className="mr-1 size-3.5" />
+                    {exporting ? "…" : "Excel"}
+                  </Button>
+                ) : null}
                 <Button
                   type="button"
                   variant="outline"

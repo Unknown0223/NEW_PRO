@@ -5,6 +5,7 @@ import { useDeferredValue, useMemo, useRef, useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { CalendarDays, FileSpreadsheet, ListOrdered, RotateCcw, Search } from "lucide-react";
 import { api } from "@/lib/api";
+import { usePermissions } from "@/lib/use-permissions";
 import { STALE } from "@/lib/query-stale";
 import { useAuthStore, useAuthStoreHydrated } from "@/lib/auth-store";
 import { SearchableMultiSelectPanel } from "@/components/ui/searchable-multi-select-panel";
@@ -254,6 +255,7 @@ function MultiFilter({
 }
 
 export default function ReportExpeditorReturnsPage() {
+  const canExport = usePermissions().has("reports.otchety.copy");
   const tenantSlug = useAuthStore((s) => s.tenantSlug);
   const hydrated = useAuthStoreHydrated();
   const today = new Date();
@@ -699,7 +701,7 @@ export default function ReportExpeditorReturnsPage() {
               type="button"
               variant="outline"
               size="sm"
-              className="h-8 shrink-0 gap-1.5 text-xs"
+              className={cn("h-8 shrink-0 gap-1.5 text-xs", !canExport && "hidden")}
               disabled={exporting}
               title="Скачать Excel (все листы отчёта)"
               onClick={() => void downloadExcel()}
@@ -873,7 +875,7 @@ export default function ReportExpeditorReturnsPage() {
               type="button"
               variant="outline"
               size="sm"
-              className="h-8 shrink-0 gap-1.5 text-xs"
+              className={cn("h-8 shrink-0 gap-1.5 text-xs", !canExport && "hidden")}
               disabled={exporting}
               title="Скачать Excel (все листы отчёта)"
               onClick={() => void downloadExcel()}
@@ -993,7 +995,7 @@ export default function ReportExpeditorReturnsPage() {
               type="button"
               variant="outline"
               size="sm"
-              className="h-8 shrink-0 gap-1.5 text-xs"
+              className={cn("h-8 shrink-0 gap-1.5 text-xs", !canExport && "hidden")}
               disabled={exporting}
               title="Скачать Excel (все листы отчёта)"
               onClick={() => void downloadExcel()}

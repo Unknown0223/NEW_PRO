@@ -12,6 +12,7 @@ import { parseXlsxPreview } from "@/lib/initial-setup/preview-xlsx";
 import { getStepTableConfig, requiredColumnKeys } from "@/lib/initial-setup/ref-table-config";
 import type { InitialSetupPreviewState, InitialSetupStep } from "@/lib/initial-setup/types";
 import { cn } from "@/lib/utils";
+import { usePermissions } from "@/lib/use-permissions";
 import { getUserFacingError } from "@/lib/error-utils";
 import { useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
@@ -47,6 +48,7 @@ export function ProductCatalogExcelPanel({
   showCardHeader = true
 }: Props) {
   const qc = useQueryClient();
+  const canExport = usePermissions().has("settings.tovar.copy");
   const [msg, setMsg] = useState<string | null>(null);
   const [downloading, setDownloading] = useState<null | "template" | "export">(null);
   const [importDialog, setImportDialog] = useState<ImportDialogState | null>(null);
@@ -180,6 +182,7 @@ export function ProductCatalogExcelPanel({
               type="button"
               variant="secondary"
               size="sm"
+              className={cn(!canExport && "hidden")}
               disabled={downloading === "export"}
               onClick={async () => {
                 setDownloading("export");

@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { isAxiosError } from "axios";
 import { api } from "@/lib/api";
+import { usePermissions } from "@/lib/use-permissions";
 import {
   firstMessagePerField,
   firstValidationUserHint,
@@ -39,6 +40,7 @@ function pickZodLeaf(per: Record<string, string>, leaf: string): string | undefi
 }
 
 export function SalesChannelsWorkspace({ tenantSlug }: Props) {
+  const canExport = usePermissions().has("settings.kanal_sbyta.export");
   const qc = useQueryClient();
   const [tab, setTab] = useState<"active" | "inactive">("active");
   const [search, setSearch] = useState("");
@@ -166,7 +168,7 @@ export function SalesChannelsWorkspace({ tenantSlug }: Props) {
                 type="button"
                 variant="outline"
                 size="sm"
-                className="h-9 shrink-0 text-xs"
+                className={cn("h-9 shrink-0 text-xs", !canExport && "hidden")}
                 onClick={() => {
                   const headers = ["Название", "Код"];
                   const rows = filteredRows.map((r) => [r.name, r.code ?? ""]);

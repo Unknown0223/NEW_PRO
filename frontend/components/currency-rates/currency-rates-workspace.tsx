@@ -126,6 +126,7 @@ export function CurrencyRatesWorkspace() {
   const { has } = usePermissions();
   const canWrite =
     has("cash.kurs_valyuty.create") || has("cash.kurs_valyuty.update");
+  const canExport = has("cash.kurs_valyuty.export");
   const qc = useQueryClient();
   const init = useMemo(() => monthRange(), []);
   const [from, setFrom] = useState(init.from);
@@ -407,10 +408,12 @@ export function CurrencyRatesWorkspace() {
           </Button>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Button type="button" variant="outline" size="sm" className="h-10 gap-1" onClick={() => void exportXlsx()}>
-            <Download className="size-4" />
-            Excel
-          </Button>
+          {canExport ? (
+            <Button type="button" variant="outline" size="sm" className="h-10 gap-1" onClick={() => void exportXlsx()}>
+              <Download className="size-4" />
+              Excel
+            </Button>
+          ) : null}
           {canWrite ? (
             <Button
               type="button"

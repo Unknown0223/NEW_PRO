@@ -10,6 +10,7 @@ import {
 } from "@/components/dashboard/sales/sales-data-table-tools";
 import { SalesSectionPanel } from "@/components/dashboard/sales/sales-section-panel";
 import { cn } from "@/lib/utils";
+import { usePermissions } from "@/lib/use-permissions";
 import { ChevronLeft, ChevronRight, Download, Filter, RefreshCw, Search, SlidersHorizontal } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
 
@@ -60,6 +61,7 @@ export function SalesDataTable<T extends object>({
   onExportXlsx?: () => void;
   rowKey: (row: T, index: number) => string;
 }) {
+  const canExport = usePermissions().has("dashboard.prodazhi.export");
   const [globalFilter, setGlobalFilter] = useState("");
   const [pageIndex, setPageIndex] = useState(0);
   const [pageSize, setPageSize] = useState(initialPageSize);
@@ -165,7 +167,10 @@ export function SalesDataTable<T extends object>({
           <button
             type="button"
             onClick={() => (onExportXlsx ? onExportXlsx() : downloadCsv(`${title}.csv`, data))}
-            className="inline-flex h-10 items-center gap-2 rounded-xl border border-border px-3 text-sm font-semibold text-slate-700 transition hover:bg-muted"
+            className={cn(
+              "inline-flex h-10 items-center gap-2 rounded-xl border border-border px-3 text-sm font-semibold text-slate-700 transition hover:bg-muted",
+              !canExport && "hidden"
+            )}
           >
             <Download className="h-4 w-4 text-emerald-600" />
             Excel

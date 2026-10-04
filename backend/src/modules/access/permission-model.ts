@@ -139,7 +139,8 @@ const SYSTEM_SETTINGS_TREE_RU = "Системные настройки";
 const CRUD: PermissionAction[] = ["view", "create", "update", "delete"];
 const VIEW_ONLY: PermissionAction[] = ["view"];
 const VIEW_COPY: PermissionAction[] = ["view", "copy"];
-const STAFF_CRUD: PermissionAction[] = ["view", "create", "update", "activate", "deactivate", "history"];
+const VIEW_EXPORT: PermissionAction[] = ["view", "export"];
+const STAFF_CRUD: PermissionAction[] = ["view", "create", "update", "activate", "deactivate", "export", "history"];
 
 /**
  * Barcha modul/bo'limlar va ularning amal tiplari.
@@ -148,9 +149,9 @@ const STAFF_CRUD: PermissionAction[] = ["view", "create", "update", "activate", 
  */
 export const PERMISSION_SECTIONS: PermissionSectionDef[] = [
   // ── Dashboard ──────────────────────────────────────────────
-  { module: "dashboard", section: "prodazhi", labelRu: "Продажа", actions: VIEW_ONLY },
-  { module: "dashboard", section: "finansy", labelRu: "Финанс", actions: VIEW_ONLY },
-  { module: "dashboard", section: "supervayzer", labelRu: "Супервайзер", actions: VIEW_ONLY },
+  { module: "dashboard", section: "prodazhi", labelRu: "Продажа", actions: VIEW_EXPORT },
+  { module: "dashboard", section: "finansy", labelRu: "Финанс", actions: VIEW_EXPORT },
+  { module: "dashboard", section: "supervayzer", labelRu: "Супервайзер", actions: VIEW_EXPORT },
   { module: "dashboard", section: "plan_fakt", labelRu: "Мониторинг продаж и планов", actions: VIEW_ONLY },
 
   // ── Orders (Заявки) ────────────────────────────────────────
@@ -170,29 +171,29 @@ export const PERMISSION_SECTIONS: PermissionSectionDef[] = [
   { module: "cash", section: "rashody_klienta", labelRu: "Расходы клиента", actions: CRUD },
   { module: "cash", section: "nachalnye_balansy", labelRu: "Начальные балансы клиентов", actions: ["view", "create", "update", "void", "restore"] },
   /** Alohida: «Балансы клиентов» — `cash.otchety` (Отчёты) bilan aralashmasin. */
-  { module: "cash", section: "balansy_klientov", labelRu: "Балансы клиентов", actions: VIEW_ONLY, treeSectionRu: REPORTS_TREE_RU },
-  { module: "cash", section: "otchety", labelRu: "Отчеты", actions: VIEW_ONLY, treeSectionRu: REPORTS_TREE_RU },
-  { module: "cash", section: "kassa", labelRu: "Кассы", actions: ["view", "create", "status", "history"] },
-  { module: "cash", section: "kurs_valyuty", labelRu: "Курс валюты", actions: ["view", "create", "update"] },
+  { module: "cash", section: "balansy_klientov", labelRu: "Балансы клиентов", actions: VIEW_EXPORT, treeSectionRu: REPORTS_TREE_RU },
+  { module: "cash", section: "otchety", labelRu: "Отчеты", actions: VIEW_EXPORT, treeSectionRu: REPORTS_TREE_RU },
+  { module: "cash", section: "kassa", labelRu: "Кассы", actions: ["view", "create", "update", "status", "export", "history"] },
+  { module: "cash", section: "kurs_valyuty", labelRu: "Курс валюты", actions: ["view", "create", "update", "export"] },
   { module: "cash", section: "prihody", labelRu: "Приходы", actions: VIEW_ONLY },
-  { module: "cash", section: "zayavki_na_oplatu", labelRu: "Заявки на оплату", actions: ["view", "approve"] },
+  { module: "cash", section: "zayavki_na_oplatu", labelRu: "Заявки на оплату", actions: ["view", "approve", "export"] },
   { module: "cash", section: "dolgi_ekspeditora", labelRu: "Долги экспедитора", actions: VIEW_ONLY },
 
   // ── Warehouse (Склады) ─────────────────────────────────────
-  { module: "warehouse", section: "sklady", labelRu: "Склады", actions: ["view", "create", "update", "delete", "history"] },
-  { module: "warehouse", section: "bloki", labelRu: "Блок склада", actions: CRUD },
-  { module: "warehouse", section: "postuplenie", labelRu: "Товарные поступления", actions: ["view", "create", "update", "delete", "import", "status", "history"] },
-  { module: "warehouse", section: "peremeshchenie", labelRu: "Перемещение товара", actions: ["view", "create", "update", "transfer"] },
-  { module: "warehouse", section: "korrektirovka", labelRu: "Корректировка и инвентаризация", actions: ["view", "create", "update"] },
+  { module: "warehouse", section: "sklady", labelRu: "Склады", actions: ["view", "create", "update", "delete", "export", "history"] },
+  { module: "warehouse", section: "bloki", labelRu: "Блок склада", actions: [...CRUD, "export"] },
+  { module: "warehouse", section: "postuplenie", labelRu: "Товарные поступления", actions: ["view", "create", "update", "delete", "import", "status", "export", "history"] },
+  { module: "warehouse", section: "peremeshchenie", labelRu: "Перемещение товара", actions: ["view", "create", "update", "transfer", "export"] },
+  { module: "warehouse", section: "korrektirovka", labelRu: "Корректировка и инвентаризация", actions: ["view", "create", "update", "export"] },
   { module: "warehouse", section: "ostatki", labelRu: "Остатки товаров", actions: VIEW_COPY, treeSectionRu: REPORTS_TREE_RU },
-  { module: "warehouse", section: "rekomendovannyy_zapas", labelRu: "Рекомендованный запас", actions: VIEW_ONLY, treeSectionRu: REPORTS_TREE_RU },
+  { module: "warehouse", section: "rekomendovannyy_zapas", labelRu: "Рекомендованный запас", actions: VIEW_EXPORT, treeSectionRu: REPORTS_TREE_RU },
   { module: "warehouse", section: "ostatki_na_datu", labelRu: "Остатки на определенную дату", actions: VIEW_COPY, treeSectionRu: REPORTS_TREE_RU },
-  { module: "warehouse", section: "materialnyy_otchet", labelRu: "Материальный отчет", actions: VIEW_ONLY, treeSectionRu: REPORTS_TREE_RU },
+  { module: "warehouse", section: "materialnyy_otchet", labelRu: "Материальный отчет", actions: VIEW_EXPORT, treeSectionRu: REPORTS_TREE_RU },
 
   // ── Suppliers (Поставщики) ─────────────────────────────────
-  { module: "suppliers", section: "postavshchik", labelRu: "Поставщики", actions: ["view", "create", "update", "delete", "history"] },
-  { module: "suppliers", section: "oplaty", labelRu: "Оплата поставщику", actions: ["view", "create", "update"] },
-  { module: "suppliers", section: "balansy", labelRu: "Балансы и акт сверки", actions: VIEW_ONLY },
+  { module: "suppliers", section: "postavshchik", labelRu: "Поставщики", actions: ["view", "create", "update", "delete", "export", "history"] },
+  { module: "suppliers", section: "oplaty", labelRu: "Оплата поставщику", actions: ["view", "create", "update", "export"] },
+  { module: "suppliers", section: "balansy", labelRu: "Балансы и акт сверки", actions: VIEW_EXPORT },
 
   // ── Plans (Планы) ──────────────────────────────────────────
   { module: "plans", section: "nastroyka_utverzhdayushchih", labelRu: "Настройка утверждающих", actions: ["view", "update"] },
@@ -201,39 +202,39 @@ export const PERMISSION_SECTIONS: PermissionSectionDef[] = [
   // ── Reports (Отчеты) ───────────────────────────────────────
   { module: "reports", section: "otchety", labelRu: "Отчеты", actions: VIEW_COPY },
   { module: "reports", section: "konstruktor", labelRu: "Конструктор отчетов", actions: ["view", "create", "update", "copy"] },
-  { module: "reports", section: "dnevnye_kpi_plany", labelRu: "Дневные KPI планы", actions: VIEW_ONLY, treeSectionRu: REPORTS_TREE_RU },
+  { module: "reports", section: "dnevnye_kpi_plany", labelRu: "Дневные KPI планы", actions: VIEW_EXPORT, treeSectionRu: REPORTS_TREE_RU },
 
   // ── Staff (Пользователи) ───────────────────────────────────
-  { module: "staff", section: "agent", labelRu: "Агент", actions: ["view", "create", "update", "delete", "copy", "activate", "deactivate", "history"] },
+  { module: "staff", section: "agent", labelRu: "Агент", actions: ["view", "create", "update", "delete", "export", "activate", "deactivate", "history"] },
   { module: "staff", section: "ekspeditor", labelRu: "Экспедитор", actions: STAFF_CRUD },
   { module: "staff", section: "supervayzer", labelRu: "Супервайзер", actions: STAFF_CRUD },
   { module: "staff", section: "skladchik", labelRu: "Складчик", actions: STAFF_CRUD },
   { module: "staff", section: "inkassator", labelRu: "Инкассатор", actions: STAFF_CRUD },
   { module: "staff", section: "auditor", labelRu: "Аудитор", actions: STAFF_CRUD },
-  { module: "staff", section: "sotrudniki", labelRu: "Сотрудники", actions: ["view", "create", "update", "activate", "deactivate"] },
-  { module: "staff", section: "konsignatsiya", labelRu: "Консигнация и лимиты агентов", actions: ["view", "create", "update"] },
-  { module: "staff", section: "tabel", labelRu: "Табель", actions: ["view", "create", "update", "history"] },
+  { module: "staff", section: "sotrudniki", labelRu: "Сотрудники", actions: ["view", "create", "update", "activate", "deactivate", "export"] },
+  { module: "staff", section: "konsignatsiya", labelRu: "Консигнация и лимиты агентов", actions: ["view", "create", "update", "export"] },
+  { module: "staff", section: "tabel", labelRu: "Табель", actions: ["view", "create", "update", "export", "history"] },
   { module: "staff", section: "rabochie_dni", labelRu: "Рабочие дни", actions: VIEW_ONLY, treeSectionRu: "Табель" },
   { module: "staff", section: "tabel_normativ", labelRu: "Табель · Норматив агентов", actions: ["view", "update"] },
   { module: "staff", section: "zadachi", labelRu: "Задачи", actions: ["view", "update"] },
 
   // ── GPS / Routes ───────────────────────────────────────────
-  { module: "gps", section: "gps", labelRu: "GPS", actions: ["view", "update"] },
+  { module: "gps", section: "gps", labelRu: "GPS", actions: ["view", "update", "export"] },
   { module: "routes", section: "marshruty", labelRu: "Маршруты", actions: ["view", "update"] },
   { module: "routes", section: "trek", labelRu: "Трек", actions: VIEW_ONLY, treeSectionRu: "Маршруты" },
 
   // ── Settings (Настройки) ───────────────────────────────────
   { module: "settings", section: "tovar", labelRu: "Товар", actions: ["view", "create", "update", "delete", "import", "copy", "history"] },
   { module: "settings", section: "tsena", labelRu: "Цена", actions: ["view", "create", "update", "import", "history"] },
-  { module: "settings", section: "bonusy_i_skidki", labelRu: "Бонусы и скидки", actions: ["view", "create", "update", "delete", "history"] },
+  { module: "settings", section: "bonusy_i_skidki", labelRu: "Бонусы и скидки", actions: ["view", "create", "update", "delete", "export", "history"] },
   { module: "settings", section: "territoriya", labelRu: "Территория", actions: CRUD },
-  { module: "settings", section: "napravlenie_torgovli", labelRu: "Направление торговли", actions: CRUD },
+  { module: "settings", section: "napravlenie_torgovli", labelRu: "Направление торговли", actions: [...CRUD, "export"] },
   { module: "settings", section: "geo_granitsy", labelRu: "Гео-границы", actions: ["view", "create", "update", "history"] },
   { module: "settings", section: "profil_kompanii", labelRu: "Профиль компании", actions: ["view", "update"] },
   { module: "settings", section: "mobile_app", labelRu: "Мобильное приложение", actions: ["view", "update"] },
   { module: "settings", section: "document_edit_lock", labelRu: "Период редактирования", actions: ["view", "update"] },
   { module: "settings", section: "system_migration", labelRu: "Системная миграция", actions: ["view", "update", "import"] },
-  { module: "settings", section: "kategoriya_tovara", labelRu: "Категория товара", actions: VIEW_ONLY, treeSectionRu: DICTIONARIES_TREE_RU },
+  { module: "settings", section: "kategoriya_tovara", labelRu: "Категория товара", actions: VIEW_EXPORT, treeSectionRu: DICTIONARIES_TREE_RU },
   { module: "settings", section: "tip_tseny", labelRu: "Тип цены", actions: VIEW_ONLY, treeSectionRu: DICTIONARIES_TREE_RU },
   { module: "settings", section: "sposob_oplaty", labelRu: "Способ оплаты", actions: VIEW_ONLY, treeSectionRu: DICTIONARIES_TREE_RU },
   { module: "settings", section: "valyuty", labelRu: "Валюты", actions: VIEW_ONLY, treeSectionRu: DICTIONARIES_TREE_RU },
@@ -243,7 +244,7 @@ export const PERMISSION_SECTIONS: PermissionSectionDef[] = [
   { module: "settings", section: "edinitsy", labelRu: "Единицы измерения", actions: VIEW_ONLY, treeSectionRu: DICTIONARIES_TREE_RU },
   { module: "settings", section: "brend", labelRu: "Бренд", actions: VIEW_ONLY, treeSectionRu: DICTIONARIES_TREE_RU },
   { module: "settings", section: "segment", labelRu: "Сегмент", actions: VIEW_ONLY, treeSectionRu: DICTIONARIES_TREE_RU },
-  { module: "settings", section: "kanal_sbyta", labelRu: "Канал сбыта", actions: VIEW_ONLY, treeSectionRu: DICTIONARIES_TREE_RU },
+  { module: "settings", section: "kanal_sbyta", labelRu: "Канал сбыта", actions: VIEW_EXPORT, treeSectionRu: DICTIONARIES_TREE_RU },
   { module: "settings", section: "format_klienta", labelRu: "Формат клиента", actions: VIEW_ONLY, treeSectionRu: DICTIONARIES_TREE_RU },
   { module: "settings", section: "tip_klienta", labelRu: "Тип клиента", actions: VIEW_ONLY, treeSectionRu: DICTIONARIES_TREE_RU },
   { module: "settings", section: "kategoriya_klienta", labelRu: "Категория клиента", actions: VIEW_ONLY, treeSectionRu: DICTIONARIES_TREE_RU },
@@ -257,13 +258,13 @@ export const PERMISSION_SECTIONS: PermissionSectionDef[] = [
   { module: "settings", section: "seansy", labelRu: "Сеансы пользователей", actions: VIEW_ONLY, treeSectionRu: SYSTEM_SETTINGS_TREE_RU },
   { module: "settings", section: "appearance", labelRu: "Тема и цвета", actions: VIEW_ONLY, treeSectionRu: SYSTEM_SETTINGS_TREE_RU },
   { module: "settings", section: "returns_filter", labelRu: "Фильтр возврата", actions: VIEW_ONLY, treeSectionRu: SYSTEM_SETTINGS_TREE_RU },
-  { module: "settings", section: "orders_consignment", labelRu: "Заказы → консигнация", actions: VIEW_ONLY, treeSectionRu: SYSTEM_SETTINGS_TREE_RU },
+  { module: "settings", section: "orders_consignment", labelRu: "Заказы → консигнация", actions: VIEW_EXPORT, treeSectionRu: SYSTEM_SETTINGS_TREE_RU },
   { module: "settings", section: "timezone", labelRu: "Часовой пояс", actions: VIEW_ONLY, treeSectionRu: SYSTEM_SETTINGS_TREE_RU },
-  { module: "settings", section: "initial_setup", labelRu: "Начальная настройка", actions: VIEW_ONLY, treeSectionRu: SYSTEM_SETTINGS_TREE_RU },
+  { module: "settings", section: "initial_setup", labelRu: "Начальная настройка", actions: VIEW_EXPORT, treeSectionRu: SYSTEM_SETTINGS_TREE_RU },
 
   // ── Audit ──────────────────────────────────────────────────
   // `finance.obzor.view` — `dashboard.finansy.view` bilan bir xil sahifa (alias, `legacy-key-map.ts`).
-  { module: "audit", section: "log", labelRu: "Аудит", actions: VIEW_ONLY },
+  { module: "audit", section: "log", labelRu: "Аудит", actions: VIEW_EXPORT },
 
   // ── Зарплата — kalitlar eski modullarda (grantlar saqlanadi), Access UI'da alohida guruh ─
   { module: "staff", section: "zarplaty", labelRu: "Расчёт зарплаты", actions: ["view", "create", "update", "delete", "copy", "import", "assign", "status", "approve"], groupRu: PAYROLL_GROUP_RU },
@@ -275,12 +276,12 @@ export const PERMISSION_SECTIONS: PermissionSectionDef[] = [
   // `pivot.otchety.view` — `reports.konstruktor.view` bilan juft alias (`MODULE_VIEW_COMPANIONS`), alohida qatorsiz.
 
   // ── Work slots / Diagnostics / Activity ────────────────────
-  { module: "work_slots", section: "raboche_mesto", labelRu: "Рабочее место", actions: ["view", "create", "update", "assign", "history"] },
-  { module: "diagnostics", section: "error_logs", labelRu: "Журнал ошибок", actions: VIEW_ONLY },
-  { module: "activity", section: "history", labelRu: "Активность и история", actions: VIEW_ONLY },
+  { module: "work_slots", section: "raboche_mesto", labelRu: "Рабочее место", actions: ["view", "create", "update", "assign", "export", "history"] },
+  { module: "diagnostics", section: "error_logs", labelRu: "Журнал ошибок", actions: VIEW_EXPORT },
+  { module: "activity", section: "history", labelRu: "Активность и история", actions: VIEW_EXPORT },
 
   // ── Access (Доступ) ────────────────────────────────────────
-  { module: "access", section: "upravlenie", labelRu: "Доступ", actions: ["view", "update", "history"] }
+  { module: "access", section: "upravlenie", labelRu: "Доступ", actions: ["view", "update", "export", "history"] }
 ];
 
 export function permissionKey(module: string, section: string, action: PermissionAction): string {

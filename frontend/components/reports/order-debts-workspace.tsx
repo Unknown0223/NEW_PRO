@@ -13,6 +13,7 @@ import { Label } from "@/components/ui/label";
 import { SearchableMultiSelectPanel } from "@/components/ui/searchable-multi-select-panel";
 import { TableColumnSettingsDialog } from "@/components/data-table/table-column-settings-dialog";
 import { api } from "@/lib/api";
+import { usePermissions } from "@/lib/use-permissions";
 import type { ClientBalanceTerritoryOptions } from "@/lib/client-balances-types";
 import { useUserTablePrefs } from "@/hooks/use-user-table-prefs";
 import { useAuthStore, useAuthStoreHydrated } from "@/lib/auth-store";
@@ -374,6 +375,7 @@ function DebtsSortTh({
 }
 
 export function OrderDebtsWorkspace() {
+  const canExport = usePermissions().has("cash.otchety.export");
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -1265,17 +1267,19 @@ export function OrderDebtsWorkspace() {
                 className="h-9 pl-8 text-sm"
               />
             </div>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="h-9 shrink-0"
-              disabled={exporting}
-              onClick={() => void downloadExcel()}
-            >
-              <FileSpreadsheet className="mr-1.5 h-4 w-4" />
-              Excel
-            </Button>
+            {canExport ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-9 shrink-0"
+                disabled={exporting}
+                onClick={() => void downloadExcel()}
+              >
+                <FileSpreadsheet className="mr-1.5 h-4 w-4" />
+                Excel
+              </Button>
+            ) : null}
             <button
               type="button"
               className={buttonVariants({ variant: "ghost", size: "icon" })}

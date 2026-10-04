@@ -11,6 +11,7 @@ import {
 import type { FinanceClientDebtRow } from "@/components/dashboard/finance/types";
 import { TableColumnSettingsDialog, type ColumnDefItem } from "@/components/data-table/table-column-settings-dialog";
 import { useDashboardVirtualRows } from "@/components/dashboard/dashboard-virtual-tbody";
+import { usePermissions } from "@/lib/use-permissions";
 import { Download, LayoutGrid, Search } from "lucide-react";
 import { useMemo, useState } from "react";
 
@@ -45,6 +46,7 @@ export function FinanceClientLedger(props: {
     isFetching
   } = props;
 
+  const canExport = usePermissions().has("dashboard.finansy.export");
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState<{ key: string; direction: SortDir }>({
     key: "effective_balance",
@@ -118,14 +120,16 @@ export function FinanceClientLedger(props: {
       </div>
       <div className="mb-3 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div className="flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            className="inline-flex h-10 items-center gap-2 rounded-lg border border-border bg-card px-3 text-sm font-semibold text-slate-700 transition hover:border-teal-300 hover:text-teal-700"
-            onClick={exportCsv}
-          >
-            <Download className="h-4 w-4 text-emerald-600" />
-            Excel
-          </button>
+          {canExport ? (
+            <button
+              type="button"
+              className="inline-flex h-10 items-center gap-2 rounded-lg border border-border bg-card px-3 text-sm font-semibold text-slate-700 transition hover:border-teal-300 hover:text-teal-700"
+              onClick={exportCsv}
+            >
+              <Download className="h-4 w-4 text-emerald-600" />
+              Excel
+            </button>
+          ) : null}
           <select
             value={pageSize}
             onChange={(e) => onPageSizeChange(Number(e.target.value))}

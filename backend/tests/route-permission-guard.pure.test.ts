@@ -68,6 +68,33 @@ describe("route-permission-guard matchRule", () => {
     }
   });
 
+  it("cash desks: create, update and shift open/close are separate keys", () => {
+    expect(matchRule("POST", "/api/:slug/cash-desks")?.anyOf).toEqual(["cash.kassa.create"]);
+    expect(matchRule("PATCH", "/api/:slug/cash-desks/:id")?.anyOf).toEqual(["cash.kassa.update"]);
+    expect(matchRule("POST", "/api/:slug/cash-desks/:id/shifts/open")?.anyOf).toEqual(["cash.kassa.status"]);
+    expect(matchRule("POST", "/api/:slug/cash-desks/:id/shifts/:shiftId/close")?.anyOf).toEqual(["cash.kassa.status"]);
+  });
+
+  it("server-built Excel exports need the section export key, not view", () => {
+    const cases: Array<[string, string]> = [
+      ["/api/:slug/stock/recommended/export", "warehouse.rekomendovannyy_zapas.export"],
+      ["/api/:slug/stock/material-report/export", "warehouse.materialnyy_otchet.export"],
+      ["/api/:slug/stock/receipts-report/export", "warehouse.postuplenie.export"],
+      ["/api/:slug/warehouse-blocks/export", "warehouse.bloki.export"],
+      ["/api/:slug/reports/order-debts/export", "cash.otchety.export"],
+      ["/api/:slug/reports/income-report/export/:kind", "cash.otchety.export"],
+      ["/api/:slug/clients/:id/reconciliation-xlsx", "cash.otchety.export"],
+      ["/api/:slug/work-slots/export.xlsx", "work_slots.raboche_mesto.export"],
+      ["/api/:slug/settings/initial-setup/export-bundle.xlsx", "settings.initial_setup.export"],
+      ["/api/:slug/audit-events/export.xlsx", "audit.log.export"]
+    ];
+    for (const [path, key] of cases) {
+      expect(matchRule("GET", path)?.anyOf, path).toEqual([key]);
+    }
+    expect(matchRule("GET", "/api/:slug/stock/recommended")?.anyOf).toEqual(["warehouse.rekomendovannyy_zapas.view"]);
+    expect(matchRule("GET", "/api/:slug/reports/product-sales/export")?.anyOf).toContain("reports.otchety.copy");
+  });
+
   it("territory check-in validation and GET /territories stay open", () => {
     expect(matchRule("POST", "/api/:slug/territories/:id/validate-checkin")).toBeNull();
     expect(matchRule("GET", "/api/:slug/territories")).toBeNull();

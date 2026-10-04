@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { CalendarDays, FileSpreadsheet, RotateCcw, Search } from "lucide-react";
 import { api } from "@/lib/api";
+import { usePermissions } from "@/lib/use-permissions";
 import { STALE } from "@/lib/query-stale";
 import { useAuthStore, useAuthStoreHydrated } from "@/lib/auth-store";
 import { FilterSelect } from "@/components/ui/filter-select";
@@ -107,6 +108,7 @@ function formatDate(v: string) {
 }
 
 export default function ReportClientSales2Page() {
+  const canExport = usePermissions().has("reports.otchety.copy");
   const tenantSlug = useAuthStore((s) => s.tenantSlug);
   const hydrated = useAuthStoreHydrated();
 
@@ -559,7 +561,7 @@ export default function ReportClientSales2Page() {
               />
             </div>
           </div>
-          <div className="ml-auto flex shrink-0 flex-wrap items-center justify-end gap-2">
+          <div className={cn("ml-auto flex shrink-0 flex-wrap items-center justify-end gap-2", !canExport && "hidden")}>
             <Button variant="outline" size="sm" onClick={() => void downloadExcel()} disabled={exporting}>
               <FileSpreadsheet className="mr-1 h-4 w-4" />
               Excel (оба)
@@ -668,7 +670,7 @@ export default function ReportClientSales2Page() {
               />
             </div>
           </div>
-          <div className="ml-auto flex shrink-0 items-center justify-end">
+          <div className={cn("ml-auto flex shrink-0 items-center justify-end", !canExport && "hidden")}>
             <Button variant="outline" size="sm" onClick={() => void downloadAgentsExcel()} disabled={exportingAgents || !reportQ.data}>
               <FileSpreadsheet className="mr-1 h-4 w-4" />
               Excel (по агентам)

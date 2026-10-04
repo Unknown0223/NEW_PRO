@@ -28,7 +28,7 @@ export const CLIENT_PERMISSION_SECTIONS: PermissionSectionDef[] = [
     ([section, labelRu]): PermissionSectionDef => ({ module: "clients", section, labelRu, actions: ["update"], treeSectionRu: VISIT_PLANNER_TREE_RU })
   ),
   { module: "clients", section: "obedinenie", labelRu: "Объединение клиентов", actions: ["view", "update", "create", "delete", "restore", "history"] },
-  { module: "clients", section: "oborudovanie", labelRu: "Оборудование", actions: ["view", "create", "delete"] },
+  { module: "clients", section: "oborudovanie", labelRu: "Оборудование", actions: ["view", "create", "delete", "export"] },
   { module: "clients", section: "foto", labelRu: "Фотоотчёты", actions: ["view", "create", "void", "restore"] },
   { module: "clients", section: "ostatki_tt", labelRu: "Остатки в торговых точках", actions: ["view", "import", "copy"] }
 ];

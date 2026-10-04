@@ -35,6 +35,7 @@ import {
 import type { InitialSetupPreviewState, InitialSetupStep } from "@/lib/initial-setup/types";
 import { getUserFacingError } from "@/lib/error-utils";
 import { api } from "@/lib/api";
+import { usePermissions } from "@/lib/use-permissions";
 import { isAxiosError } from "axios";
 import { STALE } from "@/lib/query-stale";
 import { cn } from "@/lib/utils";
@@ -68,6 +69,7 @@ function statusIcon(done: boolean, skipped: boolean, blocked: boolean) {
 }
 
 export function InitialSetupWorkspace({ tenantSlug }: Props) {
+  const canExport = usePermissions().has("settings.initial_setup.export");
   const [progress, setProgress] = useState<InitialSetupProgress>(() =>
     loadInitialSetupProgress(tenantSlug)
   );
@@ -467,7 +469,7 @@ export function InitialSetupWorkspace({ tenantSlug }: Props) {
               type="button"
               variant="outline"
               size="sm"
-              className="h-9 gap-1.5 rounded-lg"
+              className={cn("h-9 gap-1.5 rounded-lg", !canExport && "hidden")}
               disabled={templateBusy === "export"}
               onClick={() => void onExportBundleData()}
             >

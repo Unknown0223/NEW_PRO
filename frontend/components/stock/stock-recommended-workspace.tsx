@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { useUserTablePrefs } from "@/hooks/use-user-table-prefs";
 import { api } from "@/lib/api";
 import { STALE } from "@/lib/query-stale";
+import { usePermissions } from "@/lib/use-permissions";
 import { cn } from "@/lib/utils";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -108,6 +109,7 @@ function coverageClass(r: RecommendedRow): string {
 }
 
 export function StockRecommendedWorkspace({ tenantSlug }: { tenantSlug: string }) {
+  const canExport = usePermissions().has("warehouse.rekomendovannyy_zapas.export");
   const today = localYmd(new Date());
   const [draftDateFrom, setDraftDateFrom] = useState(monthStartYmd);
   const [draftDateTo, setDraftDateTo] = useState(today);
@@ -523,10 +525,12 @@ export function StockRecommendedWorkspace({ tenantSlug }: { tenantSlug: string }
                     onKeyDown={(e) => e.key === "Enter" && applyFilters()}
                   />
                 </div>
-                <Button type="button" variant="outline" size="sm" className="h-9" disabled={exporting} onClick={() => void downloadExcel()}>
-                  <Download className="mr-1 size-3.5" />
-                  {exporting ? "…" : "Excel"}
-                </Button>
+                {canExport ? (
+                  <Button type="button" variant="outline" size="sm" className="h-9" disabled={exporting} onClick={() => void downloadExcel()}>
+                    <Download className="mr-1 size-3.5" />
+                    {exporting ? "…" : "Excel"}
+                  </Button>
+                ) : null}
                 <Button type="button" variant="outline" size="icon" className="h-9 w-9" onClick={() => void listQ.refetch()}>
                   <RefreshCw className={cn("size-4", listQ.isFetching && "animate-spin")} />
                 </Button>

@@ -9,12 +9,11 @@ export default function CashDesksSettingsPage() {
   const tenantSlug = useAuthStore((s) => s.tenantSlug);
   const hydrated = useAuthStoreHydrated();
   const { has, isLoading } = usePermissions();
-  /** API PATCH/POST → cash.kassa.create */
-  const canWrite = has("cash.kassa.create");
+  const canCreate = has("cash.kassa.create");
+  const canUpdate = has("cash.kassa.update");
   const canHistory = has("cash.kassa.history");
   const canStatus = has("cash.kassa.status");
-  /** Client-side Excel: create yoki history (view-only emas) */
-  const canExport = canWrite || canHistory;
+  const canExport = has("cash.kassa.export");
 
   if (!hydrated || isLoading) {
     return <p className="text-sm text-muted-foreground">Загрузка сессии…</p>;
@@ -39,7 +38,8 @@ export default function CashDesksSettingsPage() {
       </div>
       <CashDesksWorkspace
         tenantSlug={tenantSlug}
-        canWrite={canWrite}
+        canCreate={canCreate}
+        canUpdate={canUpdate}
         canHistory={canHistory}
         canStatus={canStatus}
         canExport={canExport}

@@ -7,6 +7,7 @@ import { DateRangePopover, formatDateRangeButton } from "@/components/ui/date-ra
 import { filterPanelSelectClassName } from "@/components/ui/filter-select";
 import { Label } from "@/components/ui/label";
 import { api } from "@/lib/api";
+import { usePermissions } from "@/lib/use-permissions";
 import { useAuthStore, useAuthStoreHydrated } from "@/lib/auth-store";
 import { downloadXlsxWorkbook } from "@/lib/download-xlsx";
 import { formatNumberGrouped } from "@/lib/format-numbers";
@@ -199,6 +200,7 @@ function childRowSourceLink(key: string): string | null {
 }
 
 export function CashFlowWorkspace() {
+  const canExport = usePermissions().has("cash.otchety.export");
   const tenantSlug = useAuthStore((s) => s.tenantSlug);
   const hydrated = useAuthStoreHydrated();
   const router = useRouter();
@@ -733,7 +735,7 @@ export function CashFlowWorkspace() {
                   <RefreshCw className="size-4" />
                 </Button>
               </div>
-              <div className="flex items-center gap-1">
+              <div className={cn("flex items-center gap-1", !canExport && "hidden")}>
                 <Button
                   type="button"
                   size="sm"

@@ -15,6 +15,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { api } from "@/lib/api";
+import { usePermissions } from "@/lib/use-permissions";
 import { downloadXlsxSheet } from "@/lib/download-xlsx";
 import { getUserFacingError } from "@/lib/error-utils";
 import { formatNumberGrouped } from "@/lib/format-numbers";
@@ -91,6 +92,7 @@ function formatDt(iso: string | null | undefined): string {
 type Props = { tenantSlug: string };
 
 export function OrdersConsignmentTransfersWorkspace({ tenantSlug }: Props) {
+  const canExport = usePermissions().has("settings.orders_consignment.export");
   const qc = useQueryClient();
   const [daysDraft, setDaysDraft] = useState("3");
   const [search, setSearch] = useState("");
@@ -344,7 +346,7 @@ export function OrdersConsignmentTransfersWorkspace({ tenantSlug }: Props) {
             type="button"
             variant="outline"
             size="sm"
-            className="gap-1.5"
+            className={cn("gap-1.5", !canExport && "hidden")}
             disabled={exportMut.isPending || total === 0}
             onClick={() => void exportMut.mutateAsync()}
           >

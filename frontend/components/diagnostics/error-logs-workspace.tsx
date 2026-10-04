@@ -4,6 +4,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { api } from "@/lib/api";
+import { usePermissions } from "@/lib/use-permissions";
+import { cn } from "@/lib/utils";
 import { STALE } from "@/lib/query-stale";
 import { useQuery } from "@tanstack/react-query";
 import { Download, X } from "lucide-react";
@@ -65,6 +67,7 @@ function sourceBadge(source: string) {
 }
 
 export function ErrorLogsWorkspace({ tenantSlug }: { tenantSlug: string }) {
+  const canExport = usePermissions().has("diagnostics.error_logs.export");
   const [page, setPage] = useState(1);
   const [userId, setUserId] = useState("");
   const [source, setSource] = useState("");
@@ -205,7 +208,7 @@ export function ErrorLogsWorkspace({ tenantSlug }: { tenantSlug: string }) {
         <Button
           variant="outline"
           size="sm"
-          className="h-9"
+          className={cn("h-9", !canExport && "hidden")}
           disabled={rows.length === 0}
           onClick={() =>
             downloadCsv(

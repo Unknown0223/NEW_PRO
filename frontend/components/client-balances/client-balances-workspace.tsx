@@ -22,6 +22,7 @@ import { TableColumnSettingsDialog } from "@/components/data-table/table-column-
 import { PageShell } from "@/components/dashboard/page-shell";
 import { useUserTablePrefs } from "@/hooks/use-user-table-prefs";
 import { api } from "@/lib/api";
+import { usePermissions } from "@/lib/use-permissions";
 import { useAuthStore, useAuthStoreHydrated } from "@/lib/auth-store";
 import {
   appendPositiveIntListParam,
@@ -604,6 +605,7 @@ function parseClientBalancesView(raw: string | null | undefined): ClientBalanceV
 }
 
 export function ClientBalancesWorkspace() {
+  const canExport = usePermissions().has("cash.balansy_klientov.export");
   const tenantSlug = useAuthStore((s) => s.tenantSlug);
   const hydrated = useAuthStoreHydrated();
   const router = useRouter();
@@ -1354,20 +1356,22 @@ export function ClientBalancesWorkspace() {
                   <LayoutGrid size={16} className="text-slate-600" />
                 </CbToolButton>
               ) : null}
-              <button
-                type="button"
-                disabled={
-                  excelBusy ||
-                  (isConsignmentView
-                    ? !consignmentQ.data?.data.length
-                    : !listQ.data?.data.length)
-                }
-                onClick={() => void runExcelExport()}
-                className="flex h-10 items-center gap-2 rounded-lg border border-border bg-card px-4 text-[13.5px] font-medium text-slate-700 transition-colors hover:bg-muted disabled:opacity-60"
-              >
-                <FileSpreadsheet size={16} className="text-emerald-600" />
-                {excelBusy ? "Экспорт…" : "Excel"}
-              </button>
+              {canExport ? (
+                <button
+                  type="button"
+                  disabled={
+                    excelBusy ||
+                    (isConsignmentView
+                      ? !consignmentQ.data?.data.length
+                      : !listQ.data?.data.length)
+                  }
+                  onClick={() => void runExcelExport()}
+                  className="flex h-10 items-center gap-2 rounded-lg border border-border bg-card px-4 text-[13.5px] font-medium text-slate-700 transition-colors hover:bg-muted disabled:opacity-60"
+                >
+                  <FileSpreadsheet size={16} className="text-emerald-600" />
+                  {excelBusy ? "Экспорт…" : "Excel"}
+                </button>
+              ) : null}
               <CbToolButton
                 title="Обновить"
                 onClick={() =>

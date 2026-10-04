@@ -4,6 +4,7 @@ import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { CalendarDays, FileSpreadsheet, RotateCcw, Search } from "lucide-react";
 import { api } from "@/lib/api";
+import { usePermissions } from "@/lib/use-permissions";
 import { STALE } from "@/lib/query-stale";
 import { useAuthStore, useAuthStoreHydrated } from "@/lib/auth-store";
 import { SearchableMultiSelectPanel } from "@/components/ui/searchable-multi-select-panel";
@@ -153,6 +154,7 @@ function isVisitTotalsBadRangeError(err: unknown): boolean {
 }
 
 export default function ReportVisitTotalsPage() {
+  const canExport = usePermissions().has("reports.otchety.copy");
   const tenantSlug = useAuthStore((s) => s.tenantSlug);
   const hydrated = useAuthStoreHydrated();
   const b0 = defaultRange();
@@ -380,17 +382,19 @@ export default function ReportVisitTotalsPage() {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="h-8 gap-1"
-              disabled={exporting}
-              onClick={() => void downloadExcel()}
-            >
-              <FileSpreadsheet className="h-3.5 w-3.5" />
-              Excel
-            </Button>
+            {canExport ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-8 gap-1"
+                disabled={exporting}
+                onClick={() => void downloadExcel()}
+              >
+                <FileSpreadsheet className="h-3.5 w-3.5" />
+                Excel
+              </Button>
+            ) : null}
             <Button
               type="button"
               variant="outline"

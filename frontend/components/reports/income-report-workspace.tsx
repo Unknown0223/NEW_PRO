@@ -6,6 +6,7 @@ import { DateRangePopover, formatDateRangeButton } from "@/components/ui/date-ra
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { FilterSearchableSelect } from "@/components/ui/filter-searchable-select";
 import { api } from "@/lib/api";
+import { usePermissions } from "@/lib/use-permissions";
 import { useAuthStore, useAuthStoreHydrated } from "@/lib/auth-store";
 import { formatNumberGrouped } from "@/lib/format-numbers";
 import {
@@ -90,6 +91,7 @@ function downloadBlob(blob: Blob, fileName: string) {
 }
 
 export function IncomeReportWorkspace() {
+  const canExport = usePermissions().has("cash.otchety.export");
   const tenantSlug = useAuthStore((s) => s.tenantSlug);
   const hydrated = useAuthStoreHydrated();
   const enabled = Boolean(tenantSlug && hydrated);
@@ -584,13 +586,15 @@ export function IncomeReportWorkspace() {
                       >
                         <RotateCcw className="size-3.5" />
                       </button>
-                      <button
-                        className="inline-flex h-8 items-center gap-1 rounded-md border px-3 text-xs"
-                        onClick={() => void exportSheet(section.key as "period" | "territory" | "clients" | "agents")}
-                      >
-                        <Download className="size-3.5" />
-                        Excel
-                      </button>
+                      {canExport ? (
+                        <button
+                          className="inline-flex h-8 items-center gap-1 rounded-md border px-3 text-xs"
+                          onClick={() => void exportSheet(section.key as "period" | "territory" | "clients" | "agents")}
+                        >
+                          <Download className="size-3.5" />
+                          Excel
+                        </button>
+                      ) : null}
                     </div>
 
                     {section.key === "period" && (() => {

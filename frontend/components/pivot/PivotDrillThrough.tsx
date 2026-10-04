@@ -44,6 +44,8 @@ type Props = {
   cellContext?: PivotCellDrillContext;
   /** Optional explicit column order (field ids). */
   columnIds?: string[];
+  /** Excel tugmasi (ruxsat bo'lmasa yashiriladi). */
+  canExport?: boolean;
   onClose: () => void;
   className?: string;
 };
@@ -84,7 +86,7 @@ function resolveDrillThroughColumns(
   return ordered.slice(0, DRILL_MAX_COLUMNS);
 }
 
-export function PivotDrillThrough({ open, records, fields, cellContext, columnIds, onClose, className }: Props) {
+export function PivotDrillThrough({ open, records, fields, cellContext, columnIds, canExport = true, onClose, className }: Props) {
   const t = getPivotStrings().drillThrough;
   const displayFields = useMemo(
     () => resolveDrillThroughColumns(records, fields, cellContext?.valueFieldId, columnIds),
@@ -131,7 +133,7 @@ export function PivotDrillThrough({ open, records, fields, cellContext, columnId
             </p>
           </div>
           <div className="flex items-center gap-2">
-            {records.length > 0 && (
+            {canExport && records.length > 0 && (
               <Button type="button" variant="outline" size="sm" className="h-8 gap-1 text-xs" onClick={handleExport}>
                 <FileSpreadsheet className="h-3.5 w-3.5" />
                 Excel

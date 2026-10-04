@@ -36,6 +36,7 @@ import { api } from "@/lib/api";
 import { getUserFacingError } from "@/lib/error-utils";
 import { downloadXlsxSheet } from "@/lib/download-xlsx";
 import { useUserTablePrefs } from "@/hooks/use-user-table-prefs";
+import { usePermissions } from "@/lib/use-permissions";
 import { cn } from "@/lib/utils";
 import { formatNumberGrouped } from "@/lib/format-numbers";
 
@@ -169,6 +170,7 @@ function parseFilenameFromDisposition(cd: string | undefined): string | null {
 
 export default function TransfersPage() {
   const tenant = useTenant();
+  const canExport = usePermissions().has("warehouse.peremeshchenie.export");
   const [loading, setLoading] = useState(true);
   const [warehouses, setWarehouses] = useState<WarehouseOption[]>([]);
   const [rawTransfers, setRawTransfers] = useState<Transfer[]>([]);
@@ -597,17 +599,19 @@ export default function TransfersPage() {
                 <RefreshCw className={cn("size-4", loading && "animate-spin")} />
                 Обновить
               </Button>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="gap-2"
-                onClick={() => setExportOpen(true)}
-                disabled={!tenant}
-              >
-                <FileSpreadsheet className="size-4" />
-                Excel
-              </Button>
+              {canExport ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="gap-2"
+                  onClick={() => setExportOpen(true)}
+                  disabled={!tenant}
+                >
+                  <FileSpreadsheet className="size-4" />
+                  Excel
+                </Button>
+              ) : null}
             </div>
           </div>
         </CardContent>

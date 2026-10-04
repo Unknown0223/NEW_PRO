@@ -4,6 +4,7 @@ import { useDeferredValue, useMemo, useRef, useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { CalendarDays, FileSpreadsheet, Filter, ListOrdered, RotateCcw, Search } from "lucide-react";
 import { api } from "@/lib/api";
+import { usePermissions } from "@/lib/use-permissions";
 import { STALE } from "@/lib/query-stale";
 import { useAuthStore, useAuthStoreHydrated } from "@/lib/auth-store";
 import { FilterSelect } from "@/components/ui/filter-select";
@@ -155,6 +156,7 @@ function collectPaymentKeys(rows: ReportRow[], totals: ReportData["totals"], cat
 }
 
 export default function ReportProductSalesPage() {
+  const canExport = usePermissions().has("reports.otchety.copy");
   const tenantSlug = useAuthStore((s) => s.tenantSlug);
   const hydrated = useAuthStoreHydrated();
   const today = new Date();
@@ -788,10 +790,12 @@ export default function ReportProductSalesPage() {
               />
             </div>
           </div>
-          <Button variant="outline" size="sm" onClick={() => void downloadExcel()} disabled={exporting}>
-            <FileSpreadsheet className="mr-1 h-4 w-4" />
-            Excel
-          </Button>
+          {canExport ? (
+            <Button variant="outline" size="sm" onClick={() => void downloadExcel()} disabled={exporting}>
+              <FileSpreadsheet className="mr-1 h-4 w-4" />
+              Excel
+            </Button>
+          ) : null}
         </div>
 
         <div className="overflow-auto">

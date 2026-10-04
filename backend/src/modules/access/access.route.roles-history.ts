@@ -14,6 +14,7 @@ import {
   listAccessHistoryActionTypes
 } from "./history.service";
 import { getUserAccessMatrix } from "./access-matrix.service";
+import { ensureAnyPermission } from "./ensure-any-permission";
 import { assertActorCanEditRoleDefaults, grantGuardErrorResponse } from "./access-grant-guard";
 import { getPermissionCatalogGrouped } from "./permission-catalog.service";
 import {
@@ -169,6 +170,7 @@ export async function registerAccessRolesHistoryRoutes(app: FastifyInstance) {
       return sendApiError(reply, request, 400, "ValidationError", "Некорректные параметры запроса", zodValidationExtras(parsed.error));
     const exportKind = parsed.data.export;
     if (exportKind === "csv" || exportKind === "xlsx") {
+      if (!(await ensureAnyPermission(request, reply, ["access.upravlenie.export"]))) return;
       const { export: _ignored, ...listParams } = parsed.data;
       const exportData = await listAccessHistory(tenantId, { ...listParams, page: 1, limit: 2000 });
       if (exportKind === "csv") {

@@ -18,6 +18,7 @@ import { getUserFacingError, withApiSupportLine } from "@/lib/error-utils";
 import { downloadXlsxSheet } from "@/lib/download-xlsx";
 import { formatNumberGrouped } from "@/lib/format-numbers";
 import { STALE } from "@/lib/query-stale";
+import { usePermissions } from "@/lib/use-permissions";
 import { cn } from "@/lib/utils";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { AxiosError } from "axios";
@@ -173,6 +174,7 @@ function renderJournalCell(row: JournalRow, colId: string): ReactNode {
 
 export default function StockCorrectionPage() {
   const tenantSlug = useAuthStore((s) => s.tenantSlug);
+  const canExport = usePermissions().has("warehouse.korrektirovka.export");
   const authHydrated = useAuthStoreHydrated();
   const role = useEffectiveRole();
   const router = useRouter();
@@ -869,10 +871,12 @@ export default function StockCorrectionPage() {
                   onChange={(e) => setJSearch(e.target.value)}
                 />
               </div>
-              <Button type="button" variant="outline" size="sm" onClick={() => setExportOpen(true)}>
-                <FileSpreadsheet className="mr-1 size-4" />
-                Excel
-              </Button>
+              {canExport ? (
+                <Button type="button" variant="outline" size="sm" onClick={() => setExportOpen(true)}>
+                  <FileSpreadsheet className="mr-1 size-4" />
+                  Excel
+                </Button>
+              ) : null}
               <Button
                 type="button"
                 variant="outline"

@@ -39,8 +39,9 @@ const cashDeskView = requireAnyPermission([
   "access.upravlenie.view",
   "access.manage"
 ]);
-const cashDeskWrite = requireAnyPermission(["cash.kassa.create"]);
-const cashDeskStatus = requireAnyPermission(["cash.kassa.status", "cash.kassa.create"]);
+const cashDeskCreate = requireAnyPermission(["cash.kassa.create"]);
+const cashDeskUpdate = requireAnyPermission(["cash.kassa.update"]);
+const cashDeskStatus = requireAnyPermission(["cash.kassa.status"]);
 const cashDeskHistory = requireAnyPermission(["cash.kassa.history", "cash.kassa.view"]);
 
 const linkSchema = z.object({
@@ -171,7 +172,7 @@ export async function registerCashDeskRoutes(app: FastifyInstance) {
   });
 
   app.post("/api/:slug/cash-desks", {
-    preHandler: [jwtAccessVerify, cashDeskWrite]
+    preHandler: [jwtAccessVerify, cashDeskCreate]
   }, async (request, reply) => {
     if (!ensureTenantContext(request, reply)) return;
     const tenantId = request.tenant!.id;
@@ -317,7 +318,7 @@ export async function registerCashDeskRoutes(app: FastifyInstance) {
   });
 
   app.patch("/api/:slug/cash-desks/:id", {
-    preHandler: [jwtAccessVerify, cashDeskWrite]
+    preHandler: [jwtAccessVerify, cashDeskUpdate]
   }, async (request, reply) => {
     if (!ensureTenantContext(request, reply)) return;
     const tenantId = request.tenant!.id;

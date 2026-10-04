@@ -16,6 +16,7 @@ import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import { useAuthStore, useAuthStoreHydrated } from "@/lib/auth-store";
 import { api } from "@/lib/api";
+import { usePermissions } from "@/lib/use-permissions";
 import { writeBonusRuleCloneDraft } from "@/lib/bonus-rule-clone-draft";
 import { getUserFacingError } from "@/lib/error-utils";
 import { STALE } from "@/lib/query-stale";
@@ -161,6 +162,7 @@ function listColumnsForVariant(v: BonusRulesListVariant) {
 const DEFAULT_HIDDEN = ["priority", "summary", "active"] as const;
 
 export function BonusRulesListView({ activeOnly, variant = "bonuses" }: Props) {
+  const canExport = usePermissions().has("settings.bonusy_i_skidki.export");
   const isDiscounts = variant === "discounts";
   const listBase = isDiscounts ? "/settings/discount-rules" : "/settings/bonus-rules";
   const tenantSlug = useAuthStore((s) => s.tenantSlug);
@@ -596,7 +598,7 @@ export function BonusRulesListView({ activeOnly, variant = "bonuses" }: Props) {
                     type="button"
                     variant="outline"
                     size="sm"
-                    className="h-9 shrink-0 gap-1"
+                    className={cn("h-9 shrink-0 gap-1", !canExport && "hidden")}
                     onClick={() => exportCsv()}
                     disabled={!rows.length}
                   >

@@ -231,6 +231,7 @@ export function ExpeditorPaymentRequestsWorkspace() {
   const qc = useQueryClient();
   const { has } = usePermissions();
   const canAct = isAdminOrOperatorLikeRole(role) && has("cash.oplaty_klientov.approve");
+  const canExport = has("cash.zayavki_na_oplatu.export");
   const isAdmin = role === "admin";
 
   const [applied, setApplied] = useState<EprFilterState>(() => defaultEprFilters());
@@ -1067,15 +1068,17 @@ export function ExpeditorPaymentRequestsWorkspace() {
               </div>
             </div>
             <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
-              <Button
-                type="button"
-                size="sm"
-                className="h-9 gap-1 bg-green-600 px-3 text-white hover:bg-green-700"
-                onClick={() => void exportXlsx()}
-              >
-                <Download className="size-3.5" />
-                Excel
-              </Button>
+              {canExport ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  className="h-9 gap-1 bg-green-600 px-3 text-white hover:bg-green-700"
+                  onClick={() => void exportXlsx()}
+                >
+                  <Download className="size-3.5" />
+                  Excel
+                </Button>
+              ) : null}
               <Button
                 type="button"
                 variant="outline"
