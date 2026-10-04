@@ -23,6 +23,7 @@ import { registerLinkageRoutes } from "./modules/linkage/linkage.route";
 import { registerMobileRoutes } from "./modules/mobile/mobile.route";
 import { registerNotificationRoutes } from "./modules/notifications/notifications.route";
 import { registerTaskRoutes } from "./modules/tasks/tasks.route";
+import { registerLoginAlertRoutes } from "./modules/security/login-alerts.route";
 import { registerAgentRoutePlanRoutes } from "./modules/field/agent-route-plan.route";
 import { registerOpeningBalanceRoutes } from "./modules/opening-balances/opening-balances.route";
 import { registerOrderAutomationRoutes } from "./modules/order-automation/order-automation.route";
@@ -115,6 +116,7 @@ export const routeRegistrars: RouteRegistrar[] = [
   registerRefusalRoutes,
   registerNotificationRoutes,
   registerTaskRoutes,
+  registerLoginAlertRoutes,
   registerMobileRoutes,
   registerLinkageRoutes,
   registerJobRoutes,

@@ -3,6 +3,7 @@
  * Kalit: `<module>.<section>.<action>`; ro'yxatda yo'q kalit uchun umumiy amal nomi ishlatiladi.
  */
 import { GPS_OP_LABEL_RU } from "./permission-op-labels.gps";
+import { SECURITY_OP_LABEL_RU } from "./permission-op-labels.security";
 
 export const PERMISSION_OP_LABEL_RU: Record<string, string> = {
   "dashboard.prodazhi.view": "Просмотр дашборда продаж",
@@ -253,6 +254,7 @@ export const PERMISSION_OP_LABEL_RU: Record<string, string> = {
   "staff.zadachi_spisok.export": "Выгрузка задач в Excel",
 
   ...GPS_OP_LABEL_RU,
+  ...SECURITY_OP_LABEL_RU,
 
   "settings.tovar.view": "Список товаров",
   "settings.tovar.create": "Создать товар",

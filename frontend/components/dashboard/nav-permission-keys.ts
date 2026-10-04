@@ -134,6 +134,7 @@ export const NAV_PERM = {
   workSlots: ["work_slots.raboche_mesto.view"],
 
   audit: ["audit.tabel.view"],
+  suspiciousLogins: ["audit.podozritelnye_vhody.view"],
   /** GPS мониторинг — kamida bitta xodim turi. */
   gpsMonitoring: [
     "gps.agenty.view",

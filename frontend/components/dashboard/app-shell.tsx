@@ -65,6 +65,7 @@ import {
   Receipt,
   Search,
   Settings,
+  ShieldAlert,
   ShieldCheck,
   ShoppingCart,
   Table2,
@@ -309,6 +310,7 @@ function linkIcon(href: string) {
   const path = href.split("?")[0] ?? href;
   if (path === "/dashboard") return LayoutDashboard;
   if (path === "/audit") return ShieldCheck;
+  if (path === "/suspicious-logins") return ShieldAlert;
   if (path.startsWith("/clients")) return Users;
   if (path.startsWith("/settings/cash-desks")) return Wallet;
   if (path === "/payments") return Wallet;

@@ -291,6 +291,7 @@ export const PERMISSION_SECTIONS: PermissionSectionDef[] = [
   // `finance.obzor.view` — `dashboard.finansy.view` bilan bir xil sahifa (alias, `legacy-key-map.ts`).
   { module: "audit", section: "log", labelRu: "Журнал аудита (все изменения в системе)", actions: VIEW_EXPORT },
   { module: "audit", section: "tabel", labelRu: "Аудит табеля и рабочих дней", actions: VIEW_ONLY },
+  { module: "audit", section: "podozritelnye_vhody", labelRu: "Подозрительные входы (общие устройства и IP)", actions: ["view", "update", "create", "delete", "export"] },
 
   // ── Зарплата — kalitlar eski modullarda (grantlar saqlanadi), Access UI'da alohida guruh ─
   { module: "staff", section: "zarplaty", labelRu: "Расчёт зарплаты", actions: ["view", "create", "update", "delete", "copy", "import", "assign", "status", "approve"], groupRu: PAYROLL_GROUP_RU },

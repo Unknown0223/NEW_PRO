@@ -97,6 +97,9 @@ model Tenant {
   face_verification_logs        FaceVerificationLog[]
   face_verification_daily_states FaceVerificationDailyState[]
   telegram_staff_links          TelegramStaffLink[]
+  auth_login_events             AuthLoginEvent[]
+  security_login_alerts         SecurityLoginAlert[]
+  security_ip_whitelist         SecurityIpWhitelist[]
 
   @@map("tenants")
 }
@@ -262,6 +265,7 @@ model User {
   face_verification_logs              FaceVerificationLog[]       @relation("FaceVerificationLogs")
   face_verification_daily_states      FaceVerificationDailyState[] @relation("FaceVerificationDailyStates")
   telegram_staff_link                 TelegramStaffLink?
+  auth_login_events                   AuthLoginEvent[]             @relation("AuthLoginEvents")
 
   @@unique([tenant_id, login])
   @@index([tenant_id, role])

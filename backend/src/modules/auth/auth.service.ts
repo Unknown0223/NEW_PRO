@@ -179,6 +179,20 @@ export async function login(app: FastifyInstance, input: LoginInput) {
   }
 
   const apkVersion = input.apk_version?.trim().slice(0, 64) || null;
+  void import("../security/login-alerts.detect")
+    .then(async ({ recordLoginAndDetect }) => {
+      const { platformOfLogin } = await import("../security/login-alerts.pure");
+      await recordLoginAndDetect({
+        tenantId,
+        userId: user.id,
+        platform: platformOfLogin(apkVersion),
+        deviceId,
+        deviceName,
+        ip: ipAddr,
+        userAgent
+      });
+    })
+    .catch(() => undefined);
   await prisma.user.update({
     where: { id: user.id },
     data: {

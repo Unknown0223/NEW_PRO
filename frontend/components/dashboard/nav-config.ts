@@ -542,6 +542,10 @@ export const dashboardSidebarLayout: SidebarLayoutEntry[] = [
       showIfAnyPermission: [...NAV_PERM.audit]
     }
   },
+  {
+    kind: "link",
+    item: { href: "/suspicious-logins", label: "Подозрительные входы", showIfAnyPermission: [...NAV_PERM.suspiciousLogins] }
+  },
   { kind: "link", item: { href: "/activity", label: "Активность и история", showIfAnyPermission: [...NAV_PERM.activity] } },
   {
     kind: "link",
@@ -666,6 +670,7 @@ const BREADCRUMB_ENTRIES: Array<{ path: string; section: string | null; label: s
   push(null, [
     { href: "/reports/gps/map", label: "GPS мониторинг" },
     { href: "/audit", label: "Аудит" },
+    { href: "/suspicious-logins", label: "Подозрительные входы" },
     { href: "/activity", label: "Активность и история" },
     { href: "/diagnostics/errors", label: "Журнал ошибок" },
     { href: "/access", label: "Доступ" },
