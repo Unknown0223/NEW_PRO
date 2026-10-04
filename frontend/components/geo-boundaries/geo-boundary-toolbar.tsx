@@ -1,5 +1,7 @@
 "use client";
 
+import { usePermissions } from "@/lib/use-permissions";
+import { cn } from "@/lib/utils";
 import type { GeoCatalogItem } from "@/hooks/use-visit-planner-catalog";
 import type { GeoBoundaryTab } from "@/lib/geo-territory-layers";
 import type { BoundaryDrawStyle, GeoBoundary } from "@/components/geo-boundaries/use-geo-boundary-editor-state";
@@ -84,6 +86,9 @@ export function GeoBoundaryToolbar({
   cashDesks = [],
   onSaveZoneLinks
 }: Props) {
+  const { has } = usePermissions();
+  const canAssign = has("settings.geo_granitsy.assign");
+  const canDelete = has("settings.geo_granitsy.void");
   const selectedItem = tabItems.find((i) => i.ref_id === refId);
   const tabLabel =
     activeTab === "branch" ? TAB_LABELS.branch : layerLabels[activeTab] || TAB_LABELS[activeTab];
@@ -253,10 +258,10 @@ export function GeoBoundaryToolbar({
                 Склад/Касса
               </button>
             ) : null}
-            <button type="button" className="vp-btn" disabled={saving} onClick={onAssignClients}>
+            <button type="button" className={cn("vp-btn", !canAssign && "hidden")} disabled={saving} onClick={onAssignClients}>
               Привязать
             </button>
-            <button type="button" className="vp-btn vp-danger" disabled={saving} onClick={onDeleteBoundary}>
+            <button type="button" className={cn("vp-btn vp-danger", !canDelete && "hidden")} disabled={saving} onClick={onDeleteBoundary}>
               Удалить
             </button>
           </>

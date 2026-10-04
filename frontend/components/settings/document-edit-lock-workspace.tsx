@@ -3,7 +3,8 @@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { useAuthStore, useAuthStoreHydrated, useEffectiveRole } from "@/lib/auth-store";
+import { useAuthStore, useAuthStoreHydrated } from "@/lib/auth-store";
+import { usePermissions } from "@/lib/use-permissions";
 import { api } from "@/lib/api";
 import { getUserFacingError } from "@/lib/error-utils";
 import { STALE } from "@/lib/query-stale";
@@ -108,9 +109,15 @@ function Block({
 
 export function DocumentEditLockWorkspace() {
   const tenantSlug = useAuthStore((s) => s.tenantSlug);
-  const role = useEffectiveRole();
   const hydrated = useAuthStoreHydrated();
-  const isAdmin = role === "admin";
+  const { has, hasAny } = usePermissions();
+  const canView = hasAny(
+    "settings.document_edit_lock.view",
+    "settings.document_edit_lock.update",
+    "settings.document_edit_lock.assign"
+  );
+  const canEditRules = has("settings.document_edit_lock.update");
+  const canGrant = has("settings.document_edit_lock.assign");
   const qc = useQueryClient();
 
   const [tab, setTab] = useState<"rules" | "open">("rules");
@@ -135,7 +142,7 @@ export function DocumentEditLockWorkspace() {
 
   const settingsQ = useQuery({
     queryKey: ["document-edit-lock", tenantSlug],
-    enabled: Boolean(tenantSlug) && hydrated && isAdmin,
+    enabled: Boolean(tenantSlug) && hydrated && canView,
     staleTime: STALE.profile,
     queryFn: async () => {
       const { data } = await api.get<{ settings: LockSettings }>(
@@ -147,7 +154,7 @@ export function DocumentEditLockWorkspace() {
 
   const grantsQ = useQuery({
     queryKey: ["document-edit-lock-grants", tenantSlug],
-    enabled: Boolean(tenantSlug) && hydrated && isAdmin && tab === "open",
+    enabled: Boolean(tenantSlug) && hydrated && canView && tab === "open",
     staleTime: STALE.list,
     queryFn: async () => {
       const { data } = await api.get<{ data: GrantRow[] }>(
@@ -159,11 +166,11 @@ export function DocumentEditLockWorkspace() {
 
   const usersQ = useQuery({
     queryKey: ["document-edit-lock-users", tenantSlug],
-    enabled: Boolean(tenantSlug) && hydrated && isAdmin && tab === "open",
+    enabled: Boolean(tenantSlug) && hydrated && canGrant && tab === "open",
     staleTime: STALE.list,
     queryFn: async () => {
       const { data } = await api.get<{ data: AccessUser[] }>(
-        `/api/${tenantSlug}/access/users?include_counts=false&is_active=true`
+        `/api/${tenantSlug}/settings/document-edit-lock/users`
       );
       return data.data ?? [];
     }
@@ -296,12 +303,12 @@ export function DocumentEditLockWorkspace() {
 
   if (!hydrated) return null;
 
-  if (!isAdmin) {
+  if (!canView) {
     return (
       <div className="mx-auto max-w-xl space-y-3 py-10">
         <h1 className="text-lg font-semibold">Ограничение периода</h1>
         <p className="text-sm text-muted-foreground">
-          Этот раздел доступен только администратору.{" "}
+          Нет доступа к этому разделу.{" "}
           <Link href="/settings" className="text-primary underline">
             Вернуться в настройки
           </Link>
@@ -399,6 +406,7 @@ export function DocumentEditLockWorkspace() {
                   type="checkbox"
                   className="mt-1 h-4 w-4 accent-primary"
                   checked={settings.enabled}
+                  disabled={!canEditRules}
                   onChange={(e) => updateDraft({ ...settings, enabled: e.target.checked })}
                 />
                 <span className="text-sm">
@@ -438,6 +446,7 @@ export function DocumentEditLockWorkspace() {
                   </p>
                   <Button
                     type="button"
+                    className={cn(!canEditRules && "hidden")}
                     disabled={saveMut.isPending || !dirty}
                     onClick={() => {
                       setMsg(null);
@@ -473,7 +482,7 @@ export function DocumentEditLockWorkspace() {
                                 type="checkbox"
                                 className="accent-primary"
                                 checked={row.enabled}
-                                disabled={!settings.enabled}
+                                disabled={!canEditRules || !settings.enabled}
                                 onChange={(e) =>
                                   patchSection(key, { enabled: e.target.checked })
                                 }
@@ -487,7 +496,7 @@ export function DocumentEditLockWorkspace() {
                                 type="number"
                                 min={1}
                                 max={365}
-                                disabled={!settings.enabled || !row.enabled}
+                                disabled={!canEditRules || !settings.enabled || !row.enabled}
                                 className="h-9 w-20"
                                 value={row.days}
                                 onChange={(e) => {
@@ -509,6 +518,7 @@ export function DocumentEditLockWorkspace() {
         )
       ) : (
         <div className="space-y-5">
+          <div className={cn("space-y-5", !canGrant && "hidden")}>
           <div className="flex gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-100">
             <Info className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
             <p className="leading-relaxed">
@@ -740,6 +750,7 @@ export function DocumentEditLockWorkspace() {
               <span className="text-xs text-muted-foreground">вручную</span>
             </div>
           </Block>
+          </div>
 
           <Block
             title="Активные открытия"
@@ -784,6 +795,7 @@ export function DocumentEditLockWorkspace() {
                             type="button"
                             size="sm"
                             variant="outline"
+                            className={cn(!canGrant && "hidden")}
                             disabled={revokeMut.isPending}
                             onClick={() => revokeMut.mutate(g.id)}
                           >

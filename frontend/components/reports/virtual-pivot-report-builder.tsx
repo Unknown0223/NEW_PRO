@@ -277,7 +277,12 @@ const LAYOUT_FORM_OPTIONS = [
 ] as const;
 
 export function VirtualPivotReportBuilder() {
-  const canExport = usePermissions().hasAny("reports.konstruktor.copy", "reports.otchety.copy");
+  const builderPerms = usePermissions();
+  const canExport = builderPerms.has("reports.konstruktor.export");
+  const canCreateSaved = builderPerms.has("reports.konstruktor.create");
+  const canUpdateSaved = builderPerms.has("reports.konstruktor.update");
+  const canDeleteSaved = builderPerms.has("reports.konstruktor.delete");
+  const canShareSaved = builderPerms.has("reports.konstruktor.transfer");
   const rb = getPivotStrings().reportBuilder;
   const tenantSlug = useAuthStore((s) => s.tenantSlug);
   const hydrated = useAuthStoreHydrated();
@@ -915,6 +920,11 @@ export function VirtualPivotReportBuilder() {
   const openSaveDialog = useCallback(
     (mode: "update" | "create") => {
       setSaveError(null);
+      const updating = mode === "update" && activeSavedReportId != null;
+      if (updating ? !canUpdateSaved : !canCreateSaved) {
+        setNotice({ message: "Нет доступа к сохранению отчёта", tone: "error" });
+        return;
+      }
       if (mode === "update" && activeSavedReportId != null) {
         setSaveOverwriteId(activeSavedReportId);
         const existingName = savedQ.data?.find((s) => s.id === activeSavedReportId)?.name;
@@ -925,7 +935,7 @@ export function VirtualPivotReportBuilder() {
       }
       setSaveDialogOpen(true);
     },
-    [activeSavedReportId, savedQ.data]
+    [activeSavedReportId, canCreateSaved, canUpdateSaved, savedQ.data]
   );
 
   const commitSave = useCallback(() => {
@@ -1265,7 +1275,7 @@ export function VirtualPivotReportBuilder() {
                 dense
                 selected={activeSavedReportId === s.id}
                 dirty={activeSavedReportId === s.id && isActiveSavedReportDirty}
-                saveDisabled={!canSavePivotConfig(config) || saveMut.isPending}
+                saveDisabled={!canUpdateSaved || !canSavePivotConfig(config) || saveMut.isPending}
                 loading={
                   loadingSavedReportId === s.id ||
                   (deleteMut.isPending && deleteMut.variables === s.id) ||
@@ -1274,8 +1284,8 @@ export function VirtualPivotReportBuilder() {
                 suffix={detectSavedReportFormat(s.config) === "wdr" ? rb.savedReportWdrSuffix : undefined}
                 onSelect={() => void handleLoadSavedReport(s.id, s.config)}
                 onSave={saveActiveSelectedReport}
-                onShare={() => openShareDialog(s.id, s.name)}
-                onDelete={() => void handleDeleteSavedReport(s.id, s.name)}
+                onShare={canShareSaved ? () => openShareDialog(s.id, s.name) : undefined}
+                onDelete={canDeleteSaved ? () => void handleDeleteSavedReport(s.id, s.name) : undefined}
               />
             ))}
           </div>
@@ -1691,7 +1701,7 @@ export function VirtualPivotReportBuilder() {
                     name={report.name}
                     selected={activeSavedReportId === report.id}
                     dirty={activeSavedReportId === report.id && isActiveSavedReportDirty}
-                    saveDisabled={!canSavePivotConfig(config) || saveMut.isPending}
+                    saveDisabled={!canUpdateSaved || !canSavePivotConfig(config) || saveMut.isPending}
                     loading={
                       loadingSavedReportId === report.id ||
                       (deleteMut.isPending && deleteMut.variables === report.id) ||
@@ -1705,8 +1715,8 @@ export function VirtualPivotReportBuilder() {
                       });
                     }}
                     onSave={saveActiveSelectedReport}
-                    onShare={() => openShareDialog(report.id, report.name)}
-                    onDelete={() => void handleDeleteSavedReport(report.id, report.name)}
+                    onShare={canShareSaved ? () => openShareDialog(report.id, report.name) : undefined}
+                    onDelete={canDeleteSaved ? () => void handleDeleteSavedReport(report.id, report.name) : undefined}
                   />
                 ))}
               </div>

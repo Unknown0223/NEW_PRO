@@ -1,13 +1,5 @@
-import { GenericRefSettingsPage } from "@/components/settings/generic-ref-settings";
+import { redirect } from "next/navigation";
 
-export default function TaskTypesSettingsPage() {
-  return (
-    <GenericRefSettingsPage
-      config={{
-        title: "Типы задач",
-        profileRefKey: "task_type_entries",
-        showColor: true,
-      }}
-    />
-  );
+export default function TaskTypesSettingsRedirect() {
+  redirect("/users/task-types");
 }

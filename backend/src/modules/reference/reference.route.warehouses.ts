@@ -7,6 +7,7 @@ import {
   mergeDirectoryAllowedIds,
   resolveActorWarehouseDirectoryIds
 } from "../access/access-directory-scope";
+import { ensureAnyPermission } from "../access/ensure-any-permission";
 import { getAccessUser, jwtAccessVerify, requireRoles } from "../auth/auth.prehandlers";
 import {
   requireRolesOrSkladchikAnyEntitlement,
@@ -36,6 +37,14 @@ async function warehouseDirectoryIdsForRequest(
     userId: actorUserIdOrNull(request),
     role: viewer.role
   });
+}
+
+/** Faqat `is_active` (ro'yxatdagi tugma) — «Деактивировать» / «Восстановить»; tahrir formasi — «Изменить». */
+function warehousePatchPermissions(body: Record<string, unknown>): string[] {
+  const onlyActive = Object.keys(body).every((k) => k === "is_active");
+  if (onlyActive && body.is_active === false) return ["warehouse.sklady.deactivate"];
+  if (onlyActive && body.is_active === true) return ["warehouse.sklady.activate"];
+  return ["warehouse.sklady.update"];
 }
 
 const warehouseDirectoryPre = requireRolesOrSkladchikAnyEntitlement(
@@ -182,6 +191,7 @@ export async function registerReferenceWarehouseRoutes(app: FastifyInstance) {
           zodValidationExtras(parsed.error)
         );
       }
+      if (!(await ensureAnyPermission(request, reply, warehousePatchPermissions(parsed.data)))) return;
       try {
         const row = await updateWarehouseRow(
           request.tenant!.id,

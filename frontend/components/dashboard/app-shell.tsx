@@ -20,6 +20,7 @@ import {
   resolvePageBreadcrumb,
   type NavItem
 } from "@/components/dashboard/nav-config";
+import { NAV_PERM } from "@/components/dashboard/nav-permission-keys";
 import { isNavItemAllowed } from "@/lib/nav-route-access";
 import { Button } from "@/components/ui/button";
 import { ClientLucideIcon } from "@/components/ui/client-lucide-icon";
@@ -1392,9 +1393,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             ) : null}
             {(effectiveRole === "admin" ||
               permissionKeySet == null ||
-              permissionKeySet.has("gps.gps.view") ||
-              permissionKeySet.has("routes.trek.view") ||
-              permissionKeySet.has("gps.dostup_k_gps")) && (
+              NAV_PERM.gpsMonitoring.some((k) => permissionKeySet.has(k))) && (
               <Link
                 href="/reports/gps/map"
                 className={cn(
@@ -1448,9 +1447,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <div className="flex items-center gap-2">
               {(effectiveRole === "admin" ||
                 permissionKeySet == null ||
-                permissionKeySet.has("gps.gps.view") ||
-                permissionKeySet.has("routes.trek.view") ||
-                permissionKeySet.has("gps.dostup_k_gps")) && (
+                NAV_PERM.gpsMonitoring.some((k) => permissionKeySet.has(k))) && (
                 <Link
                   href="/reports/gps/map"
                   className={cn(

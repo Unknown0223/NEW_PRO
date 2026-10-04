@@ -13,6 +13,7 @@ import {
   dashboardSuppliersNav,
   dashboardUsersNav
 } from "@/components/dashboard/nav-config";
+import { NAV_PERM } from "@/components/dashboard/nav-permission-keys";
 
 function pathOnly(href: string): string {
   const raw = href.split("?")[0] ?? href;
@@ -36,6 +37,8 @@ function collectNavItems(): NavItem[] {
   for (const entry of dashboardSidebarLayout) {
     if (entry.kind === "link") out.push(entry.item);
   }
+  // Header GPS chip — `/reports/gps` (jadval hisobot) prefiksi xaritani yopib qo‘ymasin.
+  out.push({ href: "/reports/gps/map", label: "GPS мониторинг", showIfAnyPermission: [...NAV_PERM.gpsMonitoring] });
   return out;
 }
 

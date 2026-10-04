@@ -6,7 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { useAuthStore, useAuthStoreHydrated, useEffectiveRole } from "@/lib/auth-store";
+import { useAuthStore, useAuthStoreHydrated } from "@/lib/auth-store";
+import { usePermissions } from "@/lib/use-permissions";
 import { api } from "@/lib/api";
 import { useAppConfirm } from "@/components/ui/app-confirm-dialog";
 import { getUserFacingError } from "@/lib/error-utils";
@@ -135,8 +136,11 @@ function StatTile({
 
 export default function MobileAppSettingsPage() {
   const tenantSlug = useAuthStore((s) => s.tenantSlug);
-  const role = useEffectiveRole();
-  const isAdmin = role === "admin";
+  const { has, hasAny } = usePermissions();
+  const canView = hasAny("settings.mobile_app.view", "settings.mobile_app.update");
+  const canEdit = has("settings.mobile_app.update");
+  const canUpload = has("settings.mobile_app.import");
+  const canNotify = has("settings.mobile_app.transfer");
   const hydrated = useAuthStoreHydrated();
   const qc = useQueryClient();
   const { confirm, dialog: confirmDialog } = useAppConfirm();
@@ -155,7 +159,7 @@ export default function MobileAppSettingsPage() {
 
   const { data, isLoading, isFetching, dataUpdatedAt, refetch } = useQuery({
     queryKey: ["settings", "mobile-app-release", tenantSlug],
-    enabled: Boolean(tenantSlug) && isAdmin,
+    enabled: Boolean(tenantSlug) && canView,
     staleTime: 0,
     gcTime: STALE.live,
     refetchInterval: 12_000,
@@ -322,8 +326,8 @@ export default function MobileAppSettingsPage() {
   });
 
   if (!hydrated) return null;
-  if (!isAdmin) {
-    return <p className="text-sm text-muted-foreground">Только для администратора.</p>;
+  if (!canView) {
+    return <p className="text-sm text-muted-foreground">Нет доступа к настройкам мобильного приложения.</p>;
   }
 
   const apkReady = data?.apk?.ready === true;
@@ -431,7 +435,7 @@ export default function MobileAppSettingsPage() {
           </Card>
 
           {/* APK yuklash */}
-          <Card className="hover:shadow-sm">
+          <Card className={cn("hover:shadow-sm", !canUpload && "hidden")}>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <FileUp className="h-4 w-4 text-muted-foreground" />
@@ -534,6 +538,7 @@ export default function MobileAppSettingsPage() {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-5">
+              <fieldset disabled={!canEdit} className="contents">
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-2">
                   <Label htmlFor="min_version">Минимальная версия</Label>
@@ -600,6 +605,7 @@ export default function MobileAppSettingsPage() {
                 />
                 <FieldHint>Показывается в окне обновления приложения.</FieldHint>
               </div>
+              </fieldset>
             </CardContent>
           </Card>
 
@@ -616,6 +622,7 @@ export default function MobileAppSettingsPage() {
                   <Input
                     id="store_android"
                     placeholder="Оставьте пустым — серверное OTA"
+                    disabled={!canEdit}
                     value={storeAndroid}
                     onChange={(e) => setStoreAndroid(e.target.value)}
                   />
@@ -625,6 +632,7 @@ export default function MobileAppSettingsPage() {
                   <Input
                     id="store_ios"
                     placeholder="Для iOS — позже"
+                    disabled={!canEdit}
                     value={storeIos}
                     onChange={(e) => setStoreIos(e.target.value)}
                   />
@@ -636,7 +644,11 @@ export default function MobileAppSettingsPage() {
           {/* Amallar */}
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex flex-wrap gap-2">
-              <Button onClick={() => saveMut.mutate()} disabled={saveMut.isPending}>
+              <Button
+                className={cn(!canEdit && "hidden")}
+                onClick={() => saveMut.mutate()}
+                disabled={saveMut.isPending}
+              >
                 {saveMut.isPending ? (
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 ) : (
@@ -646,6 +658,7 @@ export default function MobileAppSettingsPage() {
               </Button>
               <Button
                 variant="outline"
+                className={cn(!canNotify && "hidden")}
                 onClick={() => notifyMut.mutate()}
                 disabled={notifyMut.isPending || outdatedCount === 0}
               >

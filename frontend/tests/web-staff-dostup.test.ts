@@ -192,19 +192,19 @@ const ROLE_NAV: Array<{
 }> = [
   {
     role: "director",
-    keys: ["dashboard.prodazhi.view", "reports.otchety.view", "orders.zakaz.view", "cash.oplaty_klientov.view"],
+    keys: ["dashboard.prodazhi.view", "reports.prodazhi_tovarov.view", "orders.zakaz.view", "cash.oplaty_klientov.view"],
     see: ["/dashboard/sales", "/orders", "/payments"],
     hide: ["/access", "/orders/new?type=order"]
   },
   {
     role: "manager",
-    keys: ["dashboard.prodazhi.view", "reports.otchety.view", "orders.zakaz.view", "staff.konsignatsiya.view"],
+    keys: ["dashboard.prodazhi.view", "reports.prodazhi_tovarov.view", "orders.zakaz.view", "staff.konsignatsiya.view"],
     see: ["/orders", "/settings/spravochnik/consignment"],
     hide: ["/payments", "/access", "/stock/receipts"]
   },
   {
     role: "sales_director",
-    keys: ["dashboard.prodazhi.view", "reports.otchety.view", "orders.zakaz.view", "clients.klient.view"],
+    keys: ["dashboard.prodazhi.view", "reports.prodazhi_tovarov.view", "orders.zakaz.view", "clients.klient.view"],
     see: ["/orders", "/clients"],
     hide: ["/payments", "/access", "/stock/balances"]
   },
@@ -246,7 +246,7 @@ const ROLE_NAV: Array<{
   },
   {
     role: "regional_manager",
-    keys: ["dashboard.prodazhi.view", "reports.otchety.view", "orders.zakaz.view"],
+    keys: ["dashboard.prodazhi.view", "reports.prodazhi_tovarov.view", "orders.zakaz.view"],
     see: ["/orders", "/dashboard/sales"],
     hide: ["/orders/new?type=order", "/access", "/payments"]
   }

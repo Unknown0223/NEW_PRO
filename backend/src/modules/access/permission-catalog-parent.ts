@@ -79,6 +79,7 @@ function plansSectionParentLabel(section: string): string | null {
 function reportsSectionParentLabel(section: string): string | null {
   const s = section.trim();
   if (/Конструктор/i.test(s) || /Сводн/i.test(s)) return "Отчёт · Конструктор отчётов";
+  if (!s.includes("/")) return null;
   if (/Отч[её]т/i.test(s)) return "Отчёт · Отчеты";
   return null;
 }

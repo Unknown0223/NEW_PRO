@@ -301,7 +301,7 @@ export const dashboardUsersNav: {
         { href: "/users/workdays", label: "Рабочие дни", showIfAnyPermission: [...NAV_PERM.staffWorkdays] },
         { href: "/users/timesheet", label: "Табель", showIfAnyPermission: [...NAV_PERM.staffTimesheet] },
         {
-          href: "/settings/reasons/task-types",
+          href: "/users/task-types",
           label: "Задачи",
           showIfAnyPermission: [...NAV_PERM.staffTasks]
         }
@@ -435,30 +435,26 @@ const pivotEngineNavEnabled = true;
 export const dashboardReportsNav: { sectionTitle: string; items: NavItem[] } = {
   sectionTitle: "Отчёт",
   items: [
-    { href: "/reports/agent-orders", label: "Заказы по агентам", showIfAnyPermission: [...NAV_PERM.reports] },
-    {
-      href: "/reports/gps",
-      label: "Отчёт по GPS",
-      showIfAnyPermission: [...NAV_PERM.reports, "gps.gps.view"]
-    },
+    { href: "/reports/agent-orders", label: "Заказы по агентам", showIfAnyPermission: [...NAV_PERM.reportAgentOrders] },
+    { href: "/reports/gps", label: "Отчёт по GPS", showIfAnyPermission: [...NAV_PERM.reportGps] },
     {
       href: "/reports/client-sales-2",
       label: "Продажи по клиентам 2",
-      showIfAnyPermission: [...NAV_PERM.reports]
+      showIfAnyPermission: [...NAV_PERM.reportClientSales2]
     },
     {
       href: "/reports/client-sales-4",
       label: "Продажи по клиентам 4",
-      showIfAnyPermission: [...NAV_PERM.reports]
+      showIfAnyPermission: [...NAV_PERM.reportClientSales4]
     },
-    { href: "/reports/product-sales", label: "Продажи по товарам", showIfAnyPermission: [...NAV_PERM.reports] },
+    { href: "/reports/product-sales", label: "Продажи по товарам", showIfAnyPermission: [...NAV_PERM.reportProductSales] },
     {
       href: "/reports/expeditor-returns",
       label: "Возврат экспедитора",
-      showIfAnyPermission: [...NAV_PERM.reports]
+      showIfAnyPermission: [...NAV_PERM.reportExpeditorReturns]
     },
-    { href: "/reports/visits-2", label: "По визитам 2.0", showIfAnyPermission: [...NAV_PERM.reports] },
-    { href: "/reports/visit-totals", label: "Итоги визитов", showIfAnyPermission: [...NAV_PERM.reports] },
+    { href: "/reports/visits-2", label: "По визитам 2.0", showIfAnyPermission: [...NAV_PERM.reportVisits2] },
+    { href: "/reports/visit-totals", label: "Итоги визитов", showIfAnyPermission: [...NAV_PERM.reportVisitTotals] },
     {
       href: "/plans/daily",
       label: "Дневные KPI планы",

@@ -202,7 +202,13 @@ function parseSum(nums: (string | null | undefined)[]): string {
 
 export function ConsignmentWorkspace({ tenantSlug }: { tenantSlug: string }) {
   const qc = useQueryClient();
-  const canExport = usePermissions().has("staff.konsignatsiya.export");
+  const perms = usePermissions();
+  const canExport = perms.has("staff.konsignatsiya.export");
+  const canToggle = perms.has("staff.konsignatsiya.status");
+  const canLimit = perms.has("staff.konsignatsiya.update");
+  const canImport = perms.has("staff.konsignatsiya.import");
+  const canCloseSchedule = perms.has("staff.konsignatsiya_zakrytie.update");
+  const canEdit = !CONSIGNMENT_CONFIG_READONLY && (canToggle || canLimit);
   const importInputRef = useRef<HTMLInputElement>(null);
   const monthPickerAnchorRef = useRef<HTMLButtonElement>(null);
   const [monthPickerOpen, setMonthPickerOpen] = useState(false);
@@ -719,7 +725,7 @@ export function ConsignmentWorkspace({ tenantSlug }: { tenantSlug: string }) {
             type="button"
             variant="outline"
             size="sm"
-            className="gap-1.5"
+            className={cn("gap-1.5", !canImport && "hidden")}
             disabled={!directionSelected}
             onClick={() => void downloadImportTemplate()}
           >
@@ -734,8 +740,8 @@ export function ConsignmentWorkspace({ tenantSlug }: { tenantSlug: string }) {
               type="button"
               variant="outline"
               size="sm"
-              className="gap-1.5"
-              disabled={!directionSelected || importing}
+              className={cn("gap-1.5", !canImport && "hidden")}
+              disabled={!directionSelected || importing || !canImport}
               onClick={() => importInputRef.current?.click()}
             >
               <Upload className="size-4" />
@@ -830,7 +836,7 @@ export function ConsignmentWorkspace({ tenantSlug }: { tenantSlug: string }) {
             <Button
               type="button"
               className="bg-emerald-600 text-white hover:bg-emerald-700"
-              disabled={savingClose || !closeScheduleDirty}
+              disabled={savingClose || !closeScheduleDirty || !canCloseSchedule}
               onClick={() => void saveGlobalCloseSchedule()}
             >
               {savingClose ? "Сохранение…" : "Сохранить"}
@@ -932,7 +938,7 @@ export function ConsignmentWorkspace({ tenantSlug }: { tenantSlug: string }) {
                 </div>
               </div>
               <div className="flex shrink-0 flex-wrap items-end gap-3 border-border/50 pt-1 md:border-l md:pl-6 md:pt-0">
-                {!CONSIGNMENT_CONFIG_READONLY ? (
+                {canEdit ? (
                 <Button
                   type="button"
                   variant="default"
@@ -1003,7 +1009,7 @@ export function ConsignmentWorkspace({ tenantSlug }: { tenantSlug: string }) {
           const ignSome = ignEligible.some((r) => rowIgnoreDebt(r));
           const ignMixed = ignSome && !ignAllOn;
           const dirty = groupHasDirty(visible);
-          const groupEditing = !CONSIGNMENT_CONFIG_READONLY && editingGroups.has(groupTitle);
+          const groupEditing = canEdit && editingGroups.has(groupTitle);
           const sumEstablished = parseSum(visible.map((r) => r.consignment_limit_amount));
           const sumCurrent = parseSum(visible.map((r) => r.remaining_limit));
           const groupClearedAt = groupDebtClearedAt(visible);
@@ -1042,7 +1048,7 @@ export function ConsignmentWorkspace({ tenantSlug }: { tenantSlug: string }) {
                     />
                   </div>
                   <div className="flex shrink-0 flex-row flex-nowrap items-center gap-2">
-                    {!CONSIGNMENT_CONFIG_READONLY ? (
+                    {canEdit ? (
                       !groupEditing ? (
                         <Button
                           type="button"
@@ -1101,7 +1107,7 @@ export function ConsignmentWorkspace({ tenantSlug }: { tenantSlug: string }) {
                             }}
                             checked={consAllOn}
                             onChange={() => patchAllDrafts(visible, { consignment: !consAllOn })}
-                            disabled={!groupEditing || visible.length === 0}
+                            disabled={!groupEditing || !canToggle || visible.length === 0}
                             aria-label="Включить или выключить консигнацию для всех строк группы"
                             title={
                               groupEditing
@@ -1155,7 +1161,7 @@ export function ConsignmentWorkspace({ tenantSlug }: { tenantSlug: string }) {
                             checked={ignAllOn}
                             onChange={() => patchAllIgnoreDebtInGroup(visible, !ignAllOn)}
                             disabled={
-                              !groupEditing || visible.length === 0 || ignEligible.length === 0
+                              !groupEditing || !canLimit || visible.length === 0 || ignEligible.length === 0
                             }
                             aria-label="Включить опцию «без долгов прошлых месяцев» для всех строк группы (где задан лимит)"
                             title={
@@ -1204,7 +1210,7 @@ export function ConsignmentWorkspace({ tenantSlug }: { tenantSlug: string }) {
                               type="checkbox"
                               className="size-4 rounded border-input accent-primary disabled:opacity-40"
                               checked={disp.consignment}
-                              disabled={!groupEditing}
+                              disabled={!groupEditing || !canToggle}
                               onChange={(e) => updateDraft(r, { consignment: e.target.checked })}
                               title={
                                 groupEditing
@@ -1248,7 +1254,7 @@ export function ConsignmentWorkspace({ tenantSlug }: { tenantSlug: string }) {
                               type="checkbox"
                               className="size-4 rounded border-input accent-primary disabled:opacity-40"
                               checked={disp.ignoreDebt}
-                              disabled={!groupEditing || !disp.canIgnoreDebt}
+                              disabled={!groupEditing || !canLimit || !disp.canIgnoreDebt}
                               onChange={(e) => updateDraft(r, { ignoreDebt: e.target.checked })}
                               title={
                                 !groupEditing
@@ -1265,7 +1271,7 @@ export function ConsignmentWorkspace({ tenantSlug }: { tenantSlug: string }) {
                                 className="h-7 w-full min-w-[7.5rem] text-right text-xs tabular-nums disabled:opacity-50"
                                 maxFractionDigits={2}
                                 value={disp.limitStr}
-                                disabled={!disp.consignment}
+                                disabled={!disp.consignment || !canLimit}
                                 onValueChange={(v) => updateDraft(r, { limitStr: v })}
                                 placeholder="—"
                                 title={

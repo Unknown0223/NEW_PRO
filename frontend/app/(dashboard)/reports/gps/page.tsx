@@ -172,7 +172,7 @@ function appendParams(
 }
 
 export default function ReportGpsPage() {
-  const canExport = usePermissions().has("reports.otchety.copy");
+  const canExport = usePermissions().has("reports.gps.export");
   const tenantSlug = useAuthStore((s) => s.tenantSlug);
   const hydrated = useAuthStoreHydrated();
   const bounds = useMemo(() => defaultRange(), []);

@@ -26,6 +26,12 @@ import {
 } from "../orders/order-create-permissions";
 import { PAYROLL_ROUTE_PERMISSION_RULES } from "./route-permission-guard.payroll";
 import { CLIENT_BULK_PATCH_PERMISSIONS, CLIENT_GROUP_TAGS_PERMISSION } from "../clients/client-bulk-permissions";
+import { GPS_MONITORING_VIEW_PERMISSIONS } from "../gps-monitoring/gps-monitoring.access";
+import {
+  REPORT_GROUP_EXPORT_PERMISSIONS,
+  REPORT_GROUP_VIEW_PERMISSIONS,
+  REPORT_PAGE_PERMISSIONS
+} from "../reports/report-permissions";
 
 type Method = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
 
@@ -124,8 +130,16 @@ const ROUTE_PERMISSION_RULES: RoutePermissionRule[] = [
   r(READ, /\/warehouse-blocks/, "warehouse.bloki.view"),
   r(WRITE, /\/stock-takes/, "warehouse.korrektirovka.create", "warehouse.korrektirovka.update"),
   r(READ, /\/stock-takes/, "warehouse.korrektirovka.view"),
-  r(DEL, /\/warehouses\/:id$/, "warehouse.sklady.delete"),
-  r(WRITE, /\/warehouses(\/|$)/, "warehouse.sklady.create", "warehouse.sklady.update", "warehouse.sklady.delete"),
+  r(DEL, /\/warehouses\/:id$/, "warehouse.sklady.deactivate"),
+  r(["POST"], /\/warehouses\/:id\/restore$/, "warehouse.sklady.activate"),
+  r(["POST"], /\/warehouses$/, "warehouse.sklady.create"),
+  r(
+    WRITE,
+    /\/warehouses(\/|$)/,
+    "warehouse.sklady.update",
+    "warehouse.sklady.activate",
+    "warehouse.sklady.deactivate"
+  ),
   r(
     READ,
     /\/warehouses(\/|$)/,
@@ -246,17 +260,35 @@ const ROUTE_PERMISSION_RULES: RoutePermissionRule[] = [
   r(READ, /\/api\/(?::slug|[^/]+)\/products(\/|$)/, "settings.tovar.view"),
   r(WRITE, /\/settings\/profile$/, "settings.profil_kompanii.update"),
   r(READ, /\/settings\/profile$/, "settings.profil_kompanii.view"),
+  r(["POST"], /\/settings\/mobile-app-release\/notify$/, "settings.mobile_app.transfer"),
+  r(["POST"], /\/settings\/mobile-app-release\/upload$/, "settings.mobile_app.import"),
   r(WRITE, /\/settings\/mobile-app-release/, "settings.mobile_app.update"),
   r(READ, /\/settings\/mobile-app-release/, "settings.mobile_app.view"),
+  r(WRITE, /\/settings\/document-edit-lock\/grants/, "settings.document_edit_lock.assign"),
+  r(READ, /\/settings\/document-edit-lock\/(search|users)$/, "settings.document_edit_lock.assign"),
+  r(READ, /\/settings\/document-edit-lock\/grants$/, "settings.document_edit_lock.view", "settings.document_edit_lock.assign"),
   r(WRITE, /\/settings\/document-edit-lock/, "settings.document_edit_lock.update"),
-  r(READ, /\/settings\/document-edit-lock/, "settings.document_edit_lock.view"),
+  r(
+    READ,
+    /\/settings\/document-edit-lock/,
+    "settings.document_edit_lock.view",
+    "settings.document_edit_lock.update",
+    "settings.document_edit_lock.assign"
+  ),
   r(READ, /\/settings\/initial-setup\/export-bundle\.xlsx$/, "settings.initial_setup.export"),
   r(READ, /\/settings\/initial-setup/, "settings.initial_setup.view", "settings.profil_kompanii.view"),
   r(WRITE, /\/system-migration\/import/, "settings.system_migration.update", "settings.system_migration.import", "settings.profil_kompanii.update"),
   r(["POST"], /\/system-migration\/export/, "settings.system_migration.view", "settings.profil_kompanii.view"),
-  r(WRITE, /\/settings\/bonus-stack$/, "settings.bonusy_i_skidki.update"),
+  r(WRITE, /\/settings\/bonus-stack$/, "settings.bonus_strategiya.update"),
   r(READ, /\/system-migration(\/|$)/, "settings.system_migration.view", "settings.profil_kompanii.view"),
 
+  // ─────────── Консигнация ───────────
+  r(WRITE, /\/consignment\/settings$/, "staff.konsignatsiya_zakrytie.update"),
+  r(["POST"], /\/consignment\/import\.xlsx$/, "staff.konsignatsiya.import"),
+  r(READ, /\/consignment\/import-template(\.xlsx)?$/, "staff.konsignatsiya.import"),
+  r(WRITE, /\/consignment\/agents\/bulk(-rows)?$/, "staff.konsignatsiya.status", "staff.konsignatsiya.update"),
+  r(WRITE, /\/consignment/, "staff.konsignatsiya.update", "staff.konsignatsiya.status", "clients.klient.update"),
+  r(READ, /\/consignment/, "staff.konsignatsiya.view", "clients.klient.view"),
   // ─────────── Пользователи (staff) ───────────
   // Excel import (create|update) — before generic POST /agents|staff
   r(["POST"], /\/staff\/import/, "staff.agent.create", "staff.agent.update", "staff.ekspeditor.create", "staff.ekspeditor.update", "staff.supervayzer.create", "staff.supervayzer.update", "staff.inkassator.create", "staff.inkassator.update", "staff.auditor.create", "staff.auditor.update", "staff.skladchik.create", "staff.skladchik.update", "staff.sotrudniki.create", "staff.sotrudniki.update"),
@@ -310,12 +342,14 @@ const ROUTE_PERMISSION_RULES: RoutePermissionRule[] = [
   r(WRITE, /\/timesheet\/norm-settings$/, "staff.tabel_normativ.update"),
   r(READ, /\/timesheet\/norm-settings$/, "staff.tabel_normativ.view", "staff.tabel_normativ.update"),
   r(READ, /\/timesheet\/history$/, "staff.tabel.history"),
-  r(WRITE, /\/timesheet/, "staff.tabel.create", "staff.tabel.update"),
+  r(WRITE, /\/timesheet/, "staff.tabel.update"),
   r(READ, /\/timesheet/, "staff.tabel.view"),
-  r(WRITE, /\/workdays/, "staff.tabel.create", "staff.tabel.update"),
-  r(DEL, /\/workdays/, "staff.tabel.update"),
-  r(READ, /\/workdays/, "staff.tabel.view"),
-  r(READ, /\/tabel-audit/, "staff.tabel.view"),
+  r(["PUT"], /\/workdays\/(schedules|enforce-access)$/, "staff.rabochie_dni.update"),
+  r(["POST"], /\/workdays\/(exceptions|overrides)$/, "staff.rabochie_dni.create"),
+  r(DEL, /\/workdays\//, "staff.rabochie_dni.delete"),
+  r(WRITE, /\/workdays/, "staff.rabochie_dni.update"),
+  r(READ, /\/workdays/, "staff.rabochie_dni.view", "staff.tabel.view"),
+  r(READ, /\/tabel-audit/, "audit.tabel.view", "staff.tabel.history", "staff.rabochie_dni.history"),
   r(WRITE, /\/work-slots\/.*\/(assign|unassign)/, "work_slots.raboche_mesto.assign", "work_slots.raboche_mesto.update"),
   r(READ, /\/work-slots\/.*\/sessions/, "work_slots.raboche_mesto.view", "work_slots.raboche_mesto.update"),
   r(WRITE, /\/work-slots\/.*\/sessions/, "work_slots.raboche_mesto.update"),
@@ -326,9 +360,6 @@ const ROUTE_PERMISSION_RULES: RoutePermissionRule[] = [
   r(WRITE, /\/client-agent-assignments/, "work_slots.raboche_mesto.assign", "work_slots.raboche_mesto.update"),
   r(READ, /\/client-agent-assignments/, "work_slots.raboche_mesto.view"),
 
-  // ─────────── Консигнация ───────────
-  r(WRITE, /\/consignment/, "staff.konsignatsiya.update", "staff.konsignatsiya.create", "clients.klient.update"),
-  r(READ, /\/consignment/, "staff.konsignatsiya.view", "clients.klient.view"),
 
   // ─────────── Планы → Настройка утверждающих ───────────
   r(WRITE, /\/plans\/approvers/, "plans.nastroyka_utverzhdayushchih.update"),
@@ -357,38 +388,41 @@ const ROUTE_PERMISSION_RULES: RoutePermissionRule[] = [
   r(READ, /\/dashboard(\/|$)/, "dashboard.prodazhi.view"),
 
   // ─────────── Отчёты ───────────
-  r(["POST"], /\/reports\/report-builder\/(preview|dataset)$/, "reports.konstruktor.view", "reports.otchety.view"),
-  r(["POST"], /\/reports\/report-builder\/export$/, "reports.konstruktor.copy", "reports.otchety.copy"),
+  r(["POST"], /\/reports\/report-builder\/(preview|dataset)$/, "reports.konstruktor.view"),
+  r(["POST"], /\/reports\/report-builder\/export$/, "reports.konstruktor.export"),
+  r(READ, /\/reports\/report-builder\/saved\/share-candidates$/, "reports.konstruktor.transfer"),
+  r(["POST"], /\/reports\/report-builder\/saved\/:id\/share$/, "reports.konstruktor.transfer"),
   r(["POST"], /\/reports\/report-builder\/saved$/, "reports.konstruktor.create"),
   r(WRITE, /\/reports\/report-builder\/saved\//, "reports.konstruktor.update"),
-  r(DEL, /\/reports\/report-builder\/saved\//, "reports.konstruktor.update"),
+  r(DEL, /\/reports\/report-builder\/saved\//, "reports.konstruktor.delete"),
+  r(READ, /\/reports\/report-builder(\/|$)/, "reports.konstruktor.view"),
   r(READ, /\/reports\/(order-debts|income-report)\/export/, "cash.otchety.export"),
-  r(READ, /\/reports\/.*\/export/, "reports.otchety.copy", "reports.konstruktor.copy"),
-  r(
-    WRITE,
-    /\/reports\/builder/,
-    "reports.konstruktor.create",
-    "reports.konstruktor.update",
-    "reports.otchety.create",
-    "reports.otchety.update"
-  ),
-  r(READ, /\/reports\/builder/, "reports.konstruktor.view", "reports.otchety.view"),
-  r(READ, /\/reports(\/|$)/, "reports.otchety.view", "reports.konstruktor.view"),
+  r(READ, /\/reports\/(order-debts|income-report|cash-flow)(\/|$)/, "cash.otchety.view"),
+  ...REPORT_PAGE_PERMISSIONS.flatMap((p) => [
+    ...(p.export ? [r(READ, new RegExp(`/reports/${p.path}/export`), `${p.section}.export`)] : []),
+    r(READ, new RegExp(`/reports/${p.path}(/|$)`), `${p.section}.view`)
+  ]),
+  // Sahifasi yo'q analitik API (`/reports/sales`, `receivables` ...) — istalgan hisobot guruhi.
+  r(READ, /\/reports\/.*\/export/, ...REPORT_GROUP_EXPORT_PERMISSIONS),
+  r(WRITE, /\/reports\/builder/, "reports.konstruktor.create", "reports.konstruktor.update"),
+  r(READ, /\/reports\/builder/, "reports.konstruktor.view"),
+  r(READ, /\/reports(\/|$)/, ...REPORT_GROUP_VIEW_PERMISSIONS),
 
   // ─────────── Бонусы и скидки (bonus-rules) ───────────
-  r(WRITE, /\/bonus-rules\/bulk$/, "settings.bonusy_i_skidki.update"),
-  r(WRITE, /\/bonus-rules\/:id\/active$/, "settings.bonusy_i_skidki.update"),
-  r(WRITE, /\/bonus-rules\/:id\/order-scope$/, "settings.bonusy_i_skidki.update"),
-  r(["POST"], /\/bonus-rules$/, "settings.bonusy_i_skidki.create"),
-  r(["PUT", "PATCH"], /\/bonus-rules\/:id$/, "settings.bonusy_i_skidki.update"),
-  r(["DELETE"], /\/bonus-rules\/:id$/, "settings.bonusy_i_skidki.delete"),
-  r(READ, /\/bonus-rules(\/|$)/, "settings.bonusy_i_skidki.view"),
+  // Bonus (`qty`) yoki skidka (`sum`/`discount`) — aniq bo'lim handlerda qoida turi bo'yicha tekshiriladi.
+  r(WRITE, /\/bonus-rules\/bulk$/, "settings.bonusy.update", "settings.skidki.update"),
+  r(WRITE, /\/bonus-rules\/:id\/active$/, "settings.bonusy.update", "settings.skidki.update"),
+  r(WRITE, /\/bonus-rules\/:id\/order-scope$/, "settings.bonusy.update", "settings.skidki.update"),
+  r(["POST"], /\/bonus-rules$/, "settings.bonusy.create", "settings.skidki.create"),
+  r(["PUT", "PATCH"], /\/bonus-rules\/:id$/, "settings.bonusy.update", "settings.skidki.update"),
+  r(["DELETE"], /\/bonus-rules\/:id$/, "settings.bonusy.delete", "settings.skidki.delete"),
+  r(READ, /\/bonus-rules(\/|$)/, "settings.bonusy.view", "settings.skidki.view"),
 
   // ─────────── Стратегия бонусов и скидок ───────────
-  r(["POST"], /\/bonus-strategies$/, "settings.bonusy_i_skidki.create"),
-  r(["PUT", "PATCH"], /\/bonus-strategies\/:id(\/active)?$/, "settings.bonusy_i_skidki.update"),
-  r(["DELETE"], /\/bonus-strategies\/:id$/, "settings.bonusy_i_skidki.delete"),
-  r(READ, /\/bonus-strategies(\/|$)/, "settings.bonusy_i_skidki.view"),
+  r(["POST"], /\/bonus-strategies$/, "settings.bonus_strategiya.create"),
+  r(["PUT", "PATCH"], /\/bonus-strategies\/:id(\/active)?$/, "settings.bonus_strategiya.update"),
+  r(["DELETE"], /\/bonus-strategies\/:id$/, "settings.bonus_strategiya.delete"),
+  r(READ, /\/bonus-strategies(\/|$)/, "settings.bonus_strategiya.view"),
 
   // ─────────── Отказы (refusals) ───────────
   r(WRITE, /\/refusals(\/|$)/, "orders.otkazy.create"),
@@ -427,12 +461,13 @@ const ROUTE_PERMISSION_RULES: RoutePermissionRule[] = [
   r(READ, /\/linkage(\/|$)/, "clients.klient.view"),
 
   // ─────────── Полевые / GPS / маршруты ───────────
-  r(WRITE, /\/field(\/|$)/, "gps.gps.update", "routes.marshruty.update"),
-  r(READ, /\/field(\/|$)/, "gps.gps.view", "routes.marshruty.view"),
-  r(READ, /\/gps-monitoring(\/|$)/, "gps.gps.view", "routes.trek.view", "routes.marshruty.view"),
-  r(WRITE, /\/agent-route-days$/, "routes.marshruty.update", "gps.gps.update"),
+  // Xodim turi (agent, dostavshik, ...) va trek — handlerda (`resolveGpsAccess`) filtrlanadi.
+  r(READ, /\/gps-monitoring(\/|$)/, ...GPS_MONITORING_VIEW_PERMISSIONS),
+  // `PUT /agent-route-days` — agent/ekspeditor o'z marshrutini saqlaydi; boshqasiga `gps.marshrut.update` handlerda.
+  r(["POST"], /\/geo-boundaries\/:id\/restore$/, "settings.geo_granitsy.update"),
+  r(["POST"], /\/geo-boundaries\/:id\/assign-clients$/, "settings.geo_granitsy.assign"),
+  r(DEL, /\/geo-boundaries(\/|$)/, "settings.geo_granitsy.void"),
   r(WRITE, /\/geo-boundaries(\/|$)/, "settings.geo_granitsy.create", "settings.geo_granitsy.update"),
-  r(DEL, /\/geo-boundaries(\/|$)/, "settings.geo_granitsy.update"),
   r(READ, /\/geo-boundaries(\/|$)/, "settings.geo_granitsy.view"),
 
   // ─────────── Уведомления ───────────
@@ -444,15 +479,13 @@ const ROUTE_PERMISSION_RULES: RoutePermissionRule[] = [
 ];
 
 function matchRule(method: string, routePath: string): RoutePermissionRule | null {
-  for (const candidate of pathsToMatch(routePath)) {
-    // Mobil API o‘z JWT+rol guardida; veb CRUD kalitlari (`clients.foto.view` va h.k.)
-    // `/mobile/clients/:id/photo-reports` ga tushmasin.
-    if (candidate.includes("/mobile/")) return null;
-    if (candidate.includes("/telegram-bot/")) return null;
-    for (const rule of ROUTE_PERMISSION_RULES) {
-      if (!rule.methods.includes(method as Method)) continue;
-      if (rule.test.test(candidate)) return rule;
-    }
+  const candidates = pathsToMatch(routePath);
+  // Mobil API o‘z JWT+rol guardida; veb CRUD kalitlari (`clients.foto.view` va h.k.)
+  // `/mobile/clients/:id/photo-reports` ga tushmasin.
+  if (candidates.some((c) => c.includes("/mobile/") || c.includes("/telegram-bot/"))) return null;
+  for (const rule of ROUTE_PERMISSION_RULES) {
+    if (!rule.methods.includes(method as Method)) continue;
+    if (candidates.some((c) => rule.test.test(c))) return rule;
   }
   return null;
 }

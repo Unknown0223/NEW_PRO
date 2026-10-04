@@ -38,7 +38,7 @@ describe("permission-model (CRUD struktura)", () => {
 
   it("yangi bo'limlar mavjud (audit/finance/automation/work_slots/warehouse to'liq)", () => {
     const modules = new Set(PERMISSION_SECTIONS.map((s) => s.module));
-    for (const m of ["audit", "finance", "work_slots", "warehouse", "routes", "activity"]) {
+    for (const m of ["audit", "finance", "work_slots", "warehouse", "gps", "activity"]) {
       expect(modules.has(m), `module yo'q: ${m}`).toBe(true);
     }
     expect(PERMISSION_SECTIONS.some((s) => s.module === "orders" && s.section === "avtomatizatsiya")).toBe(true);

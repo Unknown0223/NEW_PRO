@@ -171,7 +171,7 @@ export default function BonusStrategiesListPage() {
                       <div className="inline-flex items-center justify-end gap-1.5">
                         <HistoryIconButton
                           module="settings"
-                          section="bonusy_i_skidki"
+                          section="bonus_strategiya"
                           entityType="bonus_strategy"
                           entityId={r.id}
                           title={`История: ${r.name}`}

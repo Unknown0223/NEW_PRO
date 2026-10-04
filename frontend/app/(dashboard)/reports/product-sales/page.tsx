@@ -156,7 +156,7 @@ function collectPaymentKeys(rows: ReportRow[], totals: ReportData["totals"], cat
 }
 
 export default function ReportProductSalesPage() {
-  const canExport = usePermissions().has("reports.otchety.copy");
+  const canExport = usePermissions().has("reports.prodazhi_tovarov.export");
   const tenantSlug = useAuthStore((s) => s.tenantSlug);
   const hydrated = useAuthStoreHydrated();
   const today = new Date();

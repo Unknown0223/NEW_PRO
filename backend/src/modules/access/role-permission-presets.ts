@@ -224,7 +224,9 @@ const PRESET_BUILDERS: Record<string, () => string[]> = {
       /** Kassa: mijoz balanslari (qarz/to‘lov) — Access orqali ham beriladi. */
       secOnly("cash", "balansy_klientov", ["view", "export"]),
       mod("dashboard"),
-      sec("gps", "gps"),
+      sec("gps", "agenty"),
+      sec("gps", "trek"),
+      sec("gps", "marshrut"),
       sec("staff", "avans")
     ),
 
@@ -250,9 +252,18 @@ const PRESET_BUILDERS: Record<string, () => string[]> = {
 
   collector: () => uniq(secOnly("cash", "zayavki_na_oplatu", ["view"]), secOnly("cash", "oplaty_klientov", ["view", "create", "export"])),
   gruzchik: () => uniq(modViewOnly("invoices"), modViewOnly("warehouse")),
-  driver: () => uniq(modViewOnly("orders"), modViewOnly("invoices"), mod("routes")),
-  dispatcher: () => uniq(modViewOnly("orders"), mod("routes"), sec("gps", "gps")),
-  logist: () => uniq(modViewOnly("orders"), mod("routes"), modViewOnly("warehouse")),
+  driver: () =>
+    uniq(modViewOnly("orders"), modViewOnly("invoices"), sec("gps", "dostavshchiki"), sec("gps", "trek"), sec("gps", "marshrut")),
+  dispatcher: () => uniq(modViewOnly("orders"), mod("gps"), sec("reports", "gps")),
+  logist: () =>
+    uniq(
+      modViewOnly("orders"),
+      sec("gps", "dostavshchiki"),
+      sec("gps", "trek"),
+      sec("gps", "marshrut"),
+      sec("reports", "gps"),
+      modViewOnly("warehouse")
+    ),
   merchandiser: () => uniq(modViewOnly("clients"), secOnly("dashboard", "prodazhi", ["view"])),
   manager: () =>
     uniq(

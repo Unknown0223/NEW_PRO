@@ -145,7 +145,7 @@ function fmtVisit(iso: string | null) {
 }
 
 export default function ReportVisits2Page() {
-  const canExport = usePermissions().has("reports.otchety.copy");
+  const canExport = usePermissions().has("reports.vizity.export");
   const tenantSlug = useAuthStore((s) => s.tenantSlug);
   const hydrated = useAuthStoreHydrated();
   const b0 = defaultRange();

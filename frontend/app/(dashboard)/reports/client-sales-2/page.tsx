@@ -108,7 +108,7 @@ function formatDate(v: string) {
 }
 
 export default function ReportClientSales2Page() {
-  const canExport = usePermissions().has("reports.otchety.copy");
+  const canExport = usePermissions().has("reports.prodazhi_klientov_2.export");
   const tenantSlug = useAuthStore((s) => s.tenantSlug);
   const hydrated = useAuthStoreHydrated();
 

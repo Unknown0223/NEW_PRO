@@ -79,7 +79,7 @@ describe("access-workspace split", () => {
       user_effect: "allow" as const
     };
     const personalOnly = {
-      key: "reports.otchety.view",
+      key: "reports.prodazhi_tovarov.view",
       effective: true,
       from_role: false,
       user_effect: "allow" as const
@@ -93,7 +93,7 @@ describe("access-workspace split", () => {
       denied_permissions: ["dashboard.supervayzer.view"]
     });
     expect(buildRevokeEffectiveAccessPatch(personalOnly)).toEqual({
-      remove_permission_keys: ["reports.otchety.view"]
+      remove_permission_keys: ["reports.prodazhi_tovarov.view"]
     });
     expect(revokeEffectiveAccessButtonLabel(rolePlusAllow)).toBe("Снять");
     expect(revokeEffectiveAccessButtonLabel(personalOnly)).toBe("Открепить");

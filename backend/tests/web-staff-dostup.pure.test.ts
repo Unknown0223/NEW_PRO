@@ -65,7 +65,8 @@ describe("web staff (kassir/operator/SVR/skladchik) — Dostup cheklovlari", () 
   it("SVR (supervisor) — work-slots va GPS bor, kassa yozish yo‘q", () => {
     const k = buildRoleDefaultKeys("supervisor");
     expect(k).toContain("work_slots.raboche_mesto.view");
-    expect(k).toContain("gps.gps.view");
+    expect(k).toContain("gps.agenty.view");
+    expect(k).toContain("gps.marshrut.update");
     expect(k).toContain("clients.foto.view");
     expect(k).not.toContain("cash.oplaty_klientov.create");
     expect(k.some((x) => x.startsWith("access."))).toBe(false);

@@ -250,7 +250,7 @@ export function BonusStrategyForm({ initial }: Props) {
           isEdit && initial ? (
             <HistoryIconButton
               module="settings"
-              section="bonusy_i_skidki"
+              section="bonus_strategiya"
               entityType="bonus_strategy"
               entityId={initial.id}
               title={`История: ${initial.name}`}

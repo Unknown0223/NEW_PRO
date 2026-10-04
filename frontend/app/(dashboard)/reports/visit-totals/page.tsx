@@ -154,7 +154,7 @@ function isVisitTotalsBadRangeError(err: unknown): boolean {
 }
 
 export default function ReportVisitTotalsPage() {
-  const canExport = usePermissions().has("reports.otchety.copy");
+  const canExport = usePermissions().has("reports.itogi_vizitov.export");
   const tenantSlug = useAuthStore((s) => s.tenantSlug);
   const hydrated = useAuthStoreHydrated();
   const b0 = defaultRange();

@@ -69,8 +69,7 @@ export const settingsSections: SettingsSection[] = [
         title: "Мобильное приложение",
         slug: "mobil-ilova",
         href: "/settings/mobile-app",
-        status: "available",
-        requiredRoles: ["admin"] as const
+        status: "available"
       }
     ]
   },
@@ -253,7 +252,6 @@ export const settingsSections: SettingsSection[] = [
         slug: "document-edit-lock",
         href: "/settings/document-edit-lock",
         status: "available",
-        requiredRoles: ["admin"] as const,
         description: "Ограничение периода для редактирования документов"
       },
       {
@@ -380,7 +378,7 @@ export function resolveSettingsItemHref(item: SettingsItem): string {
 const SETTINGS_HREF_VIEW_PERMS: Record<string, readonly string[]> = {
   "/settings/appearance": ["settings.appearance.view"],
   "/settings/returns/filter": ["settings.returns_filter.view"],
-  "/settings/mobile-app": ["settings.mobile_app.view"],
+  "/settings/mobile-app": ["settings.mobile_app.view", "settings.mobile_app.update"],
   "/settings/territories": ["settings.territoriya.view"],
   "/settings/units": ["settings.edinitsy.view"],
   "/settings/branches": ["settings.filial.view"],
@@ -403,10 +401,10 @@ const SETTINGS_HREF_VIEW_PERMS: Record<string, readonly string[]> = {
   "/settings/sales-directions/trade": ["settings.napravlenie_torgovli.view"],
   "/settings/sales-directions/sales-channels": ["settings.kanal_sbyta.view"],
   "/settings/sales-directions/kpi-groups": ["settings.napravlenie_torgovli.view"],
-  "/settings/bonus-rules": ["settings.bonusy_i_skidki.view"],
-  "/settings/discount-rules": ["settings.bonusy_i_skidki.view"],
-  "/settings/bonus-strategies": ["settings.bonusy_i_skidki.view"],
-  "/settings/bonus-stack": ["settings.bonusy_i_skidki.view"],
+  "/settings/bonus-rules": ["settings.bonusy.view"],
+  "/settings/discount-rules": ["settings.skidki.view"],
+  "/settings/bonus-strategies": ["settings.bonus_strategiya.view"],
+  "/settings/bonus-stack": ["settings.bonusy.view", "settings.skidki.view", "settings.bonus_strategiya.view"],
   "/settings/reasons/request-types": ["settings.prichiny.view"],
   "/settings/reasons/refusal-reasons": ["settings.prichiny.view"],
   "/settings/reasons/cancel-payment-reasons": ["settings.prichiny.view"],
@@ -420,7 +418,11 @@ const SETTINGS_HREF_VIEW_PERMS: Record<string, readonly string[]> = {
   "/settings/knowledge-base/type": ["settings.baza_znaniy.view"],
   "/settings/knowledge-base/base": ["settings.baza_znaniy.view"],
   "/settings/company": ["settings.profil_kompanii.view"],
-  "/settings/document-edit-lock": ["settings.document_edit_lock.view"],
+  "/settings/document-edit-lock": [
+    "settings.document_edit_lock.view",
+    "settings.document_edit_lock.update",
+    "settings.document_edit_lock.assign"
+  ],
   "/settings/period/orders-consignment": ["settings.orders_consignment.view"],
   "/settings/timezone": ["settings.timezone.view"],
   "/settings/initial-setup": ["settings.initial_setup.view"],

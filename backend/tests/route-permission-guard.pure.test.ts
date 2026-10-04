@@ -33,7 +33,9 @@ describe("route-permission-guard matchRule", () => {
 
   it("regex / custom-named route params normalize to :id", () => {
     expect(matchRule("PATCH", "/api/:slug/orders/:id(\\d+)")?.anyOf).toContain("orders.zakaz.update");
-    expect(matchRule("DELETE", "/api/:slug/warehouses/:warehouseId")?.anyOf).toEqual(["warehouse.sklady.delete"]);
+    expect(matchRule("DELETE", "/api/:slug/warehouses/:warehouseId")?.anyOf).toEqual(["warehouse.sklady.deactivate"]);
+    expect(matchRule("POST", "/api/:slug/warehouses/:warehouseId/restore")?.anyOf).toEqual(["warehouse.sklady.activate"]);
+    expect(matchRule("POST", "/api/:slug/warehouses")?.anyOf).toEqual(["warehouse.sklady.create"]);
     expect(matchRule("DELETE", "/api/:slug/opening-balances/:id(\\d+)")?.anyOf).toEqual(["cash.nachalnye_balansy.void"]);
   });
 
@@ -61,7 +63,15 @@ describe("route-permission-guard matchRule", () => {
       ["POST", "/api/:slug/clients/merge-preview", "clients.obedinenie.view"],
       ["DELETE", "/api/:slug/currency-rates/:id", "cash.kurs_valyuty.update"],
       ["POST", "/api/:slug/order-restriction-rules", "orders.avtomatizatsiya.create"],
-      ["PATCH", "/api/:slug/settings/bonus-stack", "settings.bonusy_i_skidki.update"]
+      ["PATCH", "/api/:slug/settings/bonus-stack", "settings.bonus_strategiya.update"],
+      ["POST", "/api/:slug/bonus-rules", "settings.bonusy.create"],
+      ["POST", "/api/:slug/bonus-rules", "settings.skidki.create"],
+      ["DELETE", "/api/:slug/bonus-rules/:id", "settings.skidki.delete"],
+      ["POST", "/api/:slug/bonus-strategies", "settings.bonus_strategiya.create"],
+      ["PATCH", "/api/:slug/consignment/settings", "staff.konsignatsiya_zakrytie.update"],
+      ["POST", "/api/:slug/consignment/import.xlsx", "staff.konsignatsiya.import"],
+      ["PATCH", "/api/:slug/consignment/agents/bulk-rows", "staff.konsignatsiya.status"],
+      ["PATCH", "/api/:slug/consignment/agents/bulk-rows", "staff.konsignatsiya.update"]
     ];
     for (const [method, path, key] of cases) {
       expect(matchRule(method, path)?.anyOf, `${method} ${path}`).toContain(key);
@@ -92,7 +102,47 @@ describe("route-permission-guard matchRule", () => {
       expect(matchRule("GET", path)?.anyOf, path).toEqual([key]);
     }
     expect(matchRule("GET", "/api/:slug/stock/recommended")?.anyOf).toEqual(["warehouse.rekomendovannyy_zapas.view"]);
-    expect(matchRule("GET", "/api/:slug/reports/product-sales/export")?.anyOf).toContain("reports.otchety.copy");
+    expect(matchRule("GET", "/api/:slug/reports/product-sales/export")?.anyOf).toEqual(["reports.prodazhi_tovarov.export"]);
+  });
+
+  it("each report page has its own view/export key", () => {
+    expect(matchRule("GET", "/api/:slug/reports/product-sales")?.anyOf).toEqual(["reports.prodazhi_tovarov.view"]);
+    expect(matchRule("GET", "/api/:slug/reports/visits-2/export")?.anyOf).toEqual(["reports.vizity.export"]);
+    expect(matchRule("GET", "/api/:slug/reports/agent-orders")?.anyOf).toEqual(["reports.zakazy_agentov.view"]);
+    expect(matchRule("GET", "/api/:slug/reports/gps-delivery-routes")?.anyOf).toEqual(["reports.gps.view"]);
+  });
+
+  it("report builder: export, share and saved CRUD are separate keys", () => {
+    expect(matchRule("POST", "/api/:slug/reports/report-builder/export")?.anyOf).toEqual(["reports.konstruktor.export"]);
+    expect(matchRule("GET", "/api/:slug/reports/report-builder/saved/share-candidates")?.anyOf).toEqual([
+      "reports.konstruktor.transfer"
+    ]);
+    expect(matchRule("POST", "/api/:slug/reports/report-builder/saved/:id/share")?.anyOf).toEqual([
+      "reports.konstruktor.transfer"
+    ]);
+    expect(matchRule("PUT", "/api/:slug/reports/report-builder/saved/:id")?.anyOf).toEqual(["reports.konstruktor.update"]);
+    expect(matchRule("DELETE", "/api/:slug/reports/report-builder/saved/:id")?.anyOf).toEqual(["reports.konstruktor.delete"]);
+  });
+
+  it("GPS monitoring accepts any per-role view key", () => {
+    const anyOf = matchRule("GET", "/api/:slug/gps-monitoring/day")?.anyOf ?? [];
+    expect(anyOf).toContain("gps.agenty.view");
+    expect(anyOf).toContain("gps.van_selling.view");
+    expect(anyOf).toContain("gps.trek.view");
+    expect(matchRule("PUT", "/api/:slug/agent-route-days")).toBeNull();
+  });
+
+  it("settings: mobile app, edit lock, workdays and geo split actions", () => {
+    expect(matchRule("POST", "/api/:slug/settings/mobile-app-release/notify")?.anyOf).toEqual(["settings.mobile_app.transfer"]);
+    expect(matchRule("POST", "/api/:slug/settings/mobile-app-release/upload")?.anyOf).toEqual(["settings.mobile_app.import"]);
+    expect(matchRule("POST", "/api/:slug/settings/document-edit-lock/grants")?.anyOf).toEqual([
+      "settings.document_edit_lock.assign"
+    ]);
+    expect(matchRule("PATCH", "/api/:slug/settings/document-edit-lock")?.anyOf).toEqual(["settings.document_edit_lock.update"]);
+    expect(matchRule("POST", "/api/:slug/workdays/exceptions")?.anyOf).toEqual(["staff.rabochie_dni.create"]);
+    expect(matchRule("DELETE", "/api/:slug/workdays/exceptions/:id")?.anyOf).toEqual(["staff.rabochie_dni.delete"]);
+    expect(matchRule("DELETE", "/api/:slug/geo-boundaries/:id")?.anyOf).toEqual(["settings.geo_granitsy.void"]);
+    expect(matchRule("POST", "/api/:slug/geo-boundaries/:id/assign-clients")?.anyOf).toEqual(["settings.geo_granitsy.assign"]);
   });
 
   it("territory check-in validation and GET /territories stay open", () => {

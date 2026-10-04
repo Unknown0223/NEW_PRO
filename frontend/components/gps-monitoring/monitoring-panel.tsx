@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useEffect, useMemo, useState } from "react";
 import {
@@ -15,6 +15,10 @@ import {
 } from "./types";
 
 const ROLE_ORDER: Employee["type"][] = ["agent", "delivery", "supervisor", "inkasator", "vansell"];
+/** Access: `gps.<section>.view|export` — har bir xodim turi alohida. */
+const ROLE_PERM_SECTION: Record<Employee["type"], string> = {
+  agent: "agenty", delivery: "dostavshchiki", supervisor: "supervayzery", inkasator: "inkassatory", vansell: "van_selling",
+};
 const ROLE_ICONS: Record<Employee["type"], typeof UserRound> = {
   agent: UserRound, delivery: Truck, supervisor: ShieldCheck, inkasator: Banknote, vansell: PackageCheck,
 };
@@ -197,7 +201,12 @@ function ListMode({ selected, onSelectEmployee, date, onDate, onLocate, employee
   onVisibleEmployeesChange?: (ids: string[]) => void;
 }) {
   void loading;
+  const { has } = usePermissions();
+  const allowedRoles = ROLE_ORDER.filter((r) => has(`gps.${ROLE_PERM_SECTION[r]}.view`));
   const [seg, setSeg] = useState<Employee["type"]>("agent");
+  useEffect(() => {
+    if (allowedRoles.length > 0 && !allowedRoles.includes(seg)) setSeg(allowedRoles[0]!);
+  }, [allowedRoles, seg]);
   const [query, setQuery] = useState("");
   const [sup, setSup] = useState<string>("all");
   const [supOpen, setSupOpen] = useState(false);
@@ -240,7 +249,7 @@ function ListMode({ selected, onSelectEmployee, date, onDate, onLocate, employee
 
         {/* role chips — scrollable, optimized for 5 roles */}
         <div className="scroll-slim mt-3 flex gap-1.5 overflow-x-auto pb-0.5">
-          {ROLE_ORDER.map((r) => {
+          {allowedRoles.map((r) => {
             const Icon = ROLE_ICONS[r];
             const active = seg === r;
             return (
@@ -835,7 +844,7 @@ function MiniTab({ employee, visited, total, date, toast, role }: {
   toast: (m: string) => void;
   role: Employee["type"];
 }) {
-  const canExport = usePermissions().has("gps.gps.export");
+  const canExport = usePermissions().has(`gps.${ROLE_PERM_SECTION[role]}.export`);
   const [query, setQuery] = useState("");
   const [spinning, setSpinning] = useState(false);
 
@@ -992,7 +1001,7 @@ function SupervisorMode({ supervisor, subRoutes, hour, date, onDate, onBack, onO
   toast: (m: string) => void;
   initialTab: "report" | "mini";
 }) {
-  const canExport = usePermissions().has("gps.gps.export");
+  const canExport = usePermissions().has("gps.supervayzery.export");
   const [tab, setTab] = useState<"report" | "mini">(initialTab);
   const [pill, setPill] = useState<"all" | "offline">("all");
   const [query, setQuery] = useState("");

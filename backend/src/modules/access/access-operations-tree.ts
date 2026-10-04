@@ -72,7 +72,15 @@ export function buildAccessOperationsTree(): AccessTreeModule[] {
   };
   for (const p of placed) if (!p.moved) ensureSection(p);
   for (const p of placed) ensureSection(p).operations.push(p.op);
-  return [...modules.values()];
+  return [...modules.values()].map(flattenSingleSectionModule);
+}
+
+/** Bitta bo'limli modul («Аудит → Аудит») — operatsiyalar modul ostida tekis (har biri o'z qatori). */
+function flattenSingleSectionModule(mod: AccessTreeModule): AccessTreeModule {
+  if (mod.sections.length !== 1) return mod;
+  const only = mod.sections[0]!;
+  if (only.operations.length <= 1) return mod;
+  return { ...mod, sections: only.operations.map((op) => ({ id: op.key, label: op.label, operations: [op] })) };
 }
 
 let catalogByKeyCache: Map<string, StructuredPermissionEntry> | null = null;

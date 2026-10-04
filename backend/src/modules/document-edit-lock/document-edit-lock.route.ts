@@ -13,8 +13,9 @@ import {
   saveDocumentEditLockSettings
 } from "../../lib/document-edit-lock.assert";
 import { appendTenantAuditEvent, AuditEntityType } from "../../lib/tenant-audit";
-import { jwtAccessVerify, requireRoles } from "../auth/auth.prehandlers";
+import { jwtAccessVerify, requireAnyPermission } from "../auth/auth.prehandlers";
 import { invalidateTenantSettingsCache } from "../../lib/redis-cache";
+import { prisma } from "../../config/database";
 import {
   batchCreateDocumentEditGrants,
   listActiveDocumentEditGrants,
@@ -22,7 +23,10 @@ import {
 } from "./document-edit-lock.grants";
 import { searchDocumentsForEditLock } from "./document-edit-lock.search";
 
-const adminRoles = ["admin"] as const;
+const LOCK_VIEW = "settings.document_edit_lock.view";
+const LOCK_UPDATE = "settings.document_edit_lock.update";
+/** Muddati o'tgan hujjatni vaqtincha tahrirlashga ochish (grant) va bekor qilish. */
+const LOCK_ASSIGN = "settings.document_edit_lock.assign";
 
 const sectionConfigSchema = z.object({
   enabled: z.boolean(),
@@ -60,7 +64,7 @@ const batchGrantSchema = z.object({
 export async function registerDocumentEditLockRoutes(app: FastifyInstance) {
   app.get(
     "/api/:slug/settings/document-edit-lock",
-    { preHandler: [jwtAccessVerify, requireRoles(...adminRoles)] },
+    { preHandler: [jwtAccessVerify, requireAnyPermission([LOCK_VIEW, LOCK_UPDATE, LOCK_ASSIGN])] },
     async (request, reply) => {
       if (!ensureTenantContext(request, reply)) return;
       const settings = await loadDocumentEditLockSettings(request.tenant!.id);
@@ -70,7 +74,7 @@ export async function registerDocumentEditLockRoutes(app: FastifyInstance) {
 
   app.patch(
     "/api/:slug/settings/document-edit-lock",
-    { preHandler: [jwtAccessVerify, requireRoles(...adminRoles)] },
+    { preHandler: [jwtAccessVerify, requireAnyPermission([LOCK_UPDATE])] },
     async (request, reply) => {
       if (!ensureTenantContext(request, reply)) return;
       const parsed = settingsSchema.safeParse(request.body);
@@ -110,7 +114,7 @@ export async function registerDocumentEditLockRoutes(app: FastifyInstance) {
 
   app.get(
     "/api/:slug/settings/document-edit-lock/search",
-    { preHandler: [jwtAccessVerify, requireRoles(...adminRoles)] },
+    { preHandler: [jwtAccessVerify, requireAnyPermission([LOCK_ASSIGN])] },
     async (request, reply) => {
       if (!ensureTenantContext(request, reply)) return;
       const q = request.query as Record<string, string | undefined>;
@@ -137,8 +141,22 @@ export async function registerDocumentEditLockRoutes(app: FastifyInstance) {
   );
 
   app.get(
+    "/api/:slug/settings/document-edit-lock/users",
+    { preHandler: [jwtAccessVerify, requireAnyPermission([LOCK_ASSIGN])] },
+    async (request, reply) => {
+      if (!ensureTenantContext(request, reply)) return;
+      const rows = await prisma.user.findMany({
+        where: { tenant_id: request.tenant!.id, is_active: true, role: { not: "admin" } },
+        select: { id: true, name: true, login: true, role: true },
+        orderBy: { name: "asc" }
+      });
+      return reply.send({ data: rows.map((u) => ({ id: u.id, full_name: u.name, login: u.login, role: u.role })) });
+    }
+  );
+
+  app.get(
     "/api/:slug/settings/document-edit-lock/grants",
-    { preHandler: [jwtAccessVerify, requireRoles(...adminRoles)] },
+    { preHandler: [jwtAccessVerify, requireAnyPermission([LOCK_VIEW, LOCK_ASSIGN])] },
     async (request, reply) => {
       if (!ensureTenantContext(request, reply)) return;
       const data = await listActiveDocumentEditGrants(request.tenant!.id);
@@ -148,7 +166,7 @@ export async function registerDocumentEditLockRoutes(app: FastifyInstance) {
 
   app.post(
     "/api/:slug/settings/document-edit-lock/grants",
-    { preHandler: [jwtAccessVerify, requireRoles(...adminRoles)] },
+    { preHandler: [jwtAccessVerify, requireAnyPermission([LOCK_ASSIGN])] },
     async (request, reply) => {
       if (!ensureTenantContext(request, reply)) return;
       const parsed = batchGrantSchema.safeParse(request.body);
@@ -184,7 +202,7 @@ export async function registerDocumentEditLockRoutes(app: FastifyInstance) {
 
   app.post(
     "/api/:slug/settings/document-edit-lock/grants/:id/revoke",
-    { preHandler: [jwtAccessVerify, requireRoles(...adminRoles)] },
+    { preHandler: [jwtAccessVerify, requireAnyPermission([LOCK_ASSIGN])] },
     async (request, reply) => {
       if (!ensureTenantContext(request, reply)) return;
       const id = Number.parseInt((request.params as { id: string }).id, 10);

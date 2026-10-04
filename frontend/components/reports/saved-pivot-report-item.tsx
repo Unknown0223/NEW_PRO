@@ -17,7 +17,7 @@ export type SavedPivotReportItemProps = {
   onSelect: () => void;
   onSave: () => void;
   onShare?: () => void;
-  onDelete: () => void;
+  onDelete?: () => void;
 };
 
 /** Saqlangan hisobot: tanlash + Сохранить/Поделиться/o‘chirish (faqat tanlanganda). */
@@ -125,22 +125,24 @@ export function SavedPivotReportItem({
               <Share2 className={dense ? "h-3 w-3" : "h-3.5 w-3.5"} />
             </button>
           ) : null}
-          <button
-            type="button"
-            className={cn(
-              "inline-flex items-center justify-center text-muted-foreground outline-none hover:bg-destructive/10 hover:text-destructive disabled:opacity-40",
-              dense ? "h-7 w-7" : "h-9 w-9"
-            )}
-            title="Удалить"
-            aria-label={`Удалить «${name}»`}
-            disabled={loading}
-            onClick={(e) => {
-              e.stopPropagation();
-              onDelete();
-            }}
-          >
-            <Trash2 className={dense ? "h-3 w-3" : "h-3.5 w-3.5"} />
-          </button>
+          {onDelete ? (
+            <button
+              type="button"
+              className={cn(
+                "inline-flex items-center justify-center text-muted-foreground outline-none hover:bg-destructive/10 hover:text-destructive disabled:opacity-40",
+                dense ? "h-7 w-7" : "h-9 w-9"
+              )}
+              title="Удалить"
+              aria-label={`Удалить «${name}»`}
+              disabled={loading}
+              onClick={(e) => {
+                e.stopPropagation();
+                onDelete();
+              }}
+            >
+              <Trash2 className={dense ? "h-3 w-3" : "h-3.5 w-3.5"} />
+            </button>
+          ) : null}
         </div>
       ) : null}
     </div>

@@ -104,7 +104,6 @@ export const PERMISSION_MODULE_LABEL_RU: Record<string, string> = {
   reports: "Отчёт",
   staff: "Пользователи",
   gps: "GPS",
-  routes: "Маршруты",
   settings: "Настройки",
   automation: "Автоматизация",
   audit: "Аудит",
@@ -149,9 +148,9 @@ const STAFF_CRUD: PermissionAction[] = ["view", "create", "update", "activate", 
  */
 export const PERMISSION_SECTIONS: PermissionSectionDef[] = [
   // ── Dashboard ──────────────────────────────────────────────
-  { module: "dashboard", section: "prodazhi", labelRu: "Продажа", actions: VIEW_EXPORT },
-  { module: "dashboard", section: "finansy", labelRu: "Финанс", actions: VIEW_EXPORT },
-  { module: "dashboard", section: "supervayzer", labelRu: "Супервайзер", actions: VIEW_EXPORT },
+  { module: "dashboard", section: "prodazhi", labelRu: "Дашборд продаж", actions: VIEW_EXPORT },
+  { module: "dashboard", section: "finansy", labelRu: "Дашборд финансов", actions: VIEW_EXPORT },
+  { module: "dashboard", section: "supervayzer", labelRu: "Дашборд супервайзера", actions: VIEW_EXPORT },
   { module: "dashboard", section: "plan_fakt", labelRu: "Мониторинг продаж и планов", actions: VIEW_ONLY },
 
   // ── Orders (Заявки) ────────────────────────────────────────
@@ -167,24 +166,24 @@ export const PERMISSION_SECTIONS: PermissionSectionDef[] = [
 
   // ── Cash (Кассы) ───────────────────────────────────────────
   { module: "cash", section: "oplaty_klientov", labelRu: "Оплаты клиентов", actions: ["view", "create", "update", "approve", "export", "delete", "history"] },
-  { module: "cash", section: "perechisleniya", labelRu: "Банковские платежи", actions: ["view", "create", "update", "import"] },
+  { module: "cash", section: "perechisleniya", labelRu: "Перечисления (банк)", actions: ["view", "create", "update", "import"] },
   { module: "cash", section: "rashody_klienta", labelRu: "Расходы клиента", actions: CRUD },
   { module: "cash", section: "nachalnye_balansy", labelRu: "Начальные балансы клиентов", actions: ["view", "create", "update", "void", "restore"] },
   /** Alohida: «Балансы клиентов» — `cash.otchety` (Отчёты) bilan aralashmasin. */
-  { module: "cash", section: "balansy_klientov", labelRu: "Балансы клиентов", actions: VIEW_EXPORT, treeSectionRu: REPORTS_TREE_RU },
-  { module: "cash", section: "otchety", labelRu: "Отчеты", actions: VIEW_EXPORT, treeSectionRu: REPORTS_TREE_RU },
-  { module: "cash", section: "kassa", labelRu: "Кассы", actions: ["view", "create", "update", "status", "export", "history"] },
-  { module: "cash", section: "kurs_valyuty", labelRu: "Курс валюты", actions: ["view", "create", "update", "export"] },
+  { module: "cash", section: "balansy_klientov", labelRu: "Балансы клиентов (оплата и долги)", actions: VIEW_EXPORT, treeSectionRu: REPORTS_TREE_RU },
+  { module: "cash", section: "otchety", labelRu: "Отчёты кассы (приходы, ДДС, акт сверки, долги)", actions: VIEW_EXPORT, treeSectionRu: REPORTS_TREE_RU },
+  { module: "cash", section: "kassa", labelRu: "Касса", actions: ["view", "create", "update", "status", "export", "history"] },
+  { module: "cash", section: "kurs_valyuty", labelRu: "Курс валют", actions: ["view", "create", "update", "export"] },
   { module: "cash", section: "prihody", labelRu: "Приходы", actions: VIEW_ONLY },
   { module: "cash", section: "zayavki_na_oplatu", labelRu: "Заявки на оплату", actions: ["view", "approve", "export"] },
   { module: "cash", section: "dolgi_ekspeditora", labelRu: "Долги экспедитора", actions: VIEW_ONLY },
 
   // ── Warehouse (Склады) ─────────────────────────────────────
-  { module: "warehouse", section: "sklady", labelRu: "Склады", actions: ["view", "create", "update", "delete", "export", "history"] },
+  { module: "warehouse", section: "sklady", labelRu: "Склады", actions: ["view", "create", "update", "deactivate", "activate", "export", "history"] },
   { module: "warehouse", section: "bloki", labelRu: "Блок склада", actions: [...CRUD, "export"] },
-  { module: "warehouse", section: "postuplenie", labelRu: "Товарные поступления", actions: ["view", "create", "update", "delete", "import", "status", "export", "history"] },
+  { module: "warehouse", section: "postuplenie", labelRu: "Поступление товаров", actions: ["view", "create", "update", "delete", "import", "status", "export", "history"] },
   { module: "warehouse", section: "peremeshchenie", labelRu: "Перемещение товара", actions: ["view", "create", "update", "transfer", "export"] },
-  { module: "warehouse", section: "korrektirovka", labelRu: "Корректировка и инвентаризация", actions: ["view", "create", "update", "export"] },
+  { module: "warehouse", section: "korrektirovka", labelRu: "Корректировка склада (инвентаризация)", actions: ["view", "create", "update", "export"] },
   { module: "warehouse", section: "ostatki", labelRu: "Остатки товаров", actions: VIEW_COPY, treeSectionRu: REPORTS_TREE_RU },
   { module: "warehouse", section: "rekomendovannyy_zapas", labelRu: "Рекомендованный запас", actions: VIEW_EXPORT, treeSectionRu: REPORTS_TREE_RU },
   { module: "warehouse", section: "ostatki_na_datu", labelRu: "Остатки на определенную дату", actions: VIEW_COPY, treeSectionRu: REPORTS_TREE_RU },
@@ -192,17 +191,29 @@ export const PERMISSION_SECTIONS: PermissionSectionDef[] = [
 
   // ── Suppliers (Поставщики) ─────────────────────────────────
   { module: "suppliers", section: "postavshchik", labelRu: "Поставщики", actions: ["view", "create", "update", "delete", "export", "history"] },
-  { module: "suppliers", section: "oplaty", labelRu: "Оплата поставщику", actions: ["view", "create", "update", "export"] },
-  { module: "suppliers", section: "balansy", labelRu: "Балансы и акт сверки", actions: VIEW_EXPORT },
+  { module: "suppliers", section: "oplaty", labelRu: "Оплаты поставщикам", actions: ["view", "create", "update", "export"] },
+  { module: "suppliers", section: "balansy", labelRu: "Начальные балансы и акт сверки с поставщиком", actions: VIEW_EXPORT },
 
   // ── Plans (Планы) ──────────────────────────────────────────
   { module: "plans", section: "nastroyka_utverzhdayushchih", labelRu: "Настройка утверждающих", actions: ["view", "update"] },
   { module: "plans", section: "ustanovka_planov", labelRu: "Установка планов", actions: ["view", "create", "update", "approve"] },
 
-  // ── Reports (Отчеты) ───────────────────────────────────────
-  { module: "reports", section: "otchety", labelRu: "Отчеты", actions: VIEW_COPY },
-  { module: "reports", section: "konstruktor", labelRu: "Конструктор отчетов", actions: ["view", "create", "update", "copy"] },
-  { module: "reports", section: "dnevnye_kpi_plany", labelRu: "Дневные KPI планы", actions: VIEW_EXPORT, treeSectionRu: REPORTS_TREE_RU },
+  // ── Reports (Отчёт) — har bir hisobot sahifasi alohida ─────
+  { module: "reports", section: "zakazy_agentov", labelRu: "Заказы по агентам", actions: VIEW_ONLY },
+  { module: "reports", section: "gps", labelRu: "Отчёт по GPS (маршруты доставки)", actions: VIEW_EXPORT },
+  { module: "reports", section: "prodazhi_klientov_2", labelRu: "Продажи по клиентам 2", actions: VIEW_EXPORT },
+  { module: "reports", section: "prodazhi_klientov_4", labelRu: "Продажи по клиентам 4", actions: VIEW_EXPORT },
+  { module: "reports", section: "prodazhi_tovarov", labelRu: "Продажи по товарам", actions: VIEW_EXPORT },
+  { module: "reports", section: "vozvrat_ekspeditora", labelRu: "Возврат экспедитора", actions: VIEW_EXPORT },
+  { module: "reports", section: "vizity", labelRu: "По визитам 2.0", actions: VIEW_EXPORT },
+  { module: "reports", section: "itogi_vizitov", labelRu: "Итоги визитов", actions: VIEW_EXPORT },
+  { module: "reports", section: "dnevnye_kpi_plany", labelRu: "Дневные KPI планы", actions: VIEW_EXPORT },
+  {
+    module: "reports",
+    section: "konstruktor",
+    labelRu: "Конструктор сводной таблицы",
+    actions: ["view", "create", "update", "delete", "export", "transfer"]
+  },
 
   // ── Staff (Пользователи) ───────────────────────────────────
   { module: "staff", section: "agent", labelRu: "Агент", actions: ["view", "create", "update", "delete", "export", "activate", "deactivate", "history"] },
@@ -212,27 +223,41 @@ export const PERMISSION_SECTIONS: PermissionSectionDef[] = [
   { module: "staff", section: "inkassator", labelRu: "Инкассатор", actions: STAFF_CRUD },
   { module: "staff", section: "auditor", labelRu: "Аудитор", actions: STAFF_CRUD },
   { module: "staff", section: "sotrudniki", labelRu: "Сотрудники", actions: ["view", "create", "update", "activate", "deactivate", "export"] },
-  { module: "staff", section: "konsignatsiya", labelRu: "Консигнация и лимиты агентов", actions: ["view", "create", "update", "export"] },
-  { module: "staff", section: "tabel", labelRu: "Табель", actions: ["view", "create", "update", "export", "history"] },
-  { module: "staff", section: "rabochie_dni", labelRu: "Рабочие дни", actions: VIEW_ONLY, treeSectionRu: "Табель" },
+  { module: "staff", section: "konsignatsiya", labelRu: "Консигнация и лимиты агентов", actions: ["view", "status", "update", "import", "export"] },
+  {
+    module: "staff",
+    section: "konsignatsiya_zakrytie",
+    labelRu: "Время автозакрытия консигнации",
+    actions: ["update"],
+    treeSectionRu: "Консигнация и лимиты агентов"
+  },
+  { module: "staff", section: "tabel", labelRu: "Табель (посещаемость)", actions: ["view", "update", "export", "history"] },
+  { module: "staff", section: "rabochie_dni", labelRu: "Рабочие дни (график)", actions: ["view", "update", "create", "delete", "history"] },
   { module: "staff", section: "tabel_normativ", labelRu: "Табель · Норматив агентов", actions: ["view", "update"] },
-  { module: "staff", section: "zadachi", labelRu: "Задачи", actions: ["view", "update"] },
+  { module: "settings", section: "tipy_zadach", labelRu: "Задачи (типы задач)", actions: VIEW_ONLY, groupRu: "Пользователи" },
+  { module: "staff", section: "zadachi", labelRu: "Уведомления (колокольчик)", actions: ["view", "update"] },
 
-  // ── GPS / Routes ───────────────────────────────────────────
-  { module: "gps", section: "gps", labelRu: "GPS", actions: ["view", "update", "export"] },
-  { module: "routes", section: "marshruty", labelRu: "Маршруты", actions: ["view", "update"] },
-  { module: "routes", section: "trek", labelRu: "Трек", actions: VIEW_ONLY, treeSectionRu: "Маршруты" },
+  // ── GPS — har bir xodim turi alohida (GPS мониторинг xaritasi) ──
+  { module: "gps", section: "agenty", labelRu: "GPS мониторинг по агентам", actions: VIEW_EXPORT },
+  { module: "gps", section: "dostavshchiki", labelRu: "GPS мониторинг по доставщикам (экспедиторам)", actions: VIEW_EXPORT },
+  { module: "gps", section: "supervayzery", labelRu: "GPS мониторинг по супервайзерам", actions: VIEW_EXPORT },
+  { module: "gps", section: "inkassatory", labelRu: "GPS мониторинг по инкассаторам", actions: VIEW_EXPORT },
+  { module: "gps", section: "van_selling", labelRu: "GPS мониторинг по ван-селлингу", actions: VIEW_EXPORT },
+  { module: "gps", section: "trek", labelRu: "Трек передвижения на карте", actions: VIEW_ONLY },
+  { module: "gps", section: "marshrut", labelRu: "Маршрут дня агента (порядок визитов)", actions: ["update"] },
 
   // ── Settings (Настройки) ───────────────────────────────────
   { module: "settings", section: "tovar", labelRu: "Товар", actions: ["view", "create", "update", "delete", "import", "copy", "history"] },
   { module: "settings", section: "tsena", labelRu: "Цена", actions: ["view", "create", "update", "import", "history"] },
-  { module: "settings", section: "bonusy_i_skidki", labelRu: "Бонусы и скидки", actions: ["view", "create", "update", "delete", "export", "history"] },
+  { module: "settings", section: "bonusy", labelRu: "Бонусы (товар в подарок)", actions: ["view", "create", "update", "delete", "export", "history"] },
+  { module: "settings", section: "skidki", labelRu: "Скидки (процент / от суммы)", actions: ["view", "create", "update", "delete", "export", "history"] },
+  { module: "settings", section: "bonus_strategiya", labelRu: "Стратегии и порядок применения бонусов и скидок", actions: CRUD },
   { module: "settings", section: "territoriya", labelRu: "Территория", actions: CRUD },
   { module: "settings", section: "napravlenie_torgovli", labelRu: "Направление торговли", actions: [...CRUD, "export"] },
-  { module: "settings", section: "geo_granitsy", labelRu: "Гео-границы", actions: ["view", "create", "update", "history"] },
-  { module: "settings", section: "profil_kompanii", labelRu: "Профиль компании", actions: ["view", "update"] },
-  { module: "settings", section: "mobile_app", labelRu: "Мобильное приложение", actions: ["view", "update"] },
-  { module: "settings", section: "document_edit_lock", labelRu: "Период редактирования", actions: ["view", "update"] },
+  { module: "settings", section: "geo_granitsy", labelRu: "Границы на карте", actions: ["view", "create", "update", "void", "assign", "history"] },
+  { module: "settings", section: "profil_kompanii", labelRu: "Компания и флаги", actions: ["view", "update"] },
+  { module: "settings", section: "mobile_app", labelRu: "Мобильное приложение (обновление APK)", actions: ["view", "update", "import", "transfer"] },
+  { module: "settings", section: "document_edit_lock", labelRu: "Ограничение периода редактирования", actions: ["view", "update", "assign"] },
   { module: "settings", section: "system_migration", labelRu: "Системная миграция", actions: ["view", "update", "import"] },
   { module: "settings", section: "kategoriya_tovara", labelRu: "Категория товара", actions: VIEW_EXPORT, treeSectionRu: DICTIONARIES_TREE_RU },
   { module: "settings", section: "tip_tseny", labelRu: "Тип цены", actions: VIEW_ONLY, treeSectionRu: DICTIONARIES_TREE_RU },
@@ -249,7 +274,6 @@ export const PERMISSION_SECTIONS: PermissionSectionDef[] = [
   { module: "settings", section: "tip_klienta", labelRu: "Тип клиента", actions: VIEW_ONLY, treeSectionRu: DICTIONARIES_TREE_RU },
   { module: "settings", section: "kategoriya_klienta", labelRu: "Категория клиента", actions: VIEW_ONLY, treeSectionRu: DICTIONARIES_TREE_RU },
   { module: "settings", section: "prichiny", labelRu: "Причины и примечания", actions: VIEW_ONLY, treeSectionRu: DICTIONARIES_TREE_RU },
-  { module: "settings", section: "tipy_zadach", labelRu: "Типы задач", actions: VIEW_ONLY, treeSectionRu: DICTIONARIES_TREE_RU },
   { module: "settings", section: "inventar_i_korobka", labelRu: "Инвентарь и упаковка", actions: VIEW_ONLY, treeSectionRu: DICTIONARIES_TREE_RU },
   { module: "settings", section: "oborudovanie", labelRu: "Оборудование (принтеры/тара)", actions: VIEW_ONLY, treeSectionRu: DICTIONARIES_TREE_RU },
   { module: "settings", section: "ustanovit_natsenku", labelRu: "Наценка", actions: VIEW_ONLY, treeSectionRu: SYSTEM_SETTINGS_TREE_RU },
@@ -264,7 +288,8 @@ export const PERMISSION_SECTIONS: PermissionSectionDef[] = [
 
   // ── Audit ──────────────────────────────────────────────────
   // `finance.obzor.view` — `dashboard.finansy.view` bilan bir xil sahifa (alias, `legacy-key-map.ts`).
-  { module: "audit", section: "log", labelRu: "Аудит", actions: VIEW_EXPORT },
+  { module: "audit", section: "log", labelRu: "Журнал аудита (все изменения в системе)", actions: VIEW_EXPORT },
+  { module: "audit", section: "tabel", labelRu: "Аудит табеля и рабочих дней", actions: VIEW_ONLY },
 
   // ── Зарплата — kalitlar eski modullarda (grantlar saqlanadi), Access UI'da alohida guruh ─
   { module: "staff", section: "zarplaty", labelRu: "Расчёт зарплаты", actions: ["view", "create", "update", "delete", "copy", "import", "assign", "status", "approve"], groupRu: PAYROLL_GROUP_RU },

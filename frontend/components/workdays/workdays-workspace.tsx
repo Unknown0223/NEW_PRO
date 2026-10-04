@@ -20,7 +20,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
-import { useEffectiveRole } from "@/lib/auth-store";
+import { usePermissions } from "@/lib/use-permissions";
 import { useTabelAudit, useWorkdaysMutations, useWorkdaysState } from "@/lib/tabel/tabel-api";
 import {
   MONTH_NAMES,
@@ -35,15 +35,17 @@ import { ExceptionsTab, IndividualTab, ScheduleMatrix } from "@/components/workd
 import { useWorkdaysData } from "@/components/workdays/use-workdays-data";
 
 type Tab = "assign" | "view" | "exceptions" | "individual";
-const EDIT_ROLES = new Set(["admin", "operator", "director", "sales_director", "regional_manager", "accountant"]);
 
 const EMPTY_SCHEDULES: ScheduleMap = Object.fromEntries(
   WD_ROLES.map((r) => [r, [false, false, false, false, false, false, false]])
 ) as ScheduleMap;
 
 export function WorkdaysWorkspace() {
-  const role = useEffectiveRole();
-  const canEdit = role === "admin" || (role != null && EDIT_ROLES.has(role));
+  const perms = usePermissions();
+  const canEdit = perms.has("staff.rabochie_dni.update");
+  const canAdd = perms.has("staff.rabochie_dni.create");
+  const canRemove = perms.has("staff.rabochie_dni.delete");
+  const canHistory = perms.has("staff.rabochie_dni.history");
 
   const { employees } = useWorkdaysData();
   const stateQ = useWorkdaysState();
@@ -226,7 +228,7 @@ export function WorkdaysWorkspace() {
             <button
               key={t}
               onClick={() => {
-                if (t === "assign" && !canEdit) return showToast("Назначать график может только Admin/Оператор");
+                if (t === "assign" && !canEdit) return showToast("Нет доступа к назначению графика");
                 setTab(t);
               }}
               className={cn(
@@ -246,15 +248,15 @@ export function WorkdaysWorkspace() {
           ))}
         </div>
         <div className="ml-auto flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={() => setHistOpen(true)}>
+          <Button variant="outline" size="sm" className={cn(!canHistory && "hidden")} onClick={() => setHistOpen(true)}>
             <History className="mr-1 size-4" /> История {scheduleAudit.length > 0 && `(${scheduleAudit.length})`}
           </Button>
-          {canEdit && tab === "individual" && (
+          {canAdd && tab === "individual" && (
             <Button size="sm" className="bg-purple-600 hover:bg-purple-700" onClick={() => setOvOpen(true)}>
               <Plus className="mr-1 size-4" /> Индивидуальный
             </Button>
           )}
-          {canEdit && tab !== "individual" && (
+          {canAdd && tab !== "individual" && (
             <Button size="sm" onClick={() => setExOpen(true)}>
               <Plus className="mr-1 size-4" /> Исключение
             </Button>
@@ -285,7 +287,7 @@ export function WorkdaysWorkspace() {
           year={year}
           month={month}
           monthExceptions={monthExceptions}
-          canEdit={canEdit}
+          canEdit={canRemove}
           onRemove={(id) => mut.removeException.mutate(id, { onSuccess: () => showToast("Исключение удалено") })}
         />
       )}
@@ -297,7 +299,7 @@ export function WorkdaysWorkspace() {
           exceptions={exceptions}
           year={year}
           month={month}
-          canEdit={canEdit}
+          canEdit={canRemove}
           onRemove={(id) => mut.removeOverride.mutate(id, { onSuccess: () => showToast("Индивидуальный график удалён") })}
         />
       )}

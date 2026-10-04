@@ -8,6 +8,7 @@
  */
 import type { PermissionAction } from "./permission-model";
 import { extractAction } from "./permission-model";
+import { REPORT_GROUP_VIEW_PERMISSIONS } from "../reports/report-permissions";
 
 /** Oxirgi segment / butun kalitdagi verb naqshlari → amal tipi. */
 const ACTION_PATTERNS: { re: RegExp; action: PermissionAction }[] = [
@@ -69,10 +70,10 @@ const SECTION_ALIAS: Record<string, string> = {
   // plans
   "plans.nastroyka_utverzhdayushchih": "plans.nastroyka_utverzhdayushchih",
   "plans.ustanovka_planov": "plans.ustanovka_planov",
-  "plans.otchety": "reports.otchety",
+  "plans.otchety": "reports.prodazhi_tovarov",
   "plans.otchety.konstruktor_otchetov": "reports.konstruktor.view",
   "plans.otchety.sozdat_publichnuyu_konfiguratsiyu": "reports.konstruktor.create",
-  "plans.otchety.excel_eksport": "reports.konstruktor.copy",
+  "plans.otchety.excel_eksport": "reports.konstruktor.export",
   // staff
   "staff.agent": "staff.agent",
   "staff.ekspeditor": "staff.ekspeditor",
@@ -88,7 +89,7 @@ const SECTION_ALIAS: Record<string, string> = {
   "staff.tabel": "staff.tabel",
   "staff.zadachi": "staff.zadachi",
   // gps
-  "gps": "gps.gps"
+  "gps": "gps.agenty"
 };
 
 /** Dashboard — har bir kalit alohida view bo'lim. */
@@ -118,8 +119,7 @@ const MODULE_VIEW_COMPANIONS: Record<string, string[]> = {
   "cash.nachalnye_balansy_klientov.view": ["cash.nachalnye_balansy.view"],
   "cash.balansy_klientov.view": ["cash.balansy.view"],
   "cash.balansy.view": ["cash.balansy_klientov.view"],
-  "reports.view": ["reports.otchety.view", "reports.konstruktor.view"],
-  "reports.otchety.view": ["reports.view"],
+  "reports.view": [...REPORT_GROUP_VIEW_PERMISSIONS],
   "reports.konstruktor.view": ["reports.view", "pivot.otchety.view"],
   "pivot.view": ["pivot.otchety.view", "reports.konstruktor.view"],
   "pivot.otchety.view": ["pivot.view", "reports.konstruktor.view"],
@@ -252,8 +252,8 @@ export const EXPLICIT_MAP: Record<string, string> = {
   "cash.otchety.spisok_balansy_klientov_po_konsignatsii": "cash.balansy_klientov.view",
   "cash.otchety.detal_balans_klienta_po_konsignatsii": "cash.balansy_klientov.view",
   "cash.balansy.view": "cash.balansy_klientov.view",
-  "gps.dostup_k_gps": "gps.gps.view",
-  "gps.planiruemaya_posledovatelnost_vizita_sotrudnikov_izmenenie": "gps.gps.update",
+  "gps.dostup_k_gps": "gps.agenty.view",
+  "gps.planiruemaya_posledovatelnost_vizita_sotrudnikov_izmenenie": "gps.marshrut.update",
   "access.manage": "access.manage"
 };
 

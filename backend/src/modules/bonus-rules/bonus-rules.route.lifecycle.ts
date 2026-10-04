@@ -3,7 +3,7 @@ import { sendApiError, zodValidationExtras } from "../../lib/api-error";
 import { actorUserIdOrNull } from "../../lib/request-actor";
 import { ensureTenantContext } from "../../lib/tenant-context";
 import { jwtAccessVerify, requireRoles } from "../auth/auth.prehandlers";
-import { catalogRoles } from "./bonus-rules.route.shared";
+import { catalogRoles, ensureBonusRuleIdsPermission } from "./bonus-rules.route.shared";
 import { activeBodySchema } from "./bonus-rules.route.schemas";
 import { setBonusRuleActive, softDeactivateBonusRule } from "./bonus-rules.service";
 
@@ -22,6 +22,7 @@ export async function registerBonusRuleLifecycleRoutes(app: FastifyInstance) {
       if (!parsed.success) {
         return sendApiError(reply, request, 400, "ValidationError", undefined, zodValidationExtras(parsed.error));
       }
+      if (!(await ensureBonusRuleIdsPermission(request, reply, request.tenant!.id, [id], "update"))) return;
       try {
         const row = await setBonusRuleActive(
           request.tenant!.id,
@@ -48,6 +49,7 @@ export async function registerBonusRuleLifecycleRoutes(app: FastifyInstance) {
       if (Number.isNaN(id)) {
         return sendApiError(reply, request, 400, "InvalidId");
       }
+      if (!(await ensureBonusRuleIdsPermission(request, reply, request.tenant!.id, [id], "delete"))) return;
       try {
         const row = await softDeactivateBonusRule(
           request.tenant!.id,

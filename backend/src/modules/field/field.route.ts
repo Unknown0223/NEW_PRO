@@ -11,6 +11,7 @@ import {
   resolveAllowedAgentIdsForActor
 } from "../access/access-agent-scope";
 import { DIRECTORY_READ_ROLES, getAccessUser, jwtAccessVerify, requireRoles } from "../auth/auth.prehandlers";
+import { ensureAnyPermission } from "../access/ensure-any-permission";
 import {
   getAgentRouteDay,
   listAgentLocationPings,
@@ -371,6 +372,10 @@ export async function registerFieldRoutes(app: FastifyInstance) {
         notes: z.string().max(2000).nullable().optional()
       })
       .parse(request.body);
+    const viewer = getAccessUser(request);
+    const selfRoute =
+      body.agent_id === parseUserId(request) && (viewer.role === "agent" || viewer.role === "expeditor");
+    if (!selfRoute && !(await ensureAnyPermission(request, reply, ["gps.marshrut.update"]))) return;
     if (!(await assertAgentInScope(request, reply, body.agent_id))) return;
     try {
       const row = await upsertAgentRouteDay(tenantId, body);

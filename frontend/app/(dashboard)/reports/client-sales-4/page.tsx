@@ -131,7 +131,7 @@ const CLIENT_COLUMNS: ColumnDefItem[] = [
 ];
 
 export default function ReportClientSales4Page() {
-  const canExport = usePermissions().has("reports.otchety.copy");
+  const canExport = usePermissions().has("reports.prodazhi_klientov_4.export");
   const tenantSlug = useAuthStore((s) => s.tenantSlug);
   const hydrated = useAuthStoreHydrated();
   const ym0 = defaultYearMonth();

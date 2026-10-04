@@ -1,5 +1,7 @@
 "use client";
 
+import { usePermissions } from "@/lib/use-permissions";
+import { cn } from "@/lib/utils";
 import type { GeoBoundaryKind } from "@/lib/geo-boundaries-types";
 import { GEO_BOUNDARY_KIND_LABELS } from "@/lib/geo-boundaries-types";
 import type { GeoCatalogItem } from "@/hooks/use-visit-planner-catalog";
@@ -57,6 +59,9 @@ export function GeoBoundaryEditorSidebar({
   onDeleteBoundary,
   onAssignClients
 }: Props) {
+  const { has } = usePermissions();
+  const canAssign = has("settings.geo_granitsy.assign");
+  const canDelete = has("settings.geo_granitsy.void");
   const items = itemsByKind[kind] ?? [];
   const selectedItem = items.find((i) => i.ref_id === refId);
   const hasPolygon = Boolean(selectedBoundary && selectedBoundary.polygon.length >= 3);
@@ -186,10 +191,10 @@ export function GeoBoundaryEditorSidebar({
         )}
         {hasPolygon ? (
           <>
-            <button type="button" className="vp-btn" disabled={saving} onClick={onAssignClients}>
+            <button type="button" className={cn("vp-btn", !canAssign && "hidden")} disabled={saving} onClick={onAssignClients}>
               Привязать клиентов
             </button>
-            <button type="button" className="vp-btn vp-danger" disabled={saving} onClick={onDeleteBoundary}>
+            <button type="button" className={cn("vp-btn vp-danger", !canDelete && "hidden")} disabled={saving} onClick={onDeleteBoundary}>
               Удалить
             </button>
           </>

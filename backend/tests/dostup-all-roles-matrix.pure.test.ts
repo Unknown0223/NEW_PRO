@@ -56,7 +56,7 @@ const PROBES: Array<{ method: string; path: string; label: string }> = [
   { method: "PATCH", path: "/api/:slug/access/users/1", label: "dostup yozish" },
   { method: "GET", path: "/api/:slug/audit-events", label: "audit" },
   { method: "GET", path: "/api/:slug/activity", label: "aktivlik" },
-  { method: "GET", path: "/api/:slug/field/routes", label: "GPS/field" },
+  { method: "GET", path: "/api/:slug/gps-monitoring/employees", label: "GPS monitoring" },
   { method: "GET", path: "/api/:slug/bonus-rules", label: "bonus" },
   { method: "GET", path: "/api/:slug/territory", label: "hudud sozlama" },
   { method: "GET", path: "/api/:slug/sales-directions", label: "savdo yo‘nalishi" },
@@ -114,7 +114,9 @@ describe("Dostup — barcha rollar: katalog va dostup yopiq", () => {
       "orders.sozdanie",
       "orders.vozvrat_polki",
       "orders.vozvrat_po_zakazu",
-      "orders.obmen"
+      "orders.obmen",
+      "staff.konsignatsiya_zakrytie",
+      "gps.marshrut"
     ]);
     for (const sec of PERMISSION_SECTIONS) {
       if (actionOnlySections.has(`${sec.module}.${sec.section}`)) continue;

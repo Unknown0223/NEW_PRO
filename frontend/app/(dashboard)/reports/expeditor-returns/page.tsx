@@ -255,7 +255,7 @@ function MultiFilter({
 }
 
 export default function ReportExpeditorReturnsPage() {
-  const canExport = usePermissions().has("reports.otchety.copy");
+  const canExport = usePermissions().has("reports.vozvrat_ekspeditora.export");
   const tenantSlug = useAuthStore((s) => s.tenantSlug);
   const hydrated = useAuthStoreHydrated();
   const today = new Date();

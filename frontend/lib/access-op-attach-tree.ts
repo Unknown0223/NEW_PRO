@@ -105,5 +105,14 @@ export function buildOpAttachTree(items: ModalPickRow[]): OpAttachTreeNode[] {
 
   return [...roots.values()]
     .map(finalize)
+    .map(liftSingleChild)
     .sort((a, b) => collator.compare(a.label, b.label));
+}
+
+/** «Аудит → Аудит → …» — yagona bo'limli modulda amallar to'g'ridan modul ostida. */
+function liftSingleChild(node: OpAttachTreeNode): OpAttachTreeNode {
+  if (node.items.length > 0 || node.children.length !== 1) return node;
+  const only = node.children[0]!;
+  if (only.children.length > 0) return node;
+  return { ...node, items: only.items, children: [] };
 }

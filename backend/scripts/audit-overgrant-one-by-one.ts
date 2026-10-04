@@ -46,7 +46,8 @@ const GRANT_PROBE_KEYS = [
   "warehouse.sklady.view",
   "warehouse.sklady.create",
   "warehouse.sklady.update",
-  "warehouse.sklady.delete",
+  "warehouse.sklady.deactivate",
+  "warehouse.sklady.activate",
   "warehouse.sklady.history",
   // warehouse companions / siblings
   "warehouse.view",
@@ -82,7 +83,7 @@ const GRANT_PROBE_KEYS = [
   "orders.otkazy.view",
   "dashboard.prodazhi.view",
   "dashboard.plan_fakt.view",
-  "gps.gps.view"
+  "gps.agenty.view"
 ] as const;
 
 /** Frontend NAV_PERM mirror (nav-permission-keys.ts). */
@@ -101,7 +102,7 @@ const NAV_PERM = {
   staffConsignment: ["staff.konsignatsiya.view"],
   clients: ["clients.klient.view", "clients.view"],
   clientsRetailStock: ["warehouse.ostatki.view"],
-  visitPlanner: ["gps.gps.view", "gps.dostup_k_gps"],
+  visitPlanner: ["gps.agenty.view", "gps.dostup_k_gps"],
   ordersView: ["orders.zakaz.view", "orders.view"],
   ordersCreate: ["orders.sozdanie.create", "orders.create"],
   exchangeCreateNav: ["orders.obmen.create"],
@@ -244,7 +245,7 @@ const CAP_FLAGS: CapFlag[] = [
   {
     id: "nav.visitPlanner",
     label: "Sidebar: Visit planner (GPS keys)",
-    okForGrant: (g) => g === "gps.gps.view" || g === "gps.dostup_k_gps",
+    okForGrant: (g) => g === "gps.agenty.view" || g === "gps.dostup_k_gps",
     trueWhen: (k) => hasAny(k, NAV_PERM.visitPlanner)
   },
   {

@@ -16,7 +16,7 @@ import { env } from "../../config/env";
 import { actorUserIdOrNull } from "../../lib/request-actor";
 import { ensureTenantContext } from "../../lib/tenant-context";
 import { ADMIN_AND_OPERATOR_LIKE_ROLES } from "../../lib/tenant-user-roles";
-import { jwtAccessVerify, requireRoles } from "../auth/auth.prehandlers";
+import { jwtAccessVerify, requireAnyPermission, requireRoles } from "../auth/auth.prehandlers";
 import { getTenantProfile, patchTenantProfile } from "./tenant-settings.service";
 import { buildInitialSetupExportBuffer } from "./initial-setup-export.service";
 import { mobileAppReleasePatchSchema, profilePatchSchema } from "./tenant-settings.route.schemas";
@@ -131,7 +131,7 @@ export async function registerTenantSettingsGeneralRoutes(app: FastifyInstance) 
 
   app.get(
     "/api/:slug/settings/mobile-app-release",
-    { preHandler: [jwtAccessVerify, requireRoles(...adminRoles)] },
+    { preHandler: [jwtAccessVerify, requireAnyPermission(["settings.mobile_app.view"])] },
     async (request, reply) => {
       if (!ensureTenantContext(request, reply)) return;
       const policy = await getMobileAppReleasePolicy(request.tenant!.id);
@@ -162,7 +162,7 @@ export async function registerTenantSettingsGeneralRoutes(app: FastifyInstance) 
 
   app.patch(
     "/api/:slug/settings/mobile-app-release",
-    { preHandler: [jwtAccessVerify, requireRoles(...adminRoles)] },
+    { preHandler: [jwtAccessVerify, requireAnyPermission(["settings.mobile_app.update"])] },
     async (request, reply) => {
       if (!ensureTenantContext(request, reply)) return;
       const parsed = mobileAppReleasePatchSchema.safeParse(request.body);
@@ -190,7 +190,7 @@ export async function registerTenantSettingsGeneralRoutes(app: FastifyInstance) 
 
   app.post(
     "/api/:slug/settings/mobile-app-release/notify",
-    { preHandler: [jwtAccessVerify, requireRoles(...adminRoles)] },
+    { preHandler: [jwtAccessVerify, requireAnyPermission(["settings.mobile_app.transfer"])] },
     async (request, reply) => {
       if (!ensureTenantContext(request, reply)) return;
       const body = z
@@ -215,7 +215,7 @@ export async function registerTenantSettingsGeneralRoutes(app: FastifyInstance) 
 
   app.post(
     "/api/:slug/settings/mobile-app-release/upload",
-    { preHandler: [jwtAccessVerify, requireRoles(...adminRoles)] },
+    { preHandler: [jwtAccessVerify, requireAnyPermission(["settings.mobile_app.import"])] },
     async (request, reply) => {
       if (!ensureTenantContext(request, reply)) return;
       const file = await request.file({
