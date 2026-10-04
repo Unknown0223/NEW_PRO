@@ -169,12 +169,14 @@ class OrdersApi {
     String? consignmentDueDate,
     String? shipmentDate,
     List<BonusStrategySelectionInput> strategySelections = const [],
+    Map<String, dynamic>? visit,
   }) async {
     try {
       final r = await _dio.post(
         '/api/$slug/mobile/orders/create',
         data: {
           'client_id': clientId,
+          if (visit != null) 'visit': visit,
           'warehouse_id': warehouseId,
           if (priceType != null && priceType.trim().isNotEmpty) 'price_type': priceType.trim(),
           'apply_bonus': applyBonus,

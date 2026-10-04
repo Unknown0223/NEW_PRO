@@ -11,7 +11,6 @@ import '../../../core/api/api_exceptions.dart';
 import '../../../core/api/orders_api.dart';
 import '../../../core/auth/biometric_transaction_confirm.dart';
 import '../../../core/auth/session.dart';
-import '../../../core/agent/outlet_radius.dart';
 import '../../../core/config/agent_action_guards.dart';
 import '../../../core/config/gps_config_policy.dart';
 import '../../../core/config/security_config_policy.dart';
@@ -29,6 +28,7 @@ import '../../../core/errors/error_reporter.dart';
 import '../../../core/errors/user_facing_error.dart';
 import '../visits/visit_stats_helper.dart';
 import '../visits/agent_visits_page.dart' show visitFromRow;
+import '../visits/visit_starter.dart';
 import '../../../core/sync/sync_data_refresh.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
@@ -271,6 +271,7 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
       'id': held.clientId,
       'name': held.clientName.isNotEmpty ? held.clientName : 'Клиент #${held.clientId}',
     };
+    if (!await _requireVisitOrLeave(client)) return;
     setState(() {
       _selectedClient = client;
       _warehouseId = held.warehouseId;
@@ -340,6 +341,7 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
     }
 
     if (!mounted) return;
+    if (!await _requireVisitOrLeave(client)) return;
     setState(() => _selectedClient = client);
 
     final draft = await ref.read(orderDraftRepositoryProvider).loadForClient(id);
@@ -359,6 +361,20 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
       await _openSetupSheet(fromInitialClient: true);
     }
     if (mounted) setState(() => _bootstrappingInitialClient = false);
+  }
+
+  /// Zakaz faqat faol vizit ichida; vizit boshlanmasa — ekrandan chiqamiz.
+  Future<bool> _requireVisitOrLeave(Map<String, dynamic> client) async {
+    if (await ensureActiveVisitForOrder(context, ref, client)) return mounted;
+    if (!mounted) return false;
+    setState(() => _bootstrappingInitialClient = false);
+    _releaseExitGuard();
+    if (context.canPop()) {
+      context.pop();
+    } else {
+      context.go('/visits');
+    }
+    return false;
   }
 
   Future<void> _waitAuthReady() async {
@@ -616,6 +632,7 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
       ),
     );
     if (picked != null && mounted) {
+      if (!await ensureActiveVisitForOrder(context, ref, picked) || !mounted) return;
       setState(() {
         _selectedClient = picked;
         _hasUnlinkedPhotoToday = false;
@@ -1055,16 +1072,14 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
       }
     }
     if (_selectedClient != null) {
-      final clat = (_selectedClient!['latitude'] as num?)?.toDouble();
-      final clng = (_selectedClient!['longitude'] as num?)?.toDouble();
-      if (!await ensureWithinOutletRadius(
-        context: context,
-        config: cfg,
-        clientLat: clat,
-        clientLng: clng,
-        blockedMessage: 'Для заказа нужно находиться в радиусе клиента',
-      )) {
-        return false;
+      if (offerPhotoCapture) {
+        if (!mounted || !await ensureActiveVisitForOrder(context, ref, _selectedClient!)) return false;
+      } else {
+        final visitError = await recordOrderPositionForVisit(ref, _selectedClient!);
+        if (visitError != null) {
+          if (mounted) _toast(visitError);
+          return false;
+        }
       }
     }
     if (cfg.gps.requiredForOrder) {
@@ -1339,11 +1354,6 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
           comment: _comment.isEmpty ? null : _comment,
         );
         await ref.read(orderDraftRepositoryProvider).delete(_selectedClientId);
-        await ensureVisitCompletedForClientTodayWithRef(
-          ref,
-          _selectedClientId,
-          clientName: _selectedClient?['name']?.toString(),
-        );
         ref.invalidate(orderDraftsProvider);
         ref.invalidate(orderDraftListProvider);
         ref.invalidate(orderDraftForClientProvider(_selectedClientId));
@@ -1351,7 +1361,7 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
         if (mounted) {
           _toast('Добавлено в офлайн-очередь', accent: AppColors.warning);
           _releaseExitGuard();
-          if (context.canPop()) context.pop();
+          context.go('/visits/active/$_selectedClientId');
           ref.invalidate(pendingCountProvider);
         }
       } catch (e, st) {
@@ -1396,13 +1406,7 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
           delayMinutes: delayMin,
           existingId: _heldOrderId,
         );
-        await ensureVisitCompletedForClientTodayWithRef(
-          ref,
-          _selectedClientId,
-          clientName: _selectedClient?['name']?.toString(),
-        );
         await ref.read(orderDraftRepositoryProvider).delete(_selectedClientId);
-        // Hold ham asosiy sahifada «Посещено» ga kiradi (Начать визит shart emas).
         ref.invalidate(orderDraftsProvider);
         ref.invalidate(orderDraftListProvider);
         ref.invalidate(orderDraftForClientProvider(_selectedClientId));
@@ -1466,6 +1470,7 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
         isConsignment: _isConsignment,
         consignmentDueDate: _isConsignment ? _consignmentDueDate : null,
         shipmentDate: _shipmentDate.isEmpty ? null : _shipmentDate,
+        visit: await orderVisitPayload(_selectedClientId),
       );
       final orderId = parseOrderInt(row['id']);
       final orderNumber = row['number']?.toString() ?? (orderId != null ? '$orderId' : '—');
@@ -1498,11 +1503,6 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
       if (mounted) {
         setState(() => _hasUnlinkedPhotoToday = false);
         await ref.read(orderDraftRepositoryProvider).delete(_selectedClientId);
-        await ensureVisitCompletedForClientTodayWithRef(
-          ref,
-          _selectedClientId,
-          clientName: _selectedClient?['name']?.toString(),
-        );
         ref.invalidate(orderDraftsProvider);
         ref.invalidate(orderDraftListProvider);
         ref.invalidate(orderDraftForClientProvider(_selectedClientId));
@@ -1533,7 +1533,8 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
           orderId: orderId,
           clientName: _selectedClient?['name']?.toString(),
         );
-        context.go('/home');
+        _toast('Заказ №$orderNumber отправлен — завершите визит', accent: AppColors.success);
+        context.go('/visits/active/$_selectedClientId');
         invalidateAfterOrderSubmit(ref.invalidate);
       }
     } on ApiException catch (e) {

@@ -4,6 +4,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
+import '../app/app_build_info.dart';
 import '../auth/session_expired.dart';
 import '../auth/workday_off.dart';
 import '../time/server_clock.dart';
@@ -23,6 +24,7 @@ Dio _plainDio() => Dio(BaseOptions(
 final dioProvider = Provider<Dio>((ref) {
   final dio = _plainDio();
   dio.interceptors.add(ServerTimeInterceptor());
+  dio.interceptors.add(AppVersionInterceptor());
   dio.interceptors.add(AuthInterceptor(ref));
   dio.interceptors.add(ErrorReportInterceptor(ref));
   ErrorReporter.bind(ref);
@@ -64,6 +66,24 @@ class ServerTimeInterceptor extends Interceptor {
   void onError(DioException err, ErrorInterceptorHandler handler) {
     _anchor(err.response?.headers);
     handler.next(err);
+  }
+}
+
+/// `X-App-Version` — server shu sarlavha bo‘yicha yangi ilova qoidalarini (majburiy vizit) qo‘llaydi.
+class AppVersionInterceptor extends Interceptor {
+  static String? _version;
+
+  @override
+  void onRequest(RequestOptions options, RequestInterceptorHandler handler) async {
+    if (_version == null) {
+      try {
+        _version = await AppBuildInfo.versionWithBuild();
+      } catch (_) {
+        _version = 'unknown';
+      }
+    }
+    options.headers['X-App-Version'] = _version;
+    handler.next(options);
   }
 }
 

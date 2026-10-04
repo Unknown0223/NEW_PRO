@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/api/api_exceptions.dart';
-import '../../../core/api/field_api.dart';
 import '../../../core/api/orders_api.dart';
 import '../../../core/auth/session.dart';
 import '../../../core/database/app_database.dart';
@@ -132,6 +131,7 @@ class HeldOrderScheduler {
             isConsignment: order.isConsignment,
             consignmentDueDate: order.consignmentDueDate,
             shipmentDate: order.shipmentDate,
+            visit: await AppDatabase().findVisitGeoForClient(order.clientId, at: order.createdAt),
           );
       final orderId = parseOrderInt(row['id']);
       if (orderId != null) {
@@ -147,12 +147,6 @@ class HeldOrderScheduler {
         ]);
       }
       await repo.markSubmitted(heldOrderId);
-      await ensureVisitCompletedForClientToday(
-        order.clientId,
-        clientName: order.clientName,
-        fieldApi: _ref.read(fieldApiProvider),
-        tenantSlug: _ref.read(sessionProvider).tenantSlug,
-      );
       await MobileLocalNotificationService.instance.notifyHeldOrderSent(
         clientName: order.clientName,
         orderNumber: row['number']?.toString() ?? (orderId?.toString() ?? ''),

@@ -36,10 +36,10 @@ Future<void> ensureVisitCompletedForClientToday(
   VisitRecord? match;
   for (final row in visits) {
     final v = visitFromRow(row);
-    if (v.clientId == clientId) {
-      match = v;
-      break;
-    }
+    if (v.clientId != clientId) continue;
+    // Faol vizit — agent o‘zi yakunlaydi; serverda allaqachon yozilgan.
+    if (v.status == 'in_progress') return;
+    match ??= v;
   }
 
   double? lat;
@@ -48,17 +48,6 @@ Future<void> ensureVisitCompletedForClientToday(
   if (match != null) {
     lat = match.latitude;
     lng = match.longitude;
-    if (match.status == 'in_progress') {
-      await db.updateVisit(
-        match.id!,
-        visitToRow(
-          match.copyWith(
-            status: 'completed',
-            endTime: DateTime.now().toIso8601String(),
-          ),
-        ),
-      );
-    }
   } else {
     final client = await db.getClientById(clientId);
     final name = clientName?.trim().isNotEmpty == true

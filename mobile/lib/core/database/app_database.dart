@@ -31,6 +31,7 @@ class AppDatabase {
           await _ensureHeldOrderSummaryColumns(db);
           await _ensurePhotoRetryColumn(db);
           await _ensurePendingLocationPingsTable(db);
+          await _ensureVisitGeoColumn(db);
           await _ensurePerfIndexes(db);
         },
         onCreate: (db, version) async {
@@ -353,6 +354,12 @@ class AppDatabase {
     } catch (_) {}
     try {
       await db.execute('ALTER TABLE held_orders ADD COLUMN discount_pct REAL NOT NULL DEFAULT 0');
+    } catch (_) {}
+  }
+
+  static Future<void> _ensureVisitGeoColumn(Database db) async {
+    try {
+      await db.execute('ALTER TABLE agent_visits ADD COLUMN geo_json TEXT');
     } catch (_) {}
   }
 
@@ -858,6 +865,37 @@ class AppDatabase {
   Future<void> updateVisit(int id, Map<String, dynamic> row) async {
     final db = await database;
     await db.update('agent_visits', row, where: 'id = ?', whereArgs: [id]);
+  }
+
+  /// Vizit GPS tekshiruvi (zakaz payload `visit` uchun manba).
+  Future<void> setVisitGeo(int visitId, Map<String, dynamic> geo) async {
+    final db = await database;
+    await db.update('agent_visits', {'geo_json': jsonEncode(geo)}, where: 'id = ?', whereArgs: [visitId]);
+  }
+
+  /// Mijozning [at] gacha boshlangan oxirgi vizit GPS ma'lumoti (36 soat ichida).
+  Future<Map<String, dynamic>?> findVisitGeoForClient(int clientId, {DateTime? at}) async {
+    final db = await database;
+    final until = (at ?? DateTime.now()).toLocal();
+    final from = until.subtract(const Duration(hours: 36));
+    final rows = await db.query(
+      'agent_visits',
+      columns: ['geo_json'],
+      where: 'client_id = ? AND geo_json IS NOT NULL AND start_time >= ? AND start_time <= ?',
+      whereArgs: [
+        clientId,
+        from.toIso8601String(),
+        until.add(const Duration(minutes: 1)).toIso8601String(),
+      ],
+      orderBy: 'start_time DESC',
+      limit: 1,
+    );
+    if (rows.isEmpty) return null;
+    try {
+      return Map<String, dynamic>.from(jsonDecode(rows.first['geo_json'] as String) as Map);
+    } catch (_) {
+      return null;
+    }
   }
 
   /// Eski katalog versiyasi yoki visit_weekdays yo‘q — qayta to‘liq yuklash.

@@ -148,6 +148,11 @@ model Order {
   work_slot_id                Int?
   /// `web` — ofis paneli; `mobile` — agent/ekspeditor ilovasi
   creation_channel           String?          @db.VarChar(16)
+  /// Mobil zakaz qaysi vizit ichida urilgan (agent «Начать визит»)
+  agent_visit_id             Int?
+  /// Vizit/zakaz GPS tekshiruvi: koordinata, masofa, radius, aniqlik, soxta GPS, oflayn
+  visit_geo                  Json?
+  agent_visit                AgentVisit?      @relation(fields: [agent_visit_id], references: [id], onDelete: SetNull)
   payments                    Payment[]
   change_logs                 OrderChangeLog[]
   items                       OrderItem[]
@@ -180,6 +185,7 @@ model Order {
   @@index([tenant_id, client_id, status])
   @@index([work_slot_id])
   @@index([warehouse_block_id])
+  @@index([agent_visit_id])
   @@index([tenant_id, is_consignment, consignment_moved_at(sort: Desc)])
   @@map("orders")
 }

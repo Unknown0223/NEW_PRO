@@ -368,6 +368,8 @@ class MobileApi {
     required List items,
     String? priceType,
     String? comment,
+    Map<String, dynamic>? visit,
+    DateTime? createdAt,
   }) async {
     try {
       final r = await _dio.post('/api/$slug/mobile/orders/enqueue', data: {
@@ -376,7 +378,8 @@ class MobileApi {
         'items': items,
         if (priceType != null) 'price_type': priceType,
         if (comment != null) 'comment': comment,
-        'offline_created_at': DateTime.now().toUtc().toIso8601String(),
+        if (visit != null) 'visit': visit,
+        'offline_created_at': (createdAt ?? DateTime.now()).toUtc().toIso8601String(),
       },);
       return r.data;
     } on DioException catch (e) { throw _map(e); }

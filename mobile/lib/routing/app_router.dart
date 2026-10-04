@@ -7,7 +7,9 @@ import '../core/theme/app_colors.dart';
 import '../features/auth/auth_provider.dart';
 import '../features/auth/pin_setup_screen.dart';
 import '../features/auth/pin_unlock_screen.dart';
+import '../core/permissions/app_permissions.dart';
 import '../features/auth/login_screen.dart';
+import '../features/auth/permission_gate_page.dart';
 import '../features/auth/bootstrap_screen.dart';
 import '../features/auth/session_splash_screen.dart';
 import '../features/agent/home/agent_home_page.dart';
@@ -95,6 +97,9 @@ final _shellKey = GlobalKey<NavigatorState>();
 class _AppRouterRefresh extends ChangeNotifier {
   _AppRouterRefresh(Ref ref) {
     ref.listen<AuthState>(authStateProvider, (_, __) => notifyListeners());
+    ref.listen<AppPermissionsState>(appPermissionsProvider, (prev, next) {
+      if (prev?.allGranted != next.allGranted || prev?.checkedOnce != next.checkedOnce) notifyListeners();
+    });
   }
 }
 
@@ -198,7 +203,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       }
 
       if (s == AuthStatus.ready) {
-        if (isLogin || isBoot || isSplash || loc == '/unlock' || loc == '/pin-setup') {
+        final perms = ref.read(appPermissionsProvider);
+        if (perms.checkedOnce && !perms.allGranted) {
+          return loc == '/permissions' ? null : '/permissions';
+        }
+        if (isLogin || isBoot || isSplash || loc == '/unlock' || loc == '/pin-setup' || loc == '/permissions') {
           return '/home';
         }
 
@@ -217,6 +226,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/pin-setup', builder: (_, __) => const PinSetupScreen()),
       GoRoute(path: '/unlock', builder: (_, __) => const PinUnlockScreen()),
       GoRoute(path: '/bootstrap', builder: (_, __) => const BootstrapScreen()),
+      GoRoute(path: '/permissions', builder: (_, __) => const PermissionGatePage()),
       GoRoute(
         path: '/exp-manual-sync',
         parentNavigatorKey: rootNavigatorKey,

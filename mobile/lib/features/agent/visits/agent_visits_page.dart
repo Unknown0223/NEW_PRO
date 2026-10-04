@@ -114,7 +114,6 @@ class AgentVisitsPage extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final config = ref.watch(sessionProvider).mobileConfig;
-    final visitStartEndEnabled = config?.misc.visitStartEndEnabled ?? true;
     final activeVisits = ref.watch(visitsTodayProvider).valueOrNull?.where((v) => v.status == 'in_progress').toList() ?? [];
     final weekdayTab = ref.watch(outletWeekdayTabProvider);
     final filtersActive = weekdayTab > 0 ||
@@ -150,14 +149,6 @@ class AgentVisitsPage extends ConsumerWidget {
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (!visitStartEndEnabled)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
-              child: Text(
-                'Старт/стоп визита отключён в настройках — точки маршрута доступны',
-                style: AppTypography.caption.copyWith(color: AppColors.textMuted),
-              ),
-            ),
           if (activeVisits.isNotEmpty)
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
@@ -181,21 +172,19 @@ class AgentVisitsPage extends ConsumerWidget {
           ),
         ],
       ),
-      floatingActionButton: visitStartEndEnabled
-          ? GestureDetector(
-              onTap: () => context.push('/visits/start'),
-              child: Container(
-                width: 58,
-                height: 58,
-                decoration: BoxDecoration(
-                  color: AppColors.primary,
-                  shape: BoxShape.circle,
-                  boxShadow: AppColors.fabShadow,
-                ),
-                child: const Icon(Icons.play_arrow_rounded, color: Colors.white, size: 28),
-              ),
-            )
-          : null,
+      floatingActionButton: GestureDetector(
+        onTap: () => context.push('/visits/start'),
+        child: Container(
+          width: 58,
+          height: 58,
+          decoration: BoxDecoration(
+            color: AppColors.primary,
+            shape: BoxShape.circle,
+            boxShadow: AppColors.fabShadow,
+          ),
+          child: const Icon(Icons.play_arrow_rounded, color: Colors.white, size: 28),
+        ),
+      ),
     );
   }
 }

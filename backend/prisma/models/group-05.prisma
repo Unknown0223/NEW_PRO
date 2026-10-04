@@ -380,6 +380,7 @@ model AgentVisit {
   agent          User      @relation(fields: [agent_id], references: [id], onDelete: Cascade)
   client         Client?   @relation(fields: [client_id], references: [id])
   tenant         Tenant    @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  orders         Order[]
 
   @@index([tenant_id, agent_id])
   @@index([tenant_id, checked_in_at(sort: Desc)])
