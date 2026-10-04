@@ -16,6 +16,7 @@ type PolkiClientSearchSelectProps = {
   tenantSlug: string | null;
   value: string;
   onValueChange: (id: string) => void;
+  onSelectRow?: (row: ClientRow) => void;
   disabled?: boolean;
   placeholder?: string;
   className?: string;
@@ -31,6 +32,7 @@ export function PolkiClientSearchSelect({
   tenantSlug,
   value,
   onValueChange,
+  onSelectRow,
   disabled,
   placeholder,
   className,
@@ -228,6 +230,7 @@ export function PolkiClientSearchSelect({
                       )}
                       onClick={() => {
                         onValueChange(String(c.id));
+                        onSelectRow?.(c);
                         setOpen(false);
                       }}
                     >

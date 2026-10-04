@@ -69,6 +69,7 @@ export function fallbackWorkdaysState(): WorkdaysState {
       Экспедитор: [true, true, true, true, true, true, false]
     },
     enforce_access: false,
+    enforce_roles: [],
     exceptions: [],
     overrides: []
   };

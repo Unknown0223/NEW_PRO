@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../core/api/supervisor_api.dart';
 import '../../../core/auth/session.dart';
@@ -63,6 +64,8 @@ class SupervisorNotificationsPage extends ConsumerWidget {
                   onTap: id == null
                       ? null
                       : () async {
+                          final href = n['link_href']?.toString().trim() ?? '';
+                          if (href.startsWith('/tasks/')) context.push(href);
                           final slug = ref.read(sessionProvider).tenantSlug ?? '';
                           try {
                             await ref.read(supervisorApiProvider).markNotificationRead(slug, id);

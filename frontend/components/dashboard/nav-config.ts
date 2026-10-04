@@ -300,11 +300,8 @@ export const dashboardUsersNav: {
         },
         { href: "/users/workdays", label: "Рабочие дни", showIfAnyPermission: [...NAV_PERM.staffWorkdays] },
         { href: "/users/timesheet", label: "Табель", showIfAnyPermission: [...NAV_PERM.staffTimesheet] },
-        {
-          href: "/users/task-types",
-          label: "Задачи",
-          showIfAnyPermission: [...NAV_PERM.staffTasks]
-        }
+        { href: "/users/tasks", label: "Задачи", showIfAnyPermission: [...NAV_PERM.staffTasks] },
+        { href: "/users/task-types", label: "Типы задач", showIfAnyPermission: [...NAV_PERM.staffTaskTypes] }
       ]
     }
   ]
@@ -386,6 +383,7 @@ export const dashboardClientsNav: { sectionTitle: string; items: NavItem[] } = {
       label: "Назначение визитов на карте",
       showIfAnyPermission: [...NAV_PERM.visitPlanner]
     },
+    { href: "/clients/agent-route", label: "Маршрут дня агента", showIfAnyPermission: [...NAV_PERM.agentRoutePlan] },
     { href: "/clients/merge", label: "Объединение клиентов", showIfAnyPermission: [...NAV_PERM.clientsMerge] },
     { href: "/clients/equipment", label: "Оборудования", showIfAnyPermission: [...NAV_PERM.clientsEquipment] },
     {

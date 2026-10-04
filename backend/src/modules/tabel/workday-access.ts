@@ -119,7 +119,7 @@ export function computeWorkdayAccess(
     seconds_until_start: null,
     message: null
   };
-  if (!wdRole || !state.enforce_access) return base;
+  if (!wdRole || !state.enforce_roles.includes(wdRole)) return base;
 
   const decision = decideWorkday(state, wdRole, today, userId);
   if (decision.working) return { ...base, restricted: true };
@@ -168,7 +168,7 @@ export async function getWorkdayAccessStatus(
 }
 
 function emptyState(): WorkdaysState {
-  return { schedules: {}, exceptions: [], overrides: [], enforce_access: false };
+  return { schedules: {}, exceptions: [], overrides: [], enforce_access: false, enforce_roles: [] };
 }
 
 /** Bloklangan holatda ham ochiq qoladigan yo‘llar (sessiya, holat sahifasi). */

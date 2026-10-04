@@ -69,9 +69,37 @@ final plannedDailyRouteProvider = FutureProvider<List<RouteMapStop>>((ref) async
     lastActivityByClient: lastActivity,
   );
 
-  return optimizeVisitRouteOrder(
-    capped,
-    startLat: routeStart?.latitude,
-    startLon: routeStart?.longitude,
-  );
+  final savedCount = (route?['_savedStopCount'] as num?)?.toInt() ?? 0;
+  if (savedCount <= 0) {
+    return optimizeVisitRouteOrder(
+      capped,
+      startLat: routeStart?.latitude,
+      startLon: routeStart?.longitude,
+    );
+  }
+
+  // Server (web «Маршрут дня агента») tartibi saqlanadi; qo‘shimcha reja nuqtalari oxirida.
+  final savedIds = {for (final s in rawStops.take(savedCount)) s.clientId};
+  final saved = capped.where((s) => savedIds.contains(s.clientId)).toList();
+  final extra = capped.where((s) => !savedIds.contains(s.clientId)).toList();
+  final tailStart = saved.isNotEmpty ? saved.last : routeStart;
+  final tail = extra.isEmpty
+      ? const <RouteMapStop>[]
+      : optimizeVisitRouteOrder(
+          extra,
+          startLat: tailStart?.latitude,
+          startLon: tailStart?.longitude,
+        );
+  final ordered = [...saved, ...tail];
+  return [
+    for (var i = 0; i < ordered.length; i++)
+      RouteMapStop(
+        clientId: ordered[i].clientId,
+        name: ordered[i].name,
+        latitude: ordered[i].latitude,
+        longitude: ordered[i].longitude,
+        orderIndex: i + 1,
+        visited: ordered[i].visited,
+      ),
+  ];
 });

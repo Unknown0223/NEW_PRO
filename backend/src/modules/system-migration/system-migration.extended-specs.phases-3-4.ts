@@ -333,8 +333,8 @@ export const EXTENDED_IMPORT_PHASES_3_4: ExtendedTableSpec[][] = [
       file: "tenant_tasks",
       delegate: "tenantTask",
       idMap: "tenantTask",
-      fk: { assignee_user_id: "user", created_by_user_id: "user" },
-      dates: ["due_at", "created_at", "updated_at"]
+      fk: { assignee_user_id: "user", created_by_user_id: "user", client_id: "client" },
+      dates: ["due_at", "started_at", "completed_at", "cancelled_at", "created_at", "updated_at"]
     },
     {
       file: "in_app_notifications",

@@ -14,6 +14,7 @@ int _stopSortKey(Map<String, dynamic> m) =>
     (m['sort'] as num?)?.toInt() ??
     (m['order'] as num?)?.toInt() ??
     (m['order_index'] as num?)?.toInt() ??
+    (m['sort_order'] as num?)?.toInt() ??
     999999;
 
 List<Map<String, dynamic>> unionRouteStopsWithPlanned({
@@ -160,7 +161,12 @@ Future<Map<String, dynamic>> resolveTodayRoute(
       plannedStops: plannedStops,
     );
     if (stops.isEmpty) return planned;
-    return {...merged, 'stops': stops, '_routeDate': routeDate};
+    return {
+      ...merged,
+      'stops': stops,
+      '_routeDate': routeDate,
+      '_savedStopCount': mergedStops.length,
+    };
   } on UnauthorizedException {
     rethrow;
   } catch (_) {}
@@ -193,7 +199,12 @@ final realTodayRouteProvider = FutureProvider<Map<String, dynamic>?>((ref) async
       final stops = (raw['stops'] as List?) ?? [];
       if (stops.isNotEmpty) {
         final merged = await mergeRouteWithLocal(raw);
-        return {...merged, '_routeDate': routeDate};
+        return {
+          ...merged,
+          '_routeDate': routeDate,
+          if (merged['_localFallback'] != true)
+            '_savedStopCount': ((merged['stops'] as List?) ?? const []).length,
+        };
       }
     }
   } on UnauthorizedException {

@@ -66,6 +66,8 @@ export interface WorkdaysState {
   overrides: EmployeeOverride[];
   /** Nishonlanmagan kunlarda (admin’dan tashqari) web/ilovaga kirish bloklanadi. */
   enforce_access: boolean;
+  /** Dam olish kuni kirish bloklanadigan rollar (sukut bo'yicha hech kim). */
+  enforce_roles: WdRole[];
 }
 
 const DEFAULT_SCHEDULE_5_6: Schedule = [true, true, true, true, true, true, false];
@@ -147,7 +149,12 @@ export function parseWorkdaysState(settings: Prisma.JsonValue): WorkdaysState {
     }
   }
 
-  return { schedules, exceptions, overrides, enforce_access: wd.enforce_access !== false };
+  const enforce_roles: WdRole[] = Array.isArray(wd.enforce_roles)
+    ? WD_ROLES.filter((r) => (wd.enforce_roles as unknown[]).includes(r))
+    : wd.enforce_access === true
+      ? [...WD_ROLES]
+      : [];
+  return { schedules, exceptions, overrides, enforce_access: enforce_roles.length > 0, enforce_roles };
 }
 
 function buildSettings(
@@ -162,7 +169,8 @@ function buildSettings(
       schedules: state.schedules,
       exceptions: state.exceptions,
       overrides: state.overrides,
-      enforce_access: state.enforce_access
+      enforce_access: state.enforce_roles.length > 0,
+      enforce_roles: state.enforce_roles
     }
   };
   if (auditAdd.length > 0) {
@@ -198,28 +206,34 @@ export async function getWorkdaysStateCached(tenantId: number): Promise<Workdays
   return state;
 }
 
-export async function saveEnforceAccess(
+function enforceRolesText(roles: readonly WdRole[]): string {
+  return roles.length === 0 ? "Разрешён всем" : `Запрещён: ${roles.join(", ")}`;
+}
+
+export async function saveEnforceRoles(
   tenantId: number,
   changedBy: string,
-  enabled: boolean
+  roles: readonly string[]
 ): Promise<WorkdaysState> {
   const settings = await loadTenantSettings(tenantId);
   const state = parseWorkdaysState(settings);
-  const audit: NewTabelAuditRecord[] =
-    state.enforce_access === enabled
-      ? []
-      : [
-          {
-            module: "workdays",
-            kind: "schedule",
-            title: "Доступ в нерабочие дни",
-            subtitle: "Ограничение входа по графику",
-            oldValue: state.enforce_access ? "Запрещён" : "Разрешён",
-            newValue: enabled ? "Запрещён" : "Разрешён",
-            changedBy
-          }
-        ];
-  state.enforce_access = enabled;
+  const next = WD_ROLES.filter((r) => roles.includes(r));
+  const changed = next.length !== state.enforce_roles.length || next.some((r) => !state.enforce_roles.includes(r));
+  const audit: NewTabelAuditRecord[] = changed
+    ? [
+        {
+          module: "workdays",
+          kind: "schedule",
+          title: "Доступ в нерабочие дни",
+          subtitle: "Блокировка входа по ролям",
+          oldValue: enforceRolesText(state.enforce_roles),
+          newValue: enforceRolesText(next),
+          changedBy
+        }
+      ]
+    : [];
+  state.enforce_roles = next;
+  state.enforce_access = next.length > 0;
   await persistSettings(tenantId, buildSettings(settings, state, audit));
   return state;
 }

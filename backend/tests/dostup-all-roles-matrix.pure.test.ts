@@ -115,8 +115,7 @@ describe("Dostup — barcha rollar: katalog va dostup yopiq", () => {
       "orders.vozvrat_polki",
       "orders.vozvrat_po_zakazu",
       "orders.obmen",
-      "staff.konsignatsiya_zakrytie",
-      "gps.marshrut"
+      "staff.konsignatsiya_zakrytie"
     ]);
     for (const sec of PERMISSION_SECTIONS) {
       if (actionOnlySections.has(`${sec.module}.${sec.section}`)) continue;

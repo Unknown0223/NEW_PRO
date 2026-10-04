@@ -444,14 +444,23 @@ model TenantTask {
   due_at             DateTime?
   assignee_user_id   Int?
   created_by_user_id Int?
+  client_id          Int?
+  started_at         DateTime?
+  completed_at       DateTime?
+  cancelled_at       DateTime?
+  result_comment     String?
+  /// Bajarilganda yuborilgan rasmlar (data URL massivi)
+  result_photos      Json?
   created_at         DateTime  @default(now())
   updated_at         DateTime  @updatedAt
   assignee           User?     @relation("TenantTaskAssignee", fields: [assignee_user_id], references: [id])
   created_by         User?     @relation("TenantTaskCreator", fields: [created_by_user_id], references: [id])
+  client             Client?   @relation(fields: [client_id], references: [id], onDelete: SetNull)
   tenant             Tenant    @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
 
   @@index([tenant_id, status])
   @@index([tenant_id, assignee_user_id])
+  @@index([tenant_id, due_at])
   @@map("tenant_tasks")
 }
 

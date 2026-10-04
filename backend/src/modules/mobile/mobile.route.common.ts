@@ -5,6 +5,7 @@ import { registerMobilePhotoRoutes } from "./mobile.route.photos";
 import { registerMobileProfileRoutes } from "./mobile.route.profile";
 import { registerMobileStockSnapshotRoutes } from "./mobile.route.stock-snapshot";
 import { registerMobileSyncRoutes } from "./mobile.route.sync";
+import { registerMobileTaskRoutes } from "./mobile.route.tasks";
 
 export async function registerMobileCommonRoutes(app: FastifyInstance) {
   await registerMobileProfileRoutes(app);
@@ -13,4 +14,5 @@ export async function registerMobileCommonRoutes(app: FastifyInstance) {
   await registerMobilePhotoRoutes(app);
   await registerMobilePaymentRoutes(app);
   await registerMobileStockSnapshotRoutes(app);
+  await registerMobileTaskRoutes(app);
 }

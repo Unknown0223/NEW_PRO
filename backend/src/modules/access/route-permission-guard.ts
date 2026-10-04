@@ -344,7 +344,8 @@ const ROUTE_PERMISSION_RULES: RoutePermissionRule[] = [
   r(READ, /\/timesheet\/history$/, "staff.tabel.history"),
   r(WRITE, /\/timesheet/, "staff.tabel.update"),
   r(READ, /\/timesheet/, "staff.tabel.view"),
-  r(["PUT"], /\/workdays\/(schedules|enforce-access)$/, "staff.rabochie_dni.update"),
+  r(["PUT"], /\/workdays\/enforce-access$/, "staff.rabochie_dni.status"),
+  r(["PUT"], /\/workdays\/schedules$/, "staff.rabochie_dni.update"),
   r(["POST"], /\/workdays\/(exceptions|overrides)$/, "staff.rabochie_dni.create"),
   r(DEL, /\/workdays\//, "staff.rabochie_dni.delete"),
   r(WRITE, /\/workdays/, "staff.rabochie_dni.update"),
@@ -464,6 +465,14 @@ const ROUTE_PERMISSION_RULES: RoutePermissionRule[] = [
   // Xodim turi (agent, dostavshik, ...) va trek — handlerda (`resolveGpsAccess`) filtrlanadi.
   r(READ, /\/gps-monitoring(\/|$)/, ...GPS_MONITORING_VIEW_PERMISSIONS),
   // `PUT /agent-route-days` — agent/ekspeditor o'z marshrutini saqlaydi; boshqasiga `gps.marshrut.update` handlerda.
+  r(READ, /\/agent-route-days\/(suggest|agents)$/, "gps.marshrut.view", "gps.marshrut.update"),
+
+  r(READ, /\/api\/[^/]+\/tasks\/export/, "staff.zadachi_spisok.export"),
+  r(["POST"], /\/api\/[^/]+\/tasks$/, "staff.zadachi_spisok.create"),
+  r(["POST"], /\/api\/[^/]+\/tasks\/:id\/cancel$/, "staff.zadachi_spisok.delete"),
+  r(WRITE, /\/api\/[^/]+\/tasks\//, "staff.zadachi_spisok.update"),
+  r(READ, /\/api\/[^/]+\/tasks\/meta$/, "staff.zadachi_spisok.view", "staff.zadachi_spisok.create", "staff.zadachi_spisok.update"),
+  r(READ, /\/api\/[^/]+\/tasks(\/|$)/, "staff.zadachi_spisok.view"),
   r(["POST"], /\/geo-boundaries\/:id\/restore$/, "settings.geo_granitsy.update"),
   r(["POST"], /\/geo-boundaries\/:id\/assign-clients$/, "settings.geo_granitsy.assign"),
   r(DEL, /\/geo-boundaries(\/|$)/, "settings.geo_granitsy.void"),

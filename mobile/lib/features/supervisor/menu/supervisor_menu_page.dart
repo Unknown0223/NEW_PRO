@@ -205,7 +205,8 @@ class SupervisorMenuPage extends ConsumerWidget {
                     tile(
                       icon: Icons.task_alt_outlined,
                       title: 'Задачи',
-                      soon: true,
+                      subtitle: 'Поручения агентам и мои задачи',
+                      onTap: () => context.push('/tasks'),
                     ),
                     const Divider(height: 1),
                     tile(

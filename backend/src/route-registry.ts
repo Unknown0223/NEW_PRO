@@ -22,6 +22,8 @@ import { registerJobRoutes } from "./modules/jobs/jobs.route";
 import { registerLinkageRoutes } from "./modules/linkage/linkage.route";
 import { registerMobileRoutes } from "./modules/mobile/mobile.route";
 import { registerNotificationRoutes } from "./modules/notifications/notifications.route";
+import { registerTaskRoutes } from "./modules/tasks/tasks.route";
+import { registerAgentRoutePlanRoutes } from "./modules/field/agent-route-plan.route";
 import { registerOpeningBalanceRoutes } from "./modules/opening-balances/opening-balances.route";
 import { registerOrderAutomationRoutes } from "./modules/order-automation/order-automation.route";
 import { registerOrderRoutes } from "./modules/orders/orders.route";
@@ -108,9 +110,11 @@ export const routeRegistrars: RouteRegistrar[] = [
   registerGeoBoundaryRoutes,
   registerPriceMatrixRoutes,
   registerFieldRoutes,
+  registerAgentRoutePlanRoutes,
   registerGpsMonitoringRoutes,
   registerRefusalRoutes,
   registerNotificationRoutes,
+  registerTaskRoutes,
   registerMobileRoutes,
   registerLinkageRoutes,
   registerJobRoutes,

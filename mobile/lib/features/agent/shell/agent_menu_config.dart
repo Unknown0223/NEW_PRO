@@ -42,7 +42,7 @@ List<AgentMenuItem> agentMenuItems(MobileConfig? config) {
     const AgentMenuItem(label: 'Должники по заказам', route: '/debtors-by-orders'),
     const AgentMenuItem(label: 'Остатки на складе', route: '/warehouse-stock'),
     const AgentMenuItem(label: 'Черновик', route: '/draft'),
-    const AgentMenuItem(label: 'Задачи', route: '', soon: true),
+    const AgentMenuItem(label: 'Задачи', route: '/tasks'),
     const AgentMenuItem(label: 'Моя локация', route: '/map'),
     const AgentMenuItem(label: 'Табель', route: '/tabel'),
     const AgentMenuItem(label: 'Настройки', route: '/settings'),
@@ -98,6 +98,7 @@ const agentNavigationPages = <String>[
   '/orders/special',
   '/search',
   '/route',
+  '/tasks',
 ];
 
 const agentShellTabPaths = <String>[

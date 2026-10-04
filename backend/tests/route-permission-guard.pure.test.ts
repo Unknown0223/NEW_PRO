@@ -130,6 +130,17 @@ describe("route-permission-guard matchRule", () => {
     expect(anyOf).toContain("gps.van_selling.view");
     expect(anyOf).toContain("gps.trek.view");
     expect(matchRule("PUT", "/api/:slug/agent-route-days")).toBeNull();
+    expect(matchRule("GET", "/api/:slug/agent-route-days/suggest")?.anyOf).toEqual(["gps.marshrut.view", "gps.marshrut.update"]);
+  });
+
+  it("tasks: list/create/update/cancel split, mobile skipped", () => {
+    expect(matchRule("GET", "/api/:slug/tasks")?.anyOf).toEqual(["staff.zadachi_spisok.view"]);
+    expect(matchRule("GET", "/api/:slug/tasks/:id")?.anyOf).toEqual(["staff.zadachi_spisok.view"]);
+    expect(matchRule("GET", "/api/:slug/tasks/meta")?.anyOf).toContain("staff.zadachi_spisok.create");
+    expect(matchRule("POST", "/api/:slug/tasks")?.anyOf).toEqual(["staff.zadachi_spisok.create"]);
+    expect(matchRule("PATCH", "/api/:slug/tasks/:id")?.anyOf).toEqual(["staff.zadachi_spisok.update"]);
+    expect(matchRule("POST", "/api/:slug/tasks/:id/cancel")?.anyOf).toEqual(["staff.zadachi_spisok.delete"]);
+    expect(matchRule("POST", "/api/:slug/mobile/tasks/:id/complete")).toBeNull();
   });
 
   it("settings: mobile app, edit lock, workdays and geo split actions", () => {
@@ -140,6 +151,8 @@ describe("route-permission-guard matchRule", () => {
     ]);
     expect(matchRule("PATCH", "/api/:slug/settings/document-edit-lock")?.anyOf).toEqual(["settings.document_edit_lock.update"]);
     expect(matchRule("POST", "/api/:slug/workdays/exceptions")?.anyOf).toEqual(["staff.rabochie_dni.create"]);
+    expect(matchRule("PUT", "/api/:slug/workdays/enforce-access")?.anyOf).toEqual(["staff.rabochie_dni.status"]);
+    expect(matchRule("PUT", "/api/:slug/workdays/schedules")?.anyOf).toEqual(["staff.rabochie_dni.update"]);
     expect(matchRule("DELETE", "/api/:slug/workdays/exceptions/:id")?.anyOf).toEqual(["staff.rabochie_dni.delete"]);
     expect(matchRule("DELETE", "/api/:slug/geo-boundaries/:id")?.anyOf).toEqual(["settings.geo_granitsy.void"]);
     expect(matchRule("POST", "/api/:slug/geo-boundaries/:id/assign-clients")?.anyOf).toEqual(["settings.geo_granitsy.assign"]);

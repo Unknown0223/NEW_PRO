@@ -101,6 +101,11 @@ class _RoleRoutes {
         location.startsWith('/bank-transfers/')) {
       return null;
     }
+    if (const {'agent', 'expeditor', 'supervisor'}.contains(role) &&
+        (location == '/tasks' || location.startsWith('/tasks/'))) {
+      if (location == '/tasks/new' && role != 'supervisor') return '/tasks';
+      return null;
+    }
     if (role == 'supervisor' && location.startsWith('/sv-clients/')) return null;
     if (role == 'supervisor' && location.startsWith('/sv-kpi')) return null;
     if (allowed.contains(location)) return null;

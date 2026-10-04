@@ -1,9 +1,16 @@
 import { describe, expect, it } from "vitest";
 import { computeWorkdayAccess, isWorkdayGuardExemptPath } from "../src/modules/tabel/workday-access";
-import { defaultSchedules, type WorkdaysState } from "../src/modules/tabel/workdays.service";
+import { WD_ROLES, defaultSchedules, parseWorkdaysState, type WorkdaysState } from "../src/modules/tabel/workdays.service";
 
 function state(patch: Partial<WorkdaysState> = {}): WorkdaysState {
-  return { schedules: defaultSchedules(), exceptions: [], overrides: [], enforce_access: true, ...patch };
+  return {
+    schedules: defaultSchedules(),
+    exceptions: [],
+    overrides: [],
+    enforce_access: true,
+    enforce_roles: [...WD_ROLES],
+    ...patch
+  };
 }
 
 /** 2026-09-27 — yakshanba, Toshkent 12:00. */
@@ -28,8 +35,17 @@ describe("computeWorkdayAccess", () => {
     expect(computeWorkdayAccess(state(), "owner", 1, SUNDAY_NOON).allowed).toBe(true);
   });
 
-  it("respects the enforce_access switch", () => {
-    expect(computeWorkdayAccess(state({ enforce_access: false }), "agent", 10, SUNDAY_NOON).allowed).toBe(true);
+  it("blocks only roles selected in enforce_roles", () => {
+    expect(computeWorkdayAccess(state({ enforce_roles: [] }), "agent", 10, SUNDAY_NOON).allowed).toBe(true);
+    const onlyAgents = state({ enforce_roles: ["Агент"] });
+    expect(computeWorkdayAccess(onlyAgents, "agent", 10, SUNDAY_NOON).allowed).toBe(false);
+    expect(computeWorkdayAccess(onlyAgents, "expeditor", 11, SUNDAY_NOON).allowed).toBe(true);
+  });
+
+  it("parses legacy settings: lock is off unless explicitly enabled", () => {
+    expect(parseWorkdaysState({}).enforce_roles).toEqual([]);
+    expect(parseWorkdaysState({ workdays: { enforce_access: true } }).enforce_roles).toEqual([...WD_ROLES]);
+    expect(parseWorkdaysState({ workdays: { enforce_roles: ["Агент", "x"] } }).enforce_roles).toEqual(["Агент"]);
   });
 
   it("uses per-role schedule (supervisor off on Saturday, agent works)", () => {

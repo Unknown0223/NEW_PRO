@@ -752,7 +752,7 @@ class _NotifCard extends StatelessWidget {
           onTap: () {
             onMarkRead();
             final href = n.linkHref?.trim() ?? '';
-            if (href.startsWith('/clients/')) {
+            if (href.startsWith('/clients/') || href.startsWith('/tasks/')) {
               context.push(href);
             }
           },

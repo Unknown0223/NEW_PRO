@@ -33,7 +33,8 @@ class RouteMapStop {
       longitude: lon,
       orderIndex: (raw['order'] as num?)?.toInt() ??
           (raw['order_index'] as num?)?.toInt() ??
-          (raw['sort'] as num?)?.toInt(),
+          (raw['sort'] as num?)?.toInt() ??
+          (raw['sort_order'] as num?)?.toInt(),
       visited: raw['visited'] == true,
     );
   }

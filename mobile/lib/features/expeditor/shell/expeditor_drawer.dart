@@ -165,6 +165,11 @@ class _ExpeditorDrawerState extends ConsumerState<ExpeditorDrawer> {
                           label: 'Незавершённые заказы',
                           onTap: () => go('/exp-unfinished'),
                         ),
+                        AgentMenuTile(
+                          icon: Icons.task_alt_outlined,
+                          label: 'Задачи',
+                          onTap: () => go('/tasks', push: true),
+                        ),
                       ],
                     ),
                   ),

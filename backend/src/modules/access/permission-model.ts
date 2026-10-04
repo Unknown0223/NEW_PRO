@@ -232,9 +232,10 @@ export const PERMISSION_SECTIONS: PermissionSectionDef[] = [
     treeSectionRu: "Консигнация и лимиты агентов"
   },
   { module: "staff", section: "tabel", labelRu: "Табель (посещаемость)", actions: ["view", "update", "export", "history"] },
-  { module: "staff", section: "rabochie_dni", labelRu: "Рабочие дни (график)", actions: ["view", "update", "create", "delete", "history"] },
+  { module: "staff", section: "rabochie_dni", labelRu: "Рабочие дни (график)", actions: ["view", "update", "create", "delete", "status", "history"] },
   { module: "staff", section: "tabel_normativ", labelRu: "Табель · Норматив агентов", actions: ["view", "update"] },
-  { module: "settings", section: "tipy_zadach", labelRu: "Задачи (типы задач)", actions: VIEW_ONLY, groupRu: "Пользователи" },
+  { module: "staff", section: "zadachi_spisok", labelRu: "Задачи (поручения сотрудникам)", actions: ["view", "create", "update", "delete", "export"] },
+  { module: "settings", section: "tipy_zadach", labelRu: "Типы задач (справочник)", actions: VIEW_ONLY, groupRu: "Пользователи" },
   { module: "staff", section: "zadachi", labelRu: "Уведомления (колокольчик)", actions: ["view", "update"] },
 
   // ── GPS — har bir xodim turi alohida (GPS мониторинг xaritasi) ──
@@ -244,7 +245,7 @@ export const PERMISSION_SECTIONS: PermissionSectionDef[] = [
   { module: "gps", section: "inkassatory", labelRu: "GPS мониторинг по инкассаторам", actions: VIEW_EXPORT },
   { module: "gps", section: "van_selling", labelRu: "GPS мониторинг по ван-селлингу", actions: VIEW_EXPORT },
   { module: "gps", section: "trek", labelRu: "Трек передвижения на карте", actions: VIEW_ONLY },
-  { module: "gps", section: "marshrut", labelRu: "Маршрут дня агента (порядок визитов)", actions: ["update"] },
+  { module: "gps", section: "marshrut", labelRu: "Маршрут дня агента (порядок визитов)", actions: ["view", "update"] },
 
   // ── Settings (Настройки) ───────────────────────────────────
   { module: "settings", section: "tovar", labelRu: "Товар", actions: ["view", "create", "update", "delete", "import", "copy", "history"] },

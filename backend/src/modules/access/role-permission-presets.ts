@@ -105,6 +105,7 @@ const PRESET_BUILDERS: Record<string, () => string[]> = {
       secOnly("staff", "agent", ["activate", "deactivate"]),
       secOnly("staff", "sotrudniki", ["activate", "deactivate"]),
       secOnly("staff", "zarplaty", ["view", "copy", "approve", "status"]),
+      sec("staff", "zadachi_spisok"),
       sec("staff", "avans")
     ),
 
@@ -116,6 +117,7 @@ const PRESET_BUILDERS: Record<string, () => string[]> = {
       modViewOnly("clients"),
       mod("plans"),
       secOnly("work_slots", "raboche_mesto", ["view", "update", "history"]),
+      sec("staff", "zadachi_spisok"),
       sec("staff", "avans")
     ),
 
@@ -127,6 +129,7 @@ const PRESET_BUILDERS: Record<string, () => string[]> = {
       modViewOnly("clients"),
       sec("plans", "nastroyka_utverzhdayushchih"),
       secOnly("plans", "ustanovka_planov", ["view", "update", "approve"]),
+      sec("staff", "zadachi_spisok"),
       sec("staff", "avans")
     ),
 
@@ -227,6 +230,7 @@ const PRESET_BUILDERS: Record<string, () => string[]> = {
       sec("gps", "agenty"),
       sec("gps", "trek"),
       sec("gps", "marshrut"),
+      sec("staff", "zadachi_spisok"),
       sec("staff", "avans")
     ),
 
@@ -275,6 +279,7 @@ const PRESET_BUILDERS: Record<string, () => string[]> = {
       secOnly("plans", "nastroyka_utverzhdayushchih", ["view"]),
       secOnly("work_slots", "raboche_mesto", ["view", "history"]),
       secOnly("staff", "konsignatsiya", ["view"]),
+      sec("staff", "zadachi_spisok"),
       sec("staff", "avans")
     ),
   partner: () => uniq(modViewOnly("orders"), modViewOnly("clients")),

@@ -128,7 +128,9 @@ export const NAV_PERM = {
   staffTimesheetHistory: ["staff.tabel.history"],
   staffTimesheetNorm: ["staff.tabel_normativ.view", "staff.tabel_normativ.update"],
   staffTimesheetNormEdit: ["staff.tabel_normativ.update"],
-  staffTasks: ["settings.tipy_zadach.view"],
+  staffTasks: ["staff.zadachi_spisok.view"],
+  staffTaskTypes: ["settings.tipy_zadach.view"],
+  agentRoutePlan: ["gps.marshrut.view", "gps.marshrut.update"],
   workSlots: ["work_slots.raboche_mesto.view"],
 
   audit: ["audit.tabel.view"],

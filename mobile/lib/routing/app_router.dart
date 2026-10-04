@@ -82,6 +82,9 @@ import '../features/shared/profile/profile_page.dart';
 import '../features/cashier/cashier_home_page.dart';
 import '../features/cashier/bank_transfer_inbox_page.dart';
 import '../features/cashier/bank_transfer_inbox_detail_page.dart';
+import '../features/tasks/task_create_page.dart';
+import '../features/tasks/task_detail_page.dart';
+import '../features/tasks/tasks_page.dart';
 import 'role_guard.dart';
 
 /// Dialoglar uchun (MaterialApp.builder kontekstida Navigator yo‘q).
@@ -303,6 +306,27 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: '/sv-notifications',
         parentNavigatorKey: rootNavigatorKey,
         builder: (_, __) => const SupervisorNotificationsPage(),
+      ),
+      GoRoute(
+        path: '/tasks',
+        parentNavigatorKey: rootNavigatorKey,
+        builder: (_, __) => const TasksPage(),
+      ),
+      GoRoute(
+        path: '/tasks/new',
+        parentNavigatorKey: rootNavigatorKey,
+        builder: (_, __) => const TaskCreatePage(),
+      ),
+      GoRoute(
+        path: '/tasks/:id',
+        parentNavigatorKey: rootNavigatorKey,
+        builder: (_, state) {
+          final id = int.tryParse(state.pathParameters['id'] ?? '');
+          if (id == null) {
+            return const Scaffold(body: Center(child: Text('Задача не найдена')));
+          }
+          return TaskDetailPage(taskId: id);
+        },
       ),
       GoRoute(
         path: '/clients/new',

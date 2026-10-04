@@ -253,6 +253,7 @@ function parseFallbackState(): WorkdaysState {
     },
     exceptions: [],
     overrides: [],
-    enforce_access: false
+    enforce_access: false,
+    enforce_roles: []
   };
 }

@@ -13,7 +13,7 @@ import {
   getWorkdaysState,
   removeException,
   removeOverride,
-  saveEnforceAccess,
+  saveEnforceRoles,
   saveSchedules,
   upsertOverride,
   type WdRole
@@ -43,7 +43,10 @@ const overrideBody = z.object({
   schedule: scheduleSchema,
   comment: z.string().max(500).optional().default("")
 });
-const enforceAccessBody = z.object({ enabled: z.boolean() });
+const enforceAccessBody = z.union([
+  z.object({ roles: z.array(roleEnum).max(WD_ROLES.length) }),
+  z.object({ enabled: z.boolean() })
+]);
 
 function actorLabel(request: FastifyRequest): string {
   const u = request.user as { role?: string; login?: string } | undefined;
@@ -80,7 +83,8 @@ export async function registerTabelRoutes(app: FastifyInstance) {
       const parsed = enforceAccessBody.safeParse(request.body);
       if (!parsed.success)
         return sendApiError(reply, request, 400, "ValidationError", undefined, zodValidationExtras(parsed.error));
-      const data = await saveEnforceAccess(request.tenant!.id, actorLabel(request), parsed.data.enabled);
+      const roles = "roles" in parsed.data ? parsed.data.roles : parsed.data.enabled ? [...WD_ROLES] : [];
+      const data = await saveEnforceRoles(request.tenant!.id, actorLabel(request), roles);
       return reply.send({ data });
     }
   );

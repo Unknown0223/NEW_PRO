@@ -2,6 +2,8 @@
  * Operatsiya nomlari (RU) — SalesDoc «Доступ» terminologiyasi bo'yicha.
  * Kalit: `<module>.<section>.<action>`; ro'yxatda yo'q kalit uchun umumiy amal nomi ishlatiladi.
  */
+import { GPS_OP_LABEL_RU } from "./permission-op-labels.gps";
+
 export const PERMISSION_OP_LABEL_RU: Record<string, string> = {
   "dashboard.prodazhi.view": "Просмотр дашборда продаж",
   "dashboard.finansy.view": "Просмотр дашборда финансов",
@@ -231,7 +233,8 @@ export const PERMISSION_OP_LABEL_RU: Record<string, string> = {
   "staff.konsignatsiya.import": "Импорт лимитов консигнации из Excel (и шаблон)",
   "staff.konsignatsiya_zakrytie.update": "Изменить время автозакрытия консигнации (для всех агентов)",
   "staff.rabochie_dni.view": "Просмотр графика рабочих дней",
-  "staff.rabochie_dni.update": "Назначить график по ролям и запрет входа в нерабочие дни",
+  "staff.rabochie_dni.update": "Назначить недельный график по ролям",
+  "staff.rabochie_dni.status": "Включать / выключать блокировку входа в нерабочие дни (по ролям)",
   "staff.rabochie_dni.create": "Добавить исключение (праздник, тренинг) или индивидуальный график",
   "staff.rabochie_dni.delete": "Удалить исключение или индивидуальный график",
   "staff.rabochie_dni.history": "История изменений графика",
@@ -243,19 +246,13 @@ export const PERMISSION_OP_LABEL_RU: Record<string, string> = {
   "staff.zadachi.view": "Видеть и читать уведомления (колокольчик)",
   "staff.zadachi.update": "Отмечать уведомления прочитанными",
   "settings.tipy_zadach.view": "Справочник типов задач (Звонок, Визит, Документ…)",
+  "staff.zadachi_spisok.view": "Список задач и результат выполнения (комментарий, фото)",
+  "staff.zadachi_spisok.create": "Создать задачу и назначить сотруднику",
+  "staff.zadachi_spisok.update": "Изменить задачу (срок, исполнитель, описание)",
+  "staff.zadachi_spisok.delete": "Отменить задачу",
+  "staff.zadachi_spisok.export": "Выгрузка задач в Excel",
 
-  "gps.agenty.view": "Видеть агентов на GPS карте (где сейчас, визиты за день)",
-  "gps.agenty.export": "Выгрузка визитов агента в Excel",
-  "gps.dostavshchiki.view": "Видеть доставщиков на GPS карте (доставки за день)",
-  "gps.dostavshchiki.export": "Выгрузка доставок доставщика в Excel",
-  "gps.supervayzery.view": "Видеть супервайзеров на GPS карте (контроль территории)",
-  "gps.supervayzery.export": "Выгрузка маршрутов команды супервайзера в Excel",
-  "gps.inkassatory.view": "Видеть инкассаторов на GPS карте (точки инкассации)",
-  "gps.inkassatory.export": "Выгрузка инкассаций в Excel",
-  "gps.van_selling.view": "Видеть ван-селлеров на GPS карте",
-  "gps.van_selling.export": "Выгрузка ван-селлинг визитов в Excel",
-  "gps.trek.view": "Видеть линию пройденного пути (трек) за день",
-  "gps.marshrut.update": "Сохранять маршрут дня (порядок визитов) другому сотруднику",
+  ...GPS_OP_LABEL_RU,
 
   "settings.tovar.view": "Список товаров",
   "settings.tovar.create": "Создать товар",

@@ -44,6 +44,8 @@ export interface WorkdaysState {
   overrides: EmployeeOverride[];
   /** Nerabochiy kunda (admin’dan tashqari) web/ilovaga kirish bloklanadi. */
   enforce_access: boolean;
+  /** Dam olish kuni kirish bloklanadigan rollar. */
+  enforce_roles: WdRole[];
 }
 
 function normalizeState(raw: Partial<WorkdaysState> | undefined): WorkdaysState {
@@ -58,7 +60,8 @@ function normalizeState(raw: Partial<WorkdaysState> | undefined): WorkdaysState 
     schedules,
     exceptions: Array.isArray(raw?.exceptions) ? raw!.exceptions : [],
     overrides: Array.isArray(raw?.overrides) ? raw!.overrides : [],
-    enforce_access: raw?.enforce_access !== false
+    enforce_access: Boolean(raw?.enforce_access),
+    enforce_roles: Array.isArray(raw?.enforce_roles) ? WD_ROLES.filter((r) => raw!.enforce_roles!.includes(r)) : []
   };
 }
 
@@ -138,12 +141,12 @@ export function useWorkdaysMutations() {
     onSuccess: invalidate
   });
 
-  const saveEnforceAccess = useMutation({
-    mutationFn: async (enabled: boolean) => {
-      await api.put(`/api/${tenantSlug}/workdays/enforce-access`, { enabled });
+  const saveEnforceRoles = useMutation({
+    mutationFn: async (roles: WdRole[]) => {
+      await api.put(`/api/${tenantSlug}/workdays/enforce-access`, { roles });
     },
     onSuccess: invalidate
   });
 
-  return { saveSchedules, addException, removeException, upsertOverride, removeOverride, saveEnforceAccess };
+  return { saveSchedules, addException, removeException, upsertOverride, removeOverride, saveEnforceRoles };
 }

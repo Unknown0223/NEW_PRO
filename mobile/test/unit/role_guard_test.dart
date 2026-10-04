@@ -37,6 +37,16 @@ void main() {
       expect(roleGuardLocation('agent', '/notifications'), isNull);
     });
 
+    test('tasks: agent/expeditor/supervisor open list and detail, only supervisor creates', () {
+      for (final role in const ['agent', 'expeditor', 'supervisor']) {
+        expect(roleGuardLocation(role, '/tasks'), isNull);
+        expect(roleGuardLocation(role, '/tasks/15'), isNull);
+      }
+      expect(roleGuardLocation('supervisor', '/tasks/new'), isNull);
+      expect(roleGuardLocation('agent', '/tasks/new'), '/tasks');
+      expect(roleGuardLocation('expeditor', '/tasks/new'), '/tasks');
+    });
+
     test('agent can access kpi', () {
       expect(roleGuardLocation('agent', '/kpi'), isNull);
       expect(roleGuardLocation('agent', '/kpi/calc'), isNull);
