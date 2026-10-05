@@ -18,6 +18,7 @@ import {
 
 import { getPaymentDetail, type PaymentDetailPayload } from "./payment.query";
 import { voidPaymentEditGrantsInTx, restorePaymentEditGrantsInTx } from "./payment-edit-grants.service";
+import { notifyClientPayment, soon } from "../tg-app/tg-notify";
 
 
 /**
@@ -79,13 +80,14 @@ export async function confirmPendingPayment(
 
   const pRow = await prisma.payment.findFirst({
     where: { id: paymentId, tenant_id: tenantId },
-    select: { client_id: true }
+    select: { client_id: true, amount: true }
   });
   if (pRow) {
     await appendClientAuditLog(tenantId, pRow.client_id, actorUserId, "client.payment", {
       payment_id: paymentId,
       source: "confirm_pending"
     });
+    soon(() => notifyClientPayment(tenantId, pRow.client_id, pRow.amount, paymentId));
   }
 
   if (uid) {

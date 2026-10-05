@@ -5,6 +5,7 @@
  * low-stock notifications for warehouse items below the threshold.
  */
 import { prisma } from "../config/database";
+import { createNotification } from "../modules/notifications/notifications.service";
 import { canTransitionOrderStatus } from "../modules/orders/order-status";
 import { emitOrderUpdated } from "./order-event-bus";
 
@@ -275,13 +276,12 @@ export async function runLowStockNotifications(): Promise<number> {
           return prod ? `${prod.name} (${prod.sku})` : `Товар #${x.product_id}`;
         });
 
-      await prisma.inAppNotification.create({
-        data: {
-          tenant_id: tenantId,
-          user_id: user.id,
-          title: LOW_STOCK_TITLE,
-          body: `Заканчиваются товары (доступно меньше ${threshold}):\n${tenantLowProducts.join("\n")}`,
-        },
+      await createNotification({
+        tenant_id: tenantId,
+        user_id: user.id,
+        title: LOW_STOCK_TITLE,
+        body: `Заканчиваются товары (доступно меньше ${threshold}):\n${tenantLowProducts.join("\n")}`,
+        link_href: "/stock"
       });
       created++;
       notifiedSet.add(key);

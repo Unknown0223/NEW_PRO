@@ -218,6 +218,7 @@ const ROUTE_PERMISSION_RULES: RoutePermissionRule[] = [
   r(["POST"], /\/clients\/:id\/equipment$/, "clients.oborudovanie.create"),
   r(READ, /\/clients\/:id\/equipment/, "clients.oborudovanie.view"),
   r(READ, /\/:slug\/equipment$/, "clients.oborudovanie.view"),
+  r(["POST"], /\/clients\/:id\/telegram\//, "clients.klient.update"),
   r(["POST"], /\/clients$/, "clients.klient.create"),
   r(["PUT", "PATCH"], /\/clients\/:id$/, "clients.klient.update"),
   r(WRITE, /\/clients\/:id\/photo-reports\/[^/]+\/restore/, "clients.foto.restore"),

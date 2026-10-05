@@ -1,5 +1,6 @@
 import { prisma } from "../../config/database";
 import { appendTenantAuditEvent, AuditEntityType } from "../../lib/tenant-audit";
+import { notifyBonusRuleChange } from "./bonus-rules.notify";
 
 import type { BonusRuleRow, CreateBonusRuleInput } from "./bonus-rules.types";
 import { fetchBonusRuleFull, parseOptionalDate } from "./bonus-rules.mappers";
@@ -154,5 +155,6 @@ export async function createBonusRule(
     action: "create",
     payload: { name: full.name, type: full.type, is_active: full.is_active }
   });
+  if (full.is_active) void notifyBonusRuleChange(tenantId, full.id, "created", actorUserId);
   return full;
 }

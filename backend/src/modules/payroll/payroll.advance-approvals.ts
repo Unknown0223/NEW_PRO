@@ -7,6 +7,8 @@ import { actorIdsOf, advanceToDto, loadAdvanceUsers, type AdvanceActor } from ".
 import { notifyUsers } from "./payroll.notify";
 import { PayrollError } from "./payroll.route-helpers";
 
+const fmtSum = (v: unknown) => `${Math.round(Number(v ?? 0)).toLocaleString("ru-RU")} сум`;
+
 export type ApprovalFilter = {
   statuses?: string[];
   branch?: string;
@@ -97,6 +99,10 @@ export async function approveAdvances(tenantId: number, actor: AdvanceActor, ids
     for (const [uid, n] of groupBySender(done)) {
       await notifyUsers(tenantId, [uid], { title: "Авансы утверждены", body: `Утверждено: ${n}`, href: "/users/advances" });
     }
+    for (const a of done) {
+      if (a.user_id === a.sent_by) continue;
+      await notifyUsers(tenantId, [a.user_id], { title: "✅ Аванс утверждён", body: `Сумма: ${fmtSum(a.amount)}`, href: "/users/advances" });
+    }
   }
   return { approved, skipped };
 }
@@ -126,6 +132,10 @@ export async function rejectAdvances(tenantId: number, actor: AdvanceActor, ids:
     });
     for (const [uid, n] of groupBySender(done)) {
       await notifyUsers(tenantId, [uid], { title: "Авансы отклонены", body: `${n}: ${why}`, href: "/users/advances" });
+    }
+    for (const a of done) {
+      if (a.user_id === a.sent_by) continue;
+      await notifyUsers(tenantId, [a.user_id], { title: "❌ Аванс отклонён", body: `Сумма: ${fmtSum(a.amount)}. ${why}`, href: "/users/advances" });
     }
   }
   return { rejected: done.length, skipped };

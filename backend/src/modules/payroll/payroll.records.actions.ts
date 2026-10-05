@@ -5,6 +5,7 @@ import { appendTenantAuditEvent, AuditEntityType } from "../../lib/tenant-audit"
 import { markPayrollDirty } from "./payroll.dirty";
 import { recalcPayrollRecord } from "./payroll.recalc";
 import { ensurePayrollPeriod } from "./payroll.recalc-month";
+import { notifyUsers } from "./payroll.notify";
 import { PayrollError } from "./payroll.route-helpers";
 
 const ymKey = (y: number, m: number) => `${y}-${String(m).padStart(2, "0")}`;
@@ -155,6 +156,14 @@ export async function changePayrollRecordStatus(
     }
     changed++;
     await audit(tenantId, actorId, r.id, `payroll.record.${action}`, { user_id: r.user_id, month: ymKey(r.year, r.month), reason });
+    if (action === "confirm" || action === "reject") {
+      const ym = `${String(r.month).padStart(2, "0")}.${r.year}`;
+      await notifyUsers(tenantId, [r.user_id], {
+        title: action === "confirm" ? `💵 Зарплата за ${ym} подтверждена` : `⚠️ Расчёт зарплаты за ${ym} отклонён`,
+        body: action === "reject" ? reason?.trim().slice(0, 300) ?? null : null,
+        href: "/users/advances"
+      });
+    }
   }
   return { changed, skipped };
 }

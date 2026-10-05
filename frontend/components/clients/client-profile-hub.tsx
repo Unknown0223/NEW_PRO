@@ -9,6 +9,7 @@ import {
   type ProfileLedgerAgentFilter
 } from "@/components/clients/client-profile-ledger-filters-context";
 import { ClientProfileEquipmentTab } from "@/components/clients/client-profile-equipment-tab";
+import { ClientTelegramPanel } from "@/components/clients/client-telegram-panel";
 import { ClientProfilePhotoReportsTab } from "@/components/clients/client-profile-photo-reports-tab";
 import type { ClientMapPoint } from "@/components/clients/clients-leaflet-map";
 import { PageHeader } from "@/components/dashboard/page-header";
@@ -427,6 +428,7 @@ type HubTab =
   | "equipment"
   | "photos"
   | "map"
+  | "telegram"
   | "service";
 
 type Props = { tenantSlug: string; clientId: number };
@@ -793,6 +795,9 @@ function ClientProfileHubInner({ tenantSlug, clientId }: Props) {
               ) : null}
               <TabsTrigger value="map" className={hubTabTriggerClass}>
                 Координаты
+              </TabsTrigger>
+              <TabsTrigger value="telegram" className={hubTabTriggerClass}>
+                Telegram
               </TabsTrigger>
               {canHistory ? (
                 <TabsTrigger value="service" className={hubTabTriggerClass}>
@@ -1342,6 +1347,10 @@ function ClientProfileHubInner({ tenantSlug, clientId }: Props) {
                   </Link>
                 </CardContent>
               </Card>
+            </TabsContent>
+
+            <TabsContent value="telegram" className="mt-3 outline-none">
+              {hubTab === "telegram" ? <ClientTelegramPanel tenantSlug={tenantSlug} clientId={clientId} /> : null}
             </TabsContent>
 
             <TabsContent value="service" className="mt-3 outline-none">

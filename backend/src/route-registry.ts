@@ -6,6 +6,7 @@ import { registerErrorEventRoutes } from "./modules/error-events/error-events.ro
 import { registerAuditEventRoutes } from "./modules/audit-events/audit-events.route";
 import { registerAuthRoutes } from "./modules/auth/auth.route";
 import { registerTelegramBotRoutes } from "./modules/telegram-bot/telegram-bot.route";
+import { registerTgAppRoutes } from "./modules/tg-app/tg-app.route";
 import { registerBonusRuleRoutes } from "./modules/bonus-rules/bonus-rules.route";
 import { registerBonusStrategyRoutes } from "./modules/bonus-strategies/bonus-strategies.route";
 import { registerCashDeskRoutes } from "./modules/cash-desks/cash-desks.route";
@@ -65,6 +66,7 @@ type RouteRegistrar = (app: FastifyInstance) => void | Promise<void>;
 export const routeRegistrars: RouteRegistrar[] = [
   registerAuthRoutes,
   registerTelegramBotRoutes,
+  registerTgAppRoutes,
   registerAccessRoutes,
   registerUserUiRoutes,
   registerClientRoutes,

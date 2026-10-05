@@ -37,7 +37,6 @@ export type TelegramBotStaffFail = {
     | "telegram_taken"
     | "staff_bound_other_telegram"
     | "unbound";
-  hint?: string;
   message: string;
 };
 
@@ -56,14 +55,8 @@ const MSG: Record<TelegramBotStaffFail["reason"], string> = {
   unbound: "Этот аккаунт Telegram пока не привязан ни к одному сотруднику."
 };
 
-function fail(reason: TelegramBotStaffFail["reason"], hint?: string): TelegramBotStaffFail {
-  const base = MSG[reason];
-  return {
-    ok: false,
-    reason,
-    hint,
-    message: hint && reason === "bad_smart" ? `${base} Рабочее место: ${hint}` : base
-  };
+function fail(reason: TelegramBotStaffFail["reason"]): TelegramBotStaffFail {
+  return { ok: false, reason, message: MSG[reason] };
 }
 
 function dtoFrom(
@@ -205,10 +198,7 @@ export async function registerTelegramStaff(input: {
   const want = normSmartCode(input.smartCode);
   const slots = await activeSlots(user.id, user.tenant_id);
   const hit = slots.find((s) => normSmartCode(s.slot_code) === want);
-  if (!hit) {
-    const codes = slots.map((s) => s.slot_code.trim()).filter(Boolean);
-    return fail("bad_smart", codes.join(", ") || undefined);
-  }
+  if (!hit) return fail("bad_smart");
 
   const tg = String(input.telegramId);
   const [byTelegram, byUser] = await Promise.all([

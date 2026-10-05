@@ -16,6 +16,7 @@ import {
 } from "./payment-allocations.service";
 
 import { buildDiscountSettlementNote } from "./payment.discount-note";
+import { notifyClientPayment, soon } from "../tg-app/tg-notify";
 
 import type { CreatePaymentInput, PaymentListRow } from "./payment.query";
 import {
@@ -384,6 +385,7 @@ export async function createPayment(
   }
 
   void invalidateDashboard(tenantId);
+  if (!isDiscountSettlement) soon(() => notifyClientPayment(tenantId, input.client_id, input.amount, row.id));
 
   return mapPaymentToListRow(row, tenantId);
 }

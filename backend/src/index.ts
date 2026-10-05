@@ -21,6 +21,7 @@ import {
 import { disableAuditRetentionCron, enableAuditRetentionCron } from "./lib/audit-retention-cron";
 import { disablePayrollCron, enablePayrollCron } from "./lib/payroll-cron";
 import { startPayrollOrderHook } from "./modules/payroll/payroll.auto-hooks";
+import { startTgApp, stopTgApp } from "./modules/tg-app/tg-runner";
 
 async function main() {
   await prisma.$connect();
@@ -46,8 +47,10 @@ async function main() {
   const stopPayrollOrderHook = startPayrollOrderHook();
   enablePayrollCron();
   app.log.info("Payroll auto-recalc cron enabled.");
+  void startTgApp();
 
   const shutdown = async () => {
+    stopTgApp();
     stopPayrollOrderHook();
     disablePayrollCron();
     disableAutoClose();

@@ -1,4 +1,5 @@
 import { prisma } from "../../config/database";
+import { notifyClientOrderStatus, pushStaffNotificationSoon, soon } from "../tg-app/tg-notify";
 
 export async function listNotifications(
   tenantId: number,
@@ -63,7 +64,7 @@ export async function createNotification(input: {
   body?: string | null;
   link_href?: string | null;
 }) {
-  return prisma.inAppNotification.create({
+  const row = await prisma.inAppNotification.create({
     data: {
       tenant_id: input.tenant_id,
       user_id: input.user_id,
@@ -72,6 +73,8 @@ export async function createNotification(input: {
       link_href: input.link_href?.slice(0, 512) ?? null
     }
   });
+  pushStaffNotificationSoon(input);
+  return row;
 }
 
 /** Zakaz statusi o‘zgaganda agent va ekspeditorga (o‘zgartirgan shaxsga emas). */
@@ -86,6 +89,7 @@ export async function notifyOrderParticipantsStatusChange(params: {
   agent_id: number | null;
   expeditor_user_id: number | null;
 }): Promise<void> {
+  soon(() => notifyClientOrderStatus(params.tenant_id, params.order_id, params.to_status));
   const recipients = new Set<number>();
   if (params.agent_id != null && params.agent_id > 0) recipients.add(params.agent_id);
   if (params.expeditor_user_id != null && params.expeditor_user_id > 0) {

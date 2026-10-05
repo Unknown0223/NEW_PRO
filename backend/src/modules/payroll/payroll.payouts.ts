@@ -9,7 +9,7 @@ import { resolveMethodForPaymentType } from "../reports/cash-flow.helpers";
 import { assertAdvanceWithinLimit } from "./payroll.advance-limits";
 import { cashDesksForBranch, cashierDeskIds, loadAdvanceUsers, loadTenantBranches, type AdvanceActor } from "./payroll.advances.shared";
 import { markPayrollDirty } from "./payroll.dirty";
-import { notifyPermissionHolders } from "./payroll.notify";
+import { notifyPermissionHolders, notifyUsers } from "./payroll.notify";
 import { recalcPayrollRecord } from "./payroll.recalc";
 import { PayrollError } from "./payroll.route-helpers";
 
@@ -180,6 +180,11 @@ export async function payPayroll(tenantId: number, actor: AdvanceActor, input: P
     payload: { user_id: userId, amount: conv.amount, currency, amount_uzs: amountUzs, cash_desk_id: input.cash_desk_id }
   });
   await refreshAfterPayout(tenantId, userId, year, month, `payout_${input.kind}`);
+  await notifyUsers(tenantId, [userId], {
+    title: input.kind === "advance" ? "💵 Аванс выплачен" : "💵 Зарплата выплачена",
+    body: `${Math.round(amountUzs).toLocaleString("ru-RU")} сум · ${String(month).padStart(2, "0")}.${year}`,
+    href: "/users/advances"
+  });
   return payout;
 }
 

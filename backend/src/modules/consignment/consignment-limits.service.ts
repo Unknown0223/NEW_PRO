@@ -10,6 +10,7 @@ import {
   utcMonthStart
 } from "./consignment.service";
 import { proposeLimitFromPlan, proposeLimitFromSnapshot, type LimitRound } from "./consignment-limits.pure";
+import { notifyConsignmentChanges, snapshotAgentConsignment } from "./consignment.notify";
 
 type Actor = { userId: number | null; role: string };
 
@@ -63,6 +64,7 @@ export async function transferConsignmentLimit(tenantId: number, input: Transfer
   const monthStartsAt = utcMonthStart(year, month);
   const now = new Date();
 
+  const before = await snapshotAgentConsignment(tenantId, [from.id, to.id]);
   const result = await prisma.$transaction(async (tx) => {
     await tx.$queryRaw`SELECT id FROM users WHERE id IN (${from.id}, ${to.id}) FOR UPDATE`;
     const fresh = await tx.user.findMany({
@@ -101,6 +103,7 @@ export async function transferConsignmentLimit(tenantId: number, input: Transfer
     action: "consignment.limit.transfer",
     payload: result
   });
+  void notifyConsignmentChanges(tenantId, before, actor.userId);
   return result;
 }
 
@@ -189,9 +192,11 @@ export async function applyConsignmentLimits(
   if (limits.some((r) => !r.limit.isFinite() || r.limit.lt(0))) throw new ConsignmentLimitError("BAD_AMOUNT");
   await loadScopedAgents(tenantId, ids, actor);
   const now = new Date();
+  const before = await snapshotAgentConsignment(tenantId, ids);
   await prisma.$transaction(async (tx) => {
     for (const r of limits) await setAgentLimit(tx, tenantId, r.user_id, r.limit, now);
   });
+  void notifyConsignmentChanges(tenantId, before, actor.userId);
   await appendTenantAuditEvent({
     tenantId,
     actorUserId: actor.userId,

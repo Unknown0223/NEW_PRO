@@ -121,6 +121,17 @@ const envSchema = z.object({
   /** Telegram klient-bot (PC) → platforma API. Kamida 16 belgi. */
   TELEGRAM_BOT_API_SECRET: z.string().min(16).optional(),
 
+  /** Mijoz + xodim Telegram ilova-boti. Token bo'lmasa bot o'chiq. */
+  TG_APP_BOT_TOKEN: z.string().min(20).optional(),
+  /** Bot qaysi tenantga xizmat qiladi (slug). */
+  TG_APP_TENANT_SLUG: z.string().min(1).optional(),
+  /** polling — bitta instans (lokal); webhook — production; off — o'chiq. */
+  TG_APP_MODE: z.enum(["polling", "webhook", "off"]).default("polling"),
+  /** Webhook `X-Telegram-Bot-Api-Secret-Token` qiymati. */
+  TG_APP_WEBHOOK_SECRET: z.string().min(16).optional(),
+  /** Webhook uchun ochiq HTTPS manzil (masalan https://panel.example.com). */
+  TG_APP_PUBLIC_URL: z.string().url().optional(),
+
   /** Sentry DSN — berilmasa Sentry o‘chiq. */
   SENTRY_DSN: z.preprocess(
     (v) => (typeof v === "string" && (!v.trim() || v.includes("<") || v.includes("your-")) ? undefined : v),

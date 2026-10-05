@@ -10,6 +10,7 @@ import {
   type ConsignmentCloseSchedule
 } from "./consignment-settings";
 import { reconcileTenantConsignmentMonthClosures } from "./consignment-month-closure.service";
+import { notifyConsignmentChanges, snapshotAgentConsignment } from "./consignment.notify";
 import { listAgentConsignmentMonthStatusForMonth } from "./consignment-month-status.repo";
 import { userWhereTradeDirection } from "./consignment-trade-direction";
 
@@ -464,6 +465,7 @@ export async function bulkPatchConsignmentAgents(
     input.consignment_ignore_previous_months_debt !== undefined;
   if (!hasField) throw new Error("EMPTY_PATCH");
 
+  const before = await snapshotAgentConsignment(tenantId, ids);
   await prisma.$transaction(async (tx) => {
     for (const userId of ids) {
       const res = await tx.user.updateMany({
@@ -490,6 +492,7 @@ export async function bulkPatchConsignmentAgents(
     action: "bulk.consignation",
     payload: { user_ids: ids, keys: Object.keys(data).filter((k) => k !== "consignment_updated_at") }
   });
+  void notifyConsignmentChanges(tenantId, before, actorUserId);
 
   return { updated: ids.length };
 }
@@ -523,6 +526,7 @@ export async function bulkPatchConsignmentAgentRows(
 
   const now = new Date();
 
+  const before = await snapshotAgentConsignment(tenantId, cleaned.map((r) => r.user_id));
   await prisma.$transaction(async (tx) => {
     for (const row of cleaned) {
       let limitAmt: Prisma.Decimal | null = null;
@@ -563,6 +567,7 @@ export async function bulkPatchConsignmentAgentRows(
     action: "bulk.consignation_rows",
     payload: { user_ids: cleaned.map((r) => r.user_id), count: cleaned.length }
   });
+  void notifyConsignmentChanges(tenantId, before, actorUserId);
 
   return { updated: cleaned.length };
 }

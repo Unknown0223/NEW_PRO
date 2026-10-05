@@ -97,14 +97,7 @@ export async function registerTelegramBotRoutes(app: FastifyInstance) {
       telegramId: parsed.data.telegram_id
     });
     if (!result.ok) {
-      return sendApiError(
-        reply,
-        request,
-        failStatus[result.reason] ?? 400,
-        result.reason,
-        result.message,
-        result.hint ? { hint: result.hint } : undefined
-      );
+      return sendApiError(reply, request, failStatus[result.reason] ?? 400, result.reason, result.message);
     }
     return reply.send(result);
   });
