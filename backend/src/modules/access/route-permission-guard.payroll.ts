@@ -60,8 +60,11 @@ export const PAYROLL_ROUTE_PERMISSION_RULES: PayrollRoutePermissionRule[] = [
   r(READ, /\/payroll\/export(\/|$)/, "staff.zarplaty.copy"),
 
   // Sozlamalar / katalog / formulalar / okladlar / qatorlar
-  r(["POST"], /\/payroll\/(items|formulas|role-configs|employee-configs)$/, "staff.zarplaty.create", "staff.zarplaty.update"),
-  r(WRITE, /\/payroll\/formulas\/validate$/, "staff.zarplaty.view"),
+  r(["POST"], /\/payroll\/(items|formulas|role-configs|employee-configs|schemes|presets\/res)$/, "staff.zarplaty.create", "staff.zarplaty.update"),
+  r(["POST"], /\/payroll\/schemes\/[^/]+\/version$/, "staff.zarplaty.create", "staff.zarplaty.update"),
+  r(WRITE, /\/payroll\/formulas\/(validate|preview)$/, "staff.zarplaty.view"),
+  r(WRITE, /\/payroll\/schemes\/preview$/, "staff.zarplaty.view"),
+  r(DEL, /\/payroll\/scheme-overrides\/[^/]+$/, "staff.zarplaty.update"),
   r(WRITE, /\/payroll(\/|$)/, "staff.zarplaty.update"),
   r(DEL, /\/payroll(\/|$)/, "staff.zarplaty.delete"),
   r(READ, /\/payroll(\/|$)/, "staff.zarplaty.view")

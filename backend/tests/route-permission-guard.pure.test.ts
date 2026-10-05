@@ -261,4 +261,17 @@ describe("route-permission-guard matchRule", () => {
     const reassign = matchRule("POST", "/api/:slug/bank-transfer-inbox/:id/reassign");
     expect(reassign?.anyOf).toContain("cash.perechisleniya.update");
   });
+
+  it("payroll schemes: guard route ruxsatlari bilan bir xil", () => {
+    expect(matchRule("GET", "/api/:slug/payroll/schemes")?.anyOf).toEqual(["staff.zarplaty.view"]);
+    expect(matchRule("GET", "/api/:slug/payroll/schemes/matches")?.anyOf).toEqual(["staff.zarplaty.view"]);
+    expect(matchRule("POST", "/api/:slug/payroll/schemes/preview")?.anyOf).toEqual(["staff.zarplaty.view"]);
+    expect(matchRule("POST", "/api/:slug/payroll/formulas/preview")?.anyOf).toEqual(["staff.zarplaty.view"]);
+    expect(matchRule("POST", "/api/:slug/payroll/schemes")?.anyOf).toEqual(["staff.zarplaty.create", "staff.zarplaty.update"]);
+    expect(matchRule("POST", "/api/:slug/payroll/schemes/:id/version")?.anyOf).toEqual(["staff.zarplaty.create", "staff.zarplaty.update"]);
+    expect(matchRule("PUT", "/api/:slug/payroll/schemes/:id")?.anyOf).toEqual(["staff.zarplaty.update"]);
+    expect(matchRule("DELETE", "/api/:slug/payroll/schemes/:id")?.anyOf).toEqual(["staff.zarplaty.delete"]);
+    expect(matchRule("DELETE", "/api/:slug/payroll/scheme-overrides/:id")?.anyOf).toEqual(["staff.zarplaty.update"]);
+    expect(matchRule("POST", "/api/:slug/payroll/scheme-overrides")?.anyOf).toEqual(["staff.zarplaty.update"]);
+  });
 });
