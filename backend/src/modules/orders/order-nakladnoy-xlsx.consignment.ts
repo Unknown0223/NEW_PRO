@@ -2,12 +2,12 @@ import ExcelJS from "exceljs";
 import type { NakladnoyBuildOptions, NakladnoyLine, NakladnoyOrderPayload } from "./order-nakladnoy-xlsx.types";
 import { repairWorkbookBeforeWrite } from "./warehouse-templates/warehouse-template-repair";
 import { patchWarehouseXlsxBuffer } from "./warehouse-templates/warehouse-template-zip-patch";
+import { applyBorderRange, FILL_HEADER_GREY } from "./order-nakladnoy-xlsx.format";
 import {
-  applyBorderRange,
-  expandConsignmentSheetGroups,
-  FILL_HEADER_GREY,
-  sanitizeSheetName
-} from "./order-nakladnoy-xlsx.format";
+  numberedSheetName,
+  splitOrdersIntoSheetGroups,
+  uniqueSheetName
+} from "./warehouse-templates/nakladnoy-sheet-groups";
 import {
   consignment217AddressLine,
   consignment217BalanceLine,
@@ -291,20 +291,8 @@ export async function buildConsignmentWorkbook(
   wb.creator = "SALESDOC";
   const printAt = new Date();
 
-  const groups = expandConsignmentSheetGroups(orders, options);
+  const groups = splitOrdersIntoSheetGroups(orders, options);
   const usedSheetNames = new Set<string>();
-  const uniqueSheetName = (base: string): string => {
-    let name = sanitizeSheetName(base).slice(0, 31);
-    if (!name) name = "N2_1_7";
-    let candidate = name;
-    let n = 2;
-    while (usedSheetNames.has(candidate)) {
-      const suffix = `_${n++}`;
-      candidate = sanitizeSheetName(name.slice(0, Math.max(1, 31 - suffix.length)) + suffix);
-    }
-    usedSheetNames.add(candidate);
-    return candidate;
-  };
 
   const formColW = [2.71, 14.71, 5.21, 5.71, 8.71, 11.21];
   const allColW = [...formColW, 2.71, ...formColW, 2.71];
@@ -313,10 +301,13 @@ export async function buildConsignmentWorkbook(
   const measureSheet = new ExcelJS.Workbook().addWorksheet("measure");
   let measureRow = 1;
 
-  for (const group of groups) {
+  for (const [gi, sheetGroup] of groups.entries()) {
+    const group = sheetGroup.orders;
     if (group.length === 0) continue;
-    const baseName = consignment217SheetName(group[0]?.expeditorName);
-    const sheet = wb.addWorksheet(uniqueSheetName(baseName), {
+    const baseName = options.separateSheets
+      ? numberedSheetName(gi + 1, "217", sheetGroup.label)
+      : consignment217SheetName(group[0]?.expeditorName);
+    const sheet = wb.addWorksheet(uniqueSheetName(usedSheetNames, baseName), {
       views: [{ showGridLines: true }]
     });
 

@@ -11,18 +11,15 @@ import {
 import { buildWarehouseLoadXlsx } from "../warehouse-templates/build-warehouse-load-xlsx";
 import { warehouseExportOptionsForLayout } from "../warehouse-templates/warehouse-export-options";
 import { buildExpeditorLoadingXlsx } from "../warehouse-templates/build-expeditor-loading-xlsx";
-import { buildExpeditorLoading520Document } from "../warehouse-templates/expeditor-loading-520-document";
-import { buildExpeditorLoading520XlsxFromDocument } from "../warehouse-templates/expeditor-loading-520-xlsx";
-import { buildExpeditorLoading520Preview } from "../warehouse-templates/expeditor-loading-520-preview";
+import { buildExpeditorLoading520Documents } from "../warehouse-templates/build-expeditor-loading-520";
+import { buildExpeditorLoading520XlsxFromDocuments } from "../warehouse-templates/expeditor-loading-520-xlsx";
 import type { NakladnoyPreviewResponse } from "../warehouse-templates/nakladnoy-preview.types";
 import { workbookBufferToNakladnoyPreview } from "../warehouse-templates/nakladnoy-xlsx-preview";
 import {
   isExpeditorLoadingLayoutId,
   expeditorLoadingDownloadFilename,
-  getExpeditorLoadingLayoutDef,
   type ExpeditorLoadingLayoutId
 } from "../warehouse-templates/expeditor-loading-template-ids";
-import { buildWarehouseAggregateContext } from "../warehouse-templates/warehouse-template-shared";
 import {
   isWarehouseLayoutId,
   warehouseLayoutDownloadFilename,
@@ -79,13 +76,15 @@ export async function requestBulkOrderNakladnoyPreview(
 
   if (expeditorLoadingLayout === "ex-5.2.0") {
     const { ordered } = await loadBulkNakladnoyOrderPayloads(tenantId, orderIds);
-    const ctx = buildWarehouseAggregateContext(ordered, buildOptions);
-    const def = getExpeditorLoadingLayoutDef("ex-5.2.0");
-    const doc = buildExpeditorLoading520Preview(ctx, buildOptions, def.versionLabel);
+    const docs = buildExpeditorLoading520Documents(ordered, buildOptions);
     return {
       label,
-      filename: doc.filename,
-      pages: [{ sheetName: doc.sheetName || "1.520.", kind: "structured-520", loading520: doc }]
+      filename: docs[0]?.filename ?? "zagruz_5_2_0.xlsx",
+      pages: docs.map((doc) => ({
+        sheetName: doc.sheetName || "1.520.",
+        kind: "structured-520" as const,
+        loading520: doc
+      }))
     };
   }
 
@@ -153,13 +152,11 @@ export async function requestBulkOrderNakladnoyLoading520(
   buildOptions: NakladnoyBuildOptions = DEFAULT_NAKLADNOY_BUILD_OPTIONS
 ): Promise<BulkNakladnoyFileResult> {
   const { ids, ordered } = await loadBulkNakladnoyOrderPayloads(tenantId, orderIds);
-  const def = getExpeditorLoadingLayoutDef("ex-5.2.0");
-  const ctx = buildWarehouseAggregateContext(ordered, buildOptions);
-  const doc = buildExpeditorLoading520Document(ctx, buildOptions, def.versionLabel);
-  const buffer = await buildExpeditorLoading520XlsxFromDocument(doc);
+  const docs = buildExpeditorLoading520Documents(ordered, buildOptions);
+  const buffer = await buildExpeditorLoading520XlsxFromDocuments(docs);
   return {
     buffer,
-    filename: doc.filename,
+    filename: docs[0]?.filename ?? "zagruz_5_2_0.xlsx",
     template: "nakladnoy_expeditor",
     format: "xlsx",
     order_ids: ids

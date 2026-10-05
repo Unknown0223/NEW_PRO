@@ -22,6 +22,8 @@ export type NakladnoyOrderPayload = {
   createdAt: Date;
   /** Bir nechta zakaz birlashtirilganda «Дата по» */
   dateTo?: Date | null;
+  /** «Дата отгрузки»: status `delivering`, bo‘lmasa `confirmed` vaqti */
+  shipDate?: Date | null;
   tenantName: string;
   tenantPhone: string | null;
   clientName: string;

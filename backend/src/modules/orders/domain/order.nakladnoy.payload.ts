@@ -327,7 +327,27 @@ export async function loadBulkNakladnoyOrderPayloads(
     }
   });
 
+  const shipLogs = await prisma.orderStatusLog.findMany({
+    where: {
+      order_id: { in: ids },
+      superseded_at: null,
+      to_status: { in: ["delivering", "confirmed"] }
+    },
+    orderBy: [{ order_id: "asc" }, { created_at: "asc" }],
+    select: { order_id: true, to_status: true, created_at: true }
+  });
+  const deliveringAt = new Map<number, Date>();
+  const confirmedAt = new Map<number, Date>();
+  for (const log of shipLogs) {
+    const target = log.to_status === "delivering" ? deliveringAt : confirmedAt;
+    if (!target.has(log.order_id)) target.set(log.order_id, log.created_at);
+  }
+
   const byId = new Map(loaded.map((x) => [x.id, x]));
-  const ordered = ids.map((id) => byId.get(id)!).map((o) => mapOrderToNakladnoyPayload(o as OrderNakladnoyDb));
+  const ordered = ids.map((id) => {
+    const payload = mapOrderToNakladnoyPayload(byId.get(id)! as OrderNakladnoyDb);
+    payload.shipDate = deliveringAt.get(id) ?? confirmedAt.get(id) ?? null;
+    return payload;
+  });
   return { ids, ordered };
 }

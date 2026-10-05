@@ -3,6 +3,7 @@
 import {
   collectGroupKeysInOrder,
   isGroupInterleaveCategory,
+  isNumberedGroupSheetName,
   normalizeSheetGroupKey,
   shouldInterleaveBulkSheetsByGroup
 } from "@/lib/bulk-export-sheet-grouping";
@@ -60,33 +61,26 @@ export function uniqueExcelSheetName(base: string, used: Set<string>): string {
   return fallback;
 }
 
+type SheetModel = {
+  id?: number;
+  name?: string;
+  merges?: string[];
+  mergeCells?: string[];
+  media?: unknown[];
+  tables?: unknown[];
+};
+
+/** Qiymat + uslub (rang, chegara, shrift) + merge + sahifa sozlamasi. */
 function copyWorksheet(src: Worksheet, dest: Worksheet): void {
-  src.columns?.forEach((col, idx) => {
-    const w = col.width;
-    if (w != null && w > 0) dest.getColumn(idx + 1).width = w;
-  });
-
-  const values = src.getSheetValues();
-  if (values && values.length > 0) {
-    dest.addRows(values);
-  } else {
-    src.eachRow({ includeEmpty: false }, (row, rowNumber) => {
-      const destRow = dest.getRow(rowNumber);
-      row.eachCell({ includeEmpty: false }, (cell, colNumber) => {
-        destRow.getCell(colNumber).value = cell.value;
-      });
-      destRow.commit();
-    });
-  }
-
-  const model = src as Worksheet & { model?: { merges?: string[] } };
-  for (const range of model.model?.merges ?? []) {
-    try {
-      dest.mergeCells(range);
-    } catch {
-      /* ignore */
-    }
-  }
+  const model = (src as Worksheet & { model: SheetModel }).model;
+  (dest as Worksheet & { model: SheetModel }).model = {
+    ...model,
+    id: dest.id,
+    name: dest.name,
+    media: [],
+    tables: [],
+    mergeCells: model.merges ?? []
+  };
 }
 
 async function toArrayBuffer(data: Blob | ArrayBuffer): Promise<ArrayBuffer> {
@@ -122,8 +116,11 @@ function appendSheet(
   sourceLabel: string,
   multiInSource: boolean
 ): void {
-  const suffix =
-    multiInSource && srcSheet.name ? `${sourceLabel} - ${srcSheet.name}` : sourceLabel;
+  const suffix = isNumberedGroupSheetName(srcSheet.name)
+    ? srcSheet.name
+    : multiInSource && srcSheet.name
+      ? `${sourceLabel} - ${srcSheet.name}`
+      : sourceLabel;
   const sheetName = uniqueExcelSheetName(suffix, usedSheetNames);
   const destSheet = outWb.addWorksheet(sheetName);
   copyWorksheet(srcSheet.worksheet, destSheet);

@@ -252,8 +252,17 @@ export async function registerOrderBulkRoutes(app: FastifyInstance) {
         if (msg === "INVALID_WAREHOUSE_LAYOUT" || msg === "WAREHOUSE_LAYOUT_XLSX_ONLY") {
           return sendApiError(reply, request, 400, "InvalidWarehouseLayout");
         }
-        if (msg.startsWith("WAREHOUSE_TEMPLATE_ASSET_MISSING:")) {
-          return sendApiError(reply, request, 500, "WarehouseTemplateMissing");
+        if (
+          msg.startsWith("WAREHOUSE_TEMPLATE_ASSET_MISSING:") ||
+          msg.startsWith("EXPEDITOR_LOADING_TEMPLATE_ASSET_MISSING:")
+        ) {
+          return sendApiError(
+            reply,
+            request,
+            500,
+            "NakladnoyTemplateMissing",
+            "Шаблон Excel для этой накладной не найден на сервере."
+          );
         }
         throw e;
       }
@@ -312,6 +321,18 @@ export async function registerOrderBulkRoutes(app: FastifyInstance) {
         ) {
           return sendApiError(reply, request, 400, "InvalidNakladnoyPreview");
         }
+        if (
+          msg.startsWith("WAREHOUSE_TEMPLATE_ASSET_MISSING:") ||
+          msg.startsWith("EXPEDITOR_LOADING_TEMPLATE_ASSET_MISSING:")
+        ) {
+          return sendApiError(
+            reply,
+            request,
+            500,
+            "NakladnoyTemplateMissing",
+            "Шаблон Excel для этой накладной не найден на сервере."
+          );
+        }
         throw e;
       }
     }
@@ -357,7 +378,13 @@ export async function registerOrderBulkRoutes(app: FastifyInstance) {
           return sendApiError(reply, request, 400, "InvalidExpeditorLoadingLayout");
         }
         if (msg.startsWith("EXPEDITOR_LOADING_TEMPLATE_ASSET_MISSING:")) {
-          return sendApiError(reply, request, 500, "ExpeditorLoadingTemplateMissing");
+          return sendApiError(
+            reply,
+            request,
+            500,
+            "NakladnoyTemplateMissing",
+            "Шаблон Excel для этой накладной не найден на сервере."
+          );
         }
         throw e;
       }

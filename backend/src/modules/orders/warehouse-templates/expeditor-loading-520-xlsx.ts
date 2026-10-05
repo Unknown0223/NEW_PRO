@@ -3,6 +3,7 @@ import { applyBorderRange, FILL_HEADER_GREY } from "../order-nakladnoy-xlsx.form
 import { repairWorkbookBeforeWrite } from "./warehouse-template-repair";
 import { patchWarehouseXlsxBuffer } from "./warehouse-template-zip-patch";
 import type { ExpeditorLoading520Document } from "./expeditor-loading-520-document";
+import { uniqueSheetName } from "./nakladnoy-sheet-groups";
 
 /** 5.2.0 shablonidagi binafsha guruh qatori */
 const FILL_GROUP_520: ExcelJS.Fill = {
@@ -16,10 +17,31 @@ const MONEY_FMT = "#,##0";
 export async function buildExpeditorLoading520XlsxFromDocument(
   doc: ExpeditorLoading520Document
 ): Promise<Buffer> {
+  return buildExpeditorLoading520XlsxFromDocuments([doc]);
+}
+
+/** Har hujjat (экспедитор / агент / территория guruhi) — alohida varaq. */
+export async function buildExpeditorLoading520XlsxFromDocuments(
+  docs: ExpeditorLoading520Document[]
+): Promise<Buffer> {
   const wb = new ExcelJS.Workbook();
   wb.creator = "SALESDOC";
   wb.created = new Date();
-  const sheet = wb.addWorksheet(doc.sheetName || "1.520.", { views: [{ showGridLines: true }] });
+  const used = new Set<string>();
+  for (const doc of docs) {
+    writeExpeditorLoading520Sheet(wb, doc, uniqueSheetName(used, doc.sheetName || "1.520."));
+  }
+  repairWorkbookBeforeWrite(wb);
+  const raw = await wb.xlsx.writeBuffer({ useStyles: true, useSharedStrings: true });
+  return patchWarehouseXlsxBuffer(Buffer.from(raw));
+}
+
+function writeExpeditorLoading520Sheet(
+  wb: ExcelJS.Workbook,
+  doc: ExpeditorLoading520Document,
+  sheetName: string
+) {
+  const sheet = wb.addWorksheet(sheetName, { views: [{ showGridLines: true }] });
 
   sheet.getColumn(1).width = 4.71;
   sheet.getColumn(2).width = 8.71;
@@ -164,10 +186,6 @@ export async function buildExpeditorLoading520XlsxFromDocument(
     fitToHeight: 0,
     margins: { left: 0.4, right: 0.4, top: 0.5, bottom: 0.5, header: 0.2, footer: 0.2 }
   };
-
-  repairWorkbookBeforeWrite(wb);
-  const raw = await wb.xlsx.writeBuffer({ useStyles: true, useSharedStrings: true });
-  return patchWarehouseXlsxBuffer(Buffer.from(raw));
 }
 
 function writeMetaPair(
