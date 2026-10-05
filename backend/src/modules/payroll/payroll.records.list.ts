@@ -200,8 +200,10 @@ export async function getPayrollRecordDetail(tenantId: number, id: number) {
       corr_key: l.corr_key,
       formula_snapshot: l.formula_snapshot,
       is_manual_override: l.is_manual_override,
-      note: l.note
+      note: l.note,
+      explain: l.explain
     })),
+    scheme_id: r.scheme_id,
     calc_snapshot: r.calc_snapshot,
     frozen_snapshot: r.frozen_snapshot,
     calc_error: r.calc_error,

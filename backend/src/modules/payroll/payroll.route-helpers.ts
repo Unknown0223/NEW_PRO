@@ -55,7 +55,10 @@ const ERROR_MAP: Record<string, [number, string]> = {
   NO_RECORDS: [409, "NoRecords"],
   HAS_UNCONFIRMED: [409, "HasUnconfirmedRecords"],
   QUEUE_DISABLED: [409, "SalaryQueueDisabled"],
-  SELF_ACTION: [403, "PayrollSelfAction"]
+  SELF_ACTION: [403, "PayrollSelfAction"],
+  SCHEME_INVALID: [400, "PayrollSchemeInvalid"],
+  SCHEME_LOCKED: [409, "PayrollSchemeLocked"],
+  SCHEME_OVERLAP: [409, "PayrollSchemeOverlap"]
 };
 
 /** Servis `Error(message)` → API javobi. `true` — javob yuborildi. */

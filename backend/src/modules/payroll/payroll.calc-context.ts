@@ -94,27 +94,34 @@ export async function resolveUserScheme(
   year: number,
   month: number
 ): Promise<{ scheme: SchemeCalcInput; errors: string[] } | null> {
-  const ym = ymInt(year, month);
-  const s = pickScheme(ctx.schemes, user, ym);
+  const s = pickScheme(ctx.schemes, user, ymInt(year, month));
   if (!s) return null;
+  return { scheme: await buildSchemeInput(ctx, user, year, month, s.id, s.rules), errors: s.errors };
+}
+
+export async function buildSchemeInput(
+  ctx: PayrollCalcContext,
+  user: PayrollUserSnapshot,
+  year: number,
+  month: number,
+  schemeId: number,
+  rules: SchemeRule[]
+): Promise<SchemeCalcInput> {
   const rows = await prisma.payrollSchemeOverride.findMany({
     where: { tenant_id: ctx.tenantId, user_id: user.id },
     select: { rule_code: true, amount: true, valid_from: true, valid_to: true }
   });
   return {
-    scheme: {
-      scheme_id: s.id,
-      rules: s.rules,
-      attrs: {
-        branch: user.branch,
-        trade_direction_id: user.trade_direction_id,
-        position: user.position,
-        tenure_months: tenureMonths(user.hired_at, year, month)
-      },
-      overrides: activeOverrides(rows.map((r) => ({ ...r, amount: Number(r.amount) })), ym),
-      groupNames: ctx.groupNames
+    scheme_id: schemeId,
+    rules,
+    attrs: {
+      branch: user.branch,
+      trade_direction_id: user.trade_direction_id,
+      position: user.position,
+      tenure_months: tenureMonths(user.hired_at, year, month)
     },
-    errors: s.errors
+    overrides: activeOverrides(rows.map((r) => ({ ...r, amount: Number(r.amount) })), ymInt(year, month)),
+    groupNames: ctx.groupNames
   };
 }
 

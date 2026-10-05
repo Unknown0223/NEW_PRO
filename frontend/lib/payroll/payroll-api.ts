@@ -96,7 +96,10 @@ const ERROR_RU: Record<string, string> = {
   PayrollSelfAction: "Нельзя утверждать, править или выплачивать собственную зарплату/аванс",
   PayrollManagedExpense: "Зарплата и аванс оформляются в разделе «Зарплата»",
   PayrollExpenseReadonly: "Запись создана выплатой — изменяется только в разделе «Зарплата»",
-  ValidationError: "Проверьте заполнение полей"
+  ValidationError: "Проверьте заполнение полей",
+  PayrollSchemeInvalid: "Ошибки в правилах схемы",
+  PayrollSchemeLocked: "Схема охватывает закрытый месяц — создайте новую версию",
+  PayrollSchemeOverlap: "Уже есть активная схема с такими же условиями на этот период"
 };
 
 type ApiErr = Error & { status?: number; apiBody?: { error?: string; message?: string } & Record<string, unknown> };
@@ -113,7 +116,31 @@ export function payrollErrorText(e: unknown): string {
     return `${base}: доступно ${money(body.available as number)} ${String(body.currency ?? "")}, нужно ${money(body.required as number)}`;
   }
   if (code === "AmountExceedsBalance" && body) return `${base} (${money(body.balance as number)})`;
+  if (code === "PayrollSchemeInvalid" && Array.isArray(body?.errors)) return `${base}:\n• ${(body.errors as string[]).join("\n• ")}`;
+  if (code === "PayrollSchemeLocked" && body?.closed) return `${base} (закрыт ${String(body.closed)})`;
+  if (code === "PayrollSchemeOverlap" && body?.name) return `${base}: «${String(body.name)}»`;
   return base;
+}
+
+const WARN_RU: Record<string, string> = {
+  pending_plan: "План сотрудника ещё не утверждён — в KPI не учитывается",
+  slot_plan_sum_mismatch: "Сумма планов по участкам не совпадает с планом сотрудника",
+  vacant_slot_days: "Часть месяца участок был без сотрудника",
+  negative_gross: "Начислено меньше нуля — проверьте удержания",
+  division_by_zero: "В формуле деление на ноль — результат 0",
+  not_finite: "Формула дала некорректное число — результат 0",
+  no_plan: "по части KPI нет утверждённого плана — эта часть = 0"
+};
+
+/** Kod → matn; `kpi:no_plan` kabi prefiksli kodlar uchun nom `ruleName` orqali. */
+export function payrollWarnText(w: string, ruleName?: (code: string) => string | undefined): string {
+  const i = w.lastIndexOf(":");
+  const code = i >= 0 ? w.slice(i + 1) : w;
+  const text = WARN_RU[code];
+  if (!text) return w;
+  if (i < 0) return text;
+  const prefix = w.slice(0, i);
+  return `«${ruleName?.(prefix) ?? prefix}»: ${text}`;
 }
 
 export function payrollApi(tenant: string) {

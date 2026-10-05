@@ -6,6 +6,7 @@ import { registerPayrollBonusRoutes } from "./payroll.route.bonus";
 import { registerPayrollAdvanceRoutes } from "./payroll.route.advances";
 import { registerPayrollCashierRoutes } from "./payroll.route.cashier";
 import { registerPayrollHealthRoutes } from "./payroll.route.health";
+import { registerPayrollSchemeRoutes } from "./payroll.route.schemes";
 
 export async function registerPayrollRoutes(app: FastifyInstance) {
   await registerPayrollCatalogRoutes(app);
@@ -15,4 +16,5 @@ export async function registerPayrollRoutes(app: FastifyInstance) {
   await registerPayrollAdvanceRoutes(app);
   await registerPayrollCashierRoutes(app);
   await registerPayrollHealthRoutes(app);
+  await registerPayrollSchemeRoutes(app);
 }

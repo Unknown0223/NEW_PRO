@@ -55,6 +55,7 @@ const GROUPS: Array<{ title: string; links: Array<{ href: string; title: string;
   {
     title: "Настройки",
     links: [
+      { href: "/users/salary/schemes", title: "Схемы расчёта", hint: "Правила по ролям, KPI-шкала, условия, версии" },
       { href: "/users/salary/role-salaries", title: "Базовые оклады", hint: "Оклад по роли и индивидуально" },
       { href: "/users/salary/formulas", title: "Формулы", hint: "KPI-бонусы, надбавки, оклад" },
       { href: "/users/bonus-and-salary-settings", title: "Настройки бонусов и зарплат", hint: "Назначение формул сотрудникам" },

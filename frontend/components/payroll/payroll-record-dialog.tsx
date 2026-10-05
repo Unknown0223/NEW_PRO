@@ -6,11 +6,13 @@ import { RotateCcw, Save } from "lucide-react";
 import { GroupedNumberInput } from "@/components/ui/grouped-number-input";
 import { useTenant } from "@/lib/api-client";
 import { usePermissions } from "@/lib/use-permissions";
-import { ADVANCE_STATUS, fmtDateTime, money, payrollApi, RECORD_STATUS, roleLabel } from "@/lib/payroll/payroll-api";
+import { ADVANCE_STATUS, fmtDateTime, money, payrollApi, payrollWarnText, RECORD_STATUS, roleLabel } from "@/lib/payroll/payroll-api";
 import { cn } from "@/lib/utils";
 import { StatusBadge, parseAmount, useNotice } from "@/components/payroll/payroll-ui";
 import type { PayrollItem } from "@/components/payroll/payroll-items-workspace";
 import { PayrollModal, PayrollModalNote, PayrollModalSection } from "@/components/payroll/kit/payroll-kit-modal";
+import { ExplainView } from "@/components/payroll/schemes/scheme-preview";
+import type { Explain } from "@/lib/payroll/payroll-scheme-types";
 import {
   PAYROLL_INPUT,
   PAYROLL_TABLE,
@@ -31,7 +33,18 @@ function Stat({ label, value }: { label: string; value: string }) {
   );
 }
 
-type Line = { item_id: number; item_name: string; item_type: string; amount: number; source: string; corr_key: string; formula_snapshot: string | null; is_manual_override: boolean; note: string | null };
+type Line = {
+  item_id: number;
+  item_name: string;
+  item_type: string;
+  amount: number;
+  source: string;
+  corr_key: string;
+  formula_snapshot: string | null;
+  is_manual_override: boolean;
+  note: string | null;
+  explain?: Explain | null;
+};
 type Detail = {
   id: number;
   user: { id: number; fio: string; code: string | null; role: string };
@@ -46,6 +59,7 @@ type Detail = {
   lines: Line[];
   calc_snapshot: {
     base?: { base_full?: number };
+    base_explain?: Explain | null;
     attendance?: { plan_days?: number; worked?: number; vacation?: number; sick?: number; trip?: number; absent?: number; half?: number };
     kpi?: { fact_total?: { cost?: number }; plan_total?: { cost?: number }; returned_sum?: number };
     warnings?: string[];
@@ -56,7 +70,16 @@ type Detail = {
   advances: Array<{ id: number; amount: number; status: string; created_at: string }>;
 };
 
-const SOURCE: Record<string, string> = { formula: "Формула", kpi: "KPI", manual: "Вручную", config: "Базовый оклад", advance: "Аванс", correction: "Корректировка", carry: "Долг прошлого месяца" };
+const SOURCE: Record<string, string> = {
+  formula: "Формула",
+  kpi: "KPI",
+  manual: "Вручную",
+  config: "Базовый оклад",
+  scheme: "Схема",
+  advance: "Аванс",
+  correction: "Корректировка",
+  carry: "Долг прошлого месяца"
+};
 
 export function PayrollRecordDialog({ recordId, items, onClose }: { recordId: number | null; items: PayrollItem[]; onClose: () => void }) {
   const tenant = useTenant();
@@ -114,7 +137,7 @@ export function PayrollRecordDialog({ recordId, items, onClose }: { recordId: nu
             <Stat label="KPI факт / план" value={`${money(k.fact_total?.cost ?? 0)} / ${money(k.plan_total?.cost ?? 0)}`} />
             <Stat label="Возвраты" value={money(k.returned_sum ?? 0)} />
           </div>
-          {(d.calc_snapshot.warnings ?? []).map((w) => <PayrollModalNote key={w} tone="warn">{w}</PayrollModalNote>)}
+          {(d.calc_snapshot.warnings ?? []).map((w) => <PayrollModalNote key={w} tone="warn">{payrollWarnText(w)}</PayrollModalNote>)}
 
           <div className="overflow-hidden rounded-xl border border-[var(--pr-border)]">
             <table className={PAYROLL_TABLE}>
@@ -122,13 +145,17 @@ export function PayrollRecordDialog({ recordId, items, onClose }: { recordId: nu
                 <tr><th className={PAYROLL_TH}>Статья</th><th className={PAYROLL_TH}>Источник</th><th className={cn(PAYROLL_TH, "text-right")}>Сумма</th><th className={cn(PAYROLL_TH, "w-14")} /></tr>
               </thead>
               <tbody>
-                <tr className={PAYROLL_TR}><td className={cn(CELL, "font-medium")}>Оклад за отработанное время</td><td className={CELL}>Табель</td><td className={cn(CELL, "text-right tabular-nums")}>{money(d.base_salary)}</td><td /></tr>
+                <tr className={PAYROLL_TR}><td className={cn(CELL, "font-medium")}>Оклад за отработанное время<ExplainView explain={d.calc_snapshot?.base_explain} /></td><td className={CELL}>Табель</td><td className={cn(CELL, "text-right tabular-nums")}>{money(d.base_salary)}</td><td /></tr>
                 {d.lines.map((l) => (
                   <tr key={`${l.item_id}-${l.corr_key}`} className={PAYROLL_TR}>
                     <td className={CELL}>
                       <span className={l.item_type === "allowance" ? "text-emerald-700" : "text-rose-700"}>{l.item_name}</span>
                       {l.corr_key ? <span className="ml-1 text-[12px] text-muted-foreground">за {l.corr_key}</span> : null}
-                      {l.formula_snapshot ? <div className="max-w-md truncate font-mono text-[11px] text-muted-foreground" title={l.formula_snapshot}>{l.formula_snapshot}</div> : null}
+                      {l.explain ? (
+                        <ExplainView explain={l.explain} />
+                      ) : l.formula_snapshot ? (
+                        <div className="max-w-md truncate font-mono text-[11px] text-muted-foreground" title={l.formula_snapshot}>{l.formula_snapshot}</div>
+                      ) : null}
                     </td>
                     <td className={cn(CELL, "text-[12px] text-muted-foreground")}>{l.is_manual_override ? "Вручную (вместо формулы)" : SOURCE[l.source] ?? l.source}</td>
                     <td className={cn(CELL, "text-right tabular-nums")}>{money(l.amount, 2)}</td>

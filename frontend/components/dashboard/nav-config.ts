@@ -328,6 +328,7 @@ export const dashboardPayrollNav: {
     {
       title: "НАСТРОЙКИ",
       items: [
+        { href: "/users/salary/schemes", label: "Схемы расчёта", showIfAnyPermission: [...NAV_PERM.staffPayroll] },
         { href: "/users/salary/role-salaries", label: "Базовые оклады", showIfAnyPermission: [...NAV_PERM.staffPayroll] },
         { href: "/users/salary/formulas", label: "Формулы", showIfAnyPermission: [...NAV_PERM.staffPayroll] },
         {

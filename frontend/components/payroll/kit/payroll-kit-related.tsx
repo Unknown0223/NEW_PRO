@@ -12,6 +12,7 @@ import { cn } from "@/lib/utils";
 
 export type PayrollSection =
   | "salary"
+  | "schemes"
   | "role-salaries"
   | "formulas"
   | "bonus"
@@ -26,6 +27,7 @@ type RelatedLink = { id: PayrollSection; label: string; href: string };
 
 const SALARY_LINKS: RelatedLink[] = [
   { id: "salary", label: "Зарплата", href: "/users/salary" },
+  { id: "schemes", label: "Схемы расчёта", href: "/users/salary/schemes" },
   { id: "role-salaries", label: "Базовые оклады", href: "/users/salary/role-salaries" },
   { id: "formulas", label: "Формулы", href: "/users/salary/formulas" },
   { id: "bonus", label: "Настройки бонусов и зарплат", href: "/users/bonus-and-salary-settings" },
