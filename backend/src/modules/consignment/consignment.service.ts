@@ -401,7 +401,7 @@ export type BulkPatchConsignmentInput = {
 };
 
 /** Konsignatsiya patchini faol ishchi o‘rniga yozadi (manba — Consigment sahifa). */
-async function mirrorConsignmentPatchToActiveSlot(
+export async function mirrorConsignmentPatchToActiveSlot(
   tx: Prisma.TransactionClient,
   tenantId: number,
   userId: number,

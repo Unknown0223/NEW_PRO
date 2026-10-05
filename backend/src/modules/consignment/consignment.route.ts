@@ -20,6 +20,7 @@ import {
   buildConsignmentImportTemplateBuffer,
   importConsignmentLimitsFromBuffer
 } from "./consignment-import.xlsx";
+import { registerConsignmentLimitRoutes } from "./consignment-limits.route";
 
 async function readConsignmentImportBuffer(
   request: FastifyRequest
@@ -144,6 +145,8 @@ const importQuerySchema = z.object({
 });
 
 export async function registerConsignmentRoutes(app: FastifyInstance) {
+  await registerConsignmentLimitRoutes(app);
+
   app.get(
     "/api/:slug/consignment/settings",
     { preHandler: [jwtAccessVerify, requireRoles(...catalogRoles)] },

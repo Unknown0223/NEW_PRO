@@ -71,7 +71,9 @@ describe("route-permission-guard matchRule", () => {
       ["PATCH", "/api/:slug/consignment/settings", "staff.konsignatsiya_zakrytie.update"],
       ["POST", "/api/:slug/consignment/import.xlsx", "staff.konsignatsiya.import"],
       ["PATCH", "/api/:slug/consignment/agents/bulk-rows", "staff.konsignatsiya.status"],
-      ["PATCH", "/api/:slug/consignment/agents/bulk-rows", "staff.konsignatsiya.update"]
+      ["PATCH", "/api/:slug/consignment/agents/bulk-rows", "staff.konsignatsiya.update"],
+      ["POST", "/api/:slug/consignment/limits/transfer", "staff.konsignatsiya_perekid.update"],
+      ["POST", "/api/:slug/consignment/limits/apply", "staff.konsignatsiya_limity.update"]
     ];
     for (const [method, path, key] of cases) {
       expect(matchRule(method, path)?.anyOf, `${method} ${path}`).toContain(key);

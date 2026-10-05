@@ -233,6 +233,8 @@ export const PERMISSION_OP_LABEL_RU: Record<string, string> = {
   "staff.konsignatsiya.update": "Изменить лимит консигнации агента (сумма и долг прошлых месяцев)",
   "staff.konsignatsiya.import": "Импорт лимитов консигнации из Excel (и шаблон)",
   "staff.konsignatsiya_zakrytie.update": "Изменить время автозакрытия консигнации (для всех агентов)",
+  "staff.konsignatsiya_perekid.update": "Перераспределить лимит между агентами одного супервайзера (общий лимит не меняется)",
+  "staff.konsignatsiya_limity.update": "Установить лимиты всем агентам: из прошлого месяца или % от плана",
   "staff.rabochie_dni.view": "Просмотр графика рабочих дней",
   "staff.rabochie_dni.update": "Назначить недельный график по ролям",
   "staff.rabochie_dni.status": "Включать / выключать блокировку входа в нерабочие дни (по ролям)",

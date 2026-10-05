@@ -287,6 +287,8 @@ const ROUTE_PERMISSION_RULES: RoutePermissionRule[] = [
   r(["POST"], /\/consignment\/import\.xlsx$/, "staff.konsignatsiya.import"),
   r(READ, /\/consignment\/import-template(\.xlsx)?$/, "staff.konsignatsiya.import"),
   r(WRITE, /\/consignment\/agents\/bulk(-rows)?$/, "staff.konsignatsiya.status", "staff.konsignatsiya.update"),
+  r(WRITE, /\/consignment\/limits\/transfer$/, "staff.konsignatsiya_perekid.update"),
+  r(WRITE, /\/consignment\/limits\/apply$/, "staff.konsignatsiya_limity.update"),
   r(WRITE, /\/consignment/, "staff.konsignatsiya.update", "staff.konsignatsiya.status", "clients.klient.update"),
   r(READ, /\/consignment/, "staff.konsignatsiya.view", "clients.klient.view"),
   // ─────────── Пользователи (staff) ───────────

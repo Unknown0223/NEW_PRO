@@ -131,6 +131,7 @@ export type PermissionSectionDef = {
 };
 
 export const PAYROLL_GROUP_RU = "Зарплата";
+const CONSIGNMENT_TREE_RU = "Консигнация и лимиты агентов";
 const REPORTS_TREE_RU = "Отчеты";
 const DICTIONARIES_TREE_RU = "Справочники";
 const SYSTEM_SETTINGS_TREE_RU = "Системные настройки";
@@ -224,13 +225,9 @@ export const PERMISSION_SECTIONS: PermissionSectionDef[] = [
   { module: "staff", section: "auditor", labelRu: "Аудитор", actions: STAFF_CRUD },
   { module: "staff", section: "sotrudniki", labelRu: "Сотрудники", actions: ["view", "create", "update", "activate", "deactivate", "export"] },
   { module: "staff", section: "konsignatsiya", labelRu: "Консигнация и лимиты агентов", actions: ["view", "status", "update", "import", "export"] },
-  {
-    module: "staff",
-    section: "konsignatsiya_zakrytie",
-    labelRu: "Время автозакрытия консигнации",
-    actions: ["update"],
-    treeSectionRu: "Консигнация и лимиты агентов"
-  },
+  { module: "staff", section: "konsignatsiya_zakrytie", labelRu: "Время автозакрытия консигнации", actions: ["update"], treeSectionRu: CONSIGNMENT_TREE_RU },
+  { module: "staff", section: "konsignatsiya_perekid", labelRu: "Перераспределение лимита консигнации", actions: ["update"], treeSectionRu: CONSIGNMENT_TREE_RU },
+  { module: "staff", section: "konsignatsiya_limity", labelRu: "Установка лимитов консигнации (прошлый месяц / % от плана)", actions: ["update"], treeSectionRu: CONSIGNMENT_TREE_RU },
   { module: "staff", section: "tabel", labelRu: "Табель (посещаемость)", actions: ["view", "update", "export", "history"] },
   { module: "staff", section: "rabochie_dni", labelRu: "Рабочие дни (график)", actions: ["view", "update", "create", "delete", "status", "history"] },
   { module: "staff", section: "tabel_normativ", labelRu: "Табель · Норматив агентов", actions: ["view", "update"] },

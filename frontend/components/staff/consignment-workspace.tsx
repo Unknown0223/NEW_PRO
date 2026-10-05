@@ -16,7 +16,9 @@ import { MonthYearPickerPopover } from "@/components/ui/month-year-picker-popove
 import { SearchableMultiSelectPanel } from "@/components/ui/searchable-multi-select-panel";
 import { downloadXlsxSheet } from "@/lib/download-xlsx";
 import { cn } from "@/lib/utils";
-import { CalendarDays, Clock, Download, FileSpreadsheet, Pencil, Search, Upload } from "lucide-react";
+import { ArrowLeftRight, CalendarDays, Clock, Download, FileSpreadsheet, Pencil, Percent, Search, Upload } from "lucide-react";
+import { ConsignmentLimitTransferDialog } from "@/components/staff/consignment-limits/consignment-limit-transfer-dialog";
+import { ConsignmentLimitBulkDialog } from "@/components/staff/consignment-limits/consignment-limit-bulk-dialog";
 import { formatConsignmentCloseSchedule } from "@/lib/consignment-close-schedule";
 import { ConsignmentCloseScheduleFields } from "@/components/staff/consignment-close-schedule-fields";
 import {
@@ -208,6 +210,8 @@ export function ConsignmentWorkspace({ tenantSlug }: { tenantSlug: string }) {
   const canLimit = perms.has("staff.konsignatsiya.update");
   const canImport = perms.has("staff.konsignatsiya.import");
   const canCloseSchedule = perms.has("staff.konsignatsiya_zakrytie.update");
+  const canTransferLimit = perms.has("staff.konsignatsiya_perekid.update");
+  const canBulkLimit = perms.has("staff.konsignatsiya_limity.update");
   const canEdit = !CONSIGNMENT_CONFIG_READONLY && (canToggle || canLimit);
   const importInputRef = useRef<HTMLInputElement>(null);
   const monthPickerAnchorRef = useRef<HTMLButtonElement>(null);
@@ -229,6 +233,7 @@ export function ConsignmentWorkspace({ tenantSlug }: { tenantSlug: string }) {
   const [closeMinute, setCloseMinute] = useState("0");
   const [savingClose, setSavingClose] = useState(false);
   const [closeDialogOpen, setCloseDialogOpen] = useState(false);
+  const [limitDialog, setLimitDialog] = useState<"transfer" | "bulk" | null>(null);
   const tradeDirectionsQ = useActiveTradeDirectionsCatalog(tenantSlug, "consignment");
   const directionSelected =
     tradeDirectionId.trim() !== "" && Number.parseInt(tradeDirectionId, 10) > 0;
@@ -324,6 +329,14 @@ export function ConsignmentWorkspace({ tenantSlug }: { tenantSlug: string }) {
       return data.data;
     }
   });
+
+  const onLimitsChanged = (message: string) => {
+    setDrafts({});
+    setEditingGroups(new Set());
+    setToast(message);
+    void qc.invalidateQueries({ queryKey: ["consignment"] });
+    void qc.invalidateQueries({ queryKey: ["staff", tenantSlug, "agents"] });
+  };
 
   const supervisorPanelItems = useMemo(
     () => [
@@ -721,6 +734,34 @@ export function ConsignmentWorkspace({ tenantSlug }: { tenantSlug: string }) {
           </Button>
           {!CONSIGNMENT_CONFIG_READONLY ? (
             <>
+          {canTransferLimit ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="gap-1.5"
+              disabled={!directionSelected}
+              title={directionSelected ? "Передать часть лимита между агентами одного супервайзера" : "Сначала выберите направление"}
+              onClick={() => setLimitDialog("transfer")}
+            >
+              <ArrowLeftRight className="size-4" />
+              Перераспределить лимит
+            </Button>
+          ) : null}
+          {canBulkLimit ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="gap-1.5"
+              disabled={!directionSelected}
+              title={directionSelected ? "Лимиты прошлого месяца или % от плана — сразу всем агентам" : "Сначала выберите направление"}
+              onClick={() => setLimitDialog("bulk")}
+            >
+              <Percent className="size-4" />
+              Установить лимиты
+            </Button>
+          ) : null}
           <Button
             type="button"
             variant="outline"
@@ -797,6 +838,30 @@ export function ConsignmentWorkspace({ tenantSlug }: { tenantSlug: string }) {
             закрыть
           </button>
         </p>
+      ) : null}
+
+      {directionSelected ? (
+        <>
+          <ConsignmentLimitTransferDialog
+            open={canTransferLimit && limitDialog === "transfer"}
+            onClose={() => setLimitDialog(null)}
+            tenantSlug={tenantSlug}
+            tradeDirectionId={tradeDirectionId}
+            supervisors={supervisorsQ.data ?? []}
+            initialSupervisor={supervisorSelected.size === 1 ? Array.from(supervisorSelected)[0]! : ""}
+            onDone={onLimitsChanged}
+          />
+          <ConsignmentLimitBulkDialog
+            open={canBulkLimit && limitDialog === "bulk"}
+            onClose={() => setLimitDialog(null)}
+            tenantSlug={tenantSlug}
+            tradeDirectionId={tradeDirectionId}
+            supervisors={supervisorsQ.data ?? []}
+            initialSupervisor={supervisorSelected.size === 1 ? Array.from(supervisorSelected)[0]! : ""}
+            pageMonth={yearMonth}
+            onDone={onLimitsChanged}
+          />
+        </>
       ) : null}
 
       <Dialog
