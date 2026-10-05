@@ -168,7 +168,7 @@ export async function recalcPayrollRecord(
     });
     const hash = createHash("sha256")
       .update(stableInputsJson(loaded.inputs))
-      .update(JSON.stringify({ salaryFormula, formulas, kept, carry, salaryPaid, cur: loaded.base.currency }))
+      .update(JSON.stringify({ salaryFormula, formulas, kept, carry, salaryPaid, cur: loaded.base.currency, items: [...ctx.items.values()] }))
       .digest("hex");
 
     if ((!record || placeholder) && loaded.base.base_full === 0 && res.lines.length === 0 && res.paid_total === 0 && carry === 0) {
@@ -280,6 +280,10 @@ async function handleFrozen(
     }
   });
   await clearDirty(record.id, startedAt);
+  if (res.errors.length) {
+    logger.warn({ tenantId, userId: user.id, year, month, errors: res.errors }, "payroll frozen recheck skipped correction");
+    return { status: "frozen", record_id: record.id, error: res.errors.join("; ") };
+  }
 
   const corrKey = ym(year, month);
   const delta = Math.round((res.gross - frozenGross) * 100) / 100;

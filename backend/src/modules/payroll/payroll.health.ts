@@ -84,7 +84,7 @@ export async function getPayrollHealth(tenantId: number, year: number, month: nu
       level: "warning",
       count: pendingPlans,
       title: "Планы на утверждении",
-      hint: "Планы в статусе «На утверждении» уже учитываются в KPI, но могут измениться.",
+      hint: "Планы в статусе «На утверждении» НЕ учитываются в KPI — до утверждения план сотрудника считается 0.",
       href: "/plans"
     },
     {

@@ -74,8 +74,15 @@ export function normalizeVarName(name: string): string {
   return name.replace(/\s+/g, " ").trim().toLocaleLowerCase("ru");
 }
 
+/**
+ * `;` ishlatilgan formulada (rus Excel) `0,5` — kasr. `;` bo'lmasa, tashqi darajadagi `0,5`
+ * noaniq (kasrmi yoki ЕСЛИ ajratuvchisimi) — jim noto'g'ri summa o'rniga xato.
+ */
 function tokenize(src: string): Tok[] {
   const out: Tok[] = [];
+  const decimalComma = src.includes(";");
+  const numRe = decimalComma ? /^\d+(?:[ \u00a0]\d{3})*(?:[.,]\d+)?/ : /^\d+(?:[ \u00a0]\d{3})*(?:\.\d+)?/;
+  let depth = 0;
   let i = 0;
   while (i < src.length) {
     const ch = src[i]!;
@@ -92,10 +99,13 @@ function tokenize(src: string): Tok[] {
       i = end + 1;
       continue;
     }
-    const num = /^\d+(?:[ \u00a0]\d{3})*(?:\.\d+)?/.exec(src.slice(i));
+    const num = numRe.exec(src.slice(i));
     if (num) {
-      out.push({ t: "num", v: num[0].replace(/[ \u00a0]/g, ""), pos: i });
+      out.push({ t: "num", v: num[0].replace(/[ \u00a0]/g, "").replace(",", "."), pos: i });
       i += num[0].length;
+      if (!decimalComma && depth === 0 && /^,\d/.test(src.slice(i))) {
+        throw new FormulaSyntaxError("Дробь пишите через точку (0.5) или используйте «;» как разделитель", i);
+      }
       continue;
     }
     const two = src.slice(i, i + 2);
@@ -116,11 +126,13 @@ function tokenize(src: string): Tok[] {
     }
     if (ch === "(") {
       out.push({ t: "lp", v: ch, pos: i });
+      depth++;
       i++;
       continue;
     }
     if (ch === ")") {
       out.push({ t: "rp", v: ch, pos: i });
+      depth--;
       i++;
       continue;
     }

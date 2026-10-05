@@ -54,7 +54,8 @@ const ERROR_MAP: Record<string, [number, string]> = {
   FORMULA_IN_USE: [409, "FormulaInUse"],
   NO_RECORDS: [409, "NoRecords"],
   HAS_UNCONFIRMED: [409, "HasUnconfirmedRecords"],
-  QUEUE_DISABLED: [409, "SalaryQueueDisabled"]
+  QUEUE_DISABLED: [409, "SalaryQueueDisabled"],
+  SELF_ACTION: [403, "PayrollSelfAction"]
 };
 
 /** Servis `Error(message)` → API javobi. `true` — javob yuborildi. */

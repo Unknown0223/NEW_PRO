@@ -92,6 +92,7 @@ export async function payPayroll(tenantId: number, actor: AdvanceActor, input: P
     amountUzs = input.amount != null ? r2(input.amount) : Number(rec.balance);
   }
   if (!(amountUzs > 0)) throw new PayrollError("BAD_AMOUNT");
+  if (userId === actor.userId) throw new PayrollError("SELF_ACTION");
   const user = (await loadAdvanceUsers(tenantId, [userId])).get(userId);
   if (!user) throw new PayrollError("BAD_USER");
   await assertDeskAllowed(tenantId, actor, input.cash_desk_id, advance?.branch_snapshot ?? user.branch);

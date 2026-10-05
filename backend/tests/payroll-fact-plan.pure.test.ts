@@ -4,6 +4,7 @@ import {
   allocatePeriodReturns,
   applyOrphanReturns,
   mergeUserFacts,
+  splitReturnEvents,
   type FactLine
 } from "../src/modules/payroll/payroll-kpi-fact.pure";
 import { splitSlotPlan } from "../src/modules/payroll/payroll-slot-plan.pure";
@@ -83,6 +84,27 @@ describe("applyOrphanReturns", () => {
     expect(f.total.cost).toBe(0);
     expect(f.total.count).toBe(0);
     expect(f.returned_sum).toBe(300);
+  });
+});
+
+describe("splitReturnEvents (qaytarish oyiga)", () => {
+  const ev = (delivered: string, qty = 2) => ({
+    order_id: 1,
+    product_id: 1,
+    qty,
+    return_at: new Date("2026-10-10T00:00:00Z"),
+    agent_id: 10,
+    work_slot_id: 100,
+    delivered_at: new Date(delivered),
+    unit_price: 100,
+    volume_unit: 0.5
+  });
+  const from = new Date("2026-10-01T00:00:00Z");
+
+  it("shu oyda yetkazilgan — sof ayirish; oldingi oy — АКБsiz ayirish", () => {
+    const { sameMonth, earlier } = splitReturnEvents([ev("2026-10-03T00:00:00Z"), ev("2026-09-20T00:00:00Z", 3), ev("2026-09-01", 0)], from);
+    expect(sameMonth).toEqual([{ order_id: 1, product_id: 1, qty: 2 }]);
+    expect(earlier).toEqual([{ agent_id: 10, work_slot_id: 100, product_id: 1, qty: 3, unit_price: 100, volume_unit: 0.5 }]);
   });
 });
 

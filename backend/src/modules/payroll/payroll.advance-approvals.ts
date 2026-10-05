@@ -70,6 +70,10 @@ export async function approveAdvances(tenantId: number, actor: AdvanceActor, ids
       skipped.push({ id: a.id, reason: `status:${a.status}` });
       continue;
     }
+    if (a.user_id === actor.userId) {
+      skipped.push({ id: a.id, reason: "self_action" });
+      continue;
+    }
     try {
       await withTransaction(async (tx) => {
         await assertAdvanceWithinLimit(tx, tenantId, { id: a.user_id, role: users.get(a.user_id)?.role ?? "" }, a.year, a.month, Number(a.amount), a.id);

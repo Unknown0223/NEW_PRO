@@ -22,9 +22,10 @@ async function periodClosed(tenantId: number, year: number, month: number) {
   return p?.status === "closed";
 }
 
-async function loadEditable(tenantId: number, recordId: number) {
+async function loadEditable(tenantId: number, recordId: number, actorId: number | null) {
   const r = await prisma.payrollRecord.findFirst({ where: { id: recordId, tenant_id: tenantId } });
   if (!r) throw new PayrollError("NOT_FOUND");
+  if (actorId != null && r.user_id === actorId) throw new PayrollError("SELF_ACTION");
   if (await periodClosed(tenantId, r.year, r.month)) throw new PayrollError("PERIOD_CLOSED");
   if (r.status === "confirmed") throw new PayrollError("RECORD_FROZEN");
   return r;
@@ -37,7 +38,7 @@ export async function setPayrollRecordLine(
   input: { item_id: number; amount: number | null; note?: string | null },
   actorId: number | null
 ) {
-  const r = await loadEditable(tenantId, recordId);
+  const r = await loadEditable(tenantId, recordId, actorId);
   const item = await prisma.payrollItem.findFirst({ where: { id: input.item_id, tenant_id: tenantId } });
   if (!item) throw new PayrollError("BAD_ITEM");
   if (item.system_key) throw new PayrollError("SYSTEM_ITEM");
@@ -92,6 +93,10 @@ export async function changePayrollRecordStatus(
       skipped.push({ id: r.id, reason: `status:${r.status}` });
       continue;
     }
+    if (actorId != null && r.user_id === actorId && action !== "submit") {
+      skipped.push({ id: r.id, reason: "self_action" });
+      continue;
+    }
     if (await periodClosed(tenantId, r.year, r.month)) {
       skipped.push({ id: r.id, reason: "period_closed" });
       continue;
@@ -124,6 +129,13 @@ export async function changePayrollRecordStatus(
         }
       });
     } else if (action === "reopen") {
+      const salaryPaid = await prisma.payrollPayout.count({
+        where: { tenant_id: tenantId, user_id: r.user_id, year: r.year, month: r.month, kind: "salary", status: "paid" }
+      });
+      if (salaryPaid > 0) {
+        skipped.push({ id: r.id, reason: "has_salary_payouts" });
+        continue;
+      }
       const corrKey = ymKey(r.year, r.month);
       const later = await prisma.payrollRecordLine.findMany({
         where: { corr_key: corrKey, record: { tenant_id: tenantId, user_id: r.user_id } },

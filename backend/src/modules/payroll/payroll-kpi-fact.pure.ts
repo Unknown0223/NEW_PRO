@@ -1,7 +1,7 @@
 /**
  * KPI fakt — sof (pure) hisob: yetkazilgan zakaz qatorlari − barcha qaytarishlar (bekor qilinganidan tashqari).
- * Oy yetkazish sanasi bo'yicha; qaytarish asl zakazning oyi va agentiga yoziladi,
- * zakazga taqsimlanmagani — mijozning oxirgi agentiga, qaytarish oyida.
+ * Sotuv — yetkazish oyida; qaytarish — qaytarish oyida, asl zakaz agentiga (yopilgan oy o'zgarmaydi),
+ * zakazga taqsimlanmagani — mijozning oxirgi agentiga.
  */
 
 export type KpiMetrics = { cost: number; count: number; volume: number; acb: number; order_count: number };
@@ -21,7 +21,7 @@ export type FactLine = {
 };
 
 /** Zakaz × mahsulot bo'yicha qaytarilgan (pullik) miqdor. */
-export type ReturnAlloc = { order_id: number; product_id: number; qty: number };
+export type ReturnAlloc = { order_id: number; product_id: number; qty: number; return_id?: number };
 
 export type FactKey = { user_id: number; work_slot_id: number | null };
 
@@ -184,7 +184,7 @@ export function allocatePeriodReturns(
     cands.forEach((c, i) => {
       const share = i === cands.length - 1 ? left : Math.round(((toAlloc * c.qty) / totalQty) * 1000) / 1000;
       const q = Math.min(share, left);
-      if (q > 0) allocs.push({ order_id: c.order_id, product_id: c.product_id, qty: q });
+      if (q > 0) allocs.push({ order_id: c.order_id, product_id: c.product_id, qty: q, return_id: rl.return_id });
       left -= q;
     });
     if (rl.qty > totalQty) {
@@ -231,6 +231,47 @@ export function applyOrphanReturns(
     returned += cost;
   }
   return { ...fact, total, byGroup, returned_sum: r2(returned) };
+}
+
+/** Oy ichida bo'lgan qaytarish hodisasi (asl zakaz qatori ma'lumoti bilan). */
+export type ReturnEvent = {
+  order_id: number;
+  product_id: number;
+  qty: number;
+  return_at: Date;
+  agent_id: number | null;
+  work_slot_id: number | null;
+  delivered_at: Date;
+  unit_price: number;
+  volume_unit: number;
+};
+
+/**
+ * Qaytarish qaytarish oyiga yoziladi: asl zakaz shu oyda yetkazilgan bo'lsa — sof ayirish (АКБ ham),
+ * oldinroq yetkazilgan bo'lsa — faqat summa/dona/hajm ayiriladi (АКБ va zakazlar soni o'zgarmaydi).
+ */
+export function splitReturnEvents(
+  events: ReturnEvent[],
+  monthFrom: Date
+): { sameMonth: ReturnAlloc[]; earlier: OrphanReturn[] } {
+  const sameMonth: ReturnAlloc[] = [];
+  const earlier: OrphanReturn[] = [];
+  for (const e of events) {
+    if (e.qty <= 0) continue;
+    if (e.delivered_at.getTime() >= monthFrom.getTime()) {
+      sameMonth.push({ order_id: e.order_id, product_id: e.product_id, qty: e.qty });
+    } else if (e.agent_id != null) {
+      earlier.push({
+        agent_id: e.agent_id,
+        work_slot_id: e.work_slot_id,
+        product_id: e.product_id,
+        qty: e.qty,
+        unit_price: e.unit_price,
+        volume_unit: e.volume_unit
+      });
+    }
+  }
+  return { sameMonth, earlier };
 }
 
 export function sumMetrics(list: KpiMetrics[]): KpiMetrics {

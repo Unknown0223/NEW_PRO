@@ -93,6 +93,7 @@ const ERROR_RU: Record<string, string> = {
   HasUnconfirmedRecords: "Есть неподтверждённые зарплаты",
   SalaryQueueDisabled: "Выдача зарплаты через очередь выключена",
   NoRecords: "Нет записей",
+  PayrollSelfAction: "Нельзя утверждать, править или выплачивать собственную зарплату/аванс",
   PayrollManagedExpense: "Зарплата и аванс оформляются в разделе «Зарплата»",
   PayrollExpenseReadonly: "Запись создана выплатой — изменяется только в разделе «Зарплата»",
   ValidationError: "Проверьте заполнение полей"

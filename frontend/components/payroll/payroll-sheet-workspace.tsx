@@ -41,6 +41,13 @@ type FilterOptions = { roles: string[]; branches: string[]; positions: string[];
 const EMPTY_FILTERS: Filters = { role: "", branches: [], status: "", direction: "", position: "" };
 
 const ACTION_LABEL: Record<StatusAction, string> = { submit: "На проверку", confirm: "Подтвердить", reject: "Отклонить", reopen: "Вернуть в черновик" };
+const SKIP_REASON: Record<string, string> = {
+  has_salary_payouts: "есть выплата зарплаты — сначала сторнируйте",
+  correction_frozen: "корректировка уже в закрытом месяце",
+  period_closed: "месяц закрыт",
+  calc_error: "ошибка расчёта",
+  self_action: "нельзя для своей записи"
+};
 const COLUMN_IDS = SHEET_COLUMNS.map((c) => c.id);
 const ALL_GROUPS: SheetGroup[] = ["allowances", "deductions", "payments"];
 
@@ -123,9 +130,10 @@ export function PayrollSheetWorkspace() {
 
   const changeStatus = useMutation({
     mutationFn: (p: { action: StatusAction; reason?: string }) =>
-      api.send<{ changed: number; skipped: unknown[] }>("POST", `/records/${p.action}`, { ids: sel.list, reason: p.reason ?? null }),
+      api.send<{ changed: number; skipped: Array<{ reason: string }> }>("POST", `/records/${p.action}`, { ids: sel.list, reason: p.reason ?? null }),
     onSuccess: (r, p) => {
-      notice.ok(`${ACTION_LABEL[p.action]}: ${r?.changed ?? 0}${r?.skipped?.length ? `, пропущено ${r.skipped.length}` : ""}`);
+      const why = [...new Set((r?.skipped ?? []).map((s) => SKIP_REASON[s.reason] ?? (s.reason.startsWith("status:") ? "неподходящий статус" : s.reason)))].join("; ");
+      notice.ok(`${ACTION_LABEL[p.action]}: ${r?.changed ?? 0}${r?.skipped?.length ? `, пропущено ${r.skipped.length} (${why})` : ""}`);
       sel.clear();
       refresh();
     },

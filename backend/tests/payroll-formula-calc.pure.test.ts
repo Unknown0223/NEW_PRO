@@ -42,6 +42,14 @@ describe("payroll formula engine", () => {
     expect(ev("MIN(5, 2, 9) + МАКС(1, 7)")).toBe(9);
   });
 
+  it("vergul-kasr: `;` bo'lsa kasr, bo'lmasa tashqi darajada xato", () => {
+    expect(ev("ЕСЛИ([A] > 0,5; [A] * 1,5; 0)", { A: 2 })).toBe(3);
+    expect(ev("MIN(1,5)")).toBe(1);
+    expect(() => parseFormula("[A] * 0,5")).toThrow(/через точку/);
+    expect(ev("[A] * 0.5", { A: 4 })).toBe(2);
+    expect(ev("[A] > 5, 100, 0", { A: 6 })).toBe(100);
+  });
+
   it("nolga bo'lish 0 va ogohlantirish", () => {
     const r = evaluateFormula(parseFormula("[A] / [B]"), vars({ A: 5, B: 0 }));
     expect(r.value).toBe(0);

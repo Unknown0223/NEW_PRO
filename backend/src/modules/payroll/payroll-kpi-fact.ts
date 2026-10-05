@@ -1,25 +1,20 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "../../config/database";
 import {
-  aggregateKpiFact,
   allocatePeriodReturns,
-  applyOrphanReturns,
-  mergeUserFacts,
-  ZERO_METRICS,
   type FactLine,
   type KpiMetrics,
   type OrphanReturn,
   type PeriodCandidate,
-  type ReturnAlloc,
-  type UserFact
+  type ReturnAlloc
 } from "./payroll-kpi-fact.pure";
 
 export type DatedFactLine = FactLine & { delivered_at: Date; created_at: Date; fully_returned: boolean };
 type Range = { from: Date; to: Date };
 
-type LineFilter = { agentIds?: number[]; expeditorIds?: number[]; slotIds?: number[]; clientIds?: number[] };
+export type LineFilter = { agentIds?: number[]; expeditorIds?: number[]; slotIds?: number[]; clientIds?: number[] };
 
-function filterSql(f: LineFilter): Prisma.Sql {
+export function filterSql(f: LineFilter): Prisma.Sql {
   const parts: Prisma.Sql[] = [];
   if (f.agentIds?.length) parts.push(Prisma.sql`o.agent_id = ANY(${f.agentIds}::int[])`);
   if (f.expeditorIds?.length) parts.push(Prisma.sql`o.expeditor_user_id = ANY(${f.expeditorIds}::int[])`);
@@ -96,13 +91,19 @@ export async function loadProductGroups(tenantId: number): Promise<Map<number, n
 }
 
 const DAY_MS = 86_400_000;
-const PAID_QTY = Prisma.sql`SUM(COALESCE(srl.paid_qty, srl.qty - COALESCE(srl.bonus_qty, 0)))`;
+export const PAID_QTY = Prisma.sql`SUM(COALESCE(srl.paid_qty, srl.qty - COALESCE(srl.bonus_qty, 0)))`;
 
 type PeriodRow = { return_id: number; client_id: number; date_from: Date; date_to: Date; product_id: number; qty: number };
 
 /** Davr qaytarishlarini mijozning shu oraliqda yetkazilgan (to'liq qaytarilmagan) zakazlariga taqsimlash. */
-async function allocatePeriodRows(tenantId: number, rows: PeriodRow[]) {
-  if (!rows.length) return { allocs: [] as ReturnAlloc[], unallocated: [] as Array<{ return_id: number; product_id: number; qty: number }> };
+export async function allocatePeriodRows(tenantId: number, rows: PeriodRow[]) {
+  if (!rows.length) {
+    return {
+      allocs: [] as ReturnAlloc[],
+      unallocated: [] as Array<{ return_id: number; product_id: number; qty: number }>,
+      candLines: [] as DatedFactLine[]
+    };
+  }
   const minFrom = new Date(Math.min(...rows.map((r) => r.date_from.getTime())));
   const maxTo = new Date(Math.max(...rows.map((r) => r.date_to.getTime())) + DAY_MS);
   const candLines = (
@@ -124,49 +125,7 @@ async function allocatePeriodRows(tenantId: number, rows: PeriodRow[]) {
         .map((c) => ({ order_id: c.order_id, client_id: c.client_id, product_id: c.product_id, qty: c.qty }))
     );
   }
-  return allocatePeriodReturns(rows, candidatesByReturn);
-}
-
-/**
- * Zakaz qatorlariga tushadigan qaytarishlar (bekor qilinganidan tashqari hammasi):
- * to'liq qaytarilgan zakaz (status `returned`), zakazga bog'langan va davr qaytarishlari.
- */
-export async function loadReturnAllocs(
-  tenantId: number,
-  range: Range,
-  lines: DatedFactLine[]
-): Promise<{ allocs: ReturnAlloc[] }> {
-  const orderIds = [...new Set(lines.map((l) => l.order_id))];
-  const allocs: ReturnAlloc[] = lines
-    .filter((l) => l.fully_returned)
-    .map((l) => ({ order_id: l.order_id, product_id: l.product_id, qty: l.qty }));
-  if (orderIds.length) {
-    const rows = await prisma.$queryRaw<Array<{ order_id: number; product_id: number; qty: Prisma.Decimal }>>`
-      SELECT sr.order_id, srl.product_id, ${PAID_QTY} AS qty
-      FROM sales_returns sr
-      JOIN sales_return_lines srl ON srl.return_id = sr.id
-      WHERE sr.tenant_id = ${tenantId} AND sr.status <> 'cancelled' AND sr.order_id = ANY(${orderIds}::int[])
-      GROUP BY sr.order_id, srl.product_id`;
-    for (const r of rows) allocs.push({ order_id: r.order_id, product_id: r.product_id, qty: Number(r.qty) });
-  }
-
-  const clientIds = [...new Set(lines.map((l) => l.client_id))];
-  if (!clientIds.length) return { allocs };
-  const periodRows = await prisma.$queryRaw<
-    Array<{ return_id: number; client_id: number; date_from: Date; date_to: Date; product_id: number; qty: Prisma.Decimal }>
-  >`
-    SELECT sr.id AS return_id, sr.client_id, sr.date_from, sr.date_to, srl.product_id, ${PAID_QTY} AS qty
-    FROM sales_returns sr
-    JOIN sales_return_lines srl ON srl.return_id = sr.id
-    WHERE sr.tenant_id = ${tenantId} AND sr.status <> 'cancelled' AND sr.order_id IS NULL
-      AND sr.client_id = ANY(${clientIds}::int[])
-      AND sr.date_from IS NOT NULL AND sr.date_to IS NOT NULL
-      AND sr.date_from < ${range.to} AND sr.date_to >= ${range.from}
-    GROUP BY sr.id, sr.client_id, sr.date_from, sr.date_to, srl.product_id`;
-  const res = await allocatePeriodRows(tenantId, periodRows.map((r) => ({ ...r, qty: Number(r.qty) })));
-  const inMonth = new Set(orderIds);
-  allocs.push(...res.allocs.filter((a) => inMonth.has(a.order_id)));
-  return { allocs };
+  return { ...allocatePeriodReturns(rows, candidatesByReturn), candLines };
 }
 
 /**
@@ -252,146 +211,6 @@ export async function loadOrphanReturns(tenantId: number, range: Range, agentIds
       }
     ];
   });
-}
-
-/** Oflayn zakazlarda `work_slot_id` yo'q bo'lsa — zakaz paytidagi o'rin oralig'i. */
-async function fillMissingSlots(tenantId: number, lines: DatedFactLine[]): Promise<void> {
-  const need = lines.filter((l) => l.work_slot_id == null && l.agent_id != null);
-  if (!need.length) return;
-  const agentIds = [...new Set(need.map((l) => l.agent_id!))];
-  const links = await prisma.slotUserLink.findMany({
-    where: { tenant_id: tenantId, user_id: { in: agentIds } },
-    select: { user_id: true, slot_id: true, started_at: true, ended_at: true }
-  });
-  for (const l of need) {
-    const t = l.created_at.getTime();
-    const hit = links.find(
-      (k) => k.user_id === l.agent_id && k.started_at.getTime() <= t && (!k.ended_at || k.ended_at.getTime() > t)
-    );
-    if (hit) l.work_slot_id = hit.slot_id;
-  }
-}
-
-export type ExpeditorFact = { delivered_count: number; delivered_sum: number; delivered_volume: number; clients: number };
-
-export type UserMonthFact = {
-  agent: UserFact;
-  bySlot: Map<number, UserFact>;
-  expeditor: ExpeditorFact;
-  team: UserFact | null;
-  diagnostics: { unallocated_returns: number; multi_group_products: number };
-};
-
-function emptyFact(userId: number): UserFact {
-  return { user_id: userId, work_slot_id: null, byGroup: new Map(), total: { ...ZERO_METRICS }, returned_sum: 0 };
-}
-
-async function teamLines(
-  tenantId: number,
-  userId: number,
-  range: Range
-): Promise<DatedFactLine[]> {
-  const links = await prisma.slotUserLink.findMany({
-    where: {
-      tenant_id: tenantId,
-      user_id: userId,
-      started_at: { lt: range.to },
-      OR: [{ ended_at: null }, { ended_at: { gt: range.from } }]
-    },
-    select: { started_at: true, ended_at: true, slot: { select: { supervisee_agent_slot_ids: true } } }
-  });
-  const windows = links
-    .filter((l) => l.slot.supervisee_agent_slot_ids.length > 0)
-    .map((l) => ({
-      from: Math.max(l.started_at.getTime(), range.from.getTime()),
-      to: Math.min(l.ended_at?.getTime() ?? range.to.getTime(), range.to.getTime()),
-      slots: new Set(l.slot.supervisee_agent_slot_ids)
-    }));
-  if (windows.length) {
-    const slotIds = [...new Set(windows.flatMap((w) => [...w.slots]))];
-    const lines = await loadDeliveredLines(tenantId, range, { slotIds });
-    return lines.filter((l) =>
-      windows.some(
-        (w) =>
-          l.work_slot_id != null && w.slots.has(l.work_slot_id) &&
-          l.delivered_at.getTime() >= w.from && l.delivered_at.getTime() < w.to
-      )
-    );
-  }
-  const agents = await prisma.user.findMany({
-    where: { tenant_id: tenantId, supervisor_user_id: userId, role: "agent" },
-    select: { id: true }
-  });
-  if (!agents.length) return [];
-  return loadDeliveredLines(tenantId, range, { agentIds: agents.map((a) => a.id) });
-}
-
-/** Bitta xodimning oy fakti: agent (o'rinlar bo'yicha ham), ekspeditor va supervayzer jamoasi. */
-export async function computeUserMonthFact(
-  tenantId: number,
-  userId: number,
-  role: string,
-  range: Range,
-  productGroups?: Map<number, number[]>
-): Promise<UserMonthFact> {
-  const groups = productGroups ?? (await loadProductGroups(tenantId));
-  const multiGroup = [...groups.values()].filter((g) => g.length > 1).length;
-
-  const agentLines = await loadDeliveredLines(tenantId, range, { agentIds: [userId] });
-  await fillMissingSlots(tenantId, agentLines);
-  const ret = await loadReturnAllocs(tenantId, range, agentLines);
-  const orphans = await loadOrphanReturns(tenantId, range, [userId]);
-  const agent = applyOrphanReturns(
-    agentLines.length ? mergeUserFacts(agentLines, ret.allocs, groups, userId) : emptyFact(userId),
-    orphans,
-    groups
-  );
-  const bySlot = new Map<number, UserFact>();
-  for (const f of aggregateKpiFact(agentLines, ret.allocs, groups).values()) {
-    if (f.user_id !== userId || f.work_slot_id == null) continue;
-    const slotId = f.work_slot_id;
-    bySlot.set(slotId, applyOrphanReturns(f, orphans.filter((o) => o.work_slot_id === slotId), groups));
-  }
-
-  const expeditor: ExpeditorFact = { delivered_count: 0, delivered_sum: 0, delivered_volume: 0, clients: 0 };
-  if (role === "expeditor") {
-    const ex = (await loadDeliveredLines(tenantId, range, { expeditorIds: [userId] })).filter((l) => !l.fully_returned);
-    const orders = new Set<number>();
-    const clients = new Set<number>();
-    for (const l of ex) {
-      orders.add(l.order_id);
-      clients.add(l.client_id);
-      expeditor.delivered_sum += l.total;
-      expeditor.delivered_volume += l.qty * l.volume_unit;
-    }
-    expeditor.delivered_count = orders.size;
-    expeditor.clients = clients.size;
-    expeditor.delivered_sum = Math.round(expeditor.delivered_sum * 100) / 100;
-    expeditor.delivered_volume = Math.round(expeditor.delivered_volume * 100) / 100;
-  }
-
-  let team: UserFact | null = null;
-  let teamOrphans = 0;
-  if (role === "supervisor") {
-    const tl = await teamLines(tenantId, userId, range);
-    const tr = await loadReturnAllocs(tenantId, range, tl);
-    const teamAgents = [...new Set(tl.map((l) => l.agent_id).filter((x): x is number => x != null))];
-    const to = await loadOrphanReturns(tenantId, range, teamAgents);
-    teamOrphans = to.length;
-    team = applyOrphanReturns(
-      mergeUserFacts(tl.map((l) => ({ ...l, agent_id: userId })), tr.allocs, groups, userId),
-      to,
-      groups
-    );
-  }
-
-  return {
-    agent,
-    bySlot,
-    expeditor,
-    team,
-    diagnostics: { unallocated_returns: orphans.length + teamOrphans, multi_group_products: multiGroup }
-  };
 }
 
 export type { KpiMetrics };

@@ -7,7 +7,7 @@ import { defaultTimesheetDay, employmentYmd, visitDayKeys } from "../timesheet/t
 import { parseTimesheetState } from "../timesheet/timesheet.service";
 import { applyAgentNormForUser, loadAgentNormContext } from "../timesheet/timesheet.agent-norm";
 import type { NormDay } from "../timesheet/timesheet.agent-norm.pure";
-import { computeUserMonthFact } from "./payroll-kpi-fact";
+import { computeUserMonthFact } from "./payroll-kpi-month";
 import { computeUserMonthPlan } from "./payroll-slot-plan";
 import { computeTeamMonthPlan } from "./payroll-team-plan";
 import { parseItemAmounts } from "./payroll.item-amounts.pure";
@@ -161,7 +161,7 @@ export type LoadedPayrollInputs = {
   inputs: PayrollCalcInputs;
   base: BaseSalaryInfo;
   attendance: AttendanceSummary;
-  plan_meta: { slots: unknown[]; warnings: string[]; pending_plans: number };
+  plan_meta: { slots: unknown[]; warnings: string[]; pending_plans: number; team_coverage: number | null };
   fact_meta: { unallocated_returns: number; multi_group_products: number; slot_ids: number[] };
 };
 
@@ -214,7 +214,7 @@ export async function loadPayrollInputs(
     inputs,
     base,
     attendance,
-    plan_meta: { slots: plan.slots, warnings: plan.warnings, pending_plans: plan.pending_plans },
+    plan_meta: { slots: plan.slots, warnings: plan.warnings, pending_plans: plan.pending_plans, team_coverage: teamPlan?.coverage ?? null },
     fact_meta: { ...fact.diagnostics, slot_ids: [...fact.bySlot.keys()] }
   };
 }
