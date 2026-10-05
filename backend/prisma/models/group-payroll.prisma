@@ -159,6 +159,8 @@ model PayrollRecord {
   employment_from    DateTime?
   employment_to      DateTime?
   calc_snapshot      Json                @default("{}")
+  /// Qo'llangan hisob sxemasi (null — eski rol/formula yo'li).
+  scheme_id          Int?
   inputs_hash        String?             @db.VarChar(64)
   frozen_inputs_hash String?             @db.VarChar(64)
   frozen_snapshot    Json?
@@ -190,6 +192,8 @@ model PayrollRecordLine {
   /// "" oddiy qator; "YYYY-MM" — shu oy uchun tuzatish qatori
   corr_key             String        @default("") @db.VarChar(16)
   formula_snapshot     String?
+  /// Qanday hisoblangani: { text, parts[] } — UI'da qator izohi.
+  explain              Json?
   is_manual_override   Boolean       @default(false)
   correction_for_year  Int?
   correction_for_month Int?

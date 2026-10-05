@@ -5,7 +5,13 @@ import { logger } from "../../config/logger";
 import { withTransaction } from "../../lib/db-context";
 import { tenantMonthRangeUtc } from "../../lib/workday-calendar";
 import { computePayroll, type CalcLine, type CalcResult, type KeptLine } from "./payroll.calc.pure";
-import { loadPayrollCalcContext, loadPayrollUser, resolveUserFormulas, type PayrollCalcContext } from "./payroll.calc-context";
+import {
+  loadPayrollCalcContext,
+  loadPayrollUser,
+  resolveUserFormulas,
+  resolveUserScheme,
+  type PayrollCalcContext
+} from "./payroll.calc-context";
 import { nextYm, prevYm } from "./payroll.dirty";
 import { loadPayrollInputs, stableInputsJson, type LoadedPayrollInputs, type PayrollUserSnapshot } from "./payroll.inputs";
 import { notifyPermissionHolders } from "./payroll.notify";
@@ -60,6 +66,7 @@ function buildSnapshot(loaded: LoadedPayrollInputs, res: CalcResult, trigger: st
     plan_meta: loaded.plan_meta,
     fact_meta: loaded.fact_meta,
     formula_values: res.formula_values,
+    base_explain: res.base_explain,
     warnings: [...res.warnings, ...loaded.plan_meta.warnings],
     salary_paid: res.salary_paid
   };
@@ -78,7 +85,8 @@ async function writeLines(tx: Prisma.TransactionClient, recordId: number, lines:
       is_manual_override: l.is_manual_override,
       correction_for_year: l.correction_for_year,
       correction_for_month: l.correction_for_month,
-      note: l.note
+      note: l.note,
+      explain: l.explain ? (l.explain as Prisma.InputJsonValue) : Prisma.DbNull
     };
     await tx.payrollRecordLine.upsert({
       where: { record_id_item_id_corr_key: { record_id: recordId, item_id: l.item_id, corr_key: l.corr_key } },
@@ -139,7 +147,10 @@ export async function recalcPayrollRecord(
 
   try {
     const loaded = await loadPayrollInputs(tenantId, user, year, month, ctx.env, ctx.productGroups);
-    const { salaryFormula, formulas } = await resolveUserFormulas(ctx, user, year, month);
+    const schemeHit = await resolveUserScheme(ctx, user, year, month);
+    const { salaryFormula, formulas } = schemeHit
+      ? { salaryFormula: null, formulas: [] }
+      : await resolveUserFormulas(ctx, user, year, month);
     const [carry, salaryPaid] = await Promise.all([
       carryFromPrev(tenantId, userId, year, month),
       sumSalaryPaid(tenantId, userId, year, month)
@@ -164,11 +175,18 @@ export async function recalcPayrollRecord(
       kept,
       systemIds: ctx.systemIds,
       carryAmount: carry,
-      salaryPaid
+      salaryPaid,
+      scheme: schemeHit?.scheme ?? null
     });
+    if (schemeHit?.errors.length) res.errors.unshift(...schemeHit.errors);
+    const schemeKey = schemeHit
+      ? { id: schemeHit.scheme.scheme_id, rules: schemeHit.scheme.rules, attrs: schemeHit.scheme.attrs, ov: [...schemeHit.scheme.overrides] }
+      : null;
     const hash = createHash("sha256")
       .update(stableInputsJson(loaded.inputs))
-      .update(JSON.stringify({ salaryFormula, formulas, kept, carry, salaryPaid, cur: loaded.base.currency, items: [...ctx.items.values()] }))
+      .update(
+        JSON.stringify({ salaryFormula, formulas, kept, carry, salaryPaid, cur: loaded.base.currency, items: [...ctx.items.values()], schemeKey })
+      )
       .digest("hex");
 
     if ((!record || placeholder) && loaded.base.base_full === 0 && res.lines.length === 0 && res.paid_total === 0 && carry === 0) {
@@ -204,6 +222,7 @@ export async function recalcPayrollRecord(
       employment_from: user.hired_at,
       employment_to: user.dismissed_at,
       calc_snapshot: snapshot as Prisma.InputJsonValue,
+      scheme_id: schemeHit?.scheme.scheme_id ?? null,
       inputs_hash: hash,
       calculated_at: new Date(),
       calc_error: res.errors.length ? res.errors.join("; ").slice(0, 1000) : null

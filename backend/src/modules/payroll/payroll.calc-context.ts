@@ -1,5 +1,9 @@
 import { prisma } from "../../config/database";
 import type { CalcFormula, CalcItem } from "./payroll.calc.pure";
+import type { SchemeCalcInput } from "./payroll.calc-scheme.pure";
+import { activeOverrides, pickScheme, type SchemeSelector } from "./payroll.scheme-select.pure";
+import { tenureMonths } from "./payroll.scheme.pure";
+import { parseSchemeRule, ymInt, type SchemeRule } from "./payroll.scheme.types";
 import { getSystemItemIds } from "./payroll.settings";
 import { loadTenantPayrollEnv, type PayrollUserSnapshot, type TenantPayrollEnv } from "./payroll.inputs";
 import { loadProductGroups } from "./payroll-kpi-fact";
@@ -21,10 +25,31 @@ export type PayrollCalcContext = {
   formulas: FormulaRow[];
   formulaById: Map<number, FormulaRow>;
   productGroups: Map<number, number[]>;
+  schemes: LoadedScheme[];
+  groupNames: Map<number, string>;
 };
 
+export type LoadedScheme = SchemeSelector & { name: string; rules: SchemeRule[]; errors: string[] };
+
+async function loadSchemes(tenantId: number): Promise<LoadedScheme[]> {
+  const rows = await prisma.payrollScheme.findMany({
+    where: { tenant_id: tenantId, is_active: true },
+    include: { rules: { orderBy: [{ sort: "asc" }, { id: "asc" }] } }
+  });
+  return rows.map((s) => {
+    const rules: SchemeRule[] = [];
+    const errors: string[] = [];
+    for (const r of s.rules) {
+      const p = parseSchemeRule(r);
+      if ("error" in p) errors.push(p.error);
+      else rules.push(p);
+    }
+    return { ...s, rules, errors };
+  });
+}
+
 export async function loadPayrollCalcContext(tenantId: number): Promise<PayrollCalcContext> {
-  const [env, itemRows, systemIds, formulas, productGroups] = await Promise.all([
+  const [env, itemRows, systemIds, formulas, productGroups, schemes, groups] = await Promise.all([
     loadTenantPayrollEnv(tenantId),
     prisma.payrollItem.findMany({
       where: { tenant_id: tenantId },
@@ -35,7 +60,9 @@ export async function loadPayrollCalcContext(tenantId: number): Promise<PayrollC
       where: { tenant_id: tenantId, is_active: true },
       select: { id: true, scope: true, text: true, role: true, target_item_id: true, priority: true }
     }),
-    loadProductGroups(tenantId)
+    loadProductGroups(tenantId),
+    loadSchemes(tenantId),
+    prisma.kpiGroup.findMany({ where: { tenant_id: tenantId }, select: { id: true, name: true } })
   ]);
   const items = new Map<number, CalcItem>();
   for (const r of itemRows) {
@@ -54,7 +81,40 @@ export async function loadPayrollCalcContext(tenantId: number): Promise<PayrollC
     systemIds,
     formulas,
     formulaById: new Map(formulas.map((f) => [f.id, f])),
-    productGroups
+    productGroups,
+    schemes,
+    groupNames: new Map(groups.map((g) => [g.id, g.name]))
+  };
+}
+
+/** Xodimga mos sxema (bo'lmasa null — eski rol/formula yo'li). Sxemada xato bo'lsa — `errors`. */
+export async function resolveUserScheme(
+  ctx: PayrollCalcContext,
+  user: PayrollUserSnapshot,
+  year: number,
+  month: number
+): Promise<{ scheme: SchemeCalcInput; errors: string[] } | null> {
+  const ym = ymInt(year, month);
+  const s = pickScheme(ctx.schemes, user, ym);
+  if (!s) return null;
+  const rows = await prisma.payrollSchemeOverride.findMany({
+    where: { tenant_id: ctx.tenantId, user_id: user.id },
+    select: { rule_code: true, amount: true, valid_from: true, valid_to: true }
+  });
+  return {
+    scheme: {
+      scheme_id: s.id,
+      rules: s.rules,
+      attrs: {
+        branch: user.branch,
+        trade_direction_id: user.trade_direction_id,
+        position: user.position,
+        tenure_months: tenureMonths(user.hired_at, year, month)
+      },
+      overrides: activeOverrides(rows.map((r) => ({ ...r, amount: Number(r.amount) })), ym),
+      groupNames: ctx.groupNames
+    },
+    errors: s.errors
   };
 }
 

@@ -1,5 +1,7 @@
+import { applySchemeRules, type SchemeCalcInput } from "./payroll.calc-scheme.pure";
 import { evaluateFormula, parseFormula } from "./payroll.formula-engine";
 import { buildFormulaVars, type PayrollCalcInputs } from "./payroll.formula-vars";
+import type { Explain } from "./payroll.scheme.types";
 
 export type CalcItem = {
   id: number;
@@ -40,10 +42,12 @@ export type CalcLine = {
   correction_for_year: number | null;
   correction_for_month: number | null;
   note: string | null;
+  explain?: Explain | null;
 };
 
 export type CalcResult = {
   base_salary: number;
+  base_explain: Explain | null;
   lines: CalcLine[];
   allowances_total: number;
   deductions_total: number;
@@ -73,6 +77,8 @@ export function computePayroll(input: {
   systemIds: { advance: number; correction: number; carry: number };
   carryAmount: number;
   salaryPaid: number;
+  /** Berilsa — rol konfiguratsiyasi va formulalar o'rniga sxema qoidalari. */
+  scheme?: SchemeCalcInput | null;
 }): CalcResult {
   const { inputs, items, systemIds } = input;
   const warnings = new Set<string>();
@@ -106,8 +112,27 @@ export function computePayroll(input: {
     bumpItem(k.item_id, k.amount);
   }
 
+  let baseSalary = inputs.base_salary;
+  let baseExplain: Explain | null = null;
+  if (input.scheme) {
+    const s = applySchemeRules(input.scheme, {
+      inputs,
+      items,
+      lines,
+      itemValues,
+      bumpItem,
+      overrideItems,
+      warnings,
+      errors,
+      formulaValues,
+      totals: () => runningTotals(lines, items, systemIds.advance)
+    });
+    baseSalary = s.base_salary;
+    baseExplain = s.base_explain;
+  }
+
   const formulaTargets = new Set(input.formulas.map((f) => f.target_item_id));
-  for (const [itemId, amount] of inputs.item_parts ?? []) {
+  for (const [itemId, amount] of input.scheme ? [] : inputs.item_parts ?? []) {
     const it = items.get(itemId);
     if (!it || it.system_key || it.type !== "allowance" || it.calc_type === "formula" || formulaTargets.has(itemId)) continue;
     if (lines.has(keyOf(itemId, "")) || !amount) continue;
@@ -125,8 +150,7 @@ export function computePayroll(input: {
     bumpItem(itemId, amount);
   }
 
-  let baseSalary = inputs.base_salary;
-  if (input.salaryFormula) {
+  if (input.salaryFormula && !input.scheme) {
     try {
       const vars = buildFormulaVars(inputs, null, itemValues, { allowances: 0, deductions: 0 }, items);
       const res = evaluateFormula(parseFormula(input.salaryFormula), vars);
@@ -138,7 +162,7 @@ export function computePayroll(input: {
   }
   const baseInputs: PayrollCalcInputs = { ...inputs, base_salary: baseSalary };
 
-  const sorted = [...input.formulas].sort((a, b) => a.priority - b.priority || a.ref.localeCompare(b.ref));
+  const sorted = [...(input.scheme ? [] : input.formulas)].sort((a, b) => a.priority - b.priority || a.ref.localeCompare(b.ref));
   const computedByItem = new Map<number, { amount: number; snapshots: string[] }>();
   for (const f of sorted) {
     const item = items.get(f.target_item_id);
@@ -209,7 +233,8 @@ export function computePayroll(input: {
   if (gross < 0) warnings.add("negative_gross");
   return {
     base_salary: r2(baseSalary),
-    lines: [...lines.values()].filter((l) => l.amount !== 0 || l.is_manual_override || l.corr_key !== ""),
+    base_explain: baseExplain,
+    lines: [...lines.values()].filter((l) => l.amount !== 0 || l.is_manual_override || l.corr_key !== "" || (l.source === "scheme" && l.explain?.text)),
     allowances_total: totals.allowances,
     deductions_total: totals.deductions,
     advances_total: r2(inputs.advances_paid),
