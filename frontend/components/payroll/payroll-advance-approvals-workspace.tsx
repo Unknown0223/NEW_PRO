@@ -5,7 +5,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, X } from "lucide-react";
 import { PageShell } from "@/components/dashboard/page-shell";
 import { Button } from "@/components/ui/button";
-import { useAppConfirm } from "@/components/ui/app-confirm-dialog";
+import { usePayrollConfirm } from "@/components/payroll/kit/payroll-kit-modal";
 import { useUserTablePrefs } from "@/hooks/use-user-table-prefs";
 import { usePermissions } from "@/lib/use-permissions";
 import { useTenant } from "@/lib/api-client";
@@ -70,7 +70,7 @@ export function PayrollAdvanceApprovalsWorkspace() {
   const perms = usePermissions();
   const canApprove = perms.isAdmin || perms.has("finance.avans.approve");
   const notice = useNotice();
-  const { confirm, dialog } = useAppConfirm();
+  const { confirm, dialog } = usePayrollConfirm();
   const sel = useSelection<number>();
   const [tab, setTab] = useState<Tab>("sent");
   const [ym, setYm] = useState<Ym | null>(null);

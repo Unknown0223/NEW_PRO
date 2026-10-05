@@ -5,7 +5,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, ArrowDownToLine, Banknote } from "lucide-react";
 import { PageShell } from "@/components/dashboard/page-shell";
 import { Button } from "@/components/ui/button";
-import { useAppConfirm } from "@/components/ui/app-confirm-dialog";
+import { usePayrollConfirm } from "@/components/payroll/kit/payroll-kit-modal";
 import { useUserTablePrefs } from "@/hooks/use-user-table-prefs";
 import { usePermissions } from "@/lib/use-permissions";
 import { useTenant } from "@/lib/api-client";
@@ -46,7 +46,7 @@ export function PayrollCashierQueueWorkspace() {
   const canPay = perms.isAdmin || perms.has("cash.vydacha_zarplaty.create");
   const canHistory = perms.isAdmin || perms.hasAny("cash.vydacha_zarplaty.history", "cash.vydacha_zarplaty.view");
   const notice = useNotice();
-  const { confirm, dialog } = useAppConfirm();
+  const { confirm, dialog } = usePayrollConfirm();
   const [tab, setTab] = useState<Tab>("queue");
   const [draft, setDraft] = useState<Filters>({ kind: "", branch: "" });
   const [filters, setFilters] = useState<Filters>({ kind: "", branch: "" });

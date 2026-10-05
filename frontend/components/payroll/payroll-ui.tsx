@@ -2,27 +2,12 @@
 
 import { useCallback, useState, type ReactNode } from "react";
 import { AlertTriangle, CheckCircle2, X } from "lucide-react";
-import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
-import { inputToYm, payrollErrorText, STATUS_TONE, ymToInput, type StatusStyle, type Ym } from "@/lib/payroll/payroll-api";
+import { payrollErrorText, STATUS_TONE, type StatusStyle } from "@/lib/payroll/payroll-api";
 
 export const FIELD_LABEL = "text-[11px] font-semibold uppercase tracking-wider text-muted-foreground";
 export const NATIVE_SELECT = "h-9 w-full rounded-md border border-input bg-background px-2 text-sm";
 export const selectCls = (extra: string) => cn(NATIVE_SELECT, extra);
-
-export function MonthField({ value, onChange, className }: { value: Ym; onChange: (v: Ym) => void; className?: string }) {
-  return (
-    <Input
-      type="month"
-      value={ymToInput(value)}
-      onChange={(e) => {
-        const v = inputToYm(e.target.value);
-        if (v) onChange(v);
-      }}
-      className={cn("h-9 w-48", className)}
-    />
-  );
-}
 
 export function StatusBadge({ map, status }: { map: Record<string, StatusStyle>; status: string }) {
   const m = map[status] ?? { label: status, ...STATUS_TONE.slate };

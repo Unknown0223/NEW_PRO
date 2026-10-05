@@ -1,7 +1,6 @@
 "use client";
 
 import { Calendar, ChevronDown, ChevronLeft, ChevronRight, X } from "lucide-react";
-import Link from "next/link";
 import { useRef, useState, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { MonthYearPickerPopover } from "@/components/ui/month-year-picker-popover";
@@ -280,7 +279,7 @@ export function PayrollFilterCard({
   onApply,
   applyDisabled,
   applyLabel = "Применить",
-  fxHref,
+  onFx,
   extra
 }: {
   title: string;
@@ -292,10 +291,10 @@ export function PayrollFilterCard({
   onApply?: () => void;
   applyDisabled?: boolean;
   applyLabel?: string;
-  fxHref?: string;
+  /** «fx»: opens the formula builder modal in place. */
+  onFx?: () => void;
   extra?: ReactNode;
 }) {
-  const showFx = Boolean(fxHref);
   return (
     <section className={cn(PAYROLL_CARD, "p-4 sm:p-5")} aria-label="Фильтры">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -314,15 +313,16 @@ export function PayrollFilterCard({
           {children}
           <div className="flex items-center gap-2 sm:ml-auto">
             {extra}
-            {showFx ? (
-              <Link
-                href={fxHref!}
-                title="Установка формулы"
-                aria-label="Установка формулы"
+            {onFx ? (
+              <button
+                type="button"
+                onClick={onFx}
+                title="Установка формулу"
+                aria-label="Установка формулу"
                 className="flex h-10 w-10 items-center justify-center rounded-lg border border-[var(--pr-brand-200)] bg-[var(--pr-brand-50)] font-mono text-[13px] font-bold text-[var(--pr-brand-600)] opacity-80 transition-colors hover:bg-[var(--pr-brand-100)] hover:opacity-100"
               >
                 fx
-              </Link>
+              </button>
             ) : null}
             {onApply ? (
               <Button type="button" className="h-10 min-w-[132px] rounded-lg text-[14px]" disabled={applyDisabled} onClick={onApply}>

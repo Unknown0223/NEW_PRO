@@ -5,7 +5,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { FileUp, Pencil, Plus, Send, Trash2, XCircle } from "lucide-react";
 import { PageShell } from "@/components/dashboard/page-shell";
 import { Button } from "@/components/ui/button";
-import { useAppConfirm } from "@/components/ui/app-confirm-dialog";
+import { usePayrollConfirm } from "@/components/payroll/kit/payroll-kit-modal";
 import { useUserTablePrefs } from "@/hooks/use-user-table-prefs";
 import { usePermissions } from "@/lib/use-permissions";
 import { useTenant } from "@/lib/api-client";
@@ -72,7 +72,7 @@ export function PayrollAdvancesWorkspace() {
   const perms = usePermissions();
   const can = (k: string) => perms.isAdmin || perms.has(k);
   const notice = useNotice();
-  const { confirm, dialog } = useAppConfirm();
+  const { confirm, dialog } = usePayrollConfirm();
   const sel = useSelection<number>();
   const [ym, setYm] = useState<Ym>(currentYm());
   const [status, setStatus] = useState("all");

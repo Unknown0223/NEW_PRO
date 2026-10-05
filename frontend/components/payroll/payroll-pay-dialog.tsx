@@ -1,13 +1,18 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Button } from "@/components/ui/button";
 import { GroupedNumberInput } from "@/components/ui/grouped-number-input";
-import { Input } from "@/components/ui/input";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useTenant } from "@/lib/api-client";
 import { money, payrollApi, payrollErrorText, roleLabel, ymLabel } from "@/lib/payroll/payroll-api";
-import { Field, NATIVE_SELECT, parseAmount } from "@/components/payroll/payroll-ui";
+import { parseAmount } from "@/components/payroll/payroll-ui";
+import {
+  PAYROLL_MODAL_INPUT,
+  PAYROLL_MODAL_SELECT,
+  PayrollModal,
+  PayrollModalActions,
+  PayrollModalField,
+  PayrollModalNote
+} from "@/components/payroll/kit/payroll-kit-modal";
 
 export type QueueRow = {
   kind: "advance" | "salary";
@@ -88,50 +93,44 @@ export function PayrollPayDialog({ row, desks, methods, defaultCurrency, onClose
   };
 
   return (
-    <Dialog open={row != null} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="payroll-template sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>{row?.kind === "salary" ? "Выдача зарплаты" : "Выдача аванса"}</DialogTitle>
-        </DialogHeader>
-        {row ? (
-          <div className="grid gap-3">
-            <div className="rounded-md bg-muted px-3 py-2 text-sm">
-              <div className="font-medium">{row.fio}</div>
-              <div className="text-xs text-muted-foreground">
-                {roleLabel(row.role)}{row.code ? ` · ${row.code}` : ""} · {row.branch ?? "—"} · {ymLabel(row)}
-              </div>
-              <div className="mt-1">{row.kind === "salary" ? "Остаток к выплате" : "Сумма аванса"}: <b>{money(row.amount)} {row.currency}</b></div>
-            </div>
-            <Field label="Касса">
-              <select className={NATIVE_SELECT} value={deskId} onChange={(e) => setDeskId(e.target.value)}>
-                <option value="">— выберите —</option>
-                {allowed.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
-              </select>
-            </Field>
-            <Field label="Способ оплаты">
-              <select className={NATIVE_SELECT} value={method} onChange={(e) => setMethod(e.target.value)}>
-                <option value="">Наличные ({defaultCurrency})</option>
-                {methods.map((x) => <option key={String(x.id)} value={x.ref}>{x.name}{x.currency ? ` (${x.currency})` : ""}</option>)}
-              </select>
-            </Field>
-            {row.kind === "salary" ? (
-              <Field label={`Сумма (${row.currency})`}>
-                <GroupedNumberInput value={amount} maxFractionDigits={2} onValueChange={setAmount} />
-              </Field>
-            ) : null}
-            {tooMuch ? <p className="text-xs text-red-700">Больше остатка к выплате</p> : null}
-            {currency !== row.currency ? <p className="text-xs text-amber-700">Выдача в {currency}: сумма будет пересчитана по курсу на сегодня.</p> : null}
-            <Field label="Комментарий">
-              <Input value={comment} onChange={(e) => setComment(e.target.value)} className="h-9" />
-            </Field>
-            {error ? <p className="text-sm text-red-700">{error}</p> : null}
-            <div className="flex justify-end gap-2">
-              <Button variant="outline" size="sm" onClick={onClose}>Отмена</Button>
-              <Button size="sm" disabled={busy || !deskId || !(value > 0) || tooMuch} onClick={() => void pay()}>Выдать</Button>
-            </div>
+    <PayrollModal open={row != null} onClose={onClose} title={row?.kind === "salary" ? "Выдача зарплаты" : "Выдача аванса"}>
+      {row ? (
+        <div className="space-y-3.5">
+          <div className="rounded-lg border border-[var(--pr-border)] bg-[var(--pr-head)] px-3.5 py-2.5">
+            <p className="text-[13.5px] font-semibold text-foreground">{row.fio}</p>
+            <p className="text-[12px] text-muted-foreground">
+              {roleLabel(row.role)}{row.code ? ` · ${row.code}` : ""} · {row.branch ?? "—"} · {ymLabel(row)}
+            </p>
+            <p className="mt-1.5 text-[12.5px] text-muted-foreground">
+              {row.kind === "salary" ? "Остаток к выплате" : "Сумма аванса"}:{" "}
+              <b className="tabular-nums text-[var(--pr-brand-600)]">{money(row.amount)} {row.currency}</b>
+            </p>
           </div>
-        ) : null}
-      </DialogContent>
-    </Dialog>
+          <PayrollModalField label="Касса" select>
+            <select className={PAYROLL_MODAL_SELECT} value={deskId} onChange={(e) => setDeskId(e.target.value)}>
+              <option value="">— выберите —</option>
+              {allowed.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
+            </select>
+          </PayrollModalField>
+          <PayrollModalField label="Способ оплаты" select>
+            <select className={PAYROLL_MODAL_SELECT} value={method} onChange={(e) => setMethod(e.target.value)}>
+              <option value="">Наличные ({defaultCurrency})</option>
+              {methods.map((x) => <option key={String(x.id)} value={x.ref}>{x.name}{x.currency ? ` (${x.currency})` : ""}</option>)}
+            </select>
+          </PayrollModalField>
+          {row.kind === "salary" ? (
+            <PayrollModalField label={`Сумма (${row.currency})`} error={tooMuch ? "Больше остатка к выплате" : null}>
+              <GroupedNumberInput value={amount} maxFractionDigits={2} onValueChange={setAmount} className={PAYROLL_MODAL_INPUT} />
+            </PayrollModalField>
+          ) : null}
+          {currency !== row.currency ? <PayrollModalNote tone="warn">Выдача в {currency}: сумма будет пересчитана по курсу на сегодня.</PayrollModalNote> : null}
+          <PayrollModalField label="Комментарий">
+            <input className={PAYROLL_MODAL_INPUT} value={comment} onChange={(e) => setComment(e.target.value)} />
+          </PayrollModalField>
+          {error ? <PayrollModalNote tone="error">{error}</PayrollModalNote> : null}
+          <PayrollModalActions onCancel={onClose} onSubmit={() => void pay()} submitLabel="Выдать" busy={busy} disabled={!deskId || !(value > 0) || tooMuch} />
+        </div>
+      ) : null}
+    </PayrollModal>
   );
 }

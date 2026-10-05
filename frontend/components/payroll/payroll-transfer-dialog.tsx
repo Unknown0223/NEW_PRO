@@ -1,12 +1,18 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useTenant } from "@/lib/api-client";
-import { payrollApi, payrollErrorText, type Ym } from "@/lib/payroll/payroll-api";
-import { Field, MonthField } from "@/components/payroll/payroll-ui";
+import { inputToYm, payrollApi, payrollErrorText, ymToInput, type Ym } from "@/lib/payroll/payroll-api";
 import type { PayrollItem } from "@/components/payroll/payroll-items-workspace";
+import {
+  PAYROLL_MODAL_INPUT,
+  PayrollModal,
+  PayrollModalActions,
+  PayrollModalCheck,
+  PayrollModalField,
+  PayrollModalNote,
+  PayrollModalSection
+} from "@/components/payroll/kit/payroll-kit-modal";
 
 type Props = { open: boolean; onOpenChange: (v: boolean) => void; to: Ym; items: PayrollItem[]; userIds: number[]; onDone: (text: string) => void };
 
@@ -48,38 +54,28 @@ export function PayrollTransferDialog({ open, onOpenChange, to, items, userIds, 
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="payroll-template sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>Перенос данных из прошлого месяца</DialogTitle>
-        </DialogHeader>
-        <div className="grid gap-3">
-          <Field label="Из месяца">
-            <MonthField value={from} onChange={setFrom} />
-          </Field>
-          <p className="text-xs text-muted-foreground">
-            {userIds.length ? `Только выбранные сотрудники: ${userIds.length}` : "Все сотрудники месяца"}. Подтверждённые записи не меняются.
-          </p>
-          <div className="grid gap-1">
-            <span className="text-xs font-semibold uppercase text-muted-foreground">Ручные статьи</span>
-            {manual.length === 0 ? <span className="text-sm text-muted-foreground">Нет ручных статей</span> : null}
+    <PayrollModal open={open} onClose={() => onOpenChange(false)} title="Перенос данных" width="sm:max-w-[440px]">
+      <div className="space-y-3.5">
+        <PayrollModalField label="Месяц источник">
+          <input type="month" className={PAYROLL_MODAL_INPUT} value={ymToInput(from)} onChange={(e) => { const v = inputToYm(e.target.value); if (v) setFrom(v); }} />
+        </PayrollModalField>
+        <PayrollModalSection title="Ручные статьи">
+          {manual.length === 0 ? <p className="text-[12.5px] text-muted-foreground">Нет ручных статей</p> : null}
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
             {manual.map((i) => (
-              <label key={i.id} className="flex items-center gap-2 text-sm">
-                <input type="checkbox" checked={picked.includes(i.id)} onChange={(e) => setPicked(e.target.checked ? [...picked, i.id] : picked.filter((x) => x !== i.id))} />
-                {i.name}
-              </label>
+              <PayrollModalCheck key={i.id} label={i.name} checked={picked.includes(i.id)} onChange={(on) => setPicked(on ? [...picked, i.id] : picked.filter((x) => x !== i.id))} />
             ))}
           </div>
-          <label className="flex items-center gap-2 text-sm">
-            <input type="checkbox" checked={bonus} onChange={(e) => setBonus(e.target.checked)} /> Назначения бонусных формул
-          </label>
-          {error ? <p className="text-sm text-red-700">{error}</p> : null}
-          <div className="flex justify-end gap-2">
-            <Button variant="outline" size="sm" onClick={() => onOpenChange(false)}>Отмена</Button>
-            <Button size="sm" disabled={busy || (!picked.length && !bonus)} onClick={() => void run()}>Перенести</Button>
-          </div>
-        </div>
-      </DialogContent>
-    </Dialog>
+        </PayrollModalSection>
+        <PayrollModalSection title="Параметры для изменения">
+          <PayrollModalCheck label="Назначения бонусных формул" checked={bonus} onChange={setBonus} />
+        </PayrollModalSection>
+        <PayrollModalNote>
+          {userIds.length ? `Только выбранные сотрудники: ${userIds.length}` : "Все сотрудники месяца"}. Подтверждённые записи не меняются.
+        </PayrollModalNote>
+        {error ? <PayrollModalNote tone="error">{error}</PayrollModalNote> : null}
+        <PayrollModalActions onCancel={() => onOpenChange(false)} onSubmit={() => void run()} submitLabel="Перенести" busy={busy} disabled={!picked.length && !bonus} />
+      </div>
+    </PayrollModal>
   );
 }

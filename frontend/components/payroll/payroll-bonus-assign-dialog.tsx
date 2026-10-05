@@ -2,12 +2,10 @@
 
 import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
-import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useTenant } from "@/lib/api-client";
 import { payrollApi, payrollErrorText, type Ym } from "@/lib/payroll/payroll-api";
-import { Field, NATIVE_SELECT } from "@/components/payroll/payroll-ui";
 import type { PayrollItem } from "@/components/payroll/payroll-items-workspace";
+import { PAYROLL_MODAL_SELECT, PayrollModal, PayrollModalActions, PayrollModalField, PayrollModalNote } from "@/components/payroll/kit/payroll-kit-modal";
 
 export type BonusFormula = { id: number; name: string; scope: string; is_active: boolean; target_item_id: number | null; text: string; assignments?: number };
 export type AssignTarget = { userIds: number[]; groupId: number };
@@ -20,6 +18,7 @@ export function PayrollBonusAssignDialog(props: {
   items: PayrollItem[];
   onClose: () => void;
   onDone: (text: string) => void;
+  onCreateFormula?: () => void;
 }) {
   const tenant = useTenant();
   const [groupId, setGroupId] = useState<number | null>(null);
@@ -55,41 +54,47 @@ export function PayrollBonusAssignDialog(props: {
   }
 
   return (
-    <Dialog open={t != null} onOpenChange={(o) => !o && close()}>
-      <DialogContent className="payroll-template sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>Установка формулы</DialogTitle>
-        </DialogHeader>
-        <div className="grid gap-3">
-          <p className="text-sm text-muted-foreground">Сотрудников: {t?.userIds.length ?? 0}</p>
-          <Field label="Группа KPI">
-            <select className={NATIVE_SELECT} value={gid} onChange={(e) => setGroupId(Number(e.target.value))}>
-              <option value={0}>Весь объём</option>
-              {props.groups.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
-            </select>
-          </Field>
-          <Field label="Формула">
-            <select className={NATIVE_SELECT} value={formulaId} onChange={(e) => setFormulaId(e.target.value)}>
-              <option value="">— выберите —</option>
-              {props.formulas.map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}
-            </select>
-          </Field>
-          {formula ? <code className="block rounded bg-muted px-2 py-1 text-xs">{formula.text}</code> : null}
-          <Field label="Статья начисления">
-            <select className={NATIVE_SELECT} value={itemId} onChange={(e) => setItemId(e.target.value)}>
-              <option value="">Из формулы</option>
-              {props.items.map((i) => <option key={i.id} value={i.id}>{i.name}</option>)}
-            </select>
-          </Field>
-          {error ? <p className="text-sm text-red-700">{error}</p> : null}
-          <div className="flex justify-end gap-2">
-            <Button variant="outline" size="sm" onClick={close}>Отмена</Button>
-            <Button size="sm" disabled={!formulaId || save.isPending || (!itemId && !formula?.target_item_id)} onClick={() => save.mutate()}>
-              Назначить
-            </Button>
-          </div>
-        </div>
-      </DialogContent>
-    </Dialog>
+    <PayrollModal open={t != null} onClose={close} title="Установка формулы">
+      <div className="space-y-3.5">
+        <PayrollModalNote>Сотрудников: <b className="text-foreground">{t?.userIds.length ?? 0}</b></PayrollModalNote>
+        <PayrollModalField label="Группа KPI" select>
+          <select className={PAYROLL_MODAL_SELECT} value={gid} onChange={(e) => setGroupId(Number(e.target.value))}>
+            <option value={0}>Весь объём</option>
+            {props.groups.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
+          </select>
+        </PayrollModalField>
+        <PayrollModalField
+          label="Формула"
+          select
+          hint={
+            props.onCreateFormula ? (
+              <button type="button" className="font-medium text-[var(--pr-brand-600)] hover:underline" onClick={props.onCreateFormula}>
+                + Новая формула
+              </button>
+            ) : null
+          }
+        >
+          <select className={PAYROLL_MODAL_SELECT} value={formulaId} onChange={(e) => setFormulaId(e.target.value)}>
+            <option value="">— выберите —</option>
+            {props.formulas.map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}
+          </select>
+        </PayrollModalField>
+        {formula ? <code className="block rounded-lg border border-[var(--pr-border)] bg-[var(--pr-head)] px-3 py-2 font-mono text-[12px] text-foreground/80">= {formula.text}</code> : null}
+        <PayrollModalField label="Статья начисления" select>
+          <select className={PAYROLL_MODAL_SELECT} value={itemId} onChange={(e) => setItemId(e.target.value)}>
+            <option value="">Из формулы</option>
+            {props.items.map((i) => <option key={i.id} value={i.id}>{i.name}</option>)}
+          </select>
+        </PayrollModalField>
+        {error ? <PayrollModalNote tone="error">{error}</PayrollModalNote> : null}
+        <PayrollModalActions
+          onCancel={close}
+          onSubmit={() => save.mutate()}
+          submitLabel="Назначить"
+          busy={save.isPending}
+          disabled={!formulaId || (!itemId && !formula?.target_item_id)}
+        />
+      </div>
+    </PayrollModal>
   );
 }

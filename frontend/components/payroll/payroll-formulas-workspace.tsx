@@ -5,7 +5,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { FileSpreadsheet, Pencil, Trash2 } from "lucide-react";
 import { PageShell } from "@/components/dashboard/page-shell";
 import { Button } from "@/components/ui/button";
-import { useAppConfirm } from "@/components/ui/app-confirm-dialog";
+import { usePayrollConfirm } from "@/components/payroll/kit/payroll-kit-modal";
 import { useUserTablePrefs } from "@/hooks/use-user-table-prefs";
 import { usePermissions } from "@/lib/use-permissions";
 import { useTenant } from "@/lib/api-client";
@@ -13,9 +13,12 @@ import { fmtDateTime, payrollApi, roleLabel, STATUS_TONE } from "@/lib/payroll/p
 import { cn } from "@/lib/utils";
 import { TonePill, useNotice } from "@/components/payroll/payroll-ui";
 import type { PayrollItem } from "@/components/payroll/payroll-items-workspace";
-import { FORMULA_SCOPES, PayrollFormulaEditor, type FormulaDraft } from "@/components/payroll/payroll-formula-editor";
+import { FORMULA_SCOPES, type FormulaDraft } from "@/components/payroll/payroll-formula-editor";
+import { PayrollFormulaBuilder } from "@/components/payroll/payroll-formula-builder";
+import { useSaveFormula } from "@/components/payroll/payroll-formula-modal";
 import { PayrollPageTitle, PayrollRelatedBar, PayrollSegmentedTabs } from "@/components/payroll/kit/payroll-kit-layout";
 import {
+  PAYROLL_CARD,
   PAYROLL_TABLE,
   PAYROLL_TD as TD,
   PAYROLL_TH as TH,
@@ -42,7 +45,7 @@ export function PayrollFormulasWorkspace() {
   const perms = usePermissions();
   const canEdit = perms.isAdmin || perms.hasAny("staff.zarplaty.update", "staff.zarplaty.create");
   const notice = useNotice();
-  const { confirm, dialog } = useAppConfirm();
+  const { confirm, dialog } = usePayrollConfirm();
   const [tab, setTab] = useState<Tab>("write");
   const [draft, setDraft] = useState<FormulaDraft>({ ...EMPTY });
   const [q, setQ] = useState("");
@@ -65,27 +68,11 @@ export function PayrollFormulasWorkspace() {
 
   const invalidate = () => void qc.invalidateQueries({ queryKey: ["payroll-formulas", tenant] });
 
-  const save = useMutation({
-    mutationFn: (d: FormulaDraft) => {
-      const body = {
-        name: d.name.trim(),
-        scope: d.scope,
-        text: d.text,
-        role: d.role,
-        target_item_id: d.scope === "salary" ? null : d.target_item_id,
-        priority: d.priority,
-        is_active: d.is_active
-      };
-      return d.id ? api.send("PATCH", `/formulas/${d.id}`, body) : api.send("POST", "/formulas", body);
-    },
-    onSuccess: () => {
-      setDraft({ ...EMPTY });
-      setTab("saved");
-      notice.ok("Формула сохранена. Зарплаты пересчитаются автоматически.");
-      invalidate();
-    },
-    onError: notice.fail
-  });
+  const save = useSaveFormula(() => {
+    setDraft({ ...EMPTY });
+    setTab("saved");
+    notice.ok("Формула сохранена. Зарплаты пересчитаются автоматически.");
+  }, notice.fail);
   const remove = useMutation({
     mutationFn: (id: number) => api.send("DELETE", `/formulas/${id}`),
     onSuccess: () => {
@@ -153,7 +140,7 @@ export function PayrollFormulasWorkspace() {
       />
       <PayrollSegmentedTabs<Tab>
         tabs={[
-          { id: "write", label: draft.id ? "Изменить формулу" : "Написать формулу" },
+          { id: "write", label: draft.id ? "Изменить формулу" : "Новая формула" },
           { id: "saved", label: "Готовые формулы", count: listQ.data?.length }
         ]}
         value={tab}
@@ -162,17 +149,20 @@ export function PayrollFormulasWorkspace() {
       {notice.element}
 
       {tab === "write" ? (
-        <PayrollFormulaEditor
-          draft={draft}
-          onChange={setDraft}
-          onSave={() => save.mutate(draft)}
-          onClear={() => setDraft({ ...EMPTY })}
-          saving={save.isPending}
-          canEdit={canEdit}
-          items={itemsQ.data ?? []}
-          roles={roles}
-          employees={empQ.data ?? []}
-        />
+        <section className={cn(PAYROLL_CARD, "p-5")}>
+          <PayrollFormulaBuilder
+            draft={draft}
+            onChange={setDraft}
+            onSave={() => save.mutate(draft)}
+            onClear={() => setDraft({ ...EMPTY })}
+            saving={save.isPending}
+            canEdit={canEdit}
+            items={itemsQ.data ?? []}
+            roles={roles}
+            employees={empQ.data ?? []}
+            bodyHeight="lg:h-[clamp(380px,calc(100vh-520px),680px)]"
+          />
+        </section>
       ) : (
         <PayrollTableCard>
           <PayrollTableToolbar

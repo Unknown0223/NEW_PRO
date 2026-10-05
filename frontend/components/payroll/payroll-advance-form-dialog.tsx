@@ -2,13 +2,18 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { GroupedNumberInput } from "@/components/ui/grouped-number-input";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useTenant } from "@/lib/api-client";
 import { money, payrollApi, payrollErrorText, roleLabel, ymLabel, ymQuery, type Ym } from "@/lib/payroll/payroll-api";
-import { Field, NATIVE_SELECT, parseAmount } from "@/components/payroll/payroll-ui";
+import { parseAmount } from "@/components/payroll/payroll-ui";
+import {
+  PAYROLL_MODAL_INPUT,
+  PAYROLL_MODAL_LIST,
+  PayrollModal,
+  PayrollModalActions,
+  PayrollModalField,
+  PayrollModalNote
+} from "@/components/payroll/kit/payroll-kit-modal";
 
 type Employee = { id: number; fio: string; code: string | null; role: string; branch: string | null; is_active: boolean; used: number; limit: number | null; remaining: number | null };
 export type AdvanceEditTarget = { id: number; fio: string; amount: number; comment: string | null } | "new" | null;
@@ -71,44 +76,42 @@ export function PayrollAdvanceFormDialog({ target, ym, onClose, onSaved }: Props
   };
 
   return (
-    <Dialog open={target != null} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="payroll-template sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>{isNew ? `Новый аванс — ${ymLabel(ym)}` : `Аванс: ${target && typeof target === "object" ? target.fio : ""}`}</DialogTitle>
-        </DialogHeader>
-        <div className="grid gap-3">
-          {isNew ? (
-            <Field label="Сотрудник">
-              <Input placeholder="Поиск по ФИО или коду" value={q} onChange={(e) => setQ(e.target.value)} className="h-9" />
-              <select className={NATIVE_SELECT} value={userId} onChange={(e) => setUserId(e.target.value)} size={6}>
-                {list.map((e) => (
-                  <option key={e.id} value={e.id}>
-                    {e.fio}{e.code ? ` (${e.code})` : ""} · {roleLabel(e.role)}{e.remaining != null ? ` · доступно ${money(e.remaining)}` : ""}
-                  </option>
-                ))}
-              </select>
-            </Field>
-          ) : null}
-          {emp ? (
-            <p className="rounded-md bg-muted px-3 py-2 text-xs">
-              Уже выдано/в работе: <b>{money(emp.used)}</b> · Лимит: <b>{emp.limit == null ? "без ограничения" : money(emp.limit)}</b>
-              {emp.remaining != null ? <> · Осталось: <b>{money(emp.remaining)}</b></> : null}
-            </p>
-          ) : null}
-          <Field label="Сумма">
-            <GroupedNumberInput value={amount} placeholder="0" onValueChange={setAmount} />
-          </Field>
-          {over ? <p className="text-xs text-red-700">Сумма больше доступного лимита ({money(emp?.remaining)})</p> : null}
-          <Field label="Комментарий">
-            <Input value={comment} onChange={(e) => setComment(e.target.value)} className="h-9" />
-          </Field>
-          {error ? <p className="text-sm text-red-700">{error}</p> : null}
-          <div className="flex justify-end gap-2">
-            <Button variant="outline" size="sm" onClick={onClose}>Отмена</Button>
-            <Button size="sm" disabled={busy || !(value > 0) || over || (isNew && !userId)} onClick={() => void save()}>Сохранить</Button>
+    <PayrollModal
+      open={target != null}
+      onClose={onClose}
+      title={isNew ? `Новый аванс — ${ymLabel(ym)}` : `Аванс: ${target && typeof target === "object" ? target.fio : ""}`}
+    >
+      <div className="space-y-3.5">
+        {isNew ? (
+          <div className="space-y-1.5">
+            <PayrollModalField label="Сотрудник">
+              <input className={PAYROLL_MODAL_INPUT} placeholder="Поиск по ФИО или коду" value={q} onChange={(e) => setQ(e.target.value)} />
+            </PayrollModalField>
+            <select className={PAYROLL_MODAL_LIST} aria-label="Сотрудник" value={userId} onChange={(e) => setUserId(e.target.value)} size={6}>
+              {list.map((e) => (
+                <option key={e.id} value={e.id}>
+                  {e.fio}{e.code ? ` (${e.code})` : ""} · {roleLabel(e.role)}{e.remaining != null ? ` · доступно ${money(e.remaining)}` : ""}
+                </option>
+              ))}
+            </select>
           </div>
-        </div>
-      </DialogContent>
-    </Dialog>
+        ) : null}
+        {emp ? (
+          <PayrollModalNote>
+            Уже выдано/в работе: <b className="text-foreground">{money(emp.used)}</b> · Лимит:{" "}
+            <b className="text-foreground">{emp.limit == null ? "без ограничения" : money(emp.limit)}</b>
+            {emp.remaining != null ? <> · Осталось: <b className="text-[var(--pr-brand-600)]">{money(emp.remaining)}</b></> : null}
+          </PayrollModalNote>
+        ) : null}
+        <PayrollModalField label="Сумма" error={over ? `Сумма больше доступного лимита (${money(emp?.remaining)})` : null}>
+          <GroupedNumberInput value={amount} placeholder="0" onValueChange={setAmount} className={PAYROLL_MODAL_INPUT} />
+        </PayrollModalField>
+        <PayrollModalField label="Комментарий">
+          <input className={PAYROLL_MODAL_INPUT} value={comment} onChange={(e) => setComment(e.target.value)} />
+        </PayrollModalField>
+        {error ? <PayrollModalNote tone="error">{error}</PayrollModalNote> : null}
+        <PayrollModalActions onCancel={onClose} onSubmit={() => void save()} busy={busy} disabled={!(value > 0) || over || (isNew && !userId)} />
+      </div>
+    </PayrollModal>
   );
 }

@@ -1,13 +1,12 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronsUpDown } from "lucide-react";
 import { PageShell } from "@/components/dashboard/page-shell";
 import { Button } from "@/components/ui/button";
-import { buttonVariants } from "@/components/ui/button-variants";
-import { useAppConfirm } from "@/components/ui/app-confirm-dialog";
+import { PayrollFormulaModal } from "@/components/payroll/payroll-formula-modal";
+import { usePayrollConfirm } from "@/components/payroll/kit/payroll-kit-modal";
 import { SearchableMultiSelectPanel } from "@/components/ui/searchable-multi-select-panel";
 import { useUserTablePrefs } from "@/hooks/use-user-table-prefs";
 import { usePermissions } from "@/lib/use-permissions";
@@ -46,7 +45,7 @@ export function PayrollBonusWorkspace() {
   const perms = usePermissions();
   const canAssign = perms.isAdmin || perms.has("staff.zarplaty.assign");
   const notice = useNotice();
-  const { confirm, dialog } = useAppConfirm();
+  const { confirm, dialog } = usePayrollConfirm();
   const sel = useSelection<number>();
   const [tab, setTab] = useState<Tab>("kpi");
   const [ym, setYm] = useState<Ym>(currentYm());
@@ -58,6 +57,7 @@ export function PayrollBonusWorkspace() {
   const [q, setQ] = useState("");
   const [fq, setFq] = useState("");
   const [expanded, setExpanded] = useState<Set<number>>(new Set());
+  const [formulaOpen, setFormulaOpen] = useState(false);
   const [target, setTarget] = useState<AssignTarget | null>(null);
   const prefs = useUserTablePrefs({ tenantSlug: tenant, tableId: "payroll.bonus-kpi", defaultColumnOrder: ["fio"], defaultPageSize: 20 });
 
@@ -135,7 +135,7 @@ export function PayrollBonusWorkspace() {
       <PayrollFilterCard
         title="Настройки бонусов и зарплат"
         month={{ value: ym, onChange: (v) => { setYm(v); sel.clear(); } }}
-        fxHref="/users/salary/formulas"
+        onFx={() => setFormulaOpen(true)}
         onApply={tab === "kpi" ? apply : undefined}
       >
         {tab === "kpi" ? (
@@ -213,9 +213,7 @@ export function PayrollBonusWorkspace() {
         <PayrollTableCard
           title="Готовые формулы"
           titleAction={
-            <Link href="/users/salary/formulas" className={buttonVariants({ variant: "outline" })}>
-              Открыть «Формулы»
-            </Link>
+            <Button onClick={() => setFormulaOpen(true)}>Установка формулу</Button>
           }
         >
           <PayrollTableToolbar pageSize={prefs.pageSize} onPageSize={prefs.setPageSize} search={fq} onSearch={setFq} searchPlaceholder="Поиск формулы" onRefresh={() => void formulasQ.refetch()} refreshing={formulasQ.isFetching} />
@@ -258,6 +256,13 @@ export function PayrollBonusWorkspace() {
         items={(itemsQ.data ?? []).filter((i) => !i.system_key && i.is_active && i.type === "allowance")}
         onClose={() => setTarget(null)}
         onDone={(t) => { notice.ok(t); sel.clear(); refresh(); }}
+        onCreateFormula={() => setFormulaOpen(true)}
+      />
+      <PayrollFormulaModal
+        open={formulaOpen}
+        onClose={() => setFormulaOpen(false)}
+        defaultScope="bonus"
+        onSaved={(t) => { notice.ok(t); void formulasQ.refetch(); }}
       />
       {dialog}
     </PageShell>

@@ -1,13 +1,11 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowRightLeft, FileDiff, Lock, Maximize2, Minimize2, Pencil, RefreshCw, Unlock } from "lucide-react";
 import { PageShell } from "@/components/dashboard/page-shell";
 import { Button } from "@/components/ui/button";
-import { buttonVariants } from "@/components/ui/button-variants";
-import { useAppConfirm } from "@/components/ui/app-confirm-dialog";
+import { usePayrollConfirm } from "@/components/payroll/kit/payroll-kit-modal";
 import { SearchableMultiSelectPanel } from "@/components/ui/searchable-multi-select-panel";
 import { TableColumnSettingsDialog } from "@/components/data-table/table-column-settings-dialog";
 import { useUserTablePrefs } from "@/hooks/use-user-table-prefs";
@@ -33,6 +31,7 @@ import {
 } from "@/components/payroll/payroll-sheet-table";
 import { PayrollRecordDialog } from "@/components/payroll/payroll-record-dialog";
 import { PayrollTransferDialog } from "@/components/payroll/payroll-transfer-dialog";
+import { PayrollFormulaModal } from "@/components/payroll/payroll-formula-modal";
 import type { PayrollItem } from "@/components/payroll/payroll-items-workspace";
 
 type Records = { period: { status: string; closed_at: string | null }; columns: SheetColumn[]; rows: SheetRow[]; totals: SheetTotals };
@@ -52,7 +51,7 @@ export function PayrollSheetWorkspace() {
   const perms = usePermissions();
   const can = (k: string) => perms.isAdmin || perms.has(k);
   const notice = useNotice();
-  const { confirm, dialog } = useAppConfirm();
+  const { confirm, dialog } = usePayrollConfirm();
   const sel = useSelection<number>();
   const [ym, setYm] = useState<Ym>(currentYm());
   const [draft, setDraft] = useState<Omit<Filters, "branches">>(EMPTY_FILTERS);
@@ -63,6 +62,7 @@ export function PayrollSheetWorkspace() {
   const [colsOpen, setColsOpen] = useState(false);
   const [openId, setOpenId] = useState<number | null>(null);
   const [transferOpen, setTransferOpen] = useState(false);
+  const [formulaOpen, setFormulaOpen] = useState(false);
 
   const prefs = useUserTablePrefs({ tenantSlug: tenant, tableId: "payroll.sheet.v2", defaultColumnOrder: COLUMN_IDS, defaultPageSize: 20 });
 
@@ -205,7 +205,7 @@ export function PayrollSheetWorkspace() {
           </span>
         }
         month={{ value: ym, onChange: (v) => { setYm(v); sel.clear(); } }}
-        fxHref="/users/salary/formulas"
+        onFx={() => setFormulaOpen(true)}
         onApply={applyFilters}
       >
         <SearchableMultiSelectPanel<string>
@@ -264,9 +264,9 @@ export function PayrollSheetWorkspace() {
               Подтвердить все{sel.list.length ? ` (${sel.list.length})` : ""}
             </Button>
           ) : null}
-          <Link href="/users/salary/formulas" className={cn(buttonVariants(), "h-9")}>
+          <Button className="h-9" onClick={() => setFormulaOpen(true)}>
             Установка формулу
-          </Link>
+          </Button>
           {can("staff.zarplaty.copy") && !closed ? (
             <Button variant="outline" className="h-9" onClick={() => setTransferOpen(true)}>
               <ArrowRightLeft className="mr-1.5 size-4" /> Перенос данных
@@ -363,6 +363,7 @@ export function PayrollSheetWorkspace() {
         userIds={selectedRows.map((r) => r.user_id)}
         onDone={(t) => { notice.ok(t); refresh(); }}
       />
+      <PayrollFormulaModal open={formulaOpen} onClose={() => setFormulaOpen(false)} onSaved={(t) => { notice.ok(t); refresh(); }} />
       {dialog}
     </PageShell>
   );

@@ -2,12 +2,14 @@
 
 import { useState } from "react";
 import { Download } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ExcelFileDropZone } from "@/components/ui/excel-file-drop-zone";
 import { downloadXlsx, readXlsxRows } from "@/lib/payroll/payroll-xlsx";
 import { money, payrollErrorText } from "@/lib/payroll/payroll-api";
 import { cn } from "@/lib/utils";
+import { PAYROLL_BTN, PayrollModal, PayrollModalActions, PayrollModalNote } from "@/components/payroll/kit/payroll-kit-modal";
+import { PAYROLL_TABLE, PAYROLL_TH, PAYROLL_THEAD, PAYROLL_TR } from "@/components/payroll/kit/payroll-kit-table";
+
+const CELL = "px-4 py-2";
 
 export type ImportPreviewRow = { row: number; code: string; fio?: string | null; amount?: number | null; status: string; note?: string };
 
@@ -74,67 +76,61 @@ export function PayrollExcelImportDialog<T>(p: Props<T>) {
   };
 
   return (
-    <Dialog
+    <PayrollModal
       open={p.open}
-      onOpenChange={(o) => {
-        if (!o) reset();
-        p.onOpenChange(o);
+      onClose={() => {
+        reset();
+        p.onOpenChange(false);
       }}
+      title={p.title}
+      width="sm:max-w-[760px]"
     >
-      <DialogContent className="payroll-template sm:max-w-3xl">
-        <DialogHeader>
-          <DialogTitle>{p.title}</DialogTitle>
-        </DialogHeader>
-        <div className="grid gap-3">
-          <p className="text-sm text-muted-foreground">{p.hint}</p>
-          <div className="flex flex-wrap items-center gap-2">
-            <Button variant="outline" size="sm" onClick={() => void downloadXlsx(p.templateFile, p.templateHeader, [])}>
-              <Download className="mr-1 size-4" /> Шаблон
-            </Button>
-            <span className="text-xs text-muted-foreground">Колонки: {p.templateHeader.join(", ")}</span>
-          </div>
-          <ExcelFileDropZone onFile={(f) => void onFile(f)} disabled={busy} />
-          {error ? <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p> : null}
-          {preview ? (
-            <div className="max-h-80 overflow-auto rounded-md border">
-              <table className="w-full text-sm">
-                <thead className="sticky top-0 bg-muted text-left text-xs">
-                  <tr>
-                    <th className="px-2 py-1.5">#</th>
-                    <th className="px-2 py-1.5">Код</th>
-                    <th className="px-2 py-1.5">Сотрудник</th>
-                    <th className="px-2 py-1.5 text-right">Сумма</th>
-                    <th className="px-2 py-1.5">Статус</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {preview.map((r) => (
-                    <tr key={r.row} className="border-t">
-                      <td className="px-2 py-1 text-muted-foreground">{r.row}</td>
-                      <td className="px-2 py-1">{r.code}</td>
-                      <td className="px-2 py-1">{r.fio ?? "—"}</td>
-                      <td className="px-2 py-1 text-right tabular-nums">{money(r.amount ?? null)}</td>
-                      <td className={cn("px-2 py-1", okSet.has(r.status) ? "text-emerald-700" : "text-red-700")}>
-                        {p.statusLabels[r.status] ?? r.status}
-                        {r.note ? <span className="ml-1 text-xs text-muted-foreground">{r.note}</span> : null}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          ) : null}
-          <div className="flex items-center justify-between gap-2">
-            <span className="text-sm text-muted-foreground">{preview ? `Готово к загрузке: ${okCount} из ${preview.length}` : ""}</span>
-            <div className="flex gap-2">
-              <Button variant="outline" size="sm" onClick={() => p.onOpenChange(false)}>Отмена</Button>
-              <Button size="sm" disabled={!preview || okCount === 0 || busy} onClick={() => void apply()}>
-                Загрузить
-              </Button>
-            </div>
-          </div>
+      <div className="space-y-3.5">
+        <p className="text-[12.5px] leading-relaxed text-muted-foreground">{p.hint}</p>
+        <div className="flex flex-wrap items-center gap-2">
+          <button type="button" className={PAYROLL_BTN.secondary} onClick={() => void downloadXlsx(p.templateFile, p.templateHeader, [])}>
+            <Download className="text-emerald-600" /> Шаблон
+          </button>
+          <span className="text-[12px] text-muted-foreground">Колонки: {p.templateHeader.join(", ")}</span>
         </div>
-      </DialogContent>
-    </Dialog>
+        <ExcelFileDropZone onFile={(f) => void onFile(f)} disabled={busy} />
+        {error ? <PayrollModalNote tone="error">{error}</PayrollModalNote> : null}
+        {preview ? (
+          <div className="max-h-80 overflow-auto rounded-lg border border-[var(--pr-border)]">
+            <table className={PAYROLL_TABLE}>
+              <thead className={cn(PAYROLL_THEAD, "sticky top-0 z-10")}>
+                <tr>
+                  <th className={PAYROLL_TH}>#</th>
+                  <th className={PAYROLL_TH}>Код</th>
+                  <th className={PAYROLL_TH}>Сотрудник</th>
+                  <th className={cn(PAYROLL_TH, "text-right")}>Сумма</th>
+                  <th className={PAYROLL_TH}>Статус</th>
+                </tr>
+              </thead>
+              <tbody>
+                {preview.map((r) => (
+                  <tr key={r.row} className={PAYROLL_TR}>
+                    <td className={cn(CELL, "text-muted-foreground")}>{r.row}</td>
+                    <td className={CELL}>{r.code}</td>
+                    <td className={CELL}>{r.fio ?? "—"}</td>
+                    <td className={cn(CELL, "text-right tabular-nums")}>{money(r.amount ?? null)}</td>
+                    <td className={cn(CELL, okSet.has(r.status) ? "text-emerald-700" : "text-rose-700")}>
+                      {p.statusLabels[r.status] ?? r.status}
+                      {r.note ? <span className="ml-1 text-[12px] text-muted-foreground">{r.note}</span> : null}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : null}
+        {preview ? (
+          <p className="text-[12.5px] text-muted-foreground">
+            Готово к загрузке: <b className="text-[var(--pr-brand-600)]">{okCount}</b> из {preview.length}
+          </p>
+        ) : null}
+        <PayrollModalActions onCancel={() => p.onOpenChange(false)} onSubmit={() => void apply()} submitLabel="Загрузить" busy={busy} disabled={!preview || okCount === 0} />
+      </div>
+    </PayrollModal>
   );
 }

@@ -2,12 +2,19 @@
 
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { FileSpreadsheet, Lock, Pencil, Plus, RefreshCw, SlidersHorizontal, Trash2 } from "lucide-react";
+import { FileSpreadsheet, Lock, Pencil, Plus, RefreshCw, SlidersHorizontal } from "lucide-react";
 import { PageShell } from "@/components/dashboard/page-shell";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { useAppConfirm } from "@/components/ui/app-confirm-dialog";
+import {
+  PAYROLL_MODAL_INPUT,
+  PAYROLL_MODAL_SELECT,
+  PayrollDeleteButton,
+  PayrollModal,
+  PayrollModalActions,
+  PayrollModalField,
+  PayrollModalSwitch,
+  usePayrollConfirm
+} from "@/components/payroll/kit/payroll-kit-modal";
 import { TableColumnSettingsDialog } from "@/components/data-table/table-column-settings-dialog";
 import { useUserTablePrefs } from "@/hooks/use-user-table-prefs";
 import { usePermissions } from "@/lib/use-permissions";
@@ -15,7 +22,7 @@ import { useTenant } from "@/lib/api-client";
 import { payrollApi } from "@/lib/payroll/payroll-api";
 import { downloadXlsx } from "@/lib/payroll/payroll-xlsx";
 import { cn } from "@/lib/utils";
-import { Field, NATIVE_SELECT, useNotice } from "@/components/payroll/payroll-ui";
+import { useNotice } from "@/components/payroll/payroll-ui";
 import { PayrollPageTitle, PayrollRelatedBar, PayrollSegmentedTabs } from "@/components/payroll/kit/payroll-kit-layout";
 import {
   PAYROLL_ICON_BTN,
@@ -75,7 +82,7 @@ export function PayrollItemsWorkspace() {
   const canUpdate = perms.isAdmin || perms.has("staff.zarplaty.update");
   const canDelete = perms.isAdmin || perms.has("staff.zarplaty.delete");
   const notice = useNotice();
-  const { confirm, dialog } = useAppConfirm();
+  const { confirm, dialog } = usePayrollConfirm();
   const [draft, setDraft] = useState<Draft | null>(null);
   const [status, setStatus] = useState<Status>("active");
   const [q, setQ] = useState("");
@@ -264,74 +271,58 @@ export function PayrollItemsWorkspace() {
         saving={prefs.saving}
       />
 
-      <Dialog open={draft != null} onOpenChange={(o) => !o && setDraft(null)}>
-        <DialogContent className="payroll-template sm:max-w-lg">
-          <DialogHeader>
-            <DialogTitle>{draft?.id ? "Изменить статью" : "Новая статья"}</DialogTitle>
-          </DialogHeader>
-          {draft ? (
-            <div className="grid gap-3">
-              <Field label="Название">
-                <Input value={draft.name} disabled={readOnly} onChange={(e) => setDraft({ ...draft, name: e.target.value })} autoFocus />
-              </Field>
-              <div className="grid grid-cols-2 gap-3">
-                <Field label="Тип">
-                  <select className={NATIVE_SELECT} value={draft.type} disabled={readOnly} onChange={(e) => setDraft({ ...draft, type: e.target.value as Draft["type"] })}>
-                    <option value="allowance">Надбавка</option>
-                    <option value="deduction">Удержание</option>
-                  </select>
-                </Field>
-                <Field label="Расчёт">
-                  <select className={NATIVE_SELECT} value={draft.calc_type} disabled={readOnly} onChange={(e) => setDraft({ ...draft, calc_type: e.target.value as Draft["calc_type"] })}>
-                    <option value="manual">Вручную</option>
-                    <option value="formula">Формула</option>
-                  </select>
-                </Field>
-                <Field label="Код">
-                  <Input value={draft.code ?? ""} disabled={readOnly} onChange={(e) => setDraft({ ...draft, code: e.target.value })} />
-                </Field>
-                <Field label="Сортировка">
-                  <Input type="number" value={draft.sort_order} disabled={readOnly} onChange={(e) => setDraft({ ...draft, sort_order: Number(e.target.value) || 0 })} />
-                </Field>
-                <Field label="Цвет">
-                  <Input type="color" value={draft.color ?? "#64748b"} disabled={readOnly} onChange={(e) => setDraft({ ...draft, color: e.target.value })} className="h-9 p-1" />
-                </Field>
-                <label className="flex items-center gap-2 pt-5 text-sm">
-                  <input type="checkbox" className="accent-primary" checked={draft.is_active} disabled={readOnly} onChange={(e) => setDraft({ ...draft, is_active: e.target.checked })} />
-                  Активный
-                </label>
-              </div>
-              <Field label="Комментарий">
-                <Input value={draft.comment ?? ""} disabled={readOnly} onChange={(e) => setDraft({ ...draft, comment: e.target.value })} />
-              </Field>
-              <div className="flex items-center justify-between gap-2 pt-2">
-                {draft.id && canDelete ? (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="text-red-600 hover:bg-red-50 hover:text-red-700"
+      <PayrollModal open={draft != null} onClose={() => setDraft(null)} title={draft?.id ? "Редактировать надбавку или вычет" : "Добавить надбавку или вычет"}>
+        {draft ? (
+          <div className="space-y-3.5">
+            <PayrollModalField label="Названия">
+              <input className={PAYROLL_MODAL_INPUT} value={draft.name} disabled={readOnly} onChange={(e) => setDraft({ ...draft, name: e.target.value })} />
+            </PayrollModalField>
+            <PayrollModalField label="Код">
+              <input className={PAYROLL_MODAL_INPUT} value={draft.code ?? ""} disabled={readOnly} onChange={(e) => setDraft({ ...draft, code: e.target.value })} />
+            </PayrollModalField>
+            <PayrollModalField label="Сортировка">
+              <input type="number" step={1} className={PAYROLL_MODAL_INPUT} value={draft.sort_order} disabled={readOnly} onChange={(e) => setDraft({ ...draft, sort_order: Number(e.target.value) || 0 })} />
+            </PayrollModalField>
+            <PayrollModalField label="Тип" select>
+              <select className={PAYROLL_MODAL_SELECT} value={draft.type} disabled={readOnly} onChange={(e) => setDraft({ ...draft, type: e.target.value as Draft["type"] })}>
+                <option value="allowance">Надбавка</option>
+                <option value="deduction">Удержание</option>
+              </select>
+            </PayrollModalField>
+            <PayrollModalField label="Тип расчёта" select>
+              <select className={PAYROLL_MODAL_SELECT} value={draft.calc_type} disabled={readOnly} onChange={(e) => setDraft({ ...draft, calc_type: e.target.value as Draft["calc_type"] })}>
+                <option value="formula">На основе формулы</option>
+                <option value="manual">Ввод вручную</option>
+              </select>
+            </PayrollModalField>
+            <PayrollModalField label="Комментарий">
+              <textarea rows={2} className={cn(PAYROLL_MODAL_INPUT, "min-h-[58px] resize-y")} value={draft.comment ?? ""} disabled={readOnly} onChange={(e) => setDraft({ ...draft, comment: e.target.value })} />
+            </PayrollModalField>
+            <div className="flex items-center justify-between rounded-lg border border-[var(--pr-border)] px-3.5 py-2">
+              <span className="text-[13px] font-medium text-foreground/80">Цвет в ведомости</span>
+              <input type="color" aria-label="Цвет" value={draft.color ?? "#64748b"} disabled={readOnly} onChange={(e) => setDraft({ ...draft, color: e.target.value })} className="h-7 w-10 cursor-pointer rounded-md border border-[var(--pr-input)] bg-card p-0.5" />
+            </div>
+            <PayrollModalSwitch label="Активный" checked={draft.is_active} disabled={readOnly} onChange={(v) => setDraft({ ...draft, is_active: v })} />
+            <PayrollModalActions
+              onCancel={() => setDraft(null)}
+              onSubmit={readOnly ? undefined : () => save.mutate(draft)}
+              busy={save.isPending}
+              disabled={!draft.name.trim()}
+              left={
+                draft.id && canDelete ? (
+                  <PayrollDeleteButton
                     disabled={remove.isPending}
                     onClick={async () => {
-                      const ok = await confirm({ title: "Удалить статью", message: `Удалить «${draft.name}»?`, confirmLabel: "Удалить", cancelLabel: "Отмена", destructive: true });
+                      const ok = await confirm({ title: "Удаление записи", message: "Вы действительно хотите удалить эту запись?", detail: `«${draft.name}»${draft.code ? ` (${draft.code})` : ""}`, confirmLabel: "Удалить", cancelLabel: "Отмена", destructive: true });
                       if (ok && draft.id) remove.mutate(draft.id);
                     }}
-                  >
-                    <Trash2 className="mr-1 size-4" /> Удалить
-                  </Button>
-                ) : (
-                  <span />
-                )}
-                <div className="flex gap-2">
-                  <Button variant="outline" size="sm" onClick={() => setDraft(null)}>Отмена</Button>
-                  <Button size="sm" disabled={readOnly || !draft.name.trim() || save.isPending} onClick={() => save.mutate(draft)}>
-                    Сохранить
-                  </Button>
-                </div>
-              </div>
-            </div>
-          ) : null}
-        </DialogContent>
-      </Dialog>
+                  />
+                ) : null
+              }
+            />
+          </div>
+        ) : null}
+      </PayrollModal>
       {dialog}
     </PageShell>
   );
