@@ -9,6 +9,19 @@
  * Nolga bo'lish → 0 (ogohlantirish bilan).
  */
 
+export const MAX_RECURSION_DEPTH = 100;
+export const MAX_CALC_TIME_MS = 5000;
+export const MAX_NUMBER = 1e15;
+export const MAX_FORMULA_LENGTH = 1000;
+export const MAX_FUNCTION_ARGS = 50;
+
+function clampNumber(x: number): number {
+  if (!Number.isFinite(x)) return 0;
+  if (x > MAX_NUMBER) return MAX_NUMBER;
+  if (x < -MAX_NUMBER) return -MAX_NUMBER;
+  return x;
+}
+
 export type FormulaAst =
   | { k: "num"; v: number }
   | { k: "var"; name: string }
@@ -21,6 +34,12 @@ export class FormulaSyntaxError extends Error {
     message: string,
     public pos: number
   ) {
+    super(message);
+  }
+}
+
+export class FormulaRuntimeError extends Error {
+  constructor(message: string) {
     super(message);
   }
 }
@@ -234,6 +253,7 @@ function checkArity(fn: string, n: number, pos: number) {
 export function parseFormula(text: string): FormulaAst {
   const src = text.trim();
   if (!src) throw new FormulaSyntaxError("Формула пустая", 0);
+  if (src.length > MAX_FORMULA_LENGTH) throw new FormulaSyntaxError(`Формула слишком длинная (max ${MAX_FORMULA_LENGTH} символов)`, 0);
   return new Parser(tokenize(src)).parseTop();
 }
 
@@ -249,71 +269,97 @@ export function collectVariables(ast: FormulaAst, out = new Set<string>()): Set<
 
 function roundTo(x: number, n: number, mode: "round" | "up" | "down"): number {
   const f = 10 ** Math.trunc(n);
-  const v = x * f;
+  const v = clampNumber(x * f);
   const r = mode === "round" ? Math.sign(v) * Math.round(Math.abs(v)) : mode === "up" ? Math.sign(v) * Math.ceil(Math.abs(v)) : Math.trunc(v);
-  return r / f;
+  return clampNumber(r / f);
 }
 
 export type EvalResult = { value: number; warnings: string[] };
 
 export function evaluateFormula(ast: FormulaAst, vars: Map<string, number>): EvalResult {
   const warnings = new Set<string>();
+  const startTime = Date.now();
+  let depth = 0;
+
+  const checkLimits = () => {
+    depth++;
+    if (depth > MAX_RECURSION_DEPTH) {
+      throw new FormulaRuntimeError(`Превышена глубина рекурсии (${MAX_RECURSION_DEPTH})`);
+    }
+    if (Date.now() - startTime > MAX_CALC_TIME_MS) {
+      throw new FormulaRuntimeError(`Превышено время вычисления (${MAX_CALC_TIME_MS}ms)`);
+    }
+  };
+
   const ev = (n: FormulaAst): number => {
+    checkLimits();
     switch (n.k) {
       case "num":
-        return n.v;
+        return clampNumber(n.v);
       case "var": {
         const v = vars.get(normalizeVarName(n.name));
-        if (v === undefined) throw new FormulaSyntaxError(`Неизвестная переменная [${n.name}]`, 0);
-        return v;
+        if (v === undefined) {
+          warnings.add(`unknown_var:${n.name}`);
+          return 0;
+        }
+        return clampNumber(v);
       }
       case "neg":
-        return -ev(n.e);
+        return clampNumber(-ev(n.e));
       case "bin": {
         const a = ev(n.a);
         const b = ev(n.b);
-        switch (n.op) {
-          case "+": return a + b;
-          case "-": return a - b;
-          case "*": return a * b;
-          case "/":
-            if (b === 0) {
-              warnings.add("division_by_zero");
-              return 0;
-            }
-            return a / b;
-          case "^": return a ** b;
-          case ">": return a > b ? 1 : 0;
-          case "<": return a < b ? 1 : 0;
-          case ">=": return a >= b ? 1 : 0;
-          case "<=": return a <= b ? 1 : 0;
-          case "=": return Math.abs(a - b) < 1e-9 ? 1 : 0;
-          case "<>": return Math.abs(a - b) >= 1e-9 ? 1 : 0;
-        }
-        return 0;
+        const result = (() => {
+          switch (n.op) {
+            case "+": return a + b;
+            case "-": return a - b;
+            case "*": return a * b;
+            case "/":
+              if (b === 0) {
+                warnings.add("division_by_zero");
+                return 0;
+              }
+              return a / b;
+            case "^": return a ** b;
+            case ">": return a > b ? 1 : 0;
+            case "<": return a < b ? 1 : 0;
+            case ">=": return a >= b ? 1 : 0;
+            case "<=": return a <= b ? 1 : 0;
+            case "=": return Math.abs(a - b) < 1e-9 ? 1 : 0;
+            case "<>": return Math.abs(a - b) >= 1e-9 ? 1 : 0;
+          }
+          return 0;
+        })();
+        return clampNumber(result);
       }
       case "call": {
-        const A = n.args;
-        switch (n.fn) {
-          case "IF": return ev(A[0]!) !== 0 ? ev(A[1]!) : A[2] ? ev(A[2]) : 0;
-          case "AND": return A.every((x) => ev(x) !== 0) ? 1 : 0;
-          case "OR": return A.some((x) => ev(x) !== 0) ? 1 : 0;
-          case "NOT": return ev(A[0]!) === 0 ? 1 : 0;
-          case "ABS": return Math.abs(ev(A[0]!));
-          case "ROUND": return roundTo(ev(A[0]!), A[1] ? ev(A[1]) : 0, "round");
-          case "ROUNDUP": return roundTo(ev(A[0]!), A[1] ? ev(A[1]) : 0, "up");
-          case "ROUNDDOWN": return roundTo(ev(A[0]!), A[1] ? ev(A[1]) : 0, "down");
-          case "MIN": return Math.min(...A.map(ev));
-          case "MAX": return Math.max(...A.map(ev));
-          case "SUM": return A.map(ev).reduce((s, x) => s + x, 0);
+        if (n.args.length > MAX_FUNCTION_ARGS) {
+          throw new FormulaRuntimeError(`Слишком много аргументов (${MAX_FUNCTION_ARGS})`);
         }
-        return 0;
+        const A = n.args;
+        const result = (() => {
+          switch (n.fn) {
+            case "IF": return ev(A[0]!) !== 0 ? ev(A[1]!) : A[2] ? ev(A[2]) : 0;
+            case "AND": return A.every((x) => ev(x) !== 0) ? 1 : 0;
+            case "OR": return A.some((x) => ev(x) !== 0) ? 1 : 0;
+            case "NOT": return ev(A[0]!) === 0 ? 1 : 0;
+            case "ABS": return Math.abs(ev(A[0]!));
+            case "ROUND": return roundTo(ev(A[0]!), A[1] ? ev(A[1]) : 0, "round");
+            case "ROUNDUP": return roundTo(ev(A[0]!), A[1] ? ev(A[1]) : 0, "up");
+            case "ROUNDDOWN": return roundTo(ev(A[0]!), A[1] ? ev(A[1]) : 0, "down");
+            case "MIN": return Math.min(...A.map((x) => ev(x)));
+            case "MAX": return Math.max(...A.map((x) => ev(x)));
+            case "SUM": return A.map((x) => ev(x)).reduce((s, x) => s + x, 0);
+          }
+          return 0;
+        })();
+        return clampNumber(result);
       }
     }
   };
   const value = ev(ast);
   if (!Number.isFinite(value)) return { value: 0, warnings: [...warnings, "not_finite"] };
-  return { value: Math.round(value * 100) / 100, warnings: [...warnings] };
+  return { value: clampNumber(Math.round(value * 100) / 100), warnings: [...warnings] };
 }
 
 export type FormulaValidation = {

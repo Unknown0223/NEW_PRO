@@ -62,7 +62,7 @@ export async function listBonusKpi(tenantId: number, f: BonusKpiFilter) {
     prisma.payrollBonusAssignment.findMany({ where: { tenant_id: tenantId, year: f.year, month: f.month, user_id: { in: ids } } }),
     prisma.kpiGroup.findMany({
       where: { tenant_id: tenantId, is_active: true, ...(f.kpi_group_id ? { id: f.kpi_group_id } : {}) },
-      select: { id: true, name: true },
+      select: { id: true, name: true, bonus_formula: true },
       orderBy: [{ sort_order: "asc" }, { name: "asc" }]
     }),
     prisma.payrollFormula.findMany({ where: { tenant_id: tenantId }, select: { id: true, name: true } }),
@@ -99,6 +99,7 @@ export async function listBonusKpi(tenantId: number, f: BonusKpiFilter) {
       groups: groups.map((g) => ({
         kpi_group_id: g.id,
         name: g.name,
+        bonus_formula: g.bonus_formula,
         fact: snap.kpi?.fact_by_group?.[String(g.id)] ?? ZERO_METRICS,
         plan: snap.kpi?.plan_by_group?.[String(g.id)] ?? ZERO_METRICS,
         assignments: mine.filter((a) => a.kpi_group_id === g.id).map(toAssign)
@@ -124,6 +125,7 @@ export type AssignInput = {
   trade_direction_id?: number;
   formula_id: number;
   target_item_id?: number | null;
+  group_formula?: string;
 };
 
 export async function assignBonusFormula(tenantId: number, input: AssignInput, actorId: number | null) {
@@ -160,8 +162,17 @@ export async function assignBonusFormula(tenantId: number, input: AssignInput, a
     };
     await prisma.payrollBonusAssignment.upsert({
       where: { payroll_bonus_assignments_uq: key },
-      create: { ...key, formula_id: formula.id, formula_text_snapshot: formula.text, created_by: actorId },
-      update: { formula_id: formula.id, formula_text_snapshot: formula.text, created_by: actorId }
+      create: {
+        ...key,
+        formula_id: formula.id,
+        formula_text_snapshot: input.group_formula ?? formula.text,
+        created_by: actorId
+      },
+      update: {
+        formula_id: formula.id,
+        formula_text_snapshot: input.group_formula ?? formula.text,
+        created_by: actorId
+      }
     });
     saved++;
   }

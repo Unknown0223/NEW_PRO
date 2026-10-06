@@ -8,7 +8,7 @@ import { PayrollEmptyRow } from "@/components/payroll/kit/payroll-kit-table";
 
 export type Metrics = { cost: number; count: number; volume: number; acb: number; order_count: number };
 export type Assign = { id: number; kpi_group_id: number; formula_id: number; formula_name: string | null; formula_text: string; target_item_name: string | null; value: number | null };
-export type GroupCell = { kpi_group_id: number; name: string; fact: Metrics; plan: Metrics; assignments: Assign[] };
+export type GroupCell = { kpi_group_id: number; name: string; bonus_formula: string | null; fact: Metrics; plan: Metrics; assignments: Assign[] };
 export type BonusRow = { user_id: number; fio: string; code: string | null; role: string; is_active: boolean; record_status: string | null; fact: Metrics; plan: Metrics; assignments_all: Assign[]; groups: GroupCell[] };
 
 const METRICS: Array<{ key: keyof Metrics; label: string }> = [
@@ -166,7 +166,14 @@ export function PayrollBonusTable({ rows, groupFilter, loading, editable, expand
                 ? groups.map((g) => (
                     <tr key={`${r.user_id}-${g.kpi_group_id}`} className="border-b border-border/40">
                       <td className={TD} />
-                      <td className={cn(TD, "pl-9 text-[12.5px] text-muted-foreground")}>{g.name}</td>
+                      <td className={cn(TD, "pl-9 text-[12.5px] text-muted-foreground")}>
+                        {g.name}
+                        {g.bonus_formula ? (
+                          <span className="block text-[10.5px] text-muted-foreground/70 font-mono break-all" title={g.bonus_formula}>
+                            {g.bonus_formula.length <= 60 ? g.bonus_formula : g.bonus_formula.slice(0, 57) + "…"}
+                          </span>
+                        ) : null}
+                      </td>
                       {METRICS.map((m, i) => (
                         <MetricBox
                           key={m.key}
@@ -179,7 +186,7 @@ export function PayrollBonusTable({ rows, groupFilter, loading, editable, expand
                     </tr>
                   ))
                 : [])
-            ];
+              ];
           })}
         </tbody>
       </table>

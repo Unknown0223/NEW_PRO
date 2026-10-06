@@ -10,7 +10,8 @@ const assignBody = z.object({
   kpi_group_id: z.number().int().min(0),
   trade_direction_id: z.number().int().min(0).optional(),
   formula_id: z.number().int().positive(),
-  target_item_id: z.number().int().positive().nullable().optional()
+  target_item_id: z.number().int().positive().nullable().optional(),
+  group_formula: z.string().max(1000).optional()
 });
 
 const posInt = (v: unknown) => {

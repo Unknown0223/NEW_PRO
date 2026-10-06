@@ -6,7 +6,7 @@ import { assignResKpiGroups, type ResAssignResult } from "./payroll.preset.assig
 import { mergeItemAmounts, parseItemAmounts } from "./payroll.item-amounts.pure";
 import { validateFormula } from "./payroll.formula-engine";
 import { knownVariableSet } from "./payroll.formula-vars";
-import { RES_FORMULAS, RES_ITEMS, RES_ROLE_COLUMNS, RES_ROLE_DEFAULTS } from "./payroll.preset.pure";
+import { RES_FORMULAS, RES_ITEMS, RES_ROLE_COLUMNS, RES_ROLE_DEFAULTS, RES_AGENT_KPI, RES_TEAM_KPI } from "./payroll.preset.pure";
 
 export type PresetResult = {
   items_created: string[];
@@ -89,6 +89,19 @@ export async function applyResPreset(
   }
 
   const { year, month } = ym ?? (await currentPayrollMonth(tenantId));
+
+  const kpiGroups = await prisma.kpiGroup.findMany({
+    where: { tenant_id: tenantId, is_active: true },
+    select: { id: true, bonus_formula: true }
+  });
+  for (const g of kpiGroups) {
+    if (g.bonus_formula !== null) continue;
+    await prisma.kpiGroup.update({
+      where: { id: g.id },
+      data: { bonus_formula: RES_AGENT_KPI } as any
+    });
+  }
+
   out.kpi = await assignResKpiGroups(tenantId, year, month, actorId);
 
   await appendTenantAuditEvent({

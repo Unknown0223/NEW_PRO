@@ -5,7 +5,9 @@ import {
   normalizeVarName,
   parseFormula,
   validateFormula,
-  type FormulaValidation
+  type FormulaValidation,
+  type FormulaAst,
+  collectVariables
 } from "./payroll.formula-engine";
 import { buildFormulaVars, knownVariableSet, staticVariableGroups } from "./payroll.formula-vars";
 import { partVarName } from "./payroll.item-amounts.pure";
@@ -13,6 +15,30 @@ import { loadPayrollCalcContext, loadPayrollUser } from "./payroll.calc-context"
 import { loadPayrollInputs } from "./payroll.inputs";
 import { markPayrollDirtyForTenant } from "./payroll.dirty";
 import { PayrollError } from "./payroll.route-helpers";
+
+const formulaCache = new Map<string, { ast: FormulaAst; variables: string[]; ts: number }>();
+const CACHE_TTL_MS = 60_000;
+const CACHE_MAX_SIZE = 500;
+
+export function parseFormulaCached(text: string): FormulaAst {
+  const cached = formulaCache.get(text);
+  const now = Date.now();
+  if (cached && now - cached.ts < CACHE_TTL_MS) {
+    return cached.ast;
+  }
+  const ast = parseFormula(text);
+  const variables = [...collectVariables(ast)];
+  if (formulaCache.size >= CACHE_MAX_SIZE) {
+    const oldestKey = [...formulaCache.entries()].reduce((min, [k, v]) => (v.ts < min.ts ? { key: k, ts: v.ts } : min), { key: "", ts: Infinity }).key;
+    if (oldestKey) formulaCache.delete(oldestKey);
+  }
+  formulaCache.set(text, { ast, variables, ts: now });
+  return ast;
+}
+
+export function validateFormulaText(text: string, known: Set<string>): FormulaValidation {
+  return validateFormula(text, known);
+}
 
 export type PayrollFormulaDto = {
   id: number;

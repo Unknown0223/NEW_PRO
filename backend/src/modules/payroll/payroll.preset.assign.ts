@@ -14,7 +14,13 @@ export type ResAssignResult = {
   extra_groups: number;
 };
 
-const KPI_KEYS = ["kpi1", "kpi2", "kpi3", "kpi4"];
+export interface KpiGroupWithFormula {
+  id: number;
+  agents: { user_id: number }[];
+  bonus_formula: string | null;
+}
+
+const KPI_KEYS = ["kpi1", "kpi2", "kpi3", "kpi4"] as const;
 
 /**
  * «KPI по группе» biriktirmalari: agent — o'z KPI guruhlari, СВР — jamoa agentlari guruhlari;
@@ -42,9 +48,9 @@ export async function assignResKpiGroups(
     }),
     prisma.kpiGroup.findMany({
       where: { tenant_id: tenantId, is_active: true },
-      select: { id: true, agents: { select: { user_id: true } } },
+      select: { id: true, agents: { select: { user_id: true } }, bonus_formula: true },
       orderBy: [{ sort_order: "asc" }, { name: "asc" }, { id: "asc" }]
-    }),
+    }) as Promise<KpiGroupWithFormula[]>,
     prisma.user.findMany({
       where: { tenant_id: tenantId, is_active: true, role: { in: Object.keys(RES_KPI_FORMULA_BY_ROLE) } },
       select: { id: true, role: true }
@@ -65,6 +71,12 @@ export async function assignResKpiGroups(
     const ids = new Set(memberIds);
     return groups.filter((g) => g.agents.some((a) => ids.has(a.user_id))).map((g) => g.id);
   };
+
+  const groupsWithFormula = groups as KpiGroupWithFormula[];
+  const groupFormulaMap = new Map<number, string>();
+  for (const g of groupsWithFormula) {
+    if (g.bonus_formula) groupFormulaMap.set(g.id, g.bonus_formula);
+  }
 
   const touched: number[] = [];
   for (const u of users) {
@@ -87,6 +99,8 @@ export async function assignResKpiGroups(
     for (const [i, groupId] of mine.slice(0, KPI_KEYS.length).entries()) {
       const target = itemIds[i]!;
       if (takenGroups.has(groupId) || takenItems.has(target)) continue;
+      const groupFormula = groupFormulaMap.get(groupId);
+      const snapshotText = groupFormula ?? formula.text;
       await prisma.payrollBonusAssignment.create({
         data: {
           tenant_id: tenantId,
@@ -96,7 +110,7 @@ export async function assignResKpiGroups(
           kpi_group_id: groupId,
           trade_direction_id: 0,
           formula_id: formula.id,
-          formula_text_snapshot: formula.text,
+          formula_text_snapshot: snapshotText,
           target_item_id: target,
           created_by: actorId
         }

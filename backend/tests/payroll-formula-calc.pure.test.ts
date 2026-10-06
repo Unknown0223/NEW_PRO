@@ -140,7 +140,7 @@ describe("computePayroll", () => {
     expect(r.gross).toBe(1_500_000 - 200_000 - 300_000);
   });
 
-  it("formula xatosi qatorni 0 qiladi va xatoni qaytaradi", () => {
+  it("noma'lum o'zgaruvchili formula 0 qiladi va ogohlantirish beradi", () => {
     const r = computePayroll({
       inputs: baseInputs(),
       items,
@@ -151,7 +151,7 @@ describe("computePayroll", () => {
       carryAmount: 0,
       salaryPaid: 0
     });
-    expect(r.errors.length).toBe(1);
+    expect(r.warnings.length).toBeGreaterThan(0);
     expect(r.gross).toBe(3_000_000);
   });
 

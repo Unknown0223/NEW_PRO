@@ -561,6 +561,7 @@ model KpiGroup {
   sort_order Int               @default(0)
   comment    String?
   is_active  Boolean           @default(true)
+  bonus_formula String?         @db.Text
   created_at DateTime          @default(now())
   updated_at DateTime          @updatedAt
   agents          KpiGroupAgent[]

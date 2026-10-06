@@ -9,11 +9,12 @@ import { PAYROLL_MODAL_SELECT, PayrollModal, PayrollModalActions, PayrollModalFi
 
 export type BonusFormula = { id: number; name: string; scope: string; is_active: boolean; target_item_id: number | null; text: string; assignments?: number };
 export type AssignTarget = { userIds: number[]; groupId: number };
+export type GroupWithFormula = { id: number; name: string; bonus_formula: string | null };
 
 export function PayrollBonusAssignDialog(props: {
   target: AssignTarget | null;
   ym: Ym;
-  groups: Array<{ id: number; name: string }>;
+  groups: GroupWithFormula[];
   formulas: BonusFormula[];
   items: PayrollItem[];
   onClose: () => void;
@@ -24,10 +25,12 @@ export function PayrollBonusAssignDialog(props: {
   const [groupId, setGroupId] = useState<number | null>(null);
   const [formulaId, setFormulaId] = useState("");
   const [itemId, setItemId] = useState("");
+  const [groupFormula, setGroupFormula] = useState("");
   const [error, setError] = useState<string | null>(null);
   const t = props.target;
   const gid = groupId ?? t?.groupId ?? 0;
   const formula = props.formulas.find((f) => String(f.id) === formulaId);
+  const selectedGroup = props.groups.find((g) => g.id === gid);
 
   const save = useMutation({
     mutationFn: () =>
@@ -36,7 +39,8 @@ export function PayrollBonusAssignDialog(props: {
         user_ids: t?.userIds ?? [],
         kpi_group_id: gid,
         formula_id: Number(formulaId),
-        target_item_id: itemId ? Number(itemId) : null
+        target_item_id: itemId ? Number(itemId) : null,
+        group_formula: groupFormula || selectedGroup?.bonus_formula || undefined
       }),
     onSuccess: (r) => {
       props.onDone(`Назначено: ${r.saved}${r.skipped_confirmed.length ? `, пропущено подтверждённых ${r.skipped_confirmed.length}` : ""}`);
@@ -49,6 +53,7 @@ export function PayrollBonusAssignDialog(props: {
     setGroupId(null);
     setFormulaId("");
     setItemId("");
+    setGroupFormula("");
     setError(null);
     props.onClose();
   }
@@ -58,11 +63,29 @@ export function PayrollBonusAssignDialog(props: {
       <div className="space-y-3.5">
         <PayrollModalNote>Сотрудников: <b className="text-foreground">{t?.userIds.length ?? 0}</b></PayrollModalNote>
         <PayrollModalField label="Группа KPI" select>
-          <select className={PAYROLL_MODAL_SELECT} value={gid} onChange={(e) => setGroupId(Number(e.target.value))}>
+          <select className={PAYROLL_MODAL_SELECT} value={gid} onChange={(e) => { setGroupId(Number(e.target.value)); setGroupFormula(props.groups.find((g) => g.id === Number(e.target.value))?.bonus_formula ?? ""); }}>
             <option value={0}>Весь объём</option>
             {props.groups.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
           </select>
         </PayrollModalField>
+        {gid > 0 && selectedGroup ? (
+          <PayrollModalField
+            label="Формула группы"
+            hint={
+              <span className="text-[11px] text-muted-foreground">
+                {selectedGroup.bonus_formula ? "Переопределит формулу назначения" : "Используется формула назначения"}
+              </span>
+            }
+          >
+            <textarea
+              className="w-full rounded-lg border border-[var(--pr-border)] bg-[var(--pr-head)] px-2 py-1.5 font-mono text-[12px] outline-none ring-primary/30 focus-within:ring-1"
+              rows={3}
+              value={groupFormula}
+              onChange={(e) => setGroupFormula(e.target.value)}
+              placeholder="Введите формулу KPI для этой группы..."
+            />
+          </PayrollModalField>
+        ) : null}
         <PayrollModalField
           label="Формула"
           select
