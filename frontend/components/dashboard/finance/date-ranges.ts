@@ -1,4 +1,5 @@
 import type { FinanceFilterDraft } from "@/components/dashboard/finance/types";
+import { monthToDateRange } from "@/components/dashboard/shared/date-ranges";
 
 export {
   formatDateDot,
@@ -8,8 +9,7 @@ export {
 } from "@/components/dashboard/shared/date-ranges";
 
 export function defaultFinanceDraft(supervisorId = ""): FinanceFilterDraft {
-  const to = new Date().toISOString().slice(0, 10);
-  const from = new Date(Date.now() - 29 * 86400000).toISOString().slice(0, 10);
+  const { from, to } = monthToDateRange();
   return {
     date_type: "order",
     from,

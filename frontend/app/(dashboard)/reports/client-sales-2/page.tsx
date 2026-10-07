@@ -12,6 +12,7 @@ import { SearchableMultiSelectPanel } from "@/components/ui/searchable-multi-sel
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { DateRangePopover, formatDateRangeButton } from "@/components/ui/date-range-popover";
+import { monthToDateRange } from "@/components/dashboard/shared/date-ranges";
 import { formatNumberGrouped } from "@/lib/format-numbers";
 import { cn } from "@/lib/utils";
 import { downloadXlsxSheet } from "@/lib/download-xlsx";
@@ -112,9 +113,7 @@ export default function ReportClientSales2Page() {
   const tenantSlug = useAuthStore((s) => s.tenantSlug);
   const hydrated = useAuthStoreHydrated();
 
-  const today = new Date();
-  const from0 = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().slice(0, 10);
-  const to0 = new Date(today.getFullYear(), today.getMonth() + 1, 0).toISOString().slice(0, 10);
+  const { from: from0, to: to0 } = monthToDateRange();
   const [dateOpen, setDateOpen] = useState(false);
   const dateAnchorRef = useRef<HTMLButtonElement>(null);
   const [exporting, setExporting] = useState(false);

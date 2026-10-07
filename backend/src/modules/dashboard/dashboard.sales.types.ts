@@ -1,5 +1,5 @@
 export type SalesDashboardFilters = {
-  date_type: "order_date" | "shipment_date";
+  date_type: "order_date" | "shipment_date" | "delivery_date";
   from: string;
   to: string;
   status: string[];

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Building2, CreditCard, MapPin, Pencil, Plus, Route, Search, Users, Warehouse, Wallet, type LucideIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -9,7 +9,15 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { api } from "@/lib/api";
 import { accessRoleLabel } from "@/lib/access-role-label";
 import type { AccessUserDetailVm } from "./hooks/use-access-user-detail-panel";
-import type { DetailModalKind, DimRow, TerritoryApiRow } from "./access-user-detail.types";
+import {
+  userMessageAfterAccessPatchFailure,
+  type AccessTerritoriesCatalog,
+  type AccessTerritoryTreeNode,
+  type DetailModalKind,
+  type DimRow,
+  type TerritoryApiRow
+} from "./access-user-detail.types";
+import { TerritoryReferenceTreeRows } from "./access-user-detail-territory-ui";
 import type { AccessUserDetailTab } from "./access-user-detail-header";
 
 type ScopeTab = Extract<AccessUserDetailTab, "territories" | "branches" | "cash_desks" | "payment_methods" | "warehouses" | "trade_directions" | "staff">;
@@ -63,6 +71,131 @@ function useScopeLabels(tenantSlug: string, tab: ScopeTab) {
   return tab === "territories" ? territoriesQ : dimQ;
 }
 
+function subtreeSelected(node: AccessTerritoryTreeNode, sel: Set<string>): boolean {
+  if (sel.has(String(node.id))) return true;
+  return (node.children ?? []).some((c) => subtreeSelected(c, sel));
+}
+
+function filterSelectedTree(nodes: AccessTerritoryTreeNode[], sel: Set<string>): AccessTerritoryTreeNode[] {
+  return nodes.flatMap((n) => {
+    if (!subtreeSelected(n, sel)) return [];
+    return [{ ...n, children: filterSelectedTree(n.children ?? [], sel) }];
+  });
+}
+
+function filterNamedTree(nodes: AccessTerritoryTreeNode[], q: string): AccessTerritoryTreeNode[] {
+  if (!q) return nodes;
+  return nodes.flatMap((n) => {
+    const children = filterNamedTree(n.children ?? [], q);
+    const hit = n.name.toLocaleLowerCase("ru").includes(q) || (n.code ?? "").toLocaleLowerCase("ru").includes(q);
+    if (!hit && children.length === 0) return [];
+    return [{ ...n, children: hit ? n.children ?? [] : children }];
+  });
+}
+
+function expandIdsFor(nodes: AccessTerritoryTreeNode[], sel: Set<string>, out = new Set<number>()): Set<number> {
+  for (const n of nodes) {
+    const kids = n.children ?? [];
+    if (kids.some((c) => subtreeSelected(c, sel))) out.add(n.id);
+    expandIdsFor(kids, sel, out);
+  }
+  return out;
+}
+
+/** Территории: зона → область → город, belgi butun pastki shoxni oladi. */
+function TerritoryScopeTree({ vm, readOnly, hint }: { vm: AccessUserDetailVm; readOnly: boolean; hint: string }) {
+  const catalogQ = useQuery({
+    queryKey: ["access-territories", vm.tenantSlug],
+    queryFn: async (): Promise<AccessTerritoriesCatalog> => {
+      const { data } = await api.get<{ data?: TerritoryApiRow[]; tree?: AccessTerritoryTreeNode[] }>(
+        `/api/${vm.tenantSlug}/access/territories`
+      );
+      return { flat: data.data ?? [], tree: data.tree ?? [] };
+    },
+    staleTime: 30_000
+  });
+  const attached = useMemo(
+    () => new Set((vm.detailQ.data?.scope?.territories ?? []).map(String)),
+    [vm.detailQ.data?.scope?.territories]
+  );
+  const [sel, setSel] = useState<Set<string>>(attached);
+  const [search, setSearch] = useState("");
+  const [onlySelected, setOnlySelected] = useState(true);
+  const [expanded, setExpanded] = useState<Set<number>>(() => new Set());
+  const saveTimer = useRef<number | null>(null);
+
+  useEffect(() => {
+    setSel(attached);
+    setExpanded(expandIdsFor(catalogQ.data?.tree ?? [], attached));
+  }, [attached, catalogQ.data?.tree]);
+
+  const tree = useMemo(() => {
+    const base = catalogQ.data?.tree ?? [];
+    const picked = onlySelected ? filterSelectedTree(base, sel) : base;
+    return filterNamedTree(picked, search.trim().toLocaleLowerCase("ru"));
+  }, [catalogQ.data?.tree, onlySelected, sel, search]);
+
+  const setAndSave: Dispatch<SetStateAction<Set<string>>> = (next) => {
+    setSel((prev) => {
+      const value = typeof next === "function" ? next(prev) : next;
+      if (saveTimer.current) window.clearTimeout(saveTimer.current);
+      saveTimer.current = window.setTimeout(() => {
+        const ids = [...value].map(Number).filter((n) => Number.isInteger(n) && n > 0);
+        void vm.patchMut.mutateAsync({ territory_ids: ids }).catch((err) => {
+          setSel(attached);
+          vm.setBulkFeedback({
+            tone: "err",
+            text: userMessageAfterAccessPatchFailure(err, "Не удалось сохранить территории")
+          });
+        });
+      }, 400);
+      return value;
+    });
+  };
+
+  const empty = (catalogQ.data?.tree.length ?? 0) === 0;
+  return (
+    <div className="flex min-h-0 flex-1 flex-col gap-2">
+      <div className="flex shrink-0 flex-wrap items-center gap-2">
+        <div className="relative min-w-[12rem] flex-1">
+          <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" aria-hidden />
+          <Input className="h-8 pl-8 text-xs" placeholder="Поиск" value={search} onChange={(e) => setSearch(e.target.value)} aria-label="Поиск территории" />
+        </div>
+        <label className="flex items-center gap-2 text-xs">
+          <input type="checkbox" className="h-4 w-4 accent-teal-700" checked={onlySelected} onChange={(e) => setOnlySelected(e.target.checked)} />
+          Только прикреплённые
+        </label>
+      </div>
+      <p className="shrink-0 text-xs text-muted-foreground">
+        {hint} Зона отмечает область и город. Прикреплено: <b className="tabular-nums text-foreground">{sel.size}</b>
+      </p>
+      <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain rounded-lg border border-border/60 p-2">
+        {catalogQ.isLoading ? (
+          <Skeleton className="h-24 w-full" />
+        ) : catalogQ.isError ? (
+          <p className="py-10 text-center text-sm text-destructive">Не удалось загрузить территории.</p>
+        ) : empty ? (
+          <p className="py-10 text-center text-sm text-muted-foreground">Нет территорий. Добавьте дерево в Настройки → Территория.</p>
+        ) : tree.length === 0 ? (
+          <p className="py-10 text-center text-sm text-muted-foreground">
+            {onlySelected ? "Территории не прикреплены." : "Ничего не найдено"}
+          </p>
+        ) : (
+          <TerritoryReferenceTreeRows
+            nodes={tree}
+            depth={0}
+            treeExpanded={expanded}
+            setTreeExpanded={setExpanded}
+            modalSel={sel}
+            setModalSel={setAndSave}
+            territoryDisabled={readOnly || vm.patchMut.isPending}
+          />
+        )}
+      </div>
+    </div>
+  );
+}
+
 /** Hudud tablari: biriktirilgan obyektlar nomi bilan + tanlash oynasini ochish. */
 export function AccessUserScopeSummary({ vm, tab, readOnly }: { vm: AccessUserDetailVm; tab: ScopeTab; readOnly: boolean }) {
   const meta = SCOPE_META[tab];
@@ -104,6 +237,8 @@ export function AccessUserScopeSummary({ vm, tab, readOnly }: { vm: AccessUserDe
   const q = search.trim().toLocaleLowerCase("ru");
   const shown = q ? items.filter((i) => i.label.toLocaleLowerCase("ru").includes(q) || i.sub?.toLocaleLowerCase("ru").includes(q)) : items;
   const loadingNames = tab !== "staff" && items.length > 0 && labelsQ.isLoading;
+
+  if (tab === "territories") return <TerritoryScopeTree vm={vm} readOnly={readOnly} hint={meta.hint} />;
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-2">

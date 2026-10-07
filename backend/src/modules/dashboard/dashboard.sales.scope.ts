@@ -39,7 +39,8 @@ import {
 } from "../tenant-settings/tenant-settings.service";
 
 export function normalizeSalesDateType(input?: string): SalesDashboardFilters["date_type"] {
-  return input === "shipment_date" ? "shipment_date" : "order_date";
+  if (input === "shipment_date" || input === "delivery_date") return input;
+  return "order_date";
 }
 
 export function csvToTextArray(input?: string): string[] {
@@ -91,9 +92,14 @@ export async function expandSalesPaymentFilters(
 }
 
 export function salesDateExprByType(dateType: SalesDashboardFilters["date_type"]): Prisma.Sql {
+  if (dateType === "delivery_date") {
+    return Prisma.raw(
+      "(SELECT MIN(sl.created_at) FROM order_status_logs sl WHERE sl.order_id = o.id AND sl.to_status = 'delivered')"
+    );
+  }
   if (dateType === "shipment_date") {
     return Prisma.raw(
-      "COALESCE((SELECT MIN(sl.created_at) FROM order_status_logs sl WHERE sl.order_id = o.id AND sl.to_status IN ('delivering', 'delivered')), o.updated_at)"
+      "(SELECT MIN(sl.created_at) FROM order_status_logs sl WHERE sl.order_id = o.id AND sl.to_status = 'delivering')"
     );
   }
   return Prisma.raw("o.created_at");

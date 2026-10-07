@@ -1103,6 +1103,7 @@ export function useAccessUserDetailPanel({
     parentOptions,
     grantedMatrixCount: grantedMatrix.length,
     bulkFeedback,
+    setBulkFeedback,
     bulkSel,
     setBulkSel,
     bulkSelectableKeys,

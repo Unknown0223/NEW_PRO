@@ -13,6 +13,7 @@ import { Button, buttonVariants } from "@/components/ui/button";
 import { formatNumberGrouped } from "@/lib/format-numbers";
 import { cn } from "@/lib/utils";
 import { DateRangePopover, formatDateRangeButton } from "@/components/ui/date-range-popover";
+import { monthToDateRange } from "@/components/dashboard/shared/date-ranges";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { TableColumnSettingsDialog, type ColumnDefItem } from "@/components/data-table/table-column-settings-dialog";
@@ -172,7 +173,7 @@ function num(v: string) {
 
 function buildFilterState(bounds: { from: string; to: string }) {
   return {
-    date_type: "order_date" as "order_date" | "created_date" | "shipped_date",
+    date_type: "order_date" as "order_date" | "created_date" | "shipped_date" | "delivered_date",
     application_type: "returns_only" as "all" | "returns_only",
     unit_mode: "qty" as "qty" | "pack" | "volume" | "weight",
     ...bounds,
@@ -258,9 +259,7 @@ export default function ReportExpeditorReturnsPage() {
   const canExport = usePermissions().has("reports.vozvrat_ekspeditora.export");
   const tenantSlug = useAuthStore((s) => s.tenantSlug);
   const hydrated = useAuthStoreHydrated();
-  const today = new Date();
-  const from0 = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().slice(0, 10);
-  const to0 = new Date(today.getFullYear(), today.getMonth() + 1, 0).toISOString().slice(0, 10);
+  const { from: from0, to: to0 } = monthToDateRange();
 
   const dateAnchorRef = useRef<HTMLButtonElement>(null);
   const [dateOpen, setDateOpen] = useState(false);

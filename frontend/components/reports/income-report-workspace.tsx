@@ -15,7 +15,7 @@ import {
   type ProfilePaymentMethodEntry
 } from "@/lib/payment-method-options";
 import { STALE } from "@/lib/query-stale";
-import { quickRangeToDates } from "@/components/dashboard/shared/date-ranges";
+import { monthToDateRange } from "@/components/dashboard/shared/date-ranges";
 import { useQuery } from "@tanstack/react-query";
 import { CalendarDays, ChevronDown, ChevronRight, Download, Filter, RotateCcw } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
@@ -96,10 +96,7 @@ export function IncomeReportWorkspace() {
   const hydrated = useAuthStoreHydrated();
   const enabled = Boolean(tenantSlug && hydrated);
   const defaultFilters: ReportFilters = useMemo(() => {
-    const range = quickRangeToDates("last30") ?? {
-      from: new Date().toISOString().slice(0, 10),
-      to: new Date().toISOString().slice(0, 10)
-    };
+    const range = monthToDateRange();
     return {
       from: range.from,
       to: range.to,

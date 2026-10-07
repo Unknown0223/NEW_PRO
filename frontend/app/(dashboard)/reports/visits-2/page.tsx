@@ -11,6 +11,7 @@ import { SearchableMultiSelectPanel } from "@/components/ui/searchable-multi-sel
 import { Button, buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { DateRangePopover, formatDateRangeButton } from "@/components/ui/date-range-popover";
+import { monthToDateRange } from "@/components/dashboard/shared/date-ranges";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { filterSelectClassName } from "@/components/ui/filter-select";
@@ -52,10 +53,7 @@ const FILTER_TRIGGER =
   "h-8 min-h-8 w-full min-w-0 max-w-none px-2 text-xs font-normal shadow-sm";
 
 function defaultRange() {
-  const t = new Date();
-  const from = new Date(t.getFullYear(), t.getMonth(), 1).toISOString().slice(0, 10);
-  const to = new Date(t.getFullYear(), t.getMonth() + 1, 0).toISOString().slice(0, 10);
-  return { from, to };
+  return monthToDateRange();
 }
 
 function buildFilterState(bounds: { from: string; to: string }) {

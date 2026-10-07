@@ -32,7 +32,7 @@ import {
   usePagedRows
 } from "@/components/payroll/kit/payroll-kit-table";
 
-type BonusData = { closed: boolean; groups: Array<{ id: number; name: string }>; directions: Array<{ id: number; name: string }>; rows: BonusRow[] };
+type BonusData = { closed: boolean; groups: Array<{ id: number; name: string; bonus_formula: string | null }>; directions: Array<{ id: number; name: string }>; rows: BonusRow[] };
 type Tab = "kpi" | "formulas";
 type Filters = { role: string; users: number[]; group: string; direction: string };
 

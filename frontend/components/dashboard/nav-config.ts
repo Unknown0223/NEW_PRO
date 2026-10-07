@@ -22,7 +22,7 @@ export const dashboardHomeNav: { sectionTitle: string; items: NavItem[] } = {
   items: [
     {
       href: "/dashboard",
-      label: "Супервайзер",
+      label: "Дашборд",
       showIfAnyPermission: ["dashboard.supervayzer.view", "dashboard.supervayzer"]
     },
     {

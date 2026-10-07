@@ -31,7 +31,7 @@ export function DashboardSales() {
 
   const [draft, setDraft] = useState<SalesFilterDraft>(() => defaultSalesDraft());
   const [applied, setApplied] = useState<SalesFilterDraft>(() => defaultSalesDraft());
-  const [quickRange, setQuickRange] = useState<QuickRangeKey>("last30");
+  const [quickRange, setQuickRange] = useState<QuickRangeKey>("custom");
 
   const analyticsSection = useDashboardSectionVisible({
     enabled: Boolean(tenantSlug) && hydrated
@@ -95,7 +95,7 @@ export function DashboardSales() {
     const fresh = defaultSalesDraft(selfSupervisorIdStr);
     setDraft(fresh);
     setApplied(fresh);
-    setQuickRange("last30");
+    setQuickRange("custom");
   };
 
   const exportPrefix = useMemo(() => salesExportPrefix(applied), [applied]);

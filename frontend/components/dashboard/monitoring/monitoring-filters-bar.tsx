@@ -79,12 +79,12 @@ export const MonitoringFiltersBar = memo(function MonitoringFiltersBar(props: {
   }, []);
 
   return (
-    <section className="overflow-hidden rounded-2xl bg-card p-0 shadow-sm ring-1 ring-slate-200/70">
+    <section className="min-w-0 rounded-2xl bg-card p-0 shadow-sm ring-1 ring-slate-200/70">
       <div className="flex flex-wrap items-center gap-3 border-b border-border px-4 py-3">
         <h2 className="shrink-0 text-[17px] font-semibold text-slate-900">Мониторинг продаж и планов</h2>
 
         <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
-          <div className="hidden min-w-[200px] sm:block md:min-w-[240px] lg:min-w-[280px]">
+          <div className="hidden w-full min-w-0 sm:block sm:w-56 md:w-64">
             <MonitoringSectionSettingsFilter
               visibleSectionIds={visibleSectionIds}
               onVisibleChange={onVisibleSectionsChange}

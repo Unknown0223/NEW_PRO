@@ -37,7 +37,7 @@ type Props = {
   onError: (text: string, detail: string) => void;
 };
 
-/** «Прикрепить операции: <пользователь>» — modul → bo'lim → operatsiya daraxti, «Выбрать все», saqlash/bekor qilish. */
+/** «Прикрепить операции: <пользователь>» — faqat hali berilmagan operatsiyalar daraxti, «Выбрать все», saqlash/bekor qilish. */
 export function AccessAttachOperationsDialog({ open, onOpenChange, vm, tree, stateByKey, isDisabled, onSaved, onError }: Props) {
   const [draft, setDraft] = useState<Map<string, boolean>>(() => new Map());
   const [search, setSearch] = useState("");
@@ -65,9 +65,15 @@ export function AccessAttachOperationsDialog({ open, onOpenChange, vm, tree, sta
       return d;
     });
 
-  const visibleTree = useMemo(() => filterAccessTree(tree, search), [tree, search]);
+  const attachTree = useMemo(
+    () => filterAccessTree(tree, "", (op) => !stateByKey.get(op.key)?.effective),
+    [tree, stateByKey]
+  );
+  const flatModuleIds = useMemo(() => new Set(tree.filter(isFlatAccessModule).map((m) => m.id)), [tree]);
+  const isFlat = (mod: AccessTreeModule) => flatModuleIds.has(mod.id);
+  const visibleTree = useMemo(() => filterAccessTree(attachTree, search), [attachTree, search]);
   const visibleKeys = useMemo(() => treeKeys(visibleTree), [visibleTree]);
-  const allKeys = useMemo(() => treeKeys(tree), [tree]);
+  const allKeys = useMemo(() => treeKeys(attachTree), [attachTree]);
   const changes = useMemo(() => draftChangedKeys(stateByKey, draft), [stateByKey, draft]);
   const dirty = changes.added.length + changes.removed.length > 0;
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -75,8 +81,8 @@ export function AccessAttachOperationsDialog({ open, onOpenChange, vm, tree, sta
   const searching = search.trim().length > 0;
 
   const groupIds = useMemo(
-    () => visibleTree.flatMap((m) => [m.id, ...(isFlatAccessModule(m) ? [] : m.sections.map((s) => s.id))]),
-    [visibleTree]
+    () => visibleTree.flatMap((m) => [m.id, ...(flatModuleIds.has(m.id) ? [] : m.sections.map((s) => s.id))]),
+    [visibleTree, flatModuleIds]
   );
   const allExpanded = groupIds.length > 0 && groupIds.every((id) => expanded.has(id));
   const isOpen = (id: string) => searching || expanded.has(id);
@@ -200,7 +206,7 @@ export function AccessAttachOperationsDialog({ open, onOpenChange, vm, tree, sta
           </button>
         </div>
         <DialogDescription className="sr-only">
-          Отметьте операции, которые должны быть у пользователя, и нажмите «Сохранить».
+          Показаны только операции, которых у пользователя ещё нет. Отметьте нужные и нажмите «Сохранить».
         </DialogDescription>
 
         <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-border/70 px-4 py-2.5">
@@ -234,7 +240,9 @@ export function AccessAttachOperationsDialog({ open, onOpenChange, vm, tree, sta
 
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain">
           {visibleTree.length === 0 ? (
-            <p className="px-4 py-12 text-center text-sm text-muted-foreground">Ничего не найдено</p>
+            <p className="px-4 py-12 text-center text-sm text-muted-foreground">
+              {attachTree.length === 0 ? "Все операции уже прикреплены" : "Ничего не найдено"}
+            </p>
           ) : (
             <ul role="tree" aria-label="Операции">
               {visibleTree.map((mod) => {
@@ -266,7 +274,7 @@ export function AccessAttachOperationsDialog({ open, onOpenChange, vm, tree, sta
                     {modOpen ? (
                       <ul role="group" className="space-y-0.5 px-4 py-2">
                         {mod.sections.map((sec) => {
-                          if (isFlatAccessModule(mod)) return opRow(sec.operations[0], sec.operations[0].label, 1);
+                          if (isFlat(mod)) return opRow(sec.operations[0], sec.operations[0].label, 1);
                           const sKeys = sectionKeys(sec);
                           const secOpen = isOpen(sec.id);
                           return (

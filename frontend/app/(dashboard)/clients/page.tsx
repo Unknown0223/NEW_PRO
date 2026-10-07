@@ -246,7 +246,7 @@ export default function ClientsPage() {
     tableId: CLIENTS_LIST_TABLE_ID,
     defaultColumnOrder: CLIENT_TABLE_PREF_COLUMN_IDS,
     defaultPageSize: 15,
-    allowedPageSizes: [10, 15, 20, 25, 30, 50, 100, 500],
+    allowedPageSizes: [10, 15, 20, 25, 30, 50, 100, 200, 500],
     defaultHiddenColumnIds: CLIENTS_DEFAULT_HIDDEN_COLUMN_IDS
   });
   useEffect(() => {
@@ -803,7 +803,7 @@ export default function ClientsPage() {
     if ((nodes?.length ?? 0) > 0) {
       return buildTerritoryTreeOnlyCascade(nodes, {
         zones,
-        regions: region ? [region] : []
+        regions: splitMultiFilterValues(region)
       });
     }
     return buildZoneRegionCityCascadeOptions(
@@ -851,19 +851,25 @@ export default function ClientsPage() {
   }, [clientsTerritoryZoneKeys, draftToolbar.zoneFilter]);
 
   useEffect(() => {
-    const r = normTrim(draftToolbar.regionFilter);
-    if (!r || clientsTerritoryRegionKeys.size === 0) return;
-    if (!clientsTerritoryRegionKeys.has(r)) {
-      setDraftToolbar((d) => ({ ...d, regionFilter: "", cityFilter: "" }));
-    }
+    if (clientsTerritoryRegionKeys.size === 0) return;
+    const regions = splitMultiFilterValues(draftToolbar.regionFilter);
+    if (regions.length === 0) return;
+    const kept = regions.filter((r) => clientsTerritoryRegionKeys.has(normTrim(r)));
+    if (kept.length === regions.length) return;
+    setDraftToolbar((d) => ({
+      ...d,
+      regionFilter: joinMultiFilterValues(kept),
+      ...(kept.length === 0 ? { cityFilter: "" } : {})
+    }));
   }, [clientsTerritoryRegionKeys, draftToolbar.regionFilter]);
 
   useEffect(() => {
-    const c = normTrim(draftToolbar.cityFilter);
-    if (!c || clientsTerritoryCityKeys.size === 0) return;
-    if (!clientsTerritoryCityKeys.has(c)) {
-      setDraftToolbar((d) => ({ ...d, cityFilter: "" }));
-    }
+    if (clientsTerritoryCityKeys.size === 0) return;
+    const cities = splitMultiFilterValues(draftToolbar.cityFilter);
+    if (cities.length === 0) return;
+    const kept = cities.filter((c) => clientsTerritoryCityKeys.has(normTrim(c)));
+    if (kept.length === cities.length) return;
+    setDraftToolbar((d) => ({ ...d, cityFilter: joinMultiFilterValues(kept) }));
   }, [clientsTerritoryCityKeys, draftToolbar.cityFilter]);
 
   useEffect(() => {

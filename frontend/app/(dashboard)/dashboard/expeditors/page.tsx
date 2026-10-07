@@ -18,6 +18,7 @@ import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { SearchableMultiSelectPanel } from "@/components/ui/searchable-multi-select-panel";
 import { DateRangePopover, formatDateRangeButton } from "@/components/ui/date-range-popover";
+import { monthToDateRange } from "@/components/dashboard/shared/date-ranges";
 import { formatNumberGrouped } from "@/lib/format-numbers";
 import { cn } from "@/lib/utils";
 
@@ -67,9 +68,7 @@ export default function ExpeditorsDashboardPage() {
   const tenantSlug = useAuthStore((s) => s.tenantSlug);
   const hydrated = useAuthStoreHydrated();
 
-  const today = new Date();
-  const to0 = today.toISOString().slice(0, 10);
-  const from0 = new Date(today.getTime() - 29 * 86400000).toISOString().slice(0, 10);
+  const { from: from0, to: to0 } = monthToDateRange();
 
   const dateAnchorRef = useRef<HTMLButtonElement>(null);
   const [dateOpen, setDateOpen] = useState(false);

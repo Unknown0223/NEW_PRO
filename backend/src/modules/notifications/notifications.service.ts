@@ -1,27 +1,39 @@
+import type { Prisma } from "@prisma/client";
 import { prisma } from "../../config/database";
 import { notifyClientOrderStatus, pushStaffNotificationSoon, soon } from "../tg-app/tg-notify";
 
 export async function listNotifications(
   tenantId: number,
   userId: number,
-  opts: { unread_only?: boolean; limit: number }
+  opts: { status?: "all" | "unread" | "read"; q?: string; limit: number; offset?: number }
 ) {
-  const where: { tenant_id: number; user_id: number; read_at?: null } = {
+  const where: Prisma.InAppNotificationWhereInput = {
     tenant_id: tenantId,
     user_id: userId
   };
-  if (opts.unread_only) where.read_at = null;
-  const [rows, unread] = await Promise.all([
+  if (opts.status === "unread") where.read_at = null;
+  if (opts.status === "read") where.read_at = { not: null };
+  const q = opts.q?.trim();
+  if (q) {
+    where.OR = [
+      { title: { contains: q, mode: "insensitive" } },
+      { body: { contains: q, mode: "insensitive" } }
+    ];
+  }
+  const [rows, unread, total] = await Promise.all([
     prisma.inAppNotification.findMany({
       where,
       orderBy: { created_at: "desc" },
-      take: opts.limit
+      take: opts.limit,
+      skip: opts.offset ?? 0
     }),
     prisma.inAppNotification.count({
       where: { tenant_id: tenantId, user_id: userId, read_at: null }
-    })
+    }),
+    prisma.inAppNotification.count({ where })
   ]);
   return {
+    total,
     data: rows.map((n) => ({
       id: n.id,
       title: n.title,

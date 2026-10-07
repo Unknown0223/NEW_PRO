@@ -14,6 +14,7 @@ import { Input } from "@/components/ui/input";
 import { formatNumberGrouped } from "@/lib/format-numbers";
 import { cn } from "@/lib/utils";
 import { DateRangePopover, formatDateRangeButton } from "@/components/ui/date-range-popover";
+import { monthToDateRange } from "@/components/dashboard/shared/date-ranges";
 import { TableColumnSettingsDialog, type ColumnDefItem } from "@/components/data-table/table-column-settings-dialog";
 import { orderTypeLabel } from "@/lib/order-types";
 import { filterSelectClassName } from "@/components/ui/filter-select";
@@ -159,9 +160,7 @@ export default function ReportProductSalesPage() {
   const canExport = usePermissions().has("reports.prodazhi_tovarov.export");
   const tenantSlug = useAuthStore((s) => s.tenantSlug);
   const hydrated = useAuthStoreHydrated();
-  const today = new Date();
-  const from0 = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().slice(0, 10);
-  const to0 = new Date(today.getFullYear(), today.getMonth() + 1, 0).toISOString().slice(0, 10);
+  const { from: from0, to: to0 } = monthToDateRange();
 
   const dateAnchorRef = useRef<HTMLButtonElement>(null);
   const [dateOpen, setDateOpen] = useState(false);

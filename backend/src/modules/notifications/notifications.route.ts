@@ -28,6 +28,9 @@ export async function registerNotificationRoutes(app: FastifyInstance) {
     const qParsed = z
       .object({
         unread_only: z.enum(["true", "false"]).optional(),
+        status: z.enum(["all", "unread", "read"]).optional(),
+        q: z.string().max(200).optional(),
+        page: z.coerce.number().int().min(1).max(500).optional(),
         limit: z.coerce.number().int().min(1).max(100).optional()
       })
       .safeParse(request.query);
@@ -35,9 +38,13 @@ export async function registerNotificationRoutes(app: FastifyInstance) {
       return sendApiError(reply, request, 400, "ValidationError", "Некорректные параметры запроса", zodValidationExtras(qParsed.error));
     }
     const q = qParsed.data;
+    const limit = q.limit ?? 40;
+    const page = q.page ?? 1;
     const result = await listNotifications(tenantId, userId, {
-      unread_only: q.unread_only === "true",
-      limit: q.limit ?? 40
+      status: q.unread_only === "true" ? "unread" : q.status ?? "all",
+      q: q.q,
+      limit,
+      offset: (page - 1) * limit
     });
     return reply.send(result);
   });

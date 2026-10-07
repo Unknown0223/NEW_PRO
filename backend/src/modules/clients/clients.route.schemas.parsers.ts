@@ -204,7 +204,7 @@ export function parseClientListQuery(q: Record<string, string | undefined>): Lis
   const pageNum = Math.max(1, Number.parseInt(q.page ?? "1", 10) || 1);
   const mapMode = q.map === "1" || q.map === "true";
   const visitPlanner = q.visit_planner === "1" || q.visit_planner === "true";
-  const maxLimit = visitPlanner ? 60_000 : mapMode ? 4000 : 100;
+  const maxLimit = visitPlanner ? 60_000 : mapMode ? 4000 : 500;
   const defaultLimit = visitPlanner ? 50_000 : mapMode ? 2500 : 50;
   const parsedLimit = Number.parseInt(q.limit ?? String(defaultLimit), 10) || defaultLimit;
   const limitNum = Math.min(maxLimit, Math.max(1, parsedLimit));

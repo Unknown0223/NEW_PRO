@@ -360,14 +360,14 @@ export async function listOrdersPaged(
   }
 
   const rawMode = (q.date_mode?.trim() || "order").toLowerCase();
-  const shipMode = rawMode === "ship";
+  const statusLogDate = rawMode === "ship" ? "delivering" : rawMode === "delivery" ? "delivered" : null;
 
   const pushDateRangeClause = (range: Prisma.DateTimeFilter) => {
-    if (shipMode) {
+    if (statusLogDate) {
       andClauses.push({
         status_logs: {
           some: {
-            to_status: "delivering",
+            to_status: statusLogDate,
             created_at: range
           }
         }
@@ -379,12 +379,12 @@ export async function listOrdersPaged(
   };
 
   if (parsedPeriods.length > 0) {
-    if (shipMode) {
+    if (statusLogDate) {
       andClauses.push({
         OR: parsedPeriods.map((p) => ({
           status_logs: {
             some: {
-              to_status: "delivering",
+              to_status: statusLogDate,
               created_at: { gte: p.from, lte: p.to }
             }
           }

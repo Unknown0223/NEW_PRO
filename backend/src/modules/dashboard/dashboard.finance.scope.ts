@@ -39,7 +39,10 @@ import {
 export function normalizeFromYmd(input?: string): string {
   const t = (input ?? "").trim();
   if (/^\d{4}-\d{2}-\d{2}$/.test(t)) return t;
-  return new Date(Date.now() - 29 * 86400000).toISOString().slice(0, 10);
+  const now = new Date();
+  const y = now.getUTCFullYear();
+  const m = String(now.getUTCMonth() + 1).padStart(2, "0");
+  return `${y}-${m}-01`;
 }
 
 export function normalizeToYmd(input?: string): string {
@@ -54,7 +57,8 @@ export function parseFinanceDashboardFilters(
   const statusesRaw = csvToStringArray(q.statuses);
   const allowedStatuses = new Set<string>(ORDER_STATUSES);
   const statuses = statusesRaw.filter((s) => allowedStatuses.has(s));
-  const date_type = q.date_type === "delivered_at" ? "delivered_at" : "created_at";
+  const date_type =
+    q.date_type === "delivered_at" || q.date_type === "shipped_at" ? q.date_type : "created_at";
   return {
     date_type,
     from: normalizeFromYmd(q.from),
@@ -107,7 +111,12 @@ export function financeDateExprByType(
 ): Prisma.Sql {
   if (dateType === "delivered_at") {
     return Prisma.raw(
-      `COALESCE((SELECT MIN(sl.created_at) FROM order_status_logs sl WHERE sl.order_id = ${orderAlias}.id AND sl.to_status IN ('delivering', 'delivered')), ${orderAlias}.updated_at)`
+      `(SELECT MIN(sl.created_at) FROM order_status_logs sl WHERE sl.order_id = ${orderAlias}.id AND sl.to_status = 'delivered')`
+    );
+  }
+  if (dateType === "shipped_at") {
+    return Prisma.raw(
+      `(SELECT MIN(sl.created_at) FROM order_status_logs sl WHERE sl.order_id = ${orderAlias}.id AND sl.to_status = 'delivering')`
     );
   }
   return Prisma.raw(`${orderAlias}.created_at`);

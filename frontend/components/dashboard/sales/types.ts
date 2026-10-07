@@ -1,4 +1,4 @@
-export type SalesDateType = "order_date" | "shipment_date";
+export type SalesDateType = "order_date" | "shipment_date" | "delivery_date";
 
 export type SalesFilterDraft = {
   date_type: SalesDateType;

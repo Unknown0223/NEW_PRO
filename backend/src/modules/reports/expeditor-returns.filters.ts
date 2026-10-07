@@ -77,7 +77,8 @@ export async function getExpeditorReturnsFilterOptions(tenantId: number, actor?:
     date_types: [
       { id: "order_date", label: "Дата заказа" },
       { id: "created_date", label: "Дата создания" },
-      { id: "shipped_date", label: "Дата отправки" }
+      { id: "shipped_date", label: "Дата отправки" },
+      { id: "delivered_date", label: "Дата доставки" }
     ],
     application_types: [
       { id: "all", label: "Все заказы" },

@@ -8,8 +8,8 @@ import { ORDER_TYPE_VALUES } from "@/lib/order-types";
 export const VALID_STATUSES = new Set<string>(ORDER_STATUS_VALUES);
 export const VALID_ORDER_TYPES = new Set<string>(ORDER_TYPE_VALUES);
 const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
-export type OrdersDateMode = "created" | "order" | "ship";
-const VALID_DATE_MODES = new Set<OrdersDateMode>(["created", "order", "ship"]);
+export type OrdersDateMode = "created" | "order" | "ship" | "delivery";
+const VALID_DATE_MODES = new Set<OrdersDateMode>(["created", "order", "ship", "delivery"]);
 
 function pad2(n: number): string {
   return String(n).padStart(2, "0");

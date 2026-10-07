@@ -5,6 +5,7 @@ import { buildClientListSearchOrClause } from "./clients.list.search";
 import type { ScopedReportActor } from "../access/access-agent-scope";
 import { intersectRequestedAgentIds } from "../access/access-agent-scope";
 import {
+  clientWhereForCityFilter,
   clientWhereForRegionFilter,
   clientWhereForZoneFilter,
   loadClientTerritoryFilterBundle
@@ -65,8 +66,13 @@ export async function buildClientListWhereInput(
     ...(q.zone?.trim() ? [q.zone.trim()] : [])
   ];
   const zoneKeys = [...new Set(zoneList)];
+  const cities = [
+    ...(q.cities?.map((c) => c.trim()).filter(Boolean) ?? []),
+    ...(q.city?.trim() ? [q.city.trim()] : [])
+  ];
+  const cityKeys = [...new Set(cities)];
   const territoryBundle =
-    regionKeys.length > 0 || zoneKeys.length > 0
+    regionKeys.length > 0 || zoneKeys.length > 0 || cityKeys.length > 0
       ? await loadClientTerritoryFilterBundle(tenantId)
       : { hints: {}, ref: undefined };
 
@@ -91,13 +97,10 @@ export async function buildClientListWhereInput(
     const clause = clientWhereForZoneFilter(territoryBundle, zoneKeys);
     if (clause) andList.push(clause);
   }
-  const cities = [
-    ...(q.cities?.map((c) => c.trim()).filter(Boolean) ?? []),
-    ...(q.city?.trim() ? [q.city.trim()] : [])
-  ];
-  const cityKeys = [...new Set(cities)];
-  if (cityKeys.length === 1) andList.push({ city: cityKeys[0] });
-  else if (cityKeys.length > 1) andList.push({ city: { in: cityKeys } });
+  if (cityKeys.length > 0) {
+    const clause = clientWhereForCityFilter(territoryBundle, cityKeys);
+    if (clause) andList.push(clause);
+  }
   const typeCodes = [
     ...(q.client_type_codes?.map((c) => c.trim()).filter(Boolean) ?? []),
     ...(q.client_type_code?.trim() ? [q.client_type_code.trim()] : [])

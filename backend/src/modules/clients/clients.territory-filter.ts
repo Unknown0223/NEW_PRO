@@ -5,6 +5,7 @@ import {
   expandRegionFilterSynonyms,
   referencesWithResolvedTerritoryNodes
 } from "../tenant-settings/tenant-settings.service";
+import { territoryCityStoredPairs } from "../tenant-settings/tenant-settings.territory";
 import type { CityTerritoryHintDto } from "../tenant-settings/tenant-settings.service";
 import { normKeyTerritoryMatch } from "../../../shared/territory-lalaku-seed";
 import {
@@ -87,6 +88,58 @@ export function cityKeysMatchingZoneInHints(
     }
   }
   return [...uniq];
+}
+
+/** Shahar filtri: UI daraxt nomi yoki kod — `clients.city` dagi kod va nom. */
+export function expandCityFilterValues(
+  bundle: ClientTerritoryFilterBundle,
+  cityFilters: string[]
+): string[] {
+  const out = new Set<string>();
+  const pairs = territoryCityStoredPairs(bundle.ref);
+  for (const raw of cityFilters) {
+    const c = raw.trim();
+    if (!c) continue;
+    out.add(c);
+    const norm = normKeyTerritoryMatch(c);
+    for (const { stored, name } of pairs) {
+      const matches =
+        stored === c ||
+        name === c ||
+        normKeyTerritoryMatch(stored) === norm ||
+        normKeyTerritoryMatch(name) === norm;
+      if (matches) {
+        if (stored) out.add(stored);
+        if (name) out.add(name);
+      }
+    }
+    for (const [key, hint] of Object.entries(bundle.hints)) {
+      const label = (hint.city_label ?? "").trim();
+      const keyHit =
+        key === c ||
+        key.toUpperCase() === c.toUpperCase() ||
+        (norm.length > 0 && normKeyTerritoryMatch(key) === norm);
+      const labelHit =
+        label.length > 0 &&
+        (label === c || normKeyTerritoryMatch(label) === norm);
+      if (keyHit || labelHit) {
+        if (label) out.add(label);
+        if (key.trim()) out.add(key.trim());
+      }
+    }
+  }
+  return [...out].filter((x) => x.length > 0 && x.length <= 80);
+}
+
+export function clientWhereForCityFilter(
+  bundle: ClientTerritoryFilterBundle,
+  cityFilters: string[]
+): Prisma.ClientWhereInput | null {
+  const values = expandCityFilterValues(bundle, cityFilters);
+  if (values.length === 0) return null;
+  return {
+    OR: values.map((v) => ({ city: { equals: v, mode: "insensitive" as const } }))
+  };
 }
 
 export function clientWhereForRegionFilter(

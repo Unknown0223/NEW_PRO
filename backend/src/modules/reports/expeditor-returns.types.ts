@@ -1,6 +1,6 @@
 import type { Prisma } from "@prisma/client";
 
-export type ExpeditorReturnsDateType = "order_date" | "created_date" | "shipped_date";
+export type ExpeditorReturnsDateType = "order_date" | "created_date" | "shipped_date" | "delivered_date";
 
 export type ExpeditorReturnsApplicationType = "all" | "returns_only";
 

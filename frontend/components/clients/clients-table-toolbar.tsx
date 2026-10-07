@@ -369,7 +369,7 @@ export function ClientsTableListToolbarStrip({
           value={pageLimit}
           onChange={(e) => onPageLimitChange(Number(e.target.value))}
         >
-          {[10, 20, 30, 50, 100].map((n) => (
+          {[10, 20, 30, 50, 100, 200, 500].map((n) => (
             <option key={n} value={n}>
               {n}
             </option>
@@ -482,7 +482,7 @@ export function ClientsTemplateListToolbar({
             onChange={(e) => onPageLimitChange(Number(e.target.value))}
             aria-label="Строк на странице"
           >
-            {[10, 15, 20, 30, 50, 100].map((n) => (
+            {[10, 15, 20, 30, 50, 100, 200, 500].map((n) => (
               <option key={n} value={n}>
                 {n}
               </option>

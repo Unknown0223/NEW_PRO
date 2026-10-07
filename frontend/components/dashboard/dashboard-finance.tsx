@@ -65,7 +65,7 @@ export function DashboardFinance() {
 
   const [draft, setDraft] = useState<FinanceFilterDraft>(() => defaultFinanceDraft());
   const [applied, setApplied] = useState<FinanceFilterDraft>(() => defaultFinanceDraft());
-  const [quickRange, setQuickRange] = useState<QuickRangeKey>("last30");
+  const [quickRange, setQuickRange] = useState<QuickRangeKey>("custom");
   const [clientsPage, setClientsPage] = useState(1);
 
   const ledgerSection = useDashboardSectionVisible({
@@ -136,7 +136,7 @@ export function DashboardFinance() {
     const fresh = defaultFinanceDraft(selfSupervisorIdStr);
     setDraft(fresh);
     setApplied(fresh);
-    setQuickRange("last30");
+    setQuickRange("custom");
     setClientsPage(1);
   };
 
