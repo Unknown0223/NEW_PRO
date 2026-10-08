@@ -27,7 +27,7 @@ export const dashboardHomeNav: { sectionTitle: string; items: NavItem[] } = {
     },
     {
       href: "/dashboard/expeditors",
-      label: "Доставщики",
+      label: "Доставка заказов",
       showIfAnyPermission: ["dashboard.supervayzer.view", "dashboard.supervayzer"]
     },
     {

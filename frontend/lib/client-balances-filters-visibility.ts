@@ -58,6 +58,63 @@ export const CLIENT_BALANCES_FILTER_VISIBILITY_META: {
 ];
 
 const LS_KEY = "salesdoc.client-balances-filters-visibility-v1";
+const REMEMBER_KEY = "salesdoc.client-balances-remember-filters";
+const STATE_KEY = "salesdoc.client-balances-filter-state-v1";
+
+export function loadClientBalancesRememberFilters(): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    return window.localStorage.getItem(REMEMBER_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+export function saveClientBalancesRememberFilters(on: boolean): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(REMEMBER_KEY, on ? "1" : "0");
+    if (!on) window.sessionStorage.removeItem(STATE_KEY);
+  } catch {
+    /* ignore */
+  }
+}
+
+export type ClientBalancesFilterSnapshot = {
+  draft: Record<string, string>;
+  applied: Record<string, string>;
+  search: string;
+  view: string;
+  page: number;
+};
+
+export function loadClientBalancesFilterSnapshot(): ClientBalancesFilterSnapshot | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const s = window.sessionStorage.getItem(STATE_KEY);
+    if (!s) return null;
+    const o = JSON.parse(s) as Partial<ClientBalancesFilterSnapshot>;
+    if (!o || typeof o !== "object" || !o.draft || !o.applied) return null;
+    return {
+      draft: o.draft,
+      applied: o.applied,
+      search: typeof o.search === "string" ? o.search : "",
+      view: typeof o.view === "string" ? o.view : "clients",
+      page: typeof o.page === "number" && o.page > 0 ? o.page : 1
+    };
+  } catch {
+    return null;
+  }
+}
+
+export function saveClientBalancesFilterSnapshot(snap: ClientBalancesFilterSnapshot): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.sessionStorage.setItem(STATE_KEY, JSON.stringify(snap));
+  } catch {
+    /* ignore */
+  }
+}
 
 function normalize(raw: unknown): ClientBalancesFilterVisibility {
   const d = DEFAULT_CLIENT_BALANCES_FILTER_VISIBILITY;

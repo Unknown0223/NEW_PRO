@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import { buttonVariants } from "@/components/ui/button-variants";
 import { api } from "@/lib/api";
+import { useDebouncedSearchCommit } from "@/lib/use-debounced-search-commit";
 import { getUserFacingError } from "@/lib/error-utils";
 import { usePermissions } from "@/lib/use-permissions";
 import { formatNumberGrouped } from "@/lib/format-numbers";
@@ -415,6 +416,10 @@ export function StockBalancesWorkspace({ tenantSlug }: Props) {
   const [draftProductScope, setDraftProductScope] = useState<ProductScope>("active");
   const [draftSort, setDraftSort] = useState<BalanceSort>("name_asc");
   const [searchDraft, setSearchDraft] = useState("");
+  useDebouncedSearchCommit(searchDraft, (q) => {
+    setApplied((prev) => (prev.q === q ? prev : { ...prev, q }));
+    setPage(1);
+  });
   const [applied, setApplied] = useState<{
     warehouseId: string;
     categoryId: string;

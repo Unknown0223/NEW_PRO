@@ -10,6 +10,7 @@ import { FilterSearchableSelect } from "@/components/ui/filter-searchable-select
 import { Input } from "@/components/ui/input";
 import { useUserTablePrefs } from "@/hooks/use-user-table-prefs";
 import { api } from "@/lib/api";
+import { useDebouncedSearchCommit } from "@/lib/use-debounced-search-commit";
 import { STALE } from "@/lib/query-stale";
 import { usePermissions } from "@/lib/use-permissions";
 import { priceTypeOptionsFromResponse, type PriceTypeOption } from "@/lib/price-type-label";
@@ -62,6 +63,10 @@ export function StockByDateWorkspace({ tenantSlug }: { tenantSlug: string }) {
   const [priceType, setPriceType] = useState("");
   const [searchDraft, setSearchDraft] = useState("");
   const [q, setQ] = useState("");
+  useDebouncedSearchCommit(searchDraft, (next) => {
+    setQ(next);
+    setPage(1);
+  });
   const [page, setPage] = useState(1);
   const [columnDialogOpen, setColumnDialogOpen] = useState(false);
   const [exporting, setExporting] = useState(false);

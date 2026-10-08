@@ -33,6 +33,7 @@ import Link from "next/link";
 import { Eye, FileSpreadsheet, FileText, LayoutGrid, RefreshCw, Search } from "lucide-react";
 import { apiFetch, useTenant } from "@/lib/api-client";
 import { api } from "@/lib/api";
+import { useDebouncedSearchCommit } from "@/lib/use-debounced-search-commit";
 import { getUserFacingError } from "@/lib/error-utils";
 import { downloadXlsxSheet } from "@/lib/download-xlsx";
 import { useUserTablePrefs } from "@/hooks/use-user-table-prefs";
@@ -182,6 +183,10 @@ export default function TransfersPage() {
   const [draftDestinationWarehouseId, setDraftDestinationWarehouseId] = useState("all");
   const [searchDraft, setSearchDraft] = useState("");
   const [searchApplied, setSearchApplied] = useState("");
+  useDebouncedSearchCommit(searchDraft, (q) => {
+    setSearchApplied(q);
+    setPage(1);
+  });
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
   const [columnOpen, setColumnOpen] = useState(false);

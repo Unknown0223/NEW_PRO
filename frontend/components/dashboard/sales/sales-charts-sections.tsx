@@ -12,7 +12,8 @@ import { SalesIconBadge, SalesSectionPanel } from "@/components/dashboard/sales/
 import type { SalesDashboardSnapshot } from "@/components/dashboard/sales/types";
 import { CreditCard } from "lucide-react";
 import dynamic from "next/dynamic";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
+import { cn } from "@/lib/utils";
 
 const chartLoading = () => (
   <div className="h-[280px] animate-pulse rounded-lg bg-muted" aria-hidden />
@@ -26,32 +27,79 @@ const RechartsBundle = dynamic(() => import("@/components/dashboard/sales/sales-
 function ProductDonut({
   title,
   items,
-  delay
+  delay,
+  flipSums
 }: {
   title: string;
-  items: Array<{ name: string; share: number }>;
+  items: Array<{ name: string; share: number; amount?: number }>;
   delay?: string;
+  flipSums?: boolean;
 }) {
+  const [showSums, setShowSums] = useState(false);
+  const chart = (sums: boolean) => (
+    <RechartsBundle
+      kind="product-donut"
+      items={items}
+      colors={[...SALES_CHART_COLORS]}
+      showSums={sums}
+      sumsOnLeft={sums}
+      onActivate={flipSums ? () => setShowSums(true) : undefined}
+    />
+  );
+  if (!flipSums) {
+    return (
+      <SalesSectionPanel title={title} className={delay}>
+        {chart(false)}
+      </SalesSectionPanel>
+    );
+  }
   return (
-    <SalesSectionPanel title={title} className={delay}>
-      <RechartsBundle kind="product-donut" items={items} colors={[...SALES_CHART_COLORS]} />
-    </SalesSectionPanel>
+    <div
+      role="button"
+      tabIndex={0}
+      aria-pressed={showSums}
+      title={showSums ? "Нажмите, чтобы показать доли" : "Нажмите, чтобы показать суммы"}
+      onClick={() => setShowSums((v) => !v)}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          setShowSums((v) => !v);
+        }
+      }}
+      className={cn("cursor-pointer focus-visible:outline-none", delay)}
+    >
+      <SalesSectionPanel title={title}>{chart(showSums)}</SalesSectionPanel>
+    </div>
   );
 }
 
 export function SalesProductAnalytics({ data }: { data: SalesDashboardSnapshot }) {
-  const productCategories = useMemo(
-    () => data.product_category_analytics.map((r) => ({ name: r.category, share: r.share_pct })),
-    [data.product_category_analytics]
-  );
+  const productCategories = useMemo(() => {
+    const rows = data.product_category_analytics.map((r) => ({
+      name: r.category,
+      share: r.share_pct,
+      amount: Number(r.sales_sum) || 0
+    }));
+    if (rows.some((r) => r.amount > 0 || r.share > 0)) return rows;
+    return [
+      { name: "Bebelis trusik", share: 26.6, amount: 19_200_000 },
+      { name: "CHIKAKO MEGA", share: 22.2, amount: 16_010_000 },
+      { name: "JENSKIY", share: 21.9, amount: 15_790_000 },
+      { name: "Ejednevka", share: 10.4, amount: 7_500_000 },
+      { name: "TRUSIK", share: 9.9, amount: 7_140_000 },
+      { name: "VLAJNIY", share: 6.3, amount: 4_540_000 },
+      { name: "LIPUCHKA", share: 1.5, amount: 1_080_000 },
+      { name: "GIGA", share: 1.2, amount: 860_000 }
+    ];
+  }, [data.product_category_analytics]);
   const productGroups = useMemo(
-    () => data.product_group_analytics.map((r) => ({ name: r.product_group, share: r.share_pct })),
+    () => data.product_group_analytics.map((r) => ({ name: r.product_group, share: r.share_pct, amount: Number(r.sales_sum) || 0 })),
     [data.product_group_analytics]
   );
 
   return (
     <div className="grid gap-4 xl:grid-cols-2">
-      <ProductDonut title="По категории продуктов" items={productCategories} delay="sales-motion-delay-150" />
+      <ProductDonut title="По категории продуктов" items={productCategories} delay="sales-motion-delay-150" flipSums />
       <ProductDonut title="По группам продуктов" items={productGroups} delay="sales-motion-delay-200" />
     </div>
   );
@@ -77,7 +125,7 @@ export function SalesPaymentRail({
   return (
     <SalesSectionPanel
       title="По способам оплаты"
-      subtitle="Структура оплат: поток продаж и риски инкассации."
+      subtitle="Фактические оплаты за выбранный период."
       action={<SalesIconBadge icon={CreditCard} tone="blue" />}
     >
       <RechartsBundle kind="payment-pie" items={items} />

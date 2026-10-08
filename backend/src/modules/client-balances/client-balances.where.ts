@@ -53,9 +53,13 @@ export function buildClientBalanceSearchOrClause(searchRaw: string): Prisma.Clie
 
   return [
     { name: { contains: search, mode: ins } },
+    { legal_name: { contains: search, mode: ins } },
     { phone: { contains: search, mode: ins } },
     { client_code: { contains: search, mode: ins } },
-    { inn: { contains: search, mode: ins } }
+    { inn: { contains: search, mode: ins } },
+    { agent: { is: { name: { contains: search, mode: ins } } } },
+    { agent: { is: { code: { contains: search, mode: ins } } } },
+    { agent: { is: { supervisor: { is: { name: { contains: search, mode: ins } } } } } }
   ];
 }
 

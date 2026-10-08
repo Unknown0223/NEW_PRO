@@ -20,6 +20,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAppConfirm } from "@/components/ui/app-confirm-dialog";
 import { api } from "@/lib/api";
+import { useDebouncedSearchCommit } from "@/lib/use-debounced-search-commit";
 import { usePermissions } from "@/lib/use-permissions";
 import { useAuthStore, useAuthStoreHydrated, useEffectiveRole } from "@/lib/auth-store";
 import {
@@ -147,6 +148,10 @@ export function SuppliersPaymentsWorkspace() {
   const [draftMethod, setDraftMethod] = useState("");
   const [draftCashDesk, setDraftCashDesk] = useState("");
   const [draftSearch, setDraftSearch] = useState("");
+  useDebouncedSearchCommit(draftSearch, (q) => {
+    setAppliedSearch(q);
+    setPage(1);
+  });
 
   const [appliedFrom, setAppliedFrom] = useState(defaultRange.from);
   const [appliedTo, setAppliedTo] = useState(defaultRange.to);

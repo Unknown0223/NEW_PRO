@@ -278,7 +278,7 @@ export function SalesMetricsRow({
         title="Оплаты по способам"
         value={fmtMoney(totalPayment)}
         unit="UZS"
-        description="Сумма по способам оплаты"
+        description="Фактические оплаты за выбранный период"
         icon={CreditCard}
         tone="blue"
         back={<BreakdownBack title="По способам оплаты" rows={paymentRows} barClass="bg-blue-500" />}

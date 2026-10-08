@@ -1,15 +1,81 @@
 "use client";
 
-import { Search } from "lucide-react";
+import { useState } from "react";
+import { ListChecks, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import type { SideRow } from "./access-workspace.shared";
 import type { UseAccessWorkspaceReturn } from "./use-access-workspace";
 
-export function AccessWorkspaceLeftPanel({ ws }: { ws: UseAccessWorkspaceReturn }) {
+function CompactSideRow({
+  row,
+  active,
+  checked,
+  selectMode,
+  nested,
+  onClick
+}: {
+  row: SideRow;
+  active: boolean;
+  checked: boolean;
+  selectMode: boolean;
+  nested?: boolean;
+  onClick: () => void;
+}) {
   return (
-        <div className="access-left-panel flex min-h-0 w-full flex-col gap-2 overflow-hidden p-2.5 lg:min-h-0 lg:w-[min(300px,100%)] lg:min-w-[260px] lg:max-w-[300px] lg:shrink-0">
+    <button
+      type="button"
+      onClick={onClick}
+      data-active={active}
+      aria-pressed={selectMode ? checked : undefined}
+      className={cn(
+        "flex w-full items-start gap-2.5 rounded-lg border px-3 py-2.5 text-left transition-colors",
+        active
+          ? "border-emerald-400/80 bg-emerald-50 dark:border-emerald-600/50 dark:bg-emerald-950/35"
+          : checked
+            ? "border-emerald-300 bg-emerald-50/80 dark:bg-emerald-950/25"
+            : "border-border/80 bg-card hover:bg-muted/30",
+        !row.is_active && "opacity-60",
+        nested && "ml-1"
+      )}
+    >
+      {selectMode ? (
+        <input type="checkbox" readOnly tabIndex={-1} checked={checked} className="mt-0.5 h-4 w-4 shrink-0 accent-emerald-700" aria-hidden />
+      ) : null}
+      <span className="min-w-0 flex-1">
+        <span className="block text-[13px] font-medium leading-snug text-foreground">{row.title}</span>
+        {row.subtitle ? <span className="mt-0.5 block text-[11px] leading-snug text-muted-foreground">{row.subtitle}</span> : null}
+      </span>
+    </button>
+  );
+}
+
+export function AccessWorkspaceLeftPanel({ ws }: { ws: UseAccessWorkspaceReturn }) {
+  const [selectMode, setSelectMode] = useState(false);
+  const [picked, setPicked] = useState<Set<string>>(() => new Set());
+  const exitSelect = () => {
+    setSelectMode(false);
+    setPicked(new Set());
+  };
+  const togglePick = (key: string) =>
+    setPicked((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  const visibleKeys = ws.filteredSideRows.map((r) => r.key);
+  const allPicked = visibleKeys.length > 0 && visibleKeys.every((k) => picked.has(k));
+  const openUsersForPicked = () => {
+    const key = [...picked][0];
+    if (!key) return;
+    ws.selectSideRowKey(key);
+    ws.setOpUsersModalOpen(true);
+  };
+
+  return (
+        <div className="access-left-panel flex min-h-0 w-full flex-col gap-2 overflow-hidden p-2.5 lg:min-h-0 lg:w-[min(360px,100%)] lg:min-w-[320px] lg:max-w-[380px] lg:shrink-0">
           <div className="shrink-0 rounded-md border border-border/60 bg-card p-3 shadow-sm">
             <p className="mb-2 text-xs font-semibold text-foreground">Фильтр</p>
             <div className="space-y-2">
@@ -50,6 +116,14 @@ export function AccessWorkspaceLeftPanel({ ws }: { ws: UseAccessWorkspaceReturn 
             <div className="access-list-cap flex flex-wrap items-center justify-between gap-2">
               <span>{ws.activeTabLabel}</span>
               <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  className="inline-flex items-center gap-1 text-[10px] font-medium text-teal-700 hover:underline dark:text-teal-300"
+                  onClick={() => (selectMode ? exitSelect() : setSelectMode(true))}
+                >
+                  <ListChecks className="h-3 w-3" aria-hidden />
+                  {selectMode ? "Отмена" : "Массовый выбор"}
+                </button>
                 {(ws.tab === "users" || ws.tab === "operations") ? (
                   <Button
                     size="sm"
@@ -66,6 +140,18 @@ export function AccessWorkspaceLeftPanel({ ws }: { ws: UseAccessWorkspaceReturn 
                 <span className="font-normal tabular-nums text-muted-foreground">{ws.filteredSideRows.length}</span>
               </div>
             </div>
+            {selectMode ? (
+              <div className="flex items-center justify-between border-b border-border/60 px-2 py-1 text-[10px]">
+                <button
+                  type="button"
+                  className="font-medium text-teal-700 hover:underline dark:text-teal-300"
+                  onClick={() => setPicked(allPicked ? new Set() : new Set(visibleKeys))}
+                >
+                  {allPicked ? "Снять все" : "Выбрать все"}
+                </button>
+                <span className="tabular-nums text-muted-foreground">Выбрано: {picked.size}</span>
+              </div>
+            ) : null}
             <div className="scrollbar-none min-h-0 flex-1 space-y-1.5 overflow-y-auto overflow-x-hidden overscroll-y-contain p-1.5 pr-0.5">
               {(ws.tab === "users" && ws.usersQ.isLoading) || (ws.tab !== "users" && ws.dimensionsQ.isLoading) ? (
                 <p className="px-1 py-4 text-center text-xs text-muted-foreground">Загрузка…</p>
@@ -184,10 +270,10 @@ export function AccessWorkspaceLeftPanel({ ws }: { ws: UseAccessWorkspaceReturn 
                 ws.operationNestedGroups.map((g) => {
                   const groupExpanded = ws.leftExpandedGroups.has(g.group);
                   return (
-                    <div key={g.group} className="rounded-md border border-border/80 bg-muted/40 dark:border-slate-700/80 dark:bg-slate-900/20">
+                    <div key={g.group} className="rounded-lg">
                       <button
                         type="button"
-                        className="flex w-full items-center justify-between px-2 py-1.5 text-left text-xs font-semibold text-slate-700 dark:text-slate-200"
+                        className="flex w-full items-center justify-between rounded-lg px-2 py-2 text-left text-sm font-semibold text-slate-800 hover:bg-muted/50 dark:text-slate-100"
                         onClick={() =>
                           ws.setLeftExpandedGroups((prev) => {
                             if (prev.has(g.group)) return new Set();
@@ -203,19 +289,39 @@ export function AccessWorkspaceLeftPanel({ ws }: { ws: UseAccessWorkspaceReturn 
                           {g.subgroups.reduce((acc, sg) => acc + sg.items.length, 0)}
                         </span>
                       </button>
-                      <div className={groupExpanded ? "border-t border-border/70 p-1.5 dark:border-slate-700/70" : "hidden"}>
+                      <div className={groupExpanded ? "space-y-1.5 py-1 pl-1" : "hidden"}>
                         <div className="space-y-1.5">
                           {g.subgroups.map((sg) => {
+                            const sameAsGroup = sg.subgroup === g.group;
                             const subgroupKey = `${g.group}|||${sg.subgroup}`;
-                            const subgroupExpanded = groupExpanded && ws.leftExpandedSubgroups.has(subgroupKey);
+                            const subgroupExpanded = sameAsGroup || (groupExpanded && ws.leftExpandedSubgroups.has(subgroupKey));
+                            if (sameAsGroup) {
+                              return (
+                                <div key={subgroupKey} className="space-y-1">
+                                  {sg.items.map((r) => (
+                                    <CompactSideRow
+                                      key={r.key}
+                                      row={r}
+                                      selectMode={selectMode}
+                                      checked={picked.has(r.key)}
+                                      active={!selectMode && ws.selectedKey === r.key}
+                                      onClick={() => {
+                                        if (selectMode) togglePick(r.key);
+                                        else {
+                                          ws.selectSideRowKey(r.key);
+                                          ws.prefetchDimensionUsersForKey(r.key);
+                                        }
+                                      }}
+                                    />
+                                  ))}
+                                </div>
+                              );
+                            }
                             return (
-                              <div
-                                key={subgroupKey}
-                                className="rounded-md border border-indigo-300/70 bg-indigo-50/40 dark:border-indigo-800/70 dark:bg-indigo-950/20"
-                              >
+                              <div key={subgroupKey} className="space-y-1">
                                 <button
                                   type="button"
-                                  className="flex w-full items-center justify-between px-2 py-1.5 text-left text-xs font-medium text-indigo-700 dark:text-indigo-200"
+                                  className="flex w-full items-center justify-between rounded-md px-2 py-1.5 text-left text-xs font-semibold text-slate-600 dark:text-slate-300"
                                   onClick={() =>
                                     ws.setLeftExpandedSubgroups((prev) => {
                                       if (prev.has(subgroupKey)) return new Set();
@@ -229,67 +335,24 @@ export function AccessWorkspaceLeftPanel({ ws }: { ws: UseAccessWorkspaceReturn 
                                   </span>
                                   <span className="text-[10px] text-muted-foreground tabular-nums">{sg.items.length}</span>
                                 </button>
-                                <div className={subgroupExpanded ? "border-t border-indigo-300/60 p-1.5 dark:border-indigo-800/60" : "hidden"}>
-                                  <div className="space-y-2">
-                                    <div>
-                                      <div className="px-1 pb-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Активные</div>
-                                      <div className="space-y-1">
-                                        {sg.items.filter((r) => r.is_active).map((r) => (
-                                          <button
-                                            key={r.key}
-                                            type="button"
-                                            onClick={() => ws.selectSideRowKey(r.key)}
-                                            onPointerEnter={() => ws.prefetchDimensionUsersForKey(r.key)}
-                                            data-active={ws.selectedKey === r.key}
-                                            className={cn(
-                                              "access-item-card w-full px-3 py-2.5 text-left transition-colors",
-                                              ws.selectedKey === r.key
-                                                ? "hover:bg-muted/40"
-                                                : "border border-emerald-300/70 bg-emerald-50/50 hover:bg-emerald-100/60 dark:border-emerald-800/70 dark:bg-emerald-950/20 dark:hover:bg-emerald-900/30",
-                                              ws.isNestedOperationRow(r)
-                                                ? ws.selectedKey === r.key
-                                                  ? "ml-2 border-l-2 border-l-primary/65"
-                                                  : "ml-2 border-l-2 border-l-emerald-500/80"
-                                                : ""
-                                            )}
-                                          >
-                                            <div className="text-sm font-medium leading-snug">{r.title}</div>
-                                            <div className="mt-0.5 text-[11px] text-muted-foreground">{r.subtitle}</div>
-                                            {r.meta ? <div className="mt-1 text-[10px] text-muted-foreground/90">{r.meta}</div> : null}
-                                          </button>
-                                        ))}
-                                      </div>
-                                    </div>
-                                    <div>
-                                      <div className="px-1 pb-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Неактивные</div>
-                                      <div className="space-y-1">
-                                        {sg.items.filter((r) => !r.is_active).map((r) => (
-                                          <button
-                                            key={r.key}
-                                            type="button"
-                                            onClick={() => ws.selectSideRowKey(r.key)}
-                                            onPointerEnter={() => ws.prefetchDimensionUsersForKey(r.key)}
-                                            data-active={ws.selectedKey === r.key}
-                                            className={cn(
-                                              "access-item-card w-full px-3 py-2.5 text-left transition-colors",
-                                              ws.selectedKey === r.key
-                                                ? "hover:bg-muted/40"
-                                                : "border border-rose-300/70 bg-rose-50/50 hover:bg-rose-100/60 dark:border-rose-800/70 dark:bg-rose-950/20 dark:hover:bg-rose-900/30",
-                                              ws.isNestedOperationRow(r)
-                                                ? ws.selectedKey === r.key
-                                                  ? "ml-2 border-l-2 border-l-primary/65"
-                                                  : "ml-2 border-l-2 border-l-rose-500/80"
-                                                : ""
-                                            )}
-                                          >
-                                            <div className="text-sm font-medium leading-snug">{r.title}</div>
-                                            <div className="mt-0.5 text-[11px] text-muted-foreground">{r.subtitle}</div>
-                                            {r.meta ? <div className="mt-1 text-[10px] text-muted-foreground/90">{r.meta}</div> : null}
-                                          </button>
-                                        ))}
-                                      </div>
-                                    </div>
-                                  </div>
+                                <div className={subgroupExpanded ? "space-y-1.5" : "hidden"}>
+                                  {sg.items.map((r) => (
+                                    <CompactSideRow
+                                      key={r.key}
+                                      row={r}
+                                      nested={ws.isNestedOperationRow(r)}
+                                      selectMode={selectMode}
+                                      checked={picked.has(r.key)}
+                                      active={!selectMode && ws.selectedKey === r.key}
+                                      onClick={() => {
+                                        if (selectMode) togglePick(r.key);
+                                        else {
+                                          ws.selectSideRowKey(r.key);
+                                          ws.prefetchDimensionUsersForKey(r.key);
+                                        }
+                                      }}
+                                    />
+                                  ))}
                                 </div>
                               </div>
                             );
@@ -301,22 +364,33 @@ export function AccessWorkspaceLeftPanel({ ws }: { ws: UseAccessWorkspaceReturn 
                 })
               ) : (
                 ws.filteredSideRows.map((r) => (
-                  <button
+                  <CompactSideRow
                     key={r.key}
-                    type="button"
-                    onClick={() => ws.selectSideRowKey(r.key)}
-                    onPointerEnter={() => ws.prefetchDimensionUsersForKey(r.key)}
-                    data-active={ws.selectedKey === r.key}
-                    className="access-item-card w-full px-3 py-2.5 text-left transition-colors hover:bg-muted/40"
-                  >
-                    {r.idLine ? <div className="text-[11px] font-medium tabular-nums text-muted-foreground">{r.idLine}</div> : null}
-                    <div className="text-sm font-medium leading-snug">{r.title}</div>
-                    <div className="mt-0.5 text-[11px] text-muted-foreground">{r.subtitle}</div>
-                    {r.meta ? <div className="mt-1 text-[10px] text-muted-foreground/90">{r.meta}</div> : null}
-                  </button>
+                    row={r}
+                    selectMode={selectMode}
+                    checked={picked.has(r.key)}
+                    active={!selectMode && ws.selectedKey === r.key}
+                    onClick={() => {
+                      if (selectMode) togglePick(r.key);
+                      else {
+                        ws.selectSideRowKey(r.key);
+                        ws.prefetchDimensionUsersForKey(r.key);
+                      }
+                    }}
+                  />
                 ))
               )}
             </div>
+            {selectMode && picked.size > 0 ? (
+              <div className="flex shrink-0 items-center justify-between gap-2 border-t border-border/60 bg-teal-50 px-2 py-1.5 text-[11px] dark:bg-teal-950/40">
+                <span>
+                  Выбрано: <b className="tabular-nums">{picked.size}</b>
+                </span>
+                <Button type="button" size="sm" className="h-7 bg-teal-700 px-2 text-[11px] text-white hover:bg-teal-800" onClick={openUsersForPicked}>
+                  Пользователи…
+                </Button>
+              </div>
+            ) : null}
           </div>
         </div>
   );

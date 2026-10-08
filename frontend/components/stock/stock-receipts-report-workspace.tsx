@@ -10,6 +10,7 @@ import { FilterSearchableSelect } from "@/components/ui/filter-searchable-select
 import { Input } from "@/components/ui/input";
 import { useUserTablePrefs } from "@/hooks/use-user-table-prefs";
 import { api } from "@/lib/api";
+import { useDebouncedSearchCommit } from "@/lib/use-debounced-search-commit";
 import { STALE } from "@/lib/query-stale";
 import { usePermissions } from "@/lib/use-permissions";
 import { cn } from "@/lib/utils";
@@ -112,6 +113,10 @@ export function StockReceiptsReportWorkspace({
   const [draftProduct, setDraftProduct] = useState("");
   const [draftQtyMode, setDraftQtyMode] = useState<"all" | "positive" | "zero">("all");
   const [searchDraft, setSearchDraft] = useState("");
+  useDebouncedSearchCommit(searchDraft, (q) => {
+    setApplied((prev) => (prev.q === q ? prev : { ...prev, q }));
+    setPage(1);
+  });
   const [applied, setApplied] = useState({
     dateFrom: monthStartYmd(),
     dateTo: localYmd(new Date()),

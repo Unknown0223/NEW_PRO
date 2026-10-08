@@ -177,43 +177,52 @@ export const ordersListQuerySchema = z
     order_alert: z.string().optional()
   })
   .transform((q) => {
+    const ints = (raw?: string) =>
+      [...new Set((raw ?? "").split(",").map((s) => Number.parseInt(s.trim(), 10)).filter((n) => Number.isFinite(n) && n > 0))];
+    const whIds = ints(q.warehouse_id);
+    const exIds = ints(q.expeditor_id ?? q.expeditor_user_id);
+    const prIds = ints(q.product_id);
+    const catIds = ints(q.product_category_id);
+    const dayIds = ints(q.visit_weekday).filter((n) => n >= 1 && n <= 7);
     const pageNum = Math.max(1, Number.parseInt(q.page ?? "1", 10) || 1);
     const limitNum = Math.min(100, Math.max(1, Number.parseInt(q.limit ?? "30", 10) || 30));
     const search = (q.q ?? q.search ?? "").trim() || undefined;
     const noAgentRaw = q.no_agent?.trim().toLowerCase();
     const include_no_agent = noAgentRaw === "1" || noAgentRaw === "true" || noAgentRaw === "yes";
-    const agent_ids = parseAgentIds(q.agent_ids);
+    const agent_ids = parseAgentIds(q.agent_ids) ?? (ints(q.agent_id).length > 1 ? ints(q.agent_id) : undefined);
     return {
       page: pageNum,
       limit: limitNum,
       status: q.status?.trim() || undefined,
       search,
       client_id: parseOptionalPosInt(q.client_id),
-      warehouse_id: parseOptionalPosInt(q.warehouse_id),
+      warehouse_id: whIds.length === 1 ? whIds[0] : undefined,
+      warehouse_ids: whIds.length > 1 ? whIds : undefined,
       agent_id: agent_ids?.length ? undefined : parseOptionalPosInt(q.agent_id),
       agent_ids,
       include_no_agent: include_no_agent || undefined,
-      expeditor_user_id: parseOptionalPosInt(q.expeditor_id ?? q.expeditor_user_id),
+      expeditor_user_id: exIds.length === 1 ? exIds[0] : undefined,
+      expeditor_user_ids: exIds.length > 1 ? exIds : undefined,
       client_category: q.client_category?.trim() || undefined,
       client_region: q.client_region?.trim() || undefined,
       client_city: q.client_city?.trim() || undefined,
       client_zone: q.client_zone?.trim() || undefined,
       agent_trade_direction: q.trade_direction?.trim() || undefined,
-      product_id: parseOptionalPosInt(q.product_id),
+      product_id: prIds.length === 1 ? prIds[0] : undefined,
+      product_ids: prIds.length > 1 ? prIds : undefined,
       date_from: q.date_from?.trim() || q.from?.trim() || undefined,
       date_to: q.date_to?.trim() || q.to?.trim() || undefined,
       date_periods: q.date_periods?.trim() || undefined,
       order_type: q.order_type?.trim() || undefined,
       is_consignment: parseConsignmentFlag(q.is_consignment),
-      product_category_id: parseOptionalPosInt(q.product_category_id),
+      product_category_id: catIds.length === 1 ? catIds[0] : undefined,
+      product_category_ids: catIds.length > 1 ? catIds : undefined,
       payment_type: q.payment_type?.trim() || undefined,
       payment_method_ref: q.payment_method_ref?.trim() || undefined,
       request_type_ref: q.request_type_ref?.trim() || undefined,
       list_price_type: q.price_type?.trim() || undefined,
-      visit_weekday: (() => {
-        const n = Number.parseInt(q.visit_weekday ?? "", 10);
-        return Number.isFinite(n) && n >= 1 && n <= 7 ? n : undefined;
-      })(),
+      visit_weekday: dayIds.length === 1 ? dayIds[0] : undefined,
+      visit_weekdays: dayIds.length > 1 ? dayIds : undefined,
       date_mode: q.date_mode?.trim() || undefined,
       cursor: q.cursor?.trim() || undefined,
       discount_alert: q.discount_alert?.trim() || undefined,

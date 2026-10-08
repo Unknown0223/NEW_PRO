@@ -10,6 +10,7 @@ import { FilterSearchableSelect } from "@/components/ui/filter-searchable-select
 import { Input } from "@/components/ui/input";
 import { useUserTablePrefs } from "@/hooks/use-user-table-prefs";
 import { api } from "@/lib/api";
+import { useDebouncedSearchCommit } from "@/lib/use-debounced-search-commit";
 import { STALE } from "@/lib/query-stale";
 import { usePermissions } from "@/lib/use-permissions";
 import { cn } from "@/lib/utils";
@@ -118,6 +119,10 @@ export function StockRecommendedWorkspace({ tenantSlug }: { tenantSlug: string }
   const [draftProductId, setDraftProductId] = useState("");
   const [draftQtyMode, setDraftQtyMode] = useState<QtyMode>("all");
   const [searchDraft, setSearchDraft] = useState("");
+  useDebouncedSearchCommit(searchDraft, (q) => {
+    setFilters((prev) => (prev.q === q ? prev : { ...prev, q }));
+    setPage(1);
+  });
   const [sortBy, setSortBy] = useState<SortBy>("category");
   const [sortDir, setSortDir] = useState<SortDir>("asc");
   const [filters, setFilters] = useState({

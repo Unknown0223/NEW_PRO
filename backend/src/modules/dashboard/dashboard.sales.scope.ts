@@ -217,6 +217,70 @@ function salesScopeWithCommonFilters(
   return Prisma.sql`${base} ${territoryClause} ${productClause}`;
 }
 
+/** Haqiqiy kirim: `client_payments`, sana — `paid_at` (yo‘q bo‘lsa `created_at`). */
+export function salesClientPaymentWhere(
+  tenantId: number,
+  from: Date,
+  to: Date,
+  f: SalesDashboardFilters,
+  territoryTerms: string[]
+): Prisma.Sql {
+  const parts: Prisma.Sql[] = [
+    Prisma.sql`p.tenant_id = ${tenantId}`,
+    Prisma.sql`p.entry_kind = 'payment'`,
+    Prisma.sql`p.deleted_at IS NULL`,
+    Prisma.sql`COALESCE(p.paid_at, p.created_at) >= ${from}`,
+    Prisma.sql`COALESCE(p.paid_at, p.created_at) <= ${to}`
+  ];
+  if (f.payment_types.length > 0) {
+    parts.push(
+      Prisma.sql`btrim(COALESCE(p.payment_type, '')) IN (${Prisma.join(f.payment_types.map((x) => Prisma.sql`${x}`))})`
+    );
+  }
+  if (f.supervisor_ids.length > 0) {
+    parts.push(Prisma.sql`u.supervisor_user_id IN (${Prisma.join(f.supervisor_ids)})`);
+  }
+  if (f.agent_ids.length > 0) {
+    parts.push(Prisma.sql`COALESCE(p.ledger_agent_id, c.agent_id) IN (${Prisma.join(f.agent_ids)})`);
+  }
+  if (f.trade_directions.length > 0) {
+    parts.push(Prisma.sql`COALESCE(u.trade_direction, '') IN (${Prisma.join(f.trade_directions)})`);
+  }
+  if (f.territory_1_list.length > 0) {
+    parts.push(
+      Prisma.sql`btrim(COALESCE(c.zone, '')) IN (${Prisma.join(f.territory_1_list.map((x) => Prisma.sql`${x}`))})`
+    );
+  }
+  if (f.territory_2_list.length > 0) {
+    parts.push(
+      Prisma.sql`btrim(COALESCE(c.region, '')) IN (${Prisma.join(f.territory_2_list.map((x) => Prisma.sql`${x}`))})`
+    );
+  }
+  if (f.territory_3_list.length > 0) {
+    parts.push(
+      Prisma.sql`btrim(COALESCE(c.city, '')) IN (${Prisma.join(f.territory_3_list.map((x) => Prisma.sql`${x}`))})`
+    );
+  }
+  const base = Prisma.join(parts, " AND ");
+  const territoryClause = buildSalesTerritoryAliasClause("c", territoryTerms);
+  const productParts: Prisma.Sql[] = [];
+  if (f.category_ids.length > 0) productParts.push(Prisma.sql`px.category_id IN (${Prisma.join(f.category_ids)})`);
+  if (f.group_ids.length > 0) productParts.push(Prisma.sql`px.product_group_id IN (${Prisma.join(f.group_ids)})`);
+  if (f.brand_ids.length > 0) productParts.push(Prisma.sql`px.brand_id IN (${Prisma.join(f.brand_ids)})`);
+  if (f.manufacturer_ids.length > 0) {
+    productParts.push(Prisma.sql`px.manufacturer_id IN (${Prisma.join(f.manufacturer_ids)})`);
+  }
+  const productClause =
+    productParts.length === 0
+      ? Prisma.empty
+      : Prisma.sql`AND p.order_id IS NOT NULL AND EXISTS (
+          SELECT 1 FROM order_items oix
+          JOIN products px ON px.id = oix.product_id
+          WHERE oix.order_id = p.order_id AND ${Prisma.join(productParts, " AND ")}
+        )`;
+  return Prisma.sql`${base} ${territoryClause} ${productClause}`;
+}
+
 export function salesProductJoinFilter(alias: string, f: SalesDashboardFilters): Prisma.Sql {
   const parts: Prisma.Sql[] = [];
   if (f.category_ids.length > 0) {

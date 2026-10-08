@@ -23,6 +23,7 @@ import { cn } from "@/lib/utils";
 import { formatGroupedDecimal } from "@/lib/format-numbers";
 import { pickFirstExcelFile } from "@/lib/excel-file-pick";
 import { api } from "@/lib/api";
+import { useDebouncedSearchCommit } from "@/lib/use-debounced-search-commit";
 import { downloadXlsxSheet } from "@/lib/download-xlsx";
 import { STALE } from "@/lib/query-stale";
 import { usePermissions } from "@/lib/use-permissions";
@@ -197,6 +198,10 @@ export function GoodsReceiptsWorkspace({ tenantSlug }: Props) {
   const [draftRangeOpen, setDraftRangeOpen] = useState(false);
   const draftRangeAnchorRef = useRef<HTMLButtonElement>(null);
   const [searchDraft, setSearchDraft] = useState("");
+  useDebouncedSearchCommit(searchDraft, (q) => {
+    setApplied((prev) => (prev.q === q ? prev : { ...prev, q }));
+    setPage(1);
+  });
   const [uploading, setUploading] = useState(false);
   const [uploadReport, setUploadReport] = useState<{ applied: number; errors: string[] } | null>(null);
   const importFileRef = useRef<HTMLInputElement | null>(null);

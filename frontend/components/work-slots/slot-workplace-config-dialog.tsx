@@ -445,7 +445,7 @@ export function SlotWorkplaceConfigDialog({
         paymentMethodEntries={paymentMethodsQ.data}
         variant={mobileVariant}
         onClose={() => onOpenChange(false)}
-        onSave={async (ent) => {
+        onSave={async (ent, opts) => {
           setMobileSaving(true);
           try {
             const mobile_config = (ent as { mobile_config?: unknown }).mobile_config;
@@ -456,6 +456,7 @@ export function SlotWorkplaceConfigDialog({
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                   slot_ids: slotIds,
+                  mobile_config_mode: opts?.replaceMobileConfig ? "replace" : "merge",
                   entitlements: { mobile_config }
                 })
               });

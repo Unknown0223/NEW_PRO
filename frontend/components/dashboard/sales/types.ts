@@ -82,6 +82,23 @@ export type SalesDashboardSnapshot = {
     okb: number;
     coverage_pct: number;
   }>;
+  category_matrix?: {
+    categories: string[];
+    by_dimension: {
+      filial: CategoryMatrixRow[];
+      supervisor: CategoryMatrixRow[];
+      agent: CategoryMatrixRow[];
+    };
+  };
+};
+
+export type CategoryMatrixRow = {
+  key: string;
+  name: string;
+  smart_code: string;
+  total: string;
+  akb: number;
+  amounts: Record<string, string>;
 };
 
 export type SalesSummaryPayload = Pick<
@@ -104,6 +121,9 @@ export type SalesAnalyticsPayload = Pick<
   | "refusal_reason_analytics"
 >;
 
-export type SalesBreakdownPayload = Pick<SalesDashboardSnapshot, "territory_analytics" | "agent_analytics"> & {
+export type SalesBreakdownPayload = Pick<
+  SalesDashboardSnapshot,
+  "territory_analytics" | "agent_analytics" | "category_matrix"
+> & {
   agent_total: number;
 };

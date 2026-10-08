@@ -27,8 +27,6 @@ import { AccessAttachOperationsDialog } from "./access-attach-operations-dialog"
 import { userMessageAfterAccessPatchFailure } from "./access-user-detail.types";
 import type { AccessUserDetailVm } from "./hooks/use-access-user-detail-panel";
 
-const GRANT_CHUNK = 80;
-
 const STATE_BADGE: Record<ReturnType<typeof opStateLabel>, string> = {
   "Из роли": "border-slate-300 bg-slate-50 text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200",
   Лично: "border-teal-300 bg-teal-50 text-teal-800 dark:border-teal-800 dark:bg-teal-950 dark:text-teal-200",
@@ -130,9 +128,7 @@ export function AccessUserOperationsPanel({ vm, filter }: { vm: AccessUserDetail
     });
     if (!ok) return;
     const field = allow ? "grant_delegation_allow" : "grant_delegation_revoke";
-    const bodies: Record<string, unknown>[] = [];
-    for (let i = 0; i < editable.length; i += GRANT_CHUNK) bodies.push({ [field]: editable.slice(i, i + GRANT_CHUNK) });
-    await run(bodies, allow ? "Выдача другим разрешена" : "Выдача другим запрещена");
+    await run([{ [field]: editable }], allow ? "Выдача другим разрешена" : "Выдача другим запрещена");
   };
 
   const labelByKey = useMemo(() => {

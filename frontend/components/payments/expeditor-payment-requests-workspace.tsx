@@ -32,6 +32,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useUserTablePrefs } from "@/hooks/use-user-table-prefs";
 import { api } from "@/lib/api";
+import { useDebouncedSearchCommit } from "@/lib/use-debounced-search-commit";
 import { useAuthStore, useAuthStoreHydrated, useEffectiveRole } from "@/lib/auth-store";
 import type { ClientBalanceTerritoryOptions } from "@/lib/client-balances-types";
 import { isAdminOrOperatorLikeRole } from "@/lib/distribution-roles";
@@ -236,6 +237,10 @@ export function ExpeditorPaymentRequestsWorkspace() {
 
   const [applied, setApplied] = useState<EprFilterState>(() => defaultEprFilters());
   const [draft, setDraft] = useState<EprFilterState>(() => defaultEprFilters());
+  useDebouncedSearchCommit(draft.search, (q) => {
+    setApplied((prev) => (prev.search === q ? prev : { ...prev, search: q }));
+    setPage(1);
+  });
   const [page, setPage] = useState(1);
   const [sortBy, setSortBy] = useState<EprPaymentRequestSortKey>(EPR_SORT_DEFAULT.sortBy);
   const [sortDir, setSortDir] = useState<"asc" | "desc">(EPR_SORT_DEFAULT.sortDir);

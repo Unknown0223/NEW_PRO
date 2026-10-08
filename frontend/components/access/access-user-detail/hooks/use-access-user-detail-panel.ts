@@ -620,9 +620,14 @@ export function useAccessUserDetailPanel({
       )
     );
     try {
+      const merged: Record<string, string[]> = {};
       for (const body of bodies) {
-        await patchMut.mutateAsync(body);
+        for (const [k, v] of Object.entries(body)) {
+          if (!Array.isArray(v)) continue;
+          merged[k] = [...(merged[k] ?? []), ...v.map(String)];
+        }
       }
+      if (Object.keys(merged).length) await patchMut.mutateAsync(merged);
       await qc.refetchQueries({ queryKey: ["access-user-detail", tenantSlug, userId] });
       setBulkFeedback({
         tone: "ok",

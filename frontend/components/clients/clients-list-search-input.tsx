@@ -16,7 +16,7 @@ type Props = {
   className?: string;
 };
 
-/** Kompakt qidiruv — matn yoziladi, keyin lupa tugmasi yoki Enter bosiladi. */
+/** Kompakt qidiruv — yozilishi bilan (qisqa pauza) qo‘llanadi. */
 export function ClientsListSearchInput({ value, onChange, className }: Props) {
   const [draft, setDraft] = useState(value);
   const [fieldsOpen, setFieldsOpen] = useState(false);
@@ -25,6 +25,13 @@ export function ClientsListSearchInput({ value, onChange, className }: Props) {
   useEffect(() => {
     setDraft(value);
   }, [value]);
+
+  useEffect(() => {
+    const next = draft.trim();
+    if (next === value) return;
+    const timer = window.setTimeout(() => onChange(next), 300);
+    return () => window.clearTimeout(timer);
+  }, [draft, onChange, value]);
 
   const submit = useCallback(() => {
     onChange(draft.trim());

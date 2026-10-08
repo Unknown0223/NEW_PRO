@@ -3,7 +3,7 @@
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { Search } from "lucide-react";
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 type Props = {
   onSearch: (query: string) => void;
@@ -13,10 +13,7 @@ type Props = {
   defaultQuery?: string;
 };
 
-/**
- * Jadval qidiruvi — matn yoziladi, keyin lupa tugmasi yoki Enter bosiladi.
- * Har harfda qayta qidiruv/qayta render bo‘lmaydi.
- */
+/** Jadval qidiruvi — yozilishi bilan (qisqa pauza) qo‘llanadi. */
 export function TableSearchField({
   onSearch,
   placeholder = "Поиск",
@@ -25,6 +22,18 @@ export function TableSearchField({
   defaultQuery = ""
 }: Props) {
   const [value, setValue] = useState(defaultQuery);
+  const onSearchRef = useRef(onSearch);
+  onSearchRef.current = onSearch;
+  const skipFirst = useRef(true);
+
+  useEffect(() => {
+    if (skipFirst.current) {
+      skipFirst.current = false;
+      return;
+    }
+    const timer = window.setTimeout(() => onSearchRef.current(value.trim()), 300);
+    return () => window.clearTimeout(timer);
+  }, [value]);
 
   const submit = useCallback(() => {
     onSearch(value.trim());

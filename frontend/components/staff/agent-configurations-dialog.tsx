@@ -33,7 +33,8 @@ import {
 import { defaultAgentMobileDraft, defaultSupervisorMobileDraft } from "@/components/staff/agent-mobile-config-defaults-draft";
 import {
   countMobileConfigPatchSections,
-  diffMobileConfigDraft
+  diffMobileConfigDraft,
+  mergeMobileConfigDraft
 } from "@/components/staff/agent-mobile-config-diff";
 import { messageFromAgentsBulkError } from "@/lib/agents-bulk-errors";
 import {
@@ -215,7 +216,10 @@ type Props = {
   open: boolean;
   agent: AgentConfigDialogRow | null;
   onClose: () => void;
-  onSave: (agentEntitlements: AgentConfigDialogRow["agent_entitlements"]) => Promise<void>;
+  onSave: (
+    agentEntitlements: AgentConfigDialogRow["agent_entitlements"],
+    opts?: { replaceMobileConfig?: boolean }
+  ) => Promise<void>;
   saving?: boolean;
   /** Ro‘yxat bo‘lmasa, to‘lov tanlovlari bo‘sh + qisqa izoh */
   paymentMethodEntries?: AgentConfigPaymentMethodEntry[];
@@ -320,8 +324,8 @@ export function AgentConfigurationsDialog({
   );
 
   const patchPreview = useMemo(
-    () => (bulkMode ? diffMobileConfigDraft(baselineDraft, draft) : null),
-    [bulkMode, baselineDraft, draft]
+    () => diffMobileConfigDraft(baselineDraft, draft),
+    [baselineDraft, draft]
   );
   const patchSectionCount = patchPreview ? countMobileConfigPatchSections(patchPreview) : 0;
 
@@ -336,33 +340,33 @@ export function AgentConfigurationsDialog({
     setDraft(baselineDraft);
   };
 
-  const handleSave = async () => {
+  const handleSave = async (mode: "full" | "changed") => {
     setLocalSaveError(null);
     try {
-      /** UI dagi «Текущее окно» (06:00–22:00 default) saqlansin — bo‘sh qoldirilsa mobil eski oynani saqlab qolmasin. */
-      const draftToSave: AgentMobileConfigDraft = {
-        ...draft,
-        sync: {
-          ...draft.sync,
-          allowed_window_from: effectiveSyncWindowFrom(draft.sync?.allowed_window_from),
-          allowed_window_to: effectiveSyncWindowTo(draft.sync?.allowed_window_to)
-        }
-      };
-      if (bulkMode) {
-        const patch = diffMobileConfigDraft(baselineDraft, draftToSave);
+      const withWindow: AgentMobileConfigDraft =
+        mode === "full"
+          ? {
+              ...draft,
+              sync: {
+                ...draft.sync,
+                allowed_window_from: effectiveSyncWindowFrom(draft.sync?.allowed_window_from),
+                allowed_window_to: effectiveSyncWindowTo(draft.sync?.allowed_window_to)
+              }
+            }
+          : draft;
+      if (mode === "changed") {
+        const patch = diffMobileConfigDraft(baselineDraft, withWindow);
         if (!patch) {
           setLocalSaveError("Нет изменений для сохранения. Отредактируйте хотя бы одно поле.");
           return;
         }
-        await onSave({ mobile_config: patch });
+        const mobile_config = bulkMode ? patch : mergeMobileConfigDraft(baselineDraft, patch);
+        await onSave({ mobile_config }, { replaceMobileConfig: false });
         onClose();
         return;
       }
-      const prev = agent!.agent_entitlements ?? {};
-      await onSave({
-        ...prev,
-        mobile_config: draftToSave
-      });
+      const prev = bulkMode ? {} : (agent!.agent_entitlements ?? {});
+      await onSave({ ...prev, mobile_config: withWindow }, { replaceMobileConfig: true });
       onClose();
     } catch (err) {
       setLocalSaveError(
@@ -1323,14 +1327,27 @@ export function AgentConfigurationsDialog({
           >
             Сбросить настройки
           </Button>
-          <Button
-            type="button"
-            className="shrink-0 bg-teal-600 text-white hover:bg-teal-700 dark:bg-teal-600 dark:hover:bg-teal-500"
-            onClick={() => void handleSave()}
-            disabled={saving || (bulkMode && patchSectionCount === 0)}
-          >
-            {bulkMode ? "Применить к выбранным" : "Сохранить"}
-          </Button>
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              className="shrink-0"
+              onClick={() => void handleSave("changed")}
+              disabled={saving || patchSectionCount === 0}
+              title="Записывает только поля, которые вы изменили в этом окне"
+            >
+              {saving ? "Сохранение…" : "Сохранить только изменённое"}
+            </Button>
+            <Button
+              type="button"
+              className="shrink-0 bg-teal-600 text-white hover:bg-teal-700 dark:bg-teal-600 dark:hover:bg-teal-500"
+              onClick={() => void handleSave("full")}
+              disabled={saving}
+              title="Записывает всю конфигурацию как на экране и заменяет остальные настройки"
+            >
+              {saving ? "Сохранение…" : bulkMode ? "Применить всё к выбранным" : "Сохранить всё"}
+            </Button>
+          </div>
         </DialogFooter>
       </DialogContent>
     </Dialog>

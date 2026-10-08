@@ -16,6 +16,7 @@ import {
   orderMilestoneDatetimeDialogTitle,
   orderStatusDatetimeDialogTitle
 } from "@/lib/order-status-datetime";
+import { useDebouncedSearchCommit } from "@/lib/use-debounced-search-commit";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import { ChevronLeft, ChevronRight, ListOrdered, Package, RefreshCw, Search } from "lucide-react";
@@ -113,6 +114,9 @@ export function OrdersListTable(props: OrdersListTableProps) {
   const [excelExportOpen, setExcelExportOpen] = useState(false);
   const canExportExcel = usePermissions().has("orders.zakaz.export");
   const [searchDraft, setSearchDraft] = useState(filters.search);
+  useDebouncedSearchCommit(searchDraft, (q) => {
+    replaceOrdersQuery({ search: q, page: 1 });
+  });
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [expandPanelWidth, setExpandPanelWidth] = useState<number | null>(null);
 

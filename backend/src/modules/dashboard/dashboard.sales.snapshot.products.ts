@@ -1,7 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "../../config/database";
 import { clampPct } from "./dashboard.helpers";
-import { buildSalesTerritoryAliasClause, salesDateExprByType } from "./dashboard.sales.scope";
+import { salesClientPaymentWhere } from "./dashboard.sales.scope";
 import type { SalesSnapshotQueryCtx } from "./dashboard.sales.snapshot.types";
 import {
   findPaymentMethodEntry,
@@ -32,7 +32,10 @@ function priceTypeLabelForOrderRef(
 }
 
 export async function fetchSalesSnapshotProductBlock(ctx: SalesSnapshotQueryCtx) {
-  const { tenantId, salesScope, productFilter } = ctx;
+  const { tenantId, filters, salesScope, productFilter, territoryTerms } = ctx;
+  const from = new Date(`${filters.from}T00:00:00.000Z`);
+  const to = new Date(`${filters.to}T23:59:59.999Z`);
+  const paymentWhere = salesClientPaymentWhere(tenantId, from, to, filters, territoryTerms);
   const [totalRow, paymentRows, priceTypeRows, pmEntries, ptEntries] = await Promise.all([
     prisma.$queryRaw<Array<{ sales_sum: Prisma.Decimal; orders_count: bigint }>>`
       SELECT
@@ -48,15 +51,12 @@ export async function fetchSalesSnapshotProductBlock(ctx: SalesSnapshotQueryCtx)
     `,
     prisma.$queryRaw<Array<{ payment_type: string; sales_sum: Prisma.Decimal }>>`
       SELECT
-        COALESCE(NULLIF(TRIM(o.payment_method_ref), ''), '—') AS payment_type,
-        COALESCE(SUM(oi.total), 0)::numeric(15,2) AS sales_sum
-      FROM orders o
-      JOIN users u ON u.id = o.agent_id
-      JOIN clients c ON c.id = o.client_id
-      JOIN order_items oi ON oi.order_id = o.id
-      JOIN products p ON p.id = oi.product_id
-      WHERE ${salesScope}
-        ${productFilter}
+        COALESCE(NULLIF(TRIM(p.payment_type), ''), '—') AS payment_type,
+        COALESCE(SUM(p.amount), 0)::numeric(15,2) AS sales_sum
+      FROM client_payments p
+      JOIN clients c ON c.id = p.client_id
+      LEFT JOIN users u ON u.id = COALESCE(p.ledger_agent_id, c.agent_id)
+      WHERE ${paymentWhere}
       GROUP BY 1
       ORDER BY sales_sum DESC
     `,
@@ -80,10 +80,11 @@ export async function fetchSalesSnapshotProductBlock(ctx: SalesSnapshotQueryCtx)
   const shareOfTotal = (sum: Prisma.Decimal) =>
     totalSales.gt(0) ? clampPct(sum.div(totalSales).mul(100).toNumber()) : 0;
 
+  const paymentGrand = paymentRows.reduce((acc, r) => acc.add(r.sales_sum), new Prisma.Decimal(0));
   const payment_method_analytics = paymentRows.map((r) => ({
     payment_type: r.payment_type,
     sales_sum: r.sales_sum.toString(),
-    share_pct: shareOfTotal(r.sales_sum)
+    share_pct: paymentGrand.gt(0) ? clampPct(r.sales_sum.div(paymentGrand).mul(100).toNumber()) : 0
   }));
 
   const byPriceType = new Map<string, Prisma.Decimal>();

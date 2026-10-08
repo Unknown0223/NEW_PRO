@@ -7,10 +7,10 @@ import {
   SalesRefusalReasonsBlock,
   SalesTrendAreaChart
 } from "@/components/dashboard/sales/sales-charts-sections";
+import { SalesCategoryMatrixTable } from "@/components/dashboard/sales/sales-category-matrix-table";
 import { SalesDataTable } from "@/components/dashboard/sales/sales-data-table";
 import { SalesMetricsRow } from "@/components/dashboard/sales/sales-metrics-row";
 import {
-  useSalesAgentColumns,
   useSalesCategoryColumns,
   useSalesTerritoryColumns
 } from "@/components/dashboard/sales/sales-table-columns";
@@ -36,7 +36,6 @@ export function SalesDashboardBody({
 }) {
   const categoryColumns = useSalesCategoryColumns(data.category_performance_table);
   const territoryColumns = useSalesTerritoryColumns(resolveTerritory);
-  const agentColumns = useSalesAgentColumns();
   const [breakdownView, setBreakdownView] = useState<"territory" | "category">("territory");
   const viewToggle = (
     <div className="inline-flex rounded-xl border border-border bg-muted p-1" role="tablist">
@@ -106,16 +105,7 @@ export function SalesDashboardBody({
               onExportXlsx={() => exporters && void exporters.categoryPerformance()}
             />
           )}
-          <SalesDataTable
-            title="По агентам"
-            data={data.agent_analytics}
-            columns={agentColumns}
-            rowKey={(r) => String(r.agent_id)}
-            initialPageSize={10}
-            compact
-            className="sales-motion-delay-250"
-            onExportXlsx={() => exporters && void exporters.agents()}
-          />
+          <SalesCategoryMatrixTable data={data} className="sales-motion-delay-250" />
         </div>
       </div>
     </div>

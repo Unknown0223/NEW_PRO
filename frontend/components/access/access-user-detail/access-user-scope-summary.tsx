@@ -123,11 +123,19 @@ function TerritoryScopeTree({ vm, readOnly, hint }: { vm: AccessUserDetailVm; re
   const [onlySelected, setOnlySelected] = useState(true);
   const [expanded, setExpanded] = useState<Set<number>>(() => new Set());
   const saveTimer = useRef<number | null>(null);
+  const expandedForUser = useRef<number | null>(null);
 
   useEffect(() => {
     setSel(attached);
-    setExpanded(expandIdsFor(catalogQ.data?.tree ?? [], attached));
-  }, [attached, catalogQ.data?.tree]);
+  }, [attached]);
+
+  useEffect(() => {
+    const tree = catalogQ.data?.tree;
+    if (!tree?.length || vm.userId <= 0 || !vm.detailQ.data) return;
+    if (expandedForUser.current === vm.userId) return;
+    expandedForUser.current = vm.userId;
+    setExpanded(expandIdsFor(tree, attached));
+  }, [catalogQ.data?.tree, attached, vm.userId, vm.detailQ.data]);
 
   const tree = useMemo(() => {
     const base = catalogQ.data?.tree ?? [];

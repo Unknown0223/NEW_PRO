@@ -188,7 +188,7 @@ const FILTER_VISIBILITY_LABELS: Record<keyof OrdersFilterVisibility, string> = {
   territory2: "Область",
   territory3: "Город",
   discountAlert: "Проблемы со скидкой",
-  bonusAlert: "Проблемы с бонусом",
+  bonusAlert: "Проблемы заявок",
   orderAlert: "Проблемные заявки"
 };
 
@@ -200,15 +200,25 @@ export const FILTER_VISIBILITY_ITEMS: Array<{ key: keyof OrdersFilterVisibility;
 
 export function parseOrdersUrl(searchParams: URLSearchParams): OrdersUrlFilters {
   const rawStatus = searchParams.get("status")?.trim() ?? "";
-  const status = VALID_STATUSES.has(rawStatus) ? rawStatus : "";
+  const status = rawStatus
+    .split(",")
+    .map((s) => s.trim())
+    .filter((s) => VALID_STATUSES.has(s))
+    .join(",");
   const rawPage = Number.parseInt(searchParams.get("page") ?? "1", 10);
   const page = Number.isFinite(rawPage) && rawPage >= 1 ? rawPage : 1;
+  const digitsCsv = (raw: string) =>
+    raw
+      .split(",")
+      .map((s) => s.trim())
+      .filter((s) => /^\d+$/.test(s))
+      .join(",");
   const wh = searchParams.get("warehouse_id")?.trim() ?? "";
-  const warehouse_id = /^\d+$/.test(wh) ? wh : "";
+  const warehouse_id = digitsCsv(wh);
   const ag = searchParams.get("agent_id")?.trim() ?? "";
-  const agent_id = /^\d+$/.test(ag) ? ag : "";
+  const agent_id = digitsCsv(ag);
   const ex = searchParams.get("expeditor_id")?.trim() ?? "";
-  const expeditor_id = /^\d+$/.test(ex) ? ex : "";
+  const expeditor_id = digitsCsv(ex);
   const df = searchParams.get("date_from")?.trim() ?? "";
   const date_from = ISO_DATE_RE.test(df) ? df : "";
   const dt = searchParams.get("date_to")?.trim() ?? "";
@@ -217,10 +227,14 @@ export function parseOrdersUrl(searchParams: URLSearchParams): OrdersUrlFilters 
   const cr = searchParams.get("client_id")?.trim() ?? "";
   const client_id = /^\d+$/.test(cr) ? cr : "";
   const pr = searchParams.get("product_id")?.trim() ?? "";
-  const product_id = /^\d+$/.test(pr) ? pr : "";
-  const client_category = (searchParams.get("client_category")?.trim() ?? "").slice(0, 128);
+  const product_id = digitsCsv(pr);
+  const client_category = (searchParams.get("client_category")?.trim() ?? "").slice(0, 400);
   const rawOrderType = searchParams.get("order_type")?.trim() ?? "";
-  const order_type = VALID_ORDER_TYPES.has(rawOrderType) ? rawOrderType : "";
+  const order_type = rawOrderType
+    .split(",")
+    .map((s) => s.trim())
+    .filter((s) => VALID_ORDER_TYPES.has(s))
+    .join(",");
   const rawDm = (searchParams.get("date_mode")?.trim().toLowerCase() ?? "") as OrdersDateMode;
   const date_mode: OrdersDateMode = VALID_DATE_MODES.has(rawDm) ? rawDm : "order";
   const icRaw = searchParams.get("is_consignment")?.trim().toLowerCase() ?? "";
@@ -231,20 +245,24 @@ export function parseOrdersUrl(searchParams: URLSearchParams): OrdersUrlFilters 
         ? "false"
         : "";
   const pc = searchParams.get("product_category_id")?.trim() ?? "";
-  const product_category_id = /^\d+$/.test(pc) ? pc : "";
-  const payment_type = (searchParams.get("payment_type")?.trim() ?? "").slice(0, 64);
-  const payment_method_ref = (searchParams.get("payment_method_ref")?.trim() ?? "").slice(0, 64);
-  const request_type_ref = (searchParams.get("request_type_ref")?.trim() ?? "").slice(0, 128);
+  const product_category_id = digitsCsv(pc);
+  const payment_type = (searchParams.get("payment_type")?.trim() ?? "").slice(0, 400);
+  const payment_method_ref = (searchParams.get("payment_method_ref")?.trim() ?? "").slice(0, 400);
+  const request_type_ref = (searchParams.get("request_type_ref")?.trim() ?? "").slice(0, 400);
   const search = (searchParams.get("q") ?? searchParams.get("search") ?? "").trim().slice(0, 200);
-  const client_region = (searchParams.get("client_region")?.trim() ?? "").slice(0, 128);
-  const client_city = (searchParams.get("client_city")?.trim() ?? "").slice(0, 128);
-  const client_zone = (searchParams.get("client_zone")?.trim() ?? "").slice(0, 128);
-  const trade_direction = (searchParams.get("trade_direction")?.trim() ?? "").slice(0, 128);
+  const client_region = (searchParams.get("client_region")?.trim() ?? "").slice(0, 400);
+  const client_city = (searchParams.get("client_city")?.trim() ?? "").slice(0, 400);
+  const client_zone = (searchParams.get("client_zone")?.trim() ?? "").slice(0, 400);
+  const trade_direction = (searchParams.get("trade_direction")?.trim() ?? "").slice(0, 400);
   const rawWd = searchParams.get("visit_weekday")?.trim() ?? "";
-  const visit_weekday = /^[1-7]$/.test(rawWd) ? rawWd : "";
-  const price_type = (searchParams.get("price_type")?.trim() ?? "").slice(0, 64);
-  const discount_alert = (searchParams.get("discount_alert")?.trim() ?? "").slice(0, 32);
-  const bonus_alert = (searchParams.get("bonus_alert")?.trim() ?? "").slice(0, 32);
+  const visit_weekday = rawWd
+    .split(",")
+    .map((s) => s.trim())
+    .filter((s) => /^[1-7]$/.test(s))
+    .join(",");
+  const price_type = (searchParams.get("price_type")?.trim() ?? "").slice(0, 400);
+  const discount_alert = (searchParams.get("discount_alert")?.trim() ?? "").slice(0, 200);
+  const bonus_alert = (searchParams.get("bonus_alert")?.trim() ?? "").slice(0, 200);
   const order_alert = (searchParams.get("order_alert")?.trim() ?? "").slice(0, 32);
   return {
     status,

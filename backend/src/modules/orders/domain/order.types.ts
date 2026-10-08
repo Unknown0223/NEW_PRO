@@ -428,12 +428,14 @@ export type ListOrdersQuery = {
   /** Raqam, mijoz nomi, izoh bo‘yicha qidiruv */
   search?: string;
   warehouse_id?: number;
+  warehouse_ids?: number[];
   agent_id?: number;
   /** Bir nechta agent (klient profili); `agent_id` bilan bir vaqtda — bu ustun. */
   agent_ids?: number[];
   /** Zakazda agent yo‘q (agent_id IS NULL) */
   include_no_agent?: boolean;
   expeditor_user_id?: number;
+  expeditor_user_ids?: number[];
   /** Mijoz `category` maydoni bilan to‘liq mos (trim) */
   client_category?: string;
   client_region?: string;
@@ -443,6 +445,7 @@ export type ListOrdersQuery = {
   agent_trade_direction?: string;
   /** Shu mahsulot qatori bo’lgan zakazlar */
   product_id?: number;
+  product_ids?: number[];
   /** YYYY-MM-DD (server vaqt zonasi — brauzer `date` input bilan mos) */
   date_from?: string;
   date_to?: string;
@@ -464,6 +467,7 @@ export type ListOrdersQuery = {
   is_consignment?: boolean;
   /** product.category_id — zakazda shu kategoriyadan mahsulot qatori bo‘lsa */
   product_category_id?: number;
+  product_category_ids?: number[];
   /** Shu payment_type bo‘lgan to‘lovi bor zakazlar */
   payment_type?: string;
   /** Sozlamalar → request_type_entries (тип накладной) */
@@ -474,6 +478,7 @@ export type ListOrdersQuery = {
   list_price_type?: string;
   /** Mijoz tashrif kuni (1=Пн … 7=Вс) */
   visit_weekday?: number;
+  visit_weekdays?: number[];
   /** Keyset pagination — `next_cursor` dan keyingi sahifa */
   cursor?: string;
   /** Skidka muammosi: not_applied | cash_desk_missing | bonus_required | any */

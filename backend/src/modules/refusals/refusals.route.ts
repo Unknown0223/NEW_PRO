@@ -37,7 +37,11 @@ function parseListQuery(q: Record<string, string | undefined>): ListClientRefusa
     exportCap != null
       ? exportCap
       : Math.min(maxLimit, Math.max(1, Number.parseInt(q.limit ?? "20", 10) || 20));
-  const agent_id = q.agent_id ? Number.parseInt(q.agent_id, 10) : undefined;
+  const agentIds = (q.agent_id ?? "")
+    .split(",")
+    .map((s) => Number.parseInt(s.trim(), 10))
+    .filter((n) => Number.isFinite(n) && n > 0);
+  const agent_id = agentIds.length === 1 ? agentIds[0] : undefined;
   let sort_by: ListClientRefusalsQuery["sort_by"] = "created_at";
   if (q.sort_by === "client" || q.sort_by === "agent" || q.sort_by === "reason") {
     sort_by = q.sort_by;
@@ -49,7 +53,8 @@ function parseListQuery(q: Record<string, string | undefined>): ListClientRefusa
     max_limit: maxLimit,
     date_from: q.date_from?.trim() || undefined,
     date_to: q.date_to?.trim() || undefined,
-    agent_id: agent_id != null && agent_id > 0 ? agent_id : undefined,
+    agent_id: agentIds.length === 1 ? agentIds[0] : undefined,
+    agent_ids: agentIds.length > 1 ? agentIds : undefined,
     refusal_reason_ref: q.refusal_reason_ref?.trim() || undefined,
     client_category: q.client_category?.trim() || undefined,
     zone: q.zone?.trim() || undefined,

@@ -132,7 +132,7 @@ export function SearchableMultiSelectPanel<T extends string | number = number>({
   onOpenChange,
   formatTriggerSummary,
   hidePopoverHeader = false,
-  filterItemsBySearch = false,
+  filterItemsBySearch = true,
   resetAllLabel = null,
   disabled = false,
   inline = false,
@@ -176,7 +176,11 @@ export function SearchableMultiSelectPanel<T extends string | number = number>({
     setOpenTracked(false);
   }, [closeToken, setOpenTracked]);
 
-  const deferredSearch = useDeferredValue(search);
+  const [localSearch, setLocalSearch] = useState(search);
+  useEffect(() => {
+    setLocalSearch(search);
+  }, [search]);
+  const deferredSearch = useDeferredValue(localSearch);
   const displayItems = useMemo(() => {
     if (!filterItemsBySearch) return items;
     const q = deferredSearch.trim().toLowerCase();
@@ -201,7 +205,7 @@ export function SearchableMultiSelectPanel<T extends string | number = number>({
     const r = t.getBoundingClientRect();
     const vw = typeof window !== "undefined" ? window.innerWidth : 1200;
     const vh = typeof window !== "undefined" ? window.innerHeight : 800;
-    const w = Math.min(Math.max(r.width, minPopoverWidth), vw - 16);
+    const w = Math.min(Math.max(r.width, minPopoverWidth, 380), Math.min(560, vw - 16));
     let left = r.left;
     if (left + w > vw - 8) left = Math.max(8, vw - w - 8);
 
@@ -292,9 +296,13 @@ export function SearchableMultiSelectPanel<T extends string | number = number>({
   const triggerSummary =
     formatTriggerSummary != null
       ? formatTriggerSummary(selected, items)
-      : selected.size === 0
-        ? triggerPlaceholder
-        : `Выбрано: ${selected.size}`;
+        : selected.size === 0
+          ? ""
+          : (() => {
+              const first = items.find((x) => selected.has(x.id));
+              const title = first?.title ?? triggerPlaceholder;
+              return selected.size > 1 ? `${title} (+${selected.size - 1})` : title;
+            })();
 
   const searchActive = searchable && search.trim().length > 0;
 
@@ -318,9 +326,12 @@ export function SearchableMultiSelectPanel<T extends string | number = number>({
           <Input
             className="h-9 border-input bg-background pl-9 text-sm shadow-none"
             placeholder={searchPlaceholder}
-            value={search}
+            value={localSearch}
             disabled={disabled}
-            onChange={(e) => onSearchChange(e.target.value)}
+            onChange={(e) => {
+              setLocalSearch(e.target.value);
+              onSearchChange(e.target.value);
+            }}
             onMouseDown={(e) => e.stopPropagation()}
             aria-label={searchPlaceholder}
           />
@@ -401,7 +412,7 @@ export function SearchableMultiSelectPanel<T extends string | number = number>({
                           {item.subtitle}
                         </span>
                       ) : null}
-                      <span className="block truncate leading-snug" title={item.title}>
+                      <span className="block whitespace-normal break-words text-[13px] leading-snug" title={item.title}>
                         {item.title}
                       </span>
                     </span>
@@ -438,7 +449,7 @@ export function SearchableMultiSelectPanel<T extends string | number = number>({
           type="button"
           disabled={disabled}
           className={cn(
-            "flex min-h-8 w-full min-w-0 items-center justify-between gap-2 rounded-lg border border-input bg-background px-2 py-1.5 text-left text-xs shadow-sm outline-none transition-colors",
+            "relative flex min-h-8 w-full min-w-0 items-center justify-between gap-2 rounded-lg border border-input bg-background px-2 py-1.5 text-left text-xs shadow-sm outline-none transition-colors",
             "hover:bg-muted/40 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
             open && "ring-2 ring-ring ring-offset-2",
             disabled && "opacity-60",
@@ -451,8 +462,13 @@ export function SearchableMultiSelectPanel<T extends string | number = number>({
             if (!disabled) setOpenTracked((v) => !v);
           }}
         >
-          <span className={cn("min-w-0 flex-1 truncate", selected.size === 0 && "text-muted-foreground")}>
-            {triggerSummary}
+          {selected.size > 0 && label ? (
+            <span className="pointer-events-none absolute left-2 top-0 -translate-y-1/2 bg-inherit px-1 text-[11px] font-medium leading-none text-muted-foreground">
+              {label}
+            </span>
+          ) : null}
+          <span className={cn("min-w-0 flex-1 truncate", selected.size === 0 ? "text-muted-foreground" : "pt-1")}>
+            {selected.size === 0 ? triggerPlaceholder || label : triggerSummary}
           </span>
           <ChevronDown
             className={cn("size-4 shrink-0 text-muted-foreground transition-transform", open && "rotate-180")}
@@ -505,7 +521,7 @@ export function SearchableMultiSelectPanel<T extends string | number = number>({
         type="button"
         disabled={disabled}
         className={cn(
-          "flex min-h-8 w-full min-w-0 items-center justify-between gap-2 rounded-lg border border-input bg-background px-2 py-1.5 text-left text-xs shadow-sm outline-none transition-colors",
+          "relative flex min-h-8 w-full min-w-0 items-center justify-between gap-2 rounded-lg border border-input bg-background px-2 py-1.5 text-left text-xs shadow-sm outline-none transition-colors",
           "hover:bg-muted/40 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
           open && "ring-2 ring-ring ring-offset-2",
           disabled && "opacity-60",
@@ -518,8 +534,13 @@ export function SearchableMultiSelectPanel<T extends string | number = number>({
           if (!disabled) setOpenTracked((v) => !v);
         }}
       >
-        <span className={cn("min-w-0 flex-1 truncate", selected.size === 0 && "text-muted-foreground")}>
-          {triggerSummary}
+        {selected.size > 0 && label ? (
+          <span className="pointer-events-none absolute left-2 top-0 z-[1] -translate-y-1/2 bg-inherit px-1 text-[11px] font-medium leading-none text-muted-foreground">
+            {label}
+          </span>
+        ) : null}
+        <span className={cn("min-w-0 flex-1 truncate", selected.size === 0 ? "text-muted-foreground" : "pt-1")}>
+          {selected.size === 0 ? triggerPlaceholder || label : triggerSummary}
         </span>
         <ChevronDown
           className={cn("size-4 shrink-0 text-muted-foreground transition-transform", open && "rotate-180")}

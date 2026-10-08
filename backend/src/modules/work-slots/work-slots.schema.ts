@@ -146,6 +146,8 @@ function hasSlotConfigFields(o: z.infer<typeof slotConfigPatchSchema>): boolean 
 export const bulkWorkSlotsBodySchema = z
   .object({
     slot_ids: z.array(z.number().int().positive()).min(1).max(500),
+    /** replace — mobile_config butunlay almashtiriladi; merge — faqat yuborilgan kalitlar. */
+    mobile_config_mode: z.enum(["merge", "replace"]).optional(),
     delete: z.literal(true).optional(),
     unassign: z.literal(true).optional(),
     revoke_sessions: z.literal(true).optional(),

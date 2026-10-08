@@ -248,13 +248,27 @@ export async function listClientBalancesReportMain(
 
     const total = agentRows.length;
     const slice = agentRows.slice((page - 1) * limit, page * limit);
+    let agentBalance = new Prisma.Decimal(0);
+    const payByLabel = new Map<string, Prisma.Decimal>();
+    for (const r of agentRows) {
+      agentBalance = agentBalance.add(r.balance);
+      for (const p of r.payment_amounts) {
+        payByLabel.set(p.label, (payByLabel.get(p.label) ?? new Prisma.Decimal(0)).add(p.amount));
+      }
+    }
     return {
       view: "agents",
       data: slice,
       total,
       page,
       limit,
-      summary: { balance: totalBalanceStr, payment_by_type: summaryPaymentByType }
+      summary: {
+        balance: agentBalance.toString(),
+        payment_by_type: summaryPaymentByType.map((p) => ({
+          label: p.label,
+          amount: (payByLabel.get(p.label) ?? new Prisma.Decimal(0)).toFixed(2)
+        }))
+      }
     };
   }
 

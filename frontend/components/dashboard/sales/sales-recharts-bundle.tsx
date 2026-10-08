@@ -1,6 +1,8 @@
 "use client";
 
 import { fmtCount, fmtMoney } from "@/components/dashboard/sales/format";
+import { cn } from "@/lib/utils";
+import { useState } from "react";
 import {
   Area,
   AreaChart,
@@ -21,8 +23,11 @@ import {
 
 type ProductDonutProps = {
   kind: "product-donut";
-  items: Array<{ name: string; share: number }>;
+  items: Array<{ name: string; share: number; amount?: number }>;
   colors: string[];
+  showSums?: boolean;
+  sumsOnLeft?: boolean;
+  onActivate?: () => void;
 };
 
 type PaymentPieProps = {
@@ -53,50 +58,136 @@ type SalesAreaProps = {
 
 type Props = ProductDonutProps | PaymentPieProps | OrdersRefusalsProps | RefusalBarProps | SalesAreaProps;
 
+function ProductDonutChart({
+  items,
+  colors,
+  showSums,
+  sumsOnLeft,
+  onActivate
+}: {
+  items: Array<{ name: string; share: number; amount?: number }>;
+  colors: string[];
+  showSums?: boolean;
+  sumsOnLeft?: boolean;
+  onActivate?: () => void;
+}) {
+  const [active, setActive] = useState(0);
+  const drawn = items.filter((i) => i.share > 0 || (i.amount ?? 0) > 0);
+  const current = drawn[active];
+  const valueOf = (item: { share: number; amount?: number }) =>
+    showSums ? fmtCount(Math.round(item.amount ?? 0)) : `${item.share.toFixed(1)}%`;
+
+  const pick = (index: number) => {
+    setActive(index);
+    onActivate?.();
+  };
+
+  if (drawn.length === 0) {
+    return <p className="py-16 text-center text-sm text-muted-foreground">Нет продаж за выбранный период</p>;
+  }
+
+  const donut = (
+      <div className="relative mx-auto h-52 w-full max-w-[220px] outline-none [&_.recharts-sector]:outline-none [&_svg]:outline-none">
+        <ResponsiveContainer width="100%" height="100%">
+          <PieChart>
+            <Pie
+              data={drawn}
+              dataKey="share"
+              nameKey="name"
+              innerRadius={64}
+              outerRadius={88}
+              paddingAngle={3}
+              stroke="none"
+              startAngle={90}
+              endAngle={-270}
+              isAnimationActive={false}
+              onClick={(_, index) => {
+                if (typeof index === "number") pick(index);
+              }}
+            >
+              {drawn.map((entry, index) => (
+                <Cell
+                  key={entry.name}
+                  fill={colors[index % colors.length]}
+                  opacity={index === active ? 1 : 0.35}
+                  style={{ cursor: "pointer", outline: "none" }}
+                  onClick={() => pick(index)}
+                />
+              ))}
+            </Pie>
+          </PieChart>
+        </ResponsiveContainer>
+        {current ? (
+          <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center px-8 text-center">
+            <p className="line-clamp-2 max-w-[6.5rem] text-[10px] font-medium leading-tight text-slate-500">{current.name}</p>
+            <p className="mt-0.5 text-lg font-black leading-none tabular-nums text-slate-950">{valueOf(current)}</p>
+          </div>
+        ) : null}
+      </div>
+    );
+  const legend = (
+      <div className="min-w-0 space-y-1.5">
+        {drawn.map((item, index) => (
+          <button
+            key={item.name}
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              pick(index);
+            }}
+            className={
+              index === active
+                ? "flex w-full min-w-0 items-center justify-between gap-3 rounded-xl bg-teal-50 px-3 py-2 text-left text-sm"
+                : "flex w-full min-w-0 items-center justify-between gap-3 rounded-xl bg-muted/80 px-3 py-2 text-left text-sm hover:bg-muted"
+            }
+          >
+            <span className="flex min-w-0 items-center gap-2 font-medium text-slate-700">
+              <span
+                className="h-2.5 w-2.5 shrink-0 rounded-full"
+                style={{ backgroundColor: colors[index % colors.length], opacity: index === active ? 1 : 0.45 }}
+              />
+              <span className="truncate">{item.name}</span>
+            </span>
+            <span className="shrink-0 font-bold tabular-nums text-slate-900">{valueOf(item)}</span>
+          </button>
+        ))}
+      </div>
+  );
+
+  return (
+    <div className="overflow-hidden" onClick={(e) => e.stopPropagation()}>
+      <div className="grid min-w-0 items-center gap-4 md:grid-cols-2">
+        <div
+          className={cn(
+            "min-w-0 transition-transform duration-700 ease-[cubic-bezier(0.22,1,0.36,1)]",
+            sumsOnLeft && "md:translate-x-[calc(100%+1rem)]"
+          )}
+        >
+          {donut}
+        </div>
+        <div
+          className={cn(
+            "min-w-0 transition-transform duration-700 ease-[cubic-bezier(0.22,1,0.36,1)]",
+            sumsOnLeft && "md:-translate-x-[calc(100%+1rem)]"
+          )}
+        >
+          {legend}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function SalesRechartsBundle(props: Props) {
   if (props.kind === "product-donut") {
     return (
-      <div className="grid items-center gap-5 md:grid-cols-[220px_1fr]">
-        <div className="h-56">
-          <ResponsiveContainer width="100%" height="100%">
-            <PieChart>
-              <Pie
-                data={props.items}
-                dataKey="share"
-                nameKey="name"
-                innerRadius={70}
-                outerRadius={96}
-                paddingAngle={4}
-                cornerRadius={7}
-                stroke="white"
-                strokeWidth={3}
-              >
-                {props.items.map((entry, index) => (
-                  <Cell key={entry.name} fill={props.colors[index % props.colors.length]} />
-                ))}
-              </Pie>
-              <Tooltip formatter={(value) => `${Number(value).toFixed(1)} %`} />
-            </PieChart>
-          </ResponsiveContainer>
-        </div>
-        <div className="space-y-2">
-          {props.items.map((item, index) => (
-            <div
-              key={item.name}
-              className="flex items-center justify-between rounded-xl bg-muted px-3 py-2 text-sm"
-            >
-              <span className="flex min-w-0 items-center gap-2 font-medium text-slate-700">
-                <span
-                  className="h-3 w-3 shrink-0 rounded-full"
-                  style={{ backgroundColor: props.colors[index % props.colors.length] }}
-                />
-                <span className="truncate">{item.name}</span>
-              </span>
-              <span className="font-bold text-slate-900">{item.share.toFixed(1)}%</span>
-            </div>
-          ))}
-        </div>
-      </div>
+      <ProductDonutChart
+        items={props.items}
+        colors={props.colors}
+        showSums={"showSums" in props ? props.showSums : false}
+        sumsOnLeft={"sumsOnLeft" in props ? props.sumsOnLeft : false}
+        onActivate={"onActivate" in props ? props.onActivate : undefined}
+      />
     );
   }
 
@@ -155,35 +246,43 @@ export default function SalesRechartsBundle(props: Props) {
     return (
       <div className="h-[330px]">
         <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={props.data} margin={{ top: 10, right: 18, left: 0, bottom: 0 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-            <XAxis dataKey="date" tick={{ fontSize: 12 }} angle={-30} textAnchor="end" height={54} />
-            <YAxis tick={{ fontSize: 12 }} />
+          <LineChart data={props.data} margin={{ top: 12, right: 16, left: 4, bottom: 4 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
+            <XAxis dataKey="date" tick={{ fontSize: 11, fill: "#64748b" }} axisLine={false} tickLine={false} />
+            <YAxis
+              allowDecimals={false}
+              width={36}
+              domain={[0, "auto"]}
+              tick={{ fontSize: 11, fill: "#64748b" }}
+              axisLine={false}
+              tickLine={false}
+            />
             <Tooltip formatter={(value) => fmtCount(Number(value))} />
-            <Legend />
+            <Legend wrapperStyle={{ fontSize: 12, paddingTop: 8 }} />
             <Line
               type="monotone"
-              dataKey="orders"
-              name="Заказы"
-              stroke={props.green}
-              strokeWidth={3}
-              dot={{ r: 3 }}
+              dataKey="notVisited"
+              name="Непосещение"
+              stroke={props.amber}
+              strokeWidth={2}
+              dot={{ r: 3, strokeWidth: 0 }}
             />
             <Line
               type="monotone"
               dataKey="refusals"
               name="Отказы"
               stroke={props.red}
-              strokeWidth={3}
-              dot={{ r: 3 }}
+              strokeWidth={2.5}
+              dot={{ r: 3, strokeWidth: 0 }}
             />
             <Line
               type="monotone"
-              dataKey="notVisited"
-              name="Непосещение"
-              stroke={props.amber}
+              dataKey="orders"
+              name="Заказы"
+              stroke={props.green}
               strokeWidth={3}
-              dot={{ r: 3 }}
+              dot={{ r: 4, fill: props.green, stroke: "#fff", strokeWidth: 2 }}
+              activeDot={{ r: 6 }}
             />
           </LineChart>
         </ResponsiveContainer>

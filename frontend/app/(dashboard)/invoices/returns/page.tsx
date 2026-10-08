@@ -21,6 +21,7 @@ import { useAuthStore, useAuthStoreHydrated, useEffectiveRole } from "@/lib/auth
 import { isAdminOrOperatorLikeRole } from "@/lib/distribution-roles";
 import { usePermissions } from "@/lib/use-permissions";
 import { api } from "@/lib/api";
+import { useDebouncedSearchCommit } from "@/lib/use-debounced-search-commit";
 import {
   DailyReturnWaybillModal,
   type DailyWaybillRef
@@ -71,6 +72,7 @@ export default function ReturnInvoicesPage() {
   const [expeditorDraft, setExpeditorDraft] = useState("all");
   const [statusDraft, setStatusDraft] = useState<"all" | "pending" | "posted" | "cancelled">("all");
   const [searchDraft, setSearchDraft] = useState("");
+  useDebouncedSearchCommit(searchDraft, setSearch);
   const [warehouse, setWarehouse] = useState("all");
   const [expeditor, setExpeditor] = useState("all");
   const [status, setStatus] = useState<"all" | "pending" | "posted" | "cancelled">("all");

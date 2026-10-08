@@ -22,6 +22,11 @@ import { TableColumnSettingsDialog } from "@/components/data-table/table-column-
 import { PageShell } from "@/components/dashboard/page-shell";
 import { useUserTablePrefs } from "@/hooks/use-user-table-prefs";
 import { api } from "@/lib/api";
+import {
+  loadClientBalancesFilterSnapshot,
+  loadClientBalancesRememberFilters,
+  saveClientBalancesFilterSnapshot
+} from "@/lib/client-balances-filters-visibility";
 import { usePermissions } from "@/lib/use-permissions";
 import { useAuthStore, useAuthStoreHydrated } from "@/lib/auth-store";
 import {
@@ -129,6 +134,33 @@ const defaultForm = (): FilterForm => ({
   agent_branch: "",
   agent_payment_type: ""
 });
+
+const FILTER_VIEWS = ["clients", "agents", "clients_delivery", "clients_legacy", "clients_consignment"] as const;
+
+function rememberedBalancesState(): {
+  draft: FilterForm;
+  applied: FilterForm;
+  search: string;
+  view: (typeof FILTER_VIEWS)[number] | null;
+  page: number;
+} | null {
+  if (!loadClientBalancesRememberFilters()) return null;
+  const snap = loadClientBalancesFilterSnapshot();
+  if (!snap) return null;
+  const base = defaultForm();
+  const fill = (src: Record<string, string>): FilterForm => {
+    const next = { ...base };
+    for (const key of Object.keys(base) as (keyof FilterForm)[]) {
+      const v = src[key];
+      if (typeof v === "string") next[key] = v;
+    }
+    return next;
+  };
+  const view = FILTER_VIEWS.includes(snap.view as (typeof FILTER_VIEWS)[number])
+    ? (snap.view as (typeof FILTER_VIEWS)[number])
+    : null;
+  return { draft: fill(snap.draft), applied: fill(snap.applied), search: snap.search, view, page: snap.page };
+}
 
 function parseAmount(s: string): number {
   const t = String(s)
@@ -611,13 +643,16 @@ export function ClientBalancesWorkspace() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
-  const [draft, setDraft] = useState<FilterForm>(() => defaultForm());
-  const [applied, setApplied] = useState<FilterForm>(() => defaultForm());
-  const [view, setView] = useState<ClientBalanceViewMode>(() =>
-    parseClientBalancesView(searchParams.get("view"))
-  );
-  const [page, setPage] = useState(1);
-  const [search, setSearch] = useState("");
+  const remembered = useState(() => rememberedBalancesState())[0];
+  const [draft, setDraft] = useState<FilterForm>(() => remembered?.draft ?? defaultForm());
+  const [applied, setApplied] = useState<FilterForm>(() => remembered?.applied ?? defaultForm());
+  const [view, setView] = useState<ClientBalanceViewMode>(() => {
+    const fromUrl = searchParams.get("view");
+    if (fromUrl) return parseClientBalancesView(fromUrl);
+    return remembered?.view ?? "clients";
+  });
+  const [page, setPage] = useState(() => remembered?.page ?? 1);
+  const [search, setSearch] = useState(() => remembered?.search ?? "");
   const [columnDialogOpen, setColumnDialogOpen] = useState(false);
   const [copyFlash, setCopyFlash] = useState(false);
   /** Tanlangan qatorlar (sahifa almashganda ham saqlanadi) */
@@ -629,6 +664,11 @@ export function ClientBalancesWorkspace() {
   const [excelBusy, setExcelBusy] = useState(false);
   const [clientSort, setClientSort] = useState<{ col: string; dir: SortDir }>({ col: "", dir: "asc" });
   const [agentSort, setAgentSort] = useState<{ col: string; dir: SortDir }>({ col: "", dir: "asc" });
+
+  useEffect(() => {
+    if (!loadClientBalancesRememberFilters()) return;
+    saveClientBalancesFilterSnapshot({ draft, applied, search, view, page });
+  }, [draft, applied, search, view, page]);
 
   const clientsTablePrefs = useUserTablePrefs({
     tenantSlug,

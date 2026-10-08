@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import type { AxiosError } from "axios";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -15,6 +15,7 @@ import { api } from "@/lib/api";
 import { firstValidationUserHint, getZodFlattenFromApiErrorBody } from "@/lib/api-validation-details";
 import { getUserFacingError, withApiSupportLine } from "@/lib/error-utils";
 import { invalidateMePermissionsQueries } from "@/lib/me-permissions";
+import { isExcludedFromAccessWebUsersList, isWebPanelDeniedRole } from "@/lib/access-web-users";
 import { splitPermissionPath } from "@/lib/access-display";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -22,6 +23,8 @@ import { cn } from "@/lib/utils";
 import { AccessBulkBottomBar } from "@/components/access/access-bulk-bottom-bar";
 import { IndeterminateCheckbox } from "@/components/access/access-user-detail/access-user-detail-territory-ui";
 import { AccessRoleDefaultsAddModal } from "./access-role-defaults-add-modal";
+import { AccessRoleDefaultsByOperation } from "./access-role-defaults-by-operation";
+import { AccessRoleDefaultsGrantTree } from "./access-role-defaults-grant-tree";
 import {
   buildRoleGrantedGroups,
   roleOpCollator,
@@ -76,6 +79,7 @@ export function AccessRoleDefaultsWorkspace({
   const [addOpen, setAddOpen] = useState(false);
   const [bulkSel, setBulkSel] = useState<Set<string>>(() => new Set());
   const [bulkFeedback, setBulkFeedback] = useState<string | null>(null);
+  const [bindMode, setBindMode] = useState<"role" | "operation">("role");
 
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingSaveRoleIdRef = useRef<number | null>(null);
@@ -105,13 +109,18 @@ export function AccessRoleDefaultsWorkspace({
     }
   });
 
+  const webRoles = useMemo(
+    () => (rolesQ.data ?? []).filter((r) => !isExcludedFromAccessWebUsersList(r.key) && !isWebPanelDeniedRole(r.key)),
+    [rolesQ.data]
+  );
+
   const selectedRole = useMemo(
-    () => (rolesQ.data ?? []).find((r) => r.id === selectedRoleId) ?? null,
-    [rolesQ.data, selectedRoleId]
+    () => webRoles.find((r) => r.id === selectedRoleId) ?? null,
+    [webRoles, selectedRoleId]
   );
 
   useEffect(() => {
-    const rows = rolesQ.data;
+    const rows = webRoles;
     if (!rows?.length) {
       setSelectedRoleId(null);
       return;
@@ -119,7 +128,7 @@ export function AccessRoleDefaultsWorkspace({
     if (selectedRoleId != null && !rows.some((r) => r.id === selectedRoleId)) {
       setSelectedRoleId(null);
     }
-  }, [rolesQ.data, selectedRoleId]);
+  }, [webRoles, selectedRoleId]);
 
   const rolePermsSyncKey = useMemo(() => {
     if (!selectedRole) return "";
@@ -142,6 +151,7 @@ export function AccessRoleDefaultsWorkspace({
     setFilterParent("");
     setFilterParentDraft("");
     setAddOpen(false);
+    setGrantKeys(new Set());
   }, [selectedRoleId]);
 
   useEffect(() => {
@@ -153,10 +163,15 @@ export function AccessRoleDefaultsWorkspace({
     setSaveError(null);
   }, [selectedRoleId]);
 
+  const [grantKeys, setGrantKeys] = useState<Set<string>>(() => new Set());
+  const grantRef = useRef<Set<string>>(grantKeys);
+  grantRef.current = grantKeys;
+
   const saveMut = useMutation({
-    mutationFn: async (payload: { roleId: number; permissions: string[] }) => {
+    mutationFn: async (payload: { roleId: number; permissions: string[]; grantKeys: string[] }) => {
       await api.put(`/api/${tenantSlug}/access/role-defaults/${payload.roleId}`, {
-        permissions: payload.permissions
+        permissions: payload.permissions,
+        grant_operation_keys: payload.grantKeys
       });
     },
     onMutate: () => setSaveError(null),
@@ -188,9 +203,10 @@ export function AccessRoleDefaultsWorkspace({
   });
 
   const persistNow = useCallback(
-    (roleId: number, next: Set<string>) => {
+    (roleId: number, next: Set<string>, grant: Set<string>) => {
       const perms = [...next].sort((a, b) => roleOpCollator.compare(a, b));
-      void saveMut.mutateAsync({ roleId, permissions: perms });
+      const grants = [...grant].filter((k) => next.has(k));
+      void saveMut.mutateAsync({ roleId, permissions: perms, grantKeys: grants });
     },
     [saveMut]
   );
@@ -203,7 +219,7 @@ export function AccessRoleDefaultsWorkspace({
         saveTimerRef.current = null;
         const rid = pendingSaveRoleIdRef.current;
         if (rid == null) return;
-        persistNow(rid, next);
+        persistNow(rid, next, grantRef.current);
       }, 450);
     },
     [persistNow]
@@ -320,7 +336,7 @@ export function AccessRoleDefaultsWorkspace({
           clearTimeout(saveTimerRef.current);
           saveTimerRef.current = null;
         }
-        persistNow(selectedRole.id, n);
+        persistNow(selectedRole.id, n, grantRef.current);
         return n;
       });
       setAddOpen(false);
@@ -389,16 +405,41 @@ export function AccessRoleDefaultsWorkspace({
   return (
     <div
       className={cn(
-        "access-surface grid min-h-0 flex-1 gap-3 p-3 md:grid-cols-[minmax(260px,320px)_1fr] md:items-stretch md:gap-4",
+        "access-surface flex min-h-0 flex-1 flex-col gap-3 p-3",
         className
       )}
     >
+      <div className="flex shrink-0 gap-1 rounded-lg bg-muted/60 p-1" role="group" aria-label="Способ привязки">
+        {(
+          [
+            ["role", "По роли"],
+            ["operation", "По операции"]
+          ] as const
+        ).map(([id, label]) => (
+          <button
+            key={id}
+            type="button"
+            aria-pressed={bindMode === id}
+            className={cn(
+              "rounded-md px-3 py-1.5 text-xs font-medium",
+              bindMode === id ? "bg-teal-700 text-white shadow-sm" : "text-muted-foreground hover:text-foreground"
+            )}
+            onClick={() => setBindMode(id)}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+      {bindMode === "operation" ? (
+        <AccessRoleDefaultsByOperation tenantSlug={tenantSlug} roles={webRoles} rolesLoading={rolesQ.isLoading} />
+      ) : (
+      <div className="grid min-h-0 flex-1 gap-3 md:grid-cols-[minmax(260px,320px)_1fr] md:items-stretch md:gap-4">
       <div className="access-left-panel flex min-h-0 min-w-0 flex-col p-2">
         <div className="access-split-scroll-panel flex min-h-0 flex-1 flex-col">
           <div className="access-list-cap flex justify-between gap-2">
             <span>Роли по умолчанию</span>
             <span className="font-normal tabular-nums text-muted-foreground">
-              {(rolesQ.data ?? []).length}
+              {webRoles.length}
             </span>
           </div>
           <div className="min-h-0 flex-1 space-y-2 overflow-auto p-2">
@@ -417,7 +458,7 @@ export function AccessRoleDefaultsWorkspace({
                   Повторить
                 </Button>
               </div>
-            ) : (rolesQ.data ?? []).length === 0 ? (
+            ) : webRoles.length === 0 ? (
               <div className="space-y-1 px-1 py-4 text-center text-xs text-muted-foreground">
                 <p>Нет ролей в tenant.</p>
                 <Button
@@ -431,7 +472,7 @@ export function AccessRoleDefaultsWorkspace({
                 </Button>
               </div>
             ) : (
-              (rolesQ.data ?? []).map((r) => (
+              webRoles.map((r) => (
                 <button
                   key={r.id}
                   type="button"
@@ -556,156 +597,21 @@ export function AccessRoleDefaultsWorkspace({
             ) : null}
 
             <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-md border border-border/60 bg-card">
-              {filteredGranted.length === 0 ? (
-                <div className="flex flex-1 flex-col items-center justify-center gap-3 px-4 py-10">
-                  <p className="text-center text-sm text-muted-foreground">
-                    {grantedRows.length === 0
-                      ? "В роли пока нет операций. Добавьте через «Добавить операции»."
-                      : "Ничего не найдено по фильтру"}
-                  </p>
-                  {grantedRows.length === 0 ? (
-                    <Button
-                      type="button"
-                      size="sm"
-                      className="h-8 gap-1 bg-teal-700 text-white hover:bg-teal-800"
-                      onClick={() => setAddOpen(true)}
-                    >
-                      <Plus className="h-3.5 w-3.5" aria-hidden />
-                      Добавить операции
-                    </Button>
-                  ) : null}
-                </div>
-              ) : (
-                <div className="min-h-0 flex-1 overflow-auto">
-                  <table className="w-full min-w-[640px] border-collapse text-left">
-                    <thead className="sticky top-0 z-10 bg-muted/95 backdrop-blur">
-                      <tr className="border-b border-border text-[11px] font-semibold text-muted-foreground">
-                        <th className="w-10 px-2 py-2">
-                          <input
-                            ref={bulkHeaderCheckboxRef}
-                            type="checkbox"
-                            className="h-4 w-4 accent-teal-700"
-                            disabled={visibleKeys.length === 0 || saveMut.isPending}
-                            onChange={(e) => {
-                              if (e.target.checked) setBulkSel(new Set(visibleKeys));
-                              else setBulkSel(new Set());
-                            }}
-                            aria-label="Выбрать все видимые"
-                          />
-                        </th>
-                        <th className="px-2 py-2">Описание</th>
-                        <th className="px-2 py-2">Родитель</th>
-                        <th className="px-2 py-2">Раздел</th>
-                        <th className="px-2 py-2 text-right">Действия</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {rowGroups.map((grp) => {
-                        const open = groupExpanded.has(grp.parent);
-                        const gKeys = grp.rows.map((r) => r.key);
-                        const gAll = gKeys.length > 0 && gKeys.every((k) => bulkSel.has(k));
-                        const gSome = gKeys.some((k) => bulkSel.has(k)) && !gAll;
-                        return (
-                          <Fragment key={grp.id}>
-                            <tr className="border-b border-border/50 bg-muted/40">
-                              <td className="px-2 py-1.5">
-                                <IndeterminateCheckbox
-                                  checked={gAll}
-                                  indeterminate={gSome}
-                                  disabled={saveMut.isPending || gKeys.length === 0}
-                                  className="h-4 w-4 accent-teal-700"
-                                  onChange={(e) => toggleGroupSel(gKeys, e.target.checked)}
-                                />
-                              </td>
-                              <td colSpan={4} className="px-2 py-1.5">
-                                <button
-                                  type="button"
-                                  className="flex w-full items-center gap-2 text-left text-xs font-semibold"
-                                  onClick={() =>
-                                    setGroupExpanded((prev) => {
-                                      const n = new Set(prev);
-                                      if (n.has(grp.parent)) n.delete(grp.parent);
-                                      else n.add(grp.parent);
-                                      return n;
-                                    })
-                                  }
-                                >
-                                  {open ? (
-                                    <ChevronDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                                  ) : (
-                                    <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                                  )}
-                                  <span className="truncate">{shortenPathLabel(grp.label)}</span>
-                                  <span className="font-normal text-muted-foreground">
-                                    ({grp.rows.length})
-                                  </span>
-                                </button>
-                              </td>
-                            </tr>
-                            {open ? (
-                              <>
-                                {grp.directRows.map(renderDataRow)}
-                                {grp.children.map((child) => {
-                                  const childOpen = groupExpanded.has(child.parent);
-                                  const cKeys = child.rows.map((r) => r.key);
-                                  const cAll =
-                                    cKeys.length > 0 && cKeys.every((k) => bulkSel.has(k));
-                                  const cSome =
-                                    cKeys.some((k) => bulkSel.has(k)) && !cAll;
-                                  return (
-                                    <Fragment key={child.id}>
-                                      <tr className="border-b border-border/40 bg-muted/20">
-                                        <td className="px-2 py-1 pl-6">
-                                          <IndeterminateCheckbox
-                                            checked={cAll}
-                                            indeterminate={cSome}
-                                            disabled={saveMut.isPending || cKeys.length === 0}
-                                            className="h-4 w-4 accent-teal-700"
-                                            onChange={(e) =>
-                                              toggleGroupSel(cKeys, e.target.checked)
-                                            }
-                                          />
-                                        </td>
-                                        <td colSpan={4} className="px-2 py-1">
-                                          <button
-                                            type="button"
-                                            className="flex w-full items-center gap-2 text-left text-xs font-medium"
-                                            onClick={() =>
-                                              setGroupExpanded((prev) => {
-                                                const n = new Set(prev);
-                                                if (n.has(child.parent)) n.delete(child.parent);
-                                                else n.add(child.parent);
-                                                return n;
-                                              })
-                                            }
-                                          >
-                                            {childOpen ? (
-                                              <ChevronDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                                            ) : (
-                                              <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                                            )}
-                                            <span className="truncate">
-                                              {shortenPathLabel(child.label)}
-                                            </span>
-                                            <span className="font-normal text-muted-foreground">
-                                              ({child.rows.length})
-                                            </span>
-                                          </button>
-                                        </td>
-                                      </tr>
-                                      {childOpen ? child.rows.map(renderDataRow) : null}
-                                    </Fragment>
-                                  );
-                                })}
-                              </>
-                            ) : null}
-                          </Fragment>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              )}
+              <div className="min-h-0 flex-1 overflow-auto">
+                <AccessRoleDefaultsGrantTree
+                  tenantSlug={tenantSlug}
+                  selected={localPermissions}
+                  grant={grantKeys}
+                  disabled={saveMut.isPending}
+                  search={tableSearch}
+                  onChange={(sel, gr) => {
+                    grantRef.current = gr;
+                    setLocalPermissions(sel);
+                    setGrantKeys(gr);
+                    if (selectedRole) schedulePersist(selectedRole.id, sel);
+                  }}
+                />
+              </div>
             </div>
 
             {bulkSel.size > 0 ? (
@@ -725,6 +631,7 @@ export function AccessRoleDefaultsWorkspace({
             <AccessRoleDefaultsAddModal
               open={addOpen}
               onOpenChange={setAddOpen}
+              tenantSlug={tenantSlug}
               roleName={selectedRole.name || selectedRole.key}
               catalog={catalogQ.data?.flat ?? []}
               grantedKeys={localPermissions}
@@ -734,6 +641,8 @@ export function AccessRoleDefaultsWorkspace({
           </div>
         )}
       </div>
+      </div>
+      )}
     </div>
   );
 }

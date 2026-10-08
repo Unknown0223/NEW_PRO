@@ -12,6 +12,7 @@ import { fetchSalesSnapshotDebtBlock } from "./dashboard.sales.snapshot.debt";
 import { fetchSalesSnapshotOrdersBlock } from "./dashboard.sales.snapshot.orders";
 import { fetchSalesSnapshotProductBlock } from "./dashboard.sales.snapshot.products";
 import { fetchSalesSnapshotRiskBlock } from "./dashboard.sales.snapshot.risk";
+import { fetchSalesCategoryMatrix } from "./dashboard.sales.snapshot.matrix";
 
 async function buildSalesCtx(tenantId: number, filters: SalesDashboardFilters): Promise<SalesSnapshotQueryCtx> {
   const from = new Date(`${filters.from}T00:00:00.000Z`);
@@ -50,7 +51,10 @@ export type SalesDashboardAnalyticsPayload = Pick<
   | "refusal_reason_analytics"
 >;
 
-export type SalesDashboardBreakdownPayload = Pick<SalesDashboardSnapshot, "filters" | "territory_analytics" | "agent_analytics"> & {
+export type SalesDashboardBreakdownPayload = Pick<
+  SalesDashboardSnapshot,
+  "filters" | "territory_analytics" | "agent_analytics" | "category_matrix"
+> & {
   agent_total: number;
   page: number;
   limit: number;
@@ -60,7 +64,7 @@ export async function getSalesDashboardSummary(
   tenantId: number,
   filters: SalesDashboardFilters
 ): Promise<SalesDashboardSummaryPayload> {
-  const snapshotKey = `tenant:${tenantId}:dashboard:sales:summary:v5:${stableJsonStringify(filters)}`;
+  const snapshotKey = `tenant:${tenantId}:dashboard:sales:summary:v6:${stableJsonStringify(filters)}`;
   const cached = await getSnapshotCache<SalesDashboardSummaryPayload>(snapshotKey);
   if (cached) return cached;
 
@@ -116,13 +120,16 @@ export async function getSalesDashboardBreakdown(
 ): Promise<SalesDashboardBreakdownPayload> {
   const page = Math.max(1, opts.page ?? 1);
   const limit = Math.min(200, Math.max(1, opts.limit ?? 50));
-  const snapshotKey = `tenant:${tenantId}:dashboard:sales:breakdown:${stableJsonStringify({ filters, page, limit })}`;
+  const snapshotKey = `tenant:${tenantId}:dashboard:sales:breakdown:v2:${stableJsonStringify({ filters, page, limit })}`;
   const cached = await getSnapshotCache<SalesDashboardBreakdownPayload>(snapshotKey);
   if (cached) return cached;
 
   const ctx = await buildSalesCtx(tenantId, filters);
   const ordersBlock = await fetchSalesSnapshotOrdersBlock(ctx);
-  const coverageBlock = await fetchSalesSnapshotCoverageBlock(ctx, ordersBlock.akb);
+  const [coverageBlock, category_matrix] = await Promise.all([
+    fetchSalesSnapshotCoverageBlock(ctx, ordersBlock.akb),
+    fetchSalesCategoryMatrix(ctx)
+  ]);
   const offset = (page - 1) * limit;
   const agent_analytics = coverageBlock.agent_analytics.slice(offset, offset + limit);
 
@@ -130,6 +137,7 @@ export async function getSalesDashboardBreakdown(
     filters,
     territory_analytics: coverageBlock.territory_analytics,
     agent_analytics,
+    category_matrix,
     agent_total: coverageBlock.agent_analytics.length,
     page,
     limit

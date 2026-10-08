@@ -13,6 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { SearchableMultiSelectPanel } from "@/components/ui/searchable-multi-select-panel";
 import { api } from "@/lib/api";
+import { useDebouncedSearchCommit } from "@/lib/use-debounced-search-commit";
 import { useAppConfirm } from "@/components/ui/app-confirm-dialog";
 import { useAuthStore, useAuthStoreHydrated } from "@/lib/auth-store";
 import type { ClientRow } from "@/lib/client-types";
@@ -179,6 +180,10 @@ export function InitialBalancesWorkspace() {
   const { confirm, dialog: confirmDialog } = useAppConfirm();
 
   const [draft, setDraft] = useState<FilterForm>(() => defaultForm());
+  useDebouncedSearchCommit(draft.search, (q) => {
+    setApplied((prev) => (prev.search === q ? prev : { ...prev, search: q }));
+    setPage(1);
+  });
   const [applied, setApplied] = useState<FilterForm>(() => defaultForm());
   const [page, setPage] = useState(1);
   const [addOpen, setAddOpen] = useState(false);

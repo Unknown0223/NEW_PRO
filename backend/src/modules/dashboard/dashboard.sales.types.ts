@@ -110,4 +110,21 @@ export type SalesDashboardSnapshot = {
     okb: number;
     coverage_pct: number;
   }>;
+  category_matrix?: {
+    categories: string[];
+    by_dimension: {
+      filial: CategoryMatrixRow[];
+      supervisor: CategoryMatrixRow[];
+      agent: CategoryMatrixRow[];
+    };
+  };
+};
+
+export type CategoryMatrixRow = {
+  key: string;
+  name: string;
+  smart_code: string;
+  total: string;
+  akb: number;
+  amounts: Record<string, string>;
 };

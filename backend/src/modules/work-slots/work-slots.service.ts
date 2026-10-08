@@ -25,6 +25,8 @@ import {
   mirrorSlotConfigToUser,
   type SlotConfigPatch
 } from "./work-slots.config-mirror";
+import { mergeMobileConfigPatch } from "../staff/agent-mobile-config.patch";
+import { parseMobileConfigV1 } from "../staff/agent-mobile-config.parse";
 import { unassignUserFromSlot } from "./work-slots.assign";
 import { resolveBranchCodesPatch } from "./work-slots.multi-bindings";
 import {
@@ -298,6 +300,7 @@ export async function bulkPatchWorkSlots(
     territory_oblasts?: string[];
     territory_cities?: string[];
     supervisee_agent_slot_ids?: number[];
+    mobile_config_mode?: "merge" | "replace";
   } & ActiveUserAttrsPatch &
     SlotConfigPatch,
   actorUserId?: number | null
@@ -592,6 +595,18 @@ export async function bulkPatchWorkSlots(
               : {};
           // mobile_config joy manbasi — bulk merge saqlaydi (next ustun).
           const merged = { ...prev, ...next };
+          if (
+            body.mobile_config_mode !== "replace" &&
+            next.mobile_config != null &&
+            typeof next.mobile_config === "object" &&
+            !Array.isArray(next.mobile_config)
+          ) {
+            const patchMc = parseMobileConfigV1(next.mobile_config);
+            if (patchMc) {
+              const storedMc = parseMobileConfigV1(prev.mobile_config);
+              merged.mobile_config = mergeMobileConfigPatch(storedMc, patchMc);
+            }
+          }
           entitlementsPatch = merged;
         }
 
