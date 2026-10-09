@@ -12,6 +12,7 @@ export type KomandaBulkRole = "supervisor" | "expeditor" | "collector" | "audito
 export type BulkKomandaStaffInput =
   | { action: "set_app_access"; user_ids: number[]; app_access: boolean }
   | { action: "set_is_active"; user_ids: number[]; is_active: boolean }
+  | { action: "set_filter_visible"; user_ids: number[]; filter_visible: boolean }
   | { action: "revoke_sessions"; user_ids: number[] };
 
 async function assertTenantKomandaIds(
@@ -63,6 +64,14 @@ export async function bulkPatchKomandaStaff(
       });
       await syncEmploymentAfterActiveChange(tenantId, ids, actorUserId);
       await audit({ is_active: input.is_active });
+      return { updated: ids.length };
+    }
+    case "set_filter_visible": {
+      await prisma.user.updateMany({
+        where: { tenant_id: tenantId, role, id: { in: ids } },
+        data: { filter_visible: input.filter_visible }
+      });
+      await audit({ filter_visible: input.filter_visible });
       return { updated: ids.length };
     }
     case "revoke_sessions": {

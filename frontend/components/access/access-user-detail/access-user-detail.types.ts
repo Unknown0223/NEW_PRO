@@ -127,6 +127,7 @@ export type SupervisorPickRow = {
   code: string | null;
   role: string;
   is_active: boolean;
+  filter_visible?: boolean;
   supervisor_user_id: number | null;
   branch: string | null;
 };
@@ -164,7 +165,9 @@ export function sortStaffRoleKeys(roles: string[]): string[] {
 
 export function formatStaffPickLine(u: SupervisorPickRow): string {
   const name = formatPersonDisplayName({ fio: u.full_name, name: u.full_name });
-  return name || `#${u.id}`;
+  const base = name || `#${u.id}`;
+  const code = u.code?.trim();
+  return code ? `${base} (${code})` : base;
 }
 
 /** Дерево из `tenant.settings.references.territory_nodes` (как на странице Territoriya). */

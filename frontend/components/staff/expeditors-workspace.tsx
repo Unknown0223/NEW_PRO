@@ -35,6 +35,7 @@ import {
 import { StaffImportDialog } from "@/components/staff/staff-import-dialog";
 import { useStaffExcelImport } from "@/components/staff/use-staff-excel-import";
 import { useStaffKomandaBulk } from "@/hooks/use-staff-komanda-bulk";
+import { useStaffFilterVisible } from "@/hooks/use-staff-filter-visible";
 import { activeBranchNamesFromProfile } from "@/lib/branch-options";
 import { useActiveTradeDirectionsCatalog } from "@/hooks/use-active-trade-directions-catalog";
 import { formatPersonDisplayName } from "@/lib/person-display";
@@ -93,6 +94,7 @@ export type ExpeditorRow = {
   work_slot_territories?: string[];
   login: string;
   is_active: boolean;
+  filter_visible?: boolean;
   max_sessions: number;
   active_session_count: number;
   kpi_color: string | null;
@@ -368,6 +370,15 @@ export function ExpeditorsWorkspace({ tenantSlug }: Props) {
     selectedRows
   });
 
+  const filterVisibleMut = useStaffFilterVisible({
+    tenantSlug,
+    segment: "expeditors",
+    invalidateQueryKeys: [
+      ["expeditors", tenantSlug],
+      ["expeditors-filter-options", tenantSlug]
+    ]
+  });
+
   const toggleExpeditorSelection = (id: number, checked: boolean) => {
     setSelectedIds((prev) => {
       const next = new Set(prev);
@@ -609,6 +620,16 @@ export function ExpeditorsWorkspace({ tenantSlug }: Props) {
         selectedIds={selectedIds}
         onToggleSelection={toggleExpeditorSelection}
         onToggleAllOnPage={toggleAllExpeditorsOnPage}
+        filterVisible={
+          tab === "inactive"
+            ? {
+                checked: (id) => pageRows.find((r) => r.id === id)?.filter_visible === true,
+                busy: filterVisibleMut.isPending || bulk.bulkBusy,
+                onToggle: (ids, next) => void filterVisibleMut.mutate({ ids, filter_visible: next }),
+                groupLabel: (id) => pageRows.find((r) => r.id === id)?.branch?.trim() || "Без филиала"
+              }
+            : undefined
+        }
         renderCell={(colId, row) =>
           renderExpeditorDataCell(colId, pageRows.find((r) => r.id === row.id)!)
         }
@@ -648,6 +669,20 @@ export function ExpeditorsWorkspace({ tenantSlug }: Props) {
               : undefined
           }
           onClearSelection={() => setSelectedIds(new Set())}
+          filterVisibleOn={
+            tab === "inactive" && selectedRows.every((r) => r.filter_visible)
+          }
+          onToggleFilterVisible={
+            tab === "inactive"
+              ? () => {
+                  const allOn = selectedRows.every((r) => r.filter_visible);
+                  void filterVisibleMut.mutate({
+                    ids: selectedRows.map((r) => r.id),
+                    filter_visible: !allOn
+                  });
+                }
+              : undefined
+          }
         />
       ) : null}
 

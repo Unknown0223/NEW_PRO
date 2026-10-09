@@ -36,6 +36,7 @@ import {
 } from "@/components/staff/staff-workspace-shell";
 import { StaffImportDialog } from "@/components/staff/staff-import-dialog";
 import { useStaffExcelImport } from "@/components/staff/use-staff-excel-import";
+import { useStaffFilterVisible } from "@/hooks/use-staff-filter-visible";
 import {
   StaffKomandaApkCell,
   StaffKomandaCreatedAtCell,
@@ -82,6 +83,7 @@ export type AgentRow = {
   territory: string | null;
   login: string;
   is_active: boolean;
+  filter_visible?: boolean;
   max_sessions: number;
   active_session_count: number;
   kpi_color: string | null;
@@ -226,6 +228,11 @@ export function AgentsWorkspace({ tenantSlug }: Props) {
   const [passwordRow, setPasswordRow] = useState<AgentRow | null>(null);
   const [deactivateAgent, setDeactivateAgent] = useState<AgentRow | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(() => new Set());
+  const filterVisibleMut = useStaffFilterVisible({
+    tenantSlug,
+    segment: "agents",
+    invalidateQueryKeys: [["agent", tenantSlug]]
+  });
   const [bulkEditOpen, setBulkEditOpen] = useState(false);
   const [confirmBulk, setConfirmBulk] = useState<"activate" | "deactivate" | null>(null);
 
@@ -611,6 +618,17 @@ export function AgentsWorkspace({ tenantSlug }: Props) {
         selectedIds={selectedIds}
         onToggleSelection={toggleAgentSelection}
         onToggleAllOnPage={toggleAllAgentsOnPage}
+        filterVisible={
+          tab === "inactive"
+            ? {
+                checked: (id) => pageRows.find((r) => r.id === id)?.filter_visible === true,
+                busy: filterVisibleMut.isPending,
+                onToggle: (ids, next) => void filterVisibleMut.mutate({ ids, filter_visible: next }),
+                groupLabel: (id) =>
+                  pageRows.find((r) => r.id === id)?.supervisor_name?.trim() || "Без супервайзера"
+              }
+            : undefined
+        }
         renderCell={(colId, row) =>
           renderAgentDataCell(colId, pageRows.find((r) => r.id === row.id)!)
         }
@@ -651,6 +669,19 @@ export function AgentsWorkspace({ tenantSlug }: Props) {
             : undefined
         }
         onClearSelection={() => setSelectedIds(new Set())}
+        filterVisibleOn={
+          tab === "inactive" &&
+          Array.from(selectedIds).every((id) => pageRows.find((r) => r.id === id)?.filter_visible)
+        }
+        onToggleFilterVisible={
+          tab === "inactive"
+            ? () => {
+                const ids = Array.from(selectedIds);
+                const allOn = ids.every((id) => pageRows.find((r) => r.id === id)?.filter_visible);
+                void filterVisibleMut.mutate({ ids, filter_visible: !allOn });
+              }
+            : undefined
+        }
       />
       ) : null}
 

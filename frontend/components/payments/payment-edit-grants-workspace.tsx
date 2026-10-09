@@ -198,7 +198,7 @@ export function PaymentEditGrantsWorkspace() {
     enabled: Boolean(tenantSlug) && hydrated,
     staleTime: STALE.reference,
     queryFn: async () => {
-      const { data } = await api.get<{ data: StaffPick[] }>(`/api/${tenantSlug}/expeditors?is_active=true`);
+      const { data } = await api.get<{ data: StaffPick[] }>(`/api/${tenantSlug}/expeditors?picker=1`);
       return data.data;
     }
   });

@@ -13,6 +13,9 @@ export type StaffBulkFloatingBarProps = {
   /** Clear sessions — omit to hide (moved to Рабочее место / sessions UI). */
   onClearSessions?: () => void;
   onClearSelection: () => void;
+  /** Неактивные: показать в фильтрах и доступе */
+  filterVisibleOn?: boolean;
+  onToggleFilterVisible?: () => void;
   /** Agent bo‘limi: ommaviy cheklovlar */
   onRestrictions?: () => void;
   /** Agent bo‘limi: umumiy maydonlarni tahrirlash */
@@ -30,6 +33,8 @@ export function StaffBulkFloatingBar({
   onToggleActive,
   onClearSessions,
   onClearSelection,
+  filterVisibleOn = false,
+  onToggleFilterVisible,
   onRestrictions,
   onBulkEdit,
   clearSessionsLabel = "Очистить сессии"
@@ -106,6 +111,35 @@ export function StaffBulkFloatingBar({
               </button>
             ) : null}
           </>
+        ) : null}
+
+        {onToggleFilterVisible ? (
+          <button
+            type="button"
+            onClick={onToggleFilterVisible}
+            disabled={busy}
+            title={
+              filterVisibleOn
+                ? "Скрыть выбранных из фильтров и доступа"
+                : "Показать выбранных в фильтрах и доступе (красным)"
+            }
+            className="flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50 disabled:opacity-50"
+          >
+            Фильтр
+            <span
+              className={cn(
+                "relative inline-block h-5 w-9 rounded-full transition-colors",
+                filterVisibleOn ? "bg-red-500" : "bg-slate-300"
+              )}
+            >
+              <span
+                className={cn(
+                  "absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-all",
+                  filterVisibleOn ? "left-[18px]" : "left-0.5"
+                )}
+              />
+            </span>
+          </button>
         ) : null}
 
         {onToggleActive ? (

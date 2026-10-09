@@ -475,7 +475,7 @@ export function AccessUserDetailModals({ vm }: { vm: AccessUserDetailVm }) {
                                   key={u.id}
                                   className={cn(
                                     "flex cursor-pointer items-start gap-2 py-1.5 pl-0.5 sm:pl-1",
-                                    !u.is_active && "opacity-75"
+                                    !u.is_active && "text-red-600"
                                   )}
                                 >
                                   <input
@@ -492,7 +492,9 @@ export function AccessUserDetailModals({ vm }: { vm: AccessUserDetailVm }) {
                                     }}
                                   />
                                   <span className="min-w-0 text-sm leading-snug">
-                                    <span className="font-medium text-foreground">{formatStaffPickLine(u)}</span>
+                                    <span className={cn("font-medium", u.is_active ? "text-foreground" : "text-red-600")}>
+                                      {formatStaffPickLine(u)}
+                                    </span>
                                   </span>
                                 </label>
                               ))}

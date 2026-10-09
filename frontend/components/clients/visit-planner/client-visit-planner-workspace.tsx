@@ -220,7 +220,7 @@ export function ClientVisitPlannerWorkspace() {
     staleTime: STALE.reference,
     queryFn: async () => {
       const { data } = await api.get<{ data: StaffRow[] }>(
-        `/api/${tenantSlug}/expeditors?is_active=true&for_new_work=1`
+        `/api/${tenantSlug}/expeditors?picker=1&for_new_work=1`
       );
       return staffFromQuery(data).filter((r) => r.is_active);
     }

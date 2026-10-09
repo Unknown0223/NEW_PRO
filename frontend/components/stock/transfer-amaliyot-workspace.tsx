@@ -223,7 +223,7 @@ export function TransferAmaliyotWorkspace() {
     let cancelled = false;
     (async () => {
       try {
-        const res = await apiFetch<{ data?: AgentPick[] }>(`/api/${tenant}/agents?is_active=true`);
+        const res = await apiFetch<{ data?: AgentPick[] }>(`/api/${tenant}/agents?picker=1`);
         if (!cancelled) setAgents((res.data ?? []).filter((a) => a.is_active));
       } catch {
         if (!cancelled) setAgents([]);

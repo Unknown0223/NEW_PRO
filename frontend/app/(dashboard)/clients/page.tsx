@@ -1037,7 +1037,7 @@ export default function ClientsPage() {
     queryFn: async () => {
       const { data } = await api.get<{
         data: Array<{ id: number; fio: string; login: string; is_active: boolean }>;
-      }>(`/api/${tenantSlug}/supervisors?is_active=true`);
+      }>(`/api/${tenantSlug}/supervisors?picker=1`);
       return data.data.map((r) => ({ id: r.id, name: r.fio, login: r.login }));
     }
   });

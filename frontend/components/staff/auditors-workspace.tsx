@@ -31,6 +31,7 @@ import {
 import { StaffImportDialog } from "@/components/staff/staff-import-dialog";
 import { useStaffExcelImport } from "@/components/staff/use-staff-excel-import";
 import { useStaffKomandaBulk } from "@/hooks/use-staff-komanda-bulk";
+import { useStaffFilterVisible } from "@/hooks/use-staff-filter-visible";
 import { formatPersonDisplayName } from "@/lib/person-display";
 import { buildTerritoryTreeOnlyCascade } from "@/lib/territory-client-filters";
 import type { TerritoryNode } from "@/lib/territory-tree";
@@ -65,6 +66,7 @@ type AuditorRow = {
   active_session_count: number;
   max_sessions: number;
   is_active: boolean;
+  filter_visible?: boolean;
   agent_entitlements?: Record<string, unknown> & { mobile_config?: unknown };
   work_slot_id?: number | null;
   work_slot_code?: string | null;
@@ -338,6 +340,15 @@ export function AuditorsWorkspace({ tenantSlug }: Props) {
     selectedRows
   });
 
+  const filterVisibleMut = useStaffFilterVisible({
+    tenantSlug,
+    segment: "auditors",
+    invalidateQueryKeys: [
+      ["auditors", tenantSlug],
+      ["auditors-filter-options", tenantSlug]
+    ]
+  });
+
   function exportCellString(r: AuditorRow, colId: string): string {
     switch (colId) {
       case "fio":
@@ -501,6 +512,16 @@ export function AuditorsWorkspace({ tenantSlug }: Props) {
         selectedIds={selected}
         onToggleSelection={toggleSelection}
         onToggleAllOnPage={toggleAllOnPage}
+        filterVisible={
+          tab === "inactive"
+            ? {
+                checked: (id) => pageRows.find((r) => r.id === id)?.filter_visible === true,
+                busy: filterVisibleMut.isPending,
+                onToggle: (ids, next) => void filterVisibleMut.mutate({ ids, filter_visible: next }),
+                groupLabel: (id) => pageRows.find((r) => r.id === id)?.branch?.trim() || "Без филиала"
+              }
+            : undefined
+        }
         renderCell={(colId, row) => renderDataCell(colId, pageRows.find((r) => r.id === row.id)!)}
         renderActions={(row) => {
           if (!perms.canAnyRowAction) return null;
@@ -538,6 +559,18 @@ export function AuditorsWorkspace({ tenantSlug }: Props) {
               : undefined
           }
           onClearSelection={() => setSelected(new Set())}
+          filterVisibleOn={tab === "inactive" && selectedRows.every((r) => r.filter_visible)}
+          onToggleFilterVisible={
+            tab === "inactive"
+              ? () => {
+                  const allOn = selectedRows.every((r) => r.filter_visible);
+                  void filterVisibleMut.mutate({
+                    ids: selectedRows.map((r) => r.id),
+                    filter_visible: !allOn
+                  });
+                }
+              : undefined
+          }
         />
       ) : null}
 

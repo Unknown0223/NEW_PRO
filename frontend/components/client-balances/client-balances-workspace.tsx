@@ -813,7 +813,7 @@ export function ClientBalancesWorkspace() {
     retry: false,
     queryFn: async () => {
       try {
-        const { data } = await api.get<{ data: StaffPick[] }>(`/api/${tenantSlug}/agents?is_active=true`);
+        const { data } = await api.get<{ data: StaffPick[] }>(`/api/${tenantSlug}/agents?picker=1`);
         return data.data ?? [];
       } catch {
         return [] as StaffPick[];
@@ -828,7 +828,7 @@ export function ClientBalancesWorkspace() {
     retry: false,
     queryFn: async () => {
       try {
-        const { data } = await api.get<{ data: StaffPick[] }>(`/api/${tenantSlug}/expeditors?is_active=true`);
+        const { data } = await api.get<{ data: StaffPick[] }>(`/api/${tenantSlug}/expeditors?picker=1`);
         return data.data ?? [];
       } catch {
         return [] as StaffPick[];
@@ -844,7 +844,7 @@ export function ClientBalancesWorkspace() {
     queryFn: async () => {
       try {
         const { data } = await api.get<{ data: StaffPick[] }>(
-          `/api/${tenantSlug}/supervisors?is_active=true`
+          `/api/${tenantSlug}/supervisors?picker=1`
         );
         return data.data ?? [];
       } catch {

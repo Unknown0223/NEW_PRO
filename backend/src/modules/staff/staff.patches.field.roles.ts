@@ -75,6 +75,7 @@ export type PatchOperatorInput = {
   position?: string | null;
   can_authorize?: boolean;
   is_active?: boolean;
+  filter_visible?: boolean;
   app_access?: boolean;
   max_sessions?: number;
   password?: string;
@@ -109,6 +110,7 @@ export async function patchOperator(
   if (input.position !== undefined) data.position = input.position?.trim().slice(0, 128) || null;
   if (input.can_authorize !== undefined) data.can_authorize = input.can_authorize;
   if (input.is_active !== undefined) data.is_active = input.is_active;
+  if (input.filter_visible !== undefined) data.filter_visible = input.filter_visible;
   if (input.app_access !== undefined) data.app_access = input.app_access;
   if (input.max_sessions !== undefined) {
     const n = input.max_sessions;
@@ -173,6 +175,7 @@ export type PatchSkladchikInput = {
   position?: string | null;
   can_authorize?: boolean;
   is_active?: boolean;
+  filter_visible?: boolean;
   app_access?: boolean;
   max_sessions?: number;
   password?: string;
@@ -211,6 +214,7 @@ export async function patchSkladchik(
   if (input.position !== undefined) data.position = input.position?.trim().slice(0, 128) || null;
   if (input.can_authorize !== undefined) data.can_authorize = input.can_authorize;
   if (input.is_active !== undefined) data.is_active = input.is_active;
+  if (input.filter_visible !== undefined) data.filter_visible = input.filter_visible;
   if (input.app_access !== undefined) data.app_access = input.app_access;
   if (input.max_sessions !== undefined) {
     const n = input.max_sessions;

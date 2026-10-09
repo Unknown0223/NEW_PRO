@@ -43,6 +43,7 @@ import {
 import { StaffImportDialog } from "@/components/staff/staff-import-dialog";
 import { useStaffExcelImport } from "@/components/staff/use-staff-excel-import";
 import { useStaffKomandaBulk } from "@/hooks/use-staff-komanda-bulk";
+import { useStaffFilterVisible } from "@/hooks/use-staff-filter-visible";
 import { formatPersonDisplayName } from "@/lib/person-display";
 import {
   StaffKomandaBranchCell,
@@ -78,6 +79,7 @@ type WebStaffRow = {
   branch: string | null;
   position: string | null;
   is_active: boolean;
+  filter_visible?: boolean;
   can_authorize: boolean;
   app_access: boolean;
   active_session_count: number;
@@ -357,6 +359,12 @@ export function SkladchikWorkspace({ tenantSlug }: Props) {
     selectedRows
   });
 
+  const filterVisibleMut = useStaffFilterVisible({
+    tenantSlug,
+    segment: "skladchik",
+    invalidateQueryKeys: [["skladchik", tenantSlug]]
+  });
+
   function toggleAllOnPage(checked: boolean) {
     if (checked) setSelected(new Set(pageRows.map((r) => r.id)));
     else setSelected(new Set());
@@ -471,6 +479,16 @@ export function SkladchikWorkspace({ tenantSlug }: Props) {
         selectedIds={selected}
         onToggleSelection={toggleOne}
         onToggleAllOnPage={toggleAllOnPage}
+        filterVisible={
+          tab === "inactive"
+            ? {
+                checked: (id) => pageRows.find((r) => r.id === id)?.filter_visible === true,
+                busy: filterVisibleMut.isPending,
+                onToggle: (ids, next) => void filterVisibleMut.mutate({ ids, filter_visible: next }),
+                groupLabel: (id) => pageRows.find((r) => r.id === id)?.branch?.trim() || "Без филиала"
+              }
+            : undefined
+        }
         renderCell={(colId, row) =>
           renderDataCell(colId, pageRows.find((r) => r.id === row.id)!)
         }
@@ -529,6 +547,18 @@ export function SkladchikWorkspace({ tenantSlug }: Props) {
               : undefined
           }
           onClearSelection={() => setSelected(new Set())}
+          filterVisibleOn={tab === "inactive" && selectedRows.every((r) => r.filter_visible)}
+          onToggleFilterVisible={
+            tab === "inactive"
+              ? () => {
+                  const allOn = selectedRows.every((r) => r.filter_visible);
+                  void filterVisibleMut.mutate({
+                    ids: selectedRows.map((r) => r.id),
+                    filter_visible: !allOn
+                  });
+                }
+              : undefined
+          }
         />
       ) : null}
 

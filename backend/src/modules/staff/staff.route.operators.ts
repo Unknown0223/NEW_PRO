@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { sendApiError, zodValidationExtras } from "../../lib/api-error";
+import { registerOperatorFilterVisibleRoute } from "./staff.route.operators-filter-visible";
 import { ensureTenantContext } from "../../lib/tenant-context";
 import { actorUserIdOrNull } from "../../lib/request-actor";
 import { DIRECTORY_READ_ROLES, jwtAccessVerify, requireRoles } from "../auth/auth.prehandlers";
@@ -183,6 +184,8 @@ export async function registerStaffOperatorRoutes(app: FastifyInstance) {
       }
     }
   );
+
+  registerOperatorFilterVisibleRoute(app);
 
   app.post(
     "/api/:slug/operators/bulk/sessions/revoke",

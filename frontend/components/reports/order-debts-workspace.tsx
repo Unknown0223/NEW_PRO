@@ -448,7 +448,7 @@ export function OrderDebtsWorkspace() {
     enabled: Boolean(tenantSlug) && hydrated,
     staleTime: STALE.reference,
     queryFn: async () => {
-      const { data } = await api.get<{ data: StaffPick[] }>(`/api/${tenantSlug}/agents?is_active=true`);
+      const { data } = await api.get<{ data: StaffPick[] }>(`/api/${tenantSlug}/agents?picker=1`);
       return data.data;
     }
   });
@@ -458,7 +458,7 @@ export function OrderDebtsWorkspace() {
     enabled: Boolean(tenantSlug) && hydrated,
     staleTime: STALE.reference,
     queryFn: async () => {
-      const { data } = await api.get<{ data: StaffPick[] }>(`/api/${tenantSlug}/expeditors?is_active=true`);
+      const { data } = await api.get<{ data: StaffPick[] }>(`/api/${tenantSlug}/expeditors?picker=1`);
       return data.data;
     }
   });
@@ -468,7 +468,7 @@ export function OrderDebtsWorkspace() {
     enabled: Boolean(tenantSlug) && hydrated,
     staleTime: STALE.reference,
     queryFn: async () => {
-      const { data } = await api.get<{ data: StaffPick[] }>(`/api/${tenantSlug}/supervisors?is_active=true`);
+      const { data } = await api.get<{ data: StaffPick[] }>(`/api/${tenantSlug}/supervisors?picker=1`);
       return data.data;
     }
   });

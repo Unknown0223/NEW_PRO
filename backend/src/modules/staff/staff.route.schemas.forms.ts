@@ -53,6 +53,7 @@ export const createBodySchema = z.object({
   app_access: z.boolean().optional(),
   territory: z.string().nullable().optional(),
   is_active: z.boolean().optional(),
+  filter_visible: z.boolean().optional(),
   max_sessions: maxSessionsValueSchema.optional(),
   kpi_color: z.string().max(16).nullable().optional(),
   work_slot_id: z.number().int().positive().nullable().optional()
@@ -89,6 +90,7 @@ export const patchStaffMutableBody = z.object({
   app_access: z.boolean().optional(),
   territory: z.string().nullable().optional(),
   is_active: z.boolean().optional(),
+  filter_visible: z.boolean().optional(),
   password: z.string().min(6).optional(),
   max_sessions: maxSessionsValueSchema.optional(),
   kpi_color: z.string().max(16).nullable().optional()
@@ -201,6 +203,11 @@ export const bulkAgentsBody = z.union([
     action: z.literal("set_is_active"),
     agent_ids: bulkAgentIds,
     is_active: z.boolean()
+  }),
+  z.object({
+    action: z.literal("set_filter_visible"),
+    agent_ids: bulkAgentIds,
+    filter_visible: z.boolean()
   }),
   z.object({
     action: z.literal("set_agent_type"),

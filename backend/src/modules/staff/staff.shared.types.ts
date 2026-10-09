@@ -100,6 +100,8 @@ export type StaffRow = {
   work_slot_territories?: string[];
   login: string;
   is_active: boolean;
+  /** Nofaol bo‘lsa ham filtr, qidiruv va dostupda ko‘rinadi */
+  filter_visible: boolean;
   max_sessions: number;
   active_session_count: number;
   kpi_color: string | null;
@@ -199,6 +201,8 @@ export type ListStaffFilters = {
   /** `territory` maydonida qator bo‘yicha qidiruv (город) */
   territory_city?: string;
   is_active?: boolean;
+  /** Faol yoki filtrda ko‘rinishga ruxsat berilgan nofaollar */
+  for_picker?: boolean;
   /** Filtr: ushbu omborga bog‘langan skladchiklar (`warehouse_id` yoki `warehouse_user_links`) */
   warehouse_id?: number;
 };

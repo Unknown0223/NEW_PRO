@@ -310,7 +310,8 @@ export function StaffWorkspaceTable({
   selectedIds,
   onToggleSelection,
   onToggleAllOnPage,
-  rowKey = (id: number) => id
+  rowKey = (id: number) => id,
+  filterVisible
 }: {
   columnOrder: readonly string[];
   columnLabelById: Map<string, string>;
@@ -328,6 +329,13 @@ export function StaffWorkspaceTable({
   /** Jadval headeridagi «hammasini belgilash» */
   onToggleAllOnPage?: (checked: boolean) => void;
   rowKey?: (id: number) => number | string;
+  /** Вкладка «Не активный»: колонка «Фильтр» и группы. */
+  filterVisible?: {
+    checked: (id: number) => boolean;
+    onToggle: (ids: number[], next: boolean) => void;
+    busy?: boolean;
+    groupLabel: (id: number) => string;
+  };
 }) {
   const paginationPages = (() => {
     const pages: number[] = [];
@@ -362,6 +370,9 @@ export function StaffWorkspaceTable({
                   />
                 ) : null}
               </th>
+              {filterVisible ? (
+                <th className="px-3 py-3 text-left font-medium text-red-600">Фильтр</th>
+              ) : null}
               {columnOrder.map((colId) => (
                 <th key={colId} className="px-3 py-3 text-left font-medium">
                   {columnLabelById.get(colId) ?? colId}
@@ -371,34 +382,87 @@ export function StaffWorkspaceTable({
             </tr>
           </thead>
           <tbody className="divide-y divide-border">
-            {pageRows.map((r) => (
-              <tr key={rowKey(r.id)} className="hover:bg-muted/60">
-                <td className="px-3 py-3">
-                  <input
-                    type="checkbox"
-                    className="h-4 w-4 rounded border-border"
-                    checked={selectedIds.has(r.id)}
-                    onChange={(e) => onToggleSelection(r.id, e.target.checked)}
-                  />
-                </td>
-                {columnOrder.map((colId) => (
-                  <td key={colId} className="px-3 py-3">
-                    {renderCell(colId, r)}
-                  </td>
-                ))}
-                <td className="px-3 py-3">{renderActions(r)}</td>
-              </tr>
-            ))}
-            {pageRows.length === 0 ? (
-              <tr>
-                <td
-                  colSpan={columnOrder.length + 2}
-                  className="px-3 py-16 text-center text-sm text-slate-500"
-                >
-                  {isLoading ? "Загрузка…" : "Нет данных по выбранным фильтрам"}
-                </td>
-              </tr>
-            ) : null}
+            {(() => {
+              const groups: Array<{ label: string; rows: typeof pageRows }> = [];
+              if (filterVisible) {
+                const byLabel = new Map<string, typeof pageRows>();
+                for (const r of pageRows) {
+                  const label = filterVisible.groupLabel(r.id) || "Без группы";
+                  const arr = byLabel.get(label) ?? [];
+                  arr.push(r);
+                  byLabel.set(label, arr);
+                }
+                for (const [label, rows] of byLabel) groups.push({ label, rows });
+              }
+              const bodyRows = filterVisible ? groups.flatMap((g) => g.rows) : pageRows;
+              const colSpan = columnOrder.length + 2 + (filterVisible ? 1 : 0);
+              const nodes: ReactNode[] = [];
+              const pushRow = (r: (typeof pageRows)[number]) => {
+                nodes.push(
+                  <tr key={rowKey(r.id)} className="hover:bg-muted/60">
+                    <td className="px-3 py-3">
+                      <input
+                        type="checkbox"
+                        className="h-4 w-4 rounded border-border"
+                        checked={selectedIds.has(r.id)}
+                        onChange={(e) => onToggleSelection(r.id, e.target.checked)}
+                      />
+                    </td>
+                    {filterVisible ? (
+                      <td className="px-3 py-3">
+                        <FilterVisibleSwitch
+                          checked={filterVisible.checked(r.id)}
+                          disabled={filterVisible.busy}
+                          onChange={(next) => filterVisible.onToggle([r.id], next)}
+                        />
+                      </td>
+                    ) : null}
+                    {columnOrder.map((colId) => (
+                      <td key={colId} className="px-3 py-3">
+                        {renderCell(colId, r)}
+                      </td>
+                    ))}
+                    <td className="px-3 py-3">{renderActions(r)}</td>
+                  </tr>
+                );
+              };
+              if (filterVisible) {
+                for (const g of groups) {
+                  const ids = g.rows.map((r) => r.id);
+                  const allOn = ids.every((id) => filterVisible.checked(id));
+                  nodes.push(
+                    <tr key={`g:${g.label}`} className="bg-red-50/70">
+                      <td colSpan={colSpan} className="px-3 py-2">
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="text-xs font-semibold uppercase tracking-wide text-red-700">
+                            {g.label}
+                            <span className="ml-2 font-normal normal-case text-red-600/80">{ids.length}</span>
+                          </span>
+                          <FilterVisibleSwitch
+                            checked={allOn}
+                            disabled={filterVisible.busy}
+                            onChange={(next) => filterVisible.onToggle(ids, next)}
+                          />
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                  for (const r of g.rows) pushRow(r);
+                }
+              } else {
+                for (const r of bodyRows) pushRow(r);
+              }
+              if (pageRows.length === 0) {
+                nodes.push(
+                  <tr key="empty">
+                    <td colSpan={colSpan} className="px-3 py-16 text-center text-sm text-slate-500">
+                      {isLoading ? "Загрузка…" : "Нет данных по выбранным фильтрам"}
+                    </td>
+                  </tr>
+                );
+              }
+              return nodes;
+            })()}
           </tbody>
         </table>
       </div>
@@ -443,5 +507,44 @@ export function StaffWorkspaceTable({
         </div>
       </div>
     </div>
+  );
+}
+
+function FilterVisibleSwitch({
+  checked,
+  disabled,
+  onChange
+}: {
+  checked: boolean;
+  disabled?: boolean;
+  onChange: (next: boolean) => void;
+}) {
+  return (
+    <label className="inline-flex cursor-pointer items-center">
+      <input
+        type="checkbox"
+        className="peer sr-only"
+        checked={checked}
+        disabled={disabled}
+        onChange={() => onChange(!checked)}
+      />
+      <div
+        className={cn(
+          "relative h-5 w-9 rounded-full transition",
+          checked ? "bg-red-500" : "bg-slate-300",
+          disabled && "opacity-60"
+        )}
+      >
+        <div
+          className={cn(
+            "absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-all",
+            checked ? "left-[18px]" : "left-0.5"
+          )}
+        />
+      </div>
+      <span className={cn("ml-2 text-xs", checked ? "font-medium text-red-600" : "text-slate-500")}>
+        {checked ? "Вкл" : "Выкл"}
+      </span>
+    </label>
   );
 }

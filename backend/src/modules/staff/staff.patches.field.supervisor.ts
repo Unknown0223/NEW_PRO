@@ -170,6 +170,7 @@ export async function patchSupervisor(
   if (input.app_access !== undefined) data.app_access = input.app_access;
   if (input.territory !== undefined) data.territory = input.territory?.trim() || null;
   if (input.is_active !== undefined) data.is_active = input.is_active;
+  if (input.filter_visible !== undefined) data.filter_visible = input.filter_visible;
   if (input.max_sessions !== undefined) {
     const n = input.max_sessions;
     assertValidMaxSessions(n);

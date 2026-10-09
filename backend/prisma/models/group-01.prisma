@@ -113,6 +113,8 @@ model User {
   password_hash              String
   role                       String
   is_active                  Boolean                 @default(true)
+  /// Nofaol, lekin filtr / qidiruv / dostup ro‘yxatlarida qizil holatda ko‘rinadi
+  filter_visible             Boolean                 @default(false)
   created_at                 DateTime                @default(now())
   updated_at                 DateTime                @updatedAt
   first_name                 String?

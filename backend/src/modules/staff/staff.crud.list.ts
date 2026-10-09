@@ -67,7 +67,12 @@ export async function listStaff(
   const roleFilter: Prisma.StringFilter | string =
     kind === "operator" ? { in: [...OPERATOR_LIKE_WEB_ROLES] } : kindRole(kind);
   const where: Prisma.UserWhereInput = { tenant_id: tenantId, role: roleFilter };
-  if (filters?.is_active !== undefined) {
+  if (filters?.for_picker) {
+    const pickerClause: Prisma.UserWhereInput = {
+      OR: [{ is_active: true }, { filter_visible: true }]
+    };
+    where.AND = [pickerClause];
+  } else if (filters?.is_active !== undefined) {
     where.is_active = filters.is_active;
   }
   if (filters?.branch?.trim()) {
@@ -314,6 +319,7 @@ export async function listStaff(
     work_slot_territories: workSlotByUser.get(u.id)?.territories ?? [],
     login: u.login,
     is_active: u.is_active,
+    filter_visible: u.filter_visible,
     max_sessions: u.max_sessions ?? 1,
     active_session_count: sessMap.get(u.id) ?? 0,
     kpi_color: u.kpi_color ?? null,

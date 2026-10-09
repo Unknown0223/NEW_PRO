@@ -149,7 +149,7 @@ export function useClientEditForm({
     queryFn: async () => {
       const { data } = await api.get<{
         data: Array<{ id: number; fio: string; login: string; is_active: boolean }>;
-      }>(`/api/${tenantSlug}/expeditors?is_active=true&for_new_work=1`);
+      }>(`/api/${tenantSlug}/expeditors?picker=1&for_new_work=1`);
       return data.data
         .filter((r) => r.is_active)
         .map((r) => ({ id: r.id, name: r.fio, login: r.login }));

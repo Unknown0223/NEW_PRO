@@ -116,7 +116,7 @@ export function AddOpeningBalanceDialog({ open, onOpenChange, tenantSlug, onCrea
     enabled: Boolean(tenantSlug) && hydrated && open,
     staleTime: STALE.reference,
     queryFn: async () => {
-      const { data } = await api.get<{ data: StaffPick[] }>(`/api/${tenantSlug}/agents?is_active=true`);
+      const { data } = await api.get<{ data: StaffPick[] }>(`/api/${tenantSlug}/agents?picker=1`);
       return data.data;
     }
   });

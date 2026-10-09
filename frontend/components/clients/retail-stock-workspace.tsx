@@ -137,7 +137,7 @@ export function RetailStockWorkspace() {
         api.get<{ data: ProductRow[] }>(`/api/${tenantSlug}/products?page=1&limit=500&is_active=true`),
         api.get<{ data: CategoryRow[] }>(`/api/${tenantSlug}/product-categories`),
         api.get<RefResponse>(`/api/${tenantSlug}/clients/references`),
-        api.get<{ data: AgentPick[] }>(`/api/${tenantSlug}/agents?is_active=true`),
+        api.get<{ data: AgentPick[] }>(`/api/${tenantSlug}/agents?picker=1`),
         api.get<{ data: string[]; options?: PriceTypeOption[] }>(`/api/${tenantSlug}/price-types?kind=sale`)
       ]);
       setProducts(r1.data.data ?? []);

@@ -28,6 +28,8 @@ import { WEB_ACCESS_ROLE_LABELS } from "@/lib/distribution-roles";
 import { StaffFioCell } from "@/components/staff/staff-fio-cell";
 import { formatPersonDisplayName } from "@/lib/person-display";
 import { AgentIconButton } from "@/components/staff/agent-workspace-template-ui";
+import { StaffBulkFloatingBar } from "@/components/staff/staff-bulk-floating-bar";
+import { useStaffFilterVisible } from "@/hooks/use-staff-filter-visible";
 import {
   StaffWorkspaceFilterPanel,
   StaffWorkspaceHeader,
@@ -52,6 +54,7 @@ type WebStaffRow = {
   branch: string | null;
   position: string | null;
   is_active: boolean;
+  filter_visible?: boolean;
   can_authorize: boolean;
   app_access: boolean;
   active_session_count: number;
@@ -149,6 +152,11 @@ export function OperatorsWorkspace({ tenantSlug }: Props) {
   const [search, setSearch] = useState("");
 
   const [selected, setSelected] = useState<Set<number>>(() => new Set());
+  const filterVisibleMut = useStaffFilterVisible({
+    tenantSlug,
+    segment: "operators",
+    invalidateQueryKeys: [["operators", tenantSlug]]
+  });
   const [editRow, setEditRow] = useState<WebStaffRow | null>(null);
   const [passwordRow, setPasswordRow] = useState<WebStaffRow | null>(null);
   const [columnDialogOpen, setColumnDialogOpen] = useState(false);
@@ -338,6 +346,16 @@ export function OperatorsWorkspace({ tenantSlug }: Props) {
           }
         }}
         onToggleAllOnPage={toggleAllOnPage}
+        filterVisible={
+          tab === "inactive"
+            ? {
+                checked: (id) => pageRows.find((r) => r.id === id)?.filter_visible === true,
+                busy: filterVisibleMut.isPending,
+                onToggle: (ids, next) => void filterVisibleMut.mutate({ ids, filter_visible: next }),
+                groupLabel: (id) => pageRows.find((r) => r.id === id)?.branch?.trim() || "Без филиала"
+              }
+            : undefined
+        }
         renderCell={(colId, row) => {
           const r = pageRows.find((x) => x.id === row.id)!;
           return renderOperatorDataCell(colId as (typeof OPERATOR_COLUMN_IDS)[number], r);
@@ -385,6 +403,23 @@ export function OperatorsWorkspace({ tenantSlug }: Props) {
           );
         }}
       />
+
+      {tab === "inactive" && selected.size > 0 ? (
+        <StaffBulkFloatingBar
+          count={selected.size}
+          isActiveTab={false}
+          busy={filterVisibleMut.isPending}
+          onClearSelection={() => setSelected(new Set())}
+          filterVisibleOn={Array.from(selected).every(
+            (id) => pageRows.find((r) => r.id === id)?.filter_visible
+          )}
+          onToggleFilterVisible={() => {
+            const ids = Array.from(selected);
+            const allOn = ids.every((id) => pageRows.find((r) => r.id === id)?.filter_visible);
+            void filterVisibleMut.mutate({ ids, filter_visible: !allOn });
+          }}
+        />
+      ) : null}
 
       <p className="text-xs text-slate-500">
         <strong className="text-slate-700">Системная роль</strong> сейчас только{" "}

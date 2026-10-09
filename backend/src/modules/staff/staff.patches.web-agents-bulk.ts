@@ -59,6 +59,7 @@ export type BulkAgentsInput =
     }
   | { action: "set_app_access"; agent_ids: number[]; app_access: boolean }
   | { action: "set_is_active"; agent_ids: number[]; is_active: boolean }
+  | { action: "set_filter_visible"; agent_ids: number[]; filter_visible: boolean }
   | { action: "set_agent_type"; agent_ids: number[]; agent_type: string | null }
   | { action: "revoke_sessions"; agent_ids: number[] }
   | { action: "set_max_sessions"; agent_ids: number[]; max_sessions: number }
@@ -205,6 +206,15 @@ export async function bulkPatchAgents(
       });
       await syncEmploymentAfterActiveChange(tenantId, ids, actorUserId);
       await auditBulk(ids.length, { is_active: input.is_active });
+      return { updated: ids.length };
+    }
+    case "set_filter_visible": {
+      const ids = await assertTenantAgentIdList(tenantId, input.agent_ids);
+      await prisma.user.updateMany({
+        where: { tenant_id: tenantId, role: "agent", id: { in: ids } },
+        data: { filter_visible: input.filter_visible }
+      });
+      await auditBulk(ids.length, { filter_visible: input.filter_visible });
       return { updated: ids.length };
     }
     case "set_agent_type": {

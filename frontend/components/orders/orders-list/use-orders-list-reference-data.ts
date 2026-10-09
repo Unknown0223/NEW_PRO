@@ -59,7 +59,7 @@ export function useOrdersListReferenceData(
     staleTime: STALE.reference,
     queryFn: async () => {
       const { data: body } = await api.get<{ data: { id: number; fio: string; code: string | null }[] }>(
-        `/api/${tenantSlug}/expeditors?is_active=true&for_new_work=1`
+        `/api/${tenantSlug}/expeditors?picker=1&for_new_work=1`
       );
       return body.data ?? [];
     }
