@@ -4,19 +4,18 @@ import type {
   ExpeditorReturnsFilters,
   ExpeditorReturnsUnitMode
 } from "./expeditor-returns.types";
+import { monthToDateYmd } from "../../lib/month-to-date";
 import { intList, strList } from "./expeditor-returns.helpers";
 
 export function parseExpeditorReturnsQuery(q: Record<string, string | undefined>): ExpeditorReturnsFilters {
   const page = Math.max(1, Number.parseInt(q.page ?? "1", 10) || 1);
   const limit = Math.min(200, Math.max(1, Number.parseInt(q.limit ?? "50", 10) || 50));
-  const today = new Date();
-  const defaultFrom = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().slice(0, 10);
-  const defaultTo = new Date(today.getFullYear(), today.getMonth() + 1, 0).toISOString().slice(0, 10);
+  const { from: defaultFrom, to: defaultTo } = monthToDateYmd();
   const from = (q.from ?? "").trim() || defaultFrom;
   const to = (q.to ?? "").trim() || defaultTo;
   const dtRaw = (q.date_type ?? "").trim();
   const date_type: ExpeditorReturnsDateType =
-    dtRaw === "shipped_date" || dtRaw === "created_date" || dtRaw === "order_date"
+    dtRaw === "shipped_date" || dtRaw === "created_date" || dtRaw === "order_date" || dtRaw === "delivered_date"
       ? (dtRaw as ExpeditorReturnsDateType)
       : "order_date";
   const app =

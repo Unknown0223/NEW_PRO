@@ -8,6 +8,7 @@ import { OrdersNakladnoyPreviewModal } from "@/components/orders/orders-list/ord
 import { OrdersBulkDownloadModal } from "@/components/orders/orders-list/orders-bulk-download-modal";
 import { OrdersBulkUploadPanel } from "@/components/orders/orders-list/orders-bulk-upload-panel";
 import { downloadBulkExportSelection } from "@/lib/bulk-export-download";
+import { useAppConfirm } from "@/components/ui/app-confirm-dialog";
 import type { BulkExportTemplateDef } from "@/lib/bulk-export-templates";
 import {
   bulkExportTemplateKey,
@@ -26,11 +27,14 @@ import {
   ORDER_LIST_COLUMNS,
   orderListExportCell
 } from "@/lib/orders-list-columns";
+import { canPickBulkTargetStatus } from "@/lib/order-status-transitions";
+import { usePermissions } from "@/lib/use-permissions";
 import { cn } from "@/lib/utils";
 import {
   ChevronDown,
   FileBarChart,
   FileText,
+  Gift,
   Truck,
   Upload,
   Wallet,
@@ -39,6 +43,7 @@ import {
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
+import { useBulkBonusGiftPicker } from "@/components/orders/orders-list/orders-bulk-bonus-gift-flow";
 import { isBulkConsignmentEligible } from "./types";
 import type { UseOrdersListPageResult } from "./use-orders-list-page";
 
@@ -56,6 +61,9 @@ type OrdersBulkToolbarProps = Pick<
   | "setBulkExpFeedback"
   | "bulkConsignmentMut"
   | "bulkConsignmentFeedback"
+  | "bulkBonusRefreshMut"
+  | "bulkBonusRefreshFeedback"
+  | "setBulkBonusRefreshFeedback"
   | "canBulkCatalog"
   | "totalsPanelOpen"
   | "setTotalsPanelOpen"
@@ -73,20 +81,25 @@ type OrdersBulkToolbarProps = Pick<
 >;
 
 const toolbarBtn =
-  "flex shrink-0 items-center gap-1.5 rounded-lg border border-border bg-card px-3.5 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-muted disabled:opacity-50 dark:border-input dark:bg-background dark:text-foreground dark:hover:bg-muted/50";
+  "flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg border border-border bg-card px-3 py-1.5 text-sm font-medium text-gray-700 transition-colors hover:bg-muted disabled:opacity-50 dark:border-input dark:bg-background dark:text-foreground dark:hover:bg-muted/50";
 
 /** Pastki panel — shablon dropdown (API status kodlari) */
 const BULK_STATUS_QUICK = [
   { value: "new", label: "Новый", color: "#0369a1", dot: "#7dd3fc" },
   { value: "confirmed", label: "Подтвержден к отгрузке", color: "#854d0e", dot: "#fde047" },
+  { value: "picking", label: "Комплектация", color: "#3730a3", dot: "#a5b4fc" },
   { value: "delivering", label: "Отгружен", color: "#9a3412", dot: "#fdba74" },
   { value: "delivered", label: "Доставлен", color: "#166534", dot: "#86efac" },
   { value: "cancelled", label: "Отменен", color: "#4b5563", dot: "#d1d5db" }
 ] as const;
 
+/** Backend `ORDER_LINES_EDITABLE_STATUSES` — ekspeditor faqat shu statuslarda biriktiriladi. */
+const EXPEDITOR_ASSIGNABLE_STATUSES = new Set(["new", "confirmed"]);
+
 type ViewMode = "main" | "upload";
 
 export function OrdersBulkToolbar(props: OrdersBulkToolbarProps) {
+  const { confirm, dialog: confirmDialog } = useAppConfirm();
   const {
     tenantSlug,
     selectedOrderIds,
@@ -100,6 +113,9 @@ export function OrdersBulkToolbar(props: OrdersBulkToolbarProps) {
     setBulkExpFeedback,
     bulkConsignmentMut,
     bulkConsignmentFeedback,
+    bulkBonusRefreshMut,
+    bulkBonusRefreshFeedback,
+    setBulkBonusRefreshFeedback,
     canBulkCatalog,
     setTotalsPanelOpen,
     nakladnoyPrefs,
@@ -114,13 +130,17 @@ export function OrdersBulkToolbar(props: OrdersBulkToolbarProps) {
     expeditorsQ
   } = props;
 
+  const bonusPicker = useBulkBonusGiftPicker(tenantSlug);
+  const { has } = usePermissions();
+  const bulkStatusOptions = useMemo(
+    () => BULK_STATUS_QUICK.filter((s) => canPickBulkTargetStatus(s.value, has)),
+    [has]
+  );
+
   const [viewMode, setViewMode] = useState<ViewMode>("main");
   const [statusOpen, setStatusOpen] = useState(false);
   const [statusDialogOpen, setStatusDialogOpen] = useState(false);
-  const [statusDialogInitial, setStatusDialogInitial] = useState<{
-    status: string;
-    step: "status" | "datetime";
-  }>({ status: "", step: "status" });
+  const [statusDialogStatus, setStatusDialogStatus] = useState("");
   const [expeditorDialogOpen, setExpeditorDialogOpen] = useState(false);
   const [consignmentOpen, setConsignmentOpen] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
@@ -144,12 +164,40 @@ export function OrdersBulkToolbar(props: OrdersBulkToolbarProps) {
     [selectedRows]
   );
 
+  const newStatusOrderIds = useMemo(
+    () => selectedRows.filter((o) => o.status === "new").map((o) => o.id),
+    [selectedRows]
+  );
+
+  const expeditorAssignableOrderIds = useMemo(
+    () =>
+      selectedRows
+        .filter((o) => EXPEDITOR_ASSIGNABLE_STATUSES.has(o.status))
+        .map((o) => o.id),
+    [selectedRows]
+  );
+
   useEffect(() => {
     if (selectedOrderIds.size === 0) {
       setViewMode("main");
       setStatusOpen(false);
     }
   }, [selectedOrderIds.size]);
+
+  const showingExpeditorFeedback = bulkFeedback == null && bulkExpFeedback != null;
+  const feedbackTone: "error" | "success" | "neutral" = !showingExpeditorFeedback
+    ? "neutral"
+    : bulkExpeditorMut.isError || (bulkExpeditorMut.data?.failed.length ?? 0) > 0
+      ? "error"
+      : bulkExpeditorMut.isSuccess
+        ? "success"
+        : "neutral";
+
+  useEffect(() => {
+    if (feedbackTone !== "success") return;
+    const t = window.setTimeout(() => setBulkExpFeedback(null), 5000);
+    return () => window.clearTimeout(t);
+  }, [feedbackTone, bulkExpFeedback, setBulkExpFeedback]);
 
   const hasSelection = Boolean(tenantSlug) && selectedOrderIds.size > 0;
 
@@ -158,7 +206,11 @@ export function OrdersBulkToolbar(props: OrdersBulkToolbarProps) {
   const count = selectedOrderIds.size;
   const ids = Array.from(selectedOrderIds);
   const feedback =
-    bulkFeedback ?? bulkExpFeedback ?? bulkConsignmentFeedback ?? nakladnoyFeedback;
+    bulkFeedback ??
+    bulkExpFeedback ??
+    bulkConsignmentFeedback ??
+    bulkBonusRefreshFeedback ??
+    nakladnoyFeedback;
 
   const exportSelectedExcel = () => {
     const order = tablePrefs.visibleColumnOrder;
@@ -166,7 +218,7 @@ export function OrdersBulkToolbar(props: OrdersBulkToolbarProps) {
     const dataRows = selectedRows.map((o) => order.map((colId) => orderListExportCell(o, colId)));
     void downloadStyledXlsxSheet(
       `zakazlar_tanlangan_${new Date().toISOString().slice(0, 10)}.xlsx`,
-      "Zakazlar",
+      "Заказы",
       headers,
       dataRows
     );
@@ -270,7 +322,7 @@ export function OrdersBulkToolbar(props: OrdersBulkToolbarProps) {
 
     const needsApi = items.some((i) => i.template.downloadKind === "nakladnoy");
     if (needsApi && !tenantSlug) {
-      setBulkFeedback("Yuklab bo‘lmadi: tenant yo‘q.");
+      setBulkFeedback("Не удалось скачать: организация не определена.");
       return;
     }
     if (needsApi && !canBulkCatalog) {
@@ -296,7 +348,7 @@ export function OrdersBulkToolbar(props: OrdersBulkToolbarProps) {
       setBulkDownloadOpen(false);
       setBulkFeedback(`Скачано: ${items.length} отчёт(ов).`);
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : "Yuklab bo‘lmadi.";
+      const msg = e instanceof Error ? e.message : "Не удалось скачать.";
       setBulkDownloadError(msg);
       setNakladnoyFeedback(msg);
       setBulkFeedback(msg);
@@ -313,12 +365,12 @@ export function OrdersBulkToolbar(props: OrdersBulkToolbarProps) {
 
   const openStatusDatetime = (status: string) => {
     setStatusOpen(false);
-    setStatusDialogInitial({ status, step: "datetime" });
+    setStatusDialogStatus(status);
     setStatusDialogOpen(true);
   };
 
   const barShell = (children: ReactNode) => (
-    <div className="animate-expand flex max-w-[min(100vw-1rem,72rem)] flex-nowrap items-center gap-2 overflow-x-auto overflow-y-visible rounded-xl border border-border bg-card px-3 py-2 shadow-2xl [overflow-y:visible] scrollbar-none dark:border-border dark:bg-card">
+    <div className="animate-expand flex max-w-full flex-wrap items-center justify-center gap-x-2 gap-y-1.5 rounded-xl border border-border bg-card px-3 py-2 shadow-2xl dark:border-border dark:bg-card">
       {children}
     </div>
   );
@@ -332,7 +384,7 @@ export function OrdersBulkToolbar(props: OrdersBulkToolbarProps) {
       if (previewTemplate.downloadKind === "register") {
         exportSelectedExcel();
       } else if (!tenantSlug || !previewTemplate.apiTemplate) {
-        throw new Error("Yuklab bo‘lmadi.");
+        throw new Error("Не удалось скачать.");
       } else if (previewTemplate.expeditorLoadingLayout) {
         await downloadExpeditorLoadingLayoutXlsx({
           tenantSlug,
@@ -354,10 +406,10 @@ export function OrdersBulkToolbar(props: OrdersBulkToolbarProps) {
           fallbackFilename
         });
       }
-      setNakladnoyFeedback("Excel fayl yuklab olindi.");
+      setNakladnoyFeedback("Файл Excel скачан.");
       setBulkFeedback(`Скачано: ${previewTemplate.label}`);
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : "Excelni yuklab bo‘lmadi.";
+      const msg = e instanceof Error ? e.message : "Не удалось скачать Excel.";
       setNakladnoyFeedback(msg);
       setBulkFeedback(msg);
     } finally {
@@ -419,12 +471,13 @@ export function OrdersBulkToolbar(props: OrdersBulkToolbarProps) {
         </span>
       </div>
 
+      {bulkStatusOptions.length > 0 ? (
       <div className="relative shrink-0" ref={statusDropdownRef}>
         <button
           type="button"
           disabled={bulkStatusMut.isPending}
           onClick={() => setStatusOpen((v) => !v)}
-          className="flex shrink-0 items-center gap-1.5 rounded-lg bg-[#22c55e] px-4 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-green-600 disabled:opacity-60"
+          className="flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg bg-[#22c55e] px-4 py-1.5 text-sm font-medium text-white shadow-sm transition-colors hover:bg-green-600 disabled:opacity-60"
         >
           Изменить статус
           <ChevronDown
@@ -438,7 +491,7 @@ export function OrdersBulkToolbar(props: OrdersBulkToolbarProps) {
           onClose={() => setStatusOpen(false)}
           minWidth={220}
         >
-          {BULK_STATUS_QUICK.map((s) => (
+          {bulkStatusOptions.map((s) => (
             <button
               key={s.value}
               type="button"
@@ -455,37 +508,29 @@ export function OrdersBulkToolbar(props: OrdersBulkToolbarProps) {
               {s.label}
             </button>
           ))}
-          <div className="my-1 border-t border-border" />
-          <button
-            type="button"
-            className="w-full px-3 py-2 text-left text-xs text-muted-foreground hover:bg-muted"
-            role="menuitem"
-            onClick={() => {
-              setStatusOpen(false);
-              setStatusDialogInitial({ status: "", step: "status" });
-              setStatusDialogOpen(true);
-            }}
-          >
-            Все статусы…
-          </button>
         </BulkToolbarDropdownPortal>
       </div>
+      ) : null}
 
-      <button
-        type="button"
-        className={toolbarBtn}
-        disabled={bulkExpeditorMut.isPending}
-        onClick={() => setExpeditorDialogOpen(true)}
-      >
-        <Truck className="size-4 shrink-0 text-gray-500 dark:text-muted-foreground" aria-hidden />
-        Доставщик
-      </button>
+      {expeditorAssignableOrderIds.length > 0 && has("orders.zakaz.assign") ? (
+        <button
+          type="button"
+          className={toolbarBtn}
+          disabled={bulkExpeditorMut.isPending}
+          title="Назначается только заказам в статусе «Новый» / «Подтверждён»"
+          onClick={() => setExpeditorDialogOpen(true)}
+        >
+          <Truck className="size-4 shrink-0 text-gray-500 dark:text-muted-foreground" aria-hidden />
+          Доставщик
+        </button>
+      ) : null}
 
       <button type="button" className={toolbarBtn} onClick={() => setTotalsPanelOpen(true)}>
         <FileBarChart className="size-4 shrink-0 text-gray-500 dark:text-muted-foreground" aria-hidden />
         Итог по заказу
       </button>
 
+      {has("orders.drugie_operacii.update") ? (
       <button
         type="button"
         className={toolbarBtn}
@@ -495,7 +540,43 @@ export function OrdersBulkToolbar(props: OrdersBulkToolbarProps) {
         <FileText className="size-4 shrink-0 text-gray-500 dark:text-muted-foreground" aria-hidden />
         Консигнация
       </button>
+      ) : null}
 
+      {newStatusOrderIds.length > 0 && has("orders.zakaz.update") ? (
+      <button
+        type="button"
+        className={toolbarBtn}
+        disabled={bulkBonusRefreshMut.isPending || bonusPicker.busy}
+        title={
+          newStatusOrderIds.length === 1
+            ? "Пересчитать бонус и выбрать подарок"
+            : "Пересчитать бонус по новому механизму в выбранных заказах «Новый»"
+        }
+        onClick={async () => {
+          setBulkFeedback(null);
+          setBulkExpFeedback(null);
+          setBulkBonusRefreshFeedback(null);
+          if (newStatusOrderIds.length === 1) {
+            await bonusPicker.start(newStatusOrderIds[0]!);
+            return;
+          }
+          const ok = await confirm({
+            title: "Обновление бонуса",
+            message: `В ${newStatusOrderIds.length} заказ(ах) «Новый» бонус будет пересчитан автоматически. Если выбрать один заказ — подарок можно выбрать в окне.`,
+            confirmLabel: "Обновить бонус",
+            cancelLabel: "Отмена",
+            destructive: false
+          });
+          if (!ok) return;
+          bulkBonusRefreshMut.mutate({ order_ids: newStatusOrderIds });
+        }}
+      >
+        <Gift className="size-4 shrink-0 text-teal-600 dark:text-teal-400" aria-hidden />
+        {bulkBonusRefreshMut.isPending || bonusPicker.busy ? "Обновление…" : "Обновление бонуса"}
+      </button>
+      ) : null}
+
+      {has("orders.zakaz.copy") ? (
       <button
         type="button"
         className={toolbarBtn}
@@ -507,22 +588,9 @@ export function OrdersBulkToolbar(props: OrdersBulkToolbarProps) {
         <Upload className="size-4 shrink-0 text-gray-500 dark:text-muted-foreground" aria-hidden />
         Загрузка
       </button>
+      ) : null}
 
-      {authHydrated ? (
-        paymentPrefill.disabled ? (
-          <button
-            type="button"
-            disabled
-            title={paymentPrefill.note ?? undefined}
-            className={cn(
-              toolbarBtn,
-              "cursor-not-allowed border-border bg-muted/40 text-muted-foreground opacity-70"
-            )}
-          >
-            <Wallet className="size-4 shrink-0" aria-hidden />
-            Приход в кассу
-          </button>
-        ) : (
+      {authHydrated && !paymentPrefill.disabled && has("cash.oplaty_klientov.create") ? (
           <Link
             href={paymentPrefill.href}
             className={cn(
@@ -533,7 +601,6 @@ export function OrdersBulkToolbar(props: OrdersBulkToolbarProps) {
             <Wallet className="size-4 shrink-0" aria-hidden />
             Приход в кассу
           </Link>
-        )
       ) : null}
 
       <button
@@ -548,14 +615,24 @@ export function OrdersBulkToolbar(props: OrdersBulkToolbarProps) {
   );
 
   const floatingBar = (
-    <div className="pointer-events-none fixed inset-x-0 bottom-5 z-[100] flex justify-center px-2 sm:px-3">
+    <div className="pointer-events-none fixed inset-x-0 bottom-5 z-[100] flex justify-center px-2 sm:px-3 md:left-[15.5rem]">
       <div className="pointer-events-auto flex w-full max-w-[min(100vw-1rem,90rem)] flex-col items-center gap-2">
         {feedback && (!bulkDownloadOpen || bulkDownloadError) ? (
-          <p className="max-w-lg rounded-lg border border-border bg-card px-3 py-1.5 text-center text-xs text-muted-foreground shadow-lg">
+          <p
+            role={feedbackTone === "error" ? "alert" : "status"}
+            className={cn(
+              "max-w-lg rounded-lg border px-3 py-1.5 text-center text-xs shadow-lg",
+              feedbackTone === "error" &&
+                "border-red-200 bg-red-50 font-medium text-red-800 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-200",
+              feedbackTone === "success" &&
+                "border-emerald-200 bg-emerald-50 font-medium text-emerald-800 dark:border-emerald-900/50 dark:bg-emerald-950/40 dark:text-emerald-200",
+              feedbackTone === "neutral" && "border-border bg-card text-muted-foreground"
+            )}
+          >
             {feedback}
           </p>
         ) : null}
-        {paymentPrefill.note && !bulkDownloadOpen ? (
+        {paymentPrefill.note && !paymentPrefill.disabled && !bulkDownloadOpen ? (
           <p className="max-w-lg rounded-lg border border-amber-200/80 bg-amber-50 px-3 py-1.5 text-center text-xs text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/40 dark:text-amber-200">
             {paymentPrefill.note}
           </p>
@@ -574,8 +651,7 @@ export function OrdersBulkToolbar(props: OrdersBulkToolbarProps) {
         onOpenChange={setStatusDialogOpen}
         selectedCount={count}
         isPending={bulkStatusMut.isPending}
-        initialStatus={statusDialogInitial.status}
-        initialStep={statusDialogInitial.step}
+        status={statusDialogStatus}
         onApply={(status, occurredAtIso) => {
           setBulkFeedback(null);
           bulkStatusMut.mutate({
@@ -590,26 +666,38 @@ export function OrdersBulkToolbar(props: OrdersBulkToolbarProps) {
       <OrdersBulkExpeditorDialog
         open={expeditorDialogOpen}
         onOpenChange={setExpeditorDialogOpen}
-        selectedCount={count}
+        selectedCount={expeditorAssignableOrderIds.length}
         expeditors={expeditorsQ.data ?? []}
         isLoadingExpeditors={expeditorsQ.isLoading}
         isPending={bulkExpeditorMut.isPending}
         onAttach={(expeditorUserId) => {
           setBulkExpFeedback(null);
+          const ex = (expeditorsQ.data ?? []).find((e) => e.id === expeditorUserId);
           bulkExpeditorMut.mutate(
-            { order_ids: ids, expeditor_user_id: expeditorUserId },
+            {
+              order_ids: expeditorAssignableOrderIds,
+              expeditor_user_id: expeditorUserId,
+              expeditor_label: ex?.fio ?? null
+            },
             { onSuccess: () => setExpeditorDialogOpen(false) }
           );
         }}
         onDetach={() => {
-          if (!window.confirm(`Открепить доставщика у ${formatGroupedInteger(count)} заказ(ов)?`)) {
-            return;
-          }
-          setBulkExpFeedback(null);
-          bulkExpeditorMut.mutate(
-            { order_ids: ids, expeditor_user_id: null },
-            { onSuccess: () => setExpeditorDialogOpen(false) }
-          );
+          void (async () => {
+            const ok = await confirm({
+              title: "Открепить",
+              message: `Открепить доставщика у ${formatGroupedInteger(expeditorAssignableOrderIds.length)} заказ(ов)?`,
+              confirmLabel: "Да",
+              cancelLabel: "Нет",
+              destructive: true
+            });
+            if (!ok) return;
+            setBulkExpFeedback(null);
+            bulkExpeditorMut.mutate(
+              { order_ids: expeditorAssignableOrderIds, expeditor_user_id: null },
+              { onSuccess: () => setExpeditorDialogOpen(false) }
+            );
+          })();
         }}
       />
 
@@ -632,6 +720,8 @@ export function OrdersBulkToolbar(props: OrdersBulkToolbarProps) {
           );
         }}
       />
+      {bonusPicker.modal}
+      {confirmDialog}
     </>
   );
 }

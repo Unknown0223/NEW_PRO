@@ -183,7 +183,7 @@ export async function importProductPricesFromXlsx(
   await workbook.xlsx.load(Buffer.from(buffer) as never);
   const sheet = workbook.worksheets[0];
   if (!sheet) {
-    return { upserted: 0, errors: ["Varaq topilmadi"] };
+    return { upserted: 0, errors: ["Лист не найден"] };
   }
 
   const resolveType = await loadPriceTypeResolver(tenantId);
@@ -245,7 +245,7 @@ export async function importProductPricesFromXlsx(
     try {
       const product = await findProductBySkuOrName(tenantId, item.sku);
       if (!product) {
-        errors.push(`Qator ${item.rowNum}: SKU/nom topilmadi (${item.sku})`);
+        errors.push(`Строка ${item.rowNum}: SKU/название не найдено (${item.sku})`);
         continue;
       }
       await prisma.productPrice.upsert({
@@ -266,7 +266,7 @@ export async function importProductPricesFromXlsx(
       });
       upserted += 1;
     } catch (e) {
-      errors.push(`Qator ${item.rowNum}: ${e instanceof Error ? e.message : "xato"}`);
+      errors.push(`Строка ${item.rowNum}: ${e instanceof Error ? e.message : "ошибка"}`);
     }
   }
 

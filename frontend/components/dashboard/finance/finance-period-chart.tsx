@@ -162,10 +162,10 @@ export function FinancePeriodChart({ data }: { data: FinanceDashboardSnapshot })
 
   const sideItems = [
     { label: "UZS", value: periodBalance.uzs, wide: true },
-    { label: "Pereches", value: periodBalance.transfer, wide: false },
-    { label: "Tenge", value: periodBalance.tenge, wide: false },
-    { label: "Terminal", value: periodBalance.terminal, wide: false },
-    { label: "Naqd", value: periodBalance.cash, wide: false }
+    { label: "Перечисление", value: periodBalance.transfer, wide: false },
+    { label: "Тенге", value: periodBalance.tenge, wide: false },
+    { label: "Терминал", value: periodBalance.terminal, wide: false },
+    { label: "Наличные", value: periodBalance.cash, wide: false }
   ];
 
   return (

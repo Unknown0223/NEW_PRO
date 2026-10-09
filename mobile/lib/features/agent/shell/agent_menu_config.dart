@@ -42,9 +42,9 @@ List<AgentMenuItem> agentMenuItems(MobileConfig? config) {
     const AgentMenuItem(label: 'Должники по заказам', route: '/debtors-by-orders'),
     const AgentMenuItem(label: 'Остатки на складе', route: '/warehouse-stock'),
     const AgentMenuItem(label: 'Черновик', route: '/draft'),
-    const AgentMenuItem(label: 'Задачи', route: '', soon: true),
+    const AgentMenuItem(label: 'Задачи', route: '/tasks'),
     const AgentMenuItem(label: 'Моя локация', route: '/map'),
-    const AgentMenuItem(label: 'Табель · jadval', route: '/tabel'),
+    const AgentMenuItem(label: 'Табель', route: '/tabel'),
     const AgentMenuItem(label: 'Настройки', route: '/settings'),
   ];
   return items.where((it) => it.visible?.call(config) ?? true).toList();
@@ -74,3 +74,37 @@ bool agentShellHidesBottomNav(String location) {
   if (location.startsWith('/kpi/route/days')) return true;
   return false;
 }
+
+/// Menyu + pastki tab + asosiy sahifalar — bir-biriga o‘tish tekshiruvi.
+const agentNavigationPages = <String>[
+  '/home',
+  '/visits',
+  '/orders',
+  '/kpi',
+  '/kpi/route',
+  '/report',
+  '/clients',
+  '/clients/new',
+  '/debtors',
+  '/debtors-by-orders',
+  '/warehouse-stock',
+  '/draft',
+  '/map',
+  '/settings',
+  '/tabel',
+  '/profile',
+  '/notifications',
+  '/orders/create',
+  '/orders/special',
+  '/search',
+  '/route',
+  '/tasks',
+];
+
+const agentShellTabPaths = <String>[
+  '/home',
+  '/visits',
+  '/orders',
+  '/kpi',
+  '/kpi/route',
+];

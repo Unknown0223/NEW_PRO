@@ -9,9 +9,10 @@ import { Label } from "@/components/ui/label";
 import { api } from "@/lib/api";
 import { isSoftVoidUiEnabled } from "@/lib/feature-flags";
 import { STALE } from "@/lib/query-stale";
+import { usePermissions } from "@/lib/use-permissions";
 import { cn } from "@/lib/utils";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ImagePlus, Loader2, RotateCcw, Trash2 } from "lucide-react";
+import { ImagePlus, RotateCcw, Trash2 } from "lucide-react";
 import { useState } from "react";
 
 export type ClientPhotoRow = {
@@ -24,30 +25,14 @@ export type ClientPhotoRow = {
 };
 
 function ClientPhotoThumb({
-  tenantSlug,
-  clientId,
-  photoId,
   alt,
+  imageUrl,
   contentPurged
 }: {
-  tenantSlug: string;
-  clientId: number;
-  photoId: number;
   alt: string;
+  imageUrl?: string;
   contentPurged?: boolean;
 }) {
-  const imgQ = useQuery({
-    queryKey: ["client-photo-report-image", tenantSlug, clientId, photoId],
-    staleTime: STALE.list,
-    enabled: !contentPurged,
-    queryFn: async () => {
-      const { data } = await api.get<ClientPhotoRow>(
-        `/api/${tenantSlug}/clients/${clientId}/photo-reports/${photoId}`
-      );
-      return data.image_url ?? "";
-    }
-  });
-
   if (contentPurged) {
     return (
       <div className="flex aspect-square w-full items-center justify-center bg-muted px-2 text-center text-[10px] text-muted-foreground">
@@ -56,21 +41,13 @@ function ClientPhotoThumb({
     );
   }
 
-  if (imgQ.isLoading) {
-    return (
-      <div className="flex aspect-square w-full items-center justify-center bg-muted">
-        <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-      </div>
-    );
-  }
-
-  if (!imgQ.data) {
+  if (!imageUrl) {
     return <div className="aspect-square w-full bg-muted" />;
   }
 
   return (
     // eslint-disable-next-line @next/next/no-img-element
-    <img src={imgQ.data} alt={alt} className="aspect-square w-full object-cover" loading="lazy" />
+    <img src={imageUrl} alt={alt} className="aspect-square w-full object-cover" loading="lazy" />
   );
 }
 
@@ -82,14 +59,21 @@ export function ClientProfilePhotoReportsTab({ tenantSlug, clientId }: { tenantS
   const [orderId, setOrderId] = useState("");
   const [voidPhotoId, setVoidPhotoId] = useState<number | null>(null);
   const [archiveView, setArchiveView] = useState(false);
+  const { has } = usePermissions();
+  const canCreate = has("clients.foto.create");
+  const canArchive = has("clients.foto.void");
+  const canRestore = has("clients.foto.restore");
 
   const listQ = useQuery({
     queryKey: ["client-photo-reports", tenantSlug, clientId, archiveView],
     staleTime: STALE.list,
     queryFn: async () => {
-      const qs = archiveView ? "?archive=true" : "";
+      const sp = new URLSearchParams();
+      if (archiveView) sp.set("archive", "true");
+      sp.set("include_images", "true");
+      const qs = sp.toString();
       const { data } = await api.get<{ data: ClientPhotoRow[] }>(
-        `/api/${tenantSlug}/clients/${clientId}/photo-reports${qs}`
+        `/api/${tenantSlug}/clients/${clientId}/photo-reports?${qs}`
       );
       return data.data;
     }
@@ -180,7 +164,7 @@ export function ClientProfilePhotoReportsTab({ tenantSlug, clientId }: { tenantS
         удаляется.
       </p>
 
-      {!archiveView ? (
+      {!archiveView && canCreate ? (
         <Card className="border border-border/90 shadow-panel">
           <CardContent className="space-y-3 p-3 sm:p-4">
             <p className="text-xs text-muted-foreground">
@@ -235,10 +219,8 @@ export function ClientProfilePhotoReportsTab({ tenantSlug, clientId }: { tenantS
           {rows.map((r) => (
             <li key={r.id} className="group relative overflow-hidden rounded-lg border border-border bg-card shadow-sm">
               <ClientPhotoThumb
-                tenantSlug={tenantSlug}
-                clientId={clientId}
-                photoId={r.id}
                 alt={r.caption ?? ""}
+                imageUrl={r.image_url}
                 contentPurged={r.content_purged}
               />
               <div className="space-y-1 p-2">
@@ -248,16 +230,18 @@ export function ClientProfilePhotoReportsTab({ tenantSlug, clientId }: { tenantS
                   {r.order_id != null ? ` · заказ #${r.order_id}` : ""}
                 </p>
                 {archiveView ? (
-                  <button
-                    type="button"
-                    className={cn(buttonVariants({ variant: "outline", size: "sm" }), "h-8 w-full text-xs")}
-                    disabled={restoreM.isPending}
-                    onClick={() => void restoreM.mutateAsync(r.id)}
-                  >
-                    <RotateCcw className="mr-1 inline h-3.5 w-3.5" />
-                    Восстановить
-                  </button>
-                ) : (
+                  canRestore ? (
+                    <button
+                      type="button"
+                      className={cn(buttonVariants({ variant: "outline", size: "sm" }), "h-8 w-full text-xs")}
+                      disabled={restoreM.isPending}
+                      onClick={() => void restoreM.mutateAsync(r.id)}
+                    >
+                      <RotateCcw className="mr-1 inline h-3.5 w-3.5" />
+                      Вернуть из архива
+                    </button>
+                  ) : null
+                ) : !canArchive ? null : (
                   <button
                     type="button"
                     className={cn(

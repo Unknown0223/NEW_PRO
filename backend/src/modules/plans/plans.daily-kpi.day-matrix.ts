@@ -8,7 +8,12 @@ import {
 import { workRegionDayRange, workRegionTodayKey } from "../mobile/mobile-agent-sync.config.service";
 import { executionPctFromPlanFact, WORKING_KPI_PLAN_STATUSES } from "./plans.monitoring-aggregates";
 import type { DailyKpiDayMatrixQuery } from "./plans.daily-kpi.schema";
-import { fallbackWorkdaysState, monthBounds, sectionLinks } from "./plans.daily-kpi.helpers";
+import {
+  fallbackWorkdaysState,
+  monthBounds,
+  routeAsOfKey,
+  sectionLinks
+} from "./plans.daily-kpi.helpers";
 
 function num(v: Prisma.Decimal | number | null | undefined): number {
   if (v == null) return 0;
@@ -30,6 +35,11 @@ export type DailyKpiCell = {
 
 export type DailyKpiDayMatrixResult = {
   day: string;
+  /** Tanlangan oraliq (ikkalasi ham bitta oy ichida). */
+  day_from: string;
+  day_to: string;
+  days_count: number;
+  working_days_count: number;
   period: { month: string; year: number; month_num: number; today: string };
   trade_directions: Array<{ id: number; name: string; code: string | null }>;
   direction_id: number | null;
@@ -53,20 +63,35 @@ export type DailyKpiDayMatrixResult = {
   links: ReturnType<typeof sectionLinks>;
 };
 
+function daysBetween(from: string, to: string): number {
+  const a = Date.parse(`${from}T00:00:00Z`);
+  const b = Date.parse(`${to}T00:00:00Z`);
+  return Math.round((b - a) / 86_400_000) + 1;
+}
+
 /**
- * Kun bo‘yicha agent × KPI jadvali:
+ * Kun / oraliq bo‘yicha agent × KPI jadvali:
  * plan / savdo / возврат / факт / %.
+ * Oraliq faqat bitta oy ichida (`day`…`day_to`), qiymatlar kunlar bo‘yicha yig‘iladi.
  */
 export async function getDailyKpiDayMatrix(
   tenantId: number,
-  query: DailyKpiDayMatrixQuery
+  query: DailyKpiDayMatrixQuery,
+  allowedAgentIds: number[] | null = null
 ): Promise<DailyKpiDayMatrixResult> {
   const dayKey = query.day;
   const { year, month } = parseDay(dayKey);
   const monthKey = `${year}-${String(month).padStart(2, "0")}`;
+  const rangeTo = query.day_to && query.day_to.slice(0, 7) === monthKey && query.day_to >= dayKey
+    ? query.day_to
+    : dayKey;
+  const inRange = (d: string) => d >= dayKey && d <= rangeTo;
   const todayKey = workRegionTodayKey();
-  const { start: monthStart, end: monthEnd } = monthBounds(year, month);
-  const { start: dayStart, end: dayEnd } = workRegionDayRange(dayKey);
+  const { start: monthStart, end: monthEnd, daysInMonth } = monthBounds(year, month);
+  const asOf = routeAsOfKey(monthKey, todayKey, daysInMonth);
+  const { start: dayStart } = workRegionDayRange(dayKey);
+  const { end: dayEnd } = workRegionDayRange(rangeTo);
+  const daysCount = daysBetween(dayKey, rangeTo);
 
   const directions = await prisma.tradeDirection.findMany({
     where: { tenant_id: tenantId, is_active: true },
@@ -77,6 +102,10 @@ export async function getDailyKpiDayMatrix(
 
   const empty = (): DailyKpiDayMatrixResult => ({
     day: dayKey,
+    day_from: dayKey,
+    day_to: rangeTo,
+    days_count: daysCount,
+    working_days_count: 0,
     period: { month: monthKey, year, month_num: month, today: todayKey },
     trade_directions: directions.map((d) => ({ id: d.id, name: d.name, code: d.code ?? null })),
     direction_id: directionId,
@@ -106,7 +135,14 @@ export async function getDailyKpiDayMatrix(
         status: { in: [...WORKING_KPI_PLAN_STATUSES] },
         kpi_group: { is_active: true }
       },
-      user: { tenant_id: tenantId, role: "agent", is_active: true }
+      user: {
+        tenant_id: tenantId,
+        role: "agent",
+        is_active: true,
+        ...(allowedAgentIds != null
+          ? { id: { in: allowedAgentIds.length > 0 ? allowedAgentIds : [-1] } }
+          : {})
+      }
     },
     select: {
       user_id: true,
@@ -164,7 +200,6 @@ export async function getDailyKpiDayMatrix(
   }
 
   const salesByAgentGroupDay = new Map<string, Map<string, number>>();
-  const daySales = new Map<string, number>();
   const dayReturns = new Map<string, number>();
 
   if (agentIds.length > 0 && groupIds.length > 0) {
@@ -181,7 +216,7 @@ export async function getDailyKpiDayMatrix(
         JOIN kpi_group_products kgp ON kgp.product_id = oi.product_id
         WHERE o.tenant_id = ${tenantId}
           AND o.agent_id IN (${Prisma.join(agentIds)})
-          AND o.order_type = 'order'
+          AND o.order_type = 'order' AND o.status <> 'cancelled'
           AND o.created_at >= ${monthStart}
           AND o.created_at < ${monthEnd}
           AND kgp.kpi_group_id IN (${Prisma.join(groupIds)})
@@ -228,7 +263,6 @@ export async function getDailyKpiDayMatrix(
         salesByAgentGroupDay.set(key, map);
       }
       map.set(d, num(r.sales));
-      if (d === dayKey) daySales.set(key, num(r.sales));
     }
     for (const r of returnRows) {
       dayReturns.set(`${r.agent_id}:${r.kpi_group_id}`, num(r.returns));
@@ -244,7 +278,7 @@ export async function getDailyKpiDayMatrix(
       FROM orders o
       WHERE o.tenant_id = ${tenantId}
         AND o.agent_id IN (${Prisma.join(agentIds)})
-        AND o.order_type = 'order'
+        AND o.order_type = 'order' AND o.status <> 'cancelled'
         AND o.created_at >= ${monthStart}
         AND o.created_at < ${monthEnd}
       GROUP BY o.agent_id, 2
@@ -256,9 +290,12 @@ export async function getDailyKpiDayMatrix(
     }
 
     for (const agentId of agentIds) {
-      let scopedDay = 0;
-      for (const gid of groupIds) scopedDay += daySales.get(`${agentId}:${gid}`) ?? 0;
-      if (scopedDay > 0) continue;
+      // Faqat oy bo‘yicha guruhga bog‘langan savdo umuman bo‘lmasa (aks holda ikki marta sanaladi).
+      let scopedMonth = 0;
+      for (const gid of groupIds) {
+        for (const v of salesByAgentGroupDay.get(`${agentId}:${gid}`)?.values() ?? []) scopedMonth += v;
+      }
+      if (scopedMonth > 0) continue;
 
       const agentPlanTotal = groupIds.reduce(
         (s, gid) => s + (planByAgentGroup.get(`${agentId}:${gid}`) ?? 0),
@@ -282,7 +319,6 @@ export async function getDailyKpiDayMatrix(
             salesByAgentGroupDay.set(key, map);
           }
           map.set(d, (map.get(d) ?? 0) + part);
-          if (d === dayKey) daySales.set(key, (daySales.get(key) ?? 0) + part);
         }
       }
     }
@@ -292,26 +328,30 @@ export async function getDailyKpiDayMatrix(
     .map((g) => ({ kpi_group_id: g.id, name: g.name, code: g.code }))
     .sort((a, b) => a.name.localeCompare(b.name, "ru"));
 
+  let workingDaysInRange = 0;
   const agents = [...agentMeta.values()]
     .sort((a, b) => a.name.localeCompare(b.name, "ru"))
     .map((agent) => {
       const workingDays = listAgentWorkingDaysInMonth(workdaysState, year, month, agent.id);
+      workingDaysInRange = Math.max(workingDaysInRange, workingDays.filter(inRange).length);
       const cells: Record<string, DailyKpiCell> = {};
       for (const g of kpi_groups) {
         const key = `${agent.id}:${g.kpi_group_id}`;
         const monthPlan = planByAgentGroup.get(key) ?? 0;
-        const salesMap = salesByAgentGroupDay.get(key) ?? new Map();
+        const salesMap: Map<string, number> = salesByAgentGroupDay.get(key) ?? new Map();
+        // O‘tgan kunlar — o‘sha kungi reja, bugun/kelajak — qolganning teng ulushi.
         const route = buildKpiDailyRoutePlan({
           monthPlan,
           year,
           monthNum: month,
-          todayKey: dayKey,
+          todayKey: asOf,
           salesByDate: salesMap,
           workingDays
         });
-        const dayRow = route.days.find((d) => d.date === dayKey);
-        const dayPlan = dayRow?.plan_sum ?? 0;
-        const sales = daySales.get(key) ?? salesMap.get(dayKey) ?? 0;
+        let dayPlan = 0;
+        for (const d of route.days) if (inRange(d.date)) dayPlan += d.plan_sum;
+        let sales = 0;
+        for (const [d, v] of salesMap) if (inRange(d)) sales += v;
         const returns = dayReturns.get(key) ?? 0;
         const fact = Math.max(0, sales - returns);
         cells[String(g.kpi_group_id)] = {
@@ -346,6 +386,10 @@ export async function getDailyKpiDayMatrix(
 
   return {
     day: dayKey,
+    day_from: dayKey,
+    day_to: rangeTo,
+    days_count: daysCount,
+    working_days_count: workingDaysInRange,
     period: { month: monthKey, year, month_num: month, today: todayKey },
     trade_directions: directions.map((d) => ({ id: d.id, name: d.name, code: d.code ?? null })),
     direction_id: directionId,

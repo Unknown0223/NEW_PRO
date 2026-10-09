@@ -14,9 +14,11 @@ import {
   bulkPatchClientItems,
   exportClientsFilteredCsv,
   getClientReferences,
+  getCreatorTerritoryOptions,
   listClientsForTenantPaged
 } from "./clients.service";
 import { listDuplicateCandidates } from "./client-dedupe.service";
+import { ensureClientBulkPermissions } from "./client-bulk-rbac";
 import {
   bulkActiveBodySchema,
   bulkItemsPatchBodySchema,
@@ -96,7 +98,58 @@ export async function registerClientListRoutes(app: FastifyInstance) {
     async (request, reply) => {
       if (!ensureTenantContext(request, reply)) return;
       const refs = await getClientReferences(request.tenant!.id);
-      return reply.send(refs);
+      const userId = actorUserIdOrNull(request);
+      const role = getAccessUser(request).role;
+      if (userId == null) return reply.send(refs);
+      const {
+        filterStringListByTerms,
+        pruneTerritoryNodesByTerms,
+        resolveFilterOptionsScope,
+        textMatchesTerritoryTerms
+      } = await import("../access/access-filter-options-scope");
+      const { parseTerritoryNodes } = await import("../reports/territory-nodes");
+      const { getTenantProfile } = await import("../tenant-settings/tenant-settings.profile.read");
+      const scope = await resolveFilterOptionsScope(request.tenant!.id, {
+        userId,
+        role
+      });
+      if (scope.unrestricted || scope.territoryTerms === null) {
+        return reply.send(refs);
+      }
+      const terms = scope.territoryTerms;
+      const profile = await getTenantProfile(request.tenant!.id);
+      const prunedNodes = pruneTerritoryNodesByTerms(
+        parseTerritoryNodes((profile.references as { territory_nodes?: unknown } | undefined)?.territory_nodes),
+        terms
+      );
+      return reply.send({
+        ...refs,
+        zones: filterStringListByTerms(refs.zones ?? [], terms),
+        regions: filterStringListByTerms(refs.regions ?? [], terms),
+        cities: filterStringListByTerms(refs.cities ?? [], terms),
+        city_options: (refs.city_options ?? []).filter(
+          (o) =>
+            textMatchesTerritoryTerms(o.value, terms) || textMatchesTerritoryTerms(o.label, terms)
+        ),
+        region_options: (refs.region_options ?? []).filter(
+          (o) =>
+            textMatchesTerritoryTerms(o.value, terms) || textMatchesTerritoryTerms(o.label, terms)
+        ),
+        territory_nodes: prunedNodes
+      });
+    }
+  );
+
+  app.get(
+    "/api/:slug/clients/creator-territory-options",
+    { preHandler: [jwtAccessVerify] },
+    async (request, reply) => {
+      if (!ensureTenantContext(request, reply)) return;
+      const opts = await getCreatorTerritoryOptions(
+        request.tenant!.id,
+        actorUserIdOrNull(request)
+      );
+      return reply.send(opts);
     }
   );
 
@@ -142,6 +195,7 @@ export async function registerClientListRoutes(app: FastifyInstance) {
           zodValidationExtras(parsed.error)
         );
       }
+      if (!(await ensureClientBulkPermissions(request, reply, [{ is_active: parsed.data.is_active }]))) return;
       const actor = getAccessUser(request);
       const sub = Number.parseInt(actor.sub, 10);
       const actorUserId = Number.isFinite(sub) && sub > 0 ? sub : null;
@@ -171,6 +225,7 @@ export async function registerClientListRoutes(app: FastifyInstance) {
           zodValidationExtras(parsed.error)
         );
       }
+      if (!(await ensureClientBulkPermissions(request, reply, [parsed.data.patch]))) return;
       const actor = getAccessUser(request);
       const sub = Number.parseInt(actor.sub, 10);
       const actorUserId = Number.isFinite(sub) && sub > 0 ? sub : null;
@@ -200,6 +255,8 @@ export async function registerClientListRoutes(app: FastifyInstance) {
           zodValidationExtras(parsed.error)
         );
       }
+      const patches = parsed.data.items.map((i) => i.patch);
+      if (!(await ensureClientBulkPermissions(request, reply, patches))) return;
       const actor = getAccessUser(request);
       const sub = Number.parseInt(actor.sub, 10);
       const actorUserId = Number.isFinite(sub) && sub > 0 ? sub : null;

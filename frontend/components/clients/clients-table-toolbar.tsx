@@ -134,7 +134,7 @@ export function ClientsTableFilters({
                 <option value="">Все</option>
                 {agentOptions.map((u) => (
                   <option key={u.id} value={String(u.id)}>
-                    {u.name} ({u.login})
+                    {u.name}
                   </option>
                 ))}
               </select>
@@ -238,7 +238,7 @@ export function ClientsTableFilters({
                 <option value="">Все</option>
                 {expeditorOptions.map((u) => (
                   <option key={`ex-${u.id}`} value={String(u.id)}>
-                    {u.name} ({u.login})
+                    {u.name}
                   </option>
                 ))}
               </select>
@@ -369,7 +369,7 @@ export function ClientsTableListToolbarStrip({
           value={pageLimit}
           onChange={(e) => onPageLimitChange(Number(e.target.value))}
         >
-          {[10, 20, 30, 50, 100].map((n) => (
+          {[10, 20, 30, 50, 100, 200, 500].map((n) => (
             <option key={n} value={n}>
               {n}
             </option>
@@ -437,8 +437,8 @@ export function ClientsTemplateListToolbar({
   onRefresh?: () => void;
   refreshing?: boolean;
   onResetView?: () => void;
-  onImportUpdate: () => void;
-  onImportCreate: () => void;
+  onImportUpdate?: () => void;
+  onImportCreate?: () => void;
   importDisabled?: boolean;
   onExportExcel?: () => void;
   /** Belgilangan klientlar bo‘yicha guruh ishlov modalini ochish */
@@ -482,7 +482,7 @@ export function ClientsTemplateListToolbar({
             onChange={(e) => onPageLimitChange(Number(e.target.value))}
             aria-label="Строк на странице"
           >
-            {[10, 15, 20, 30, 50, 100].map((n) => (
+            {[10, 15, 20, 30, 50, 100, 200, 500].map((n) => (
               <option key={n} value={n}>
                 {n}
               </option>
@@ -497,26 +497,25 @@ export function ClientsTemplateListToolbar({
         <div className="mx-1 hidden h-5 w-px shrink-0 bg-muted lg:block" />
 
         <div className="flex flex-wrap items-center gap-1.5">
-          <button
-            type="button"
-            disabled={importDisabled}
-            onClick={onImportUpdate}
-            className={toolbarBtn}
-          >
-            <RefreshCw className="h-3.5 w-3.5 shrink-0 text-gray-600" aria-hidden />
-            Обновление клиентов с Excel
-          </button>
-          <button type="button" disabled={importDisabled} onClick={onImportCreate} className={toolbarBtn}>
-            <Download className="h-3.5 w-3.5 shrink-0 text-gray-600" aria-hidden />
-            Импорт
-          </button>
+          {onImportUpdate ? (
+            <button type="button" disabled={importDisabled} onClick={onImportUpdate} className={toolbarBtn}>
+              <RefreshCw className="h-3.5 w-3.5 shrink-0 text-gray-600" aria-hidden />
+              Обновление клиентов с Excel
+            </button>
+          ) : null}
+          {onImportCreate ? (
+            <button type="button" disabled={importDisabled} onClick={onImportCreate} className={toolbarBtn}>
+              <Download className="h-3.5 w-3.5 shrink-0 text-gray-600" aria-hidden />
+              Импорт
+            </button>
+          ) : null}
           {onGroupProcessing ? (
             <button
               type="button"
               disabled={groupProcessingDisabled}
               onClick={onGroupProcessing}
               className={toolbarBtn}
-              title={groupProcessingDisabled ? "Avval klientlarni belgilang" : undefined}
+              title={groupProcessingDisabled ? "Сначала отметьте клиентов" : undefined}
             >
               <Layers className="h-3.5 w-3.5 shrink-0 text-gray-600" aria-hidden />
               Групповые обработки

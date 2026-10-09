@@ -88,7 +88,7 @@ export default function AccountPage() {
   const active = me?.app_access !== false;
 
   return (
-    <div className="mx-auto w-full max-w-5xl">
+    <div className="w-full">
       <h1 className="mb-4 text-xl font-semibold text-foreground">Профиль</h1>
 
       <div className="flex flex-col gap-4 md:flex-row">

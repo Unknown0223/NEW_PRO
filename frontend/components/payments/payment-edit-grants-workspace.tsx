@@ -10,12 +10,14 @@ import {
 } from "@/components/payments/payment-edit-grants-filters-panel";
 import { RestorePaymentModal } from "@/components/payments/client-payments/restore-payment-modal";
 import { api } from "@/lib/api";
+import { usePermissions } from "@/lib/use-permissions";
 import { useAuthStore, useAuthStoreHydrated, useEffectiveRole } from "@/lib/auth-store";
 import { downloadXlsxSheet } from "@/lib/download-xlsx";
 import { getUserFacingError } from "@/lib/error-utils";
 import { staffPickerDisplayName } from "@/lib/person-display";
 import { activeRefSelectOptions, refEntryLabelByStored } from "@/lib/profile-ref-entries";
 import { STALE } from "@/lib/query-stale";
+import { appendNamedStringListParam, appendPositiveIntListParam, splitMultiFilterValues } from "@/lib/client-filter-select-value";
 import { cn } from "@/lib/utils";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Download, ExternalLink, RotateCcw, RotateCw, SlidersHorizontal } from "lucide-react";
@@ -133,6 +135,7 @@ function downloadEditGrantsExcel(rows: GrantRow[], reasonLabel: (ref: string | n
 }
 
 export function PaymentEditGrantsWorkspace() {
+  const canExport = usePermissions().has("cash.oplaty_klientov.export");
   const tenantSlug = useAuthStore((s) => s.tenantSlug);
   const hydrated = useAuthStoreHydrated();
   const effectiveRole = useEffectiveRole();
@@ -165,9 +168,15 @@ export function PaymentEditGrantsWorkspace() {
     p.set("limit", String(pageSize));
     if (applied.date_from) p.set("date_from", applied.date_from);
     if (applied.date_to) p.set("date_to", applied.date_to);
-    if (applied.status) p.set("status", applied.status);
-    if (applied.access_user_id) p.set("access_user_id", applied.access_user_id);
-    if (applied.cancel_reason_ref) p.set("cancel_reason_ref", applied.cancel_reason_ref);
+    if (applied.status.trim()) {
+      const statuses = splitMultiFilterValues(applied.status).filter((s) =>
+        ["completed", "deleted", "restored"].includes(s)
+      );
+      if (statuses.length === 1) p.set("status", statuses[0]!);
+      else if (statuses.length > 1) p.set("statuses", statuses.join(","));
+    }
+    appendPositiveIntListParam(p, "access_user_id", "access_user_ids", applied.access_user_id);
+    appendNamedStringListParam(p, "cancel_reason_ref", "cancel_reason_refs", applied.cancel_reason_ref);
     if (applied.search.trim()) p.set("search", applied.search.trim());
     return p.toString();
   }, [applied, page, pageSize]);
@@ -189,7 +198,7 @@ export function PaymentEditGrantsWorkspace() {
     enabled: Boolean(tenantSlug) && hydrated,
     staleTime: STALE.reference,
     queryFn: async () => {
-      const { data } = await api.get<{ data: StaffPick[] }>(`/api/${tenantSlug}/expeditors?is_active=true`);
+      const { data } = await api.get<{ data: StaffPick[] }>(`/api/${tenantSlug}/expeditors?picker=1`);
       return data.data;
     }
   });
@@ -315,15 +324,17 @@ export function PaymentEditGrantsWorkspace() {
               }}
               className="min-w-[9rem] flex-1"
             />
-            <button
-              type="button"
-              disabled={!rows.length}
-              onClick={() => downloadEditGrantsExcel(rows, reasonLabel)}
-              className="flex h-8 shrink-0 items-center gap-1.5 rounded-md border border-border bg-card px-2.5 text-xs font-medium text-gray-800 transition-colors hover:border-border hover:bg-muted disabled:opacity-50"
-            >
-              <Download className="h-4 w-4 text-emerald-600" />
-              Excel
-            </button>
+            {canExport ? (
+              <button
+                type="button"
+                disabled={!rows.length}
+                onClick={() => downloadEditGrantsExcel(rows, reasonLabel)}
+                className="flex h-8 shrink-0 items-center gap-1.5 rounded-md border border-border bg-card px-2.5 text-xs font-medium text-gray-800 transition-colors hover:border-border hover:bg-muted disabled:opacity-50"
+              >
+                <Download className="h-4 w-4 text-emerald-600" />
+                Excel
+              </button>
+            ) : null}
             <button
               type="button"
               onClick={() => void listQ.refetch()}
@@ -351,7 +362,7 @@ export function PaymentEditGrantsWorkspace() {
 
         <div className="mt-3 shrink-0 overflow-hidden rounded-lg border border-border bg-card shadow-sm">
           <div
-            className="scrollbar-none overflow-auto overscroll-contain"
+            className="scrollbar-none overflow-auto overscroll-y-contain"
             style={{ maxHeight: rows.length > 0 ? TABLE_BODY_MAX_PX : undefined }}
           >
             <table className="min-w-full divide-y divide-border text-[12px]">

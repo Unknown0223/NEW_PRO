@@ -15,6 +15,8 @@ import {
 } from "./history.service";
 import { getUserAccessMatrix } from "./access-matrix.service";
 import { getPermissionCatalogGrouped } from "./permission-catalog.service";
+import { permissionDisplayDescription } from "./permission-model";
+import { structuredCatalogByKey } from "./access-operations-tree";
 import {
   AccessManageRequiredError,
   bulkMergeUserPermissionKeysForUsers,
@@ -52,13 +54,13 @@ import {
 import { bulkSetWarehouseDelegateForUsers, replaceUserScopes } from "./scope.service";
 import {
   loadPaymentMethodEntriesForResolve,
-  loadTenantBranchesForAccess,
-  type BranchDto
+  loadTenantBranchesForAccess
 } from "../tenant-settings/tenant-settings.service";
 import type { PaymentMethodEntryDto } from "../tenant-settings/finance-refs";
 import { paymentMethodStorageKey } from "../tenant-settings/finance-refs";
 import {
   adminOrAccessManager,
+  branchAliasKeys,
   pickBranchDimensionKey,
   pickPaymentDimensionKey,
   sumBranchLinkCounts,
@@ -76,7 +78,7 @@ export async function registerAccessDimensionsRoutes(app: FastifyInstance) {
     });
     const parsed = schema.safeParse(request.query ?? {});
     if (!parsed.success)
-      return sendApiError(reply, request, 400, "ValidationError", "Invalid query", zodValidationExtras(parsed.error));
+      return sendApiError(reply, request, 400, "ValidationError", "Некорректные параметры запроса", zodValidationExtras(parsed.error));
     const { type } = parsed.data;
 
     if (type === "cash_desks") {
@@ -141,23 +143,54 @@ export async function registerAccessDimensionsRoutes(app: FastifyInstance) {
       for (const r of linkGroups) {
         countBy.set(r.branch_code, r._count._all);
       }
-      const seenRowKeys = new Set<string>();
-      const data: { key: string; label: string; attached_users_count: number; is_active: boolean }[] = [];
+      // Payment methods kabi: barcha aliaslarni claim qil — orphan dublikat yo‘q.
+      const claimed = new Set<string>();
       for (const b of refBranches) {
+        for (const k of branchAliasKeys(b)) claimed.add(k);
+      }
+      // Bir xil nom (Qoqon/Qoqon): faol + ko‘proq userli qatorni ustun qo‘yamiz.
+      const sortedRefs = [...refBranches].sort((a, b) => {
+        const ca = sumBranchLinkCounts(a, countBy);
+        const cb = sumBranchLinkCounts(b, countBy);
+        if (cb !== ca) return cb - ca;
+        const aa = a.active !== false ? 1 : 0;
+        const ba = b.active !== false ? 1 : 0;
+        if (ba !== aa) return ba - aa;
+        return (a.name || "").localeCompare(b.name || "", "ru");
+      });
+      const seenRowKeys = new Set<string>();
+      const seenNames = new Set<string>();
+      const data: { key: string; label: string; attached_users_count: number; is_active: boolean }[] = [];
+      for (const b of sortedRefs) {
         const key = pickBranchDimensionKey(b, countBy);
         if (!key || seenRowKeys.has(key)) continue;
+        const nameNorm = (b.name.trim() || key).toLocaleLowerCase("uz");
+        if (nameNorm && seenNames.has(nameNorm)) {
+          seenRowKeys.add(key);
+          continue;
+        }
         seenRowKeys.add(key);
+        if (nameNorm) seenNames.add(nameNorm);
+        const code = b.code?.trim();
+        const baseLabel = b.name.trim() || key;
         data.push({
           key,
-          label: b.name.trim() || key,
+          label: code && code.toLocaleUpperCase("en-US") !== baseLabel.toLocaleUpperCase("en-US")
+            ? `${baseLabel} (${code})`
+            : baseLabel,
           attached_users_count: sumBranchLinkCounts(b, countBy),
           is_active: b.active !== false
         });
       }
       for (const r of linkGroups) {
         const k = r.branch_code;
-        if (seenRowKeys.has(k)) continue;
+        const kn = k.trim().toLocaleUpperCase("en-US");
+        if (claimed.has(k) || claimed.has(kn) || seenRowKeys.has(k) || seenRowKeys.has(kn)) continue;
+        // Nom dublikati: katalogda shu label bo‘lsa orphan qo‘shilmasin.
+        const orphanNorm = k.trim().toLocaleLowerCase("uz");
+        if (orphanNorm && seenNames.has(orphanNorm)) continue;
         seenRowKeys.add(k);
+        if (orphanNorm) seenNames.add(orphanNorm);
         data.push({
           key: k,
           label: k,
@@ -241,8 +274,9 @@ export async function registerAccessDimensionsRoutes(app: FastifyInstance) {
       });
     }
 
+    const catalog = structuredCatalogByKey();
     const ops = await prisma.permission.findMany({
-      where: { tenant_id: tenantId },
+      where: { tenant_id: tenantId, key: { in: [...catalog.keys()] } },
       select: {
         key: true,
         description: true,
@@ -258,7 +292,7 @@ export async function registerAccessDimensionsRoutes(app: FastifyInstance) {
     return reply.send({
       data: ops.map((r) => ({
         key: r.key,
-        label: (r.description && String(r.description).trim()) || r.key,
+        label: catalog.get(r.key)?.description ?? permissionDisplayDescription(r.key, (r.description && String(r.description).trim()) || r.key),
         attached_users_count: r._count.users + r._count.roles,
         is_active: true
       }))

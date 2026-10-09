@@ -266,9 +266,12 @@ export class PivotEngine {
               )
             : undefined;
 
-        const cells = onRows
-          ? this.buildEmptyLabelCells(colSpecs, config, rowLabel)
-          : this.buildCellsForData(groupData, colSpecs, config, enrichedFields, groupKey);
+        // values-on-rows: faqat metrika bola qatorlari bo‘lsa ota bo‘sh;
+        // viloyat→agent kabi o‘lcham otasi — guruh summasi ko‘rinsin (— emas).
+        const cells =
+          onRows && measureChildren
+            ? this.buildEmptyLabelCells(colSpecs, config, rowLabel)
+            : this.buildCellsForData(groupData, colSpecs, config, enrichedFields, groupKey);
 
         const subtotal =
           config.options.showSubtotals && config.rows.length > 1
@@ -730,9 +733,19 @@ export class PivotEngine {
   }
 
   private extractNumericValues(data: Record<string, unknown>[], fieldId: string): number[] {
-    return data
-      .map((r) => r[fieldId])
-      .filter((v): v is number => typeof v === "number" && Number.isFinite(v));
+    const out: number[] = [];
+    for (const r of data) {
+      const v = r[fieldId];
+      if (typeof v === "number" && Number.isFinite(v)) {
+        out.push(v);
+        continue;
+      }
+      if (typeof v === "string") {
+        const n = Number(v.trim());
+        if (Number.isFinite(n)) out.push(n);
+      }
+    }
+    return out;
   }
 
   private buildFlatRow(
@@ -788,10 +801,11 @@ export class PivotEngine {
             )
           : undefined;
 
-      const cells = onRows
-        ? this.buildEmptyLabelCells(colSpecs, config, rowLabel)
-        : this.buildCellsForData(groupData, colSpecs, config, fields, rowGroupKey);
-      if (!onRows && cells[0]) {
+      const cells =
+        onRows && measureChildren
+          ? this.buildEmptyLabelCells(colSpecs, config, rowLabel)
+          : this.buildCellsForData(groupData, colSpecs, config, fields, rowGroupKey);
+      if (cells[0] && !(onRows && measureChildren)) {
         cells[0] = {
           ...cells[0],
           value: rowLabel,
@@ -825,19 +839,13 @@ export class PivotEngine {
     parentLabel: string,
     rowGroupKey: string
   ): PivotTotalRow {
-    const onRows = valuesOnRows(config.options);
-    const cells = onRows
-      ? this.buildEmptyLabelCells(
-          colSpecs,
-          config,
-          getPivotStrings().engine.subtotalInline(parentLabel)
-        )
-      : this.buildCellsForData(data, colSpecs, config, fields, rowGroupKey);
-    if (!onRows && cells[0]) {
+    const label = getPivotStrings().engine.subtotalInline(parentLabel);
+    const cells = this.buildCellsForData(data, colSpecs, config, fields, rowGroupKey);
+    if (cells[0]) {
       cells[0] = {
         ...cells[0],
-        value: getPivotStrings().engine.subtotalInline(parentLabel),
-        formatted: getPivotStrings().engine.subtotalInline(parentLabel),
+        value: label,
+        formatted: label,
         isEmpty: false
       };
     }

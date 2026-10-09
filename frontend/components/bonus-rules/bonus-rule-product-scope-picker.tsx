@@ -25,15 +25,15 @@ export function BonusRuleProductScopePicker({
     <div className="space-y-3 rounded-md border border-border bg-muted/20 p-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-sm text-muted-foreground">
-          Kategoriyani oching va mahsulotlarni belgilang. Bonus faqat tanlangan mahsulotlar qatorida hisoblanadi (
+          Откройте категорию и отметьте товары. Бонус начисляется только по строкам выбранных товаров (
           <span className="font-mono text-xs">product_ids</span>).
         </p>
         <Button type="button" variant="outline" size="sm" onClick={() => onChange([])} disabled={disabled || value.length === 0}>
-          Tanlovni tozalash
+          Очистить выбор
         </Button>
       </div>
       <p className="text-xs text-muted-foreground">
-        Tanlangan: <span className="font-medium text-foreground">{value.length}</span> ta mahsulot
+        Выбрано товаров: <span className="font-medium text-foreground">{value.length}</span>
       </p>
 
       <div className="max-h-[min(28rem,60vh)] overflow-y-auto">

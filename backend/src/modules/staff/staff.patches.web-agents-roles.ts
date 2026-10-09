@@ -1,8 +1,10 @@
 import bcrypt from "bcryptjs";
 import { Prisma } from "@prisma/client";
 import { prisma } from "../../config/database";
+import { assertValidMaxSessions } from "../../lib/max-sessions";
 import { appendTenantAuditEvent, AuditEntityType } from "../../lib/tenant-audit";
 import { onAppAccessChanged } from "../auth/app-access.service";
+import { syncEmploymentAfterActiveChange } from "./staff.employment-sync";
 import { parseMobileConfigV1, type AgentMobileConfigV1 } from "./agent-mobile-config";
 import type { AgentEntitlements, ExpeditorAssignmentRules, StaffRow } from "./staff.shared";
 import {
@@ -18,6 +20,7 @@ import {
 } from "./staff.shared";
 import { applyAgentPatchInDb } from "./staff.patches.field";
 import { listStaff, type PatchAgentInput } from "./staff.crud";
+import { assertWorkplaceStaffPatchAllowed } from "../work-slots/work-slots.staff-guard";
 
 export type PatchExpeditorInput = Omit<PatchAgentInput, "supervisor_user_id"> & {
   expeditor_assignment_rules?: ExpeditorAssignmentRules;
@@ -29,6 +32,8 @@ export async function patchExpeditor(
   input: PatchExpeditorInput,
   actorUserId: number | null = null
 ): Promise<StaffRow> {
+  await assertWorkplaceStaffPatchAllowed(expeditorId, input as Record<string, unknown>);
+
   const existing = await prisma.user.findFirst({
     where: { id: expeditorId, tenant_id: tenantId, role: "expeditor" }
   });
@@ -91,15 +96,16 @@ export async function patchExpeditor(
   if (input.app_access !== undefined) data.app_access = input.app_access;
   if (input.territory !== undefined) data.territory = input.territory?.trim() || null;
   if (input.is_active !== undefined) data.is_active = input.is_active;
+  if (input.filter_visible !== undefined) data.filter_visible = input.filter_visible;
   if (input.max_sessions !== undefined) {
     const n = input.max_sessions;
-    if (!Number.isInteger(n) || n < 1 || n > 99) throw new Error("BAD_MAX_SESSIONS");
+    assertValidMaxSessions(n);
     data.max_sessions = n;
   }
   if (input.kpi_color !== undefined) data.kpi_color = input.kpi_color?.trim().slice(0, 16) || null;
   if (input.password !== undefined && input.password.trim().length > 0) {
     if (input.password.length < 6) throw new Error("BAD_PASSWORD");
-    data.password_hash = await bcrypt.hash(input.password, 10);
+    data.password_hash = await bcrypt.hash(input.password, 12);
   }
 
   if (input.expeditor_assignment_rules !== undefined) {
@@ -140,6 +146,9 @@ export async function patchExpeditor(
     if (input.app_access !== undefined) {
       await onAppAccessChanged(tenantId, expeditorId, input.app_access);
     }
+    if (input.is_active !== undefined) {
+      await syncEmploymentAfterActiveChange(tenantId, [expeditorId], actorUserId);
+    }
 
     const auditKeys = Object.keys(data).filter((k) => k !== "password_hash");
     const auditPayload: Record<string, unknown> = { keys: auditKeys };
@@ -173,6 +182,8 @@ export async function patchCollector(
   input: PatchCollectorInput,
   actorUserId: number | null = null
 ): Promise<StaffRow> {
+  await assertWorkplaceStaffPatchAllowed(collectorId, input as Record<string, unknown>);
+
   const existing = await prisma.user.findFirst({
     where: { id: collectorId, tenant_id: tenantId, role: "collector" }
   });
@@ -228,15 +239,16 @@ export async function patchCollector(
   if (input.app_access !== undefined) data.app_access = input.app_access;
   if (input.territory !== undefined) data.territory = input.territory?.trim() || null;
   if (input.is_active !== undefined) data.is_active = input.is_active;
+  if (input.filter_visible !== undefined) data.filter_visible = input.filter_visible;
   if (input.max_sessions !== undefined) {
     const n = input.max_sessions;
-    if (!Number.isInteger(n) || n < 1 || n > 99) throw new Error("BAD_MAX_SESSIONS");
+    assertValidMaxSessions(n);
     data.max_sessions = n;
   }
   if (input.kpi_color !== undefined) data.kpi_color = input.kpi_color?.trim().slice(0, 16) || null;
   if (input.password !== undefined && input.password.trim().length > 0) {
     if (input.password.length < 6) throw new Error("BAD_PASSWORD");
-    data.password_hash = await bcrypt.hash(input.password, 10);
+    data.password_hash = await bcrypt.hash(input.password, 12);
   }
   if (input.agent_entitlements !== undefined) {
     const prev = parseEntitlements(existing.agent_entitlements);
@@ -262,6 +274,9 @@ export async function patchCollector(
     await prisma.user.update({ where: { id: collectorId }, data });
     if (input.app_access !== undefined) {
       await onAppAccessChanged(tenantId, collectorId, input.app_access);
+    }
+    if (input.is_active !== undefined) {
+      await syncEmploymentAfterActiveChange(tenantId, [collectorId], actorUserId);
     }
     const auditKeys = Object.keys(data).filter((k) => k !== "password_hash");
     const auditPayload: Record<string, unknown> = { keys: auditKeys };
@@ -289,6 +304,8 @@ export async function patchAuditor(
   input: PatchAuditorInput,
   actorUserId: number | null = null
 ): Promise<StaffRow> {
+  await assertWorkplaceStaffPatchAllowed(auditorId, input as Record<string, unknown>);
+
   const existing = await prisma.user.findFirst({
     where: { id: auditorId, tenant_id: tenantId, role: "auditor" }
   });
@@ -312,15 +329,16 @@ export async function patchAuditor(
   if (input.app_access !== undefined) data.app_access = input.app_access;
   if (input.territory !== undefined) data.territory = input.territory?.trim() || null;
   if (input.is_active !== undefined) data.is_active = input.is_active;
+  if (input.filter_visible !== undefined) data.filter_visible = input.filter_visible;
   if (input.max_sessions !== undefined) {
     const n = input.max_sessions;
-    if (!Number.isInteger(n) || n < 1 || n > 99) throw new Error("BAD_MAX_SESSIONS");
+    assertValidMaxSessions(n);
     data.max_sessions = n;
   }
   if (input.kpi_color !== undefined) data.kpi_color = input.kpi_color?.trim().slice(0, 16) || null;
   if (input.password !== undefined && input.password.trim().length > 0) {
     if (input.password.length < 6) throw new Error("BAD_PASSWORD");
-    data.password_hash = await bcrypt.hash(input.password, 10);
+    data.password_hash = await bcrypt.hash(input.password, 12);
   }
   if (input.agent_entitlements !== undefined) {
     const prev = parseEntitlements(existing.agent_entitlements);
@@ -344,6 +362,9 @@ export async function patchAuditor(
     await prisma.user.update({ where: { id: auditorId }, data });
     if (input.app_access !== undefined) {
       await onAppAccessChanged(tenantId, auditorId, input.app_access);
+    }
+    if (input.is_active !== undefined) {
+      await syncEmploymentAfterActiveChange(tenantId, [auditorId], actorUserId);
     }
     await appendTenantAuditEvent({
       tenantId,

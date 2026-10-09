@@ -38,7 +38,7 @@ export function AppearanceSettingsWorkspace() {
   const { prefs, setPrefs, resetPrefs } = useLoaderPrefs();
 
   return (
-    <div className="mx-auto max-w-4xl space-y-8">
+    <div className="w-full space-y-8">
       <div>
         <h1 className="text-lg font-semibold tracking-tight">Тема и цвета</h1>
         <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
@@ -280,7 +280,7 @@ function ThemePreviewCard({
         <span className="text-[11px] text-muted-foreground">
           {id === "classic"
             ? "Исходная палитра приложения"
-            : "HEX + --dash-* → shadcn (theme-palettes.css)"}
+            : "Палитра HEX + --dash-* → shadcn (theme-palettes.css)"}
         </span>
       </div>
     </button>

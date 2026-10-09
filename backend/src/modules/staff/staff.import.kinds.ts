@@ -44,7 +44,7 @@ export const STAFF_IMPORT_SHEET_NAME: Record<StaffImportKind, string> = {
   collector: "Инкассаторы",
   auditor: "Аудиторы",
   skladchik: "Складчики",
-  operator: "Сотрудники"
+  operator: "Операторы"
 };
 
 /**
@@ -57,16 +57,17 @@ export type StaffImportTemplateColumn = {
   example: string;
 };
 
+/** Canonical template headers — match staff / work-slots UI labels. */
 const COMMON_LOGIN_COLS: StaffImportTemplateColumn[] = [
   { header: "Ф.И.О", example: "Иванов Иван Иванович" },
-  { header: "Авторизоваться", example: "ivanov" },
+  { header: "Логин", example: "ivanov" },
   { header: "Пароль", example: "Parol123!" },
   { header: "Телефон", example: "+998901234567" },
   { header: "Код", example: "A001" },
   { header: "ПИНФЛ", example: "30101990123456" },
   { header: "Должность", example: "ТП" },
   { header: "Филиал", example: "" },
-  { header: "Доступ к приложение", example: "Да" },
+  { header: "Доступ к приложению", example: "Да" },
   { header: "Максимальное количество сессий", example: "2" }
 ];
 
@@ -79,7 +80,8 @@ export const STAFF_IMPORT_TEMPLATE_COLUMNS: Record<StaffImportKind, StaffImportT
     { header: "Филиал", example: "" },
     { header: "Направление торговли", example: "" },
     { header: "Склад", example: "" },
-    { header: "Доступ к приложение", example: "Да" },
+    { header: "Рабочее место", example: "PMAND001" },
+    { header: "Доступ к приложению", example: "Да" },
     { header: "Максимальное количество сессий", example: "2" }
   ],
   expeditor: [
@@ -88,7 +90,8 @@ export const STAFF_IMPORT_TEMPLATE_COLUMNS: Record<StaffImportKind, StaffImportT
     { header: "Территория", example: "" },
     { header: "Филиал", example: "" },
     { header: "Должность", example: "" },
-    { header: "Доступ к приложение", example: "Да" },
+    { header: "Рабочее место", example: "PMEXP001" },
+    { header: "Доступ к приложению", example: "Да" },
     { header: "Максимальное количество сессий", example: "2" }
   ],
   supervisor: [
@@ -101,7 +104,8 @@ export const STAFF_IMPORT_TEMPLATE_COLUMNS: Record<StaffImportKind, StaffImportT
     { header: "Филиал", example: "" },
     { header: "Должность", example: "" },
     { header: "Агент", example: "A001, A002" },
-    { header: "Доступ к приложение", example: "Да" },
+    { header: "Рабочее место", example: "PMSVR001" },
+    { header: "Доступ к приложению", example: "Да" },
     { header: "Максимальное количество сессий", example: "2" }
   ],
   collector: [
@@ -109,7 +113,8 @@ export const STAFF_IMPORT_TEMPLATE_COLUMNS: Record<StaffImportKind, StaffImportT
     { header: "Территория", example: "" },
     { header: "Филиал", example: "" },
     { header: "Должность", example: "" },
-    { header: "Доступ к приложение", example: "Да" },
+    { header: "Рабочее место", example: "PMCOL001" },
+    { header: "Доступ к приложению", example: "Да" },
     { header: "Максимальное количество сессий", example: "2" }
   ],
   auditor: [
@@ -117,21 +122,23 @@ export const STAFF_IMPORT_TEMPLATE_COLUMNS: Record<StaffImportKind, StaffImportT
     { header: "Территория", example: "" },
     { header: "Филиал", example: "" },
     { header: "Должность", example: "" },
-    { header: "Доступ к приложение", example: "Да" },
+    { header: "Рабочее место", example: "PMAUD001" },
+    { header: "Доступ к приложению", example: "Да" },
     { header: "Максимальное количество сессий", example: "2" }
   ],
   skladchik: [
     { header: "Ф.И.О", example: "Сидоров Алексей" },
-    { header: "Авторизоваться", example: "sidorov" },
+    { header: "Логин", example: "sidorov" },
     { header: "Пароль", example: "Parol123!" },
     { header: "Код", example: "SK01" },
     { header: "ПИНФЛ", example: "" },
     { header: "Email", example: "" },
     { header: "Телефон", example: "" },
-    { header: "Склады", example: "Основной склад" },
+    { header: "Склад", example: "Основной склад" },
     { header: "Филиал", example: "" },
     { header: "Должность", example: "" },
-    { header: "Доступ к приложение", example: "Нет" },
+    { header: "Рабочее место", example: "PMSKL001" },
+    { header: "Доступ к приложению", example: "Нет" },
     { header: "Максимальное количество сессий", example: "1" }
   ],
   operator: [
@@ -145,10 +152,101 @@ export const STAFF_IMPORT_TEMPLATE_COLUMNS: Record<StaffImportKind, StaffImportT
     { header: "Должность", example: "Оператор" },
     { header: "Системная роль", example: "operator" },
     { header: "Филиал", example: "" },
-    { header: "Доступ к приложение", example: "Нет" },
+    { header: "Рабочее место", example: "PMOPR001" },
+    { header: "Доступ к приложению", example: "Нет" },
     { header: "Максимальное количество сессий", example: "1" }
   ]
 };
+
+/**
+ * Сотрудники web-rollari — all-roles shablonda alohida listlar.
+ * Import kind always `operator`; sheet name implies default Системная роль.
+ */
+export const STAFF_OFFICE_IMPORT_SHEETS = [
+  {
+    webRole: "operator",
+    sheetName: "Операторы",
+    label: "Оператор",
+    exampleLogin: "operator1",
+    exampleCode: "OP01",
+    exampleSlot: "PMOPR001"
+  },
+  {
+    webRole: "director",
+    sheetName: "Директоры",
+    label: "Директор",
+    exampleLogin: "director1",
+    exampleCode: "DR01",
+    exampleSlot: "PMDIR001"
+  },
+  {
+    webRole: "sales_director",
+    sheetName: "Директор по продажам",
+    label: "Директор по продажам",
+    exampleLogin: "sales_dir1",
+    exampleCode: "SD01",
+    exampleSlot: "PMSD001"
+  },
+  {
+    webRole: "manager",
+    sheetName: "Менеджеры",
+    label: "Менеджер",
+    exampleLogin: "manager1",
+    exampleCode: "MG01",
+    exampleSlot: "PMMGR001"
+  },
+  {
+    webRole: "regional_manager",
+    sheetName: "Региональные менеджеры",
+    label: "Региональный менеджер",
+    exampleLogin: "reg_mgr1",
+    exampleCode: "RM01",
+    exampleSlot: "PMRM001"
+  },
+  {
+    webRole: "accountant",
+    sheetName: "Бухгалтеры",
+    label: "Бухгалтер",
+    exampleLogin: "accountant1",
+    exampleCode: "AC01",
+    exampleSlot: "PMACC001"
+  },
+  {
+    webRole: "warehouse_manager",
+    sheetName: "Менеджеры склада",
+    label: "Менеджер склада",
+    exampleLogin: "wh_mgr1",
+    exampleCode: "WM01",
+    exampleSlot: "PMWM001"
+  }
+] as const;
+
+export type StaffOfficeWebRole = (typeof STAFF_OFFICE_IMPORT_SHEETS)[number]["webRole"];
+
+export function isStaffOfficeWebRole(v: string): v is StaffOfficeWebRole {
+  return STAFF_OFFICE_IMPORT_SHEETS.some((s) => s.webRole === v);
+}
+
+export function officeImportSheetByWebRole(webRole: string) {
+  return STAFF_OFFICE_IMPORT_SHEETS.find((s) => s.webRole === webRole) ?? null;
+}
+
+export function resolveOfficeWebRoleFromSheetName(name: string): StaffOfficeWebRole | null {
+  const n = name
+    .trim()
+    .toLowerCase()
+    .replace(/\u00a0/g, " ")
+    .replace(/\s+/g, " ")
+    .replace(/ё/g, "е");
+  for (const s of STAFF_OFFICE_IMPORT_SHEETS) {
+    if (s.sheetName.toLowerCase().replace(/ё/g, "е") === n) return s.webRole;
+    if (s.webRole === n) return s.webRole;
+    if (s.label.toLowerCase().replace(/ё/g, "е") === n) return s.webRole;
+  }
+  // legacy single sheet
+  if (n === "сотрудники" || n === "сотрудник") return "operator";
+  return null;
+}
 
 /** Field key → RU header aliases (export + template). */
 export type StaffImportField =
@@ -175,7 +273,8 @@ export type StaffImportField =
 
 const BASE_ALIASES: Partial<Record<StaffImportField, string[]>> = {
   fio: ["ф.и.о", "фио", "ф.и.о.", "пользователь", "имя пользователя", "полное имя", "сотрудник"],
-  login: ["авторизоваться", "логин", "login"],
+  // Canonical UI: «Логин»; keep «Авторизоваться» for old Excel exports/templates
+  login: ["логин", "авторизоваться", "login"],
   password: ["пароль", "password", "parol"],
   phone: ["телефон", "тел", "phone"],
   code: ["код", "код агента", "код экспедитора", "код супервайзера", "код пользователя", "code"],
@@ -188,9 +287,11 @@ const BASE_ALIASES: Partial<Record<StaffImportField, string[]>> = {
   branch: ["филиал"],
   tradeDirection: ["направление торговли", "направление"],
   warehouse: ["склад"],
-  warehouses: ["склады", "омборлар"],
+  // «Склад» (UI) + legacy plural «Склады»
+  warehouses: ["склад", "склады", "омборлар"],
   territory: ["территория"],
-  appAccess: ["доступ к приложение", "доступ к приложению"],
+  // Canonical grammar «приложению»; keep typo «приложение» from older templates
+  appAccess: ["доступ к приложению", "доступ к приложение"],
   maxSessions: ["максимальное количество сессий", "макс. сессий", "max sessions"],
   agentsCol: [
     "агент",
@@ -259,6 +360,7 @@ export function headerAliasesForKind(kind: StaffImportKind): Record<string, stri
         "branch",
         "position",
         "agentsCol",
+        "workSlot",
         "appAccess",
         "maxSessions"
       );
@@ -285,6 +387,7 @@ export function headerAliasesForKind(kind: StaffImportKind): Record<string, stri
         "phone",
         "code",
         "pinfl",
+        "workSlot",
         "territory",
         "branch",
         "position",
@@ -319,6 +422,7 @@ export function headerAliasesForKind(kind: StaffImportKind): Record<string, stri
         "email",
         "position",
         "webRole",
+        "workSlot",
         "branch",
         "appAccess",
         "maxSessions"
@@ -333,3 +437,43 @@ export function isStaffImportKind(v: string): v is StaffImportKind {
 export const STAFF_IMPORT_DEFAULT_PASSWORD = "Parol123!";
 export const STAFF_IMPORT_MAX_ROWS = 5000;
 export const STAFF_IMPORT_MAX_ERRORS = 100;
+
+/** Query for shared /staff/import/* — ?kind=agent|…|all and/or ?mode=all */
+export function parseStaffImportKindOrAllQuery(query: unknown): {
+  ok: true;
+  kind?: StaffImportKind | "all";
+  mode?: "all" | "single";
+  sheet?: string;
+} | { ok: false; issues: string[] } {
+  const q = (query && typeof query === "object" ? query : {}) as Record<string, unknown>;
+  const kindRaw = q.kind == null ? undefined : String(q.kind);
+  const modeRaw = q.mode == null ? undefined : String(q.mode);
+  const sheetRaw = q.sheet == null ? undefined : String(q.sheet);
+  const issues: string[] = [];
+
+  let kind: StaffImportKind | "all" | undefined;
+  if (kindRaw !== undefined) {
+    if (kindRaw === "all" || isStaffImportKind(kindRaw)) kind = kindRaw;
+    else issues.push(`kind: недопустимое значение`);
+  }
+
+  let mode: "all" | "single" | undefined;
+  if (modeRaw !== undefined) {
+    if (modeRaw === "all" || modeRaw === "single") mode = modeRaw;
+    else issues.push(`mode: недопустимое значение`);
+  }
+
+  let sheet: string | undefined;
+  if (sheetRaw !== undefined) {
+    const s = sheetRaw.trim();
+    if (!s || s.length > 64) issues.push(`sheet: некорректное значение`);
+    else sheet = s;
+  }
+
+  if (issues.length) return { ok: false, issues };
+  return { ok: true, kind, mode, sheet };
+}
+
+export function wantsAllRoles(q: { kind?: string; mode?: string }): boolean {
+  return q.mode === "all" || q.kind === "all";
+}

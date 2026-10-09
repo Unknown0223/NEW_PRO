@@ -32,7 +32,7 @@ export async function importProductsFromCatalogTemplateXlsx(
   await workbook.xlsx.load(Buffer.from(buffer) as never);
   const sheet = workbook.worksheets[0];
   if (!sheet) {
-    return { created: 0, updated: 0, errors: ["Varaq topilmadi"] };
+    return { created: 0, updated: 0, errors: ["Лист не найден"] };
   }
 
   const headerRow = sheet.getRow(1);

@@ -8,21 +8,19 @@
 
 export const NAV_PERM = {
   ordersView: ["orders.zakaz.view", "orders.view"],
-  ordersCreate: ["orders.zakaz.create", "orders.create"],
-  returnsCreate: ["orders.vozvrat.create"],
-  returnsView: ["orders.vozvrat.view"],
-  exchangeCreate: ["orders.obmen_i_otkaz.create"],
-  exchangeView: ["orders.obmen_i_otkaz.view"],
-  automation: ["automation.zaiavki.view"],
+  ordersCreate: ["orders.sozdanie.create", "orders.create"],
+  returnsShelfCreate: ["orders.vozvrat_polki.create"],
+  returnsByOrderCreate: ["orders.vozvrat_po_zakazu.create"],
+  exchangeCreate: ["orders.obmen.create"],
+  refusals: ["orders.otkazy.view"],
+  automation: ["orders.avtomatizatsiya.view"],
 
   clients: ["clients.klient.view", "clients.view"],
-  clientsMap: ["clients.klient.view", "clients.klienty_na_karte"],
+  clientsMap: ["clients.karta.view", "clients.klienty_na_karte"],
   clientsMerge: ["clients.obedinenie.view", "clients.obedinenye.view"],
   clientsEquipment: ["clients.oborudovanie.view"],
-  /** Faqat ombor qoldiq — clients.view retail stock ni ochmasin. */
-  clientsRetailStock: ["warehouse.ostatki.view"],
-  /** GPS kalitlari — clients.klient.view visit planner ni ochmasin. */
-  visitPlanner: ["gps.gps.view", "gps.dostup_k_gps"],
+  clientsRetailStock: ["clients.ostatki_tt.view"],
+  visitPlanner: ["clients.vizity.view"],
 
   invoicesAssembly: ["invoices.sborochnye.view", "invoices.sborochnye_nakladnye.view"],
   invoicesShipment: ["invoices.otgruzochnye.view", "invoices.otgruzochnye_nakladnye.view"],
@@ -41,25 +39,57 @@ export const NAV_PERM = {
   cashPayments: ["cash.oplaty_klientov.view"],
   cashBankTransfers: ["cash.perechisleniya.view"],
   cashClientExpenses: ["cash.rashody_klienta.view"],
-  cashOpeningBalances: ["cash.nachalnye_balansy.view", "cash.nachalnye_balansy_klientov.view"],
-  cashClientBalances: ["cash.otchety.view", "cash.balansy.view"],
-  /** Faqat kassa otchet — reports.view barcha kassa otchetlarini ochmasin. */
+  cashOpeningBalances: [
+    "cash.nachalnye_balansy.view",
+    "cash.nachalnye_balansy_klientov.view",
+    "cash.nachalnye_balansy_klientov.spisok_nachalnye_balansy"
+  ],
+  /** Faqat balanslar — `cash.otchety` barcha kassa otchetlarini ochmasin. Legacy Access «Дополнительно» ham. */
+  cashClientBalances: [
+    "cash.balansy_klientov.view",
+    "cash.balansy.view",
+    "cash.otchety.spisok_balansy_klientov",
+    "cash.otchety.spisok_balansy_klientov_po_konsignatsii",
+    "cash.otchety.detal_balans_klienta",
+    "cash.otchety.detal_balans_klienta_po_konsignatsii"
+  ],
+  /** Faqat kassa otchet — balanslar menyusini ochmasin. */
   cashReports: ["cash.otchety.view"],
   cashDesks: ["cash.kassa.view", "cash.view"],
   cashCurrency: ["cash.kurs_valyuty.view"],
   cashExpenses: ["cash.rashody_klienta.view", "cash.rashody.view"],
   cashPaymentRequests: ["cash.zayavki_na_oplatu.view"],
+  cashExpeditorDebts: ["cash.dolgi_ekspeditora.view"],
 
   suppliers: ["suppliers.postavshchik.view", "suppliers.view"],
   suppliersPayments: ["suppliers.oplaty.view", "suppliers.oplaty_postavshchikam.view"],
   suppliersBalances: ["suppliers.balansy.view", "suppliers.nachalnye_balansy_postavshchikov.view"],
   suppliersReconciliation: ["suppliers.postavshchik.view", "suppliers.akt.view"],
 
-  reports: ["reports.otchety.view", "reports.view"],
+  reportAgentOrders: ["reports.zakazy_agentov.view"],
+  reportGps: ["reports.gps.view"],
+  reportClientSales2: ["reports.prodazhi_klientov_2.view"],
+  reportClientSales4: ["reports.prodazhi_klientov_4.view"],
+  reportProductSales: ["reports.prodazhi_tovarov.view"],
+  reportExpeditorReturns: ["reports.vozvrat_ekspeditora.view"],
+  reportVisits2: ["reports.vizity.view"],
+  reportVisitTotals: ["reports.itogi_vizitov.view"],
+  /** Istalgan hisobot — «Настройки отчетов» (shaxsiy menyu) uchun. */
+  reports: [
+    "reports.zakazy_agentov.view",
+    "reports.gps.view",
+    "reports.prodazhi_klientov_2.view",
+    "reports.prodazhi_klientov_4.view",
+    "reports.prodazhi_tovarov.view",
+    "reports.vozvrat_ekspeditora.view",
+    "reports.vizity.view",
+    "reports.itogi_vizitov.view",
+    "reports.dnevnye_kpi_plany.view",
+    "reports.konstruktor.view"
+  ],
+  dailyKpi: ["reports.dnevnye_kpi_plany.view"],
   reportBuilder: [
     "reports.konstruktor.view",
-    "reports.otchety.view",
-    "reports.view",
     "pivot.otchety.view",
     "pivot.view",
     "plans.otchety.konstruktor_otchetov"
@@ -89,16 +119,69 @@ export const NAV_PERM = {
   /** Faqat konsignatsiya — clients.klient.view ochmasin. */
   staffConsignment: ["staff.konsignatsiya.view"],
   staffPayroll: ["staff.zarplaty.view"],
-  staffWorkdays: ["staff.rabochie_dni.view", "staff.tabel.view"],
+  staffAdvances: ["staff.avans.view"],
+  staffAdvanceLimits: ["staff.avans_limity.view", "staff.avans_limity.update"],
+  financeAdvances: ["finance.avans.view", "finance.avans.approve"],
+  cashPayrollQueue: ["cash.vydacha_zarplaty.view", "cash.vydacha_zarplaty.history"],
+  staffWorkdays: ["staff.rabochie_dni.view"],
   staffTimesheet: ["staff.tabel.view"],
-  staffTasks: ["staff.zadachi.view"],
+  staffTimesheetHistory: ["staff.tabel.history"],
+  staffTimesheetNorm: ["staff.tabel_normativ.view", "staff.tabel_normativ.update"],
+  staffTimesheetNormEdit: ["staff.tabel_normativ.update"],
+  staffTasks: ["staff.zadachi_spisok.view"],
+  staffTaskTypes: ["settings.tipy_zadach.view"],
+  agentRoutePlan: ["gps.marshrut.view", "gps.marshrut.update"],
   workSlots: ["work_slots.raboche_mesto.view"],
 
-  audit: ["audit.log.view", "audit.view"],
+  audit: ["audit.tabel.view"],
+  suspiciousLogins: ["audit.podozritelnye_vhody.view"],
+  /** GPS мониторинг — kamida bitta xodim turi. */
+  gpsMonitoring: [
+    "gps.agenty.view",
+    "gps.dostavshchiki.view",
+    "gps.supervayzery.view",
+    "gps.inkassatory.view",
+    "gps.van_selling.view"
+  ],
+  activity: ["activity.history.view"],
   settings: [
     "settings.profil_kompanii.view",
     "settings.tovar.view",
+    "settings.kategoriya_tovara.view",
     "settings.tsena.view",
-    "settings.filial.view"
+    "settings.tip_tseny.view",
+    "settings.territoriya.view",
+    "settings.sposob_oplaty.view",
+    "settings.valyuty.view",
+    "settings.filial.view",
+    "settings.dolzhnost.view",
+    "settings.edinitsy.view",
+    "settings.brend.view",
+    "settings.segment.view",
+    "settings.kanal_sbyta.view",
+    "settings.napravlenie_torgovli.view",
+    "settings.format_klienta.view",
+    "settings.tip_klienta.view",
+    "settings.kategoriya_klienta.view",
+    "settings.bonusy.view",
+    "settings.skidki.view",
+    "settings.bonus_strategiya.view",
+    "settings.ustanovit_natsenku.view",
+    "settings.zakrytie_perioda.view",
+    "settings.prichiny.view",
+    "settings.inventar_i_korobka.view",
+    "settings.oborudovanie.view",
+    "settings.baza_znaniy.view",
+    "settings.seansy.view",
+    "settings.geo_granitsy.view",
+    "settings.appearance.view",
+    "settings.mobile_app.view",
+    "settings.returns_filter.view",
+    "settings.document_edit_lock.view",
+    "settings.orders_consignment.view",
+    "settings.web_staff_positions.view",
+    "settings.timezone.view",
+    "settings.initial_setup.view",
+    "settings.system_migration.view"
   ]
 } as const;

@@ -9,12 +9,14 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { getUserFacingError } from "@/lib/error-utils";
 import { formatGroupedInteger } from "@/lib/format-numbers";
+import { usePermissions } from "@/lib/use-permissions";
 import { OrdersExcelExportDialog } from "@/components/orders/orders-list/orders-excel-export-dialog";
 import { ORDER_LIST_COLUMNS, orderListColumnThClass } from "@/lib/orders-list-columns";
 import {
   orderMilestoneDatetimeDialogTitle,
   orderStatusDatetimeDialogTitle
 } from "@/lib/order-status-datetime";
+import { useDebouncedSearchCommit } from "@/lib/use-debounced-search-commit";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import { ChevronLeft, ChevronRight, ListOrdered, Package, RefreshCw, Search } from "lucide-react";
@@ -110,7 +112,11 @@ export function OrdersListTable(props: OrdersListTableProps) {
   const [pendingStatusDialog, setPendingStatusDialog] = useState<PendingStatusDialog | null>(null);
   const [expandedOrderId, setExpandedOrderId] = useState<number | null>(null);
   const [excelExportOpen, setExcelExportOpen] = useState(false);
+  const canExportExcel = usePermissions().has("orders.zakaz.export");
   const [searchDraft, setSearchDraft] = useState(filters.search);
+  useDebouncedSearchCommit(searchDraft, (q) => {
+    replaceOrdersQuery({ search: q, page: 1 });
+  });
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [expandPanelWidth, setExpandPanelWidth] = useState<number | null>(null);
 
@@ -196,8 +202,8 @@ export function OrdersListTable(props: OrdersListTableProps) {
       <TableColumnSettingsDialog
         open={columnDialogOpen}
         onOpenChange={setColumnDialogOpen}
-        title="Ustunlarni boshqarish"
-        description="Ko‘rinadigan ustunlar va tartib. Sizning akkauntingiz uchun saqlanadi (server)."
+        title="Настройка столбцов"
+        description="Видимые столбцы и их порядок. Сохраняются для вашей учётной записи (на сервере)."
         columns={ORDER_LIST_COLUMNS}
         columnOrder={tablePrefs.columnOrder}
         hiddenColumnIds={tablePrefs.hiddenColumnIds}
@@ -260,16 +266,18 @@ export function OrdersListTable(props: OrdersListTableProps) {
                 <ListOrdered className="h-4 w-4" />
                 Колонки
               </Button>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="h-9 shrink-0"
-                disabled={rows.length === 0 || !tenantSlug}
-                onClick={() => setExcelExportOpen(true)}
-              >
-                Excel
-              </Button>
+              {canExportExcel ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-9 shrink-0"
+                  disabled={rows.length === 0 || !tenantSlug}
+                  onClick={() => setExcelExportOpen(true)}
+                >
+                  Excel
+                </Button>
+              ) : null}
               <Button
                 type="button"
                 variant="outline"
@@ -335,7 +343,7 @@ export function OrdersListTable(props: OrdersListTableProps) {
             ) : isError ? (
               <div className="p-4 sm:p-5">
                 <PageError
-                  message={getUserFacingError(error, "Zakazlarni yuklab bo'lmadi.")}
+                  message={getUserFacingError(error, "Не удалось загрузить заказы.")}
                   onRetry={() => void refetch()}
                 />
               </div>
@@ -365,7 +373,7 @@ export function OrdersListTable(props: OrdersListTableProps) {
                             className="size-4 rounded border-input"
                             checked={allOnPageSelected}
                             onChange={toggleSelectAllOnPage}
-                            aria-label="Joriy sahifadagi barcha zakazlarni tanlash"
+                            aria-label="Выбрать все заказы на текущей странице"
                           />
                         </th>
                         {tablePrefs.visibleColumnOrder.map((colId) => {
@@ -402,7 +410,7 @@ export function OrdersListTable(props: OrdersListTableProps) {
                             "orders-list-table-th-sticky-right"
                           )}
                         >
-                          <span className="sr-only">Tafsilot</span>
+                          <span className="sr-only">Подробнее</span>
                         </th>
                       </tr>
                     </thead>

@@ -47,23 +47,23 @@ export function VisitPlannerGeoSidebar({
   const items = itemsByKind[kind] ?? [];
   const selectedItem = items.find((i) => i.ref_id === refId);
   const hasPolygon = Boolean(selectedBoundary && selectedBoundary.polygon.length >= 3);
-  const summary = selectedItem?.name ?? "Tanlanmagan";
+  const summary = selectedItem?.name ?? "Не выбрано";
 
   return (
     <div className={`vp-geo-bar${expanded ? " vp-geo-bar-open" : ""}`}>
       <button type="button" className="vp-geo-toggle" onClick={onToggleExpanded} aria-expanded={expanded}>
         <MapPinned className="size-4 shrink-0 text-violet-600" aria-hidden />
-        <span className="vp-geo-toggle-label">Hudud</span>
+        <span className="vp-geo-toggle-label">Территория</span>
         <span className="vp-geo-toggle-value">{summary}</span>
-        {hasPolygon ? <span className="vp-geo-badge">{clientsInArea} klient</span> : null}
+        {hasPolygon ? <span className="vp-geo-badge">Клиентов: {clientsInArea}</span> : null}
         <ChevronDown className={`vp-geo-chevron size-4 shrink-0${expanded ? " vp-open" : ""}`} aria-hidden />
       </button>
 
       {expanded ? (
         <div className="vp-geo-panel">
           <p className="vp-geo-hint">
-            Filial / zona / territoriya tanlang, xaritada chegara chizing (kamida 3 nuqta). Ichidagi klientlar
-            avtomatik ko‘rinadi.
+            Выберите филиал / зону / территорию и нарисуйте границу на карте (минимум 3 точки). Клиенты внутри
+            границы отобразятся автоматически.
           </p>
 
           <div className="vp-geo-row">
@@ -86,7 +86,7 @@ export function VisitPlannerGeoSidebar({
             <label className="vp-geo-label vp-geo-label-inline">
               <span>{GEO_BOUNDARY_KIND_LABELS[kind]}</span>
               <select className="vp-native" value={refId} onChange={(e) => onRefIdChange(e.target.value)}>
-                <option value="">— Tanlang —</option>
+                <option value="">— Выберите —</option>
                 {items.map((it) => (
                   <option key={it.ref_id} value={it.ref_id}>
                     {it.name}
@@ -99,7 +99,7 @@ export function VisitPlannerGeoSidebar({
 
           {items.length === 0 ? (
             <p className="vp-geo-warn">
-              Tizimda {GEO_BOUNDARY_KIND_LABELS[kind].toLowerCase()} topilmadi. Sozlamalarda yarating.
+              В системе не найдено: {GEO_BOUNDARY_KIND_LABELS[kind].toLowerCase()}. Создайте в настройках.
             </p>
           ) : null}
 
@@ -109,8 +109,8 @@ export function VisitPlannerGeoSidebar({
                 <b>{selectedItem.name}</b>
                 <span>
                   {hasPolygon
-                    ? `Chegara chizilgan · ${selectedBoundary!.polygon.length} nuqta`
-                    : "Chegara hali chizilmagan"}
+                    ? `Граница нарисована · точек: ${selectedBoundary!.polygon.length}`
+                    : "Граница ещё не нарисована"}
                 </span>
               </div>
             </div>
@@ -119,7 +119,7 @@ export function VisitPlannerGeoSidebar({
           <div className="vp-geo-actions vp-geo-actions-row">
             {!drawActive ? (
               <button type="button" className="vp-btn vp-primary" disabled={!refId || saving} onClick={onStartDraw}>
-                {hasPolygon ? "Qayta chizish" : "Hudud chizish"}
+                {hasPolygon ? "Перерисовать" : "Нарисовать территорию"}
               </button>
             ) : (
               <>
@@ -129,27 +129,27 @@ export function VisitPlannerGeoSidebar({
                   disabled={drawPointCount < 3 || saving}
                   onClick={onFinishDraw}
                 >
-                  {saving ? "Saqlanmoqda…" : `Saqlash (${drawPointCount})`}
+                  {saving ? "Сохранение…" : `Сохранить (${drawPointCount})`}
                 </button>
                 <button type="button" className="vp-btn" onClick={onCancelDraw}>
-                  Bekor
+                  Отмена
                 </button>
               </>
             )}
             {hasPolygon ? (
               <>
                 <button type="button" className="vp-btn" disabled={saving} onClick={onAssignClients}>
-                  Klientlarni bog‘lash
+                  Привязать клиентов
                 </button>
                 <button type="button" className="vp-btn vp-danger" disabled={saving} onClick={onDeleteBoundary}>
-                  O‘chirish
+                  Удалить
                 </button>
               </>
             ) : null}
           </div>
 
           {drawActive ? (
-            <p className="vp-geo-draw-hint">Xaritada nuqtalarni bosing (kamida 3). Chegaralar rang bilan ajratiladi.</p>
+            <p className="vp-geo-draw-hint">Нажимайте на карте, чтобы поставить точки (минимум 3). Границы выделяются цветом.</p>
           ) : null}
         </div>
       ) : null}

@@ -54,7 +54,7 @@ export async function importProductsCatalogUpdateOnlyXlsx(
       skipped_empty: 0,
       skipped_unknown_sku: 0,
       skipped_no_change: 0,
-      errors: ["Varaq topilmadi"]
+      errors: ["Лист не найден"]
     };
   }
 
@@ -71,7 +71,7 @@ export async function importProductsCatalogUpdateOnlyXlsx(
       skipped_empty: 0,
       skipped_unknown_sku: 0,
       skipped_no_change: 0,
-      errors: ["«Код» (SKU) ustuni majburiy — eksport faylidan foydalaning."]
+      errors: ["Столбец «Код» (SKU) обязателен — используйте файл экспорта."]
     };
   }
   if (!colByField.name || !colByField.categoryName || !colByField.unitName) {

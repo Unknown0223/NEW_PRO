@@ -9,7 +9,7 @@ describe("previewReturnFilterSettings", () => {
       period_value: 7,
       balance_zero_enabled: true
     });
-    expect(p.title).toContain("HOLAT 3");
+    expect(p.title).toContain("Режим 3");
     expect(p.warning).toBeTruthy();
   });
 
@@ -20,7 +20,7 @@ describe("previewReturnFilterSettings", () => {
       period_value: 7,
       balance_zero_enabled: false
     });
-    expect(p.body).toContain("Balans 0");
-    expect(p.body).toContain("olinmaydi");
+    expect(p.body).toContain("Баланс 0");
+    expect(p.body).toContain("не учитывается");
   });
 });

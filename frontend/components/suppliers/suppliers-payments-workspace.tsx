@@ -1,6 +1,7 @@
 "use client";
 
 import { TableColumnSettingsDialog, type ColumnDefItem } from "@/components/data-table/table-column-settings-dialog";
+import { ClientsTemplateSelectField } from "@/components/clients/clients-template-select-field";
 import { PageHeader } from "@/components/dashboard/page-header";
 import { PageShell } from "@/components/dashboard/page-shell";
 import { Button } from "@/components/ui/button";
@@ -17,8 +18,17 @@ import {
 import { GroupedNumberInput } from "@/components/ui/grouped-number-input";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useAppConfirm } from "@/components/ui/app-confirm-dialog";
 import { api } from "@/lib/api";
+import { useDebouncedSearchCommit } from "@/lib/use-debounced-search-commit";
+import { usePermissions } from "@/lib/use-permissions";
 import { useAuthStore, useAuthStoreHydrated, useEffectiveRole } from "@/lib/auth-store";
+import {
+  appendNamedStringListParam,
+  appendPositiveIntListParam,
+  joinMultiFilterValues,
+  splitMultiFilterValues
+} from "@/lib/client-filter-select-value";
 import { isAdminOrOperatorLikeRole } from "@/lib/distribution-roles";
 import { downloadXlsxSheet } from "@/lib/download-xlsx";
 import { formatNumberGrouped } from "@/lib/format-numbers";
@@ -110,10 +120,12 @@ function monthRangeStrings(d: Date): { from: string; to: string } {
 
 export function SuppliersPaymentsWorkspace() {
   const tenantSlug = useAuthStore((s) => s.tenantSlug);
+  const canExport = usePermissions().has("suppliers.oplaty.export");
   const hydrated = useAuthStoreHydrated();
   const role = useEffectiveRole();
   const qc = useQueryClient();
   const isAdmin = isAdminOrOperatorLikeRole(role);
+  const { confirm, dialog: confirmDialog } = useAppConfirm();
 
   const prefs = useUserTablePrefs({
     tenantSlug,
@@ -136,6 +148,10 @@ export function SuppliersPaymentsWorkspace() {
   const [draftMethod, setDraftMethod] = useState("");
   const [draftCashDesk, setDraftCashDesk] = useState("");
   const [draftSearch, setDraftSearch] = useState("");
+  useDebouncedSearchCommit(draftSearch, (q) => {
+    setAppliedSearch(q);
+    setPage(1);
+  });
 
   const [appliedFrom, setAppliedFrom] = useState(defaultRange.from);
   const [appliedTo, setAppliedTo] = useState(defaultRange.to);
@@ -239,11 +255,9 @@ export function SuppliersPaymentsWorkspace() {
       p.set("sort_dir", sortDir);
       if (appliedFrom) p.set("from", appliedFrom);
       if (appliedTo) p.set("to", appliedTo);
-      const sid = Number.parseInt(appliedSupplier, 10);
-      if (Number.isFinite(sid) && sid > 0) p.set("supplier_id", String(sid));
-      if (appliedMethod.trim()) p.set("payment_method", appliedMethod.trim());
-      const cid = Number.parseInt(appliedCashDesk, 10);
-      if (Number.isFinite(cid) && cid > 0) p.set("cash_desk_id", String(cid));
+      appendPositiveIntListParam(p, "supplier_id", "supplier_ids", appliedSupplier);
+      appendNamedStringListParam(p, "payment_method", "payment_methods", appliedMethod);
+      appendPositiveIntListParam(p, "cash_desk_id", "cash_desk_ids", appliedCashDesk);
       if (appliedSearch.trim()) p.set("search", appliedSearch.trim());
       const { data } = await api.get<{ data: PaymentRow[]; total: number }>(
         `/api/${tenantSlug}/suppliers/accounting/payments?${p.toString()}`
@@ -361,11 +375,9 @@ export function SuppliersPaymentsWorkspace() {
       p.set("sort_dir", sortDir);
       if (appliedFrom) p.set("from", appliedFrom);
       if (appliedTo) p.set("to", appliedTo);
-      const sid = Number.parseInt(appliedSupplier, 10);
-      if (Number.isFinite(sid) && sid > 0) p.set("supplier_id", String(sid));
-      if (appliedMethod.trim()) p.set("payment_method", appliedMethod.trim());
-      const cid = Number.parseInt(appliedCashDesk, 10);
-      if (Number.isFinite(cid) && cid > 0) p.set("cash_desk_id", String(cid));
+      appendPositiveIntListParam(p, "supplier_id", "supplier_ids", appliedSupplier);
+      appendNamedStringListParam(p, "payment_method", "payment_methods", appliedMethod);
+      appendPositiveIntListParam(p, "cash_desk_id", "cash_desk_ids", appliedCashDesk);
       if (appliedSearch.trim()) p.set("search", appliedSearch.trim());
       const { data } = await api.get<{ data: PaymentRow[] }>(
         `/api/${tenantSlug}/suppliers/accounting/payments?${p.toString()}`
@@ -434,14 +446,23 @@ export function SuppliersPaymentsWorkspace() {
             size="icon-sm"
             title="Сторно"
             onClick={() => {
-              if (window.confirm("Сторнировать оплату? Средства вернутся в кассу.")) reverseMut.mutate(r.id);
+              void (async () => {
+                const ok = await confirm({
+                  title: "Сторно",
+                  message: "Сторнировать оплату? Средства вернутся в кассу.",
+                  confirmLabel: "Да",
+                  cancelLabel: "Нет",
+                  destructive: true
+                });
+                if (ok) reverseMut.mutate(r.id);
+              })();
             }}
           >
             <RotateCcw className="size-3.5" />
           </Button>
         ) : null
     }),
-    [isAdmin, reverseMut]
+    [isAdmin, reverseMut, confirm]
   );
 
   if (!hydrated) {
@@ -524,51 +545,33 @@ export function SuppliersPaymentsWorkspace() {
         />
 
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          <div className="grid gap-1.5">
-            <Label>Поставщики</Label>
-            <select
-              className="h-9 rounded-md border border-input bg-background px-2 text-sm"
-              value={draftSupplier}
-              onChange={(e) => setDraftSupplier(e.target.value)}
-            >
-              <option value="">Все</option>
-              {(suppliersQ.data ?? []).map((s) => (
-                <option key={s.id} value={String(s.id)}>
-                  {s.name}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="grid gap-1.5">
-            <Label>Способ оплаты</Label>
-            <select
-              className="h-9 rounded-md border border-input bg-background px-2 text-sm"
-              value={draftMethod}
-              onChange={(e) => setDraftMethod(e.target.value)}
-            >
-              <option value="">Все</option>
-              {payMethodOpts.map((o) => (
-                <option key={o.value} value={o.value}>
-                  {o.label}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="grid gap-1.5">
-            <Label>Касса</Label>
-            <select
-              className="h-9 rounded-md border border-input bg-background px-2 text-sm"
-              value={draftCashDesk}
-              onChange={(e) => setDraftCashDesk(e.target.value)}
-            >
-              <option value="">Все</option>
-              {(cashDesksQ.data ?? []).map((d) => (
-                <option key={d.id} value={String(d.id)}>
-                  {d.name}
-                </option>
-              ))}
-            </select>
-          </div>
+          <ClientsTemplateSelectField
+            label="Поставщики"
+            multi
+            options={(suppliersQ.data ?? []).map((s) => ({
+              value: String(s.id),
+              label: s.name
+            }))}
+            values={splitMultiFilterValues(draftSupplier)}
+            onChange={(v) => setDraftSupplier(joinMultiFilterValues(v))}
+          />
+          <ClientsTemplateSelectField
+            label="Способ оплаты"
+            multi
+            options={payMethodOpts}
+            values={splitMultiFilterValues(draftMethod)}
+            onChange={(v) => setDraftMethod(joinMultiFilterValues(v))}
+          />
+          <ClientsTemplateSelectField
+            label="Касса"
+            multi
+            options={(cashDesksQ.data ?? []).map((d) => ({
+              value: String(d.id),
+              label: d.name
+            }))}
+            values={splitMultiFilterValues(draftCashDesk)}
+            onChange={(v) => setDraftCashDesk(joinMultiFilterValues(v))}
+          />
         </div>
 
         <div className="flex flex-wrap items-center justify-end gap-2 pt-1">
@@ -632,17 +635,19 @@ export function SuppliersPaymentsWorkspace() {
             </div>
           </div>
           <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              disabled={exporting}
-              className="h-9 gap-1 border-green-600/40 text-green-700 hover:bg-green-50 dark:text-green-400 dark:hover:bg-green-950/30"
-              onClick={() => void exportXlsx()}
-            >
-              <Download className="size-3.5" />
-              {exporting ? "…" : "Excel"}
-            </Button>
+            {canExport ? (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                disabled={exporting}
+                className="h-9 gap-1 border-green-600/40 text-green-700 hover:bg-green-50 dark:text-green-400 dark:hover:bg-green-950/30"
+                onClick={() => void exportXlsx()}
+              >
+                <Download className="size-3.5" />
+                {exporting ? "…" : "Excel"}
+              </Button>
+            ) : null}
             <Button type="button" variant="outline" size="icon" className="h-9 w-9 shrink-0" title="Обновить" onClick={() => void listQ.refetch()}>
               <RefreshCw className={cn("size-4", listQ.isFetching && "animate-spin")} />
             </Button>
@@ -881,6 +886,7 @@ export function SuppliersPaymentsWorkspace() {
           </div>
         </DialogContent>
       </Dialog>
+      {confirmDialog}
     </PageShell>
   );
 }

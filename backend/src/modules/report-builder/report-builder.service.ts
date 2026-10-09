@@ -19,14 +19,23 @@ import {
   resolvePriceTypeKeyToLabel
 } from "../tenant-settings/finance-refs";
 import { asRecord } from "../tenant-settings/tenant-settings.shared";
+import { enrichScopedReportActor, buildClientAgentScopeWhere } from "../access/access-agent-scope";
 import {
-  buildScopedAgentWhereForActor,
-  enrichScopedReportActor
-} from "../access/access-agent-scope";
+  filterTerritoryRowsByTerms,
+  pruneTerritoryNodesByTerms,
+  resolveFilterOptionsScope,
+  staffWhereForFilterOptions,
+  warehouseWhereForFilterOptions
+} from "../access/access-filter-options-scope";
 import { getReportBuilderMetadata } from "./report-builder.metadata";
 import { runReportBuilderDataset } from "./report-builder.dataset";
 import { buildMatrixView, runReportBuilderPreview } from "./report-builder.query";
-import { mergeTerritoryFilterOptions, type TerritoryRow } from "../reports/territory-nodes";
+import {
+  mergeTerritoryFilterOptions,
+  parseTerritoryNodes,
+  type TerritoryRow
+} from "../reports/territory-nodes";
+import { parseUserTerritoryPartsFromHelpers } from "../work-slots/work-slots.config-territory";
 import * as saved from "./report-builder.saved";
 import type {
   ReportBuilderConfigPayload,
@@ -63,7 +72,7 @@ export async function getReportBuilderFilterOptions(
   tenantId: number,
   actor?: ReportActor
 ): Promise<ReportBuilderFilterOptionsResponse> {
-  const whereAgent = await buildScopedAgentWhereForActor(tenantId, actor);
+  const scope = await resolveFilterOptionsScope(tenantId, actor);
 
   const statuses = ORDER_STATUSES.map((id) => ({
     id,
@@ -100,15 +109,17 @@ export async function getReportBuilderFilterOptions(
     paymentRows,
     clientCategoryRows,
     tenantRow,
-    territoryRows
+    territoryRows,
+    workSlotTerritoryRows,
+    agentTerritoryRows
   ] = await Promise.all([
     prisma.user.findMany({
-      where: whereAgent,
+      where: staffWhereForFilterOptions(tenantId, scope, "agent"),
       select: { id: true, name: true, code: true, supervisor_user_id: true, trade_direction_id: true, branch: true },
       orderBy: { name: "asc" }
     }),
     prisma.warehouse.findMany({
-      where: { tenant_id: tenantId, is_active: true },
+      where: warehouseWhereForFilterOptions(tenantId, scope),
       select: { id: true, name: true, code: true },
       orderBy: { name: "asc" }
     }),
@@ -137,12 +148,12 @@ export async function getReportBuilderFilterOptions(
       take: 300
     }),
     prisma.user.findMany({
-      where: { tenant_id: tenantId, role: "expeditor", is_active: true },
+      where: staffWhereForFilterOptions(tenantId, scope, "expeditor"),
       select: { id: true, name: true, code: true },
       orderBy: { name: "asc" }
     }),
     prisma.user.findMany({
-      where: { tenant_id: tenantId, role: "supervisor", is_active: true },
+      where: staffWhereForFilterOptions(tenantId, scope, "supervisor"),
       select: { id: true, name: true, code: true },
       orderBy: { name: "asc" }
     }),
@@ -157,7 +168,15 @@ export async function getReportBuilderFilterOptions(
       orderBy: [{ sort_order: "asc" }, { name: "asc" }]
     }),
     prisma.client.findMany({
-      where: { tenant_id: tenantId, is_active: true, merged_into_client_id: null },
+      where: {
+        tenant_id: tenantId,
+        is_active: true,
+        merged_into_client_id: null,
+        ...((): Prisma.ClientWhereInput => {
+          const clientScope = buildClientAgentScopeWhere(scope.actor);
+          return clientScope ? { AND: [clientScope] } : {};
+        })()
+      },
       select: { id: true, name: true, client_code: true },
       orderBy: { name: "asc" },
       take: 2500
@@ -196,6 +215,21 @@ export async function getReportBuilderFilterOptions(
       },
       select: { zone: true, region: true, city: true, district: true },
       take: 5000
+    }),
+    prisma.workSlot.findMany({
+      where: { tenant_id: tenantId, is_active: true },
+      select: { territory: true, territories: true },
+      take: 3000
+    }),
+    prisma.user.findMany({
+      where: {
+        tenant_id: tenantId,
+        is_active: true,
+        OR: [{ role: "agent" }, { role: "supervisor" }, { role: "expeditor" }],
+        NOT: { territory: null }
+      },
+      select: { territory: true },
+      take: 3000
     })
   ]);
 
@@ -225,16 +259,55 @@ export async function getReportBuilderFilterOptions(
     string,
     unknown
   >;
-  const refs = referencesWithResolvedTerritoryNodes(refsRaw);
-  const territoryMerged = mergeTerritoryFilterOptions(
-    refs,
+  const refsResolved = referencesWithResolvedTerritoryNodes(refsRaw);
+  const refs =
+    scope.territoryTerms === null
+      ? refsResolved
+      : {
+          ...refsResolved,
+          territory_nodes: pruneTerritoryNodesByTerms(
+            parseTerritoryNodes(refsResolved.territory_nodes),
+            scope.territoryTerms
+          )
+        };
+  const clientTerritoryRows: TerritoryRow[] = filterTerritoryRowsByTerms(
     territoryRows.map((r) => ({
       // Robust fallback for tenants where one of zone/region/city isn't populated.
       t1: (r.zone ?? "").trim() || (r.region ?? "").trim() || null,
       t2: (r.region ?? "").trim() || (r.city ?? "").trim() || null,
       t3: (r.city ?? "").trim() || (r.district ?? "").trim() || null
-    })) satisfies TerritoryRow[]
+    })),
+    scope.territoryTerms
   );
+  const workplaceTerritoryRows: TerritoryRow[] = [];
+  for (const slot of workSlotTerritoryRows) {
+    const rawList = [
+      ...(slot.territories?.length ? slot.territories : []),
+      ...(slot.territory ? [slot.territory] : [])
+    ];
+    for (const raw of rawList) {
+      const parts = parseUserTerritoryPartsFromHelpers(raw);
+      if (!parts.zone && !parts.oblast && !parts.city) continue;
+      workplaceTerritoryRows.push({
+        t1: parts.zone,
+        t2: parts.oblast,
+        t3: parts.city
+      });
+    }
+  }
+  for (const u of agentTerritoryRows) {
+    const parts = parseUserTerritoryPartsFromHelpers(u.territory);
+    if (!parts.zone && !parts.oblast && !parts.city) continue;
+    workplaceTerritoryRows.push({
+      t1: parts.zone,
+      t2: parts.oblast,
+      t3: parts.city
+    });
+  }
+  const territoryMerged = mergeTerritoryFilterOptions(refs, [
+    ...clientTerritoryRows,
+    ...filterTerritoryRowsByTerms(workplaceTerritoryRows, scope.territoryTerms)
+  ]);
   const territory_level_1 = territoryMerged.territory_1.map((id) => ({ id, label: id }));
   const territory_level_2 = territoryMerged.territory_2.map((id) => ({ id, label: id }));
   const territory_level_3 = territoryMerged.territory_3.map((id) => ({ id, label: id }));
@@ -321,7 +394,9 @@ export const reportBuilderSaved = {
   create: saved.createReportBuilderSaved,
   update: saved.updateReportBuilderSaved,
   delete: saved.deleteReportBuilderSaved,
-  restore: saved.restoreReportBuilderSaved
+  restore: saved.restoreReportBuilderSaved,
+  listShareCandidates: saved.listReportBuilderShareCandidates,
+  share: saved.shareReportBuilderSaved
 };
 
 export type { ReportBuilderConfigPayload, ReportBuilderDatasetResponse };

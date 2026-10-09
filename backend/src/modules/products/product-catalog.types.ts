@@ -4,6 +4,11 @@ export type ListCatalogOpts = {
   is_active?: boolean | null;
   /** true → is_active filtr yo‘q (aktiv + noaktiv). */
   include_inactive?: boolean;
+  /**
+   * Faqat `product-groups`: guruhlar shu kategoriyadagi mahsulotlar orqali bog‘langan
+   * (DB da group↔category FK yo‘q — products orqali kaskad).
+   */
+  category_id?: number;
   page: number;
   limit: number;
 };

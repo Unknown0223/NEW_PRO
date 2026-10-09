@@ -16,6 +16,7 @@ import {
   requireAnyPermission
 } from "../auth/auth.prehandlers";
 import { getCashDeskAvailableCash } from "../stock/supplier-payment-cash.service";
+import { getCashDeskLedger, ledgerToJson } from "./cash-desk-ledger";
 import { parseSelectedMastersFromQuery, resolveConstraintScope } from "../linkage/linkage.service";
 import { createCashDesk, getCashDesk, listCashDesks, listCashDeskPickers, patchCashDesk } from "./cash-desks.service";
 import {
@@ -38,8 +39,9 @@ const cashDeskView = requireAnyPermission([
   "access.upravlenie.view",
   "access.manage"
 ]);
-const cashDeskWrite = requireAnyPermission(["cash.kassa.create"]);
-const cashDeskStatus = requireAnyPermission(["cash.kassa.status", "cash.kassa.create"]);
+const cashDeskCreate = requireAnyPermission(["cash.kassa.create"]);
+const cashDeskUpdate = requireAnyPermission(["cash.kassa.update"]);
+const cashDeskStatus = requireAnyPermission(["cash.kassa.status"]);
 const cashDeskHistory = requireAnyPermission(["cash.kassa.history", "cash.kassa.view"]);
 
 const linkSchema = z.object({
@@ -162,12 +164,15 @@ export async function registerCashDeskRoutes(app: FastifyInstance) {
     }
     const row = await getCashDesk(tenantId, id);
     if (!row) return sendApiError(reply, request, 404, "NotFound");
-    const available = await getCashDeskAvailableCash(prisma, tenantId, id);
-    return reply.send({ data: { available_cash: available.toDecimalPlaces(2).toString() } });
+    const [available, ledger] = await Promise.all([
+      getCashDeskAvailableCash(prisma, tenantId, id),
+      getCashDeskLedger(prisma, tenantId, id)
+    ]);
+    return reply.send({ data: { available_cash: available.toDecimalPlaces(2).toString(), ...ledgerToJson(ledger) } });
   });
 
   app.post("/api/:slug/cash-desks", {
-    preHandler: [jwtAccessVerify, cashDeskWrite]
+    preHandler: [jwtAccessVerify, cashDeskCreate]
   }, async (request, reply) => {
     if (!ensureTenantContext(request, reply)) return;
     const tenantId = request.tenant!.id;
@@ -313,7 +318,7 @@ export async function registerCashDeskRoutes(app: FastifyInstance) {
   });
 
   app.patch("/api/:slug/cash-desks/:id", {
-    preHandler: [jwtAccessVerify, cashDeskWrite]
+    preHandler: [jwtAccessVerify, cashDeskUpdate]
   }, async (request, reply) => {
     if (!ensureTenantContext(request, reply)) return;
     const tenantId = request.tenant!.id;

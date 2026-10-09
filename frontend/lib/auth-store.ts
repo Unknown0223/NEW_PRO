@@ -89,9 +89,20 @@ export const useAuthStore = create<AuthState>()(
     }),
     {
       name: "savdo-auth",
+      partialize: (s) => ({
+        tenantSlug: s.tenantSlug,
+        role: s.role,
+        accessToken: s.accessToken
+      }),
       merge: (persisted, current) => {
         const p = persisted as Partial<AuthState>;
-        const next = { ...current, ...p } as AuthState;
+        const next = {
+          ...current,
+          tenantSlug: typeof p.tenantSlug === "string" ? p.tenantSlug : current.tenantSlug,
+          role: typeof p.role === "string" ? p.role : current.role,
+          accessToken: typeof p.accessToken === "string" ? p.accessToken : current.accessToken,
+          refreshToken: current.refreshToken
+        } as AuthState;
         const jwtSlug = decodeAccessTokenTenantSlug(next.accessToken);
         if (jwtSlug) next.tenantSlug = jwtSlug;
         return next;
@@ -107,13 +118,39 @@ export const useAuthStore = create<AuthState>()(
 export function useAuthStoreHydrated() {
   const [hydrated, setHydrated] = useState(false);
   useEffect(() => {
+    let cancelled = false;
+    const finish = async () => {
+      if (!useAuthStore.getState().accessToken) {
+        try {
+          const hasRt =
+            typeof document !== "undefined" && /(?:^|;\s*)salec_rt=/.test(document.cookie);
+          if (hasRt) {
+            const { restoreSessionFromCookie } = await import("@/lib/api");
+            await restoreSessionFromCookie();
+          }
+        } catch {
+          /* cookie yo‘q yoki tarmoq — login sahifasi */
+        }
+      }
+      if (!cancelled) setHydrated(true);
+    };
     const p = useAuthStore.persist;
     if (!p) {
-      setHydrated(true);
-      return;
+      void finish();
+      return () => {
+        cancelled = true;
+      };
     }
-    setHydrated(p.hasHydrated());
-    return p.onFinishHydration(() => setHydrated(true));
+    if (p.hasHydrated()) {
+      void finish();
+    }
+    const unsub = p.onFinishHydration(() => {
+      void finish();
+    });
+    return () => {
+      cancelled = true;
+      unsub();
+    };
   }, []);
   return hydrated;
 }

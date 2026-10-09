@@ -15,6 +15,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { api } from "@/lib/api";
+import { usePermissions } from "@/lib/use-permissions";
 import { downloadXlsxSheet } from "@/lib/download-xlsx";
 import { getUserFacingError } from "@/lib/error-utils";
 import { formatNumberGrouped } from "@/lib/format-numbers";
@@ -91,6 +92,7 @@ function formatDt(iso: string | null | undefined): string {
 type Props = { tenantSlug: string };
 
 export function OrdersConsignmentTransfersWorkspace({ tenantSlug }: Props) {
+  const canExport = usePermissions().has("settings.orders_consignment.export");
   const qc = useQueryClient();
   const [daysDraft, setDaysDraft] = useState("3");
   const [search, setSearch] = useState("");
@@ -172,10 +174,10 @@ export function OrdersConsignmentTransfersWorkspace({ tenantSlug }: Props) {
       void qc.invalidateQueries({ queryKey: ["orders-consignment-auto-candidates", tenantSlug] });
       setPage(1);
       setSelected(new Set());
-      setToast(`Давр сақланди: ${data.days_after_delivered} кун`);
+      setToast(`Период сохранён: ${data.days_after_delivered} дн.`);
     },
     onError: (e: unknown) => {
-      setToast(getUserFacingError(e, "Даврни сақлаб бўлмади"));
+      setToast(getUserFacingError(e, "Не удалось сохранить период"));
     }
   });
 
@@ -183,9 +185,9 @@ export function OrdersConsignmentTransfersWorkspace({ tenantSlug }: Props) {
     mutationFn: async () => {
       setModalErr(null);
       const ids = Array.from(selected);
-      if (ids.length === 0) throw new Error("Заказ танланмади");
+      if (ids.length === 0) throw new Error("Заказ не выбран");
       const fields = Array.from(commentFields);
-      if (fields.length === 0) throw new Error("Камida битта майдонни белгиланг");
+      if (fields.length === 0) throw new Error("Отметьте хотя бы одно поле");
       if (fields.includes("conditions") && !conditions.trim()) {
         // optional free text even if checkbox on
       }
@@ -206,8 +208,8 @@ export function OrdersConsignmentTransfersWorkspace({ tenantSlug }: Props) {
       const fail = res.failed.length;
       setToast(
         fail > 0
-          ? `Консигнация: ${ok}. Хато: ${fail}`
-          : `Консигнацияга ўтказилди: ${ok}`
+          ? `Консигнация: ${ok}. Ошибок: ${fail}`
+          : `Переведено в консигнацию: ${ok}`
       );
       setModalOpen(false);
       setSelected(new Set());
@@ -218,7 +220,7 @@ export function OrdersConsignmentTransfersWorkspace({ tenantSlug }: Props) {
       void qc.invalidateQueries({ queryKey: ["orders", tenantSlug] });
     },
     onError: (e: unknown) => {
-      setModalErr(e instanceof Error ? e.message : getUserFacingError(e, "Хато"));
+      setModalErr(e instanceof Error ? e.message : getUserFacingError(e, "Ошибка"));
     }
   });
 
@@ -271,9 +273,9 @@ export function OrdersConsignmentTransfersWorkspace({ tenantSlug }: Props) {
         ]),
         { colWidths: [14, 24, 18, 18, 12, 12, 16, 8, 12, 12] }
       );
-      setToast(`Excel: ${exportRows.length} қатор`);
+      setToast(`Excel: строк — ${exportRows.length}`);
     },
-    onError: (e: unknown) => setToast(getUserFacingError(e, "Excel юклаб бўлмади"))
+    onError: (e: unknown) => setToast(getUserFacingError(e, "Не удалось выгрузить Excel"))
   });
 
   const previewComment = useMemo(() => {
@@ -322,7 +324,7 @@ export function OrdersConsignmentTransfersWorkspace({ tenantSlug }: Props) {
   const onSaveDays = () => {
     const n = Number.parseInt(daysDraft, 10);
     if (!Number.isInteger(n) || n < 1 || n > 365) {
-      setToast("Кунлар: 1…365");
+      setToast("Дней: 1…365");
       return;
     }
     void saveDaysMut.mutateAsync(n);
@@ -334,9 +336,9 @@ export function OrdersConsignmentTransfersWorkspace({ tenantSlug }: Props) {
         <div className="min-w-0">
           <h1 className="text-xl font-semibold tracking-tight">Заказы → консигнация</h1>
           <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-            Доставлен статусидаги, консигнациясиз ва тўлиқ тўланмаган заказлар — етказилганидан{" "}
-            <b>N кун</b> ўтгач рўйхатга тушади. Танлаб консигнацияга ўтказишда комментарийга қайси
-            маълумотлар кириши модалда белгиланади.
+            Заказы в статусе «Доставлен», без консигнации и не оплаченные полностью, попадают в список
+            через <b>N дней</b> после доставки. При переводе выбранных заказов в консигнацию в окне
+            отмечается, какие данные попадут в комментарий.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -344,7 +346,7 @@ export function OrdersConsignmentTransfersWorkspace({ tenantSlug }: Props) {
             type="button"
             variant="outline"
             size="sm"
-            className="gap-1.5"
+            className={cn("gap-1.5", !canExport && "hidden")}
             disabled={exportMut.isPending || total === 0}
             onClick={() => void exportMut.mutateAsync()}
           >
@@ -361,7 +363,7 @@ export function OrdersConsignmentTransfersWorkspace({ tenantSlug }: Props) {
               setModalOpen(true);
             }}
           >
-            Консигнацияга ўтказиш ({selected.size})
+            Перевести в консигнацию ({selected.size})
           </Button>
         </div>
       </div>
@@ -370,7 +372,7 @@ export function OrdersConsignmentTransfersWorkspace({ tenantSlug }: Props) {
         <p className="rounded-md border bg-muted/40 px-3 py-2 text-sm" role="status">
           {toast}{" "}
           <button type="button" className="text-primary underline" onClick={() => setToast(null)}>
-            ёпиш
+            закрыть
           </button>
         </p>
       ) : null}
@@ -378,7 +380,7 @@ export function OrdersConsignmentTransfersWorkspace({ tenantSlug }: Props) {
       <Card className="border bg-card shadow-sm">
         <CardContent className="flex flex-wrap items-end gap-4 p-4">
           <div className="grid gap-1.5">
-            <Label className="text-xs">Давр (кун) — доставлендан кейин</Label>
+            <Label className="text-xs">Период (дней) — после доставки</Label>
             <div className="flex items-center gap-2">
               <Input
                 className="h-9 w-24"
@@ -386,7 +388,7 @@ export function OrdersConsignmentTransfersWorkspace({ tenantSlug }: Props) {
                 value={daysDraft}
                 onChange={(e) => setDaysDraft(e.target.value.replace(/[^\d]/g, ""))}
               />
-              <span className="text-sm text-muted-foreground">кун</span>
+              <span className="text-sm text-muted-foreground">дн.</span>
               <Button
                 type="button"
                 size="sm"
@@ -394,15 +396,15 @@ export function OrdersConsignmentTransfersWorkspace({ tenantSlug }: Props) {
                 disabled={saveDaysMut.isPending}
                 onClick={onSaveDays}
               >
-                Сақлаш
+                Сохранить
               </Button>
             </div>
             <p className="text-[11px] text-muted-foreground">
-              Ҳозир: {daysForList} кун. Шу муддатдан ошган доставлен + тўланмаган заказлар рўйхатда.
+              Сейчас: {daysForList} дн. В списке — доставленные и неоплаченные заказы старше этого срока.
             </p>
           </div>
           <div className="grid min-w-[14rem] flex-1 gap-1.5">
-            <Label className="text-xs">Қидирув</Label>
+            <Label className="text-xs">Поиск</Label>
             <div className="relative">
               <Search className="absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
               <Input
@@ -425,7 +427,7 @@ export function OrdersConsignmentTransfersWorkspace({ tenantSlug }: Props) {
             disabled={listQ.isFetching}
           >
             <RefreshCw className={cn("size-4", listQ.isFetching && "animate-spin")} />
-            Янгилаш
+            Обновить
           </Button>
         </CardContent>
       </Card>
@@ -447,16 +449,16 @@ export function OrdersConsignmentTransfersWorkspace({ tenantSlug }: Props) {
                       return next;
                     });
                   }}
-                  aria-label="Саҳифани танлаш"
+                  aria-label="Выбрать страницу"
                 />
               </th>
               <th className="px-2 py-2">Заказ</th>
               <th className="px-2 py-2">Клиент</th>
               <th className="px-2 py-2">Агент / Эксп.</th>
               <th className="px-2 py-2 text-right">Сумма</th>
-              <th className="px-2 py-2 text-right">Қарз</th>
+              <th className="px-2 py-2 text-right">Долг</th>
               <th className="px-2 py-2">Доставлен</th>
-              <th className="px-2 py-2 text-right">Кун</th>
+              <th className="px-2 py-2 text-right">Дней</th>
               <th className="px-2 py-2">Оплата</th>
             </tr>
           </thead>
@@ -464,14 +466,14 @@ export function OrdersConsignmentTransfersWorkspace({ tenantSlug }: Props) {
             {listQ.isLoading || settingsQ.isLoading ? (
               <tr>
                 <td colSpan={9} className="px-3 py-10 text-center text-muted-foreground">
-                  Юкланмоқда…
+                  Загрузка…
                 </td>
               </tr>
             ) : null}
             {!listQ.isLoading && rows.length === 0 ? (
               <tr>
                 <td colSpan={9} className="px-3 py-10 text-center text-muted-foreground">
-                  {daysForList} кундан ошган доставлен + тўланмаган консигнациясиз заказ йўқ
+                  Нет доставленных неоплаченных заказов без консигнации старше {daysForList} дн.
                 </td>
               </tr>
             ) : null}
@@ -531,10 +533,10 @@ export function OrdersConsignmentTransfersWorkspace({ tenantSlug }: Props) {
             disabled={page <= 1}
             onClick={() => setPage((p) => Math.max(1, p - 1))}
           >
-            Орқа
+            Назад
           </Button>
           <span className="text-muted-foreground">
-            {page} / {pageCount} · жами {formatNumberGrouped(total)}
+            {page} / {pageCount} · всего {formatNumberGrouped(total)}
           </span>
           <Button
             type="button"
@@ -543,25 +545,25 @@ export function OrdersConsignmentTransfersWorkspace({ tenantSlug }: Props) {
             disabled={page >= pageCount}
             onClick={() => setPage((p) => Math.min(pageCount, p + 1))}
           >
-            Олдин
+            Вперёд
           </Button>
         </div>
       ) : (
-        <p className="text-xs text-muted-foreground">Жами: {formatNumberGrouped(total)}</p>
+        <p className="text-xs text-muted-foreground">Всего: {formatNumberGrouped(total)}</p>
       )}
 
       <Dialog open={modalOpen} onOpenChange={setModalOpen}>
         <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg" showCloseButton>
           <DialogHeader>
-            <DialogTitle>Консигнацияга ўтказиш</DialogTitle>
+            <DialogTitle>Перевод в консигнацию</DialogTitle>
             <DialogDescription>
-              Танланган: <b>{selected.size}</b>. Комментарийга қўшиладиган майдонларни белгиланг —
-              ким/нима шартлари заказ комментарийсига ёзилади.
+              Выбрано: <b>{selected.size}</b>. Отметьте поля, которые будут добавлены в комментарий, —
+              кто и на каких условиях, запишется в комментарий заказа.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div className="grid gap-2">
-              <Label>Комментарий майдонлари</Label>
+              <Label>Поля комментария</Label>
               <div className="grid gap-1.5 sm:grid-cols-2">
                 {COMMENT_FIELD_OPTIONS.map((opt) => (
                   <label
@@ -588,18 +590,18 @@ export function OrdersConsignmentTransfersWorkspace({ tenantSlug }: Props) {
             </div>
             {commentFields.has("conditions") ? (
               <div className="grid gap-1.5">
-                <Label>Қўшимча шартлар (матн)</Label>
+                <Label>Дополнительные условия (текст)</Label>
                 <textarea
                   rows={3}
                   className="min-h-[72px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  placeholder="Масалан: нал тўланмаган; супервайзер келишуви…"
+                  placeholder="Например: нал не оплачен; согласовано с супервайзером…"
                   value={conditions}
                   onChange={(e) => setConditions(e.target.value)}
                 />
               </div>
             ) : null}
             <div className="grid gap-1.5">
-              <Label>Тўлов муддати (ихтиёрий)</Label>
+              <Label>Срок оплаты (необязательно)</Label>
               <button
                 ref={dueAnchor}
                 type="button"
@@ -610,7 +612,7 @@ export function OrdersConsignmentTransfersWorkspace({ tenantSlug }: Props) {
                 onClick={() => setDueOpen((o) => !o)}
               >
                 <CalendarDays className="size-4 text-muted-foreground" />
-                {dueDate ? formatRuDateButton(dueDate) : "Сана танланг"}
+                {dueDate ? formatRuDateButton(dueDate) : "Выберите дату"}
               </button>
               <DatePickerPopover
                 open={dueOpen}
@@ -622,7 +624,7 @@ export function OrdersConsignmentTransfersWorkspace({ tenantSlug }: Props) {
             </div>
             <div className="rounded-md border bg-muted/30 px-3 py-2">
               <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                Комментарий намунаси
+                Пример комментария
               </p>
               <p className="mt-1 whitespace-pre-wrap text-xs text-foreground">{previewComment}</p>
             </div>
@@ -630,7 +632,7 @@ export function OrdersConsignmentTransfersWorkspace({ tenantSlug }: Props) {
           </div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => setModalOpen(false)}>
-              Бекор
+              Отмена
             </Button>
             <Button
               type="button"
@@ -638,7 +640,7 @@ export function OrdersConsignmentTransfersWorkspace({ tenantSlug }: Props) {
               disabled={convertMut.isPending || selected.size === 0}
               onClick={() => void convertMut.mutateAsync()}
             >
-              {convertMut.isPending ? "Сақланмоқда…" : "Ўтказиш"}
+              {convertMut.isPending ? "Сохранение…" : "Перевести"}
             </Button>
           </DialogFooter>
         </DialogContent>

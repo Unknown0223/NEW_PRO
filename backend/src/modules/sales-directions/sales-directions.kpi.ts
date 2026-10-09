@@ -3,9 +3,19 @@ import { prisma } from "../../config/database";
 import { appendTenantAuditEvent } from "../../lib/tenant-audit";
 import type { KpiGroupDetailRow, KpiGroupListRow } from "./sales-directions.kpi.types";
 import { normCode } from "./sales-directions.shared";
+import { loadActiveWorkSlotsByUserIds } from "../work-slots/work-slots.query.read";
 
 function userFio(u: { name: string }): string {
   return u.name.trim();
+}
+
+async function kpiGroupAgentRows(kpiGroupId: number, agentUserIds: number[]) {
+  const slots = await loadActiveWorkSlotsByUserIds(agentUserIds);
+  return agentUserIds.map((user_id) => ({
+    kpi_group_id: kpiGroupId,
+    user_id,
+    work_slot_id: slots.get(user_id)?.slot_id ?? null
+  }));
 }
 
 export async function listKpiGroups(
@@ -145,7 +155,7 @@ export async function createKpiGroup(
     }
     if (agent_user_ids.length) {
       await tx.kpiGroupAgent.createMany({
-        data: agent_user_ids.map((user_id) => ({ kpi_group_id: g.id, user_id }))
+        data: await kpiGroupAgentRows(g.id, agent_user_ids)
       });
     }
     return g;
@@ -221,7 +231,7 @@ export async function patchKpiGroup(
       await tx.kpiGroupAgent.deleteMany({ where: { kpi_group_id: id } });
       if (input.agent_user_ids.length) {
         await tx.kpiGroupAgent.createMany({
-          data: input.agent_user_ids.map((user_id) => ({ kpi_group_id: id, user_id }))
+          data: await kpiGroupAgentRows(id, input.agent_user_ids)
         });
       }
     }

@@ -19,11 +19,11 @@ export default function InitialSetupPage() {
               Настройки · Импорт
             </p>
             <h1 className="mt-1 text-xl font-semibold tracking-tight text-slate-900 sm:text-2xl">
-              Boshlang‘ich sozlash
+              Начальная настройка
             </h1>
             <p className="mt-1.5 text-sm leading-relaxed text-slate-600">
-              Bo‘sh tizimni ketma-ket to‘ldiring: shablon → jadval → qo‘llash. Export va import bir xil Excel
-              formatida.
+              Заполните пустую систему по шагам: шаблон → таблица → применение. Экспорт и импорт — в едином
+              формате Excel.
             </p>
           </div>
           <Link

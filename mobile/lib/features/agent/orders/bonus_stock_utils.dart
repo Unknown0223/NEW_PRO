@@ -83,17 +83,68 @@ int takeGiftQtyFromOthers({
   return taken;
 }
 
+/// [excludeProductId] dan tashqari mahsulotlarga [amount] dona qo‘shadi (navbatma-navbat).
+int giveGiftQtyToOthers({
+  required Map<int, int> qtyByProduct,
+  required int excludeProductId,
+  required int amount,
+  required List<int> candidateProductIds,
+  int Function(int productId, int currentQty)? maxFor,
+}) {
+  if (amount <= 0) return 0;
+  final ids = candidateProductIds.where((id) => id != excludeProductId).toList();
+  if (ids.isEmpty) return 0;
+  var left = amount;
+  var given = 0;
+  var idx = 0;
+  while (left > 0 && ids.isNotEmpty) {
+    final pid = ids[idx % ids.length];
+    final cur = qtyByProduct[pid] ?? 0;
+    final cap = maxFor != null ? maxFor(pid, cur) : cur + left;
+    if (cur >= cap) {
+      ids.remove(pid);
+      if (ids.isEmpty) break;
+      continue;
+    }
+    qtyByProduct[pid] = cur + 1;
+    left--;
+    given++;
+    idx++;
+  }
+  return given;
+}
+
 /// Yangi miqdor kiritilganda limitdan oshsa boshqalardan avtomatik ayirish.
+/// [preserveTotal]: kamaytirganda bo‘shagan donani boshqa SKU larga o‘tkazadi (jami max saqlanadi).
 int resolveGiftQtyWithRedistribution({
   required Map<int, int> qtyByProduct,
   required int productId,
   required int requestedQty,
   required int maxTotal,
   required Set<int> manualProductIds,
+  bool preserveTotal = false,
+  List<int>? allProductIds,
 }) {
   final oldQty = qtyByProduct[productId] ?? 0;
   var target = requestedQty.clamp(0, maxTotal);
-  if (target <= oldQty) return target;
+  if (target < oldQty) {
+    if (preserveTotal && maxTotal > 0) {
+      final freed = oldQty - target;
+      final candidates = allProductIds ?? qtyByProduct.keys.toList();
+      final given = giveGiftQtyToOthers(
+        qtyByProduct: qtyByProduct,
+        excludeProductId: productId,
+        amount: freed,
+        candidateProductIds: candidates,
+        maxFor: (_, cur) => maxTotal,
+      );
+      if (given < freed) {
+        target = oldQty - given;
+      }
+    }
+    return target;
+  }
+  if (target == oldQty) return target;
 
   final otherTotal = qtyByProduct.entries
       .where((e) => e.key != productId)

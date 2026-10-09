@@ -10,6 +10,7 @@ import {
   softVoidListFilter
 } from "../../lib/soft-void";
 import { appendClientAuditLog } from "./clients.audit";
+import { workRegionDayRangeExclusive, workRegionTodayKey } from "../mobile/mobile-agent-sync.config.service";
 
 async function assertClient(tenantId: number, clientId: number): Promise<void> {
   const c = await prisma.client.findFirst({
@@ -315,14 +316,6 @@ export type ClientPhotoReportApi = ClientPhotoReportSummary & {
   content_purged?: boolean;
 };
 
-/** Bugungi kun (server lokal vaqti) uchun [00:00:00.000 .. 23:59:59.999] oralig'i. */
-function localTodayRange(): { start: Date; end: Date } {
-  const now = new Date();
-  const start = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
-  const end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
-  return { start, end };
-}
-
 export async function listClientPhotoReports(
   tenantId: number,
   clientId: number,
@@ -349,8 +342,8 @@ export async function listClientPhotoReports(
   }
   // Fotohisobot faqat olingan kunida ko'rinadi (ertasiga eskisi ko'rinmaydi).
   if (opts?.todayOnly) {
-    const { start, end } = localTodayRange();
-    where.created_at = { gte: start, lte: end };
+    const { start, end } = workRegionDayRangeExclusive(workRegionTodayKey());
+    where.created_at = { gte: start, lt: end };
   }
   const rows = await prisma.clientPhotoReport.findMany({
     where,
@@ -404,8 +397,8 @@ export async function getClientPhotoReportById(
     where.NOT = { created_by: { is: { role: "expeditor" } } };
   }
   if (opts?.todayOnly) {
-    const { start, end } = localTodayRange();
-    where.created_at = { gte: start, lte: end };
+    const { start, end } = workRegionDayRangeExclusive(workRegionTodayKey());
+    where.created_at = { gte: start, lt: end };
   }
   const row = await prisma.clientPhotoReport.findFirst({ where });
   if (!row) throw new Error("NOT_FOUND");
@@ -445,7 +438,9 @@ export async function createClientPhotoReportRow(
       image_url: url,
       caption: input.caption?.trim() ? input.caption.trim().slice(0, 1000) : null,
       order_id: orderId,
-      created_by_user_id: userId
+      created_by_user_id: userId,
+      // Prisma UTC — DB session TZ ga bog‘liq CURRENT_TIMESTAMP emas.
+      created_at: new Date()
     }
   });
   return {

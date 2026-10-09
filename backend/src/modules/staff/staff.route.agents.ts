@@ -2,7 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { sendApiError, zodValidationExtras } from "../../lib/api-error";
 import { ensureTenantContext } from "../../lib/tenant-context";
 import { actorUserIdOrNull } from "../../lib/request-actor";
-import { DIRECTORY_READ_ROLES, getAccessUser, jwtAccessVerify, requireRoles } from "../auth/auth.prehandlers";
+import { DIRECTORY_READ_ROLES, jwtAccessVerify, requireRoles } from "../auth/auth.prehandlers";
 import type { BulkAgentsInput, ListStaffFilters } from "./staff.service";
 import {
   ADMIN_AND_OPERATOR_LIKE_ROLES,
@@ -35,8 +35,7 @@ import {
   revokeStaffSessions,
   type StaffKind
 } from "./staff.service";
-import { catalogRoles, adminRoles } from "./staff.route.shared";
-import { buildScopedAgentDirectoryWhereForActor } from "../access/access-agent-scope";
+import { catalogRoles, adminRoles, accessStaffDirectoryWhere } from "./staff.route.shared";
 import {
   agentEntitlementsPayloadSchema,
   agentEntitlementsSchema,
@@ -84,11 +83,7 @@ export async function registerStaffAgentRoutes(app: FastifyInstance) {
     if (!ensureTenantContext(request, reply)) return;
     const q = request.query as Record<string, string | undefined>;
     const filters = parseAgentListFilters(q);
-    const actor = getAccessUser(request);
-    const accessScope = await buildScopedAgentDirectoryWhereForActor(request.tenant!.id, {
-      userId: actorUserIdOrNull(request),
-      role: actor.role ?? ""
-    });
+    const accessScope = await accessStaffDirectoryWhere(request, request.tenant!.id);
     const data = await listStaff(request.tenant!.id, "agent", filters, accessScope);
     return reply.send({ data });
   });
@@ -156,7 +151,12 @@ export async function registerStaffAgentRoutes(app: FastifyInstance) {
       if (Number.isNaN(id)) {
         return sendApiError(reply, request, 400, "InvalidId");
       }
-      const row = await getStaffRow(request.tenant!.id, "agent", id);
+      const row = await getStaffRow(
+        request.tenant!.id,
+        "agent",
+        id,
+        await accessStaffDirectoryWhere(request, request.tenant!.id)
+      );
       if (!row) {
         return sendApiError(reply, request, 404, "NotFound");
       }
@@ -237,6 +237,15 @@ export async function registerStaffAgentRoutes(app: FastifyInstance) {
           );
         }
         if (msg === "BAD_WAREHOUSE") return sendApiError(reply, request, 400, "BadWarehouse");
+        if (msg === "WORKPLACE_ON_SLOT") {
+          return sendApiError(
+            reply,
+            request,
+            409,
+            "WorkplaceOnSlot",
+            "Настройки места меняются в «Рабочее место», не в карточке сотрудника"
+          );
+        }
         if (msg === "BAD_RETURN_WAREHOUSE") return sendApiError(reply, request, 400, "BadReturnWarehouse");
         if (msg === "BAD_TRADE_DIRECTION") return sendApiError(reply, request, 400, "BadTradeDirection");
         if (msg === "BAD_PASSWORD") return sendApiError(reply, request, 400, "BadPassword");
@@ -286,6 +295,15 @@ export async function registerStaffAgentRoutes(app: FastifyInstance) {
         if (msg === "BAD_CLOSE_HOUR") return sendApiError(reply, request, 400, "BadCloseHour");
         if (msg === "BAD_CLOSE_MINUTE") return sendApiError(reply, request, 400, "BadCloseMinute");
         if (msg === "BAD_MOBILE_CONFIG_PATCH") return sendApiError(reply, request, 400, "BadMobileConfigPatch");
+        if (msg === "WORKPLACE_ON_SLOT") {
+          return sendApiError(
+            reply,
+            request,
+            409,
+            "WorkplaceOnSlot",
+            "Поля рабочего места редактируются в рабочем месте. Откройте «Рабочее место → Конфигурация»."
+          );
+        }
         if (msg === "BAD_MOBILE_CONFIG_SYNC_WINDOW") {
           return sendApiError(reply, request, 400, "BadMobileConfigSyncWindow");
         }

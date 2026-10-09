@@ -4,6 +4,7 @@ import { useDeferredValue, useMemo, useRef, useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { CalendarDays, FileSpreadsheet, Filter, ListOrdered, RotateCcw, Search } from "lucide-react";
 import { api } from "@/lib/api";
+import { usePermissions } from "@/lib/use-permissions";
 import { STALE } from "@/lib/query-stale";
 import { useAuthStore, useAuthStoreHydrated } from "@/lib/auth-store";
 import { FilterSelect } from "@/components/ui/filter-select";
@@ -13,6 +14,7 @@ import { Input } from "@/components/ui/input";
 import { formatNumberGrouped } from "@/lib/format-numbers";
 import { cn } from "@/lib/utils";
 import { DateRangePopover, formatDateRangeButton } from "@/components/ui/date-range-popover";
+import { monthToDateRange } from "@/components/dashboard/shared/date-ranges";
 import { TableColumnSettingsDialog, type ColumnDefItem } from "@/components/data-table/table-column-settings-dialog";
 import { orderTypeLabel } from "@/lib/order-types";
 import { filterSelectClassName } from "@/components/ui/filter-select";
@@ -155,11 +157,10 @@ function collectPaymentKeys(rows: ReportRow[], totals: ReportData["totals"], cat
 }
 
 export default function ReportProductSalesPage() {
+  const canExport = usePermissions().has("reports.prodazhi_tovarov.export");
   const tenantSlug = useAuthStore((s) => s.tenantSlug);
   const hydrated = useAuthStoreHydrated();
-  const today = new Date();
-  const from0 = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().slice(0, 10);
-  const to0 = new Date(today.getFullYear(), today.getMonth() + 1, 0).toISOString().slice(0, 10);
+  const { from: from0, to: to0 } = monthToDateRange();
 
   const dateAnchorRef = useRef<HTMLButtonElement>(null);
   const [dateOpen, setDateOpen] = useState(false);
@@ -788,10 +789,12 @@ export default function ReportProductSalesPage() {
               />
             </div>
           </div>
-          <Button variant="outline" size="sm" onClick={() => void downloadExcel()} disabled={exporting}>
-            <FileSpreadsheet className="mr-1 h-4 w-4" />
-            Excel
-          </Button>
+          {canExport ? (
+            <Button variant="outline" size="sm" onClick={() => void downloadExcel()} disabled={exporting}>
+              <FileSpreadsheet className="mr-1 h-4 w-4" />
+              Excel
+            </Button>
+          ) : null}
         </div>
 
         <div className="overflow-auto">

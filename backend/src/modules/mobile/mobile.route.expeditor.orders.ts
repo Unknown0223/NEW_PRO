@@ -23,6 +23,11 @@ import {
   patchMobileExpeditorOrderStatus
 } from "./mobile.expeditor.service";
 import { mobileSyncPreHandler } from "./mobile.route.shared";
+import {
+  assertFaceGateForAction,
+  isFaceGateError,
+  loadMobileConfigForFaceGate
+} from "./mobile-face.guard";
 
 export async function registerMobileExpeditorOrderRoutes(app: FastifyInstance) {
 
@@ -49,6 +54,10 @@ export async function registerMobileExpeditorOrderRoutes(app: FastifyInstance) {
       const userId = Number.parseInt(viewer.sub, 10);
       try {
         await assertDocWritableById(request, "orders", idParsed.data.id);
+        if (statusParsed.data.status === "delivered" && Number.isFinite(userId) && userId > 0) {
+          const mc = await loadMobileConfigForFaceGate(request.tenant!.id, userId);
+          await assertFaceGateForAction(request.tenant!.id, userId, "delivery_confirm", mc);
+        }
         const row = await patchMobileExpeditorOrderStatus(
           request.tenant!.id,
           userId,
@@ -58,6 +67,9 @@ export async function registerMobileExpeditorOrderRoutes(app: FastifyInstance) {
         );
         return reply.send(row);
       } catch (e) {
+        if (isFaceGateError(e)) {
+          return sendApiError(reply, request, 403, e.code, e.message);
+        }
         if (isDocumentEditPeriodLockedError(e)) return sendDocumentEditPeriodLocked(reply, request);
         if (e instanceof Error && e.message === "NOT_FOUND") {
           return sendApiError(reply, request, 404, "NotFound");
@@ -164,6 +176,8 @@ export async function registerMobileExpeditorOrderRoutes(app: FastifyInstance) {
       }
       const userId = Number.parseInt(viewer.sub, 10);
       try {
+        const mc = await loadMobileConfigForFaceGate(request.tenant!.id, userId);
+        await assertFaceGateForAction(request.tenant!.id, userId, "payment_accept", mc);
         const row = await createMobileExpeditorOrderPayment(
           request.tenant!.id,
           userId,
@@ -172,6 +186,9 @@ export async function registerMobileExpeditorOrderRoutes(app: FastifyInstance) {
         );
         return reply.send(row);
       } catch (e) {
+        if (isFaceGateError(e)) {
+          return sendApiError(reply, request, 403, e.code, e.message);
+        }
         if (isDocumentEditPeriodLockedError(e)) return sendDocumentEditPeriodLocked(reply, request);
         if (e instanceof Error && e.message === "NOT_FOUND") {
           return sendApiError(reply, request, 404, "NotFound");

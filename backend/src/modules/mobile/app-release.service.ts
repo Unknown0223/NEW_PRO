@@ -42,6 +42,10 @@ export type OutdatedMobileUserRow = {
   last_sync_at: string | null;
 };
 
+export type MobileAppUserRow = OutdatedMobileUserRow & {
+  is_outdated: boolean;
+};
+
 const DEFAULT_POLICY: MobileAppReleasePolicy = {
   min_version: null,
   latest_version: null,
@@ -244,7 +248,33 @@ export async function enrichAppUpdateBlockUrl(
     url = null;
   }
   if (!url) url = apkUrl;
-  return { ...block, url, apk_url: apkUrl };
+  return withoutBrokenUpdateOffer({ ...block, url, apk_url: apkUrl }, { apkFileReady: Boolean(apkUrl) });
+}
+
+/** APK/do‘kon yo‘q bo‘lsa loginni bloklamaymiz va 404 «Обновить» dialogini ko‘rsatmaymiz. */
+export function withoutBrokenUpdateOffer(
+  block: AppUpdateBlock,
+  opts?: { apkFileReady?: boolean }
+): AppUpdateBlock {
+  const apk = block.apk_url?.trim() || "";
+  const store = (block.store_url_android?.trim() || "") || (block.store_url_ios?.trim() || "");
+  const url = block.url?.trim() || "";
+  const ownApk = Boolean(apk && isOwnApkDownloadUrl(apk));
+  const ownUrl = Boolean(url && isOwnApkDownloadUrl(url));
+  const apkOk = Boolean(apk && (!ownApk || opts?.apkFileReady));
+  const urlOk = Boolean(url && (!ownUrl || opts?.apkFileReady));
+  const installable = Boolean(apkOk || store || urlOk);
+  if (installable) return block;
+  if (!block.required && !block.optional) {
+    return { ...block, apk_url: apkOk ? apk : null, url: store || (urlOk ? url : null) };
+  }
+  return {
+    ...block,
+    required: false,
+    optional: false,
+    apk_url: null,
+    url: store || null
+  };
 }
 
 export function resolveRequestOrigin(headers: {
@@ -281,6 +311,8 @@ export async function resolveAppUpdateForTenant(
     )?.slug;
   if (slug && opts?.origin) {
     block = await enrichAppUpdateBlockUrl(block, policy, slug, opts.origin);
+  } else {
+    block = withoutBrokenUpdateOffer(block);
   }
   return block;
 }
@@ -296,7 +328,7 @@ export function isApkOutdated(
   return false;
 }
 
-export async function listOutdatedMobileUsers(tenantId: number): Promise<OutdatedMobileUserRow[]> {
+export async function listMobileAppUsers(tenantId: number): Promise<MobileAppUserRow[]> {
   const policy = await getMobileAppReleasePolicy(tenantId);
   const users = await prisma.user.findMany({
     where: {
@@ -317,15 +349,27 @@ export async function listOutdatedMobileUsers(tenantId: number): Promise<Outdate
     orderBy: [{ role: "asc" }, { name: "asc" }]
   });
 
-  return users
-    .filter((u) => isApkOutdated(u.apk_version, policy))
-    .map((u) => ({
-      id: u.id,
-      name: u.name,
-      login: u.login,
-      role: u.role,
-      apk_version: u.apk_version,
-      device_name: u.device_name,
-      last_sync_at: u.last_sync_at?.toISOString() ?? null
-    }));
+  return users.map((u) => ({
+    id: u.id,
+    name: u.name,
+    login: u.login,
+    role: u.role,
+    apk_version: u.apk_version,
+    device_name: u.device_name,
+    last_sync_at: u.last_sync_at?.toISOString() ?? null,
+    is_outdated: isApkOutdated(u.apk_version, policy)
+  }));
+}
+
+export async function listOutdatedMobileUsers(tenantId: number): Promise<OutdatedMobileUserRow[]> {
+  const all = await listMobileAppUsers(tenantId);
+  return all.filter((u) => u.is_outdated).map((u) => ({
+    id: u.id,
+    name: u.name,
+    login: u.login,
+    role: u.role,
+    apk_version: u.apk_version,
+    device_name: u.device_name,
+    last_sync_at: u.last_sync_at
+  }));
 }

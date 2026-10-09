@@ -7,8 +7,23 @@ import { sendApiError, zodValidationExtras } from "../../lib/api-error";
 import { writeApiRateLimitRouteOpts } from "../../lib/rate-limit-config";
 import { ensureTenantContext } from "../../lib/tenant-context";
 import { jwtAccessVerify, requireRoles, getAccessUser } from "../auth/auth.prehandlers";
+import { actorUserIdOrNull } from "../../lib/request-actor";
+import { assertClientAllowedForActor } from "../access/access-agent-scope";
 import { createClientMinimal, updateClientFields } from "./clients.service";
+import { clientUniqueHttp } from "./clients.write.uniques";
 import { bulkActiveBodySchema, createClientBodySchema } from "./clients.route.schemas";
+
+async function assertWriteClientInScope(
+  request: Parameters<typeof getAccessUser>[0],
+  tenantId: number,
+  clientId: number
+): Promise<void> {
+  const viewer = getAccessUser(request);
+  await assertClientAllowedForActor(tenantId, clientId, {
+    userId: actorUserIdOrNull(request),
+    role: viewer.role ?? ""
+  });
+}
 
 export async function registerClientWriteRoutes(app: FastifyInstance) {
   app.post(
@@ -60,7 +75,9 @@ export async function registerClientWriteRoutes(app: FastifyInstance) {
           client_format: parsed.data.client_format,
           sales_channel: parsed.data.sales_channel,
           product_category_ref: parsed.data.product_category_ref,
-          logistics_service: parsed.data.logistics_service
+          logistics_service: parsed.data.logistics_service,
+          inn: parsed.data.inn,
+          client_code: parsed.data.client_code
         });
         await updateClientFields(
           request.tenant!.id,
@@ -86,17 +103,9 @@ export async function registerClientWriteRoutes(app: FastifyInstance) {
         if (e instanceof Error && e.message === "VALIDATION") {
           return sendApiError(reply, request, 400, "ValidationError");
         }
-        if (e instanceof Error && e.message === "DUPLICATE_PHONE") {
-          return sendApiError(reply, request, 409, "DuplicatePhone", "Bu telefon mavjud.");
-        }
-        if (e instanceof Error && e.message === "DUPLICATE_NAME") {
-          return sendApiError(
-            reply,
-            request,
-            409,
-            "DuplicateName",
-            "Shu nomga o‘xshash klient mavjud."
-          );
+        const uniq = e instanceof Error ? clientUniqueHttp(e.message) : null;
+        if (uniq) {
+          return sendApiError(reply, request, 409, uniq.error, uniq.message);
         }
         if (e instanceof Error && e.message === "DUPLICATE_AGENT_DIRECTION") {
           return sendApiError(
@@ -104,7 +113,7 @@ export async function registerClientWriteRoutes(app: FastifyInstance) {
             request,
             409,
             "DuplicateAgentDirection",
-            "Bir klientga bir xil agentni bir necha yo‘nalishga bog‘lab bo‘lmaydi. Har bir yo‘nalishda faqat bitta agent."
+            "Нельзя привязать одного и того же агента к клиенту по нескольким направлениям. В каждом направлении — только один агент."
           );
         }
         if (e instanceof Error && e.message === "AGENT_NOT_FOUND") {
@@ -113,7 +122,7 @@ export async function registerClientWriteRoutes(app: FastifyInstance) {
             request,
             400,
             "ValidationError",
-            "Tanlangan agent topilmadi yoki nofaol. Faol agentni qayta tanlang."
+            "Выбранный агент не найден или неактивен. Выберите активного агента."
           );
         }
         if (e instanceof Error && e.message === "AGENT_NOT_ON_SLOT") {
@@ -122,7 +131,28 @@ export async function registerClientWriteRoutes(app: FastifyInstance) {
             request,
             403,
             "AgentNotOnSlot",
-            "Agent ish joyiga biriktirilmagan — yangi mijoz bog‘lash taqiqlangan (faqat qarz yig‘ish)."
+            "Агент не назначен на рабочее место — привязка новых клиентов запрещена (только сбор долга)."
+          );
+        }
+        if (e instanceof Error && e.message === "EXPEDITOR_NOT_ON_SLOT") {
+          return sendApiError(
+            reply,
+            request,
+            403,
+            "ExpeditorNotOnSlot",
+            "Экспедитор не назначен на рабочее место — привязка новых клиентов запрещена."
+          );
+        }
+        if (e instanceof Error && e.message === "ASSIGNMENT_PERSON_HAS_DEBT") {
+          const ex = e as Error & { debtMessage?: string; debtBlocks?: unknown };
+          return sendApiError(
+            reply,
+            request,
+            409,
+            "AssignmentPersonHasDebt",
+            ex.debtMessage ??
+              "Нельзя снять / заменить агента или экспедитора: остаток долга по доставленным заказам этого сотрудника должен быть ровно 0. Переплата по заказам = остаток 0 — тогда можно.",
+            ex.debtBlocks != null ? { debt_blocks: ex.debtBlocks } : undefined
           );
         }
         if (e instanceof Error && e.message === "EXPEDITOR_NOT_FOUND") {
@@ -131,7 +161,7 @@ export async function registerClientWriteRoutes(app: FastifyInstance) {
             request,
             400,
             "ValidationError",
-            "Tanlangan dastavchik topilmadi yoki nofaol. Faol dastavchikni qayta tanlang."
+            "Выбранный экспедитор не найден или неактивен. Выберите активного экспедитора."
           );
         }
         throw e;
@@ -164,6 +194,7 @@ export async function registerClientWriteRoutes(app: FastifyInstance) {
         const sub = Number.parseInt(actor.sub, 10);
         const actorUserId = Number.isFinite(sub) && sub > 0 ? sub : null;
         const body = parsed.data;
+        await assertWriteClientInScope(request, request.tenant!.id, id);
         const mapped = {
           ...body,
           contact_persons: body.contact_persons?.map((s) => ({
@@ -177,13 +208,18 @@ export async function registerClientWriteRoutes(app: FastifyInstance) {
       } catch (e) {
         const msg = e instanceof Error ? e.message : "";
         if (msg === "NOT_FOUND") return sendApiError(reply, request, 404, "NotFound");
+        if (msg === "CLIENT_OUT_OF_SCOPE") {
+          return sendApiError(reply, request, 403, "Forbidden", "Клиент вне зоны доступа агента");
+        }
+        const uniq = clientUniqueHttp(msg);
+        if (uniq) return sendApiError(reply, request, 409, uniq.error, uniq.message);
         if (msg === "DUPLICATE_AGENT_DIRECTION") {
           return sendApiError(
             reply,
             request,
             409,
             "DuplicateAgentDirection",
-            "Bir klientga bir xil agentni bir necha yo‘nalishga bog‘lab bo‘lmaydi. Har bir yo‘nalishda faqat bitta agent."
+            "Нельзя привязать одного и того же агента к клиенту по нескольким направлениям. В каждом направлении — только один агент."
           );
         }
         if (msg === "AGENT_NOT_FOUND") {
@@ -192,7 +228,7 @@ export async function registerClientWriteRoutes(app: FastifyInstance) {
             request,
             400,
             "ValidationError",
-            "Tanlangan agent topilmadi yoki nofaol. Faol agentni qayta tanlang."
+            "Выбранный агент не найден или неактивен. Выберите активного агента."
           );
         }
         if (msg === "AGENT_NOT_ON_SLOT") {
@@ -201,7 +237,28 @@ export async function registerClientWriteRoutes(app: FastifyInstance) {
             request,
             403,
             "AgentNotOnSlot",
-            "Agent ish joyiga biriktirilmagan — yangi mijoz bog‘lash taqiqlangan (faqat qarz yig‘ish)."
+            "Агент не назначен на рабочее место — привязка новых клиентов запрещена (только сбор долга)."
+          );
+        }
+        if (msg === "EXPEDITOR_NOT_ON_SLOT") {
+          return sendApiError(
+            reply,
+            request,
+            403,
+            "ExpeditorNotOnSlot",
+            "Экспедитор не назначен на рабочее место — привязка новых клиентов запрещена."
+          );
+        }
+        if (msg === "ASSIGNMENT_PERSON_HAS_DEBT") {
+          const ex = e as Error & { debtMessage?: string; debtBlocks?: unknown };
+          return sendApiError(
+            reply,
+            request,
+            409,
+            "AssignmentPersonHasDebt",
+            ex.debtMessage ??
+              "Нельзя снять / заменить агента или экспедитора: остаток долга по доставленным заказам этого сотрудника должен быть ровно 0. Переплата по заказам = остаток 0 — тогда можно.",
+            ex.debtBlocks != null ? { debt_blocks: ex.debtBlocks } : undefined
           );
         }
         if (msg === "EXPEDITOR_NOT_FOUND") {
@@ -210,7 +267,7 @@ export async function registerClientWriteRoutes(app: FastifyInstance) {
             request,
             400,
             "ValidationError",
-            "Tanlangan dastavchik topilmadi yoki nofaol. Faol dastavchikni qayta tanlang."
+            "Выбранный экспедитор не найден или неактивен. Выберите активного экспедитора."
           );
         }
         if (msg === "VALIDATION" || msg === "EMPTY") {

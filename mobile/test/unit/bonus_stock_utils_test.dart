@@ -90,6 +90,49 @@ void main() {
     expect(m[3], 12);
   });
 
+  test('preserveTotal decrease moves freed qty to others', () {
+    final m = {1: 2, 2: 1, 3: 0};
+    final result = resolveGiftQtyWithRedistribution(
+      qtyByProduct: m,
+      productId: 1,
+      requestedQty: 1,
+      maxTotal: 3,
+      manualProductIds: {},
+      preserveTotal: true,
+      allProductIds: const [1, 2, 3],
+    );
+    expect(result, 1);
+    m[1] = result;
+    expect(m[1]! + m[2]! + m[3]!, 3);
+    expect(m[1], 1);
+  });
+
+  test('preserveTotal cannot drop below max when alone', () {
+    final m = {1: 3};
+    final result = resolveGiftQtyWithRedistribution(
+      qtyByProduct: m,
+      productId: 1,
+      requestedQty: 1,
+      maxTotal: 3,
+      manualProductIds: {},
+      preserveTotal: true,
+      allProductIds: const [1],
+    );
+    expect(result, 3);
+  });
+
+  test('giveGiftQtyToOthers round-robins', () {
+    final m = {1: 0, 2: 0, 3: 5};
+    final given = giveGiftQtyToOthers(
+      qtyByProduct: m,
+      excludeProductId: 3,
+      amount: 4,
+      candidateProductIds: const [1, 2, 3],
+    );
+    expect(given, 4);
+    expect(m[1]! + m[2]!, 4);
+  });
+
   test('capGiftQtyByStock caps to available', () {
     expect(capGiftQtyByStock(stockAvailable: 5, requested: 12), 5);
     expect(capGiftQtyByStock(stockAvailable: 0, requested: 12), 0);

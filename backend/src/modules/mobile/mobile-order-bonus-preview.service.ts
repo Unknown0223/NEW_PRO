@@ -8,6 +8,7 @@ import {
 import { parseBonusStackPolicy, bonusPolicyToJson } from "../orders/bonus-stack-policy";
 import {
   fetchClientUsedAutoBonusRuleIds,
+  fetchClientUsedAutoBonusRuleIdsExcludingOrder,
   findQtyBonusPeeks,
   findWinningSumPeek,
   loadAvailableQtyByProductId,
@@ -37,10 +38,12 @@ import {
   buildQtyEligibleRowsFromPeeks,
   dedupeEligibleBonusRows,
   filterEligibleBonusesForPreview,
+  preferCategoryGiftPoolForPreview,
   rulesLinked,
   type EligibleBonusRow
 } from "./mobile-order-bonus-preview.compute";
 import { findAllEligibleDiscountRules, mapGiftProducts } from "./mobile-order-bonus-preview.query";
+import { assertAgentScopedClient } from "./mobile-agent-sync.config.service";
 
 export type MobileBonusPreviewInput = {
   client_id: number;
@@ -50,6 +53,8 @@ export type MobileBonusPreviewInput = {
   bonus_gift_overrides?: BonusGiftOverrideInput[];
   is_consignment?: boolean;
   bonus_strategy_selections?: { strategy_id: number; rule_ids: number[] }[];
+  /** Tahrir: shu zakazning o‘zi once_per_client / oy agregatidan chiqariladi. */
+  exclude_order_id?: number;
 };
 
 export async function previewMobileOrderBonus(
@@ -57,16 +62,25 @@ export async function previewMobileOrderBonus(
   agentUserId: number,
   input: MobileBonusPreviewInput
 ) {
-  const client = await prisma.client.findFirst({
+  // Create bilan bir xil scope: aktiv + agent bog‘lanishi.
+  // Nofaollarni alohida xabar (aksiya «bog‘lanmagan» deb chalkashmasin).
+  const anyClient = await prisma.client.findFirst({
     where: {
       id: input.client_id,
       tenant_id: tenantId,
-      merged_into_client_id: null,
-      is_active: true
+      merged_into_client_id: null
     },
-    select: { id: true, category: true }
+    select: { id: true, category: true, is_active: true }
   });
-  if (!client) throw new Error("BAD_CLIENT");
+  if (!anyClient) throw new Error("BAD_CLIENT");
+  if (!anyClient.is_active) throw new Error("CLIENT_INACTIVE");
+
+  try {
+    await assertAgentScopedClient(tenantId, agentUserId, input.client_id);
+  } catch {
+    throw new Error("BAD_CLIENT");
+  }
+  const client = { id: anyClient.id, category: anyClient.category };
 
   const wh = await prisma.warehouse.findFirst({
     where: { id: input.warehouse_id, tenant_id: tenantId }
@@ -107,12 +121,21 @@ export async function previewMobileOrderBonus(
 
   const validatedGiftOverrides =
     input.bonus_gift_overrides?.length ?
-      await validateBonusGiftOverrides(tenantId, input.bonus_gift_overrides)
+      await validateBonusGiftOverrides(tenantId, input.bonus_gift_overrides, [...orderedProductIds])
     : new Map<number, number>();
 
   return prisma.$transaction(async (tx) => {
     const now = new Date();
-    const usedRuleIds = await fetchClientUsedAutoBonusRuleIds(tx, tenantId, client.id);
+    const excludeOrderId =
+      input.exclude_order_id != null &&
+      Number.isFinite(input.exclude_order_id) &&
+      input.exclude_order_id > 0
+        ? input.exclude_order_id
+        : undefined;
+    const usedRuleIds =
+      excludeOrderId != null
+        ? await fetchClientUsedAutoBonusRuleIdsExcludingOrder(tx, tenantId, client.id, excludeOrderId)
+        : await fetchClientUsedAutoBonusRuleIds(tx, tenantId, client.id);
 
     const resolved = await resolveOrderBonusesForCreate(
       tx,
@@ -129,7 +152,7 @@ export async function previewMobileOrderBonus(
       validatedGiftOverrides,
       new Map<number, ReadonlyMap<number, number>>(),
       input.warehouse_id,
-      { referenceAt: now },
+      { referenceAt: now, excludeOrderId },
       orderAgent,
       {
         applyDiscount: true,
@@ -178,12 +201,14 @@ export async function previewMobileOrderBonus(
               tenantId,
               clientId: client.id,
               referenceAt: now,
+              excludeOrderId,
               timeZone: BONUS_SUM_THRESHOLD_TIMEZONE
             }),
             fetchClientMonthPaidQtyByProductExclOrder(tx, {
               tenantId,
               clientId: client.id,
               referenceAt: now,
+              excludeOrderId,
               timeZone: BONUS_SUM_THRESHOLD_TIMEZONE
             })
           ])
@@ -287,6 +312,18 @@ export async function previewMobileOrderBonus(
     }
     if (sumPeek) {
       await collectGiftIds(sumPeek.rule, sumPeek.giftPid > 0 ? sumPeek.giftPid : undefined);
+    }
+    for (const p of qtyPeeks) {
+      const peekGift = p.giftPid > 0 ? p.giftPid : undefined;
+      const next = preferCategoryGiftPoolForPreview(
+        p.rule,
+        qtyByProduct,
+        productById,
+        allowedGiftsByRuleId.get(p.rule.id) ?? [],
+        peekGift
+      );
+      allowedGiftsByRuleId.set(p.rule.id, next);
+      for (const id of next) giftProductIds.add(id);
     }
 
     const giftStockIds = [...giftProductIds].filter((id) => !stockProductIds.has(id));

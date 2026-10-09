@@ -8,14 +8,12 @@ import { prisma } from "../../config/database";
 import { env } from "../../config/env";
 import { getRedisForApp } from "../../lib/redis-cache";
 import {
-  ORDER_STATUSES,
+  ORDER_STATUSES_EXCLUDED_FROM_SALES,
   ORDER_STATUSES_OUTSTANDING_RECEIVABLE
 } from "../orders/order-status";
+import { dashboardCacheKey } from "./dashboard.cache-keys";
 
-
-export function dashboardCacheKey(tenantId: number): string {
-  return `tenant:${tenantId}:dashboard`;
-}
+export { dashboardCacheKey, dashboardCacheKeyPrefixes, isDashboardCacheKeyForTenant } from "./dashboard.cache-keys";
 
 export function stableJsonStringify(value: unknown): string {
   if (value == null) return "null";
@@ -95,7 +93,12 @@ export async function getDashboardStats(tenantId: number): Promise<DashboardStat
     products_active
   ] = await Promise.all([
     prisma.order.count({
-      where: { tenant_id: tenantId, created_at: { gte: start, lt: end } }
+      where: {
+        tenant_id: tenantId,
+        order_type: "order",
+        status: { notIn: [...ORDER_STATUSES_EXCLUDED_FROM_SALES] },
+        created_at: { gte: start, lt: end }
+      }
     }),
     prisma.order.count({
       where: { tenant_id: tenantId, status: { in: activeStatuses } }

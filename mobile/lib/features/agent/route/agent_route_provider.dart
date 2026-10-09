@@ -14,7 +14,28 @@ int _stopSortKey(Map<String, dynamic> m) =>
     (m['sort'] as num?)?.toInt() ??
     (m['order'] as num?)?.toInt() ??
     (m['order_index'] as num?)?.toInt() ??
+    (m['sort_order'] as num?)?.toInt() ??
     999999;
+
+List<Map<String, dynamic>> unionRouteStopsWithPlanned({
+  required List<Map<String, dynamic>> routeStops,
+  required List<Map<String, dynamic>> plannedStops,
+}) {
+  final ids = <int>{};
+  final out = <Map<String, dynamic>>[];
+  for (final s in routeStops) {
+    final id = (s['client_id'] as num?)?.toInt();
+    if (id != null) ids.add(id);
+    out.add(s);
+  }
+  for (final s in plannedStops) {
+    final id = (s['client_id'] as num?)?.toInt();
+    if (id == null || ids.contains(id)) continue;
+    ids.add(id);
+    out.add(s);
+  }
+  return out;
+}
 
 Future<Map<String, dynamic>> mergeRouteWithLocal(Map<String, dynamic>? route) async {
   if (route == null) return localRouteFallback();
@@ -120,14 +141,32 @@ Future<Map<String, dynamic>> resolveTodayRoute(
           routeDate: routeDate,
         );
     final merged = await mergeRouteWithLocal(raw);
+    final planned = await plannedRouteFallback(
+      routeDate: routeDate,
+      weekday: DateTime.parse(routeDate).weekday,
+    );
     if (merged['_localFallback'] == true) {
-      return plannedRouteFallback(
-        routeDate: routeDate,
-        weekday: DateTime.parse(routeDate).weekday,
-      );
+      return planned;
     }
-    final stops = (merged['stops'] as List?) ?? [];
-    if (stops.isNotEmpty) return {...merged, '_routeDate': routeDate};
+    final mergedStops = ((merged['stops'] as List?) ?? [])
+        .whereType<Map>()
+        .map((e) => Map<String, dynamic>.from(e))
+        .toList();
+    final plannedStops = ((planned['stops'] as List?) ?? [])
+        .whereType<Map>()
+        .map((e) => Map<String, dynamic>.from(e))
+        .toList();
+    final stops = unionRouteStopsWithPlanned(
+      routeStops: mergedStops,
+      plannedStops: plannedStops,
+    );
+    if (stops.isEmpty) return planned;
+    return {
+      ...merged,
+      'stops': stops,
+      '_routeDate': routeDate,
+      '_savedStopCount': mergedStops.length,
+    };
   } on UnauthorizedException {
     rethrow;
   } catch (_) {}
@@ -160,7 +199,12 @@ final realTodayRouteProvider = FutureProvider<Map<String, dynamic>?>((ref) async
       final stops = (raw['stops'] as List?) ?? [];
       if (stops.isNotEmpty) {
         final merged = await mergeRouteWithLocal(raw);
-        return {...merged, '_routeDate': routeDate};
+        return {
+          ...merged,
+          '_routeDate': routeDate,
+          if (merged['_localFallback'] != true)
+            '_savedStopCount': ((merged['stops'] as List?) ?? const []).length,
+        };
       }
     }
   } on UnauthorizedException {

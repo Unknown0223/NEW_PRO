@@ -298,15 +298,43 @@ export const EXTENDED_IMPORT_PHASES_3_4: ExtendedTableSpec[][] = [
       delegate: "agentRouteDay",
       idMap: "agentRouteDay",
       naturalKey: ["agent_id", "route_date"],
-      fk: { agent_id: "user" },
+      fk: { agent_id: "user", work_slot_id: "workSlot" },
       dates: ["route_date", "created_at", "updated_at"]
+    },
+    {
+      file: "bank_transfer_inbox",
+      delegate: "bankTransferInbox",
+      idMap: "bankTransferInbox",
+      naturalKey: ["source", "external_id"],
+      fk: {
+        matched_client_id: "client",
+        assigned_client_id: "client",
+        payment_id: "payment",
+        cash_desk_id: "cashDesk",
+        ignored_by_user_id: "user",
+        created_by_user_id: "user"
+      },
+      decimals: ["amount"],
+      dates: ["paid_at", "ignored_at", "created_at", "updated_at"]
+    },
+    {
+      file: "bank_transfer_inbox_events",
+      delegate: "bankTransferInboxEvent",
+      idMap: "bankTransferInboxEvent",
+      fk: {
+        inbox_id: "bankTransferInbox",
+        actor_user_id: "user",
+        from_client_id: "client",
+        to_client_id: "client"
+      },
+      dates: ["created_at"]
     },
     {
       file: "tenant_tasks",
       delegate: "tenantTask",
       idMap: "tenantTask",
-      fk: { assignee_user_id: "user", created_by_user_id: "user" },
-      dates: ["due_at", "created_at", "updated_at"]
+      fk: { assignee_user_id: "user", created_by_user_id: "user", client_id: "client" },
+      dates: ["due_at", "started_at", "completed_at", "cancelled_at", "created_at", "updated_at"]
     },
     {
       file: "in_app_notifications",

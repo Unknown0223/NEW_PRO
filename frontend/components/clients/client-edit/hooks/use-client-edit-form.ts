@@ -19,6 +19,7 @@ import { pickCityTerritoryHint } from "@/lib/city-territory-hint";
 import { mergeRefOptions } from "@/lib/merge-ref-options";
 import { mergeRefSelectOptions } from "@/lib/ref-select-options";
 import { orderAgentFilterOption, orderExpeditorFilterOption } from "@/lib/order-picker-labels";
+import { filterStaffByTerritoryPickerContext } from "@/lib/client-edit-territory-staff-picker";
 import {
   type ClientDetailApi,
   type AgentSlotForm,
@@ -148,7 +149,7 @@ export function useClientEditForm({
     queryFn: async () => {
       const { data } = await api.get<{
         data: Array<{ id: number; fio: string; login: string; is_active: boolean }>;
-      }>(`/api/${tenantSlug}/expeditors`);
+      }>(`/api/${tenantSlug}/expeditors?picker=1&for_new_work=1`);
       return data.data
         .filter((r) => r.is_active)
         .map((r) => ({ id: r.id, name: r.fio, login: r.login }));
@@ -238,6 +239,25 @@ export function useClientEditForm({
     }
   });
 
+  const creatorTerrQ = useQuery({
+    queryKey: ["clients-creator-territory-options", tenantSlug],
+    enabled: Boolean(tenantSlug),
+    staleTime: STALE.reference,
+    queryFn: async () => {
+      const { data } = await api.get<{
+        scoped: boolean;
+        cities: { value: string; label: string; zone: string | null; region: string | null }[];
+        regions: { value: string; label: string }[];
+        zones: string[];
+      }>(`/api/${tenantSlug}/clients/creator-territory-options`);
+      return data;
+    }
+  });
+  const creatorScoped = Boolean(creatorTerrQ.data?.scoped);
+  const creatorCities = creatorTerrQ.data?.cities ?? [];
+  const creatorRegions = creatorTerrQ.data?.regions ?? [];
+  const creatorZones = creatorTerrQ.data?.zones ?? [];
+
   const catOpts = useMemo(() => {
     const d = refsQ.data;
     if (!d) return [];
@@ -255,13 +275,21 @@ export function useClientEditForm({
     return mergeRefOptions(clientTypeCode, d.client_type_codes).map((v) => ({ value: v, label: v }));
   }, [clientTypeCode, refsQ.data]);
   const terrOpts = useMemo(() => {
+    if (creatorScoped && creatorRegions.length > 0) {
+      const base = creatorRegions.map((o) => ({ value: o.value, label: o.label }));
+      const cur = region.trim();
+      if (cur && !base.some((o) => o.value === cur)) {
+        return [{ value: cur, label: cur }, ...base];
+      }
+      return base;
+    }
     const d = refsQ.data;
     if (!d) return [];
     if (d.region_options?.length) {
       return mergeRefSelectOptions(region, d.region_options, d.regions);
     }
     return mergeRefOptions(region, d.regions).map((v) => ({ value: v, label: v }));
-  }, [region, refsQ.data]);
+  }, [creatorRegions, creatorScoped, region, refsQ.data]);
   const formatOpts = useMemo(() => {
     const d = refsQ.data;
     if (!d) return [];
@@ -283,14 +311,31 @@ export function useClientEditForm({
     [productCategoryRef, refsQ.data?.product_category_refs]
   );
   const cityOpts = useMemo(() => {
+    if (creatorScoped && creatorCities.length > 0) {
+      const base = creatorCities.map((o) => ({ value: o.value, label: o.label }));
+      const cur = city.trim();
+      if (cur && !base.some((o) => o.value === cur)) {
+        const fromRefs = refsQ.data?.city_options?.find((o) => o.value === cur);
+        return [{ value: cur, label: fromRefs?.label ?? cur }, ...base];
+      }
+      return base;
+    }
     const d = refsQ.data;
     if (!d) return [];
     if (d.city_options?.length) {
       return mergeRefSelectOptions(city, d.city_options, d.cities);
     }
     return mergeRefOptions(city, d.cities).map((v) => ({ value: v, label: v }));
-  }, [city, refsQ.data]);
-  const zoneOpts = useMemo(() => mergeRefOptions(zone, refsQ.data?.zones), [zone, refsQ.data?.zones]);
+  }, [city, creatorCities, creatorScoped, refsQ.data]);
+  const zoneOpts = useMemo(() => {
+    if (creatorScoped && creatorZones.length > 0) {
+      const base = [...creatorZones];
+      const cur = zone.trim();
+      if (cur && !base.includes(cur)) return [cur, ...base];
+      return base;
+    }
+    return mergeRefOptions(zone, refsQ.data?.zones);
+  }, [creatorScoped, creatorZones, refsQ.data?.zones, zone]);
   const logOpts = useMemo(
     () => mergeRefOptions(logisticsService, refsQ.data?.logistics_services),
     [logisticsService, refsQ.data?.logistics_services]
@@ -299,21 +344,27 @@ export function useClientEditForm({
   const hintRows = useMemo(() => Object.values(refsQ.data?.city_territory_hints ?? {}), [refsQ.data?.city_territory_hints]);
 
   const cascadedCityOpts = useMemo(() => {
-    if (!region) return cityOpts;
-    const allow = new Set(
-      hintRows
-        .filter((h) => !region || h.region_stored === region)
-        .map((h) => [h.region_stored, h.zone_stored])
-        .flat()
-        .filter(Boolean)
-    );
+    if (!region && !zone) return cityOpts;
     const filtered = cityOpts.filter((o) => {
-      if (!allow.size) return true;
+      const creator = creatorCities.find((c) => c.value === o.value);
+      if (creator) {
+        if (region && creator.region && creator.region !== region) return false;
+        if (zone && creator.zone && creator.zone !== zone) return false;
+        return true;
+      }
       const h = pickCityTerritoryHint(refsQ.data?.city_territory_hints, o.value);
-      return (!!h && (!region || h.region_stored === region)) || allow.has(o.value);
+      if (!h) return creatorScoped ? true : false;
+      if (region && h.region_stored !== region) return false;
+      if (zone && h.zone_stored !== zone) return false;
+      return true;
     });
-    return filtered.length > 0 ? filtered : cityOpts;
-  }, [cityOpts, hintRows, refsQ.data?.city_territory_hints, region]);
+    const current = city.trim();
+    if (current && !filtered.some((o) => o.value === current)) {
+      const cur = cityOpts.find((o) => o.value === current);
+      return cur ? [cur, ...filtered] : filtered;
+    }
+    return filtered;
+  }, [city, cityOpts, creatorCities, creatorScoped, refsQ.data?.city_territory_hints, region, zone]);
 
   const cascadedZoneOpts = useMemo(() => {
     let base: string[];
@@ -332,45 +383,60 @@ export function useClientEditForm({
       );
       const cityHint = city ? pickCityTerritoryHint(refsQ.data?.city_territory_hints, city) : null;
       if (cityHint?.zone_stored) allow.add(cityHint.zone_stored);
+      const creatorCity = creatorCities.find((c) => c.value === city);
+      if (creatorCity?.zone) allow.add(creatorCity.zone);
+      for (const c of creatorCities) {
+        if (region && c.region && c.region !== region) continue;
+        if (c.zone) allow.add(c.zone);
+      }
       const filtered = zoneOpts.filter((v) => allow.has(v));
-      base = filtered.length > 0 ? filtered : zoneOpts;
+      base = filtered.length > 0 ? filtered : creatorScoped ? filtered : zoneOpts;
     }
     const current = zone.trim();
     if (current && !base.includes(current)) return [current, ...base];
     return base;
-  }, [city, hintRows, refsQ.data?.city_territory_hints, region, zone, zoneOpts]);
+  }, [city, creatorCities, hintRows, refsQ.data?.city_territory_hints, region, zone, zoneOpts]);
 
   const onCitySelect = (next: string) => {
     setCity(next);
+    const creator = creatorCities.find((c) => c.value === next);
+    if (creator?.region) setRegion(creator.region);
+    if (creator?.zone) setZone(creator.zone);
     const h = pickCityTerritoryHint(refsQ.data?.city_territory_hints, next);
     if (!h) return;
-    if (h.region_stored) setRegion(h.region_stored);
-    if (h.zone_stored) setZone(h.zone_stored);
+    if (!creator?.region && h.region_stored) setRegion(h.region_stored);
+    if (!creator?.zone && h.zone_stored) setZone(h.zone_stored);
   };
   const onRegionSelect = (next: string) => {
     setRegion(next);
     if (next.trim() !== region.trim()) {
       setCity("");
-      setZone("");
     }
   };
 
   const onZoneSelect = (next: string) => {
     setZone(next);
+    if (next.trim() !== zone.trim()) {
+      setRegion("");
+      setCity("");
+    }
   };
 
   const agentsForTeamPicker = useMemo(() => {
     const all = agentsPickerQ.data ?? [];
     const ctx = territoryAgentPickerCtxQ.data;
-    if (!ctx || !ctx.territory_matched) return all;
-    const slotIds = new Set<number>();
+    const slotIds: number[] = [];
     for (const sl of agentSlots) {
       const n = Number.parseInt(String(sl.agentId).trim(), 10);
-      if (Number.isFinite(n) && n > 0) slotIds.add(n);
+      if (Number.isFinite(n) && n > 0) slotIds.push(n);
     }
-    const allow = new Set(ctx.agent_ids);
-    for (const id of slotIds) allow.add(id);
-    return all.filter((a) => allow.has(a.id));
+    return filterStaffByTerritoryPickerContext(
+      all,
+      ctx
+        ? { territory_matched: ctx.territory_matched, staff_ids: ctx.agent_ids ?? [] }
+        : null,
+      slotIds
+    );
   }, [agentsPickerQ.data, territoryAgentPickerCtxQ.data, agentSlots]);
 
   const agentTeamSelectOptions = useMemo(
@@ -380,15 +446,18 @@ export function useClientEditForm({
   const expeditorsForTeamPicker = useMemo(() => {
     const all = expeditorsPickerQ.data ?? [];
     const ctx = territoryAgentPickerCtxQ.data;
-    if (!ctx || !ctx.territory_matched) return all;
-    const slotIds = new Set<number>();
+    const slotIds: number[] = [];
     for (const sl of agentSlots) {
       const n = Number.parseInt(String(sl.expeditorUserId).trim(), 10);
-      if (Number.isFinite(n) && n > 0) slotIds.add(n);
+      if (Number.isFinite(n) && n > 0) slotIds.push(n);
     }
-    const allow = new Set(ctx.expeditor_ids);
-    for (const id of slotIds) allow.add(id);
-    return all.filter((u) => allow.has(u.id));
+    return filterStaffByTerritoryPickerContext(
+      all,
+      ctx
+        ? { territory_matched: ctx.territory_matched, staff_ids: ctx.expeditor_ids ?? [] }
+        : null,
+      slotIds
+    );
   }, [expeditorsPickerQ.data, territoryAgentPickerCtxQ.data, agentSlots]);
 
   const expeditorTeamSelectOptions = useMemo(
@@ -451,8 +520,10 @@ export function useClientEditForm({
     if (!c) return;
     const h = pickCityTerritoryHint(hints, c);
     if (!h) return;
-    if (h.region_stored) setRegion(h.region_stored);
-    if (h.zone_stored) setZone(h.zone_stored);
+    // Faqat DBda bo‘sh maydonlarni to‘ldiramiz — saqlangan qiymatni yashirmaymiz.
+    // (Ilgari har doim overwrite qilinar edi: UI da область bor, DBda yo‘q → report N/A.)
+    if (!client.region?.trim() && h.region_stored) setRegion(h.region_stored);
+    if (!client.zone?.trim() && h.zone_stored) setZone(h.zone_stored);
   }, [clientQ.data, refsQ.data?.city_territory_hints]);
 
   const mutation = useMutation({
@@ -753,9 +824,9 @@ export function useClientEditForm({
         applyPickedCoords(byAddress.lat, byAddress.lon);
         return;
       }
-      setMapSearchNotice("Koordinata yoki manzil aniqlanmadi. Matn formatini tekshiring.");
+      setMapSearchNotice("Не удалось определить координаты или адрес. Проверьте формат текста.");
     } catch {
-      setMapSearchNotice("Yandex карта yuklanmadi. Internet yoki API kalitini tekshiring.");
+      setMapSearchNotice("Не удалось загрузить Yandex карту. Проверьте интернет или API-ключ.");
     } finally {
       setMapSearchPending(false);
     }
@@ -871,6 +942,7 @@ export function useClientEditForm({
     terrOpts,
     cascadedCityOpts,
     cascadedZoneOpts,
+    creatorScoped,
     prodCatOpts,
     salesOpts,
     logOpts,

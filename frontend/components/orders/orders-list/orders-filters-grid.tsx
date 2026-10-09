@@ -173,29 +173,32 @@ export function OrdersFiltersGrid({
       {cell(
         "bonusAlert",
         <OrdersListSingleMultiFilter
-          placeholder="Проблемы с бонусом"
-          searchPlaceholder="Бонус"
-          triggerClassName={ordersFilterRowSelect}
-          items={BONUS_ALERT_FILTER_OPTIONS.filter((o) => o.value !== "").map((o) => ({
-            id: o.value,
-            title: o.label
-          }))}
-          value={filterDraft.bonus_alert}
-          onChange={(v) => patchDraft({ bonus_alert: v })}
-        />
-      )}
-      {cell(
-        "orderAlert",
-        <OrdersListSingleMultiFilter
-          placeholder="Проблемные заявки"
+          placeholder="Проблемы заявок"
           searchPlaceholder="Проблемы"
           triggerClassName={ordersFilterRowSelect}
-          items={ORDER_ALERT_FILTER_OPTIONS.filter((o) => o.value !== "").map((o) => ({
-            id: o.value,
-            title: o.label
-          }))}
-          value={filterDraft.order_alert}
-          onChange={(v) => patchDraft({ order_alert: v })}
+          items={[
+            ...BONUS_ALERT_FILTER_OPTIONS.filter((o) => o.value !== "" && o.value !== "any").map((o) => ({
+              id: o.value,
+              title: o.label
+            })),
+            ...ORDER_ALERT_FILTER_OPTIONS.filter((o) => o.value === "any").map((o) => ({
+              id: "order_any",
+              title: o.label
+            }))
+          ]}
+          value={[
+            ...filterDraft.bonus_alert.split(",").map((s) => s.trim()).filter(Boolean),
+            filterDraft.order_alert === "any" ? "order_any" : ""
+          ]
+            .filter(Boolean)
+            .join(",")}
+          onChange={(v) => {
+            const parts = v.split(",").map((s) => s.trim()).filter(Boolean);
+            patchDraft({
+              bonus_alert: parts.filter((p) => p !== "order_any").join(","),
+              order_alert: parts.includes("order_any") ? "any" : ""
+            });
+          }}
         />
       )}
       {cell(

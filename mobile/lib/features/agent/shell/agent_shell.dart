@@ -18,6 +18,7 @@ import 'agent_drawer.dart';
 import 'agent_scaffold_key.dart';
 import 'agent_van_selling_strip.dart';
 import '../clients/client_map_holder.dart';
+import '../sync/agent_sync_overlay.dart';
 import '../sync/manual_sync_provider.dart';
 import '../sync/sync_progress_sheet.dart';
 import '../sync/sync_success_dialog.dart';
@@ -25,6 +26,7 @@ import '../../../core/l10n/app_strings_ru.dart';
 import '../../../core/notifications/notifications_day_rollover.dart';
 import '../../../core/time/work_region_time.dart';
 import '../orders/held_orders_provider.dart';
+import '../orders/create_order_exit_guard.dart';
 import 'agent_menu_config.dart';
 
 /// Agent ilova qobig‘i: drawer + shablon pastki navigatsiya.
@@ -65,6 +67,9 @@ class _AgentShellState extends ConsumerState<AgentShell> with WidgetsBindingObse
       ref.read(authStateProvider.notifier).refreshMobileConfig();
       ref.invalidate(syncCountTodayProvider);
       unawaited(ref.read(notificationsDayRolloverProvider).checkNow());
+      try {
+        unawaited(ref.read(gpsTrackerProvider.notifier).flushPendingLocationPings());
+      } catch (_) {}
     }
   }
 
@@ -128,11 +133,7 @@ class _AgentShellState extends ConsumerState<AgentShell> with WidgetsBindingObse
               Expanded(child: ClientMapPreloadHost(child: widget.child)),
             ],
           ),
-          if (syncRunning)
-            ModalBarrier(
-              color: Colors.black.withValues(alpha: 0.35),
-              dismissible: false,
-            ),
+          if (syncRunning) const AgentSyncLoadingOverlay(),
           if (syncRunning) SyncProgressSheet(state: sync),
         ],
       ),
@@ -141,18 +142,24 @@ class _AgentShellState extends ConsumerState<AgentShell> with WidgetsBindingObse
           : AgentBottomNav(
               selectedIndex: _tabIndex(loc),
               onTab: (i) {
-                switch (i) {
-                  case 0:
-                    context.go('/home');
-                  case 1:
-                    context.go('/visits');
-                  case 2:
-                    context.go('/orders');
-                  case 3:
-                    context.go('/kpi');
-                  case 4:
-                    context.go('/kpi/route');
-                }
+                const paths = [
+                  '/home',
+                  '/visits',
+                  '/orders',
+                  '/kpi',
+                  '/kpi/route',
+                ];
+                if (i < 0 || i >= paths.length) return;
+                final path = paths[i];
+                final router = GoRouter.of(context);
+                final loc = GoRouterState.of(context).uri.path;
+                final container = ProviderScope.containerOf(context);
+                unawaited(leaveCreateOrderThenGo(
+                  container: container,
+                  go: router.go,
+                  path: path,
+                  currentLocation: loc,
+                ));
               },
             ),
     );

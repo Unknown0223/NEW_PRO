@@ -6,6 +6,7 @@ import { ensureTenantContext } from "../../lib/tenant-context";
 import { ADMIN_AND_OPERATOR_LIKE_ROLES, TENANT_ADMIN_ROLE } from "../../lib/tenant-user-roles";
 import { jwtAccessVerify, requireRoles } from "../auth/auth.prehandlers";
 import { listTimesheetFilters, listTimesheetMatrix, patchAttendanceCell, patchAttendanceCells } from "./timesheet.service";
+import { registerTimesheetNormRoutes, timesheetActorLabel } from "./timesheet.route.norm";
 
 const readRoles = [...ADMIN_AND_OPERATOR_LIKE_ROLES, "supervisor"] as const;
 const writeRoles = ADMIN_AND_OPERATOR_LIKE_ROLES;
@@ -44,20 +45,30 @@ function mapPatchError(reply: Parameters<typeof sendApiError>[0], request: Param
   return false;
 }
 
-function actorLabel(request: { user?: unknown }): string {
-  const u = request.user as { role?: string; login?: string } | undefined;
-  const role = u?.role?.trim();
-  const login = u?.login?.trim();
-  if (role && login) return `${role} (${login})`;
-  return role || login || "система";
-}
-
 function actorIsAdmin(request: { user?: unknown }): boolean {
   const role = (request.user as { role?: string } | undefined)?.role?.trim();
   return role === TENANT_ADMIN_ROLE;
 }
 
+/** `roles=a,b` yoki `roles=a&roles=b` (Fastify array) → unique list. */
+function parseCsvOrList(raw: unknown): string[] | undefined {
+  if (raw == null) return undefined;
+  if (Array.isArray(raw)) {
+    const list = raw
+      .flatMap((x) => String(x).split(","))
+      .map((s) => s.trim())
+      .filter(Boolean);
+    return list.length ? [...new Set(list)] : undefined;
+  }
+  const s = String(raw).trim();
+  if (!s) return undefined;
+  const list = s.split(",").map((x) => x.trim()).filter(Boolean);
+  return list.length ? [...new Set(list)] : undefined;
+}
+
 export async function registerTimesheetRoutes(app: FastifyInstance) {
+  await registerTimesheetNormRoutes(app);
+
   app.get(
     "/api/:slug/timesheet/filters",
     { preHandler: [jwtAccessVerify, requireRoles(...readRoles)] },
@@ -73,15 +84,23 @@ export async function registerTimesheetRoutes(app: FastifyInstance) {
     { preHandler: [jwtAccessVerify, requireRoles(...readRoles)] },
     async (request, reply) => {
       if (!ensureTenantContext(request, reply)) return;
-      const q = request.query as Record<string, string | undefined>;
-      const month = (q.month ?? "").trim();
+      const q = request.query as Record<string, unknown>;
+      const month = String(q.month ?? "").trim();
       if (!month) return sendApiError(reply, request, 400, "BadMonth");
-      const user_id = q.user_id ? Number.parseInt(q.user_id, 10) : undefined;
-      if (q.user_id && Number.isNaN(user_id)) return sendApiError(reply, request, 400, "BadUserId");
+      const userIdRaw = q.user_id != null ? String(q.user_id).trim() : "";
+      const user_id = userIdRaw ? Number.parseInt(userIdRaw, 10) : undefined;
+      if (userIdRaw && Number.isNaN(user_id)) return sendApiError(reply, request, 400, "BadUserId");
       try {
+        const roles = parseCsvOrList(q.roles) ?? parseCsvOrList(q.role);
+        const branches = parseCsvOrList(q.branches) ?? parseCsvOrList(q.branch);
+        const directionRaw = String(q.direction_id ?? q.direction ?? "").trim();
+        const direction_id = directionRaw ? Number.parseInt(directionRaw, 10) : undefined;
         const data = await listTimesheetMatrix(request.tenant!.id, {
           month,
-          role: q.role?.trim() || undefined,
+          roles,
+          branches,
+          branch: branches?.length === 1 ? branches[0] : undefined,
+          direction_id: Number.isFinite(direction_id) ? direction_id : undefined,
           user_id
         });
         return reply.send({ data });
@@ -107,7 +126,7 @@ export async function registerTimesheetRoutes(app: FastifyInstance) {
           request.tenant!.id,
           actorUserIdOrNull(request),
           parsed.data.entries,
-          actorLabel(request),
+          await timesheetActorLabel(request),
           { actorIsAdmin: actorIsAdmin(request) }
         );
         return reply.send(data);
@@ -139,7 +158,7 @@ export async function registerTimesheetRoutes(app: FastifyInstance) {
             status: parsed.data.status,
             source: parsed.data.source,
             comment: parsed.data.comment,
-            changedBy: actorLabel(request)
+            changedBy: await timesheetActorLabel(request)
           },
           { actorIsAdmin: actorIsAdmin(request) }
         );

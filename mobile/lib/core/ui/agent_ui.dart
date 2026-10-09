@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 
 import '../l10n/app_strings_ru.dart';
+import '../errors/user_facing_error.dart';
+import '../theme/app_colors.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_typography.dart';
+import 'client_photo_thumb.dart';
 
 /// Agent 2.0 shablon UI — umumiy komponentlar.
 
@@ -519,6 +522,7 @@ class AgentOutletCard extends StatelessWidget {
   final String subtitle;
   final String trailing;
   final String? grade;
+  final String? photoUrl;
   final Color? trailingColor;
   final Widget? trailingWidget;
   final Widget? headerTrailing;
@@ -530,6 +534,7 @@ class AgentOutletCard extends StatelessWidget {
     required this.subtitle,
     required this.trailing,
     this.grade,
+    this.photoUrl,
     this.trailingColor,
     this.trailingWidget,
     this.headerTrailing,
@@ -551,15 +556,7 @@ class AgentOutletCard extends StatelessWidget {
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Container(
-                    width: 43,
-                    height: 43,
-                    decoration: BoxDecoration(
-                      color: AppColors.surfaceVariant,
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: const Icon(Icons.storefront_outlined, color: AppColors.textSecondary),
-                  ),
+                  ClientPhotoThumb(source: photoUrl, size: 43, radius: 12),
                   const SizedBox(width: 12),
                   Expanded(
                     child: Column(
@@ -799,7 +796,7 @@ class AgentMenuTile extends StatelessWidget {
 /// Agent roli badge (shablon teal).
 class AgentRoleBadge extends StatelessWidget {
   final String label;
-  const AgentRoleBadge({super.key, this.label = 'Agent'});
+  const AgentRoleBadge({super.key, this.label = 'Агент'});
 
   @override
   Widget build(BuildContext context) {
@@ -1137,6 +1134,7 @@ void showAgentToast(
   VoidCallback? onDismiss,
   Color accentColor = AppColors.warning,
 }) {
+  final text = UserFacingError.stripTechnical(message);
   final messenger = ScaffoldMessenger.of(context);
   final mq = MediaQuery.of(context);
   final top = mq.padding.top;
@@ -1153,7 +1151,7 @@ void showAgentToast(
       dismissDirection: DismissDirection.up,
       duration: const Duration(seconds: 5),
       content: _AgentSnackContent(
-        message: message,
+        message: text,
         accentColor: accentColor,
         onDismiss: () {
           messenger.hideCurrentSnackBar();

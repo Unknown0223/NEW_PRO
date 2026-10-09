@@ -271,8 +271,39 @@ export async function getMobileAgentAssignedCities(
     where: { id: agentUserId, tenant_id: tenantId, is_active: true },
     select: { territory: true }
   });
-  if (user?.territory) {
-    const parts = parseUserTerritoryParts(user.territory);
+
+  const slotTerritoriesRow = await prisma.slotUserLink.findFirst({
+    where: {
+      tenant_id: tenantId,
+      user_id: agentUserId,
+      ended_at: null,
+      slot: { tenant_id: tenantId, deleted_at: null }
+    },
+    select: { slot: { select: { territory: true, territories: true } } }
+  });
+  const slotTerritoryList: string[] = [];
+  if (slotTerritoriesRow?.slot) {
+    for (const t of slotTerritoriesRow.slot.territories ?? []) {
+      if (typeof t === "string" && t.trim()) slotTerritoryList.push(t.trim());
+    }
+    if (
+      slotTerritoryList.length === 0 &&
+      typeof slotTerritoriesRow.slot.territory === "string" &&
+      slotTerritoriesRow.slot.territory.trim()
+    ) {
+      slotTerritoryList.push(slotTerritoriesRow.slot.territory.trim());
+    }
+  }
+  // User.territory — primary fallback (mirror); slot list ustun.
+  const territoryStrings =
+    slotTerritoryList.length > 0
+      ? slotTerritoryList
+      : user?.territory?.trim()
+        ? [user.territory.trim()]
+        : [];
+
+  for (const territoryRaw of territoryStrings) {
+    const parts = parseUserTerritoryParts(territoryRaw);
     if (parts.city) {
       if (!isLikelyRegionStored(parts.city)) {
         addCity(map, parts.city, parts.zone, parts.oblast);
@@ -373,7 +404,8 @@ export async function getMobileAgentAssignedCities(
     );
   }
 
-  const hasTerritoryScope = territoryLinks.length > 0 || Boolean(user?.territory?.trim());
+  const hasTerritoryScope =
+    territoryLinks.length > 0 || territoryStrings.length > 0;
 
   if (hasTerritoryScope) {
     for (const ar of assignedRegions) {

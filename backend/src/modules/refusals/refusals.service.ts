@@ -61,10 +61,14 @@ export async function listClientRefusals(
     const to = parseYmdEnd(q.date_to);
     if (to) conditions.push(Prisma.sql`cr.created_at <= ${to}`);
   }
+  const requestedAgents = [
+    ...(q.agent_ids ?? []),
+    ...(q.agent_id != null && q.agent_id > 0 ? [q.agent_id] : [])
+  ];
   const agentScope = actor
-    ? intersectRequestedAgentIds(q.agent_id != null && q.agent_id > 0 ? [q.agent_id] : undefined, actor)
+    ? intersectRequestedAgentIds(requestedAgents.length ? requestedAgents : undefined, actor)
     : {
-        agentIds: q.agent_id != null && q.agent_id > 0 ? [q.agent_id] : [],
+        agentIds: requestedAgents,
         restricted: false
       };
   if (agentScope.restricted) {
@@ -76,14 +80,23 @@ export async function listClientRefusals(
   } else if (agentScope.agentIds.length > 0) {
     conditions.push(Prisma.sql`cr.agent_id IN (${Prisma.join(agentScope.agentIds)})`);
   }
-  if (q.refusal_reason_ref?.trim()) {
-    conditions.push(Prisma.sql`cr.refusal_reason_ref = ${q.refusal_reason_ref.trim()}`);
-  }
-
-  if (q.client_category?.trim()) conditions.push(Prisma.sql`c.category = ${q.client_category.trim()}`);
-  if (q.zone?.trim()) conditions.push(Prisma.sql`c.zone = ${q.zone.trim()}`);
-  if (q.region?.trim()) conditions.push(Prisma.sql`c.region = ${q.region.trim()}`);
-  if (q.city?.trim()) conditions.push(Prisma.sql`c.city = ${q.city.trim()}`);
+  const csv = (raw?: string) =>
+    [...new Set((raw ?? "").split(",").map((s) => s.trim()).filter(Boolean))];
+  const reasons = csv(q.refusal_reason_ref);
+  if (reasons.length === 1) conditions.push(Prisma.sql`cr.refusal_reason_ref = ${reasons[0]}`);
+  else if (reasons.length > 1) conditions.push(Prisma.sql`cr.refusal_reason_ref IN (${Prisma.join(reasons)})`);
+  const categories = csv(q.client_category);
+  if (categories.length === 1) conditions.push(Prisma.sql`c.category = ${categories[0]}`);
+  else if (categories.length > 1) conditions.push(Prisma.sql`c.category IN (${Prisma.join(categories)})`);
+  const zones = csv(q.zone);
+  if (zones.length === 1) conditions.push(Prisma.sql`c.zone = ${zones[0]}`);
+  else if (zones.length > 1) conditions.push(Prisma.sql`c.zone IN (${Prisma.join(zones)})`);
+  const regions = csv(q.region);
+  if (regions.length === 1) conditions.push(Prisma.sql`c.region = ${regions[0]}`);
+  else if (regions.length > 1) conditions.push(Prisma.sql`c.region IN (${Prisma.join(regions)})`);
+  const cities = csv(q.city);
+  if (cities.length === 1) conditions.push(Prisma.sql`c.city = ${cities[0]}`);
+  else if (cities.length > 1) conditions.push(Prisma.sql`c.city IN (${Prisma.join(cities)})`);
 
   if (q.search?.trim()) {
     const needle = `%${q.search.trim()}%`;

@@ -86,13 +86,6 @@ export function ClientsTemplateSelectField({
     return pruneToAllowedOptions(raw, allowed);
   }, [values, multi, allowed]);
 
-  useEffect(() => {
-    const same =
-      normalizedValues.length === values.length &&
-      normalizedValues.every((v, i) => v === values[i]);
-    if (!same) onChange(normalizedValues);
-  }, [normalizedValues, values, onChange]);
-
   const hasValue = normalizedValues.length > 0;
   const visibleValues = useMemo(() => filteredOptions.map((o) => o.value), [filteredOptions]);
   const allSelected =
@@ -185,7 +178,7 @@ export function ClientsTemplateSelectField({
       >
         <span
           className={cn(
-            "pointer-events-none absolute bg-card leading-none transition-all duration-200 font-medium text-gray-600",
+            "pointer-events-none absolute bg-inherit leading-none transition-all duration-200 font-medium text-gray-600",
             hasValue
               ? compact
                 ? "left-1.5 top-0 -translate-y-1/2 px-0.5 text-[10px]"
@@ -231,7 +224,7 @@ export function ClientsTemplateSelectField({
       </button>
 
       {open ? (
-        <div className="absolute left-0 right-0 top-full z-50 mt-1 min-w-[220px] overflow-hidden rounded-lg border border-border bg-card shadow-xl">
+        <div className="absolute left-0 top-full z-50 mt-1 w-[min(420px,80vw)] min-w-[280px] overflow-hidden rounded-lg border border-border bg-card shadow-xl">
           {searchable ? (
             <div className="relative border-b border-border px-2 py-2">
               <Search
@@ -281,7 +274,13 @@ export function ClientsTemplateSelectField({
                     )}
                   >
                     <OptionIndicator checked={checked} multi={multi} />
-                    <span className={cn("truncate text-left", checked && "font-semibold text-emerald-800")}>
+                    <span
+                      className={cn(
+                        "min-w-0 flex-1 whitespace-normal break-words text-left text-[13px] leading-snug",
+                        checked && "font-semibold text-emerald-800"
+                      )}
+                      title={opt.label}
+                    >
                       {opt.label}
                     </span>
                   </button>

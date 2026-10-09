@@ -66,7 +66,9 @@ export const createOrderBodySchema = z
     source_order_ids: z.array(z.number().int().positive()).optional(),
     minus_lines: z.array(exchangeLineSchema).optional(),
     plus_lines: z.array(plusLineSchema).optional(),
-    reason_ref: z.string().trim().max(256).optional().nullable()
+    reason_ref: z.string().trim().max(256).optional().nullable(),
+    /** Ixtiyoriy hujjat ID (har qanday matn); bo‘sh → create dan keyin String(id) */
+    number: z.string().trim().min(1).max(64).optional().nullable()
   })
   .superRefine((data, ctx) => {
     const ot = data.order_type ?? "order";
@@ -74,21 +76,21 @@ export const createOrderBodySchema = z
       if (!data.source_order_ids?.length) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
-          message: "Manba zakazlar (source_order_ids) majburiy",
+          message: "Исходные заказы (source_order_ids) обязательны",
           path: ["source_order_ids"]
         });
       }
       if (!data.minus_lines?.length) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
-          message: "Kamayuvchi qatorlar (minus_lines) majburiy",
+          message: "Строки списания (minus_lines) обязательны",
           path: ["minus_lines"]
         });
       }
       if (!data.plus_lines?.length) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
-          message: "Qo‘shiluvchi qatorlar (plus_lines) majburiy",
+          message: "Строки добавления (plus_lines) обязательны",
           path: ["plus_lines"]
         });
       }
@@ -97,7 +99,7 @@ export const createOrderBodySchema = z
     if (!data.items.length) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        message: "Kamida bitta qator kerak",
+        message: "Нужна хотя бы одна строка",
         path: ["items"]
       });
     }
@@ -105,7 +107,7 @@ export const createOrderBodySchema = z
     if (data.agent_id == null || data.agent_id < 1) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        message: "Agent majburiy",
+        message: "Агент обязателен",
         path: ["agent_id"]
       });
     }
@@ -175,43 +177,52 @@ export const ordersListQuerySchema = z
     order_alert: z.string().optional()
   })
   .transform((q) => {
+    const ints = (raw?: string) =>
+      [...new Set((raw ?? "").split(",").map((s) => Number.parseInt(s.trim(), 10)).filter((n) => Number.isFinite(n) && n > 0))];
+    const whIds = ints(q.warehouse_id);
+    const exIds = ints(q.expeditor_id ?? q.expeditor_user_id);
+    const prIds = ints(q.product_id);
+    const catIds = ints(q.product_category_id);
+    const dayIds = ints(q.visit_weekday).filter((n) => n >= 1 && n <= 7);
     const pageNum = Math.max(1, Number.parseInt(q.page ?? "1", 10) || 1);
     const limitNum = Math.min(100, Math.max(1, Number.parseInt(q.limit ?? "30", 10) || 30));
     const search = (q.q ?? q.search ?? "").trim() || undefined;
     const noAgentRaw = q.no_agent?.trim().toLowerCase();
     const include_no_agent = noAgentRaw === "1" || noAgentRaw === "true" || noAgentRaw === "yes";
-    const agent_ids = parseAgentIds(q.agent_ids);
+    const agent_ids = parseAgentIds(q.agent_ids) ?? (ints(q.agent_id).length > 1 ? ints(q.agent_id) : undefined);
     return {
       page: pageNum,
       limit: limitNum,
       status: q.status?.trim() || undefined,
       search,
       client_id: parseOptionalPosInt(q.client_id),
-      warehouse_id: parseOptionalPosInt(q.warehouse_id),
+      warehouse_id: whIds.length === 1 ? whIds[0] : undefined,
+      warehouse_ids: whIds.length > 1 ? whIds : undefined,
       agent_id: agent_ids?.length ? undefined : parseOptionalPosInt(q.agent_id),
       agent_ids,
       include_no_agent: include_no_agent || undefined,
-      expeditor_user_id: parseOptionalPosInt(q.expeditor_id ?? q.expeditor_user_id),
+      expeditor_user_id: exIds.length === 1 ? exIds[0] : undefined,
+      expeditor_user_ids: exIds.length > 1 ? exIds : undefined,
       client_category: q.client_category?.trim() || undefined,
       client_region: q.client_region?.trim() || undefined,
       client_city: q.client_city?.trim() || undefined,
       client_zone: q.client_zone?.trim() || undefined,
       agent_trade_direction: q.trade_direction?.trim() || undefined,
-      product_id: parseOptionalPosInt(q.product_id),
+      product_id: prIds.length === 1 ? prIds[0] : undefined,
+      product_ids: prIds.length > 1 ? prIds : undefined,
       date_from: q.date_from?.trim() || q.from?.trim() || undefined,
       date_to: q.date_to?.trim() || q.to?.trim() || undefined,
       date_periods: q.date_periods?.trim() || undefined,
       order_type: q.order_type?.trim() || undefined,
       is_consignment: parseConsignmentFlag(q.is_consignment),
-      product_category_id: parseOptionalPosInt(q.product_category_id),
+      product_category_id: catIds.length === 1 ? catIds[0] : undefined,
+      product_category_ids: catIds.length > 1 ? catIds : undefined,
       payment_type: q.payment_type?.trim() || undefined,
       payment_method_ref: q.payment_method_ref?.trim() || undefined,
       request_type_ref: q.request_type_ref?.trim() || undefined,
       list_price_type: q.price_type?.trim() || undefined,
-      visit_weekday: (() => {
-        const n = Number.parseInt(q.visit_weekday ?? "", 10);
-        return Number.isFinite(n) && n >= 1 && n <= 7 ? n : undefined;
-      })(),
+      visit_weekday: dayIds.length === 1 ? dayIds[0] : undefined,
+      visit_weekdays: dayIds.length > 1 ? dayIds : undefined,
       date_mode: q.date_mode?.trim() || undefined,
       cursor: q.cursor?.trim() || undefined,
       discount_alert: q.discount_alert?.trim() || undefined,
@@ -456,13 +467,50 @@ export const patchOrderLinesBodySchema = z.object({
   warehouse_id: z.number().int().positive().nullable().optional(),
   agent_id: z.number().int().positive().nullable().optional(),
   payment_method_ref: z.string().trim().max(64).optional().nullable(),
-  /** Narx turi — tahrirda qayta hisoblash (Order jadvalida saqlanmaydi). */
+  /** Narx turi — tahrirda qayta hisoblash va `orders.price_type` ga saqlanadi. */
   price_type: z.string().trim().min(1).max(128).optional(),
   apply_bonus: z.boolean().optional(),
   /** `false` — chegirma qo‘llanmaydi (bonus yoqilgan bo‘lsa ham). */
   apply_discount: z.boolean().optional(),
   bonus_gift_overrides: z.array(bonusGiftOverrideSchema).optional(),
+  /** Qty bonus: bir qoida uchun bir nechta mahsulot/dona (web tahrir tasdiqlash). */
+  bonus_gift_lines: z.array(bonusGiftLineSchema).optional(),
+  bonus_strategy_selections: z
+    .array(
+      z.object({
+        strategy_id: z.number().int().positive(),
+        rule_ids: z.array(z.number().int().positive()).min(1).max(200)
+      })
+    )
+    .max(50)
+    .optional(),
   items: z.array(orderLineItemSchema).min(1)
+});
+
+/** POST `/api/:slug/orders/bonus-preview` — web tahrir (agent_id majburiy). */
+export const orderBonusPreviewBodySchema = z.object({
+  client_id: z.number().int().positive(),
+  warehouse_id: z.number().int().positive(),
+  agent_id: z.number().int().positive(),
+  price_type: z.string().trim().min(1).max(128).optional(),
+  items: z.array(orderLineItemSchema).min(1),
+  bonus_gift_overrides: z.array(bonusGiftOverrideSchema).optional(),
+  is_consignment: z.boolean().optional(),
+  exclude_order_id: z.number().int().positive().optional(),
+  bonus_strategy_selections: z
+    .array(
+      z.object({
+        strategy_id: z.number().int().positive(),
+        rule_ids: z.array(z.number().int().positive()).min(1).max(200)
+      })
+    )
+    .max(50)
+    .optional()
+});
+
+/** POST `/api/:slug/orders/bulk/bonus-refresh` — «Новый» zakazlarda yangi bonus mexanizmi. */
+export const bulkOrderBonusRefreshBodySchema = z.object({
+  order_ids: orderIdsBulkSchema
 });
 
 /** PATCH `/api/:slug/orders/:id` meta maydonlari */
@@ -485,6 +533,6 @@ export const patchOrderMetaBodySchema = z
       b.warehouse_block_id !== undefined,
     {
       message:
-        "At least one of warehouse_id, agent_id, expeditor_user_id, comment, payment_method_ref, warehouse_block_id"
+        "Укажите хотя бы одно поле: warehouse_id, agent_id, expeditor_user_id, comment, payment_method_ref, warehouse_block_id"
     }
   );

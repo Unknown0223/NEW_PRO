@@ -1,11 +1,13 @@
 import type ExcelJS from "exceljs";
 import type { NakladnoyBuildOptions, NakladnoyLine } from "../../order-nakladnoy-xlsx.types";
 import { lineCodeDisplay } from "../../order-nakladnoy-xlsx.format";
+import {
+  LOADING_520_SHELF_RETURN_GROUP,
+  sortLoading520GroupKeys
+} from "../../order-nakladnoy-xlsx.consignment-217";
 import type { WarehouseAggregateContext } from "../warehouse-template-shared";
 import { cellStr, setCell, findHeaderColumn } from "../warehouse-template-fill.helpers";
 import {
-  clearCellValueOnly,
-  cloneCellStyle,
   fillArgb,
   fillExpeditorMetaBlock,
   findRowWith,
@@ -20,6 +22,14 @@ type ListCols = {
   qty: number;
   price: number;
   sum: number;
+};
+
+type StyleSnap = {
+  font?: Partial<ExcelJS.Font>;
+  fill?: ExcelJS.Fill;
+  border?: Partial<ExcelJS.Borders>;
+  alignment?: Partial<ExcelJS.Alignment>;
+  numFmt?: string;
 };
 
 function detectListCols(sheet: ExcelJS.Worksheet, headerRow: number): ListCols | null {
@@ -42,65 +52,161 @@ function detectListCols(sheet: ExcelJS.Worksheet, headerRow: number): ListCols |
   };
 }
 
-function writeGroupRowStyled(
+function snapCell(cell: ExcelJS.Cell): StyleSnap {
+  return {
+    font: cell.font ? { ...cell.font } : undefined,
+    fill: cell.fill ? { ...cell.fill } : undefined,
+    border: cell.border ? { ...cell.border } : undefined,
+    alignment: cell.alignment ? { ...cell.alignment } : undefined,
+    numFmt: cell.numFmt
+  } as StyleSnap;
+}
+
+function snapRow(sheet: ExcelJS.Worksheet, row: number, cols = 8): { snaps: StyleSnap[]; height?: number } {
+  const snaps: StyleSnap[] = [];
+  for (let c = 1; c <= cols; c++) snaps.push(snapCell(sheet.getCell(row, c)));
+  return { snaps, height: sheet.getRow(row).height };
+}
+
+function paintRow(sheet: ExcelJS.Worksheet, row: number, sample: { snaps: StyleSnap[]; height?: number }) {
+  const r = sheet.getRow(row);
+  if (sample.height && sample.height > 0) r.height = sample.height;
+  r.hidden = false;
+  for (let c = 1; c <= sample.snaps.length; c++) {
+    const cell = r.getCell(c);
+    const snap = sample.snaps[c - 1]!;
+    if (snap.font) cell.font = { ...snap.font };
+    if (snap.fill) cell.fill = { ...snap.fill };
+    if (snap.border) cell.border = { ...snap.border };
+    if (snap.alignment) cell.alignment = { ...snap.alignment };
+    if (snap.numFmt) cell.numFmt = snap.numFmt;
+    if (!cell.formula) cell.value = null;
+  }
+}
+
+function mergedSpan(sheet: ExcelJS.Worksheet, row: number, col: number): number {
+  const master = sheet.getCell(row, col);
+  let span = 1;
+  for (let c = col + 1; c <= col + 6; c++) {
+    const cell = sheet.getCell(row, c);
+    if (cell.isMerged && cell.master?.address === master.address) span++;
+    else break;
+  }
+  return span;
+}
+
+function mergeHorizontal(sheet: ExcelJS.Worksheet, row: number, col: number, span: number) {
+  if (span <= 1) return;
+  sheet.mergeCells(row, col, row, col + span - 1);
+}
+
+function unmergeFromRow(sheet: ExcelJS.Worksheet, fromRow: number) {
+  const merges = [
+    ...(((sheet as ExcelJS.Worksheet & { model?: { merges?: string[] } }).model?.merges) ?? [])
+  ];
+  for (const ref of merges) {
+    const m = /^[A-Z]+(\d+):/i.exec(ref);
+    if (!m || Number(m[1]) < fromRow) continue;
+    try {
+      sheet.unMergeCells(ref);
+    } catch {
+      /* allaqachon yechilgan */
+    }
+  }
+}
+
+function clearBody(sheet: ExcelJS.Worksheet, fromRow: number) {
+  const last = Math.max(sheet.rowCount, fromRow);
+  for (let r = fromRow; r <= last; r++) {
+    const row = sheet.getRow(r);
+    row.hidden = false;
+    for (let c = 1; c <= 8; c++) {
+      const cell = row.getCell(c);
+      if (!cell.formula) cell.value = null;
+    }
+  }
+}
+
+/** exceljs spliceRows qatorlar sonini qisqartirmaydi — shablon dumi bo‘sh qator bo‘lib qoladi. */
+function dropRowsAfter(sheet: ExcelJS.Worksheet, lastRow: number) {
+  const rows = (sheet as ExcelJS.Worksheet & { _rows?: unknown[] })._rows;
+  if (rows && rows.length > lastRow) rows.length = lastRow;
+}
+
+function renameSheet(wb: ExcelJS.Workbook, sheet: ExcelJS.Worksheet, versionLabel: string) {
+  const name = `Загруз зав.склада ${versionLabel}`.replace(/[:\\/?*[\]]/g, " ").trim().slice(0, 31);
+  if (!name || sheet.name === name) return;
+  if (wb.worksheets.some((ws) => ws !== sheet && ws.name === name)) return;
+  sheet.name = name;
+}
+
+function writeGroup(
   sheet: ExcelJS.Worksheet,
   row: number,
   cols: ListCols,
-  sample: ExcelJS.Row,
+  sample: { snaps: StyleSnap[]; height?: number },
+  nameSpan: number,
   groupName: string,
   qty: number,
   sum: number
 ) {
-  for (let c = 1; c <= 8; c++) {
-    const cell = sheet.getCell(row, c);
-    cloneCellStyle(sample.getCell(c), cell);
-    clearCellValueOnly(cell);
-  }
+  paintRow(sheet, row, sample);
+  mergeHorizontal(sheet, row, cols.name, nameSpan);
   setCell(sheet, row, cols.name, groupName);
   if (qty > 0) setCell(sheet, row, cols.qty, qty);
-  if (sum > 0 && cols.sum) setCell(sheet, row, cols.sum, sum);
-  sheet.getCell(row, cols.name).font = { ...sheet.getCell(row, cols.name).font, bold: true };
+  if (sum > 0) setCell(sheet, row, cols.sum, sum);
+  const nameCell = sheet.getCell(row, cols.name);
+  nameCell.font = { ...nameCell.font, bold: true };
 }
 
-function writeProductRowStyled(
+function writeProduct(
   sheet: ExcelJS.Worksheet,
   row: number,
   cols: ListCols,
-  sample: ExcelJS.Row,
+  sample: { snaps: StyleSnap[]; height?: number },
+  nameSpan: number,
   idx: number,
   ln: NakladnoyLine,
-  options: NakladnoyBuildOptions
+  options: NakladnoyBuildOptions,
+  mode: "sale" | "bonus"
 ) {
-  for (let c = 1; c <= 8; c++) {
-    const cell = sheet.getCell(row, c);
-    cloneCellStyle(sample.getCell(c), cell);
-    clearCellValueOnly(cell);
-  }
+  paintRow(sheet, row, sample);
+  mergeHorizontal(sheet, row, cols.name, nameSpan);
   setCell(sheet, row, cols.no, idx);
-  if (cols.code != null) setCell(sheet, row, cols.code, lineCodeDisplay(ln, options.codeColumn));
+  if (mode === "sale" && cols.code != null) {
+    setCell(sheet, row, cols.code, lineCodeDisplay(ln, options.codeColumn));
+  }
   setCell(sheet, row, cols.name, ln.name);
-  if (ln.qty > 0) setCell(sheet, row, cols.qty, ln.qty);
-  if (ln.price > 0) setCell(sheet, row, cols.price, ln.price);
-  if (ln.sum > 0) setCell(sheet, row, cols.sum, ln.sum);
+  const qty = mode === "bonus" ? ln.bonusQty : ln.qty;
+  if (qty > 0) setCell(sheet, row, cols.qty, qty);
+  if (mode === "sale" && ln.price > 0) setCell(sheet, row, cols.price, ln.price);
+  if (mode === "sale" && ln.sum > 0) setCell(sheet, row, cols.sum, ln.sum);
 }
 
-function writeBonusRowStyled(
+function writeTotals(
   sheet: ExcelJS.Worksheet,
   row: number,
   cols: ListCols,
-  sample: ExcelJS.Row,
-  idx: number,
-  ln: NakladnoyLine
+  totalSample: { snaps: StyleSnap[]; height?: number },
+  weightSample: { snaps: StyleSnap[]; height?: number },
+  nameEndCol: number,
+  qty: number,
+  sum: number
 ) {
-  for (let c = 1; c <= 8; c++) {
-    const cell = sheet.getCell(row, c);
-    cloneCellStyle(sample.getCell(c), cell);
-    clearCellValueOnly(cell);
+  paintRow(sheet, row, totalSample);
+  paintRow(sheet, row + 1, weightSample);
+  if (nameEndCol > 1) {
+    sheet.mergeCells(row, 1, row, nameEndCol);
+    sheet.mergeCells(row + 1, 1, row + 1, nameEndCol);
   }
-  setCell(sheet, row, cols.no, idx);
-  setCell(sheet, row, cols.name, ln.name);
-  if (ln.bonusQty > 0) setCell(sheet, row, cols.qty, ln.bonusQty);
-  if (ln.price > 0) setCell(sheet, row, cols.price, ln.price);
+  const amountLeft = cols.price > cols.qty ? Math.min(cols.price, cols.sum) : cols.sum;
+  const amountRight = Math.max(cols.sum, amountLeft);
+  sheet.mergeCells(row, cols.qty, row + 1, cols.qty);
+  if (amountLeft !== cols.qty) sheet.mergeCells(row, amountLeft, row + 1, amountRight);
+  setCell(sheet, row, 1, "Общая сумма");
+  setCell(sheet, row + 1, 1, "Общее(вес)");
+  setCell(sheet, row, cols.qty, qty);
+  setCell(sheet, row, amountLeft, sum);
 }
 
 export function fillExpeditorLoading518(
@@ -110,6 +216,7 @@ export function fillExpeditorLoading518(
   versionLabel: string
 ) {
   const sheet = wb.worksheets[0]!;
+  renameSheet(wb, sheet, versionLabel);
   fillExpeditorMetaBlock(sheet, ctx, versionLabel);
 
   const headerRow = findRowWith(
@@ -139,76 +246,95 @@ export function fillExpeditorLoading518(
   }
   if (groupSampleRow < 0 || productSampleRow < 0) return;
 
-  const groupSample = sheet.getRow(groupSampleRow);
-  const productSample = sheet.getRow(productSampleRow);
+  const groupSample = snapRow(sheet, groupSampleRow);
+  const productSample = snapRow(sheet, productSampleRow);
+  const nameSpan = mergedSpan(sheet, headerRow, cols.name);
+  const nameEndCol = cols.name + nameSpan - 1;
 
   const bonusRow = findRowWith(sheet, (r) => rowText(sheet, r).includes("бонус"), headerRow, 120);
   const totalRow = findRowWith(sheet, (r) => rowText(sheet, r).includes("общая сумма"), headerRow, 120);
+  const weightRow = findRowWith(
+    sheet,
+    (r) => rowText(sheet, r).includes("вес"),
+    totalRow > 0 ? totalRow : headerRow,
+    120
+  );
+  const returnRow = findRowWith(sheet, (r) => rowText(sheet, r).includes("возврат"), headerRow, 150);
+
+  const bonusSample = snapRow(sheet, bonusRow > 0 ? bonusRow : groupSampleRow);
+  const totalSample = snapRow(sheet, totalRow > 0 ? totalRow : groupSampleRow);
+  const weightSample = snapRow(sheet, weightRow > 0 ? weightRow : totalRow > 0 ? totalRow : groupSampleRow);
+  const returnSample = snapRow(sheet, returnRow > 0 ? returnRow : bonusRow > 0 ? bonusRow : groupSampleRow);
 
   const dataStart = headerRow + 1;
-  const dataEnd = bonusRow > 0 ? bonusRow - 1 : totalRow > 0 ? totalRow - 1 : sheet.rowCount;
+  unmergeFromRow(sheet, dataStart);
+  clearBody(sheet, dataStart);
 
-  for (let r = dataStart; r <= dataEnd; r++) {
-    for (let c = 1; c <= 8; c++) clearCellValueOnly(sheet.getCell(r, c));
-  }
+  const returnKey = LOADING_520_SHELF_RETURN_GROUP;
+  const mainKeys = sortLoading520GroupKeys([...ctx.linesByGroup.keys()]).filter((k) => k !== returnKey);
 
   let row = dataStart;
   let idx = 1;
   let grandQty = 0;
   let grandSum = 0;
 
-  for (const gk of [...ctx.linesByGroup.keys()].sort((a, b) => a.localeCompare(b, "ru"))) {
-    const groupLines = ctx.linesByGroup.get(gk)!.filter((ln) => ln.qty > 0);
-    if (groupLines.length === 0) continue;
-
-    let gQty = 0;
-    let gSum = 0;
-    for (const ln of groupLines) {
-      gQty += ln.qty;
-      gSum += ln.sum;
+  const writeGroups = (keys: string[]) => {
+    for (const gk of keys) {
+      const groupLines = ctx.linesByGroup.get(gk)!.filter((ln) => ln.qty > 0);
+      if (groupLines.length === 0) continue;
+      let gQty = 0;
+      let gSum = 0;
+      for (const ln of groupLines) {
+        gQty += ln.qty;
+        gSum += ln.sum;
+      }
+      writeGroup(sheet, row, cols, groupSample, nameSpan, gk, gQty, gSum);
+      row++;
+      for (const ln of groupLines) {
+        writeProduct(sheet, row, cols, productSample, nameSpan, idx++, ln, options, "sale");
+        grandQty += ln.qty;
+        grandSum += ln.sum;
+        row++;
+      }
     }
-    writeGroupRowStyled(sheet, row, cols, groupSample, gk, gQty, gSum);
-    row++;
+  };
 
-    for (const ln of groupLines) {
-      writeProductRowStyled(sheet, row, cols, productSample, idx++, ln, options);
-      grandQty += ln.qty;
-      grandSum += ln.sum;
+  writeGroups(mainKeys);
+
+  const bonusLines = ctx.lines.filter((ln) => ln.bonusQty > 0);
+  paintRow(sheet, row, bonusSample);
+  mergeHorizontal(sheet, row, cols.name, nameSpan);
+  setCell(sheet, row, cols.name, "Бонусы");
+  const bonusQtyTotal = bonusLines.reduce((a, ln) => a + ln.bonusQty, 0);
+  if (bonusQtyTotal > 0) setCell(sheet, row, cols.qty, bonusQtyTotal);
+  const bonusName = sheet.getCell(row, cols.name);
+  bonusName.font = { ...bonusName.font, bold: true };
+  row++;
+  let bonusIdx = 1;
+  for (const ln of bonusLines) {
+    writeProduct(sheet, row, cols, productSample, nameSpan, bonusIdx++, ln, options, "bonus");
+    row++;
+  }
+
+  writeTotals(sheet, row, cols, totalSample, weightSample, nameEndCol, grandQty, grandSum);
+  row += 2;
+
+  const returnLines = (ctx.linesByGroup.get(returnKey) ?? []).filter((ln) => ln.qty > 0);
+  if (returnLines.length > 0) {
+    let rQty = 0;
+    let rSum = 0;
+    for (const ln of returnLines) {
+      rQty += ln.qty;
+      rSum += ln.sum;
+    }
+    writeGroup(sheet, row, cols, returnSample, nameSpan, returnKey, rQty, rSum);
+    row++;
+    let returnIdx = 1;
+    for (const ln of returnLines) {
+      writeProduct(sheet, row, cols, productSample, nameSpan, returnIdx++, ln, options, "sale");
       row++;
     }
   }
 
-  if (totalRow > 0) {
-    setCell(sheet, totalRow, cols.qty, grandQty);
-    if (grandSum > 0) setCell(sheet, totalRow, cols.sum, grandSum);
-  }
-
-  const bonusLines = ctx.lines.filter((ln) => ln.bonusQty > 0);
-  if (bonusRow > 0) {
-    if (bonusLines.length === 0) {
-      for (let r = bonusRow; r <= (totalRow > bonusRow ? totalRow : bonusRow + 5); r++) {
-        sheet.getRow(r).hidden = true;
-      }
-    } else {
-      let br = bonusRow + 1;
-      let bi = 1;
-      const bonusEnd = totalRow > bonusRow ? totalRow - 1 : br + 20;
-      for (; br <= bonusEnd; br++) {
-        for (let c = 1; c <= 8; c++) clearCellValueOnly(sheet.getCell(br, c));
-      }
-      br = bonusRow + 1;
-      for (const ln of bonusLines) {
-        if (br >= bonusEnd) break;
-        writeBonusRowStyled(sheet, br, cols, productSample, bi++, ln);
-        br++;
-      }
-      const bonusQtyTotal = bonusLines.reduce((a, ln) => a + ln.bonusQty, 0);
-      setCell(sheet, bonusRow, cols.qty, bonusQtyTotal > 0 ? bonusQtyTotal : "");
-    }
-  }
-
-  const returnRow = findRowWith(sheet, (r) => rowText(sheet, r).includes("возврат"), headerRow, 150);
-  if (returnRow > 0) {
-    for (let r = returnRow; r <= sheet.rowCount; r++) sheet.getRow(r).hidden = true;
-  }
+  dropRowsAfter(sheet, row - 1);
 }

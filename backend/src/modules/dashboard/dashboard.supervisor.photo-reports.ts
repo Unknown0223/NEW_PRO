@@ -1,5 +1,6 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "../../config/database";
+import { isClientPhotoStorageKey, readStoredClientPhoto } from "../../lib/client-photo-storage";
 import type { SupervisorDashboardFilters } from "./dashboard.supervisor.scope";
 
 export type SupervisorPhotoReportImageMeta = {
@@ -51,6 +52,53 @@ function clientTerritory(c: {
 }): string | null {
   const parts = [c.zone, c.region, c.city, c.district].map((x) => String(x ?? "").trim()).filter(Boolean);
   return parts[0] ?? null;
+}
+
+/** Base64 / data-URL DB da saqlansa — JSON orqali uzatish brauzerni «o‘ldiradi». */
+export function isInlineHeavyPhotoUrl(url: string | null | undefined): boolean {
+  const t = String(url ?? "").trim();
+  if (!t) return false;
+  if (/^data:/i.test(t)) return true;
+  if (/^https?:\/\//i.test(t) || t.startsWith("/")) return false;
+  // Xom base64 (prefixsiz) — uzun bo‘lsa heavy.
+  return t.length > 400;
+}
+
+export function supervisorPhotoContentPath(tenantSlug: string, photoId: number): string {
+  return `/api/${tenantSlug}/dashboard/supervisor/photo-reports/${photoId}/content`;
+}
+
+export function resolvePhotoUrlForClient(
+  tenantSlug: string,
+  photoId: number,
+  storedUrl: string
+): string {
+  if (isInlineHeavyPhotoUrl(storedUrl)) {
+    return supervisorPhotoContentPath(tenantSlug, photoId);
+  }
+  const t = storedUrl.trim();
+  if (isClientPhotoStorageKey(t)) {
+    return supervisorPhotoContentPath(tenantSlug, photoId);
+  }
+  return t || supervisorPhotoContentPath(tenantSlug, photoId);
+}
+
+const DATA_URL_RE = /^data:(image\/[a-z0-9.+-]+);base64,(.+)$/i;
+
+export function decodeStoredPhotoContent(stored: string): {
+  buffer: Buffer;
+  contentType: string;
+} | null {
+  const t = stored.trim();
+  if (!t) return null;
+  const m = DATA_URL_RE.exec(t);
+  if (m) {
+    return { contentType: m[1]!, buffer: Buffer.from(m[2]!, "base64") };
+  }
+  if (/^[A-Za-z0-9+/=\s]+$/.test(t) && t.length > 80) {
+    return { contentType: "image/jpeg", buffer: Buffer.from(t.replace(/\s+/g, ""), "base64") };
+  }
+  return null;
 }
 
 export async function listSupervisorAgentPhotoReports(
@@ -112,6 +160,7 @@ export async function listSupervisorAgentPhotoReports(
       : {})
   };
 
+  // image_url ni bu yerda OLMASLIK — base64 bo‘lsa ro‘yxat so‘rovi sekundlab cho‘ziladi.
   const photos = await prisma.clientPhotoReport.findMany({
     where: photoWhere,
     select: {
@@ -207,18 +256,59 @@ export async function listSupervisorAgentPhotoReports(
 
 export async function fetchSupervisorPhotoImages(
   tenantId: number,
+  tenantSlug: string,
   photoIds: number[]
 ): Promise<SupervisorPhotoReportImage[]> {
   const ids = [...new Set(photoIds)].filter((id) => Number.isFinite(id) && id > 0);
   if (ids.length === 0) return [];
+  // image_url (base64 TEXT) ni select QILMAYMIZ — faqat meta + proxy URL.
   const rows = await prisma.clientPhotoReport.findMany({
     where: { tenant_id: tenantId, id: { in: ids.slice(0, 100) }, deleted_at: null },
-    select: { id: true, image_url: true, caption: true, created_at: true }
+    select: { id: true, caption: true, created_at: true }
   });
   return rows.map((r) => ({
     id: r.id,
-    image_url: r.image_url,
+    image_url: supervisorPhotoContentPath(tenantSlug, r.id),
     caption: r.caption,
     created_at: r.created_at.toISOString()
   }));
+}
+
+const photoContentCache = new Map<number, { buffer: Buffer; contentType: string }>();
+const PHOTO_CONTENT_CACHE_MAX = 48;
+
+function rememberPhotoContent(photoId: number, buffer: Buffer, contentType: string) {
+  if (photoContentCache.size >= PHOTO_CONTENT_CACHE_MAX) {
+    const oldest = photoContentCache.keys().next().value;
+    if (oldest != null) photoContentCache.delete(oldest);
+  }
+  photoContentCache.set(photoId, { buffer, contentType });
+}
+
+export async function loadSupervisorPhotoContent(
+  tenantId: number,
+  photoId: number
+): Promise<
+  | { kind: "redirect"; url: string }
+  | { kind: "bytes"; buffer: Buffer; contentType: string }
+  | null
+> {
+  const hit = photoContentCache.get(photoId);
+  if (hit) return { kind: "bytes", buffer: hit.buffer, contentType: hit.contentType };
+
+  const row = await prisma.clientPhotoReport.findFirst({
+    where: { id: photoId, tenant_id: tenantId, deleted_at: null },
+    select: { image_url: true, content_purged_at: true }
+  });
+  if (!row || row.content_purged_at != null) return null;
+  const stored = String(row.image_url ?? "").trim();
+  if (!stored) return null;
+  if (/^https?:\/\//i.test(stored) || stored.startsWith("/")) {
+    return { kind: "redirect", url: stored };
+  }
+  const fromStore = await readStoredClientPhoto(stored);
+  const decoded = fromStore ?? decodeStoredPhotoContent(stored);
+  if (!decoded) return null;
+  rememberPhotoContent(photoId, decoded.buffer, decoded.contentType);
+  return { kind: "bytes", buffer: decoded.buffer, contentType: decoded.contentType };
 }

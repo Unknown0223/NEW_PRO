@@ -2,11 +2,10 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "../../config/database";
 import { ORDER_STATUSES_OUTSTANDING_RECEIVABLE } from "../orders/order-status";
 import {
+  buildSummaryOverpaymentsByType,
   buildClientWhere,
   buildOrderCreatedLocalDateClause,
-  buildSummaryNetMinusUnpaid,
   loadPaymentNetNormByClient,
-  loadPaymentNetTotalsByTypeGlobally,
   loadTenantPaymentRefs,
   loadUnpaidOrderBalanceRawByPaymentRef,
   parseIsoDateEndUtc,
@@ -204,7 +203,7 @@ export async function listConsignmentBalancesReport(
     allow_large_export: q.allow_large_export
   };
 
-  const where = buildClientWhere(tenantId, qConsign, { skipBalanceFilter: true });
+  const where = await buildClientWhere(tenantId, qConsign, { skipBalanceFilter: true });
 
   const allClients = await prisma.client.findMany({
     where,
@@ -240,11 +239,10 @@ export async function listConsignmentBalancesReport(
   const asOfEnd = asOfRaw ? parseIsoDateEndUtc(asOfRaw) : null;
 
   const { labels: sprLabels, entries: pmEntries } = await loadTenantPaymentRefs(tenantId);
-  const [rawUnpaid, netGlobal, pagePayNorm] = await Promise.all([
+  const [rawUnpaid, pagePayNorm] = await Promise.all([
     loadUnpaidOrderBalanceRawByPaymentRef(tenantId, eligible, odFrom, odTo, {
       consignmentOnly: true
     }),
-    loadPaymentNetTotalsByTypeGlobally(tenantId, eligible, asOfEnd, pmEntries),
     loadPaymentNetNormByClient(tenantId, sliceIds, asOfEnd, pmEntries)
   ]);
   perf("payment-sources-loaded", {
@@ -273,15 +271,20 @@ export async function listConsignmentBalancesReport(
         });
   perf("page-clients-loaded", { clients: clients.length });
 
-  const { byClient: unpaidByClientMethod, globalUnpaidNorm } = processUnpaidPayRefRows(
+  const { byClient: unpaidByClientMethod } = processUnpaidPayRefRows(
     rawUnpaid,
     pmEntries,
     sprLabels
   );
-  const paymentByTypeSummary = buildSummaryNetMinusUnpaid(sprLabels, netGlobal, globalUnpaidNorm);
-  const naqdKpi =
-    paymentByTypeSummary.find((x) => /^\s*naqd\s*$/i.test(x.label.trim())) ?? paymentByTypeSummary[0];
-  const cashDebtStr = naqdKpi?.amount ?? totalDebtNeg;
+  // Konsignatsiya — qarz (Общий); tip ustunlari faqat peredoplata uchun (bu yerda 0).
+  const paymentByTypeSummary = buildSummaryOverpaymentsByType(
+    sprLabels,
+    eligible.map((id) => {
+      const unpaid = debtMap.get(id)?.unpaid ?? new Prisma.Decimal(0);
+      return { balance: unpaid.neg() };
+    })
+  );
+  const cashDebtStr = totalDebtNeg;
 
   const orderMap = new Map(clients.map((c) => [c.id, c]));
   const orderedClients = sliceIds.map((id) => orderMap.get(id)!).filter(Boolean);
@@ -324,7 +327,8 @@ export async function listConsignmentBalancesReport(
       payment_amounts: paymentAmountsNetMinusUnpaid(
         sprLabels,
         pagePayNorm.get(c.id),
-        unpaidByClientMethod.get(c.id)
+        unpaidByClientMethod.get(c.id),
+        unpaid.neg()
       )
     };
   });

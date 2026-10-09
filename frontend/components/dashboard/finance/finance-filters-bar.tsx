@@ -61,7 +61,7 @@ export function FinanceFiltersBar(props: {
     <section className="rounded-2xl bg-card p-4 shadow-sm ring-1 ring-slate-200/70">
       <div className="mb-4 flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
         <div className="min-w-0">
-          <p className="text-xs font-semibold uppercase tracking-[0.22em] text-teal-600">Finance module</p>
+          <p className="text-xs font-semibold uppercase tracking-[0.22em] text-teal-600">Финансы</p>
           <h2 className="text-xl font-bold text-slate-950">Финансы</h2>
         </div>
         <div className="flex min-w-0 flex-col gap-3 xl:flex-row xl:items-center xl:justify-end">
@@ -78,7 +78,7 @@ export function FinanceFiltersBar(props: {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-[repeat(6,minmax(0,1fr))_44px_160px]">
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-[repeat(8,minmax(0,1fr))_44px_160px]">
         <SupervisorDashboardMultiFilter
           placeholder="Супервайзер"
           searchPlaceholder="Супервайзер"
@@ -97,7 +97,7 @@ export function FinanceFiltersBar(props: {
           onChange={(next) => setDraft((p) => ({ ...p, agent_ids: next }))}
         />
         <SupervisorDashboardMultiFilter
-          placeholder="Территория"
+          placeholder="Зона"
           searchPlaceholder="Зона"
           triggerClassName={financeFilterTriggerClassName}
           items={opts.zoneOptions.map((o) => ({ id: o.value, title: o.label }))}
@@ -105,6 +105,24 @@ export function FinanceFiltersBar(props: {
           onChange={(next) =>
             setDraft((p) => ({ ...p, territory_1_list: next, territory_2_list: [], territory_3_list: [] }))
           }
+        />
+        <SupervisorDashboardMultiFilter
+          placeholder="Область"
+          searchPlaceholder="Область"
+          triggerClassName={financeFilterTriggerClassName}
+          items={opts.regionOptions.map((o) => ({ id: o.value, title: o.label }))}
+          selectedValues={draft.territory_2_list}
+          onChange={(next) =>
+            setDraft((p) => ({ ...p, territory_2_list: next, territory_3_list: [] }))
+          }
+        />
+        <SupervisorDashboardMultiFilter
+          placeholder="Город"
+          searchPlaceholder="Город"
+          triggerClassName={financeFilterTriggerClassName}
+          items={opts.cityOptions.map((o) => ({ id: o.value, title: o.label }))}
+          selectedValues={draft.territory_3_list}
+          onChange={(next) => setDraft((p) => ({ ...p, territory_3_list: next }))}
         />
         <SupervisorDashboardMultiFilter
           placeholder="Категория клиента"

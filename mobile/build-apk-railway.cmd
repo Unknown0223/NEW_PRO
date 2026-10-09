@@ -13,9 +13,9 @@ set "RELEASE_APK=%RELEASES%\SalesDoc-latest-release.apk"
 powershell -NoProfile -ExecutionPolicy Bypass -File "%REPO_ROOT%\scripts\env\switch-production-mobile.ps1"
 if errorlevel 1 exit /b 1
 
-echo === SalesDoc APK (Railway production) ===
+echo === SalesDoc APK (Hetzner production) ===
 echo Loyiha: %REPO_ROOT%
-echo Server: https://backend-production-3cf2.up.railway.app
+echo Server: https://api.salesarena.sale
 echo.
 
 powershell -NoProfile -ExecutionPolicy Bypass -Command ". '%REPO_ROOT%\scripts\env\resolve-flutter.ps1'; Set-MobileBuildEnv | Out-Null"
@@ -36,8 +36,6 @@ if not exist "%RELEASES%" mkdir "%RELEASES%"
 for /f "usebackq delims=" %%V in (`powershell -NoProfile -Command "(Get-Content '%MOBILE_SRC%\pubspec.yaml' | Select-String '^version:' | ForEach-Object { $_ -replace 'version:\s*','' -replace '\+.*','' }).ToString().Trim()"`) do set "APP_VER=%%V"
 copy /Y "%APK%" "%RELEASE_APK%" >nul
 if defined APP_VER copy /Y "%APK%" "%RELEASES%\SalesDoc-!APP_VER!-release.apk" >nul
-for /f %%D in ('powershell -NoProfile -Command "Get-Date -Format yyyy-MM-dd"') do set "TODAY=%%D"
-copy /Y "%APK%" "%RELEASES%\SalesDoc-%TODAY%-release.apk" >nul
 
 echo.
 echo Tayyor:

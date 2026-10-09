@@ -120,7 +120,9 @@ class OrderDraftListSection extends ConsumerWidget {
 }
 
 class OrderDraftPageBody extends ConsumerWidget {
-  const OrderDraftPageBody({super.key});
+  final Future<void> Function()? onRefresh;
+
+  const OrderDraftPageBody({super.key, this.onRefresh});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -128,14 +130,36 @@ class OrderDraftPageBody extends ConsumerWidget {
     return draftsAsync.when(
       data: (entries) {
         if (entries.isEmpty) {
-          return AgentEmptyState.fill(message: S.emptyDraft);
+          return RefreshIndicator(
+            color: AppColors.primary,
+            onRefresh: () async {
+              if (onRefresh != null) {
+                await onRefresh!();
+              } else {
+                ref.invalidate(orderDraftsProvider);
+                ref.invalidate(orderDraftListProvider);
+                await ref.read(orderDraftListProvider.future);
+              }
+            },
+            child: AgentEmptyState.fill(
+              message: S.emptyDraft,
+              action: TextButton(
+                onPressed: () => context.go('/orders/create'),
+                child: const Text('Создать заказ'),
+              ),
+            ),
+          );
         }
         return RefreshIndicator(
           color: AppColors.primary,
           onRefresh: () async {
-            ref.invalidate(orderDraftsProvider);
-            ref.invalidate(orderDraftListProvider);
-            await ref.read(orderDraftListProvider.future);
+            if (onRefresh != null) {
+              await onRefresh!();
+            } else {
+              ref.invalidate(orderDraftsProvider);
+              ref.invalidate(orderDraftListProvider);
+              await ref.read(orderDraftListProvider.future);
+            }
           },
           child: ListView.separated(
             physics: const AlwaysScrollableScrollPhysics(),
@@ -155,7 +179,25 @@ class OrderDraftPageBody extends ConsumerWidget {
         );
       },
       loading: () => const Center(child: CircularProgressIndicator(color: AppColors.primary)),
-      error: (e, _) => Center(child: Text('Ошибка: $e', textAlign: TextAlign.center)),
+      error: (e, _) => Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text('Ошибка: $e', textAlign: TextAlign.center),
+              const SizedBox(height: 12),
+              FilledButton(
+                onPressed: () {
+                  ref.invalidate(orderDraftsProvider);
+                  ref.invalidate(orderDraftListProvider);
+                },
+                child: const Text('Повторить'),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

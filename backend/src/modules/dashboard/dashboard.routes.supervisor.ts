@@ -11,7 +11,7 @@ import {
   getSupervisorSummary,
   getSupervisorVisits
 } from "./dashboard.supervisor.snapshot.partials";
-import { listSupervisorAgentPhotoReports, fetchSupervisorPhotoImages } from "./dashboard.supervisor.photo-reports";
+import { listSupervisorAgentPhotoReports, fetchSupervisorPhotoImages, loadSupervisorPhotoContent } from "./dashboard.supervisor.photo-reports";
 import {
   getExpeditorsDashboard,
   parseExpeditorsDashboardFilters
@@ -102,7 +102,7 @@ export function registerDashboardSupervisorRoutes(app: FastifyInstance) {
       await applyAccessAgentIdsScope(request.tenant!.id, accessUser, parsed);
       const agentId = Number.parseInt(q.agent_id ?? "", 10);
       if (!Number.isFinite(agentId) || agentId <= 0) {
-        return sendApiError(reply, request, 400, "ValidationError", "agent_id is required");
+        return sendApiError(reply, request, 400, "ValidationError", "Требуется agent_id");
       }
       const page = Number.parseInt(q.page ?? "1", 10);
       const limit = Number.parseInt(q.limit ?? "10", 10);
@@ -134,14 +134,18 @@ export function registerDashboardSupervisorRoutes(app: FastifyInstance) {
         .map((s) => Number.parseInt(s.trim(), 10))
         .filter((n) => Number.isFinite(n) && n > 0);
       if (ids.length === 0) {
-        return sendApiError(reply, request, 400, "ValidationError", "ids is required");
+        return sendApiError(reply, request, 400, "ValidationError", "Требуется ids");
       }
       if (ids.length > 100) {
-        return sendApiError(reply, request, 400, "ValidationError", "Too many ids (max 100)");
+        return sendApiError(reply, request, 400, "ValidationError", "Слишком много ids (максимум 100)");
       }
       const accessUser = getAccessUser(request);
       const t0 = Date.now();
-      const data = await fetchSupervisorPhotoImages(request.tenant!.id, ids);
+      const data = await fetchSupervisorPhotoImages(
+        request.tenant!.id,
+        request.tenant!.slug,
+        ids
+      );
       recordDashboardPerf(request.log, reply, {
         route: "supervisor-photo-images",
         tenantId: request.tenant!.id,
@@ -149,6 +153,33 @@ export function registerDashboardSupervisorRoutes(app: FastifyInstance) {
         supervisorRole: accessUser.role === "supervisor"
       });
       return reply.send({ data });
+    }
+  );
+
+  app.get(
+    "/api/:slug/dashboard/supervisor/photo-reports/:photoId/content",
+    { preHandler: dashboardSupervisorPreHandler },
+    async (request, reply) => {
+      if (!ensureTenantContext(request, reply)) return;
+      const photoId = Number.parseInt(
+        String((request.params as { photoId?: string }).photoId ?? ""),
+        10
+      );
+      if (!Number.isFinite(photoId) || photoId <= 0) {
+        return sendApiError(reply, request, 400, "ValidationError", "Требуется photoId");
+      }
+      const content = await loadSupervisorPhotoContent(request.tenant!.id, photoId);
+      if (!content) {
+        return sendApiError(reply, request, 404, "NotFound", "Фото не найдено");
+      }
+      if (content.kind === "redirect") {
+        return reply.redirect(content.url);
+      }
+      return reply
+        .header("Content-Type", content.contentType)
+        .header("Cache-Control", "private, max-age=3600, immutable")
+        .header("Content-Length", String(content.buffer.length))
+        .send(content.buffer);
     }
   );
 

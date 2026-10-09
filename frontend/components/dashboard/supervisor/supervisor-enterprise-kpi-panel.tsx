@@ -118,7 +118,7 @@ export function SupervisorEnterpriseKpiPanel({
           </h3>
           <div className="grid grid-cols-3 gap-3">
             <div className="rounded-lg bg-muted/60 px-3 py-2">
-              <p className="text-[10px] text-muted-foreground">План (одобрено)</p>
+              <p className="text-[10px] text-muted-foreground">План (одобр. / на согл.)</p>
               <p className="text-lg font-bold tabular-nums">
                 {formatNumberGrouped(salesPlanKpi.planSum, { maxFractionDigits: 0 })}
               </p>

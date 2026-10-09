@@ -56,6 +56,7 @@ import {
   validateAgentEntitlements,
   validateExpeditorAssignmentRules
 } from "./staff.shared";
+import { REF_KEY, readUiPrefs } from "../mobile/mobile-face.shared";
 export async function listStaff(
   tenantId: number,
   kind: StaffKind,
@@ -66,7 +67,12 @@ export async function listStaff(
   const roleFilter: Prisma.StringFilter | string =
     kind === "operator" ? { in: [...OPERATOR_LIKE_WEB_ROLES] } : kindRole(kind);
   const where: Prisma.UserWhereInput = { tenant_id: tenantId, role: roleFilter };
-  if (filters?.is_active !== undefined) {
+  if (filters?.for_picker) {
+    const pickerClause: Prisma.UserWhereInput = {
+      OR: [{ is_active: true }, { filter_visible: true }]
+    };
+    where.AND = [pickerClause];
+  } else if (filters?.is_active !== undefined) {
     where.is_active = filters.is_active;
   }
   if (filters?.branch?.trim()) {
@@ -211,7 +217,10 @@ export async function listStaff(
     if (row.agent_id != null) countMap.set(row.agent_id, row._count._all);
   }
 
-  let workSlotByUser = new Map<number, { slot_id: number; slot_code: string }>();
+  let workSlotByUser = new Map<
+    number,
+    { slot_id: number; slot_code: string; territories: string[] }
+  >();
   if (STAFF_KINDS_WITH_WORK_SLOT.has(kind) && userIds.length > 0) {
     const { loadActiveWorkSlotsByUserIds } = await import("../work-slots/work-slots.query");
     workSlotByUser = await loadActiveWorkSlotsByUserIds(userIds);
@@ -301,9 +310,16 @@ export async function listStaff(
     position: u.position,
     created_at: u.created_at.toISOString(),
     app_access: u.app_access,
-    territory: u.territory,
+    territory: (() => {
+      const slotTerr = workSlotByUser.get(u.id)?.territories ?? [];
+      if (slotTerr.length > 0) return slotTerr[0] ?? null;
+      return u.territory;
+    })(),
+    /** Ish o‘rnidagi barcha bog‘langan hududlar (dastavchik/agent ro‘yxati uchun). */
+    work_slot_territories: workSlotByUser.get(u.id)?.territories ?? [],
     login: u.login,
     is_active: u.is_active,
+    filter_visible: u.filter_visible,
     max_sessions: u.max_sessions ?? 1,
     active_session_count: sessMap.get(u.id) ?? 0,
     kpi_color: u.kpi_color ?? null,
@@ -328,6 +344,10 @@ export async function listStaff(
           ) as Record<string, boolean>)
         : {},
     work_slot_id: workSlotByUser.get(u.id)?.slot_id ?? null,
-    work_slot_code: workSlotByUser.get(u.id)?.slot_code ?? null
+    work_slot_code: workSlotByUser.get(u.id)?.slot_code ?? null,
+    has_face_reference: (() => {
+      const key = readUiPrefs(u.ui_preferences)[REF_KEY];
+      return typeof key === "string" && key.length > 0;
+    })()
   }));
 }

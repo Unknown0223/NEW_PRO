@@ -26,14 +26,12 @@ import {
   processUnpaidPayRefRows
 } from "./client-balances.payments.data";
 import {
-  buildSummaryNetMinusUnpaid,
+  buildSummaryOverpaymentsByType,
   compareNumForSort,
   moneySortValueFromPaymentAmounts,
-  normPayTypeKey,
   paymentAmountsNetMinusUnpaid,
   readSortDir
 } from "./client-balances.payments.util";
-import { loadPaymentNetTotalsByTypeGlobally } from "./client-balances.payments.aggregate";
 import { loadBalancesAsOf, loadLastDeliveryByClient, loadLastPaymentByClient } from "./client-balances.ledger";
 import {
   loadDeliveryDebtByClient,
@@ -49,7 +47,7 @@ export async function listClientBalancesReportFiltered(
 ): Promise<ClientBalanceListResponse> {
   const { tenantId, q, perf, page, limit, asOfEnd, odFrom, odTo } = ctx;
   const bfEarly = q.balance_filter?.trim() ?? "";
-  const whereBase = buildClientWhere(tenantId, q, { skipBalanceFilter: true });
+  const whereBase = await buildClientWhere(tenantId, q, { skipBalanceFilter: true });
     const allMinimal = await prisma.client.findMany({
       where: whereBase,
       select: {
@@ -86,16 +84,23 @@ export async function listClientBalancesReportFiltered(
 
     const eligibleIds = eligible.map((r) => r.id);
     const { labels: sprLabels, entries: pmEntries } = await loadTenantPaymentRefs(tenantId);
-    const [netGlobalByType, rawUnpaidEligible] = await Promise.all([
-      loadPaymentNetTotalsByTypeGlobally(tenantId, eligibleIds, asOfEnd, pmEntries),
+    const [payNormEligible, rawUnpaidEligible] = await Promise.all([
+      loadPaymentNetNormByClient(tenantId, eligibleIds, asOfEnd, pmEntries),
       loadUnpaidOrderBalanceRawByPaymentRef(tenantId, eligibleIds, odFrom, odTo)
     ]);
-    const { byClient: unpaidByMethod, globalUnpaidNorm } = processUnpaidPayRefRows(
+    const { byClient: unpaidByMethod } = processUnpaidPayRefRows(
       rawUnpaidEligible,
       pmEntries,
       sprLabels
     );
-    const summaryPaymentByType = buildSummaryNetMinusUnpaid(sprLabels, netGlobalByType, globalUnpaidNorm);
+    const summaryPaymentByType = buildSummaryOverpaymentsByType(
+      sprLabels,
+      eligible.map((row) => ({
+        balance: mergeLedgerWithUnpaidDelivered(ledgerOf(row), deliveryMap.get(row.id)),
+        payNorm: payNormEligible.get(row.id),
+        unpaidNorm: unpaidByMethod.get(row.id)
+      }))
+    );
 
     const sortBy = q.sort_by?.trim() ?? "";
     const sortDir = readSortDir(q);
@@ -111,17 +116,20 @@ export async function listClientBalancesReportFiltered(
         return compareNumForSort(aBal, bBal, sortDir);
       });
     } else if (sortBy.startsWith("pay:")) {
-      const payNormAll = await loadPaymentNetNormByClient(tenantId, eligibleIds, asOfEnd, pmEntries);
       orderedEligible = [...eligible].sort((a, b) => {
+        const aBal = mergeLedgerWithUnpaidDelivered(ledgerOf(a), deliveryMap.get(a.id));
+        const bBal = mergeLedgerWithUnpaidDelivered(ledgerOf(b), deliveryMap.get(b.id));
         const aAmounts = paymentAmountsNetMinusUnpaid(
           sprLabels,
-          payNormAll.get(a.id),
-          unpaidByMethod.get(a.id)
+          payNormEligible.get(a.id),
+          unpaidByMethod.get(a.id),
+          aBal
         );
         const bAmounts = paymentAmountsNetMinusUnpaid(
           sprLabels,
-          payNormAll.get(b.id),
-          unpaidByMethod.get(b.id)
+          payNormEligible.get(b.id),
+          unpaidByMethod.get(b.id),
+          bBal
         );
         const aVal = moneySortValueFromPaymentAmounts(aAmounts, sortBy, sprLabels);
         const bVal = moneySortValueFromPaymentAmounts(bAmounts, sortBy, sprLabels);
@@ -164,9 +172,16 @@ export async function listClientBalancesReportFiltered(
     const data: ClientBalanceRow[] = orderedClients.map((c) => {
       const blend = deliveryMap.get(c.id);
       const blendPass = blend && blend.debt.gt(0) ? blend : null;
+      const ledger = pageBalAsOf?.get(c.id) ?? c.client_balances[0]?.balance ?? new Prisma.Decimal(0);
+      const displayBal = mergeLedgerWithUnpaidDelivered(ledger, blendPass ?? undefined);
       return mapClientRow(
         c,
-        paymentAmountsNetMinusUnpaid(sprLabels, pagePayNorm.get(c.id), unpaidByMethod.get(c.id)),
+        paymentAmountsNetMinusUnpaid(
+          sprLabels,
+          pagePayNorm.get(c.id) ?? payNormEligible.get(c.id),
+          unpaidByMethod.get(c.id),
+          displayBal
+        ),
         lastPays.get(c.id),
         lastOrds.get(c.id),
         pageBalAsOf?.get(c.id) ?? null,

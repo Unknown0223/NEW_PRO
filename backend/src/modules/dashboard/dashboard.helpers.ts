@@ -47,6 +47,17 @@ export function clampPct(v: number): number {
   return Math.round(v * 10) / 10;
 }
 
+/** Savdo summa/qty: `cancelled` va `returned` kirmaydi. */
+export const SQL_SUM_SALE_LINE_TOTAL = Prisma.sql`COALESCE(SUM(CASE WHEN o.status NOT IN ('cancelled', 'returned') THEN oi.total ELSE 0 END), 0)`;
+export const SQL_SUM_SALE_LINE_QTY = Prisma.sql`COALESCE(SUM(CASE WHEN o.status NOT IN ('cancelled', 'returned') THEN oi.qty ELSE 0 END), 0)`;
+
+/** Otmena/vozvrat ulushi — savdo + shu bucket (100% dan oshmasin). */
+export function pctAgainstSalesAndBucket(sales: number, bucket: number): number | null {
+  const denom = sales + bucket;
+  if (!(denom > 0)) return null;
+  return clampPct((bucket / denom) * 100);
+}
+
 export function decToString(v: Prisma.Decimal | string | number | null | undefined): string {
   if (v == null) return "0";
   if (typeof v === "string") return v;

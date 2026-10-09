@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart' as p;
 
+import '../errors/error_reporter.dart';
 import '../time/work_region_time.dart';
 
 class AppDatabase {
@@ -14,23 +15,26 @@ class AppDatabase {
   }
 
   static Future<Database> _initDb() async {
-    final dbPath = await getDatabasesPath();
-    final path = p.join(dbPath, 'salesdoc.db');
-    return openDatabase(
-      path,
-      version: 18,
-      onOpen: (db) async {
-        // Android: PRAGMA faqat rawQuery orqali (execute xato beradi).
-        try {
-          await db.rawQuery('PRAGMA journal_mode=WAL');
-          await db.rawQuery('PRAGMA synchronous=NORMAL');
-        } catch (_) {}
-        await _ensureClientColumns(db);
-        await _ensureHeldOrderSummaryColumns(db);
-        await _ensurePhotoRetryColumn(db);
-        await _ensurePerfIndexes(db);
-      },
-      onCreate: (db, version) async {
+    try {
+      final dbPath = await getDatabasesPath();
+      final path = p.join(dbPath, 'salesdoc.db');
+      return openDatabase(
+        path,
+        version: 21,
+        onOpen: (db) async {
+          // Android: PRAGMA faqat rawQuery orqali (execute xato beradi).
+          try {
+            await db.rawQuery('PRAGMA journal_mode=WAL');
+            await db.rawQuery('PRAGMA synchronous=NORMAL');
+          } catch (_) {}
+          await _ensureClientColumns(db);
+          await _ensureHeldOrderSummaryColumns(db);
+          await _ensurePhotoRetryColumn(db);
+          await _ensurePendingLocationPingsTable(db);
+          await _ensureVisitGeoColumn(db);
+          await _ensurePerfIndexes(db);
+        },
+        onCreate: (db, version) async {
         await db.execute('''
           CREATE TABLE clients (
             id INTEGER PRIMARY KEY,
@@ -58,7 +62,8 @@ class AppDatabase {
             client_pinfl TEXT,
             contract_number TEXT,
             notes TEXT,
-            visit_date TEXT
+            visit_date TEXT,
+            photo_url TEXT
           )
         ''');
         await db.execute('''
@@ -151,6 +156,20 @@ class AppDatabase {
             created_at TEXT NOT NULL,
             status TEXT NOT NULL DEFAULT 'pending',
             retry_count INTEGER NOT NULL DEFAULT 0
+          )
+        ''');
+        await db.execute('''
+          CREATE TABLE pending_location_pings (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            latitude REAL NOT NULL,
+            longitude REAL NOT NULL,
+            accuracy_meters REAL,
+            battery_pct INTEGER,
+            network_type TEXT,
+            recorded_at TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'pending',
+            retry_count INTEGER NOT NULL DEFAULT 0,
+            created_at TEXT NOT NULL
           )
         ''');
         await db.execute('''
@@ -286,6 +305,15 @@ class AppDatabase {
         if (oldVersion < 18) {
           await _ensurePerfIndexes(db);
         }
+        if (oldVersion < 19) {
+          await _ensureClientColumns(db);
+        }
+        if (oldVersion < 20) {
+          await _ensurePendingLocationPingsTable(db);
+        }
+        if (oldVersion < 21) {
+          await _ensurePendingLocationPingMetaColumns(db);
+        }
         if (oldVersion < 5) {
           await db.execute('''
             CREATE TABLE IF NOT EXISTS agent_visits (
@@ -306,6 +334,18 @@ class AppDatabase {
         }
       },
     );
+    } catch (e, st) {
+      ErrorReporter.instance?.reportCaught(
+        e,
+        stack: st,
+        module: ErrorModules.database,
+        code: 'SqliteOpenFailed',
+        message: 'SQLite: не удалось открыть локальную базу',
+        path: '/mobile/database',
+        severity: 'fatal',
+      );
+      rethrow;
+    }
   }
 
   static Future<void> _ensureHeldOrderSummaryColumns(Database db) async {
@@ -314,6 +354,12 @@ class AppDatabase {
     } catch (_) {}
     try {
       await db.execute('ALTER TABLE held_orders ADD COLUMN discount_pct REAL NOT NULL DEFAULT 0');
+    } catch (_) {}
+  }
+
+  static Future<void> _ensureVisitGeoColumn(Database db) async {
+    try {
+      await db.execute('ALTER TABLE agent_visits ADD COLUMN geo_json TEXT');
     } catch (_) {}
   }
 
@@ -330,6 +376,38 @@ class AppDatabase {
       await db.execute(
         "UPDATE held_orders SET capture_deadline = submit_at WHERE capture_deadline IS NULL OR capture_deadline = ''",
       );
+    } catch (_) {}
+  }
+
+  static Future<void> _ensurePendingLocationPingsTable(Database db) async {
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS pending_location_pings (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        latitude REAL NOT NULL,
+        longitude REAL NOT NULL,
+        accuracy_meters REAL,
+        battery_pct INTEGER,
+        network_type TEXT,
+        recorded_at TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'pending',
+        retry_count INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL
+      )
+    ''');
+    try {
+      await db.execute(
+        'CREATE INDEX IF NOT EXISTS idx_pending_loc_status ON pending_location_pings(status, retry_count)',
+      );
+    } catch (_) {}
+    await _ensurePendingLocationPingMetaColumns(db);
+  }
+
+  static Future<void> _ensurePendingLocationPingMetaColumns(Database db) async {
+    try {
+      await db.execute('ALTER TABLE pending_location_pings ADD COLUMN battery_pct INTEGER');
+    } catch (_) {}
+    try {
+      await db.execute('ALTER TABLE pending_location_pings ADD COLUMN network_type TEXT');
     } catch (_) {}
   }
 
@@ -408,6 +486,46 @@ class AppDatabase {
     if (!cols.contains('visit_date')) {
       await db.execute('ALTER TABLE clients ADD COLUMN visit_date TEXT');
     }
+    if (!cols.contains('photo_url')) {
+      await db.execute('ALTER TABLE clients ADD COLUMN photo_url TEXT');
+    }
+  }
+
+  static Future<void> _preserveClientPhotoUrls(
+    DatabaseExecutor db,
+    List<Map<String, dynamic>> clients,
+  ) async {
+    final ids = <int>[];
+    for (final c in clients) {
+      final incoming = c['photo_url']?.toString().trim();
+      if (incoming != null && incoming.isNotEmpty) continue;
+      final id = c['id'];
+      if (id is int) ids.add(id);
+    }
+    if (ids.isEmpty) return;
+    final existing = <int, String>{};
+    for (var i = 0; i < ids.length; i += 400) {
+      final chunk = ids.skip(i).take(400).toList();
+      final placeholders = List.filled(chunk.length, '?').join(',');
+      final rows = await db.query(
+        'clients',
+        columns: ['id', 'photo_url'],
+        where: 'id IN ($placeholders)',
+        whereArgs: chunk,
+      );
+      for (final r in rows) {
+        final p = r['photo_url']?.toString().trim();
+        final id = r['id'];
+        if (id is int && p != null && p.isNotEmpty) existing[id] = p;
+      }
+    }
+    for (final c in clients) {
+      final incoming = c['photo_url']?.toString().trim();
+      if (incoming != null && incoming.isNotEmpty) continue;
+      final id = c['id'];
+      final keep = id is int ? existing[id] : null;
+      if (keep != null) c['photo_url'] = keep;
+    }
   }
 
   static Future<void> _upsertBatched(
@@ -466,6 +584,7 @@ class AppDatabase {
       await Future<void>.delayed(Duration.zero);
       await _upsertBatchedTxn(txn, 'prices', prices);
       await Future<void>.delayed(Duration.zero);
+      await _preserveClientPhotoUrls(txn, clients);
       if (replaceClients) {
         await txn.delete('clients');
       }
@@ -539,6 +658,134 @@ class AppDatabase {
       {'key': 'sync_count_day', 'value': jsonEncode({'date': day, 'count': count + 1})},
       conflictAlgorithm: ConflictAlgorithm.replace,
     );
+  }
+
+  /// Bugun muvaffaqiyatli yuborilgan fotootchyotlar (online + navbat flush).
+  Future<int> getPhotosSyncedToday() async {
+    final db = await database;
+    final r = await db.query('sync_meta', where: "key = 'photos_synced_day'");
+    if (r.isEmpty) return 0;
+    try {
+      final m = jsonDecode(r.first['value'] as String) as Map<String, dynamic>;
+      if (m['date'] == _todayKey()) return (m['count'] as num?)?.toInt() ?? 0;
+    } catch (_) {}
+    return 0;
+  }
+
+  Future<void> recordPhotosSyncedToday([int amount = 1]) async {
+    if (amount <= 0) return;
+    final db = await database;
+    final day = _todayKey();
+    var count = 0;
+    final r = await db.query('sync_meta', where: "key = 'photos_synced_day'");
+    if (r.isNotEmpty) {
+      try {
+        final m = jsonDecode(r.first['value'] as String) as Map<String, dynamic>;
+        if (m['date'] == day) count = (m['count'] as num?)?.toInt() ?? 0;
+      } catch (_) {}
+    }
+    await db.insert(
+      'sync_meta',
+      {'key': 'photos_synced_day', 'value': jsonEncode({'date': day, 'count': count + amount})},
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+  }
+
+  /// Bugun sinxronlangan fotootchyot mijozlari (bosh sahifa vizit hisobi uchun).
+  Future<Set<int>> getPhotoSyncedClientIdsToday() async {
+    final db = await database;
+    final r = await db.query('sync_meta', where: "key = 'photos_synced_clients_day'");
+    if (r.isEmpty) return {};
+    try {
+      final m = jsonDecode(r.first['value'] as String) as Map<String, dynamic>;
+      if (m['date'] != _todayKey()) return {};
+      final raw = m['ids'];
+      if (raw is! List) return {};
+      return raw.map((e) => (e as num).toInt()).toSet();
+    } catch (_) {
+      return {};
+    }
+  }
+
+  Future<void> recordPhotoSyncedClientToday(int clientId) async {
+    if (clientId <= 0) return;
+    final db = await database;
+    final day = _todayKey();
+    final ids = await getPhotoSyncedClientIdsToday();
+    ids.add(clientId);
+    await db.insert(
+      'sync_meta',
+      {
+        'key': 'photos_synced_clients_day',
+        'value': jsonEncode({'date': day, 'ids': ids.toList()..sort()}),
+      },
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+  }
+
+  bool _isWorkRegionToday(String? rawIso) {
+    if (rawIso == null || rawIso.isEmpty) return false;
+    final wr = toWorkRegionFromIso(rawIso);
+    if (wr == null) return false;
+    final now = workRegionNow();
+    return wr.year == now.year && wr.month == now.month && wr.day == now.day;
+  }
+
+  /// Bugun lokal saqlangan buyurtmalar (vizitsiz «Добавить заказ» ham).
+  Future<Set<int>> getClientIdsWithOrdersToday() async {
+    final db = await database;
+    final rows = await db.query('orders', columns: ['client_id', 'created_at']);
+    final ids = <int>{};
+    for (final r in rows) {
+      if (!_isWorkRegionToday(r['created_at']?.toString())) continue;
+      final cid = (r['client_id'] as num?)?.toInt();
+      if (cid != null) ids.add(cid);
+    }
+    return ids;
+  }
+
+  /// Bugun oflayn navbatdagi buyurtmalar.
+  Future<Set<int>> getClientIdsWithPendingOrdersToday() async {
+    final db = await database;
+    final rows = await db.query(
+      'offline_queue',
+      columns: ['client_id', 'created_at'],
+      where: "status = 'pending'",
+    );
+    final ids = <int>{};
+    for (final r in rows) {
+      if (!_isWorkRegionToday(r['created_at']?.toString())) continue;
+      final cid = (r['client_id'] as num?)?.toInt();
+      if (cid != null) ids.add(cid);
+    }
+    return ids;
+  }
+
+  /// Bugun hold (kechiktirilgan yuborish) buyurtmalari.
+  Future<Set<int>> getClientIdsWithPendingHeldOrdersToday() async {
+    final db = await database;
+    final rows = await db.query(
+      'held_orders',
+      columns: ['client_id', 'created_at', 'submit_at'],
+      where: "status = 'pending'",
+    );
+    final ids = <int>{};
+    for (final r in rows) {
+      final created = r['created_at']?.toString();
+      final submit = r['submit_at']?.toString();
+      if (!_isWorkRegionToday(created) && !_isWorkRegionToday(submit)) continue;
+      final cid = (r['client_id'] as num?)?.toInt();
+      if (cid != null) ids.add(cid);
+    }
+    return ids;
+  }
+
+  Future<int> failedPhotoReportCount() async {
+    final db = await database;
+    final r = await db.rawQuery(
+      "SELECT COUNT(*) as cnt FROM pending_photo_reports WHERE status = 'failed'",
+    );
+    return r.first['cnt'] as int? ?? 0;
   }
 
   Future<List<Map<String, dynamic>>> getVisitsForDay([String? day]) async {
@@ -620,9 +867,40 @@ class AppDatabase {
     await db.update('agent_visits', row, where: 'id = ?', whereArgs: [id]);
   }
 
+  /// Vizit GPS tekshiruvi (zakaz payload `visit` uchun manba).
+  Future<void> setVisitGeo(int visitId, Map<String, dynamic> geo) async {
+    final db = await database;
+    await db.update('agent_visits', {'geo_json': jsonEncode(geo)}, where: 'id = ?', whereArgs: [visitId]);
+  }
+
+  /// Mijozning [at] gacha boshlangan oxirgi vizit GPS ma'lumoti (36 soat ichida).
+  Future<Map<String, dynamic>?> findVisitGeoForClient(int clientId, {DateTime? at}) async {
+    final db = await database;
+    final until = (at ?? DateTime.now()).toLocal();
+    final from = until.subtract(const Duration(hours: 36));
+    final rows = await db.query(
+      'agent_visits',
+      columns: ['geo_json'],
+      where: 'client_id = ? AND geo_json IS NOT NULL AND start_time >= ? AND start_time <= ?',
+      whereArgs: [
+        clientId,
+        from.toIso8601String(),
+        until.add(const Duration(minutes: 1)).toIso8601String(),
+      ],
+      orderBy: 'start_time DESC',
+      limit: 1,
+    );
+    if (rows.isEmpty) return null;
+    try {
+      return Map<String, dynamic>.from(jsonDecode(rows.first['geo_json'] as String) as Map);
+    } catch (_) {
+      return null;
+    }
+  }
+
   /// Eski katalog versiyasi yoki visit_weekdays yo‘q — qayta to‘liq yuklash.
   /// Eslatma: ≤50 mijoz «stale» deb hisoblanmasin — bu har ochilishda full sync qilardi.
-  static const agentClientsCatalogVersion = '6';
+  static const agentClientsCatalogVersion = '7';
 
   Future<bool> needsAgentClientCatalogUpgrade() async {
     final db = await database;
@@ -673,6 +951,7 @@ class AppDatabase {
 
   Future<void> upsertClients(List<Map<String, dynamic>> clients) async {
     final db = await database;
+    await _preserveClientPhotoUrls(db, clients);
     await _upsertBatched(db, 'clients', clients);
   }
 
@@ -919,6 +1198,68 @@ class AppDatabase {
     final db = await database;
     final r = await db.rawQuery(
       "SELECT COUNT(*) as cnt FROM pending_photo_reports WHERE status = 'pending' AND retry_count < 5",
+    );
+    return r.first['cnt'] as int? ?? 0;
+  }
+
+  Future<int> enqueueLocationPing({
+    required double latitude,
+    required double longitude,
+    double? accuracyMeters,
+    int? batteryPct,
+    String? networkType,
+    required DateTime recordedAt,
+  }) async {
+    final db = await database;
+    return db.insert('pending_location_pings', {
+      'latitude': latitude,
+      'longitude': longitude,
+      'accuracy_meters': accuracyMeters,
+      'battery_pct': batteryPct,
+      'network_type': networkType,
+      'recorded_at': recordedAt.toUtc().toIso8601String(),
+      'status': 'pending',
+      'retry_count': 0,
+      'created_at': DateTime.now().toUtc().toIso8601String(),
+    });
+  }
+
+  Future<List<Map<String, dynamic>>> getPendingLocationPings({int limit = 50}) async {
+    final db = await database;
+    return db.query(
+      'pending_location_pings',
+      where: "status = 'pending' AND retry_count < ?",
+      whereArgs: [8],
+      orderBy: 'recorded_at ASC, id ASC',
+      limit: limit,
+    );
+  }
+
+  Future<void> deletePendingLocationPings(List<int> ids) async {
+    if (ids.isEmpty) return;
+    final db = await database;
+    final placeholders = List.filled(ids.length, '?').join(',');
+    await db.delete(
+      'pending_location_pings',
+      where: 'id IN ($placeholders)',
+      whereArgs: ids,
+    );
+  }
+
+  Future<void> bumpPendingLocationPingRetries(List<int> ids) async {
+    if (ids.isEmpty) return;
+    final db = await database;
+    final placeholders = List.filled(ids.length, '?').join(',');
+    await db.rawUpdate(
+      'UPDATE pending_location_pings SET retry_count = retry_count + 1 WHERE id IN ($placeholders)',
+      ids,
+    );
+  }
+
+  Future<int> pendingLocationPingCount() async {
+    final db = await database;
+    final r = await db.rawQuery(
+      "SELECT COUNT(*) as cnt FROM pending_location_pings WHERE status = 'pending' AND retry_count < 8",
     );
     return r.first['cnt'] as int? ?? 0;
   }

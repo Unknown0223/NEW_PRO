@@ -13,6 +13,7 @@ import { Label } from "@/components/ui/label";
 import { SearchableMultiSelectPanel } from "@/components/ui/searchable-multi-select-panel";
 import { TableColumnSettingsDialog } from "@/components/data-table/table-column-settings-dialog";
 import { api } from "@/lib/api";
+import { usePermissions } from "@/lib/use-permissions";
 import type { ClientBalanceTerritoryOptions } from "@/lib/client-balances-types";
 import { useUserTablePrefs } from "@/hooks/use-user-table-prefs";
 import { useAuthStore, useAuthStoreHydrated } from "@/lib/auth-store";
@@ -374,6 +375,7 @@ function DebtsSortTh({
 }
 
 export function OrderDebtsWorkspace() {
+  const canExport = usePermissions().has("cash.otchety.export");
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -446,7 +448,7 @@ export function OrderDebtsWorkspace() {
     enabled: Boolean(tenantSlug) && hydrated,
     staleTime: STALE.reference,
     queryFn: async () => {
-      const { data } = await api.get<{ data: StaffPick[] }>(`/api/${tenantSlug}/agents?is_active=true`);
+      const { data } = await api.get<{ data: StaffPick[] }>(`/api/${tenantSlug}/agents?picker=1`);
       return data.data;
     }
   });
@@ -456,7 +458,7 @@ export function OrderDebtsWorkspace() {
     enabled: Boolean(tenantSlug) && hydrated,
     staleTime: STALE.reference,
     queryFn: async () => {
-      const { data } = await api.get<{ data: StaffPick[] }>(`/api/${tenantSlug}/expeditors?is_active=true`);
+      const { data } = await api.get<{ data: StaffPick[] }>(`/api/${tenantSlug}/expeditors?picker=1`);
       return data.data;
     }
   });
@@ -466,7 +468,7 @@ export function OrderDebtsWorkspace() {
     enabled: Boolean(tenantSlug) && hydrated,
     staleTime: STALE.reference,
     queryFn: async () => {
-      const { data } = await api.get<{ data: StaffPick[] }>(`/api/${tenantSlug}/supervisors?is_active=true`);
+      const { data } = await api.get<{ data: StaffPick[] }>(`/api/${tenantSlug}/supervisors?picker=1`);
       return data.data;
     }
   });
@@ -876,7 +878,7 @@ export function OrderDebtsWorkspace() {
 
   return (
     <PageShell>
-      <PageHeader title="Долги по заказам" description="Yetkazilgan zakazlar bo‘yicha to‘lanmagan qoldiq." />
+      <PageHeader title="Долги по заказам" description="Неоплаченный остаток по доставленным заказам." />
       <Card className="border border-border bg-card shadow-sm">
         <CardContent className="space-y-4 p-4 sm:p-5">
           <div className="flex flex-wrap items-end justify-end gap-2 border-b border-border/60 pb-3">
@@ -1265,17 +1267,19 @@ export function OrderDebtsWorkspace() {
                 className="h-9 pl-8 text-sm"
               />
             </div>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="h-9 shrink-0"
-              disabled={exporting}
-              onClick={() => void downloadExcel()}
-            >
-              <FileSpreadsheet className="mr-1.5 h-4 w-4" />
-              Excel
-            </Button>
+            {canExport ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-9 shrink-0"
+                disabled={exporting}
+                onClick={() => void downloadExcel()}
+              >
+                <FileSpreadsheet className="mr-1.5 h-4 w-4" />
+                Excel
+              </Button>
+            ) : null}
             <button
               type="button"
               className={buttonVariants({ variant: "ghost", size: "icon" })}

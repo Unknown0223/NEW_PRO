@@ -22,18 +22,18 @@ export const dashboardHomeNav: { sectionTitle: string; items: NavItem[] } = {
   items: [
     {
       href: "/dashboard",
-      label: "Супервайзер",
+      label: "Дашборд",
       showIfAnyPermission: ["dashboard.supervayzer.view", "dashboard.supervayzer"]
     },
     {
       href: "/dashboard/expeditors",
-      label: "Доставщики",
+      label: "Доставка заказов",
       showIfAnyPermission: ["dashboard.supervayzer.view", "dashboard.supervayzer"]
     },
     {
       href: "/dashboard/finance",
       label: "Финансы",
-      showIfAnyPermission: ["dashboard.finansy.view", "dashboard.finansy"]
+      showIfAnyPermission: ["dashboard.finansy.view", "dashboard.finansy", "finance.obzor.view"]
     },
     {
       href: "/dashboard/sales",
@@ -89,12 +89,12 @@ export const dashboardOrdersNav: {
         {
           href: "/orders/new?type=return",
           label: "Создать возврат с полки",
-          showIfAnyPermission: [...NAV_PERM.returnsCreate]
+          showIfAnyPermission: [...NAV_PERM.returnsShelfCreate]
         },
         {
           href: "/orders/new?type=return_by_order",
           label: "Создать возврат с полки по заказу",
-          showIfAnyPermission: [...NAV_PERM.returnsCreate]
+          showIfAnyPermission: [...NAV_PERM.returnsByOrderCreate]
         },
         {
           href: "/orders/new?type=exchange",
@@ -107,7 +107,7 @@ export const dashboardOrdersNav: {
       title: "УПРАВЛЕНИЕ ЗАКАЗАМИ",
       items: [
         { href: "/orders", label: "Заявки", showIfAnyPermission: [...NAV_PERM.ordersView] },
-        { href: "/orders/refusals", label: "Отказы", showIfAnyPermission: [...NAV_PERM.exchangeView] },
+        { href: "/orders/refusals", label: "Отказы", showIfAnyPermission: [...NAV_PERM.refusals] },
         { href: "/orders/automation", label: "Автоматизация заявок", showIfAnyPermission: [...NAV_PERM.automation] }
       ]
     }
@@ -206,14 +206,24 @@ export const dashboardKassaNav: {
       items: [
         { href: "/settings/cash-desks", label: "Касса", showIfAnyPermission: [...NAV_PERM.cashDesks] },
         { href: "/currency-rates", label: "Курс валют", showIfAnyPermission: [...NAV_PERM.cashCurrency] },
-        { href: "#", label: "Приходы", placeholder: true },
+        {
+          href: "#",
+          label: "Приходы",
+          placeholder: true,
+          showIfAnyPermission: ["cash.prihody.view"]
+        },
         { href: "/expenses", label: "Расходы", showIfAnyPermission: [...NAV_PERM.cashExpenses] },
         {
           href: "/expeditor-payment-requests",
           label: "Заявки на оплату",
           showIfAnyPermission: [...NAV_PERM.cashPaymentRequests]
         },
-        { href: "#", label: "Долги экспедитора", placeholder: true }
+        {
+          href: "#",
+          label: "Долги экспедитора",
+          placeholder: true,
+          showIfAnyPermission: [...NAV_PERM.cashExpeditorDebts]
+        }
       ]
     }
   ]
@@ -288,15 +298,10 @@ export const dashboardUsersNav: {
           label: "Консигнация",
           showIfAnyPermission: [...NAV_PERM.staffConsignment]
         },
-        { href: "#", label: "Настройки бонусов и зарплат", placeholder: true },
-        { href: "/settings/payroll", label: "Зарплата", showIfAnyPermission: [...NAV_PERM.staffPayroll] },
         { href: "/users/workdays", label: "Рабочие дни", showIfAnyPermission: [...NAV_PERM.staffWorkdays] },
         { href: "/users/timesheet", label: "Табель", showIfAnyPermission: [...NAV_PERM.staffTimesheet] },
-        {
-          href: "/settings/reasons/task-types",
-          label: "Задачи",
-          showIfAnyPermission: [...NAV_PERM.staffTasks]
-        }
+        { href: "/users/tasks", label: "Задачи", showIfAnyPermission: [...NAV_PERM.staffTasks] },
+        { href: "/users/task-types", label: "Типы задач", showIfAnyPermission: [...NAV_PERM.staffTaskTypes] }
       ]
     }
   ]
@@ -304,6 +309,67 @@ export const dashboardUsersNav: {
 
 export function dashboardUsersNavFlatItems(): NavItem[] {
   return dashboardUsersNav.groups.flatMap((g) => g.items).filter((i) => !i.disabled && i.href !== "#");
+}
+
+/** Зарплата — hisob, avans, kassada berish va sozlamalar bitta bo‘limda. */
+export const dashboardPayrollNav: {
+  sectionTitle: string;
+  groups: { title: string; items: NavItem[] }[];
+} = {
+  sectionTitle: "Зарплата",
+  groups: [
+    {
+      title: "ОСНОВНОЕ",
+      items: [
+        { href: "/users/salary", label: "Зарплата", showIfAnyPermission: [...NAV_PERM.staffPayroll] },
+        { href: "/users/salary/compare", label: "Сверка с Excel", showIfAnyPermission: [...NAV_PERM.staffPayroll] }
+      ]
+    },
+    {
+      title: "НАСТРОЙКИ",
+      items: [
+        { href: "/users/salary/role-salaries", label: "Базовые оклады", showIfAnyPermission: [...NAV_PERM.staffPayroll] },
+        { href: "/users/salary/formulas", label: "Формулы", showIfAnyPermission: [...NAV_PERM.staffPayroll] },
+        {
+          href: "/users/bonus-and-salary-settings",
+          label: "Настройки бонусов и зарплат",
+          showIfAnyPermission: [...NAV_PERM.staffPayroll]
+        },
+        { href: "/settings/payroll/adjustments", label: "Надбавки и вычеты к зарплате", showIfAnyPermission: [...NAV_PERM.staffPayroll] },
+        { href: "/settings/payroll", label: "Настройки зарплаты", showIfAnyPermission: [...NAV_PERM.staffPayroll] }
+      ]
+    },
+    {
+      title: "АВАНС",
+      items: [
+        { href: "/users/advances", label: "Аванс", showIfAnyPermission: [...NAV_PERM.staffAdvances] },
+        {
+          href: "/finance/advances/approval",
+          label: "Утверждение авансов",
+          showIfAnyPermission: [...NAV_PERM.financeAdvances]
+        },
+        {
+          href: "/settings/payroll/advance-limits",
+          label: "Лимиты авансов",
+          showIfAnyPermission: [...NAV_PERM.staffAdvanceLimits]
+        }
+      ]
+    },
+    {
+      title: "ВЫДАЧА",
+      items: [
+        {
+          href: "/finance/cashier-queue",
+          label: "Выдача аванса и зарплаты",
+          showIfAnyPermission: [...NAV_PERM.cashPayrollQueue]
+        }
+      ]
+    }
+  ]
+};
+
+export function dashboardPayrollNavFlatItems(): NavItem[] {
+  return dashboardPayrollNav.groups.flatMap((g) => g.items).filter((i) => !i.disabled && i.href !== "#");
 }
 
 /** Клиенты — отдельный модуль в боковой панели */
@@ -317,6 +383,7 @@ export const dashboardClientsNav: { sectionTitle: string; items: NavItem[] } = {
       label: "Назначение визитов на карте",
       showIfAnyPermission: [...NAV_PERM.visitPlanner]
     },
+    { href: "/clients/agent-route", label: "Маршрут дня агента", showIfAnyPermission: [...NAV_PERM.agentRoutePlan] },
     { href: "/clients/merge", label: "Объединение клиентов", showIfAnyPermission: [...NAV_PERM.clientsMerge] },
     { href: "/clients/equipment", label: "Оборудования", showIfAnyPermission: [...NAV_PERM.clientsEquipment] },
     {
@@ -366,30 +433,31 @@ const pivotEngineNavEnabled = true;
 export const dashboardReportsNav: { sectionTitle: string; items: NavItem[] } = {
   sectionTitle: "Отчёт",
   items: [
-    { href: "/reports/agent-orders", label: "Заказы по агентам", showIfAnyPermission: [...NAV_PERM.reports] },
-    {
-      href: "/reports/gps",
-      label: "Отчёт по GPS",
-      showIfAnyPermission: [...NAV_PERM.reports, "gps.gps.view"]
-    },
+    { href: "/reports/agent-orders", label: "Заказы по агентам", showIfAnyPermission: [...NAV_PERM.reportAgentOrders] },
+    { href: "/reports/gps", label: "Отчёт по GPS", showIfAnyPermission: [...NAV_PERM.reportGps] },
     {
       href: "/reports/client-sales-2",
       label: "Продажи по клиентам 2",
-      showIfAnyPermission: [...NAV_PERM.reports]
+      showIfAnyPermission: [...NAV_PERM.reportClientSales2]
     },
     {
       href: "/reports/client-sales-4",
       label: "Продажи по клиентам 4",
-      showIfAnyPermission: [...NAV_PERM.reports]
+      showIfAnyPermission: [...NAV_PERM.reportClientSales4]
     },
-    { href: "/reports/product-sales", label: "Продажи по товарам", showIfAnyPermission: [...NAV_PERM.reports] },
+    { href: "/reports/product-sales", label: "Продажи по товарам", showIfAnyPermission: [...NAV_PERM.reportProductSales] },
     {
       href: "/reports/expeditor-returns",
       label: "Возврат экспедитора",
-      showIfAnyPermission: [...NAV_PERM.reports]
+      showIfAnyPermission: [...NAV_PERM.reportExpeditorReturns]
     },
-    { href: "/reports/visits-2", label: "По визитам 2.0", showIfAnyPermission: [...NAV_PERM.reports] },
-    { href: "/reports/visit-totals", label: "Итоги визитов", showIfAnyPermission: [...NAV_PERM.reports] },
+    { href: "/reports/visits-2", label: "По визитам 2.0", showIfAnyPermission: [...NAV_PERM.reportVisits2] },
+    { href: "/reports/visit-totals", label: "Итоги визитов", showIfAnyPermission: [...NAV_PERM.reportVisitTotals] },
+    {
+      href: "/plans/daily",
+      label: "Дневные KPI планы",
+      showIfAnyPermission: [...NAV_PERM.dailyKpi]
+    },
     {
       href: "/reports/builder",
       label: pivotEngineNavEnabled
@@ -418,11 +486,6 @@ export const dashboardPlansNav: { sectionTitle: string; items: NavItem[] } = {
       showIfAnyPermission: ["plans.ustanovka_planov.view"]
     },
     {
-      href: "/plans/daily",
-      label: "Дневные KPI планы",
-      showIfAnyPermission: ["plans.ustanovka_planov.view"]
-    },
-    {
       href: "/plans/approvers",
       label: "Настройка утверждающих",
       showIfAnyPermission: ["plans.nastroyka_utverzhdayushchih.view"]
@@ -448,6 +511,7 @@ export type SidebarLayoutEntry =
   | { kind: "reports" }
   | { kind: "kassa" }
   | { kind: "users" }
+  | { kind: "payroll" }
   | { kind: "plans" }
   /** Loyihada hali yo‘q bo‘lim — sariq, bosib bo‘lmaydigan sarlavha (keyin qo‘shamiz). */
   | { kind: "placeholder"; label: string; icon: PlaceholderIconKey };
@@ -455,7 +519,7 @@ export type SidebarLayoutEntry =
 /**
  * Referens UI tartibi:
  * Дашборды → Заявки → Клиенты → Накладные → Касса → Склад → Поставщики →
- * Планы → Отчёт → Пользователи → Аудит → Доступ → Настройки.
+ * Планы → Отчёт → Пользователи → Зарплата → Аудит → Доступ → Настройки.
  * «placeholder» bo‘limlar loyihada hali yo‘q — sariq label sifatida ko‘rinadi.
  */
 export const dashboardSidebarLayout: SidebarLayoutEntry[] = [
@@ -469,6 +533,7 @@ export const dashboardSidebarLayout: SidebarLayoutEntry[] = [
   { kind: "plans" },
   { kind: "reports" },
   { kind: "users" },
+  { kind: "payroll" },
   {
     kind: "link",
     item: {
@@ -477,7 +542,11 @@ export const dashboardSidebarLayout: SidebarLayoutEntry[] = [
       showIfAnyPermission: [...NAV_PERM.audit]
     }
   },
-  { kind: "link", item: { href: "/activity", label: "Активность и история", roles: ["admin"] } },
+  {
+    kind: "link",
+    item: { href: "/suspicious-logins", label: "Подозрительные входы", showIfAnyPermission: [...NAV_PERM.suspiciousLogins] }
+  },
+  { kind: "link", item: { href: "/activity", label: "Активность и история", showIfAnyPermission: [...NAV_PERM.activity] } },
   {
     kind: "link",
     item: {
@@ -536,7 +605,39 @@ export function flattenMobileNavItems(): NavItem[] {
       for (const item of dashboardKassaNavFlatItems()) pushUnique(item);
     } else if (e.kind === "users") {
       for (const item of dashboardUsersNavFlatItems()) pushUnique(item);
+    } else if (e.kind === "payroll") {
+      for (const item of dashboardPayrollNavFlatItems()) pushUnique(item);
     }
+  }
+  return out;
+}
+
+/** Yon menyu qidiruvi — har bir band o'z bo'limi nomi bilan (menyu tartibida). */
+export type NavSearchEntry = { item: NavItem; section: string | null };
+
+export function flattenNavSearchEntries(): NavSearchEntry[] {
+  const out: NavSearchEntry[] = [];
+  const seen = new Set<string>();
+  const push = (section: string | null, items: NavItem[]) => {
+    for (const item of items) {
+      if (item.disabled || item.placeholder || item.href === "#" || seen.has(item.href)) continue;
+      seen.add(item.href);
+      out.push({ item, section });
+    }
+  };
+  for (const e of dashboardSidebarLayout) {
+    if (e.kind === "dashboard") push(dashboardHomeNav.sectionTitle, dashboardHomeNav.items);
+    else if (e.kind === "orders") push(dashboardOrdersNav.sectionTitle, dashboardOrdersNavFlatItems());
+    else if (e.kind === "clients") push(dashboardClientsNav.sectionTitle, dashboardClientsNav.items);
+    else if (e.kind === "invoices") push(dashboardInvoicesNav.sectionTitle, dashboardInvoicesNav.items);
+    else if (e.kind === "kassa") push(dashboardKassaNav.sectionTitle, dashboardKassaNavFlatItems());
+    else if (e.kind === "stock") push(dashboardStockNav.sectionTitle, dashboardStockNav.items);
+    else if (e.kind === "suppliers") push(dashboardSuppliersNav.sectionTitle, dashboardSuppliersNav.items);
+    else if (e.kind === "plans") push(dashboardPlansNav.sectionTitle, dashboardPlansNav.items);
+    else if (e.kind === "reports") push(dashboardReportsNav.sectionTitle, dashboardReportsNav.items);
+    else if (e.kind === "users") push(dashboardUsersNav.sectionTitle, dashboardUsersNavFlatItems());
+    else if (e.kind === "payroll") push(dashboardPayrollNav.sectionTitle, dashboardPayrollNavFlatItems());
+    else if (e.kind === "link") push(null, [e.item]);
   }
   return out;
 }
@@ -565,9 +666,11 @@ const BREADCRUMB_ENTRIES: Array<{ path: string; section: string | null; label: s
   push(dashboardReportsNav.sectionTitle, dashboardReportsNav.items);
   push(dashboardPlansNav.sectionTitle, dashboardPlansNav.items);
   push(dashboardUsersNav.sectionTitle, dashboardUsersNavFlatItems());
+  push(dashboardPayrollNav.sectionTitle, dashboardPayrollNavFlatItems());
   push(null, [
     { href: "/reports/gps/map", label: "GPS мониторинг" },
     { href: "/audit", label: "Аудит" },
+    { href: "/suspicious-logins", label: "Подозрительные входы" },
     { href: "/activity", label: "Активность и история" },
     { href: "/diagnostics/errors", label: "Журнал ошибок" },
     { href: "/access", label: "Доступ" },
@@ -576,6 +679,10 @@ const BREADCRUMB_ENTRIES: Array<{ path: string; section: string | null; label: s
   return out;
 })();
 
+/** Sidebar active: eng uzun mos `path` g‘olib chiqishi uchun (prefix to‘qnashuvi). */
+export const ALL_DASHBOARD_NAV_PATHS: readonly string[] = Object.freeze(
+  [...new Set(BREADCRUMB_ENTRIES.map((e) => e.path))]
+);
 /**
  * Joriy `pathname` uchun eng aniq (eng uzun prefiksli) menyu bandini topadi.
  * Topilmasa `null` — tepa header chap qismi bo'sh qoladi.

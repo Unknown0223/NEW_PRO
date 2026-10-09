@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { TableColumnSettingsDialog } from "@/components/data-table/table-column-settings-dialog";
 import { useUserTablePrefs } from "@/hooks/use-user-table-prefs";
 import { api } from "@/lib/api";
+import { usePermissions } from "@/lib/use-permissions";
 import { useAuthStore } from "@/lib/auth-store";
 import { downloadXlsxSheet } from "@/lib/download-xlsx";
 import { CalendarDays, Download, Filter, History, Plus, Search, SlidersHorizontal } from "lucide-react";
@@ -79,6 +80,7 @@ function fmtDate(iso: string): string {
 }
 
 export function EquipmentWorkspace({ view = "equipment" }: { view?: "equipment" | "history" }) {
+  const canExport = usePermissions().has("clients.oborudovanie.export");
   const isHistory = view === "history";
   const tenantSlug = useAuthStore((s) => s.tenantSlug);
   const [rows, setRows] = useState<EquipmentRow[]>([]);
@@ -124,7 +126,7 @@ export function EquipmentWorkspace({ view = "equipment" }: { view?: "equipment" 
   const agentOptions = useMemo(() => {
     const m = new Map<number, string>();
     for (const r of rows) {
-      if (r.agent_id && r.agent_id > 0) m.set(r.agent_id, r.agent_name?.trim() || `Agent #${r.agent_id}`);
+      if (r.agent_id && r.agent_id > 0) m.set(r.agent_id, r.agent_name?.trim() || `Агент #${r.agent_id}`);
     }
     return Array.from(m.entries())
       .map(([id, label]) => ({ id: String(id), label }))
@@ -252,10 +254,10 @@ export function EquipmentWorkspace({ view = "equipment" }: { view?: "equipment" 
     setAddError(null);
     const clientId = Number(addClientId);
     const productId = Number(addProductId);
-    if (!Number.isFinite(clientId) || clientId <= 0) return setAddError("Клиентni tanlang.");
-    if (!Number.isFinite(productId) || productId <= 0) return setAddError("Mahsulotni tanlang.");
+    if (!Number.isFinite(clientId) || clientId <= 0) return setAddError("Выберите клиента.");
+    if (!Number.isFinite(productId) || productId <= 0) return setAddError("Выберите товар.");
     const p = productOptions.find((x) => x.id === productId);
-    if (!p) return setAddError("Tanlangan mahsulot topilmadi.");
+    if (!p) return setAddError("Выбранный товар не найден.");
     setAddSaving(true);
     try {
       await api.post(`/api/${tenantSlug}/clients/${clientId}/equipment`, {
@@ -273,7 +275,7 @@ export function EquipmentWorkspace({ view = "equipment" }: { view?: "equipment" 
       setAddNote("");
       await load(1);
     } catch {
-      setAddError("Saqlashda xatolik bo‘ldi.");
+      setAddError("Ошибка при сохранении.");
     } finally {
       setAddSaving(false);
     }
@@ -283,7 +285,7 @@ export function EquipmentWorkspace({ view = "equipment" }: { view?: "equipment" 
     <PageShell>
       <PageHeader
         title={isHistory ? "История перемещения оборудования" : "Оборудование"}
-        description={isHistory ? "Inventory movement log, territory and serial tracking" : "Client equipment control and attachment"}
+        description={isHistory ? "Журнал перемещений инвентаря, учёт по территориям и серийным номерам" : "Контроль и привязка оборудования клиентов"}
       />
       <Card className="border-border/80 shadow-sm">
         <CardContent className="space-y-3 p-3">
@@ -421,14 +423,16 @@ export function EquipmentWorkspace({ view = "equipment" }: { view?: "equipment" 
                   placeholder="Поиск"
                 />
               </div>
-              <Button
-                variant="outline"
-                className="h-8 text-xs"
-                onClick={() => exportEquipmentExcel(rows, isHistory ? "equipment_history" : "equipment_list")}
-              >
-                <Download className="mr-1.5 h-3.5 w-3.5" />
-                Excel
-              </Button>
+              {canExport ? (
+                <Button
+                  variant="outline"
+                  className="h-8 text-xs"
+                  onClick={() => exportEquipmentExcel(rows, isHistory ? "equipment_history" : "equipment_list")}
+                >
+                  <Download className="mr-1.5 h-3.5 w-3.5" />
+                  Excel
+                </Button>
+              ) : null}
               <Button variant="ghost" className="h-8 text-xs" onClick={resetFilters}>
                 <Filter className="mr-1 h-3.5 w-3.5" />
                 Сброс
@@ -514,8 +518,8 @@ export function EquipmentWorkspace({ view = "equipment" }: { view?: "equipment" 
           <TableColumnSettingsDialog
             open={columnDialogOpen}
             onOpenChange={setColumnDialogOpen}
-            title="Ustunlarni boshqarish"
-            description="Ko‘rinadigan ustunlar va tartib. Sizning akkauntingiz uchun saqlanadi."
+            title="Настройка столбцов"
+            description="Видимые столбцы и их порядок. Сохраняется для вашей учётной записи."
             columns={[...EQUIPMENT_COLUMNS]}
             columnOrder={tablePrefs.columnOrder}
             hiddenColumnIds={tablePrefs.hiddenColumnIds}
@@ -530,13 +534,13 @@ export function EquipmentWorkspace({ view = "equipment" }: { view?: "equipment" 
         <Dialog open={addOpen} onOpenChange={setAddOpen}>
           <DialogContent className="sm:max-w-[560px]">
             <DialogHeader>
-              <DialogTitle>Оборудованиеga qo‘shish</DialogTitle>
+              <DialogTitle>Добавить оборудование</DialogTitle>
             </DialogHeader>
             <div className="space-y-3">
               <div className="space-y-1">
                 <p className="text-xs text-muted-foreground">Клиент *</p>
                 <select className="h-9 w-full rounded-md border bg-background px-2 text-sm" value={addClientId} onChange={(e) => setAddClientId(e.target.value)}>
-                  <option value="">Клиентni tanlang</option>
+                  <option value="">Выберите клиента</option>
                   {clientOptions.map((c) => (
                     <option key={c.id} value={String(c.id)}>
                       {c.name}
@@ -545,9 +549,9 @@ export function EquipmentWorkspace({ view = "equipment" }: { view?: "equipment" 
                 </select>
               </div>
               <div className="space-y-1">
-                <p className="text-xs text-muted-foreground">Маҳсулот (Продукт) *</p>
+                <p className="text-xs text-muted-foreground">Товар *</p>
                 <select className="h-9 w-full rounded-md border bg-background px-2 text-sm" value={addProductId} onChange={(e) => setAddProductId(e.target.value)}>
-                  <option value="">Маҳсулотни tanlang</option>
+                  <option value="">Выберите товар</option>
                   {productOptions.map((p) => (
                     <option key={p.id} value={String(p.id)}>
                       {p.name} {p.sku ? `(${p.sku})` : ""} {!p.is_active ? "• неактив" : ""}

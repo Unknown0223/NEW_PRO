@@ -86,7 +86,7 @@ export function Select({
   value,
   onChange,
   options,
-  placeholder = "Tanlang",
+  placeholder = "Выберите",
   error
 }: {
   value: string;
@@ -152,7 +152,7 @@ export function MultiSelect({
   values,
   onChange,
   options,
-  placeholder = "Tanlang",
+  placeholder = "Выберите",
   error
 }: {
   values: string[];

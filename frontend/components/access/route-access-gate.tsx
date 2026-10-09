@@ -30,10 +30,10 @@ export function RouteAccessGate({ children }: { children: ReactNode }) {
     return (
       <div className="flex flex-1 items-start justify-center p-6 sm:p-10">
         <AccessDeniedBanner
-          title="Нет доступа / Ruxsat yo‘q"
-          message={`Раздел «${gated.label}» недоступен для вашей роли или прав. / «${gated.label}» bo‘limi sizning rolingiz yoki ruxsatlaringiz uchun yopiq.`}
+          title="Нет доступа"
+          message={`Раздел «${gated.label}» недоступен для вашей роли или прав.`}
           secondaryHref="/access"
-          secondaryLabel="Доступ / Kirish"
+          secondaryLabel="Доступ"
         />
       </div>
     );

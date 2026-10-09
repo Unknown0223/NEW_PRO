@@ -6,8 +6,10 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { useAuthStore, useAuthStoreHydrated, useEffectiveRole } from "@/lib/auth-store";
+import { useAuthStore, useAuthStoreHydrated } from "@/lib/auth-store";
+import { usePermissions } from "@/lib/use-permissions";
 import { api } from "@/lib/api";
+import { useAppConfirm } from "@/components/ui/app-confirm-dialog";
 import { getUserFacingError } from "@/lib/error-utils";
 import { STALE } from "@/lib/query-stale";
 import { cn } from "@/lib/utils";
@@ -45,6 +47,7 @@ type OutdatedUser = {
   apk_version: string | null;
   device_name: string | null;
   last_sync_at: string | null;
+  is_outdated?: boolean;
 };
 
 type ApkStatus = {
@@ -56,6 +59,8 @@ type ApkStatus = {
 
 type MobileAppReleaseResponse = {
   policy: MobileAppReleasePolicy;
+  users?: OutdatedUser[];
+  users_count?: number;
   outdated_count: number;
   outdated_users: OutdatedUser[];
   apk?: ApkStatus;
@@ -131,14 +136,18 @@ function StatTile({
 
 export default function MobileAppSettingsPage() {
   const tenantSlug = useAuthStore((s) => s.tenantSlug);
-  const role = useEffectiveRole();
-  const isAdmin = role === "admin";
+  const { has, hasAny } = usePermissions();
+  const canView = hasAny("settings.mobile_app.view", "settings.mobile_app.update");
+  const canEdit = has("settings.mobile_app.update");
+  const canUpload = has("settings.mobile_app.import");
+  const canNotify = has("settings.mobile_app.transfer");
   const hydrated = useAuthStoreHydrated();
   const qc = useQueryClient();
+  const { confirm, dialog: confirmDialog } = useAppConfirm();
 
   const [minVersion, setMinVersion] = useState("");
   const [latestVersion, setLatestVersion] = useState("");
-  const [forceUpdate, setForceUpdate] = useState(true);
+  const [forceUpdate, setForceUpdate] = useState(false);
   const [downloadUrl, setDownloadUrl] = useState("");
   const [storeAndroid, setStoreAndroid] = useState("");
   const [storeIos, setStoreIos] = useState("");
@@ -148,17 +157,41 @@ export default function MobileAppSettingsPage() {
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isFetching, dataUpdatedAt, refetch } = useQuery({
     queryKey: ["settings", "mobile-app-release", tenantSlug],
-    enabled: Boolean(tenantSlug) && isAdmin,
-    staleTime: STALE.profile,
+    enabled: Boolean(tenantSlug) && canView,
+    staleTime: 0,
+    gcTime: STALE.live,
+    refetchInterval: 12_000,
+    refetchIntervalInBackground: false,
+    refetchOnWindowFocus: true,
+    refetchOnMount: "always",
     queryFn: async () => {
       const { data: body } = await api.get<MobileAppReleaseResponse>(
-        `/api/${tenantSlug}/settings/mobile-app-release`
+        `/api/${tenantSlug}/settings/mobile-app-release`,
+        { headers: { "Cache-Control": "no-cache" } }
       );
       return body;
     }
   });
+
+  const mobileUsers = Array.isArray(data?.users)
+    ? data.users
+    : (data?.outdated_users ?? []).map((u) => ({ ...u, is_outdated: true }));
+  const outdatedCount = data?.outdated_count ?? mobileUsers.filter((u) => u.is_outdated).length;
+
+  const policyKey = data?.policy
+    ? [
+        data.policy.min_version,
+        data.policy.latest_version,
+        data.policy.force_update,
+        data.policy.download_url,
+        data.policy.store_url_android,
+        data.policy.store_url_ios,
+        data.policy.release_notes,
+        data.apk?.download_url
+      ].join("|")
+    : "";
 
   useEffect(() => {
     if (!data?.policy) return;
@@ -170,10 +203,24 @@ export default function MobileAppSettingsPage() {
     setStoreAndroid(p.store_url_android ?? "");
     setStoreIos(p.store_url_ios ?? "");
     setReleaseNotes(p.release_notes ?? "");
-  }, [data]);
+    // Faqat siyosat o‘zgaganda forma yangilanadi — poll hodimlar jadvalini buzmasin.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [policyKey]);
 
   const saveMut = useMutation({
     mutationFn: async () => {
+      if (forceUpdate) {
+        const ok = await confirm({
+          title: "Принудительное обновление",
+          message: "Агенты со старой версией не смогут войти — обновление приложения станет обязательным.",
+          detail:
+            "Если APK нет на сервере, обновление завершится ошибкой 404. Удалять приложение не нужно — при совпадении ключа подписи оно обновится изнутри. Продолжить?",
+          confirmLabel: "Да",
+          cancelLabel: "Нет",
+          destructive: false
+        });
+        if (!ok) throw new Error("SAVE_CANCELLED");
+      }
       const { data: body } = await api.patch<{ policy: MobileAppReleasePolicy }>(
         `/api/${tenantSlug}/settings/mobile-app-release`,
         {
@@ -190,10 +237,15 @@ export default function MobileAppSettingsPage() {
     },
     onSuccess: () => {
       setMsgTone("ok");
-      setMsg("Saqlandi — agentlar ilovani ochganda yangilash dialogi chiqadi");
+      setMsg(
+        forceUpdate
+          ? "Сохранено — старые версии не смогут войти без обновления"
+          : "Сохранено — необязательное обновление: «Обновить» или «Позже», удалять приложение не нужно"
+      );
       void qc.invalidateQueries({ queryKey: ["settings", "mobile-app-release", tenantSlug] });
     },
     onError: (e) => {
+      if (e instanceof Error && e.message === "SAVE_CANCELLED") return;
       setMsgTone("err");
       setMsg(getUserFacingError(e));
     }
@@ -221,21 +273,24 @@ export default function MobileAppSettingsPage() {
       });
       setUploadProgress(100);
       setDownloadUrl(body.download_url);
-      setForceUpdate(true);
+      setForceUpdate(body.policy.force_update === true);
       if (body.policy.latest_version) {
         setLatestVersion(body.policy.latest_version);
       }
       if (body.policy.min_version) {
         setMinVersion(body.policy.min_version);
+      } else {
+        setMinVersion("");
       }
       if (body.policy.release_notes) {
         setReleaseNotes(body.policy.release_notes);
       } else if (body.policy.latest_version) {
-        setReleaseNotes(`Production yangilash ${body.policy.latest_version}`);
+        setReleaseNotes(`Обновление ${body.policy.latest_version}`);
       }
       setMsgTone("ok");
       setMsg(
-        `APK tayyor (${formatMb(body.bytes)}). Versiya ${body.policy.latest_version ?? "—"} — agentlar ilova ichida yangilanadi.`
+        `APK готов (${formatMb(body.bytes)}). Версия ${body.policy.latest_version ?? "—"}. ` +
+          "Принудительное обновление не включено — агенты обновят приложение изнутри кнопкой «Обновить», без удаления."
       );
       void qc.invalidateQueries({ queryKey: ["settings", "mobile-app-release", tenantSlug] });
     } catch (e) {
@@ -260,8 +315,8 @@ export default function MobileAppSettingsPage() {
       setMsgTone("ok");
       setMsg(
         r.fcm_configured
-          ? `Push yuborildi: ${r.tokens_sent} token (${r.users} foydalanuvchi)`
-          : `FCM sozlanmagan — agentlar ilovani ochganda baribir yangilash dialogi chiqadi (${r.users} ta)`
+          ? `Push-уведомление отправлено: токенов — ${r.tokens_sent}, пользователей — ${r.users}`
+          : `FCM не настроен — при открытии приложения агенты всё равно увидят окно обновления (пользователей: ${r.users})`
       );
     },
     onError: (e) => {
@@ -271,27 +326,27 @@ export default function MobileAppSettingsPage() {
   });
 
   if (!hydrated) return null;
-  if (!isAdmin) {
-    return <p className="text-sm text-muted-foreground">Faqat administrator uchun.</p>;
+  if (!canView) {
+    return <p className="text-sm text-muted-foreground">Нет доступа к настройкам мобильного приложения.</p>;
   }
 
   const apkReady = data?.apk?.ready === true;
   const latest = data?.policy.latest_version ?? latestVersion;
-  const otaActive = Boolean(latest && (downloadUrl || apkReady) && forceUpdate);
+  const otaActive = Boolean(latest && (downloadUrl || apkReady));
   const statusOk = otaActive && apkReady;
   const effectiveUrl = downloadUrl || data?.apk?.download_url || "";
 
   return (
-    <div className="mx-auto max-w-4xl space-y-6 pb-10">
+    <div className="w-full space-y-6 pb-10">
       <PageHeader
-        title="Mobil ilova — serverdan yangilash"
-        description="Yangi APK ni serverga yuklang. Agentlar ilovani ochganda yoki sync qilganda ilova ichida yangilanadi. Kalit mos bo‘lsa PIN va kesh saqlanadi."
+        title="Мобильное приложение — обновление с сервера"
+        description="Загрузите новый APK на сервер. Агенты получат обновление внутри приложения при его открытии — удалять не нужно (при совпадении ключа подписи PIN и кеш сохраняются). Включайте «Принудительное обновление» только когда APK готов."
       />
 
       {isLoading ? (
         <div className="flex items-center gap-2 rounded-xl border border-border/70 bg-muted/20 px-4 py-8 text-sm text-muted-foreground">
           <Loader2 className="h-4 w-4 animate-spin" />
-          Yuklanmoqda…
+          Загрузка…
         </div>
       ) : (
         <>
@@ -302,42 +357,42 @@ export default function MobileAppSettingsPage() {
                 <div>
                   <CardTitle className="flex items-center gap-2 text-base">
                     <Smartphone className="h-4 w-4 text-muted-foreground" />
-                    Holat
+                    Статус
                   </CardTitle>
                   <CardDescription className="mt-1">
-                    Hozirgi OTA (over-the-air) yangilash holati — bir qarashda
+                    Текущее состояние OTA-обновления (по воздуху) — кратко
                   </CardDescription>
                 </div>
                 <Badge variant={statusOk ? "success" : apkReady ? "warning" : "destructive"} className="px-2.5 py-1 text-[11px]">
-                  {statusOk ? "OTA faol" : apkReady ? "Sozlash kerak" : "APK yo‘q"}
+                  {statusOk ? "OTA готово" : apkReady ? "APK есть" : "APK нет"}
                 </Badge>
               </div>
             </CardHeader>
             <CardContent className="space-y-4 pt-4">
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                 <StatTile
-                  label="Oxirgi versiya"
+                  label="Последняя версия"
                   value={latest || "—"}
-                  hint="Agentlarga taklif qilinadigan"
+                  hint="Предлагается агентам"
                   tone={latest ? "ok" : "warn"}
                 />
                 <StatTile
-                  label="Minimal versiya"
+                  label="Минимальная версия"
                   value={minVersion || data?.policy.min_version || "—"}
-                  hint="Bundan past — blok"
+                  hint="Ниже — блокировка"
                   tone="default"
                 />
                 <StatTile
-                  label="APK fayli"
-                  value={apkReady ? formatMb(data?.apk?.bytes) : "Yo‘q"}
-                  hint={apkReady ? `Yuklangan: ${formatWhen(data?.apk?.mtime_ms)}` : "Avval APK yuklang"}
+                  label="Файл APK"
+                  value={apkReady ? formatMb(data?.apk?.bytes) : "Нет"}
+                  hint={apkReady ? `Загружен: ${formatWhen(data?.apk?.mtime_ms)}` : "Сначала загрузите APK"}
                   tone={apkReady ? "ok" : "bad"}
                 />
                 <StatTile
-                  label="Eskirgan agentlar"
-                  value={`${data?.outdated_count ?? 0} ta`}
-                  hint={forceUpdate ? "Majburiy yangilash yoqilgan" : "Majburiy yangilash o‘chirilgan"}
-                  tone={(data?.outdated_count ?? 0) > 0 ? "warn" : "ok"}
+                  label="Устаревшие агенты"
+                  value={`${outdatedCount}`}
+                  hint={forceUpdate ? "Принудительное обновление включено" : "Принудительное обновление выключено"}
+                  tone={outdatedCount > 0 ? "warn" : "ok"}
                 />
               </div>
 
@@ -357,19 +412,21 @@ export default function MobileAppSettingsPage() {
                 <div className="min-w-0 space-y-1">
                   <p className="font-medium text-foreground">
                     {statusOk
-                      ? `Server yangilashi ishlayapti — ${latest}`
+                      ? `Обновление внутри приложения работает — ${latest} (удалять не нужно)`
                       : apkReady
-                        ? "APK bor, lekin majburiy yangilash yoki versiya to‘liq sozlanmagan"
-                        : "APK serverda yo‘q — agentlar «Обновить» da 404 olishi mumkin"}
+                        ? "APK есть. Достаточно сохранить и показать необязательное окно; принудительный флаг блокирует вход"
+                        : "APK нет на сервере — «Обновить» вернёт 404. Сначала загрузите APK и не включайте принудительное обновление"}
                   </p>
                   <div className="space-y-0.5 text-xs text-muted-foreground">
                     <p>
-                      <span className="font-medium text-foreground/80">Yuklash URL:</span>{" "}
+                      <span className="font-medium text-foreground/80">URL загрузки:</span>{" "}
                       <span className="break-all font-mono">{effectiveUrl || "—"}</span>
                     </p>
                     <p>
-                      <span className="font-medium text-foreground/80">Majburiy:</span>{" "}
-                      {forceUpdate ? "ha — past versiya loginni bloklaydi" : "yo‘q — ixtiyoriy dialog"}
+                      <span className="font-medium text-foreground/80">Принудительно:</span>{" "}
+                      {forceUpdate
+                        ? "да — старая версия блокирует вход (без APK агент застрянет)"
+                        : "нет — необязательно «Обновить» / «Позже», приложение не удаляется"}
                     </p>
                   </div>
                 </div>
@@ -378,19 +435,19 @@ export default function MobileAppSettingsPage() {
           </Card>
 
           {/* APK yuklash */}
-          <Card className="hover:shadow-sm">
+          <Card className={cn("hover:shadow-sm", !canUpload && "hidden")}>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <FileUp className="h-4 w-4 text-muted-foreground" />
-                APK yuklash
+                Загрузка APK
               </CardTitle>
               <CardDescription>
-                Release APK ni tanlang. Yuklangach URL va versiya avtomatik to‘ldiriladi.
+                Выберите релизный APK. После загрузки URL и версия заполнятся автоматически.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="download_url">Server APK URL</Label>
+                <Label htmlFor="download_url">URL APK на сервере</Label>
                 <Input
                   id="download_url"
                   placeholder="https://backend.../api/mobile/apk-download?slug=..."
@@ -399,7 +456,7 @@ export default function MobileAppSettingsPage() {
                   className="font-mono text-xs sm:text-sm"
                 />
                 <FieldHint>
-                  Odatda server o‘zi beradi. Qo‘lda o‘zgartirish shart emas — APK yuklash kifoya.
+                  Обычно сервер подставляет его сам. Менять вручную не нужно — достаточно загрузить APK.
                 </FieldHint>
               </div>
 
@@ -423,12 +480,12 @@ export default function MobileAppSettingsPage() {
                   {uploading ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Yuklanmoqda…
+                      Загрузка…
                     </>
                   ) : (
                     <>
                       <FileUp className="mr-2 h-4 w-4" />
-                      Yangi APK ni serverga yuklash
+                      Загрузить новый APK на сервер
                     </>
                   )}
                 </Button>
@@ -439,7 +496,7 @@ export default function MobileAppSettingsPage() {
                     onClick={() => window.open(effectiveUrl, "_blank", "noopener,noreferrer")}
                   >
                     <Download className="mr-2 h-4 w-4" />
-                    Yuklab olishni sinash
+                    Проверить скачивание
                     <ExternalLink className="ml-1.5 h-3.5 w-3.5 opacity-60" />
                   </Button>
                 ) : null}
@@ -451,7 +508,7 @@ export default function MobileAppSettingsPage() {
                     <Loader2 className="h-5 w-5 shrink-0 animate-spin text-primary" />
                     <div className="min-w-0 flex-1 space-y-2">
                       <p className="text-sm font-medium">
-                        Yuklanmoqda…{" "}
+                        Загрузка…{" "}
                         {uploadProgress != null ? `${Math.round(uploadProgress)}%` : ""}
                       </p>
                       <div className="h-2 overflow-hidden rounded-full bg-muted">
@@ -465,8 +522,8 @@ export default function MobileAppSettingsPage() {
                 </div>
               ) : (
                 <FieldHint>
-                  Agent «Обновить» bosadi — APK ilova ichida o‘rnatiladi. Redeploydan keyin APK ni qayta
-                  yuklash kerak bo‘lishi mumkin.
+                  Агент нажимает «Обновить» — APK устанавливается внутри приложения. После повторного развёртывания
+                  сервера APK может потребоваться загрузить заново.
                 </FieldHint>
               )}
             </CardContent>
@@ -475,32 +532,33 @@ export default function MobileAppSettingsPage() {
           {/* Versiya siyosati */}
           <Card className="hover:shadow-sm">
             <CardHeader>
-              <CardTitle>Versiya siyosati</CardTitle>
+              <CardTitle>Политика версий</CardTitle>
               <CardDescription>
-                Minimal — undan past bloklanadi. Oxirgi — yangilash dialogida ko‘rsatiladi.
+                Минимальная — всё, что ниже, блокируется. Последняя — показывается в окне обновления.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-5">
+              <fieldset disabled={!canEdit} className="contents">
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-2">
-                  <Label htmlFor="min_version">Minimal versiya</Label>
+                  <Label htmlFor="min_version">Минимальная версия</Label>
                   <Input
                     id="min_version"
-                    placeholder="masalan: 3.1.0"
+                    placeholder="например: 3.1.0"
                     value={minVersion}
                     onChange={(e) => setMinVersion(e.target.value)}
                   />
-                  <FieldHint>Bundan past APK — majburiy yangilash / kirish cheklovi.</FieldHint>
+                  <FieldHint>APK ниже этой версии — принудительное обновление / ограничение входа.</FieldHint>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="latest_version">Oxirgi versiya (yangi ilova)</Label>
+                  <Label htmlFor="latest_version">Последняя версия (новое приложение)</Label>
                   <Input
                     id="latest_version"
-                    placeholder="masalan: 3.1.20"
+                    placeholder="например: 3.1.20"
                     value={latestVersion}
                     onChange={(e) => setLatestVersion(e.target.value)}
                   />
-                  <FieldHint>Serverdagi joriy release raqami (masalan 3.1.20).</FieldHint>
+                  <FieldHint>Текущий номер релиза на сервере (например, 3.1.20).</FieldHint>
                 </div>
               </div>
 
@@ -522,38 +580,40 @@ export default function MobileAppSettingsPage() {
                 />
                 <div className="min-w-0 space-y-1">
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-sm font-medium">Majburiy yangilash</span>
+                    <span className="text-sm font-medium">Принудительное обновление</span>
                     <Badge variant={forceUpdate ? "success" : "secondary"}>
-                      {forceUpdate ? "Yoqilgan" : "O‘chirilgan"}
+                      {forceUpdate ? "Включено" : "Выключено"}
                     </Badge>
                   </div>
                   <p className="text-xs leading-relaxed text-muted-foreground">
-                    Yoqilsa: oxirgi versiyadan past APK da login bloklanadi, yangilash dialogi majburiy.
-                    O‘chirilsa: faqat ixtiyoriy eslatma.
+                    Если включено: APK ниже последней версии не пускает в систему. Если APK нет на сервере, агент
+                    застрянет. Если выключено (рекомендуется): «Обновить» / «Позже» — удалять приложение
+                    не нужно, при совпадении ключа PIN сохраняется.
                   </p>
                 </div>
               </label>
 
               <div className="space-y-2">
-                <Label htmlFor="release_notes">Reliz eslatmalari</Label>
+                <Label htmlFor="release_notes">Примечания к релизу</Label>
                 <textarea
                   id="release_notes"
                   rows={3}
                   className="flex min-h-[88px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  placeholder="Agentlarga ko‘rinadigan qisqa matn…"
+                  placeholder="Короткий текст, который увидят агенты…"
                   value={releaseNotes}
                   onChange={(e) => setReleaseNotes(e.target.value)}
                 />
-                <FieldHint>Ilova yangilash oynasida ko‘rsatiladi.</FieldHint>
+                <FieldHint>Показывается в окне обновления приложения.</FieldHint>
               </div>
+              </fieldset>
             </CardContent>
           </Card>
 
           {/* Do‘kon havolalari */}
           <Card className="hover:shadow-sm">
             <CardHeader>
-              <CardTitle>Do‘kon havolalari</CardTitle>
-              <CardDescription>Ixtiyoriy. Hozircha asosan server OTA ishlatiladi.</CardDescription>
+              <CardTitle>Ссылки на магазины</CardTitle>
+              <CardDescription>Необязательно. Пока в основном используется серверное OTA-обновление.</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="grid gap-4 sm:grid-cols-2">
@@ -561,7 +621,8 @@ export default function MobileAppSettingsPage() {
                   <Label htmlFor="store_android">Google Play</Label>
                   <Input
                     id="store_android"
-                    placeholder="Bo‘sh qoldiring — server OTA"
+                    placeholder="Оставьте пустым — серверное OTA"
+                    disabled={!canEdit}
                     value={storeAndroid}
                     onChange={(e) => setStoreAndroid(e.target.value)}
                   />
@@ -570,7 +631,8 @@ export default function MobileAppSettingsPage() {
                   <Label htmlFor="store_ios">App Store</Label>
                   <Input
                     id="store_ios"
-                    placeholder="iOS uchun keyinroq"
+                    placeholder="Для iOS — позже"
+                    disabled={!canEdit}
                     value={storeIos}
                     onChange={(e) => setStoreIos(e.target.value)}
                   />
@@ -582,28 +644,44 @@ export default function MobileAppSettingsPage() {
           {/* Amallar */}
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex flex-wrap gap-2">
-              <Button onClick={() => saveMut.mutate()} disabled={saveMut.isPending}>
+              <Button
+                className={cn(!canEdit && "hidden")}
+                onClick={() => saveMut.mutate()}
+                disabled={saveMut.isPending}
+              >
                 {saveMut.isPending ? (
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 ) : (
                   <Save className="mr-2 h-4 w-4" />
                 )}
-                Saqlash
+                Сохранить
               </Button>
               <Button
                 variant="outline"
+                className={cn(!canNotify && "hidden")}
                 onClick={() => notifyMut.mutate()}
-                disabled={notifyMut.isPending || (data?.outdated_count ?? 0) === 0}
+                disabled={notifyMut.isPending || outdatedCount === 0}
               >
                 {notifyMut.isPending ? (
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 ) : (
                   <RefreshCw className="mr-2 h-4 w-4" />
                 )}
-                Eskirganlarga eslatma
+                Напомнить устаревшим
                 <Badge variant="secondary" className="ml-2">
-                  {data?.outdated_count ?? 0}
+                  {outdatedCount}
                 </Badge>
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => void refetch()}
+                disabled={isFetching}
+                title="Обновить сейчас"
+              >
+                <RefreshCw className={cn("mr-1.5 h-3.5 w-3.5", isFetching && "animate-spin")} />
+                Обновить
               </Button>
             </div>
             {msg ? (
@@ -618,23 +696,36 @@ export default function MobileAppSettingsPage() {
             ) : null}
           </div>
 
-          {/* Eskirganlar jadvali */}
+          {/* Hodimlar APK holati */}
           <Card className="overflow-hidden hover:shadow-sm">
             <CardHeader className="bg-muted/15">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div>
                   <CardTitle className="flex items-center gap-2">
                     <Users className="h-4 w-4 text-muted-foreground" />
-                    Yangilanishi kerak
+                    Сотрудники — версия приложения
                   </CardTitle>
                   <CardDescription className="mt-1">
-                    «Versiya noma’lum» — hali yangi ilova bilan login/sync qilmagan. Ilovani ochganda
-                    majburiy yangilash chiqadi.
+                    Обновляется автоматически каждые ~12 секунд. «Версия неизвестна» — сотрудник ещё не входил и не
+                    синхронизировался.
+                    {dataUpdatedAt > 0 ? (
+                      <>
+                        {" "}
+                        Последнее обновление:{" "}
+                        <span className="font-medium text-foreground/80">
+                          {formatSync(new Date(dataUpdatedAt).toISOString())}
+                        </span>
+                        {isFetching ? " · обновление…" : null}
+                      </>
+                    ) : null}
                   </CardDescription>
                 </div>
-                <Badge variant={(data?.outdated_users.length ?? 0) > 0 ? "warning" : "success"}>
-                  {data?.outdated_users.length ?? 0} ta
-                </Badge>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge variant="outline">Всего: {mobileUsers.length}</Badge>
+                  <Badge variant={outdatedCount > 0 ? "warning" : "success"}>
+                    устаревших: {outdatedCount}
+                  </Badge>
+                </div>
               </div>
             </CardHeader>
             <CardContent className="p-0">
@@ -642,46 +733,59 @@ export default function MobileAppSettingsPage() {
                 <table className="w-full text-sm">
                   <thead className="sticky top-0 z-[1] bg-muted/80 backdrop-blur-sm">
                     <tr className="border-b text-left text-[11px] uppercase tracking-wide text-muted-foreground">
-                      <th className="px-4 py-2.5 font-medium">Ism / login</th>
-                      <th className="px-4 py-2.5 font-medium">Rol</th>
-                      <th className="px-4 py-2.5 font-medium">APK versiya</th>
-                      <th className="px-4 py-2.5 font-medium">Qurilma</th>
-                      <th className="px-4 py-2.5 font-medium">Oxirgi sync</th>
+                      <th className="px-4 py-2.5 font-medium">Имя / логин</th>
+                      <th className="px-4 py-2.5 font-medium">Роль</th>
+                      <th className="px-4 py-2.5 font-medium">Версия APK</th>
+                      <th className="px-4 py-2.5 font-medium">Статус</th>
+                      <th className="px-4 py-2.5 font-medium">Устройство</th>
+                      <th className="px-4 py-2.5 font-medium">Последняя синхронизация</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {(data?.outdated_users ?? []).map((u) => (
-                      <tr key={u.id} className="border-b border-border/60 last:border-0 hover:bg-muted/30">
-                        <td className="px-4 py-2.5">
-                          <div className="font-medium text-foreground">{u.name}</div>
-                          <div className="text-xs text-muted-foreground">{u.login}</div>
-                        </td>
-                        <td className="px-4 py-2.5">
-                          <Badge variant="outline" className="font-normal capitalize">
-                            {u.role}
-                          </Badge>
-                        </td>
-                        <td className="px-4 py-2.5">
-                          {u.apk_version ? (
-                            <span className="font-mono text-xs font-medium">{u.apk_version}</span>
-                          ) : (
-                            <Badge variant="warning">noma’lum</Badge>
-                          )}
-                        </td>
-                        <td className="max-w-[10rem] truncate px-4 py-2.5 text-muted-foreground">
-                          {u.device_name ?? "—"}
-                        </td>
-                        <td className="whitespace-nowrap px-4 py-2.5 text-xs text-muted-foreground">
-                          {formatSync(u.last_sync_at)}
-                        </td>
-                      </tr>
-                    ))}
-                    {(data?.outdated_users.length ?? 0) === 0 ? (
+                    {mobileUsers.map((u) => {
+                      const outdated = u.is_outdated === true;
+                      return (
+                        <tr
+                          key={u.id}
+                          className="border-b border-border/60 last:border-0 hover:bg-muted/30"
+                        >
+                          <td className="px-4 py-2.5">
+                            <div className="font-medium text-foreground">{u.name}</div>
+                            <div className="text-xs text-muted-foreground">{u.login}</div>
+                          </td>
+                          <td className="px-4 py-2.5">
+                            <Badge variant="outline" className="font-normal capitalize">
+                              {u.role}
+                            </Badge>
+                          </td>
+                          <td className="px-4 py-2.5">
+                            {u.apk_version ? (
+                              <span className="font-mono text-xs font-medium">{u.apk_version}</span>
+                            ) : (
+                              <Badge variant="warning">неизвестна</Badge>
+                            )}
+                          </td>
+                          <td className="px-4 py-2.5">
+                            {outdated ? (
+                              <Badge variant="warning">нужно обновить</Badge>
+                            ) : (
+                              <Badge variant="success">актуальная</Badge>
+                            )}
+                          </td>
+                          <td className="max-w-[10rem] truncate px-4 py-2.5 text-muted-foreground">
+                            {u.device_name ?? "—"}
+                          </td>
+                          <td className="whitespace-nowrap px-4 py-2.5 text-xs text-muted-foreground">
+                            {formatSync(u.last_sync_at)}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                    {mobileUsers.length === 0 ? (
                       <tr>
-                        <td colSpan={5} className="px-4 py-10 text-center text-muted-foreground">
+                        <td colSpan={6} className="px-4 py-10 text-center text-muted-foreground">
                           <CheckCircle2 className="mx-auto mb-2 h-8 w-8 text-emerald-500/80" />
-                          Barcha foydalanuvchilar {latest || "oxirgi"} versiyada (yoki hali sync
-                          qilmaganlar yo‘q)
+                          Сотрудники с доступом к мобильному приложению не найдены
                         </td>
                       </tr>
                     ) : null}
@@ -692,6 +796,7 @@ export default function MobileAppSettingsPage() {
           </Card>
         </>
       )}
+      {confirmDialog}
     </div>
   );
 }

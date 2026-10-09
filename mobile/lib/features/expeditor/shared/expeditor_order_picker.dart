@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/app_typography.dart';
 import '../expeditor_providers.dart';
+import '../shell/expeditor_drawer.dart';
 
 /// Yetkazilgan buyurtmalar ro'yxati — to'lov yoki qaytarish uchun tanlash.
 class ExpeditorOrderPicker extends ConsumerWidget {
@@ -31,6 +32,7 @@ class ExpeditorOrderPicker extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(title: Text(title)),
+      drawer: const ExpeditorDrawer(),
       body: orders.when(
         data: (list) {
           var filtered = list;
@@ -77,7 +79,7 @@ class ExpeditorOrderPicker extends ConsumerWidget {
           );
         },
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(child: Text('Xato: $e')),
+        error: (e, _) => Center(child: Text('Ошибка: $e')),
       ),
     );
   }

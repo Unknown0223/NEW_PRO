@@ -8,6 +8,7 @@ import { prisma } from "../../config/database";
 import { appendClientAuditLog } from "../clients/clients.service";
 import { appendTenantAuditEvent, AuditEntityType } from "../../lib/tenant-audit";
 import { invalidateDashboard } from "../../lib/redis-cache";
+import { isPgInt4Id } from "../../lib/pg-int4";
 import {
   allocatePayment,
   getPaymentAllocations,
@@ -16,11 +17,32 @@ import {
 } from "./payment-allocations.service";
 import type { ScopedReportActor } from "../access/access-agent-scope";
 import { intersectRequestedAgentIds } from "../access/access-agent-scope";
+import { buildActorPaymentGrantOr } from "../access/access-staff-scope";
 import {
   parseTransferChannelFromPaymentNote,
   resolveTransferChannel
 } from "../bank-transfer-inbox/bank-transfer-inbox.helpers";
 import type { PaymentListQuery, PaymentListRow } from "./payment.query.types";
+
+function splitFilterTerms(raw?: string): string[] {
+  if (!raw?.trim()) return [];
+  const sep = raw.includes("|") ? "|" : ",";
+  return [...new Set(raw.split(sep).map((s) => s.trim()).filter(Boolean))];
+}
+
+function clientFieldContainsAny(
+  field: "zone" | "region" | "city" | "district",
+  raw?: string
+): Prisma.ClientWhereInput | null {
+  const terms = splitFilterTerms(raw);
+  if (terms.length === 0) return null;
+  if (terms.length === 1) {
+    return { [field]: { contains: terms[0], mode: "insensitive" as const } };
+  }
+  return {
+    OR: terms.map((t) => ({ [field]: { contains: t, mode: "insensitive" as const } }))
+  };
+}
 
 export function paymentListInclude(tenantId: number): Prisma.PaymentInclude {
   return {
@@ -116,6 +138,7 @@ export function mapPaymentToListRow(r: any, tenantId: number): PaymentListRow {
     : (fromNote?.channel ?? null);
   return {
     id: r.id,
+    number: r.number != null && String(r.number).trim() ? String(r.number).trim() : null,
     client_id: r.client_id,
     client_name: r.client.name,
     client_legal_name: r.client.legal_name ?? null,
@@ -167,10 +190,34 @@ export function buildPaymentListWhere(
 ): Prisma.PaymentWhereInput {
   const andParts: Prisma.PaymentWhereInput[] = [{ tenant_id: tenantId }];
 
-  if (q.payment_status === "deleted") {
+  const statusList = [
+    ...(q.payment_statuses ?? []),
+    ...(q.payment_status && !(q.payment_statuses?.length) ? [q.payment_status] : [])
+  ];
+  const uniqStatuses = [...new Set(statusList)];
+  const wantsDeleted = uniqStatuses.includes("deleted");
+  const liveStatuses = uniqStatuses.filter((s) => s !== "deleted") as Array<
+    "pending_confirmation" | "confirmed" | "rejected"
+  >;
+
+  if (uniqStatuses.length === 0) {
+    andParts.push({ deleted_at: null });
+  } else if (wantsDeleted && liveStatuses.length === 0) {
     andParts.push({ deleted_at: { not: null } });
+  } else if (wantsDeleted && liveStatuses.length > 0) {
+    andParts.push({
+      OR: [
+        { deleted_at: { not: null } },
+        { deleted_at: null, workflow_status: { in: liveStatuses } }
+      ]
+    });
   } else {
     andParts.push({ deleted_at: null });
+    if (liveStatuses.length === 1) {
+      andParts.push({ workflow_status: liveStatuses[0] });
+    } else if (liveStatuses.length > 1) {
+      andParts.push({ workflow_status: { in: liveStatuses } });
+    }
   }
 
   if (q.client_id != null && q.client_id > 0) andParts.push({ client_id: q.client_id });
@@ -211,7 +258,9 @@ export function buildPaymentListWhere(
     });
   }
 
-  if (q.payment_type != null && q.payment_type.trim() !== "" && q.payment_type !== "__all__") {
+  if (q.payment_types != null && q.payment_types.length > 0) {
+    andParts.push({ payment_type: { in: q.payment_types.map((t) => t.trim()).filter(Boolean) } });
+  } else if (q.payment_type != null && q.payment_type.trim() !== "" && q.payment_type !== "__all__") {
     andParts.push({ payment_type: q.payment_type.trim() });
   }
 
@@ -241,7 +290,8 @@ export function buildPaymentListWhere(
     if (hit.restricted) {
       scopedAgentIds = hit.agentIds;
       if (scopedAgentIds.length === 0) {
-        andParts.push({ id: { in: [] } });
+        const grantOr = buildActorPaymentGrantOr(actorScope);
+        andParts.push(grantOr ?? { id: { in: [] } });
       }
     }
   }
@@ -254,7 +304,21 @@ export function buildPaymentListWhere(
     });
   }
 
-  if (q.trade_direction != null && q.trade_direction.trim() !== "" && q.trade_direction !== "__all__") {
+  if (q.trade_directions != null && q.trade_directions.length > 0) {
+    clientAnd.push({
+      OR: q.trade_directions.map((tdRaw) => {
+        const td = tdRaw.trim();
+        return {
+          agent: {
+            OR: [
+              { trade_direction: { contains: td, mode: "insensitive" as const } },
+              { trade_direction_row: { name: { contains: td, mode: "insensitive" as const } } }
+            ]
+          }
+        };
+      })
+    });
+  } else if (q.trade_direction != null && q.trade_direction.trim() !== "" && q.trade_direction !== "__all__") {
     const td = q.trade_direction.trim();
     clientAnd.push({
       agent: {
@@ -266,18 +330,14 @@ export function buildPaymentListWhere(
     });
   }
 
-  if (q.territory_region?.trim()) {
-    clientAnd.push({ region: { contains: q.territory_region.trim(), mode: "insensitive" } });
-  }
-  if (q.territory_city?.trim()) {
-    clientAnd.push({ city: { contains: q.territory_city.trim(), mode: "insensitive" } });
-  }
-  if (q.territory_district?.trim()) {
-    clientAnd.push({ district: { contains: q.territory_district.trim(), mode: "insensitive" } });
-  }
-  if (q.territory_zone?.trim()) {
-    clientAnd.push({ zone: { contains: q.territory_zone.trim(), mode: "insensitive" } });
-  }
+  const regionClause = clientFieldContainsAny("region", q.territory_region);
+  if (regionClause) clientAnd.push(regionClause);
+  const cityClause = clientFieldContainsAny("city", q.territory_city);
+  if (cityClause) clientAnd.push(cityClause);
+  const districtClause = clientFieldContainsAny("district", q.territory_district);
+  if (districtClause) clientAnd.push(districtClause);
+  const zoneClause = clientFieldContainsAny("zone", q.territory_zone);
+  if (zoneClause) clientAnd.push(zoneClause);
 
   if (q.deal_type === "regular") {
     clientAnd.push({
@@ -299,19 +359,13 @@ export function buildPaymentListWhere(
       { client: { legal_name: { contains: s, mode: "insensitive" } } },
       { client: { client_code: { contains: s, mode: "insensitive" } } }
     ];
-    if (Number.isFinite(idNum) && idNum > 0) {
+    if (isPgInt4Id(idNum)) {
       orSearch.push({ id: idNum });
     }
     andParts.push({ OR: orSearch });
   }
 
-  if (q.payment_status === "pending_confirmation") {
-    andParts.push({ workflow_status: "pending_confirmation" });
-  } else if (q.payment_status === "confirmed") {
-    andParts.push({ workflow_status: "confirmed" });
-  } else if (q.payment_status === "rejected") {
-    andParts.push({ workflow_status: "rejected" });
-  }
+  // workflow_status already applied via payment_statuses / payment_status above.
 
   const ch = q.application_channel;
   if (ch === "expeditor") {

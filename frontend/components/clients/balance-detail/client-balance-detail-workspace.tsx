@@ -35,6 +35,7 @@ import { emptyBalanceDetailFilters } from "@/lib/client-balance-detail/types";
 import type { ClientBalanceLedgerResponse, ClientLedgerRow } from "@/lib/client-balance-ledger-types";
 import { downloadXlsxWorkbook } from "@/lib/download-xlsx";
 import { STALE } from "@/lib/query-stale";
+import { usePermissions } from "@/lib/use-permissions";
 import { cn } from "@/lib/utils";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -173,6 +174,7 @@ export function ClientBalanceDetailWorkspace({
   onAddPayment
 }: Props) {
   const queryClient = useQueryClient();
+  const { hasAny } = usePermissions();
   const profileLedgerCtx = useClientProfileLedgerFiltersOptional();
 
   const [tab, setTab] = useState<BalanceDetailViewTab>("overall");
@@ -521,6 +523,7 @@ export function ClientBalanceDetailWorkspace({
             refreshing={ledgerQ.isFetching}
             exportBusy={excelBusy}
             canExport={displayRows.length > 0}
+            showExport={hasAny("cash.balansy_klientov.export", "clients.klient.copy")}
           />
 
           {filtersOpen ? (

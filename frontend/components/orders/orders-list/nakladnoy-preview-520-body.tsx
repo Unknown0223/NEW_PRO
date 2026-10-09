@@ -19,15 +19,15 @@ export function NakladnoyPreview520Body({ data }: { data: ExpeditorLoading520Pre
       <table className="w-full max-w-xl border-collapse text-[11px]">
         <tbody>
           <tr>
-            <td className="py-0.5 pr-2 font-medium text-gray-700">Дата заказа:</td>
+            <td className="py-0.5 pr-2 font-medium text-gray-700">Дата заявки</td>
             <td>{meta.dateOrder}</td>
           </tr>
           <tr>
-            <td className="py-0.5 pr-2 font-medium text-gray-700">Дата отгрузки:</td>
+            <td className="py-0.5 pr-2 font-medium text-gray-700">Дата отгрузки</td>
             <td>{meta.dateShip ?? "—"}</td>
           </tr>
           <tr>
-            <td className="py-0.5 pr-2 font-medium text-gray-700">Торговый представитель:</td>
+            <td className="py-0.5 pr-2 font-medium text-gray-700">Агенты</td>
             <td>{meta.agents}</td>
             {meta.agentPhonesVisible ? (
               <td className="py-0.5 pl-4 font-medium text-gray-700">
@@ -36,17 +36,15 @@ export function NakladnoyPreview520Body({ data }: { data: ExpeditorLoading520Pre
             ) : null}
           </tr>
           <tr>
-            <td className="py-0.5 pr-2 font-medium text-gray-700">Территория:</td>
+            <td className="py-0.5 pr-2 font-medium text-gray-700">Территория</td>
             <td colSpan={meta.agentPhonesVisible ? 2 : 1}>{meta.territory}</td>
           </tr>
-          {meta.expeditorVisible ? (
-            <tr>
-              <td className="py-0.5 pr-2 font-medium text-gray-700">Экспедитор:</td>
-              <td colSpan={2}>{meta.expeditor}</td>
-            </tr>
-          ) : null}
           <tr>
-            <td className="py-0.5 pr-2 font-medium text-gray-700">Валюта:</td>
+            <td className="py-0.5 pr-2 font-medium text-gray-700">Экспедитор</td>
+            <td colSpan={2}>{meta.expeditor}</td>
+          </tr>
+          <tr>
+            <td className="py-0.5 pr-2 font-medium text-gray-700">Валюта</td>
             <td colSpan={2}>{meta.currency}</td>
           </tr>
         </tbody>
@@ -74,12 +72,8 @@ export function NakladnoyPreview520Body({ data }: { data: ExpeditorLoading520Pre
                   <td className={td} />
                   <td className={td} colSpan={2} />
                   <td className={cn(td, "font-bold")}>{g.name}</td>
-                  <td className={cn(td, "text-right font-bold tabular-nums")}>
-                    {g.qty > 0 ? g.qty : ""}
-                  </td>
-                  <td className={cn(td, "text-right font-bold tabular-nums")}>
-                    {g.bonus > 0 ? g.bonus : ""}
-                  </td>
+                  <td className={cn(td, "text-right font-bold tabular-nums")}>{g.qty}</td>
+                  <td className={cn(td, "text-right font-bold tabular-nums")}>{g.bonus}</td>
                   <td className={td} />
                   <td className={cn(td, "text-right font-bold tabular-nums")}>{g.sum}</td>
                 </tr>
@@ -90,14 +84,15 @@ export function NakladnoyPreview520Body({ data }: { data: ExpeditorLoading520Pre
                       {ln.code}
                     </td>
                     <td className={td}>{ln.name}</td>
-                    <td className={cn(td, "text-right tabular-nums")}>{ln.qty ?? ""}</td>
-                    <td className={cn(td, "text-right tabular-nums")}>{ln.bonus ?? ""}</td>
+                    <td className={cn(td, "text-right tabular-nums")}>{ln.qty}</td>
+                    <td className={cn(td, "text-right tabular-nums")}>{ln.bonus}</td>
                     <td className={cn(td, "text-right tabular-nums")}>{ln.price}</td>
                     <td className={cn(td, "text-right tabular-nums")}>{ln.sum}</td>
                   </tr>
                 ))}
               </Fragment>
             ))}
+            {data.shelfReturnOnly ? null : (
             <tr className="bg-gray-100 font-bold">
               <td className={cn(td, "font-bold")} colSpan={4}>
                 Итого
@@ -108,17 +103,18 @@ export function NakladnoyPreview520Body({ data }: { data: ExpeditorLoading520Pre
                 {data.totals.sum}
               </td>
             </tr>
+            )}
           </tbody>
         </table>
       </div>
 
       <div className="grid grid-cols-2 gap-8 pt-6 text-[11px] text-gray-700">
         <div>
-          <div className="font-medium">Складчик:</div>
+          <div className="font-medium">Складчик</div>
           <div className="mt-8 border-b border-gray-400" />
         </div>
         <div>
-          <div className="font-medium">Доставщик:</div>
+          <div className="font-medium">Доставщик</div>
           <div className="mt-8 border-b border-gray-400" />
         </div>
       </div>

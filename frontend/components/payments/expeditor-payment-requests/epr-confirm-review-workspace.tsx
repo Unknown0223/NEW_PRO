@@ -117,13 +117,11 @@ export function EprConfirmReviewWorkspace() {
     enabled: Boolean(tenantSlug) && hydrated && ids.length > 0,
     staleTime: STALE.detail,
     queryFn: async () => {
-      const results = await Promise.all(
-        ids.map(async (id) => {
-          const { data } = await api.get<{ payment: PaymentListApiRow }>(`/api/${tenantSlug}/payments/${id}`);
-          return data.payment;
-        })
+      const { data } = await api.post<{ data: PaymentListApiRow[] }>(
+        `/api/${tenantSlug}/payments/by-ids`,
+        { ids }
       );
-      return results.filter((r) => r.workflow_status === "pending_confirmation");
+      return (data.data ?? []).filter((r) => r.workflow_status === "pending_confirmation");
     }
   });
 
@@ -132,7 +130,7 @@ export function EprConfirmReviewWorkspace() {
     enabled: Boolean(tenantSlug) && hydrated,
     staleTime: STALE.reference,
     queryFn: async () => {
-      const { data } = await api.get<{ data: StaffPick[] }>(`/api/${tenantSlug}/agents?is_active=true`);
+      const { data } = await api.get<{ data: StaffPick[] }>(`/api/${tenantSlug}/agents?picker=1`);
       return data.data ?? [];
     }
   });

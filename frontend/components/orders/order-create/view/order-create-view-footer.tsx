@@ -46,6 +46,7 @@ export function OrderCreateViewFooter({ vm }: { vm: OrderCreateVm }) {
     isExchangeFlow,
     isEditMode,
     mutation,
+    requestSubmit,
     polkiRangeAnchorRef,
     polkiRangeOpen,
     polkiSubmitBlockedReason,
@@ -68,25 +69,25 @@ export function OrderCreateViewFooter({ vm }: { vm: OrderCreateVm }) {
           ) : null}
           <div className="flex shrink-0 flex-wrap items-center justify-end gap-2 sm:ml-auto">
             <Button type="button" variant="outline" onClick={onCancel} disabled={mutation.isPending}>
-              {isPolkiSheet ? "Отмена" : "Bekor"}
+              Отмена
             </Button>
             <Button
               type="button"
               disabled={!canSubmit}
-              onClick={() => mutation.mutate()}
+              onClick={() => requestSubmit()}
               className="bg-teal-600 text-white hover:bg-teal-700 disabled:opacity-50 dark:bg-teal-600 dark:hover:bg-teal-700"
             >
               {mutation.isPending
                 ? isPolkiSheet
                   ? "Оформление…"
-                  : "Saqlanmoqda…"
+                  : "Сохранение…"
                 : isPolkiSheet
                   ? "Возврат"
                   : isExchangeFlow
                     ? "Обмен"
                     : isEditMode
-                      ? "Saqlash"
-                      : "Yaratish"}
+                      ? "Сохранить"
+                      : "Создать"}
             </Button>
           </div>
         </div>

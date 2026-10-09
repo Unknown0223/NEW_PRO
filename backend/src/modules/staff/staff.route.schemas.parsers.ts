@@ -1,9 +1,16 @@
 import { z } from "zod";
+import { maxSessionsValueSchema } from "../../lib/max-sessions";
 import type { ListStaffFilters } from "./staff.service";
+
+function applyActivityFilter(filters: ListStaffFilters, q: Record<string, string | undefined>) {
+  if (q.picker === "1") filters.for_picker = true;
+  else if (q.is_active === "true") filters.is_active = true;
+  else if (q.is_active === "false") filters.is_active = false;
+}
+
 export function parseAgentListFilters(q: Record<string, string | undefined>): ListStaffFilters {
   const filters: ListStaffFilters = {};
-  if (q.is_active === "true") filters.is_active = true;
-  else if (q.is_active === "false") filters.is_active = false;
+  applyActivityFilter(filters, q);
   if (q.branch?.trim()) filters.branch = q.branch.trim();
   if (q.trade_direction?.trim()) filters.trade_direction = q.trade_direction.trim();
   if (q.position?.trim()) filters.position = q.position.trim();
@@ -23,34 +30,34 @@ export function parseExpeditorListFilters(q: Record<string, string | undefined>)
 
 export function parseSupervisorListFilters(q: Record<string, string | undefined>): ListStaffFilters {
   const filters: ListStaffFilters = {};
-  if (q.is_active === "true") filters.is_active = true;
-  else if (q.is_active === "false") filters.is_active = false;
+  applyActivityFilter(filters, q);
   if (q.position?.trim()) filters.position = q.position.trim();
   return filters;
 }
 
 export function parseCollectorListFilters(q: Record<string, string | undefined>): ListStaffFilters {
   const filters: ListStaffFilters = {};
-  if (q.is_active === "true") filters.is_active = true;
-  else if (q.is_active === "false") filters.is_active = false;
+  applyActivityFilter(filters, q);
   if (q.position?.trim()) filters.position = q.position.trim();
   if (q.territory?.trim()) filters.territory = q.territory.trim();
+  if (q.territory_oblast?.trim()) filters.territory_oblast = q.territory_oblast.trim();
+  if (q.territory_city?.trim()) filters.territory_city = q.territory_city.trim();
   return filters;
 }
 
 export function parseAuditorListFilters(q: Record<string, string | undefined>): ListStaffFilters {
   const filters: ListStaffFilters = {};
-  if (q.is_active === "true") filters.is_active = true;
-  else if (q.is_active === "false") filters.is_active = false;
+  applyActivityFilter(filters, q);
   if (q.position?.trim()) filters.position = q.position.trim();
   if (q.territory?.trim()) filters.territory = q.territory.trim();
+  if (q.territory_oblast?.trim()) filters.territory_oblast = q.territory_oblast.trim();
+  if (q.territory_city?.trim()) filters.territory_city = q.territory_city.trim();
   return filters;
 }
 
 export function parseOperatorListFilters(q: Record<string, string | undefined>): ListStaffFilters {
   const filters: ListStaffFilters = {};
-  if (q.is_active === "true") filters.is_active = true;
-  else if (q.is_active === "false") filters.is_active = false;
+  applyActivityFilter(filters, q);
   if (q.branch?.trim()) filters.branch = q.branch.trim();
   if (q.position?.trim()) filters.position = q.position.trim();
   return filters;
@@ -92,7 +99,7 @@ export const createOperatorBodySchema = z
     can_authorize: z.boolean().optional(),
     is_active: z.boolean().optional(),
     app_access: z.boolean().optional(),
-    max_sessions: z.number().int().min(1).max(99).optional(),
+    max_sessions: maxSessionsValueSchema.optional(),
     cash_desk_id: z.number().int().positive().optional(),
     cash_desk_link_role: z.enum(["cashier", "manager", "operator"]).optional(),
     /** `operator` dan tashqari distribusiya rollari — kassa bog‘lanmasi bo‘lmasligi kerak. */
@@ -125,8 +132,9 @@ export const patchOperatorBody = z
     position: z.string().max(128).nullable().optional(),
     can_authorize: z.boolean().optional(),
     is_active: z.boolean().optional(),
+    filter_visible: z.boolean().optional(),
     app_access: z.boolean().optional(),
-    max_sessions: z.number().int().min(1).max(99).optional(),
+    max_sessions: maxSessionsValueSchema.optional(),
     password: z.string().min(6).optional()
   })
   .refine((o) => Object.keys(o).length > 0, { message: "empty" });
@@ -146,7 +154,7 @@ export const createSkladchikBodySchema = z.object({
   can_authorize: z.boolean().optional(),
   is_active: z.boolean().optional(),
   app_access: z.boolean().optional(),
-  max_sessions: z.number().int().min(1).max(99).optional(),
+  max_sessions: maxSessionsValueSchema.optional(),
   warehouse_ids: z.array(z.number().int().positive()).optional(),
   warehouse_staff_entitlements: z.record(z.string(), z.boolean()).optional()
 });
@@ -165,8 +173,9 @@ export const patchSkladchikBody = z
     position: z.string().max(128).nullable().optional(),
     can_authorize: z.boolean().optional(),
     is_active: z.boolean().optional(),
+    filter_visible: z.boolean().optional(),
     app_access: z.boolean().optional(),
-    max_sessions: z.number().int().min(1).max(99).optional(),
+    max_sessions: maxSessionsValueSchema.optional(),
     password: z.string().min(6).optional(),
     warehouse_ids: z.array(z.number().int().positive()).optional(),
     warehouse_staff_entitlements: z.record(z.string(), z.boolean()).optional()
@@ -177,12 +186,36 @@ export const bulkWebPanelRevokeBody = z.object({
   user_ids: z.array(z.number().int().positive()).min(1).max(200)
 });
 
+const bulkKomandaUserIds = z.array(z.number().int().positive()).min(1).max(500);
+
+export const bulkKomandaStaffBody = z.discriminatedUnion("action", [
+  z.object({
+    action: z.literal("set_app_access"),
+    user_ids: bulkKomandaUserIds,
+    app_access: z.boolean()
+  }),
+  z.object({
+    action: z.literal("set_is_active"),
+    user_ids: bulkKomandaUserIds,
+    is_active: z.boolean()
+  }),
+  z.object({
+    action: z.literal("set_filter_visible"),
+    user_ids: bulkKomandaUserIds,
+    filter_visible: z.boolean()
+  }),
+  z.object({
+    action: z.literal("revoke_sessions"),
+    user_ids: bulkKomandaUserIds
+  })
+]);
+
 export const bulkWebPanelMaxSessionsBody = z.object({
   updates: z
     .array(
       z.object({
         user_id: z.number().int().positive(),
-        max_sessions: z.number().int().min(1).max(99)
+        max_sessions: maxSessionsValueSchema
       })
     )
     .min(1)
@@ -190,12 +223,30 @@ export const bulkWebPanelMaxSessionsBody = z.object({
 });
 
 export const createWebStaffPositionPresetBody = z.object({
-  label: z.string().min(1).max(128)
+  label: z.string().min(1).max(128),
+  role: z.string().min(1).max(64).nullable().optional(),
+  code: z.string().max(20).nullable().optional(),
+  comment: z.string().max(500).nullable().optional(),
+  sort_order: z.number().int().min(0).max(99999).nullable().optional(),
+  is_active: z.boolean().optional()
 });
 
 export const patchWebStaffPositionPresetBody = z
   .object({
     label: z.string().min(1).max(128).optional(),
+    role: z.string().min(1).max(64).nullable().optional(),
+    code: z.string().max(20).nullable().optional(),
+    comment: z.string().max(500).nullable().optional(),
+    sort_order: z.number().int().min(0).max(99999).nullable().optional(),
     is_active: z.boolean().optional()
   })
-  .refine((o) => o.label !== undefined || o.is_active !== undefined, { message: "empty" });
+  .refine(
+    (o) =>
+      o.label !== undefined ||
+      o.role !== undefined ||
+      o.code !== undefined ||
+      o.comment !== undefined ||
+      o.sort_order !== undefined ||
+      o.is_active !== undefined,
+    { message: "empty" }
+  );

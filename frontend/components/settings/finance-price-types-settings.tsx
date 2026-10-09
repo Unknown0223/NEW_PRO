@@ -119,7 +119,7 @@ export function FinancePriceTypesSettings() {
 
   const saveMut = useMutation({
     mutationFn: async (next: PriceTypeEntry[]) => {
-      if (!tenantSlug) throw new Error("no tenant");
+      if (!tenantSlug) throw new Error("Компания не выбрана");
       await api.patch(`/api/${tenantSlug}/settings/profile`, {
         references: { price_type_entries: next }
       });
@@ -129,7 +129,7 @@ export function FinancePriceTypesSettings() {
       await qc.invalidateQueries({ queryKey: ["price-types", tenantSlug] });
       await qc.invalidateQueries({ queryKey: ["finance-price-overview", tenantSlug] });
       setServerFieldErrs({});
-      setMsg("Saqlandi. Narx turi kaliti mahsulot narxlari (price_type) bilan mos kelishi kerak.");
+      setMsg("Сохранено. Ключ типа цены должен совпадать с типом цены (price_type) в ценах товаров.");
       setOpen(false);
       resetForm();
     },
@@ -142,14 +142,14 @@ export function FinancePriceTypesSettings() {
           const top = flat.formErrors.map((s) => s.trim()).find(Boolean);
           const hint = firstValidationUserHint(flat);
           const line = top ?? hint ?? Object.values(per).find((m) => m.trim() !== "");
-          setMsg(line ? withApiSupportLine(line, e) : getUserFacingError(e, "Saqlashda xatolik."));
+          setMsg(line ? withApiSupportLine(line, e) : getUserFacingError(e, "Ошибка при сохранении."));
           return;
         }
         setServerFieldErrs({});
       } else {
         setServerFieldErrs({});
       }
-      setMsg(getUserFacingError(e, "Saqlashda xatolik."));
+      setMsg(getUserFacingError(e, "Ошибка при сохранении."));
     }
   });
 
@@ -212,7 +212,7 @@ export function FinancePriceTypesSettings() {
   if (!hydrated) {
     return (
       <PageShell>
-        <p className="text-sm text-muted-foreground">Sessiya...</p>
+        <p className="text-sm text-muted-foreground">Загрузка сессии…</p>
       </PageShell>
     );
   }
@@ -221,7 +221,7 @@ export function FinancePriceTypesSettings() {
       <PageShell>
         <p className="text-sm text-destructive">
           <Link href="/login" className="underline">
-            Kirish
+            Войти
           </Link>
         </p>
       </PageShell>
@@ -232,7 +232,7 @@ export function FinancePriceTypesSettings() {
     <PageShell>
       <PageHeader
         title="Тип цены"
-        description="Sotish yoki xarid; to‘lov usuli bilan bog‘langan. Kalit: kod bo‘lsa kod, aks holda nom. Katalog to‘ldirilgan bo‘lsa, zakaz/prixod tanlovi faqat shu yozuvlar bo‘yicha."
+        description="Продажа или закупка; привязан к способу оплаты. Ключ: код, если задан, иначе название. Если справочник заполнен, в заказах и приходах можно выбрать только эти записи."
         actions={
           <div className="flex gap-2">
             <Button size="sm" disabled={!isAdmin || payList.length === 0} onClick={openAdd}>
@@ -245,7 +245,7 @@ export function FinancePriceTypesSettings() {
               Способ оплаты
             </Link>
             <Link href="/settings" className={cn(buttonVariants({ variant: "outline", size: "sm" }))}>
-              Katalog
+              Каталог
             </Link>
           </div>
         }
@@ -253,11 +253,11 @@ export function FinancePriceTypesSettings() {
 
       {payList.length === 0 ? (
         <p className="text-sm text-amber-600 dark:text-amber-400">
-          Avval{" "}
+          Сначала добавьте{" "}
           <Link href="/settings/payment-methods" className="underline">
-            to‘lov usullarini
-          </Link>{" "}
-          qo‘shing.
+            способы оплаты
+          </Link>
+          .
         </p>
       ) : null}
 
@@ -283,14 +283,14 @@ export function FinancePriceTypesSettings() {
                     <td className="px-3 py-2 font-mono text-xs">{priceKey(r)}</td>
                     <td className="px-3 py-2 text-right">
                       {isAdmin ? (
-                        <TableRowActionGroup className="justify-end" ariaLabel="Narx turi">
+                        <TableRowActionGroup className="justify-end" ariaLabel="Тип цены">
                           <Button
                             variant="outline"
                             size="icon-sm"
                             type="button"
                             className="text-muted-foreground hover:text-foreground"
-                            title="Tahrirlash"
-                            aria-label="Tahrirlash"
+                            title="Редактировать"
+                            aria-label="Редактировать"
                             onClick={() => openEdit(r)}
                           >
                             <Pencil className="size-3.5" aria-hidden />
@@ -303,7 +303,7 @@ export function FinancePriceTypesSettings() {
                 {rows.length === 0 ? (
                   <tr>
                     <td colSpan={5} className="px-3 py-6 text-center text-muted-foreground">
-                      Ma&apos;lumot yo&apos;q
+                      Нет данных
                     </td>
                   </tr>
                 ) : null}
@@ -319,7 +319,7 @@ export function FinancePriceTypesSettings() {
         <DialogContent className="sm:max-w-[520px]" showCloseButton>
           <DialogHeader>
             <DialogTitle>{editId ? "Редактировать" : "Добавить"}</DialogTitle>
-            <DialogDescription>Kod ixtiyoriy (A–Z, 0–9, _). Bo‘sh bo‘lsa kalit sifatida nom ishlatiladi.</DialogDescription>
+            <DialogDescription>Код необязателен (A–Z, 0–9, _). Если пусто, в качестве ключа используется название.</DialogDescription>
           </DialogHeader>
           <div className="grid gap-3">
             <div className="grid gap-1.5">

@@ -97,8 +97,8 @@ export async function deletePayment(
             client_balance_id: bal.id,
             delta: payment.amount,
             note: reasonNote
-              ? `Rasxod klient #${payment.id} bekor (arxiv) — ${reasonNote}`
-              : `Rasxod klient #${payment.id} bekor qilindi (arxiv)`,
+              ? `Расход клиента #${payment.id} отменён (архив) — ${reasonNote}`
+              : `Расход клиента #${payment.id} отменён (архив)`,
             user_id: actorUserId
           }
         });
@@ -112,8 +112,8 @@ export async function deletePayment(
             client_balance_id: bal.id,
             delta: payment.amount.neg(),
             note: reasonNote
-              ? `To'lov #${payment.id} bekor (arxiv) — ${reasonNote}`
-              : `To'lov #${payment.id} bekor qilindi (arxiv)`,
+              ? `Оплата #${payment.id} отменена (архив) — ${reasonNote}`
+              : `Оплата #${payment.id} отменена (архив)`,
             user_id: actorUserId
           }
         });
@@ -222,7 +222,7 @@ export async function restorePayment(
           data: {
             client_balance_id: bal.id,
             delta: payment.amount.neg(),
-            note: `Rasxod klient #${payment.id} tiklandi — ${commentText}`,
+            note: `Расход клиента #${payment.id} восстановлен — ${commentText}`,
             user_id: actorUserId
           }
         });
@@ -235,7 +235,7 @@ export async function restorePayment(
           data: {
             client_balance_id: bal.id,
             delta: payment.amount,
-            note: `To'lov #${payment.id} tiklandi — ${commentText}`,
+            note: `Оплата #${payment.id} восстановлена — ${commentText}`,
             user_id: actorUserId
           }
         });
@@ -299,4 +299,49 @@ export async function restorePayment(
       }
     });
   }
+}
+
+const BATCH_VOID_CONCURRENCY = 5;
+
+async function runVoidIdBatch(
+  ids: number[],
+  fn: (id: number) => Promise<unknown>
+): Promise<{ ok: number[]; failed: { id: number; error: string }[] }> {
+  const validIds = [...new Set(ids.filter((id) => Number.isFinite(id) && id >= 1))];
+  const ok: number[] = [];
+  const failed: { id: number; error: string }[] = [];
+  for (let i = 0; i < validIds.length; i += BATCH_VOID_CONCURRENCY) {
+    const chunk = validIds.slice(i, i + BATCH_VOID_CONCURRENCY);
+    const results = await Promise.allSettled(chunk.map((id) => fn(id)));
+    for (let j = 0; j < chunk.length; j++) {
+      const id = chunk[j]!;
+      const result = results[j]!;
+      if (result.status === "fulfilled") ok.push(id);
+      else {
+        failed.push({
+          id,
+          error: result.reason instanceof Error ? result.reason.message : "ERR"
+        });
+      }
+    }
+  }
+  return { ok, failed };
+}
+
+export async function deletePaymentsBatch(
+  tenantId: number,
+  ids: number[],
+  actorUserId: number | null,
+  cancelReasonRef: string | null
+): Promise<{ ok: number[]; failed: { id: number; error: string }[] }> {
+  return runVoidIdBatch(ids, (id) => deletePayment(tenantId, id, actorUserId, cancelReasonRef));
+}
+
+export async function restorePaymentsBatch(
+  tenantId: number,
+  ids: number[],
+  actorUserId: number | null,
+  comment: string
+): Promise<{ ok: number[]; failed: { id: number; error: string }[] }> {
+  return runVoidIdBatch(ids, (id) => restorePayment(tenantId, id, actorUserId, comment));
 }

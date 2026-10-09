@@ -18,10 +18,10 @@ export function SlotBadge({
 
 export function LockStatusBadge({ lockType }: { lockType: string }) {
   if (lockType === "contract") {
-    return <Badge variant="destructive">Qulflangan</Badge>;
+    return <Badge variant="destructive">Заблокировано</Badge>;
   }
   if (lockType === "manual") {
-    return <Badge variant="secondary">Qo‘lda</Badge>;
+    return <Badge variant="secondary">Вручную</Badge>;
   }
-  return <Badge variant="outline">Erkin</Badge>;
+  return <Badge variant="outline">Свободно</Badge>;
 }

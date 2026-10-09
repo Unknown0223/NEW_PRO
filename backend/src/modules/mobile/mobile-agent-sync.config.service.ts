@@ -1,7 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "../../config/database";
 import { MOBILE_FIELD_ROLES } from "../../lib/constants";
-import { parseVisitWeekdaysJson } from "../clients/clients.types";
+import { resolveSyncClientVisitPlan } from "./mobile-agent-sync.client-weekdays";
 import {
   evaluateMobileSyncPolicy,
   syncWindowMessage
@@ -13,9 +13,9 @@ import {
 } from "../staff/agent-mobile-config";
 import { getTenantProfile } from "../tenant-settings/tenant-settings.service";
 import {
+  buildCityTerritoryHints,
   referencesWithResolvedTerritoryNodes,
-  territoryRegionPickerNames,
-  type CityTerritoryHintDto
+  territoryRegionPickerNames
 } from "../tenant-settings/tenant-settings.territory";
 import { paymentMethodStorageKey, priceTypeEntriesFromUnknown, priceTypeKey } from "../tenant-settings/finance-refs";
 import { asRecord } from "../tenant-settings/tenant-settings.shared";
@@ -28,7 +28,16 @@ import {
 import { loadActiveWorkSlotsByUserIds } from "../work-slots/work-slots.query";
 import { resolveAppUpdateForTenant } from "./app-release.service";
 import { getMobileAgentAssignedCities } from "./mobile-agent-cities";
-import { mergeMobileCitiesByZoneRegion } from "./mobile-territory-references";
+import {
+  citiesByZoneRegionFromTerritoryNodes,
+  mergeMobileCitiesByZoneRegion
+} from "./mobile-territory-references";
+import {
+  filterPriceTypeOptionsByAllowed,
+  parsePriceTypeList,
+  resolveAgentAllowedPriceTypes
+} from "../orders/price-type-restriction";
+import { filterTerritoryRefsByAgentCities } from "../linkage/workplace-bindings";
 
 export function agentScopedClientWhere(
   tenantId: number,
@@ -70,7 +79,7 @@ export function agentScopedOrderWhere(tenantId: number, agentId: number): Prisma
 }
 
 /** Ish mintaqasi (UTC+5) — mobil `workRegionNow` bilan bir xil. */
-const WORK_REGION_UTC_OFFSET_HOURS = 5;
+export const WORK_REGION_UTC_OFFSET_HOURS = 5;
 
 export function workRegionTodayKey(d = new Date()): string {
   const wr = new Date(d.getTime() + WORK_REGION_UTC_OFFSET_HOURS * 3_600_000);
@@ -82,6 +91,12 @@ export function workRegionDayRange(dateStr: string): { start: Date; end: Date } 
   const start = new Date(Date.UTC(y, m - 1, d, -WORK_REGION_UTC_OFFSET_HOURS, 0, 0, 0));
   const end = new Date(Date.UTC(y, m - 1, d, 24 - WORK_REGION_UTC_OFFSET_HOURS - 1, 59, 59, 999));
   return { start, end };
+}
+
+/** Foto/list uchun — [start, nextDay) exclusive (chegarada kechagi kun aralashmasin). */
+export function workRegionDayRangeExclusive(dateStr: string): { start: Date; end: Date } {
+  const { start } = workRegionDayRange(dateStr);
+  return { start, end: new Date(start.getTime() + 86_400_000) };
 }
 
 export function localTodayRange(): { start: Date; end: Date } {
@@ -98,6 +113,16 @@ export async function loadAgentMobileConfig(
   tenantId: number,
   userId: number
 ): Promise<AgentMobileConfigV1 | null> {
+  const slotMap = await loadActiveWorkSlotsByUserIds([userId]);
+  const slotInfo = slotMap.get(userId);
+  if (slotInfo) {
+    const slot = await prisma.workSlot.findFirst({
+      where: { id: slotInfo.slot_id, tenant_id: tenantId },
+      select: { entitlements: true }
+    });
+    const fromSlot = extractMobileConfigFromEntitlementsUnknown(slot?.entitlements);
+    if (fromSlot) return fromSlot;
+  }
   const u = await prisma.user.findFirst({
     where: { id: userId, tenant_id: tenantId, is_active: true },
     select: { agent_entitlements: true }
@@ -198,32 +223,28 @@ export type CompactClientRow = {
   contract_number?: string | null;
   notes?: string | null;
   visit_date?: string | null;
-  visit_weekdays?: number[];
+  visit_weekdays?: unknown;
   balance?: number | null;
   credit_limit?: Prisma.Decimal | null;
   client_balances?: { balance: Prisma.Decimal }[];
+  client_photo_reports?: { image_url: string | null }[];
   agent_assignments?: {
     visit_weekdays: unknown;
     visit_date?: Date | string | null;
     agent_id?: number | null;
+    work_slot_id?: number | null;
   }[];
 };
 
-export function compactClient(c: CompactClientRow) {
+export function compactClient(
+  c: CompactClientRow,
+  opts?: { agentId?: number; workSlotId?: number | null }
+) {
   const ledger = c.client_balances?.[0]?.balance;
-  const assignments = c.agent_assignments ?? [];
-  // Avvalo kunlari bor assignment (slot rejasi), keyin birinchisi.
-  const withDays = assignments.find((a) => parseVisitWeekdaysJson(a.visit_weekdays).length > 0);
-  const assignment = withDays ?? assignments[0];
-  const weekdays =
-    parseVisitWeekdaysJson(assignment?.visit_weekdays) ||
-    parseVisitWeekdaysJson(c.visit_weekdays);
-  const visitDate =
-    assignment?.visit_date != null
-      ? assignment.visit_date instanceof Date
-        ? assignment.visit_date.toISOString()
-        : String(assignment.visit_date)
-      : c.visit_date ?? null;
+  const plan = resolveSyncClientVisitPlan(c.agent_assignments, c.visit_weekdays, opts);
+  const visitDate = plan.visitDate ?? c.visit_date ?? null;
+  const weekdays = plan.weekdays;
+  const photoUrl = compactSyncPhotoUrl(c.client_photo_reports?.[0]?.image_url);
   return {
     id: c.id,
     name: c.name,
@@ -250,9 +271,16 @@ export function compactClient(c: CompactClientRow) {
     notes: c.notes ?? null,
     visit_date: visitDate,
     ...(weekdays.length ? { visit_weekdays: weekdays } : {}),
+    ...(photoUrl ? { photo_url: photoUrl } : {}),
     balance: ledger != null ? Number(ledger) : null,
     credit_limit: c.credit_limit != null ? Number(c.credit_limit) : null
   };
+}
+
+function compactSyncPhotoUrl(raw: string | null | undefined): string | undefined {
+  const s = raw?.trim() ?? "";
+  if (!s || s.startsWith("data:") || s.length > 2048) return undefined;
+  return s;
 }
 
 export const clientSyncSelectBase = {
@@ -284,12 +312,11 @@ export const clientSyncSelectBase = {
   client_balances: { select: { balance: true }, take: 1 }
 } as const;
 
-/** Mobil sync — joriy agent + slot:1 tashrif jadvali (VACANT/eski agent_id holati uchun). */
+/** Mobil sync — joriy agent yoki vacant work_slot tashrif jadvali.
+ * `image_url` ataylab select qilinmaydi: base64 `data:` matnlari Prisma napi stringni yiqitadi.
+ */
 export function clientSyncSelectForAgent(agentId: number, workSlotId?: number | null) {
-  const assignmentOr: Prisma.ClientAgentAssignmentWhereInput[] = [
-    { agent_id: agentId },
-    { slot: 1 }
-  ];
+  const assignmentOr: Prisma.ClientAgentAssignmentWhereInput[] = [{ agent_id: agentId }];
   if (workSlotId != null && workSlotId > 0) {
     assignmentOr.push({ work_slot_id: workSlotId });
   }
@@ -297,8 +324,9 @@ export function clientSyncSelectForAgent(agentId: number, workSlotId?: number | 
     ...clientSyncSelectBase,
     agent_assignments: {
       where: { OR: assignmentOr },
-      select: { visit_weekdays: true, visit_date: true, agent_id: true },
-      take: 5
+      select: { visit_weekdays: true, visit_date: true, agent_id: true, work_slot_id: true },
+      orderBy: { slot: "asc" as const },
+      take: 12
     }
   };
 }
@@ -357,7 +385,7 @@ async function loadMobileTenantReferences(tenantId: number) {
   const ref = profile.references;
   const refT = referencesWithResolvedTerritoryNodes(ref as unknown as Record<string, unknown>);
   const territoryNodes = territoryNodesFromUnknown(refT.territory_nodes);
-  const hints: Record<string, CityTerritoryHintDto> = {};
+  const hints = buildCityTerritoryHints(refT as Record<string, unknown>);
   const tenantRow = await prisma.tenant.findUnique({
     where: { id: tenantId },
     select: { settings: true }
@@ -365,7 +393,7 @@ async function loadMobileTenantReferences(tenantId: number) {
   const st = asRecord(tenantRow?.settings);
   const refInner = asRecord(st.references);
   const citiesByZoneRegion = mergeMobileCitiesByZoneRegion({
-    fromTree: {},
+    fromTree: citiesByZoneRegionFromTerritoryNodes(territoryNodes),
     fromClientRows: {},
     cities: ref.client_cities ?? [],
     hints
@@ -423,6 +451,8 @@ export async function getMobileAgentConfigPayload(
       id: true,
       role: true,
       agent_entitlements: true,
+      agent_price_types: true,
+      price_type: true,
       consignment: true,
       consignment_limit_amount: true
     }
@@ -433,18 +463,63 @@ export async function getMobileAgentConfigPayload(
 
   const slotMap = await loadActiveWorkSlotsByUserIds([userId]);
   const slot = slotMap.get(userId) ?? null;
+
+  let entitlementsForMobile = u.agent_entitlements;
+  let consignment = u.consignment === true;
+  let consignmentLimit = u.consignment_limit_amount?.toString() ?? null;
+  let slotPriceTypes: unknown = u.agent_price_types;
+  let slotLegacyPriceType = u.price_type?.trim() || null;
+
+  if (slot) {
+    const slotRow = await prisma.workSlot.findFirst({
+      where: { id: slot.slot_id, tenant_id: tenantId },
+      select: {
+        entitlements: true,
+        price_types: true,
+        price_type: true,
+        consignment: true,
+        consignment_limit_amount: true
+      }
+    });
+    if (slotRow) {
+      const slotMc = extractMobileConfigFromEntitlementsUnknown(slotRow.entitlements);
+      const userMc = extractMobileConfigFromEntitlementsUnknown(u.agent_entitlements);
+      const slotEntObj =
+        slotRow.entitlements != null &&
+        typeof slotRow.entitlements === "object" &&
+        !Array.isArray(slotRow.entitlements)
+          ? (slotRow.entitlements as Record<string, unknown>)
+          : {};
+      const userEntObj =
+        u.agent_entitlements != null &&
+        typeof u.agent_entitlements === "object" &&
+        !Array.isArray(u.agent_entitlements)
+          ? (u.agent_entitlements as Record<string, unknown>)
+          : {};
+      entitlementsForMobile = {
+        ...userEntObj,
+        ...slotEntObj,
+        ...(slotMc || userMc ? { mobile_config: slotMc ?? userMc } : {})
+      };
+      slotPriceTypes = slotRow.price_types ?? slotPriceTypes;
+      if (slotRow.price_type?.trim()) slotLegacyPriceType = slotRow.price_type.trim();
+      consignment = slotRow.consignment === true;
+      consignmentLimit = slotRow.consignment_limit_amount?.toString() ?? null;
+    }
+  }
+
   const profile = await getTenantProfile(tenantId);
   const refInner = profile.references as unknown as Record<string, unknown>;
   const refT = referencesWithResolvedTerritoryNodes(refInner);
   const territoryNodes = territoryNodesFromUnknown(refT.territory_nodes);
-  const hints: Record<string, CityTerritoryHintDto> = {};
+  const hints = buildCityTerritoryHints(refT as Record<string, unknown>);
   const tenantRow = await prisma.tenant.findUnique({
     where: { id: tenantId },
     select: { settings: true, slug: true }
   });
   const st = asRecord(tenantRow?.settings);
   const citiesByZoneRegion = mergeMobileCitiesByZoneRegion({
-    fromTree: {},
+    fromTree: citiesByZoneRegionFromTerritoryNodes(territoryNodes),
     fromClientRows: {},
     cities: profile.references.client_cities ?? [],
     hints
@@ -467,22 +542,42 @@ export async function getMobileAgentConfigPayload(
   const workTimezone = loadTimezoneFromSettingsJson(st);
   const workUtcOffsetHours = utcOffsetHoursForTimezone(workTimezone);
 
+  const tenant_references = await loadMobileTenantReferences(tenantId);
+  const entPts =
+    entitlementsForMobile != null &&
+    typeof entitlementsForMobile === "object" &&
+    !Array.isArray(entitlementsForMobile)
+      ? parsePriceTypeList((entitlementsForMobile as Record<string, unknown>).price_types)
+      : [];
+  const allowedPriceTypes = resolveAgentAllowedPriceTypes({
+    entitlementsPriceTypes: entPts,
+    agentPriceTypes: parsePriceTypeList(slotPriceTypes),
+    legacyPriceType: slotLegacyPriceType
+  });
+  if (allowedPriceTypes.length > 0) {
+    tenant_references.price_type_options = filterPriceTypeOptionsByAllowed(
+      tenant_references.price_type_options,
+      allowedPriceTypes
+    );
+  }
+  const scopedTerritoryRefs = filterTerritoryRefsByAgentCities(tenant_references, agentCities);
+
   return {
     ok: true as const,
     user_id: u.id,
     /** Rol defaultlari + saqlangan patch — mobil «Настройки» / enforcement bilan bir xil. */
-    mobile_config: resolveMobileConfigForUser(u.role, u.agent_entitlements),
-    agent_entitlements: u.agent_entitlements,
+    mobile_config: resolveMobileConfigForUser(u.role, entitlementsForMobile),
+    agent_entitlements: entitlementsForMobile,
     agent_limits: {
-      consignment: u.consignment === true,
-      consignment_limit_amount: u.consignment_limit_amount?.toString() ?? null
+      consignment,
+      consignment_limit_amount: consignmentLimit
     },
     work_slot_id: slot?.slot_id ?? null,
     work_slot_code: slot?.slot_code ?? null,
     /** Ish mintaqasi — admin Sozlamalar → Sistema → Vaqt mintaqasi. */
     work_timezone: workTimezone,
     work_utc_offset_hours: workUtcOffsetHours,
-    tenant_references: await loadMobileTenantReferences(tenantId),
+    tenant_references: scopedTerritoryRefs,
     agent_cities: agentCities,
     ...(appUpdate ? { app_update: appUpdate } : {})
   };

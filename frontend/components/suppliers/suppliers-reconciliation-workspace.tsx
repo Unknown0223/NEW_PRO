@@ -9,6 +9,7 @@ import { DateRangePopover, formatDateRangeButton } from "@/components/ui/date-ra
 import { filterSelectClassName } from "@/components/ui/filter-select";
 import { Input } from "@/components/ui/input";
 import { api } from "@/lib/api";
+import { usePermissions } from "@/lib/use-permissions";
 import { useAuthStore, useAuthStoreHydrated } from "@/lib/auth-store";
 import { downloadXlsxSheet } from "@/lib/download-xlsx";
 import { formatNumberGrouped } from "@/lib/format-numbers";
@@ -94,6 +95,7 @@ function fmtCell(v: string, opts?: { minFractionDigits?: number; maxFractionDigi
 
 export function SuppliersReconciliationWorkspace() {
   const tenantSlug = useAuthStore((s) => s.tenantSlug);
+  const canExport = usePermissions().has("suppliers.balansy.export");
   const hydrated = useAuthStoreHydrated();
   const defaultRange = useMemo(() => monthRangeStrings(new Date()), []);
 
@@ -477,17 +479,19 @@ export function SuppliersReconciliationWorkspace() {
               >
                 <LayoutGrid className="size-4" />
               </Button>
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                disabled={exporting || !rec}
-                className="h-9 gap-1 border-green-600/40 text-green-700 hover:bg-green-50 dark:text-green-400 dark:hover:bg-green-950/30"
-                onClick={() => void exportXlsx()}
-              >
-                <Download className="size-3.5" />
-                {exporting ? "…" : "Excel"}
-              </Button>
+              {canExport ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  disabled={exporting || !rec}
+                  className="h-9 gap-1 border-green-600/40 text-green-700 hover:bg-green-50 dark:text-green-400 dark:hover:bg-green-950/30"
+                  onClick={() => void exportXlsx()}
+                >
+                  <Download className="size-3.5" />
+                  {exporting ? "…" : "Excel"}
+                </Button>
+              ) : null}
               <Button
                 type="button"
                 variant="outline"

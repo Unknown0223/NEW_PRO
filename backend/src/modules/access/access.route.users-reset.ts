@@ -5,6 +5,8 @@ import { sendApiError } from "../../lib/api-error";
 import { actorUserIdOrNull } from "../../lib/request-actor";
 import { appendTenantAuditEvent } from "../../lib/tenant-audit";
 import { adminOrAccessManager } from "./access.route.shared";
+import { getAccessUser } from "../auth/auth.prehandlers";
+import { assertActorCanPatchUser, grantGuardErrorResponse, isAdminActor } from "./access-grant-guard";
 import {
   applyAccessResetToRoleDefault,
   findLatestAccessResetLog,
@@ -19,10 +21,22 @@ export async function registerAccessUsersResetRoutes(app: FastifyInstance) {
     if (!ok) return;
     const tenantId = request.tenant!.id;
     const id = Number((request.params as { id: string }).id);
-    if (!Number.isInteger(id) || id < 1) return sendApiError(reply, request, 400, "InvalidId", "Invalid user id");
+    if (!Number.isInteger(id) || id < 1) return sendApiError(reply, request, 400, "InvalidId", "Некорректный ID пользователя");
     const user = await prisma.user.findFirst({ where: { id, tenant_id: tenantId }, select: { role: true } });
     if (!user) return sendApiError(reply, request, 404, "UserNotFound");
     const actorId = actorUserIdOrNull(request);
+    try {
+      await assertActorCanPatchUser(
+        tenantId,
+        { userId: actorId, role: getAccessUser(request)?.role },
+        { id, role: user.role },
+        { permissions: [], denied_permissions: [], merge_permissions: false }
+      );
+    } catch (e) {
+      const res = grantGuardErrorResponse(e);
+      if (res) return sendApiError(reply, request, 403, res.code, res.message, res.keys ? { keys: res.keys } : undefined);
+      throw e;
+    }
     const snapshot = await snapshotUserAccessGrants(tenantId, id, user.role);
     await applyAccessResetToRoleDefault(tenantId, id, user.role);
     await prisma.accessLog.create({
@@ -71,16 +85,19 @@ export async function registerAccessUsersResetRoutes(app: FastifyInstance) {
       if (!ok) return;
       const tenantId = request.tenant!.id;
       const id = Number((request.params as { id: string }).id);
-      if (!Number.isInteger(id) || id < 1) return sendApiError(reply, request, 400, "InvalidId", "Invalid user id");
+      if (!Number.isInteger(id) || id < 1) return sendApiError(reply, request, 400, "InvalidId", "Некорректный ID пользователя");
       const user = await prisma.user.findFirst({
         where: { id, tenant_id: tenantId },
         select: { id: true, role: true }
       });
       if (!user) return sendApiError(reply, request, 404, "UserNotFound");
+      if (!isAdminActor({ userId: actorUserIdOrNull(request), role: getAccessUser(request)?.role })) {
+        return sendApiError(reply, request, 403, "ACCESS_ADMIN_ONLY", "Восстановить доступ из снимка может только администратор.");
+      }
 
       const resetLog = await findLatestAccessResetLog(tenantId, id);
       if (!resetLog) {
-        return sendApiError(reply, request, 404, "NoResetSnapshot", "No access.reset log found for this user");
+        return sendApiError(reply, request, 404, "NoResetSnapshot", "Для этого пользователя не найдена запись о сбросе доступа");
       }
       if (!isAccessResetSnapshot(resetLog.old_value)) {
         return sendApiError(
@@ -88,7 +105,7 @@ export async function registerAccessUsersResetRoutes(app: FastifyInstance) {
           request,
           409,
           "SnapshotIncomplete",
-          "Latest access.reset log has no full grants snapshot (pre-Phase 2 reset)"
+          "В последней записи о сбросе доступа нет полного снимка прав (сброс выполнен в старой версии)"
         );
       }
 

@@ -3,6 +3,8 @@ import { proxyToBackend } from "@/lib/proxy-to-backend";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+/** Katta migratsiya ZIP / uzoq so‘rovlar (Railway). */
+export const maxDuration = 600;
 
 type Ctx = { params: { path?: string[] } };
 

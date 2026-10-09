@@ -1,6 +1,8 @@
 import fp from "fastify-plugin";
 import { prisma } from "../config/database";
 import { sendApiError } from "../lib/api-error";
+import { getAppCache, setAppCache } from "../lib/redis-cache";
+import { resolveTenantSlugAlias } from "../lib/tenant-slug-alias";
 
 function requestPath(url: string): string {
   const q = url.indexOf("?");
@@ -13,7 +15,7 @@ function tenantSlugFromApiPath(path: string): string | undefined {
   const parts = path.split("/").filter(Boolean);
   if (parts.length < 2 || parts[0] !== "api") return undefined;
   const seg = parts[1];
-  if (!seg || seg === "auth" || seg === "mobile") return undefined;
+  if (!seg || seg === "auth" || seg === "mobile" || seg === "telegram-bot") return undefined;
   try {
     return decodeURIComponent(seg);
   } catch {
@@ -24,25 +26,38 @@ function tenantSlugFromApiPath(path: string): string | undefined {
 export const tenantPlugin = fp(async (app) => {
   app.addHook("preHandler", async (request, reply) => {
     const path = requestPath(request.url);
-    if (path === "/health" || path === "/ready" || path.startsWith("/auth/") || path.startsWith("/api/auth/")) {
+    if (
+      path === "/health" ||
+      path === "/ready" ||
+      path.startsWith("/auth/") ||
+      path.startsWith("/api/auth/") ||
+      path.startsWith("/api/telegram-bot/")
+    ) {
       return;
     }
 
     const slugFromParams = (request.params as { slug?: string } | undefined)?.slug;
     const slugFromHeader = request.headers["x-tenant-slug"];
-    const slug =
+    const rawSlug =
       slugFromParams?.trim() ||
       tenantSlugFromApiPath(path) ||
       (Array.isArray(slugFromHeader) ? slugFromHeader[0] : slugFromHeader)?.trim();
 
-    if (!slug) {
+    if (!rawSlug) {
       return;
     }
+    const slug = resolveTenantSlugAlias(rawSlug);
 
-    const tenant = await prisma.tenant.findUnique({
-      where: { slug },
-      select: { id: true, slug: true, name: true, is_active: true }
-    });
+    const cacheKey = `tenant:slug:${slug}`;
+    type TenantRow = { id: number; slug: string; name: string; is_active: boolean };
+    let tenant = await getAppCache<TenantRow>(cacheKey);
+    if (!tenant) {
+      tenant = await prisma.tenant.findUnique({
+        where: { slug },
+        select: { id: true, slug: true, name: true, is_active: true }
+      });
+      if (tenant) await setAppCache(cacheKey, tenant, 60);
+    }
 
     if (!tenant || !tenant.is_active) {
       return sendApiError(reply, request, 404, "TenantNotFound", undefined, {

@@ -1,6 +1,6 @@
 import { Prisma } from "@prisma/client";
-import { prisma } from "../../config/database";
 import { ORDER_STATUSES_OUTSTANDING_RECEIVABLE } from "../orders/order-status";
+import { isPgInt4Id } from "../../lib/pg-int4";
 import {
   paymentTypesFromMethodEntries,
   resolveCurrencyEntries,
@@ -15,6 +15,11 @@ import {
   isExternalClientCode,
   parseExternalClientCodeSuffix
 } from "../../../shared/client-display-id";
+import {
+  clientWhereForRegionFilter,
+  clientWhereForZoneFilter,
+  loadClientTerritoryFilterBundle
+} from "../clients/clients.territory-filter";
 
 /** Balanslar ro‘yxati: `search` — tashqi kod, aniq id yoki matn. */
 export function buildClientBalanceSearchOrClause(searchRaw: string): Prisma.ClientWhereInput[] {
@@ -28,7 +33,7 @@ export function buildClientBalanceSearchOrClause(searchRaw: string): Prisma.Clie
     const parts: Prisma.ClientWhereInput[] = [
       { client_code: { equals: search, mode: ins } }
     ];
-    if (suffixId != null) parts.push({ id: suffixId });
+    if (isPgInt4Id(suffixId)) parts.push({ id: suffixId });
     return parts;
   }
 
@@ -48,17 +53,21 @@ export function buildClientBalanceSearchOrClause(searchRaw: string): Prisma.Clie
 
   return [
     { name: { contains: search, mode: ins } },
+    { legal_name: { contains: search, mode: ins } },
     { phone: { contains: search, mode: ins } },
     { client_code: { contains: search, mode: ins } },
-    { inn: { contains: search, mode: ins } }
+    { inn: { contains: search, mode: ins } },
+    { agent: { is: { name: { contains: search, mode: ins } } } },
+    { agent: { is: { code: { contains: search, mode: ins } } } },
+    { agent: { is: { supervisor: { is: { name: { contains: search, mode: ins } } } } } }
   ];
 }
 
-export function buildClientWhere(
+export async function buildClientWhere(
   tenantId: number,
   q: ClientBalanceListQuery,
   opts?: { skipBalanceFilter?: boolean; skipTerritoryFilters?: boolean }
-): Prisma.ClientWhereInput {
+): Promise<Prisma.ClientWhereInput> {
   const andParts: Prisma.ClientWhereInput[] = [
     { tenant_id: tenantId },
     { merged_into_client_id: null }
@@ -195,12 +204,15 @@ export function buildClientWhere(
 
   if (!opts?.skipTerritoryFilters) {
     const regions = q.territory_regions?.filter((x) => x.trim() !== "") ?? [];
-    if (regions.length > 0) {
-      andParts.push({
-        OR: regions.map((r) => ({ region: { contains: r, mode: "insensitive" } }))
-      });
-    } else if (q.territory_region?.trim()) {
-      andParts.push({ region: { contains: q.territory_region.trim(), mode: "insensitive" } });
+    if (q.territory_region?.trim()) regions.push(q.territory_region.trim());
+    const zones = q.territory_zones?.filter((x) => x.trim() !== "") ?? [];
+    if (q.territory_zone?.trim()) zones.push(q.territory_zone.trim());
+    const needHints = regions.length > 0 || zones.length > 0;
+    const bundle = needHints ? await loadClientTerritoryFilterBundle(tenantId) : null;
+
+    if (regions.length > 0 && bundle) {
+      const clause = clientWhereForRegionFilter(bundle, regions);
+      if (clause) andParts.push(clause);
     }
 
     const cities = q.territory_cities?.filter((x) => x.trim() !== "") ?? [];
@@ -216,13 +228,9 @@ export function buildClientWhere(
       andParts.push({ district: { contains: q.territory_district.trim(), mode: "insensitive" } });
     }
 
-    const zones = q.territory_zones?.filter((x) => x.trim() !== "") ?? [];
-    if (zones.length > 0) {
-      andParts.push({
-        OR: zones.map((z) => ({ zone: { contains: z, mode: "insensitive" } }))
-      });
-    } else if (q.territory_zone?.trim()) {
-      andParts.push({ zone: { contains: q.territory_zone.trim(), mode: "insensitive" } });
+    if (zones.length > 0 && bundle) {
+      const clause = clientWhereForZoneFilter(bundle, zones);
+      if (clause) andParts.push(clause);
     }
   }
 

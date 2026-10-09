@@ -87,7 +87,7 @@ function parseQty(s: string): number {
 function blockHint(p: ProductRow): string {
   const qpb = p.qty_per_block;
   if (qpb != null && qpb > 0) {
-    return `${qpb} ${p.unit} / blok`;
+    return `${qpb} ${p.unit} / блок`;
   }
   return "—";
 }
@@ -164,7 +164,7 @@ export function TransferAmaliyotWorkspace() {
       } catch (e) {
         if (!cancelled) {
           setStockRows([]);
-          setStockError(getUserFacingError(e, "Qoldiq yuklanmadi"));
+          setStockError(getUserFacingError(e, "Не удалось загрузить остатки"));
         }
       } finally {
         if (!cancelled) setLoadStock(false);
@@ -206,7 +206,7 @@ export function TransferAmaliyotWorkspace() {
         if (!cancelled) setWarehouses(res.data ?? []);
       } catch (e) {
         if (!cancelled) {
-          setWhError(getUserFacingError(e, "Omborlar yuklanmadi"));
+          setWhError(getUserFacingError(e, "Не удалось загрузить склады"));
           setWarehouses([]);
         }
       } finally {
@@ -223,7 +223,7 @@ export function TransferAmaliyotWorkspace() {
     let cancelled = false;
     (async () => {
       try {
-        const res = await apiFetch<{ data?: AgentPick[] }>(`/api/${tenant}/agents?is_active=true`);
+        const res = await apiFetch<{ data?: AgentPick[] }>(`/api/${tenant}/agents?picker=1`);
         if (!cancelled) setAgents((res.data ?? []).filter((a) => a.is_active));
       } catch {
         if (!cancelled) setAgents([]);
@@ -257,7 +257,7 @@ export function TransferAmaliyotWorkspace() {
         if (!cancelled) setCategories(rows);
       } catch (e) {
         if (!cancelled) {
-          setCatError(getUserFacingError(e, "Kategoriyalar yuklanmadi"));
+          setCatError(getUserFacingError(e, "Не удалось загрузить категории"));
           setCategories([]);
         }
       } finally {
@@ -295,7 +295,7 @@ export function TransferAmaliyotWorkspace() {
         if (!ac.signal.aborted) {
           setProducts([]);
           setDrafts({});
-          setProdError(getUserFacingError(e, "Mahsulotlar yuklanmadi"));
+          setProdError(getUserFacingError(e, "Не удалось загрузить товары"));
         }
       } finally {
         if (!ac.signal.aborted) setLoadProducts(false);
@@ -388,11 +388,11 @@ export function TransferAmaliyotWorkspace() {
     const src = Number.parseInt(sourceId, 10);
     const dst = Number.parseInt(destId, 10);
     if (!Number.isFinite(src) || !Number.isFinite(dst)) {
-      setFormError("Manba va qabul omborini tanlang.");
+      setFormError("Выберите склад-отправитель и склад-получатель.");
       return;
     }
     if (src === dst) {
-      setFormError("Manba va qabul ombori bir xil bo‘lmasligi kerak.");
+      setFormError("Склад-отправитель и склад-получатель не должны совпадать.");
       return;
     }
     const payloadLines: {
@@ -413,7 +413,7 @@ export function TransferAmaliyotWorkspace() {
       });
     }
     if (payloadLines.length === 0) {
-      setFormError("Kamida bitta mahsulot uchun miqdor kiriting (0 dan katta).");
+      setFormError("Укажите количество (больше 0) хотя бы для одного товара.");
       return;
     }
     const eps = 1e-6;
@@ -423,7 +423,7 @@ export function TransferAmaliyotWorkspace() {
       if (line.qty > av + eps) {
         const p = products.find((x) => x.id === line.product_id);
         setFormError(
-          `${p?.sku ?? line.product_id}: ko‘chirish ${line.qty}, mavjud (qoldiq − bron) ${av}. Bron ostidagi miqdor yuborilmaydi.`
+          `${p?.sku ?? line.product_id}: перемещение ${line.qty}, доступно (остаток − бронь) ${av}. Забронированное количество не отправляется.`
         );
         return;
       }
@@ -442,7 +442,7 @@ export function TransferAmaliyotWorkspace() {
       });
       router.push("/stock/transfers");
     } catch (err) {
-      setFormError(getUserFacingError(err, "Saqlashda xato"));
+      setFormError(getUserFacingError(err, "Ошибка сохранения"));
     } finally {
       setSubmitting(false);
     }
@@ -455,19 +455,19 @@ export function TransferAmaliyotWorkspace() {
   if (!canWrite) {
     return (
       <div className="space-y-2 p-4">
-        <p className="text-sm text-muted-foreground">Huquqlar yetarli emas.</p>
+        <p className="text-sm text-muted-foreground">Недостаточно прав.</p>
         <Link href="/stock/transfers" className="text-sm text-primary underline">
-          Ro‘yxatga qaytish
+          Вернуться к списку
         </Link>
       </div>
     );
   }
 
   return (
-    <div className="mx-auto w-full max-w-[1600px] space-y-4 pb-6">
+    <div className="w-full space-y-4 pb-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="min-w-0">
-          <h1 className="text-2xl font-bold tracking-tight">О перемещение</h1>
+          <h1 className="text-2xl font-bold tracking-tight">Оформление перемещения</h1>
           <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
             Перемещение товаров между складами. Количество не может превышать доступный остаток.
           </p>
@@ -476,7 +476,7 @@ export function TransferAmaliyotWorkspace() {
           href="/stock/transfers"
           className={cn(buttonVariants({ variant: "outline" }), "shrink-0 self-start sm:self-center")}
         >
-          Jurnalga
+          К журналу
         </Link>
       </div>
 
@@ -579,7 +579,7 @@ export function TransferAmaliyotWorkspace() {
                   >
                     <div className="border-b border-border bg-muted/20 px-3 py-2">
                       <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                        Kategoriyalar
+                        Категории
                       </p>
                     </div>
                     <div className="max-h-44 overflow-y-auto p-2 md:max-h-none md:flex-1 md:overflow-y-auto">
@@ -588,7 +588,7 @@ export function TransferAmaliyotWorkspace() {
                       ) : categories.length === 0 ? (
                         <p className="px-1 py-2 text-sm text-muted-foreground">Нет активных категорий.</p>
                       ) : (
-                        <nav className="flex flex-col gap-0.5" aria-label="Mahsulot kategoriyalari">
+                        <nav className="flex flex-col gap-0.5" aria-label="Категории товаров">
                           {categories.map((c) => {
                             const active = categoryId === String(c.id);
                             return (
@@ -617,21 +617,21 @@ export function TransferAmaliyotWorkspace() {
                     <div className="flex flex-col gap-2 border-b border-border p-2 sm:flex-row sm:items-center sm:gap-2">
                       <div className="min-w-0 flex-1 space-y-1">
                         <Label htmlFor="row-filter" className="text-xs text-muted-foreground">
-                          Qidiruv
+                          Поиск
                         </Label>
                         <Input
                           id="row-filter"
                           className="h-9"
                           value={rowFilter}
                           onChange={(e) => setRowFilter(e.target.value)}
-                          placeholder="SKU, nom, shtrix…"
+                          placeholder="SKU, название, штрихкод…"
                           disabled={!categoryId || loadProducts}
                         />
                       </div>
                       {categoryId && !loadProducts && products.length > 0 && (
                         <div className="flex shrink-0 flex-wrap items-center gap-2 sm:pt-5">
                           <Button type="button" variant="outline" size="sm" onClick={clearQuantities}>
-                            Miqdorlarni tozalash
+                            Очистить количества
                           </Button>
                           {filteredProducts.length !== products.length && (
                             <span className="text-xs text-muted-foreground whitespace-nowrap">
@@ -655,7 +655,7 @@ export function TransferAmaliyotWorkspace() {
 
                       {categoryId && loadProducts && (
                         <p className="py-6 text-center text-sm text-muted-foreground">
-                          Mahsulotlar Загрузка…
+                          Загрузка товаров…
                         </p>
                       )}
 
@@ -671,18 +671,18 @@ export function TransferAmaliyotWorkspace() {
                             <TableHeader>
                               <TableRow>
                                 <TableHead className="w-10">№</TableHead>
-                                <TableHead className="w-[100px]">Kod</TableHead>
-                                <TableHead>Nomi</TableHead>
-                                <TableHead className="w-28">Blok</TableHead>
+                                <TableHead className="w-[100px]">Код</TableHead>
+                                <TableHead>Наименование</TableHead>
+                                <TableHead className="w-28">Блок</TableHead>
                                 <TableHead className="w-32 text-xs font-normal text-muted-foreground">
-                                  1 blok
+                                  1 блок
                                 </TableHead>
-                                <TableHead className="w-24 text-right">Qoldiq</TableHead>
-                                <TableHead className="w-24 text-right">Bron</TableHead>
-                                <TableHead className="w-24 text-right">Mavjud</TableHead>
-                                <TableHead className="w-28">Ko‘chirish</TableHead>
-                                <TableHead className="w-28">Partiya</TableHead>
-                                <TableHead className="min-w-[120px]">Izoh</TableHead>
+                                <TableHead className="w-24 text-right">Остаток</TableHead>
+                                <TableHead className="w-24 text-right">Бронь</TableHead>
+                                <TableHead className="w-24 text-right">Доступно</TableHead>
+                                <TableHead className="w-28">Переместить</TableHead>
+                                <TableHead className="w-28">Партия</TableHead>
+                                <TableHead className="min-w-[120px]">Комментарий</TableHead>
                               </TableRow>
                             </TableHeader>
                             <TableBody>
@@ -727,8 +727,8 @@ export function TransferAmaliyotWorkspace() {
                                         disabled={p.qty_per_block == null || p.qty_per_block <= 0}
                                         title={
                                           p.qty_per_block != null && p.qty_per_block > 0
-                                            ? "Blok soni — miqdor avto"
-                                            : "Bu mahsulotda blok o‘lchami yo‘q"
+                                            ? "Количество блоков — количество пересчитывается автоматически"
+                                            : "У этого товара не задан размер блока"
                                         }
                                       />
                                     </TableCell>
@@ -751,11 +751,11 @@ export function TransferAmaliyotWorkspace() {
                                         onChange={(e) => updateDraft(p.id, { qty: e.target.value })}
                                         inputMode="decimal"
                                         placeholder="0"
-                                        title={sourceId ? `Maks. ${aDisplay}` : undefined}
+                                        title={sourceId ? `Макс. ${aDisplay}` : undefined}
                                       />
                                       {over && (
                                         <p className="text-[10px] text-destructive mt-0.5">
-                                          Mavjuddan oshiq
+                                          Больше доступного
                                         </p>
                                       )}
                                     </TableCell>

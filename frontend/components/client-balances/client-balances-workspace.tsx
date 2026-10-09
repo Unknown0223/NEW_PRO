@@ -22,6 +22,12 @@ import { TableColumnSettingsDialog } from "@/components/data-table/table-column-
 import { PageShell } from "@/components/dashboard/page-shell";
 import { useUserTablePrefs } from "@/hooks/use-user-table-prefs";
 import { api } from "@/lib/api";
+import {
+  loadClientBalancesFilterSnapshot,
+  loadClientBalancesRememberFilters,
+  saveClientBalancesFilterSnapshot
+} from "@/lib/client-balances-filters-visibility";
+import { usePermissions } from "@/lib/use-permissions";
 import { useAuthStore, useAuthStoreHydrated } from "@/lib/auth-store";
 import {
   appendPositiveIntListParam,
@@ -128,6 +134,33 @@ const defaultForm = (): FilterForm => ({
   agent_branch: "",
   agent_payment_type: ""
 });
+
+const FILTER_VIEWS = ["clients", "agents", "clients_delivery", "clients_legacy", "clients_consignment"] as const;
+
+function rememberedBalancesState(): {
+  draft: FilterForm;
+  applied: FilterForm;
+  search: string;
+  view: (typeof FILTER_VIEWS)[number] | null;
+  page: number;
+} | null {
+  if (!loadClientBalancesRememberFilters()) return null;
+  const snap = loadClientBalancesFilterSnapshot();
+  if (!snap) return null;
+  const base = defaultForm();
+  const fill = (src: Record<string, string>): FilterForm => {
+    const next = { ...base };
+    for (const key of Object.keys(base) as (keyof FilterForm)[]) {
+      const v = src[key];
+      if (typeof v === "string") next[key] = v;
+    }
+    return next;
+  };
+  const view = FILTER_VIEWS.includes(snap.view as (typeof FILTER_VIEWS)[number])
+    ? (snap.view as (typeof FILTER_VIEWS)[number])
+    : null;
+  return { draft: fill(snap.draft), applied: fill(snap.applied), search: snap.search, view, page: snap.page };
+}
 
 function parseAmount(s: string): number {
   const t = String(s)
@@ -604,18 +637,22 @@ function parseClientBalancesView(raw: string | null | undefined): ClientBalanceV
 }
 
 export function ClientBalancesWorkspace() {
+  const canExport = usePermissions().has("cash.balansy_klientov.export");
   const tenantSlug = useAuthStore((s) => s.tenantSlug);
   const hydrated = useAuthStoreHydrated();
   const router = useRouter();
   const searchParams = useSearchParams();
 
-  const [draft, setDraft] = useState<FilterForm>(() => defaultForm());
-  const [applied, setApplied] = useState<FilterForm>(() => defaultForm());
-  const [view, setView] = useState<ClientBalanceViewMode>(() =>
-    parseClientBalancesView(searchParams.get("view"))
-  );
-  const [page, setPage] = useState(1);
-  const [search, setSearch] = useState("");
+  const remembered = useState(() => rememberedBalancesState())[0];
+  const [draft, setDraft] = useState<FilterForm>(() => remembered?.draft ?? defaultForm());
+  const [applied, setApplied] = useState<FilterForm>(() => remembered?.applied ?? defaultForm());
+  const [view, setView] = useState<ClientBalanceViewMode>(() => {
+    const fromUrl = searchParams.get("view");
+    if (fromUrl) return parseClientBalancesView(fromUrl);
+    return remembered?.view ?? "clients";
+  });
+  const [page, setPage] = useState(() => remembered?.page ?? 1);
+  const [search, setSearch] = useState(() => remembered?.search ?? "");
   const [columnDialogOpen, setColumnDialogOpen] = useState(false);
   const [copyFlash, setCopyFlash] = useState(false);
   /** Tanlangan qatorlar (sahifa almashganda ham saqlanadi) */
@@ -627,6 +664,11 @@ export function ClientBalancesWorkspace() {
   const [excelBusy, setExcelBusy] = useState(false);
   const [clientSort, setClientSort] = useState<{ col: string; dir: SortDir }>({ col: "", dir: "asc" });
   const [agentSort, setAgentSort] = useState<{ col: string; dir: SortDir }>({ col: "", dir: "asc" });
+
+  useEffect(() => {
+    if (!loadClientBalancesRememberFilters()) return;
+    saveClientBalancesFilterSnapshot({ draft, applied, search, view, page });
+  }, [draft, applied, search, view, page]);
 
   const clientsTablePrefs = useUserTablePrefs({
     tenantSlug,
@@ -768,9 +810,14 @@ export function ClientBalancesWorkspace() {
     queryKey: ["agents", tenantSlug, "client-balances-filters"],
     enabled: Boolean(tenantSlug) && hydrated,
     staleTime: STALE.reference,
+    retry: false,
     queryFn: async () => {
-      const { data } = await api.get<{ data: StaffPick[] }>(`/api/${tenantSlug}/agents?is_active=true`);
-      return data.data;
+      try {
+        const { data } = await api.get<{ data: StaffPick[] }>(`/api/${tenantSlug}/agents?picker=1`);
+        return data.data ?? [];
+      } catch {
+        return [] as StaffPick[];
+      }
     }
   });
 
@@ -778,9 +825,14 @@ export function ClientBalancesWorkspace() {
     queryKey: ["expeditors", tenantSlug, "client-balances-filters"],
     enabled: Boolean(tenantSlug) && hydrated,
     staleTime: STALE.reference,
+    retry: false,
     queryFn: async () => {
-      const { data } = await api.get<{ data: StaffPick[] }>(`/api/${tenantSlug}/expeditors?is_active=true`);
-      return data.data;
+      try {
+        const { data } = await api.get<{ data: StaffPick[] }>(`/api/${tenantSlug}/expeditors?picker=1`);
+        return data.data ?? [];
+      } catch {
+        return [] as StaffPick[];
+      }
     }
   });
 
@@ -788,11 +840,16 @@ export function ClientBalancesWorkspace() {
     queryKey: ["supervisors", tenantSlug, "client-balances-filters"],
     enabled: Boolean(tenantSlug) && hydrated,
     staleTime: STALE.reference,
+    retry: false,
     queryFn: async () => {
-      const { data } = await api.get<{ data: StaffPick[] }>(
-        `/api/${tenantSlug}/supervisors?is_active=true`
-      );
-      return data.data;
+      try {
+        const { data } = await api.get<{ data: StaffPick[] }>(
+          `/api/${tenantSlug}/supervisors?picker=1`
+        );
+        return data.data ?? [];
+      } catch {
+        return [] as StaffPick[];
+      }
     }
   });
 
@@ -1339,20 +1396,22 @@ export function ClientBalancesWorkspace() {
                   <LayoutGrid size={16} className="text-slate-600" />
                 </CbToolButton>
               ) : null}
-              <button
-                type="button"
-                disabled={
-                  excelBusy ||
-                  (isConsignmentView
-                    ? !consignmentQ.data?.data.length
-                    : !listQ.data?.data.length)
-                }
-                onClick={() => void runExcelExport()}
-                className="flex h-10 items-center gap-2 rounded-lg border border-border bg-card px-4 text-[13.5px] font-medium text-slate-700 transition-colors hover:bg-muted disabled:opacity-60"
-              >
-                <FileSpreadsheet size={16} className="text-emerald-600" />
-                {excelBusy ? "Экспорт…" : "Excel"}
-              </button>
+              {canExport ? (
+                <button
+                  type="button"
+                  disabled={
+                    excelBusy ||
+                    (isConsignmentView
+                      ? !consignmentQ.data?.data.length
+                      : !listQ.data?.data.length)
+                  }
+                  onClick={() => void runExcelExport()}
+                  className="flex h-10 items-center gap-2 rounded-lg border border-border bg-card px-4 text-[13.5px] font-medium text-slate-700 transition-colors hover:bg-muted disabled:opacity-60"
+                >
+                  <FileSpreadsheet size={16} className="text-emerald-600" />
+                  {excelBusy ? "Экспорт…" : "Excel"}
+                </button>
+              ) : null}
               <CbToolButton
                 title="Обновить"
                 onClick={() =>

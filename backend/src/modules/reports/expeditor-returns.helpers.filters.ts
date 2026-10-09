@@ -72,9 +72,8 @@ export const STATUS_CTE = Prisma.sql`
   )`;
 
 export function dateFilterExpr(f: ExpeditorReturnsFilters): Prisma.Sql {
-  if (f.date_type === "shipped_date") {
-    return Prisma.sql`COALESCE(sl.shipped_at, o.updated_at)`;
-  }
+  if (f.date_type === "delivered_date") return Prisma.sql`sl.delivered_at`;
+  if (f.date_type === "shipped_date") return Prisma.sql`sl.shipped_at`;
   return Prisma.sql`o.created_at`;
 }
 

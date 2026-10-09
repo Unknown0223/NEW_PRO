@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { catalogRoles } from "./products.route.shared";
 
 import {
+  bulkProductsEquipmentBodySchema,
   bulkProductsKpiGroupBodySchema,
   createProductBodySchema,
   updateProductBodySchema
@@ -11,7 +12,12 @@ import { actorUserIdOrNull } from "../../lib/request-actor";
 import { sendApiError, zodValidationExtras } from "../../lib/api-error";
 import { ensureTenantContext } from "../../lib/tenant-context";
 import { jwtAccessVerify, requireRoles } from "../auth/auth.prehandlers";
-import { createProduct, softDeleteProduct, updateProduct } from "./products.service";
+import {
+  bulkSetProductsEquipment,
+  createProduct,
+  softDeleteProduct,
+  updateProduct
+} from "./products.service";
 import { mapProductToJson, type ProductListRow } from "./products.route.mappers";
 
 
@@ -98,6 +104,31 @@ export async function registerProductWriteRoutes(app: FastifyInstance) {
       } catch (e) {
         const msg = e instanceof Error ? e.message : "";
         if (msg === "NOT_FOUND") return sendApiError(reply, request, 404, "NotFound");
+        if (msg === "BAD_PRODUCT_IDS") return sendApiError(reply, request, 400, "BadProductIds");
+        throw e;
+      }
+    }
+  );
+
+  app.post(
+    "/api/:slug/products/bulk-equipment",
+    { preHandler: [jwtAccessVerify, requireRoles(...catalogRoles)] },
+    async (request, reply) => {
+      if (!ensureTenantContext(request, reply)) return;
+      const parsed = bulkProductsEquipmentBodySchema.safeParse(request.body);
+      if (!parsed.success) {
+        return sendApiError(reply, request, 400, "ValidationError", undefined, zodValidationExtras(parsed.error));
+      }
+      try {
+        const result = await bulkSetProductsEquipment(
+          request.tenant!.id,
+          parsed.data.product_ids,
+          parsed.data.is_equipment,
+          actorUserIdOrNull(request)
+        );
+        return reply.send(result);
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : "";
         if (msg === "BAD_PRODUCT_IDS") return sendApiError(reply, request, 400, "BadProductIds");
         throw e;
       }

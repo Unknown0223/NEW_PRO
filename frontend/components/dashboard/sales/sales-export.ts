@@ -84,12 +84,13 @@ export function createSalesExportHandlers(
         {
           name: "Эффективность",
           rows: [
-            ["Категория", "Сумма продаж", "Кол-во", "Объем", "АКБ", "Доля, %"],
+            ["Категория", "Сумма продаж", "Кол-во", "Объем", "Бонус", "АКБ", "Доля, %"],
             ...data.category_performance_table.map((r) => [
               r.category,
               Number(r.sales_sum),
               Number(r.sold_qty),
               Number(r.volume),
+              Number(r.bonus_qty ?? 0),
               r.akb,
               r.share_pct
             ])
@@ -211,12 +212,13 @@ export async function exportSalesAll(
     {
       name: "Эффективность",
       rows: [
-        ["Категория", "Сумма продаж", "Кол-во", "Объем", "АКБ", "Доля, %"],
+        ["Категория", "Сумма продаж", "Кол-во", "Объем", "Бонус", "АКБ", "Доля, %"],
         ...data.category_performance_table.map((r) => [
           r.category,
           Number(r.sales_sum),
           Number(r.sold_qty),
           Number(r.volume),
+          Number(r.bonus_qty ?? 0),
           r.akb,
           r.share_pct
         ])

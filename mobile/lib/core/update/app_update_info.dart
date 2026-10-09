@@ -43,6 +43,28 @@ class AppUpdateInfo {
 
   bool get hasAction => required || optional;
 
+  @override
+  bool operator ==(Object other) =>
+      other is AppUpdateInfo &&
+      other.required == required &&
+      other.optional == optional &&
+      other.currentVersion == currentVersion &&
+      other.latestVersion == latestVersion &&
+      other.minVersion == minVersion &&
+      other.apkUrl == apkUrl &&
+      other.url == url;
+
+  @override
+  int get hashCode => Object.hash(
+        required,
+        optional,
+        currentVersion,
+        latestVersion,
+        minVersion,
+        apkUrl,
+        url,
+      );
+
   /// In-app o‘rnatish uchun APK manzili (do‘kondan mustaqil).
   String? get effectiveApkUrl {
     final apk = apkUrl?.trim();
@@ -85,9 +107,9 @@ bool get preferStoreUpdate {
 
 String storeUpdateHint(AppUpdateInfo info) {
   if (info.storeUrlAndroid != null || info.storeUrlIos != null) {
-    return Platform.isIOS ? 'App Store orqali yangilang' : 'Google Play orqali yangilang';
+    return Platform.isIOS ? 'Обновите через App Store' : 'Обновите через Google Play';
   }
-  return 'Yangi APK yuklab oling va o\'rnating';
+  return 'Скачайте и установите новый APK';
 }
 
 /// Qo‘lda «Проверить обновление» natijasi.

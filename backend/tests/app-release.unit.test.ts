@@ -2,7 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   compareSemver,
   isOwnApkDownloadUrl,
-  resolveAppUpdateBlock
+  resolveAppUpdateBlock,
+  withoutBrokenUpdateOffer
 } from "../src/modules/mobile/app-release.service";
 
 describe("app-release.service", () => {
@@ -75,5 +76,63 @@ describe("app-release.service", () => {
     );
     expect(block.required).toBe(false);
     expect(block.optional).toBe(true);
+  });
+
+  it("resolveAppUpdateBlock stays optional when force_update is off and above min", () => {
+    const block = resolveAppUpdateBlock(
+      "3.1.10",
+      {
+        min_version: "3.1.0",
+        latest_version: "3.1.21",
+        force_update: false,
+        download_url: "https://example.com/app.apk",
+        store_url_android: null,
+        store_url_ios: null,
+        release_notes: "Soft OTA"
+      },
+      "android"
+    );
+    expect(block.required).toBe(false);
+    expect(block.optional).toBe(true);
+    expect(block.apk_url).toContain("app.apk");
+  });
+
+  it("withoutBrokenUpdateOffer drops required when APK is missing", () => {
+    const next = withoutBrokenUpdateOffer({
+      required: true,
+      optional: false,
+      current_version: "3.0.9",
+      min_version: "3.1.0",
+      latest_version: "3.1.21",
+      url: "https://backend.example/api/mobile/apk-download?slug=test1",
+      apk_url: "https://backend.example/api/mobile/apk-download?slug=test1",
+      store_url_android: null,
+      store_url_ios: null,
+      notes: null
+    });
+    expect(next.required).toBe(false);
+    expect(next.optional).toBe(false);
+    expect(next.apk_url).toBeNull();
+  });
+
+  it("withoutBrokenUpdateOffer keeps required when APK file is ready", () => {
+    const url = "https://backend.example/api/mobile/apk-download?slug=test1";
+    const next = withoutBrokenUpdateOffer(
+      {
+        required: true,
+        optional: false,
+        current_version: "3.0.9",
+        min_version: "3.1.0",
+        latest_version: "3.1.21",
+        url,
+        apk_url: url,
+        store_url_android: null,
+        store_url_ios: null,
+        notes: null
+      },
+      { apkFileReady: true }
+    );
+    expect(next.required).toBe(true);
+    expect(next.apk_url).toBe(url);
   });
 });

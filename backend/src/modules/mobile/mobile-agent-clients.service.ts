@@ -16,15 +16,18 @@ import {
   mobileClientPatchToUpdateFields,
   type MobileClientInput
 } from "../staff/agent-mobile-config.client-mobile";
+import { appendClientToExistingAgentRouteDays } from "../field/field.service";
 import {
   agentScopedClientWhereForUser,
   assertAgentScopedClient,
-  clientSyncSelectForAgent,
   compactClient,
+  clientSyncSelectForAgent,
   loadAgentMobileConfig,
   normalizePhotoBase64Url,
+  resolveAgentWorkSlotId,
   type CompactClientRow
 } from "./mobile-agent-sync.service";
+import { newClientActiveFromApprovalFlag } from "./mobile-agent-new-client";
 
 export async function createMobileClientPhotoReport(
   tenantId: number,
@@ -122,8 +125,15 @@ export async function createMobileAgentClient(
   userId: number,
   input: CreateClientBody
 ) {
+  const { assertAgentCanTakeNewWork } = await import("../work-slots/work-slots.agent-gate");
+  await assertAgentCanTakeNewWork(tenantId, userId);
+
   const cfg = await loadAgentMobileConfig(tenantId, userId);
   assertMobileClientPolicy(cfg?.client, input as MobileClientInput, "create");
+
+  const workSlotId = await resolveAgentWorkSlotId(userId);
+  const visitWeekdays = input.visit_weekdays?.length ? input.visit_weekdays : [];
+  const isActive = newClientActiveFromApprovalFlag(cfg?.client?.require_new_client_approval);
 
   const { id } = await createClientMinimal(tenantId, userId, {
     name: input.name,
@@ -133,39 +143,69 @@ export async function createMobileAgentClient(
     region: input.region ?? null,
     city: input.city ?? null,
     zone: input.zone ?? null,
-    sales_channel: input.sales_channel ?? null
+    sales_channel: input.sales_channel ?? null,
+    inn: input.inn ?? null,
+    client_code: input.client_code ?? null,
+    client_pinfl: input.client_pinfl ?? null,
+    skipTerritoryAutoAssign: true,
+    is_active: isActive
   });
 
   const extra = mobileClientInputToUpdateFields(input as MobileClientInput);
-  await updateClientFields(tenantId, id, extra, userId);
+  await updateClientFields(
+    tenantId,
+    id,
+    {
+      ...extra,
+      agent_id: userId,
+      skip_territory_auto_assign: true
+    },
+    userId
+  );
 
   await prisma.client.update({
     where: { id },
     data: { agent_id: userId }
   });
 
-  if (input.visit_weekdays?.length) {
-    await prisma.clientAgentAssignment.upsert({
-      where: { client_id_slot: { client_id: id, slot: 1 } },
-      create: {
-        tenant_id: tenantId,
-        client_id: id,
-        agent_id: userId,
-        slot: 1,
-        visit_weekdays: input.visit_weekdays
-      },
-      update: {
-        agent_id: userId,
-        visit_weekdays: input.visit_weekdays
-      }
-    });
-  }
+  await prisma.clientAgentAssignment.upsert({
+    where: { client_id_slot: { client_id: id, slot: 1 } },
+    create: {
+      tenant_id: tenantId,
+      client_id: id,
+      agent_id: userId,
+      slot: 1,
+      work_slot_id: workSlotId,
+      visit_weekdays: visitWeekdays,
+      auto_assign_status: "assigned"
+    },
+    update: {
+      agent_id: userId,
+      work_slot_id: workSlotId,
+      auto_assign_status: "assigned",
+      ...(input.visit_weekdays?.length ? { visit_weekdays: input.visit_weekdays } : {})
+    }
+  });
 
   const row = await prisma.client.findFirst({
     where: { id, tenant_id: tenantId },
-    select: clientSyncSelectForAgent(userId)
+    select: clientSyncSelectForAgent(userId, workSlotId)
   });
-  return compactClient(row as unknown as CompactClientRow);
+  const compact = compactClient(row as unknown as CompactClientRow, { agentId: userId, workSlotId });
+  if (input.visit_weekdays?.length) {
+    await appendClientToExistingAgentRouteDays(
+      tenantId,
+      userId,
+      {
+        client_id: id,
+        client_name: compact.name,
+        latitude: compact.latitude,
+        longitude: compact.longitude
+      },
+      input.visit_weekdays
+    );
+  }
+  return compact;
 }
 
 export async function patchMobileAgentClient(
@@ -185,13 +225,78 @@ export async function patchMobileAgentClient(
 
   assertMobileClientPolicy(cfg?.client, patch as MobileClientInput, "patch");
   const fields = mobileClientPatchToUpdateFields(patch as Partial<MobileClientInput>);
-  await updateClientFields(tenantId, clientId, fields, userId);
+  if (Object.keys(fields).length > 0) {
+    await updateClientFields(
+      tenantId,
+      clientId,
+      {
+        ...fields,
+        skip_territory_auto_assign: true
+      },
+      userId
+    );
+  }
+
+  const workSlotId = await resolveAgentWorkSlotId(userId);
+
+  // Tahrirdan keyin agent bog‘lanishi saqlansin (territory auto / manzil o‘zgarishi yeb qo‘ymasın).
+  const stillMine = await prisma.client.findFirst({
+    where: { id: clientId, ...(await agentScopedClientWhereForUser(tenantId, userId)) },
+    select: { id: true, agent_id: true }
+  });
+  if (!stillMine || stillMine.agent_id !== userId) {
+    await prisma.client.update({
+      where: { id: clientId },
+      data: { agent_id: userId }
+    });
+  }
+  await prisma.clientAgentAssignment.upsert({
+    where: { client_id_slot: { client_id: clientId, slot: 1 } },
+    create: {
+      tenant_id: tenantId,
+      client_id: clientId,
+      agent_id: userId,
+      slot: 1,
+      work_slot_id: workSlotId,
+      visit_weekdays: patch.visit_weekdays ?? [],
+      auto_assign_status: "assigned"
+    },
+    update: {
+      agent_id: userId,
+      auto_assign_status: "assigned",
+      ...(workSlotId != null ? { work_slot_id: workSlotId } : {}),
+      ...(patch.visit_weekdays !== undefined ? { visit_weekdays: patch.visit_weekdays ?? [] } : {})
+    }
+  });
+
+  if (patch.visit_weekdays !== undefined) {
+    const visitWeekdays = patch.visit_weekdays ?? [];
+    if (visitWeekdays.length > 0) {
+      const forRoute = await prisma.client.findFirst({
+        where: { id: clientId, tenant_id: tenantId },
+        select: { name: true, latitude: true, longitude: true }
+      });
+      if (forRoute) {
+        await appendClientToExistingAgentRouteDays(
+          tenantId,
+          userId,
+          {
+            client_id: clientId,
+            client_name: forRoute.name,
+            latitude: forRoute.latitude != null ? Number(forRoute.latitude) : null,
+            longitude: forRoute.longitude != null ? Number(forRoute.longitude) : null
+          },
+          visitWeekdays
+        );
+      }
+    }
+  }
 
   const row = await prisma.client.findFirst({
     where: { id: clientId, tenant_id: tenantId },
-    select: clientSyncSelectForAgent(userId)
+    select: clientSyncSelectForAgent(userId, workSlotId)
   });
-  return compactClient(row as unknown as CompactClientRow);
+  return compactClient(row as unknown as CompactClientRow, { agentId: userId, workSlotId });
 }
 
 /** GPS — faqat ushbu supervayzerga bog‘langan agentlar. */

@@ -1,5 +1,10 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "../../config/database";
+import { getActiveSlotForUser } from "../work-slots/work-slots.query.read";
+import {
+  appendStopToRouteStops,
+  isoDatesThisWeekForWeekdays
+} from "./agent-route-stops";
 
 function startOfUtcDay(d: Date) {
   return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), 0, 0, 0, 0));
@@ -13,13 +18,22 @@ export type AgentLocationPingRow = {
   latitude: string;
   longitude: string;
   accuracy_meters: number | null;
+  battery_pct: number | null;
+  network_type: string | null;
   recorded_at: string;
 };
 
 export async function recordAgentLocationPing(
   tenantId: number,
   agentId: number,
-  input: { latitude: number; longitude: number; accuracy_meters?: number | null }
+  input: {
+    latitude: number;
+    longitude: number;
+    accuracy_meters?: number | null;
+    battery_pct?: number | null;
+    network_type?: string | null;
+    recorded_at?: Date | null;
+  }
 ): Promise<AgentLocationPingRow> {
   const user = await prisma.user.findFirst({
     where: {
@@ -32,6 +46,16 @@ export async function recordAgentLocationPing(
   });
   if (!user) throw new Error("AgentNotFound");
 
+  const recordedAt = clampClientRecordedAt(input.recorded_at ?? null);
+  const battery =
+    input.battery_pct != null && Number.isFinite(input.battery_pct)
+      ? Math.max(0, Math.min(100, Math.round(input.battery_pct)))
+      : null;
+  const network =
+    input.network_type != null && String(input.network_type).trim()
+      ? String(input.network_type).trim().slice(0, 16)
+      : null;
+
   const row = await prisma.agentLocationPing.create({
     data: {
       tenant_id: tenantId,
@@ -41,7 +65,10 @@ export async function recordAgentLocationPing(
       accuracy_meters:
         input.accuracy_meters != null && Number.isFinite(input.accuracy_meters)
           ? input.accuracy_meters
-          : null
+          : null,
+      battery_pct: battery,
+      network_type: network,
+      ...(recordedAt ? { recorded_at: recordedAt } : {})
     }
   });
   return {
@@ -50,8 +77,72 @@ export async function recordAgentLocationPing(
     latitude: row.latitude.toString(),
     longitude: row.longitude.toString(),
     accuracy_meters: row.accuracy_meters,
+    battery_pct: row.battery_pct,
+    network_type: row.network_type,
     recorded_at: row.recorded_at.toISOString()
   };
+}
+
+/** Client oflayn flush: 7 kun orqaga / 5 daqiqa oldinga cheklov. */
+export function clampClientRecordedAt(raw: Date | null | undefined, now = new Date()): Date | null {
+  if (raw == null || Number.isNaN(raw.getTime())) return null;
+  const maxFutureMs = 5 * 60 * 1000;
+  const maxPastMs = 7 * 24 * 60 * 60 * 1000;
+  if (raw.getTime() > now.getTime() + maxFutureMs) return now;
+  if (raw.getTime() < now.getTime() - maxPastMs) return new Date(now.getTime() - maxPastMs);
+  return raw;
+}
+
+export async function recordAgentLocationPingsBatch(
+  tenantId: number,
+  agentId: number,
+  pings: Array<{
+    latitude: number;
+    longitude: number;
+    accuracy_meters?: number | null;
+    battery_pct?: number | null;
+    network_type?: string | null;
+    recorded_at?: Date | null;
+  }>
+): Promise<{ inserted: number }> {
+  if (!pings.length) return { inserted: 0 };
+  const user = await prisma.user.findFirst({
+    where: {
+      id: agentId,
+      tenant_id: tenantId,
+      role: { in: ["agent", "expeditor"] },
+      is_active: true
+    },
+    select: { id: true }
+  });
+  if (!user) throw new Error("AgentNotFound");
+
+  const now = new Date();
+  const data = pings.slice(0, 200).map((p) => {
+    const recordedAt = clampClientRecordedAt(p.recorded_at ?? null, now);
+    const battery =
+      p.battery_pct != null && Number.isFinite(p.battery_pct)
+        ? Math.max(0, Math.min(100, Math.round(p.battery_pct)))
+        : null;
+    const network =
+      p.network_type != null && String(p.network_type).trim()
+        ? String(p.network_type).trim().slice(0, 16)
+        : null;
+    return {
+      tenant_id: tenantId,
+      agent_id: agentId,
+      latitude: new Prisma.Decimal(p.latitude),
+      longitude: new Prisma.Decimal(p.longitude),
+      accuracy_meters:
+        p.accuracy_meters != null && Number.isFinite(p.accuracy_meters) ? p.accuracy_meters : null,
+      battery_pct: battery,
+      network_type: network,
+      recorded_at: recordedAt ?? now
+    };
+  });
+
+  const result = await prisma.agentLocationPing.createMany({ data });
+  return { inserted: result.count };
 }
 
 export async function listAgentLocationPings(
@@ -77,6 +168,8 @@ export async function listAgentLocationPings(
       latitude: r.latitude.toString(),
       longitude: r.longitude.toString(),
       accuracy_meters: r.accuracy_meters,
+      battery_pct: r.battery_pct,
+      network_type: r.network_type,
       recorded_at: r.recorded_at.toISOString()
     })),
     truncated
@@ -219,6 +312,7 @@ export async function upsertAgentRouteDay(
   if (Number.isNaN(d.getTime())) throw new Error("InvalidDate");
   const day = startOfUtcDay(d);
   const stops = Array.isArray(body.stops) ? body.stops : [];
+  const activeSlot = await getActiveSlotForUser(body.agent_id);
   const row = await prisma.agentRouteDay.upsert({
     where: {
       tenant_id_agent_id_route_date: { tenant_id: tenantId, agent_id: body.agent_id, route_date: day }
@@ -227,6 +321,7 @@ export async function upsertAgentRouteDay(
       tenant_id: tenantId,
       agent_id: body.agent_id,
       route_date: day,
+      work_slot_id: activeSlot?.slot_id ?? null,
       stops: stops as Prisma.InputJsonValue,
       notes: body.notes?.trim() || null
     },
@@ -237,6 +332,35 @@ export async function upsertAgentRouteDay(
     include: { agent: { select: { id: true, name: true, login: true } } }
   });
   return serializeRouteDay(row);
+}
+
+/** Mavjud kunlik marshrutga nuqta qo‘shish (yangi bo‘sh marshrut yaratilmaydi). */
+export async function appendClientToExistingAgentRouteDays(
+  tenantId: number,
+  agentId: number,
+  stop: {
+    client_id: number;
+    client_name: string;
+    latitude?: number | null;
+    longitude?: number | null;
+  },
+  visitWeekdays: number[]
+): Promise<void> {
+  const dates = isoDatesThisWeekForWeekdays(visitWeekdays);
+  if (dates.length === 0) return;
+  for (const routeDate of dates) {
+    const existing = await getAgentRouteDay(tenantId, agentId, routeDate);
+    if (!existing) continue;
+    const next = appendStopToRouteStops(existing.stops, stop);
+    const prevLen = Array.isArray(existing.stops) ? existing.stops.length : 0;
+    if (next.length === prevLen) continue;
+    await upsertAgentRouteDay(tenantId, {
+      agent_id: agentId,
+      route_date: routeDate,
+      stops: next,
+      notes: existing.notes
+    });
+  }
 }
 
 export async function listAgentRouteDays(

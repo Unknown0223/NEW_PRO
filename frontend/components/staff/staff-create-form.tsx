@@ -40,10 +40,8 @@ const emptyForm = {
   middle_name: "",
   phone: "",
   territory: "",
-  code: "",
   pinfl: "",
   branch: "",
-  position: "",
   login: "",
   password: "",
   product: "",
@@ -53,16 +51,15 @@ const emptyForm = {
   warehouse_id: "",
   return_warehouse_id: "",
   can_authorize: true,
-  app_access: true,
   consignment: false
 };
 
 type StaffCreateFormState = typeof emptyForm;
 
 function staffCreateFieldMessageUzbek(field: string): string | undefined {
-  if (field === "first_name") return "Ism majburiy.";
-  if (field === "login") return "Login majburiy.";
-  if (field === "password") return "Parol kamida 6 belgidan iborat bo‘lishi kerak.";
+  if (field === "first_name") return "Имя обязательно.";
+  if (field === "login") return "Логин обязателен.";
+  if (field === "password") return "Пароль должен содержать не менее 6 символов.";
   return undefined;
 }
 
@@ -80,7 +77,7 @@ function staffCreateValidationBanner(flat: ZodFlattenDetails): string {
   for (const key of ["first_name", "login", "password"]) {
     if (per[key]) return per[key];
   }
-  return firstValidationUserHint(flat) ?? "Ma’lumotlarni tekshiring.";
+  return firstValidationUserHint(flat) ?? "Проверьте данные.";
 }
 
 function validateStaffCreateForm(form: StaffCreateFormState): Record<string, string> {
@@ -144,11 +141,9 @@ export function StaffCreateForm({ kind, tenantSlug, onSuccess, onCancel }: Props
         phone: form.phone.trim() || null,
         territory:
           kind === "supervisor" || workplaceOnWorkSlots ? null : form.territory.trim() || null,
-        code: kind === "supervisor" ? null : form.code.trim() || null,
         pinfl: kind === "supervisor" ? null : form.pinfl.trim() || null,
         branch:
           kind === "supervisor" || workplaceOnWorkSlots ? null : form.branch.trim() || null,
-        position: kind === "supervisor" ? null : form.position.trim() || null,
         login: form.login.trim(),
         password: form.password,
         product: kind === "supervisor" ? null : form.product || null,
@@ -173,7 +168,6 @@ export function StaffCreateForm({ kind, tenantSlug, onSuccess, onCancel }: Props
               ? Number.parseInt(form.return_warehouse_id, 10)
               : null,
         can_authorize: form.can_authorize,
-        app_access: kind === "supervisor" ? true : form.app_access,
         consignment: kind === "supervisor" || workplaceOnWorkSlots ? false : form.consignment
       });
     },
@@ -206,7 +200,7 @@ export function StaffCreateForm({ kind, tenantSlug, onSuccess, onCancel }: Props
     const clientErrors = validateStaffCreateForm(form);
     if (Object.keys(clientErrors).length > 0) {
       setFieldErrors(clientErrors);
-      setLocalError(Object.values(clientErrors)[0] ?? "Majburiy maydonlarni to‘ldiring.");
+      setLocalError(Object.values(clientErrors)[0] ?? "Заполните обязательные поля.");
       return;
     }
     createMut.mutate();
@@ -214,25 +208,25 @@ export function StaffCreateForm({ kind, tenantSlug, onSuccess, onCancel }: Props
 
   const title =
     kind === "agent"
-      ? "Yangi agent"
+      ? "Новый агент"
       : kind === "supervisor"
-        ? "Yangi supervizor"
+        ? "Новый супервайзер"
         : kind === "collector"
-          ? "Yangi inkassator"
+          ? "Новый инкассатор"
           : kind === "auditor"
-            ? "Yangi auditor"
-          : "Yangi ekseditor";
+            ? "Новый аудитор"
+          : "Новый экспедитор";
 
   if (kind === "supervisor") {
     return (
-      <div className="mx-auto flex max-w-2xl flex-col gap-6 pb-10">
+      <div className="flex w-full flex-col gap-6 pb-10">
         <PageHeader
           title={title}
-          description="Faqat kirish uchun kerakli maydonlar"
+          description="Только поля, необходимые для входа"
           actions={
             <div className="flex flex-wrap justify-end gap-2">
               <Button type="button" variant="outline" size="sm" onClick={onCancel}>
-                Orqaga
+                Назад
               </Button>
               <Button
                 type="button"
@@ -240,7 +234,7 @@ export function StaffCreateForm({ kind, tenantSlug, onSuccess, onCancel }: Props
                 disabled={createMut.isPending}
                 onClick={submitCreate}
               >
-                {createMut.isPending ? "Saqlanmoqda…" : "Qo‘shish"}
+                {createMut.isPending ? "Сохранение…" : "Добавить"}
               </Button>
             </div>
           }
@@ -254,7 +248,7 @@ export function StaffCreateForm({ kind, tenantSlug, onSuccess, onCancel }: Props
           <div className="flex flex-col gap-1 sm:col-span-2">
             <Input
               className="w-full"
-              placeholder="Ism *"
+              placeholder="Имя *"
               value={form.first_name}
               onChange={(e) => setForm((p) => ({ ...p, first_name: e.target.value }))}
             />
@@ -262,7 +256,7 @@ export function StaffCreateForm({ kind, tenantSlug, onSuccess, onCancel }: Props
           </div>
           <div className="flex flex-col gap-1">
             <Input
-              placeholder="Familiya"
+              placeholder="Фамилия"
               value={form.last_name}
               onChange={(e) => setForm((p) => ({ ...p, last_name: e.target.value }))}
             />
@@ -270,7 +264,7 @@ export function StaffCreateForm({ kind, tenantSlug, onSuccess, onCancel }: Props
           </div>
           <div className="flex flex-col gap-1">
             <Input
-              placeholder="Telefon"
+              placeholder="Телефон"
               value={form.phone}
               onChange={(e) => setForm((p) => ({ ...p, phone: e.target.value }))}
             />
@@ -279,7 +273,7 @@ export function StaffCreateForm({ kind, tenantSlug, onSuccess, onCancel }: Props
           <div className="flex flex-col gap-1 sm:col-span-2">
             <Input
               className="font-mono w-full"
-              placeholder="Login *"
+              placeholder="Логин *"
               value={form.login}
               onChange={(e) => setForm((p) => ({ ...p, login: e.target.value }))}
               autoComplete="off"
@@ -289,7 +283,7 @@ export function StaffCreateForm({ kind, tenantSlug, onSuccess, onCancel }: Props
           <div className="flex flex-col gap-1 sm:col-span-2">
             <Input
               className="w-full"
-              placeholder="Parol * (min. 6)"
+              placeholder="Пароль * (мин. 6)"
               type="password"
               value={form.password}
               onChange={(e) => setForm((p) => ({ ...p, password: e.target.value }))}
@@ -303,21 +297,21 @@ export function StaffCreateForm({ kind, tenantSlug, onSuccess, onCancel }: Props
               checked={form.can_authorize}
               onChange={(e) => setForm((p) => ({ ...p, can_authorize: e.target.checked }))}
             />
-            Tizimga kirish ruxsati
+            Доступ для входа в систему
           </label>
           <p className="text-xs text-muted-foreground sm:col-span-2">
-            Agentlar ro‘yxatida «Супервайзер» ustunidan ushbu foydalanuvchini tanlang.
+            Выберите этого пользователя в столбце «Супервайзер» списка агентов.
           </p>
         </div>
         <div className="flex flex-wrap justify-end gap-2 border-t pt-4">
           <Button type="button" variant="outline" onClick={onCancel}>
-            Bekor
+            Отмена
           </Button>
           <Button
             onClick={submitCreate}
             disabled={createMut.isPending}
           >
-            {createMut.isPending ? "Saqlanmoqda…" : "Qo‘shish"}
+            {createMut.isPending ? "Сохранение…" : "Добавить"}
           </Button>
         </div>
       </div>
@@ -325,14 +319,14 @@ export function StaffCreateForm({ kind, tenantSlug, onSuccess, onCancel }: Props
   }
 
   return (
-    <div className="mx-auto flex max-w-2xl flex-col gap-6 pb-10">
+    <div className="flex w-full flex-col gap-6 pb-10">
       <PageHeader
         title={title}
-        description="To‘liq sahifada qo‘shish"
+        description="Добавление на отдельной странице"
         actions={
           <div className="flex flex-wrap justify-end gap-2">
             <Button type="button" variant="outline" size="sm" onClick={onCancel}>
-              Orqaga
+              Назад
             </Button>
             <Button
               type="button"
@@ -340,7 +334,7 @@ export function StaffCreateForm({ kind, tenantSlug, onSuccess, onCancel }: Props
               disabled={createMut.isPending}
               onClick={submitCreate}
             >
-              {createMut.isPending ? "Saqlanmoqda…" : "Qo‘shish"}
+              {createMut.isPending ? "Сохранение…" : "Добавить"}
             </Button>
           </div>
         }
@@ -407,10 +401,6 @@ export function StaffCreateForm({ kind, tenantSlug, onSuccess, onCancel }: Props
           </div>
         ) : null}
         <div className="flex flex-col gap-1">
-          <Input placeholder="Код" value={form.code} onChange={(e) => setForm((p) => ({ ...p, code: e.target.value }))} />
-          <FieldHint name="code" errors={fieldErrors} />
-        </div>
-        <div className="flex flex-col gap-1">
           <Input placeholder="ПИНФЛ" value={form.pinfl} onChange={(e) => setForm((p) => ({ ...p, pinfl: e.target.value }))} />
           <FieldHint name="pinfl" errors={fieldErrors} />
         </div>
@@ -431,14 +421,6 @@ export function StaffCreateForm({ kind, tenantSlug, onSuccess, onCancel }: Props
             <FieldHint name="branch" errors={fieldErrors} />
           </div>
         ) : null}
-        <div className="flex flex-col gap-1">
-          <Input
-            placeholder="Должность"
-            value={form.position}
-            onChange={(e) => setForm((p) => ({ ...p, position: e.target.value }))}
-          />
-          <FieldHint name="position" errors={fieldErrors} />
-        </div>
         <div className="flex flex-col gap-1">
           <Input placeholder="Логин" value={form.login} onChange={(e) => setForm((p) => ({ ...p, login: e.target.value }))} />
           <FieldHint name="login" errors={fieldErrors} />
@@ -481,18 +463,10 @@ export function StaffCreateForm({ kind, tenantSlug, onSuccess, onCancel }: Props
             />
             Активный
           </label>
-          <label className="inline-flex items-center gap-2">
-            <input
-              type="checkbox"
-              checked={form.app_access}
-              onChange={(e) => setForm((p) => ({ ...p, app_access: e.target.checked }))}
-            />
-            Доступ к приложение
-          </label>
         </div>
         <div className="flex flex-wrap justify-end gap-2 border-t pt-4 sm:col-span-2">
           <Button type="button" variant="outline" onClick={onCancel}>
-            Bekor
+            Отмена
           </Button>
           <Button
             onClick={submitCreate}

@@ -84,27 +84,31 @@ model SalesKpiPlan {
 
 /// Xodim × reja bo'yicha KPI maqsadlari (summa, miqdor, hajm, AKB, buyurtmalar).
 model SalesKpiPlanTarget {
-  id          Int      @id @default(autoincrement())
-  tenant_id   Int
-  plan_id     Int
-  user_id     Int
-  cost        Decimal  @default(0) @db.Decimal(18, 2)
-  count       Decimal  @default(0) @db.Decimal(18, 2)
-  volume      Decimal  @default(0) @db.Decimal(18, 2)
-  acb         Decimal  @default(0) @db.Decimal(18, 2)
-  order_count Int      @default(0)
-  comment     String?
-  status      String   @default("draft") @db.VarChar(32)
-  updated_by  Int?
-  updated_at  DateTime @updatedAt
+  id           Int      @id @default(autoincrement())
+  tenant_id    Int
+  plan_id      Int
+  user_id      Int
+  /// Joy (WorkSlot) — dual-write; unique hali plan+user
+  work_slot_id Int?
+  cost         Decimal  @default(0) @db.Decimal(18, 2)
+  count        Decimal  @default(0) @db.Decimal(18, 2)
+  volume       Decimal  @default(0) @db.Decimal(18, 2)
+  acb          Decimal  @default(0) @db.Decimal(18, 2)
+  order_count  Int      @default(0)
+  comment      String?
+  status       String   @default("draft") @db.VarChar(32)
+  updated_by   Int?
+  updated_at   DateTime @updatedAt
 
-  tenant  Tenant       @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
-  plan    SalesKpiPlan @relation(fields: [plan_id], references: [id], onDelete: Cascade)
-  user    User         @relation("SalesKpiPlanTargetUser", fields: [user_id], references: [id], onDelete: Cascade)
-  editor  User?        @relation("SalesKpiPlanTargetEditor", fields: [updated_by], references: [id], onDelete: SetNull)
+  tenant    Tenant       @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  plan      SalesKpiPlan @relation(fields: [plan_id], references: [id], onDelete: Cascade)
+  user      User         @relation("SalesKpiPlanTargetUser", fields: [user_id], references: [id], onDelete: Cascade)
+  editor    User?        @relation("SalesKpiPlanTargetEditor", fields: [updated_by], references: [id], onDelete: SetNull)
+  work_slot WorkSlot?    @relation(fields: [work_slot_id], references: [id], onDelete: SetNull)
 
   @@unique([plan_id, user_id], map: "sales_kpi_plan_targets_unique")
   @@index([tenant_id, plan_id])
   @@index([tenant_id, user_id])
+  @@index([work_slot_id])
   @@map("sales_kpi_plan_targets")
 }

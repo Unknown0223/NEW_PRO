@@ -28,7 +28,6 @@ import {
   ruleRelatesToOrderSelection,
   ruleNeedsOrderContext,
   ruleTreeSatisfiedForOrder,
-  qtyRuleMatchingProductIds,
   roundMoney,
   type BonusLineDraft,
   type OrderAgentBonusContext,
@@ -42,6 +41,7 @@ import {
   rewardRuleViews,
   ruleOrAnyClauseUsesCalendarMonth
 } from "./order-bonus-clauses";
+import { scopedQtyBonusSlices } from "./order-bonus-qty-slices";
 export type QtyBonusPeek = {
   rule: BonusRuleRow;
   purchasedPid: number;
@@ -81,7 +81,8 @@ export function mergeQtyPeeksByRule(peeks: QtyBonusPeek[]): QtyBonusPeek[] {
 
 /**
  * Qty bonus: (1) doira **bo‘sh** — barcha pullik qatorlar yig‘indisi, eng yuqori priority qoida;
- * (2) mahsulot/kategoriya doirasi — **har SKU alohida** (6+1: 36→6, 18→3; sovg‘a o‘sha mahsulotdan).
+ * (2) faqat assortiment — **har SKU alohida** (6+1: 36→6, 18→3);
+ * (3) kategoriya — mos SKU miqdorlari **yig‘iladi** (3+1: 1+1+1 → 1).
  */
 export async function findQtyBonusPeeks(
   tx: Prisma.TransactionClient,
@@ -218,11 +219,17 @@ export async function findQtyBonusPeeks(
         }
         if (heroPid <= 0) continue;
         const giftPid = resolveQtyGiftProductId(view, heroPid, giftOverrides, ctx);
-        if (giftPid <= 0) continue;
+        const resolvedGift =
+          giftPid > 0
+            ? giftPid
+            : heroPid > 0
+              ? heroPid
+              : view.bonus_product_ids[0] ?? 0;
+        if (resolvedGift <= 0) continue;
         peeks.push({
           rule,
           purchasedPid: QTY_AGGREGATE_PURCHASED_PID,
-          giftPid,
+          giftPid: resolvedGift,
           bonusQty: bonusUnits
         });
         anyPeek = true;
@@ -230,11 +237,17 @@ export async function findQtyBonusPeeks(
       }
 
       const giftPid = resolveQtyGiftProductId(view, QTY_AGGREGATE_PURCHASED_PID, giftOverrides, ctx);
-      if (giftPid <= 0) continue;
+      const resolvedGift =
+        giftPid > 0
+          ? giftPid
+          : view.bonus_product_ids[0] ??
+            [...qtyByProduct.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ??
+            0;
+      if (resolvedGift <= 0) continue;
       peeks.push({
         rule,
         purchasedPid: QTY_AGGREGATE_PURCHASED_PID,
-        giftPid,
+        giftPid: resolvedGift,
         bonusQty: bonusUnits
       });
       anyPeek = true;
@@ -297,8 +310,11 @@ export async function findQtyBonusPeeks(
 
     for (const view of rewardRuleViews(rule)) {
       if (!ruleHasPurchaseScope(view)) continue;
-      const matchingPids = qtyRuleMatchingProductIds(view, qtyByProduct, productById);
-      if (matchingPids.length === 0) continue;
+      const slices = scopedQtyBonusSlices(view, qtyByProduct, productById, {
+        monthAggregateExclOrder: monthAgg,
+        monthByProductExclOrder: monthByProd
+      });
+      if (slices.length === 0) continue;
 
       const catKey = `${rule.id}:${view.product_category_ids.join(",")}`;
       const categoryCandidateIds =
@@ -306,26 +322,26 @@ export async function findQtyBonusPeeks(
           ? categoryCandidatesByKey.get(catKey)
           : undefined;
 
-      for (const purchasedPid of matchingPids) {
-        const lineQty = qtyByProduct.get(purchasedPid) ?? 0;
-        if (lineQty <= 0) continue;
-
-        const effScoped = effectivePurchasedQtyForQtyRule(view, {
-          orderQty: lineQty,
-          productIdForMonthLookup: purchasedPid,
-          monthAggregateExclOrder: monthAgg,
-          monthByProductExclOrder: monthByProd
-        });
-        const bonusUnits = computeQtyBonusForRuleRow(view, effScoped);
-        if (bonusUnits <= 0) continue;
-
-        const giftPid = resolveQtyGiftProductId(view, purchasedPid, giftOverrides, {
+      for (const slice of slices) {
+        const giftPid = resolveQtyGiftProductId(view, slice.purchasedPid, giftOverrides, {
           availableByProductId: giftPickAvail,
-          minUnits: bonusUnits,
+          minUnits: slice.bonusUnits,
           categoryCandidateIds
         });
-        if (giftPid <= 0) continue;
-        peeks.push({ rule, purchasedPid, giftPid, bonusQty: bonusUnits });
+        // Omborda yetmasa ham peek saqlanadi — preview/UI shart + mahsulot + yetishmovchilikni ko‘rsatadi.
+        const resolvedGift =
+          giftPid > 0
+            ? giftPid
+            : view.bonus_product_ids[0] ??
+              categoryCandidateIds?.[0] ??
+              (slice.purchasedPid > 0 ? slice.purchasedPid : 0);
+        if (resolvedGift <= 0) continue;
+        peeks.push({
+          rule,
+          purchasedPid: slice.purchasedPid,
+          giftPid: resolvedGift,
+          bonusQty: slice.bonusUnits
+        });
       }
     }
   }
@@ -360,6 +376,30 @@ export async function materializeQtyPeeks(
     });
   }
 
+  return out;
+}
+
+/**
+ * Agent `bonus_gift_lines` jami — peek bo‘yicha hisoblangan earned dan oshmasin.
+ * Ordinal: avval yuborilgan SKU tartibida to‘ldiriladi.
+ */
+export function capGiftSplitsToEarned(
+  splits: ReadonlyMap<number, number>,
+  earnedUnits: number
+): Map<number, number> {
+  const cap = Math.max(0, Math.floor(earnedUnits));
+  const out = new Map<number, number>();
+  if (cap <= 0) return out;
+  let left = cap;
+  for (const [pid, raw] of splits) {
+    if (left <= 0) break;
+    const q = Math.floor(Number(raw));
+    if (!Number.isFinite(q) || q <= 0 || pid <= 0) continue;
+    const take = Math.min(q, left);
+    if (take <= 0) continue;
+    out.set(pid, take);
+    left -= take;
+  }
   return out;
 }
 

@@ -1,16 +1,8 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import {
-  CalendarDays,
-  RotateCcw,
-  Truck,
-  PackageCheck,
-  Undo2,
-  Wallet,
-  AlertTriangle
-} from "lucide-react";
+import { CalendarDays, RotateCcw } from "lucide-react";
 import { api } from "@/lib/api";
 import { STALE } from "@/lib/query-stale";
 import { useAuthStore, useAuthStoreHydrated } from "@/lib/auth-store";
@@ -18,8 +10,10 @@ import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { SearchableMultiSelectPanel } from "@/components/ui/searchable-multi-select-panel";
 import { DateRangePopover, formatDateRangeButton } from "@/components/ui/date-range-popover";
+import { monthToDateRange } from "@/components/dashboard/shared/date-ranges";
 import { formatNumberGrouped } from "@/lib/format-numbers";
 import { cn } from "@/lib/utils";
+import { ExpeditorDimBoard, type ExpeditorDim, type ExpeditorGroupRow, type ExpeditorStatusRow } from "@/components/dashboard/expeditors-group-table";
 
 type ExpeditorRow = {
   expeditor_user_id: number;
@@ -49,36 +43,39 @@ type DashboardPayload = {
     debt: string;
   };
   expeditors: Array<{ id: number; name: string; code: string | null }>;
+  agents?: Array<{ id: number; name: string; code: string | null }>;
+  supervisors?: Array<{ id: number; name: string; code: string | null }>;
+  branches?: string[];
+  by_filial?: Array<{
+    name: string;
+    code: string | null;
+    delivered_orders: number;
+    delivered_sum: string;
+    returned_sum: string;
+    payments_collected: string;
+    debt: string;
+  }>;
+  by_supervisor?: DashboardPayload["by_filial"];
+  by_agent?: DashboardPayload["by_filial"];
+  status_by?: Record<ExpeditorDim, ExpeditorStatusRow[]>;
 };
 
 function money(v: string | number) {
   return formatNumberGrouped(String(v), { maxFractionDigits: 0 });
 }
 
-type SortKey =
-  | "delivered_sum"
-  | "delivered_orders"
-  | "returned_sum"
-  | "payments_collected"
-  | "debt"
-  | "expeditor_name";
-
 export default function ExpeditorsDashboardPage() {
   const tenantSlug = useAuthStore((s) => s.tenantSlug);
   const hydrated = useAuthStoreHydrated();
 
-  const today = new Date();
-  const to0 = today.toISOString().slice(0, 10);
-  const from0 = new Date(today.getTime() - 29 * 86400000).toISOString().slice(0, 10);
+  const { from: from0, to: to0 } = monthToDateRange();
 
   const dateAnchorRef = useRef<HTMLButtonElement>(null);
   const [dateOpen, setDateOpen] = useState(false);
 
-  const [draft, setDraft] = useState({ from: from0, to: to0, expeditor_ids: [] as string[] });
-  const [applied, setApplied] = useState({ from: from0, to: to0, expeditor_ids: [] as string[] });
-  const [sortBy, setSortBy] = useState<SortKey>("delivered_sum");
-  const [sortDir, setSortDir] = useState<1 | -1>(-1);
-
+  const emptyPick = { expeditor_ids: [] as string[], agent_ids: [] as string[], supervisor_ids: [] as string[], branches: [] as string[] };
+  const [draft, setDraft] = useState({ from: from0, to: to0, ...emptyPick });
+  const [applied, setApplied] = useState({ from: from0, to: to0, ...emptyPick });
   const dashQ = useQuery({
     queryKey: ["dashboard-expeditors", tenantSlug, applied],
     enabled: Boolean(tenantSlug && hydrated),
@@ -88,6 +85,9 @@ export default function ExpeditorsDashboardPage() {
       p.set("date_from", applied.from);
       p.set("date_to", applied.to);
       if (applied.expeditor_ids.length) p.set("expeditor_ids", applied.expeditor_ids.join(","));
+      if (applied.agent_ids.length) p.set("agent_ids", applied.agent_ids.join(","));
+      if (applied.supervisor_ids.length) p.set("supervisor_ids", applied.supervisor_ids.join(","));
+      if (applied.branches.length) p.set("branches", applied.branches.join(","));
       const { data } = await api.get<DashboardPayload>(
         `/api/${tenantSlug}/dashboard/expeditors?${p.toString()}`
       );
@@ -101,38 +101,14 @@ export default function ExpeditorsDashboardPage() {
     title: `${x.name}${x.code ? ` (${x.code})` : ""}`
   }));
 
-  const sortedRows = useMemo(() => {
-    const rows = [...(data?.rows ?? [])];
-    rows.sort((a, b) => {
-      let av: number | string;
-      let bv: number | string;
-      if (sortBy === "expeditor_name") {
-        av = a.expeditor_name.toLowerCase();
-        bv = b.expeditor_name.toLowerCase();
-        return av < bv ? -1 * sortDir : av > bv ? 1 * sortDir : 0;
-      }
-      av = Number(a[sortBy] ?? 0);
-      bv = Number(b[sortBy] ?? 0);
-      return (av - bv) * sortDir;
-    });
-    return rows;
-  }, [data?.rows, sortBy, sortDir]);
-
-  const toggleSort = (key: SortKey) => {
-    if (sortBy === key) {
-      setSortDir((d) => (d === 1 ? -1 : 1));
-    } else {
-      setSortBy(key);
-      setSortDir(key === "expeditor_name" ? 1 : -1);
-    }
-  };
-
   const applyDraft = () => setApplied({ ...draft });
   const resetAll = () => {
-    const reset = { from: from0, to: to0, expeditor_ids: [] as string[] };
+    const reset = { from: from0, to: to0, ...emptyPick };
     setDraft(reset);
     setApplied(reset);
   };
+  const staffItems = (rows: Array<{ id: number; name: string; code: string | null }> | undefined) =>
+    (rows ?? []).map((x) => ({ id: String(x.id), title: `${x.name}${x.code ? ` (${x.code})` : ""}` }));
 
   if (!hydrated || !tenantSlug) {
     return <p className="text-sm text-muted-foreground">Загрузка...</p>;
@@ -141,62 +117,47 @@ export default function ExpeditorsDashboardPage() {
   const periodBtn = formatDateRangeButton(draft.from, draft.to);
   const t = data?.totals;
 
+  const overdueRows = data?.status_by?.expeditor ?? [];
+  const overdueSum = overdueRows.reduce((sum, row) => {
+    return sum + Object.values(row.by_status).reduce((s, v) => s + (Number(v) || 0), 0);
+  }, 0);
+  const overdueCount = overdueRows.reduce((sum, row) => sum + (row.delivered_orders || 0), 0);
+
   const kpis = [
     {
-      label: "Доставщиков",
-      value: String(t?.expeditors_count ?? 0),
-      icon: Truck,
-      color: "text-sky-600",
-      bg: "bg-sky-50"
-    },
-    {
-      label: "Доставлено (сумма)",
+      label: "Доставлено",
       value: money(t?.delivered_sum ?? 0),
-      sub: `${t?.delivered_orders ?? 0} заказ(ов)`,
-      icon: PackageCheck,
-      color: "text-emerald-600",
-      bg: "bg-emerald-50"
+      sub: `${t?.delivered_orders ?? 0} заказ(ов) · ${t?.expeditors_count ?? 0} доставщиков`
     },
     {
-      label: "Возвраты (сумма)",
+      label: "Возвраты",
       value: money(t?.returned_sum ?? 0),
-      sub: `${t?.returned_orders ?? 0} заказ(ов)`,
-      icon: Undo2,
-      color: "text-orange-600",
-      bg: "bg-orange-50"
+      sub: `${t?.returned_orders ?? 0} заказ(ов)`
     },
     {
       label: "Собрано оплат",
       value: money(t?.payments_collected ?? 0),
-      icon: Wallet,
-      color: "text-violet-600",
-      bg: "bg-violet-50"
+      sub: "По доставленным"
     },
     {
-      label: "Долг (доставлено)",
+      label: "Долг",
       value: money(t?.debt ?? 0),
-      icon: AlertTriangle,
-      color: "text-rose-600",
-      bg: "bg-rose-50"
+      sub: "По доставленным"
+    },
+    {
+      label: "Дольше 1 дня",
+      value: money(overdueSum),
+      sub: `${overdueCount} заказ(ов), ещё не доставлено`
     }
-  ];
-
-  const headers: Array<{ key: SortKey; label: string; numeric?: boolean }> = [
-    { key: "expeditor_name", label: "Доставщик" },
-    { key: "delivered_orders", label: "Доставлено (шт)", numeric: true },
-    { key: "delivered_sum", label: "Доставлено (сумма)", numeric: true },
-    { key: "returned_sum", label: "Возврат (сумма)", numeric: true },
-    { key: "payments_collected", label: "Собрано оплат", numeric: true },
-    { key: "debt", label: "Долг", numeric: true }
   ];
 
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-lg font-semibold">Доставщики</h1>
+          <h1 className="text-lg font-semibold">Доставка заказов</h1>
           <p className="text-xs text-muted-foreground">
-            Данные по доставщикам: доставка, возвраты, оплаты, долги
+            Филиал, СВР, агент и доставщик: доставка, возвраты, оплаты, долги и статусы
           </p>
         </div>
         <button
@@ -229,24 +190,32 @@ export default function ExpeditorsDashboardPage() {
         <CardHeader className="py-3">
           <CardTitle className="text-base">Фильтр</CardTitle>
         </CardHeader>
-        <CardContent className="flex flex-wrap items-end gap-2 pt-0">
-          <div className="min-w-[220px] max-w-xs flex-1">
+        <CardContent className="grid grid-cols-1 gap-2 pt-0 sm:grid-cols-2 xl:grid-cols-4">
+          {(
+            [
+              ["Филиал", "branches", (data?.branches ?? []).map((b) => ({ id: b, title: b }))] as const,
+              ["СВР", "supervisor_ids", staffItems(data?.supervisors)] as const,
+              ["Агент", "agent_ids", staffItems(data?.agents)] as const,
+              ["Доставщик", "expeditor_ids", expeditorItems] as const
+            ]
+          ).map(([label, key, items]) => (
             <SearchableMultiSelectPanel
-              label="Доставщик"
+              key={key}
+              label={label}
               hideOuterLabel
               hidePopoverHeader
-              triggerPlaceholder="Все доставщики"
-              items={expeditorItems}
-              selected={new Set(draft.expeditor_ids)}
+              triggerPlaceholder={label}
+              items={[...items]}
+              selected={new Set(draft[key])}
               onSelectedChange={(next) => {
-                const resolved =
-                  typeof next === "function" ? next(new Set(draft.expeditor_ids)) : next;
-                setDraft((d) => ({ ...d, expeditor_ids: Array.from(resolved) }));
+                const resolved = typeof next === "function" ? next(new Set(draft[key])) : next;
+                setDraft((d) => ({ ...d, [key]: Array.from(resolved) }));
               }}
               searchable
-              searchPlaceholder="Доставщик"
+              searchPlaceholder={label}
             />
-          </div>
+          ))}
+          <div className="flex items-end gap-2 sm:col-span-2 xl:col-span-4">
           <Button type="button" variant="outline" size="sm" className="h-8 text-xs" onClick={resetAll}>
             <RotateCcw className="mr-1 h-3.5 w-3.5" />
             Сброс
@@ -254,111 +223,44 @@ export default function ExpeditorsDashboardPage() {
           <Button type="button" size="sm" className="h-8 min-w-[120px] text-xs" onClick={applyDraft}>
             Применить
           </Button>
+          </div>
         </CardContent>
       </Card>
 
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-5">
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
         {kpis.map((k) => (
-          <Card key={k.label}>
-            <CardContent className="flex items-center gap-3 p-4">
-              <div className={cn("flex h-10 w-10 shrink-0 items-center justify-center rounded-lg", k.bg)}>
-                <k.icon className={cn("h-5 w-5", k.color)} />
-              </div>
-              <div className="min-w-0">
-                <p className="truncate text-[11px] font-medium text-muted-foreground">{k.label}</p>
-                <p className="truncate text-lg font-semibold tabular-nums">{k.value}</p>
-                {k.sub ? <p className="truncate text-[11px] text-muted-foreground">{k.sub}</p> : null}
-              </div>
-            </CardContent>
-          </Card>
+          <div key={k.label} className="min-w-0 rounded-2xl bg-card px-4 py-3 shadow-sm ring-1 ring-slate-200/70">
+            <p className="text-[11px] font-medium text-slate-500">{k.label}</p>
+            <p className="mt-1 text-xl font-semibold leading-tight tabular-nums text-slate-950">{k.value}</p>
+            <p className="mt-1 text-[11px] leading-snug text-slate-500">{k.sub}</p>
+          </div>
         ))}
       </div>
 
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between gap-2 py-3">
-          <CardTitle className="text-base">По доставщикам</CardTitle>
-          <Button
-            type="button"
-            variant="outline"
-            size="icon"
-            className="h-8 w-8"
-            onClick={() => void dashQ.refetch()}
-          >
-            <RotateCcw className="h-3.5 w-3.5" />
-          </Button>
-        </CardHeader>
-        <CardContent className="overflow-x-auto pt-0">
-          {dashQ.isError ? (
-            <p className="text-sm text-destructive">Ошибка загрузки</p>
-          ) : dashQ.isLoading ? (
-            <p className="text-sm text-muted-foreground">Загрузка…</p>
-          ) : sortedRows.length === 0 ? (
-            <p className="py-6 text-center text-sm text-muted-foreground">Нет данных за период</p>
-          ) : (
-            <div className="overflow-auto rounded border">
-              <table className="w-full min-w-[760px] border-collapse text-xs">
-                <thead className="app-table-thead">
-                  <tr>
-                    {headers.map((h) => (
-                      <th
-                        key={h.key}
-                        className={cn(
-                          "cursor-pointer select-none whitespace-nowrap px-3 py-2 font-medium hover:bg-muted/40",
-                          h.numeric ? "text-right" : "text-left"
-                        )}
-                        onClick={() => toggleSort(h.key)}
-                      >
-                        {h.label}
-                        {sortBy === h.key ? (sortDir === 1 ? " ▲" : " ▼") : ""}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {sortedRows.map((r) => (
-                    <tr key={r.expeditor_user_id} className="border-t border-border/60 hover:bg-muted/20">
-                      <td className="px-3 py-2">
-                        <div className="font-medium">{r.expeditor_name}</div>
-                        {r.expeditor_code ? (
-                          <div className="text-[11px] text-muted-foreground">{r.expeditor_code}</div>
-                        ) : null}
-                      </td>
-                      <td className="px-3 py-2 text-right tabular-nums">{r.delivered_orders}</td>
-                      <td className="px-3 py-2 text-right tabular-nums">{money(r.delivered_sum)}</td>
-                      <td className="px-3 py-2 text-right tabular-nums text-orange-600">
-                        {money(r.returned_sum)}
-                      </td>
-                      <td className="px-3 py-2 text-right tabular-nums text-violet-600">
-                        {money(r.payments_collected)}
-                      </td>
-                      <td
-                        className={cn(
-                          "px-3 py-2 text-right tabular-nums",
-                          Number(r.debt) > 0 ? "font-medium text-rose-600" : "text-muted-foreground"
-                        )}
-                      >
-                        {money(r.debt)}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-                {t ? (
-                  <tfoot>
-                    <tr className="border-t-2 border-border bg-muted/30 font-semibold">
-                      <td className="px-3 py-2">Итого</td>
-                      <td className="px-3 py-2 text-right tabular-nums">{t.delivered_orders}</td>
-                      <td className="px-3 py-2 text-right tabular-nums">{money(t.delivered_sum)}</td>
-                      <td className="px-3 py-2 text-right tabular-nums">{money(t.returned_sum)}</td>
-                      <td className="px-3 py-2 text-right tabular-nums">{money(t.payments_collected)}</td>
-                      <td className="px-3 py-2 text-right tabular-nums">{money(t.debt)}</td>
-                    </tr>
-                  </tfoot>
-                ) : null}
-              </table>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+      <ExpeditorDimBoard
+        loading={dashQ.isLoading}
+        onRefresh={() => void dashQ.refetch()}
+        groups={{
+          filial: (data?.by_filial ?? []) as ExpeditorGroupRow[],
+          supervisor: (data?.by_supervisor ?? []) as ExpeditorGroupRow[],
+          agent: (data?.by_agent ?? []) as ExpeditorGroupRow[],
+          expeditor: (data?.rows ?? []).map((r) => ({
+            name: r.expeditor_name,
+            code: r.expeditor_code,
+            delivered_orders: r.delivered_orders,
+            delivered_sum: r.delivered_sum,
+            returned_sum: r.returned_sum,
+            payments_collected: r.payments_collected,
+            debt: r.debt
+          }))
+        }}
+        statuses={{
+          filial: data?.status_by?.filial ?? [],
+          supervisor: data?.status_by?.supervisor ?? [],
+          agent: data?.status_by?.agent ?? [],
+          expeditor: data?.status_by?.expeditor ?? []
+        }}
+      />
     </div>
   );
 }

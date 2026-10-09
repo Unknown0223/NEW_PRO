@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { prisma } from "../../config/database";
 import { sendApiError, zodValidationExtras } from "../../lib/api-error";
+import { resolveTenantSlugAlias } from "../../lib/tenant-slug-alias";
 import { ensureMobileApkLocal, openMobileApkReadable } from "./mobile-apk.service";
 
 const slugQuery = z
@@ -9,10 +10,11 @@ const slugQuery = z
   .min(1)
   .max(64)
   .transform((s) => s.trim())
-  .refine((s) => s.length > 0, { message: "slug required" });
+  .refine((s) => s.length > 0, { message: "Требуется slug" });
 
 /** Public mobile: slug trim + case-insensitive (TenantNotFound kamaytirish). */
-async function findActiveTenantBySlug(slug: string) {
+async function findActiveTenantBySlug(rawSlug: string) {
+  const slug = resolveTenantSlugAlias(rawSlug);
   const exact = await prisma.tenant.findUnique({
     where: { slug },
     select: { id: true, is_active: true, slug: true, settings: true }
@@ -70,7 +72,7 @@ export async function registerMobilePublicRoutes(app: FastifyInstance) {
     await ensureMobileApkLocal(row.slug);
     const stream = await openMobileApkReadable(row.slug);
     if (!stream) {
-      return sendApiError(reply, request, 404, "ApkNotFound", "Mobil APK hali yuklanmagan");
+      return sendApiError(reply, request, 404, "ApkNotFound", "Мобильный APK ещё не загружен");
     }
     reply.header("Content-Type", "application/vnd.android.package-archive");
     reply.header("Content-Disposition", 'attachment; filename="salesdoc.apk"');

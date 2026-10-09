@@ -1,6 +1,7 @@
 import type { BonusRule, BonusRuleCondition } from "@prisma/client";
 import { prisma } from "../../config/database";
 import { appendTenantAuditEvent, AuditEntityType } from "../../lib/tenant-audit";
+import { notifyBonusRuleChange } from "./bonus-rules.notify";
 
 type RuleWithConditions = BonusRule & { conditions: BonusRuleCondition[] };
 
@@ -554,6 +555,7 @@ export async function updateBonusRule(
     action: "update",
     payload: { changed_keys: Object.keys(input), locked }
   });
+  if (full.is_active) void notifyBonusRuleChange(tenantId, id, "updated", actorUserId);
   return full;
 }
 

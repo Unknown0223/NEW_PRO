@@ -13,6 +13,7 @@ import {
   hydrateDecimals,
   readZipJson,
   remapId,
+  remapIntArray,
   stripIdTenant
 } from "./system-migration.parse";
 type ZipLike = JSZip;
@@ -39,12 +40,8 @@ export async function importTransactionalTables(
   const warnings: string[] = [];
   const counts: Record<string, number> = {};
 
-  const orders = await readZipJson<Record<string, unknown>>(zip, "data/orders.json");
-  if (!orders.length) {
-    return { counts, warnings: ["data/orders.json bo‘sh — operatsion import o‘tkazilmadi."] };
-  }
-
   const [
+    orders,
     orderItems,
     orderStatusLogs,
     orderChangeLogs,
@@ -52,8 +49,11 @@ export async function importTransactionalTables(
     goodsReceipts,
     salesReturns,
     auditEvents,
-    clientAuditLogs
+    clientAuditLogs,
+    goodsReceiptLines,
+    salesReturnLines
   ] = await Promise.all([
+    readZipJson<Record<string, unknown>>(zip, "data/orders.json"),
     readZipJson<Record<string, unknown>>(zip, "data/order_items.json"),
     readZipJson<Record<string, unknown>>(zip, "data/order_status_logs.json"),
     readZipJson<Record<string, unknown>>(zip, "data/order_change_logs.json"),
@@ -61,101 +61,117 @@ export async function importTransactionalTables(
     readZipJson<Record<string, unknown>>(zip, "data/goods_receipts.json"),
     readZipJson<Record<string, unknown>>(zip, "data/sales_returns.json"),
     readZipJson<Record<string, unknown>>(zip, "data/tenant_audit_events.json"),
-    readZipJson<Record<string, unknown>>(zip, "data/client_audit_logs.json")
+    readZipJson<Record<string, unknown>>(zip, "data/client_audit_logs.json"),
+    readZipJson<Record<string, unknown>>(zip, "data/goods_receipt_lines.json"),
+    readZipJson<Record<string, unknown>>(zip, "data/sales_return_lines.json")
   ]);
 
-  const goodsReceiptLines = await readZipJson<Record<string, unknown>>(zip, "data/goods_receipt_lines.json");
-  const salesReturnLines = await readZipJson<Record<string, unknown>>(zip, "data/sales_return_lines.json");
+  if (!orders.length) {
+    warnings.push(
+      "data/orders.json пуст — заказов нет; оплаты/склад/визиты/фото всё равно будут импортированы."
+    );
+  }
 
   await prisma.$transaction(
     async (tx) => {
-      const orderRows: Array<{
-        oldId: number;
-        key: string;
-        data: Prisma.OrderUncheckedCreateInput;
-      }> = [];
-      for (const row of orders) {
-        const oldId = Number(row.id);
-        const data = hydrateDecimals(
-          hydrateDates(stripIdTenant(row), [
-            "created_at",
-            "updated_at",
-            "consignment_due_date"
-          ]),
-          ["total_sum", "bonus_sum", "discount_sum"]
+      if (orders.length) {
+        const orderRows: Array<{
+          oldId: number;
+          key: string;
+          data: Prisma.OrderUncheckedCreateInput;
+        }> = [];
+        for (const row of orders) {
+          const oldId = Number(row.id);
+          const data = hydrateDecimals(
+            hydrateDates(stripIdTenant(row), [
+              "created_at",
+              "updated_at",
+              "consignment_due_date",
+              "consignment_moved_at"
+            ]),
+            ["total_sum", "bonus_sum", "discount_sum"]
+          );
+          const clientId = requireMap(maps, "client", data.client_id, "order.client_id");
+          if (clientId == null) throw new Error(`MAP_MISSING:order.client_id:${data.client_id}`);
+          const number = String(data.number ?? "").trim();
+          if (!number) throw new Error(`MAP_MISSING:order.number:${oldId}`);
+          orderRows.push({
+            oldId,
+            key: number,
+            data: {
+              ...(data as Prisma.OrderUncheckedCreateInput),
+              tenant_id: tenantId,
+              client_id: clientId,
+              agent_id: remapId(maps.user, data.agent_id) ?? null,
+              warehouse_id: remapId(maps.warehouse, data.warehouse_id) ?? null,
+              expeditor_user_id: remapId(maps.user, data.expeditor_user_id) ?? null,
+              work_slot_id: remapId(maps.workSlot, data.work_slot_id) ?? null,
+              consignment_moved_by_user_id:
+                remapId(maps.user, data.consignment_moved_by_user_id) ?? null,
+              applied_auto_bonus_rule_ids: remapIntArray(
+                maps.bonusRule,
+                data.applied_auto_bonus_rule_ids
+              ),
+              // warehouse_block — extended phase 3 dan keyin second-pass
+              warehouse_block_id: null
+            }
+          });
+        }
+        counts.orders = await createManyAndMapByKey(
+          (args) => tx.order.createManyAndReturn(args),
+          orderRows,
+          maps.order
         );
-        const clientId = requireMap(maps, "client", data.client_id, "order.client_id");
-        if (clientId == null) throw new Error(`MAP_MISSING:order.client_id:${data.client_id}`);
-        const number = String(data.number ?? "").trim();
-        if (!number) throw new Error(`MAP_MISSING:order.number:${oldId}`);
-        orderRows.push({
-          oldId,
-          key: number,
-          data: {
-            ...(data as Prisma.OrderUncheckedCreateInput),
-            tenant_id: tenantId,
-            client_id: clientId,
-            agent_id: remapId(maps.user, data.agent_id) ?? null,
-            warehouse_id: remapId(maps.warehouse, data.warehouse_id) ?? null,
-            expeditor_user_id: remapId(maps.user, data.expeditor_user_id) ?? null,
-            warehouse_block_id: null
-          }
-        });
-      }
-      counts.orders = await createManyAndMapByKey(
-        (args) => tx.order.createManyAndReturn(args),
-        orderRows,
-        maps.order
-      );
 
-      const orderItemData: Prisma.OrderItemUncheckedCreateInput[] = [];
-      for (const row of orderItems) {
-        const orderId = requireMap(maps, "order", row.order_id, "order_item.order_id");
-        const productId = requireMap(maps, "product", row.product_id, "order_item.product_id");
-        if (orderId == null || productId == null) continue;
-        const data = hydrateDecimals(stripIdTenant(row), ["qty", "price", "total"]);
-        orderItemData.push({
-          ...(data as Prisma.OrderItemUncheckedCreateInput),
-          order_id: orderId,
-          product_id: productId
-        });
-      }
-      counts.order_items = await createManyChunked(
-        (args) => tx.orderItem.createMany(args),
-        orderItemData
-      );
+        const orderItemData: Prisma.OrderItemUncheckedCreateInput[] = [];
+        for (const row of orderItems) {
+          const orderId = requireMap(maps, "order", row.order_id, "order_item.order_id");
+          const productId = requireMap(maps, "product", row.product_id, "order_item.product_id");
+          if (orderId == null || productId == null) continue;
+          const data = hydrateDecimals(stripIdTenant(row), ["qty", "price", "total"]);
+          orderItemData.push({
+            ...(data as Prisma.OrderItemUncheckedCreateInput),
+            order_id: orderId,
+            product_id: productId
+          });
+        }
+        counts.order_items = await createManyChunked(
+          (args) => tx.orderItem.createMany(args),
+          orderItemData
+        );
 
-      const statusLogData: Prisma.OrderStatusLogUncheckedCreateInput[] = [];
-      for (const row of orderStatusLogs) {
-        const orderId = requireMap(maps, "order", row.order_id, "status_log.order_id");
-        if (orderId == null) continue;
-        const data = hydrateDates(stripIdTenant(row), ["created_at"]);
-        statusLogData.push({
-          ...(data as Prisma.OrderStatusLogUncheckedCreateInput),
-          order_id: orderId,
-          user_id: remapId(maps.user, data.user_id) ?? null
-        });
-      }
-      counts.order_status_logs = await createManyChunked(
-        (args) => tx.orderStatusLog.createMany(args),
-        statusLogData
-      );
+        const statusLogData: Prisma.OrderStatusLogUncheckedCreateInput[] = [];
+        for (const row of orderStatusLogs) {
+          const orderId = requireMap(maps, "order", row.order_id, "status_log.order_id");
+          if (orderId == null) continue;
+          const data = hydrateDates(stripIdTenant(row), ["created_at"]);
+          statusLogData.push({
+            ...(data as Prisma.OrderStatusLogUncheckedCreateInput),
+            order_id: orderId,
+            user_id: remapId(maps.user, data.user_id) ?? null
+          });
+        }
+        counts.order_status_logs = await createManyChunked(
+          (args) => tx.orderStatusLog.createMany(args),
+          statusLogData
+        );
 
-      const changeLogData: Prisma.OrderChangeLogUncheckedCreateInput[] = [];
-      for (const row of orderChangeLogs) {
-        const orderId = requireMap(maps, "order", row.order_id, "change_log.order_id");
-        if (orderId == null) continue;
-        const data = hydrateDates(stripIdTenant(row), ["created_at"]);
-        changeLogData.push({
-          ...(data as Prisma.OrderChangeLogUncheckedCreateInput),
-          order_id: orderId,
-          user_id: remapId(maps.user, data.user_id) ?? null
-        });
+        const changeLogData: Prisma.OrderChangeLogUncheckedCreateInput[] = [];
+        for (const row of orderChangeLogs) {
+          const orderId = requireMap(maps, "order", row.order_id, "change_log.order_id");
+          if (orderId == null) continue;
+          const data = hydrateDates(stripIdTenant(row), ["created_at"]);
+          changeLogData.push({
+            ...(data as Prisma.OrderChangeLogUncheckedCreateInput),
+            order_id: orderId,
+            user_id: remapId(maps.user, data.user_id) ?? null
+          });
+        }
+        counts.order_change_logs = await createManyChunked(
+          (args) => tx.orderChangeLog.createMany(args),
+          changeLogData
+        );
       }
-      counts.order_change_logs = await createManyChunked(
-        (args) => tx.orderChangeLog.createMany(args),
-        changeLogData
-      );
 
       const paymentRows: Array<{
         oldId: number;
@@ -223,7 +239,7 @@ export async function importTransactionalTables(
             ...(data as Prisma.GoodsReceiptUncheckedCreateInput),
             tenant_id: tenantId,
             warehouse_id: warehouseId,
-            supplier_id: null,
+            supplier_id: remapId(maps.supplier, data.supplier_id) ?? null,
             created_by_user_id: remapId(maps.user, data.created_by_user_id) ?? null,
             deleted_by_user_id: remapId(maps.user, data.deleted_by_user_id) ?? null
           }

@@ -17,6 +17,8 @@ import {
   SlidersHorizontal,
   TableProperties
 } from "lucide-react";
+import { SavedPivotReportItem } from "@/components/reports/saved-pivot-report-item";
+import { SharePivotReportDialog } from "@/components/reports/share-pivot-report-dialog";
 import { PivotChart } from "@/components/pivot/PivotChart";
 import { PivotDrillThrough } from "@/components/pivot/PivotDrillThrough";
 import { FilterEditor } from "@/components/pivot/PivotFilters";
@@ -54,6 +56,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { useAppConfirm } from "@/components/ui/app-confirm-dialog";
 import { cn } from "@/lib/utils";
 import { usePivot } from "@/hooks/pivot/usePivot";
 import { usePivotExport } from "@/hooks/pivot/usePivotExport";
@@ -70,6 +73,10 @@ import {
   fetchReportBuilderSavedReports,
   metadataToPivotFields,
   savePivotConfigReport,
+  updatePivotConfigReport,
+  deletePivotConfigReport,
+  fetchReportBuilderShareCandidates,
+  sharePivotConfigReport,
   savedReportConfigToPivotConfig,
   type ReportBuilderDatasetRequest,
   type ReportBuilderDatasetResult
@@ -100,7 +107,15 @@ import {
   type PivotConfig
 } from "@salec/pivot-engine";
 import { api } from "@/lib/api";
-import { resolveLayoutForm, type PivotLayoutForm } from "@/lib/pivot-layout-form";
+import { usePermissions } from "@/lib/use-permissions";
+import { canSavePivotConfig, resolveLayoutForm, type PivotLayoutForm } from "@/lib/pivot-layout-form";
+import {
+  aoaToFlatPivotData,
+  buildScreenMatchingPivotAoA,
+  downloadPivotAoAAsCsv,
+  writePivotAoAToExcel
+} from "@/lib/pivot-export-screen-aoa";
+import { isLeavingFlatLayout, restoreFromPreFlatSnapshot } from "@/lib/pivot-config-extras";
 import {
   DEFAULT_PIVOT_TABLE_STYLE_ID,
   WDR_DEFAULT_TABLE_STYLE_ID,
@@ -110,6 +125,19 @@ import {
 import { STALE } from "@/lib/query-stale";
 
 const PIVOT_DEMO_URL = process.env.NEXT_PUBLIC_PIVOT_DEMO_URL ?? "http://127.0.0.1:5174";
+
+/** Saqlangan hisobot «dirty» solishtiruvi uchun barqaror snapshot. */
+function snapshotSavedReportState(
+  pivotConfig: PivotConfig,
+  datasetFilters: DatasetFiltersPayload,
+  dateFmt: PivotDateFormatState
+): string {
+  return JSON.stringify({
+    config: pivotConfig,
+    filters: datasetFilters,
+    dateFormat: dateFmt
+  });
+}
 
 function ToolbarButton({
   icon,
@@ -249,9 +277,16 @@ const LAYOUT_FORM_OPTIONS = [
 ] as const;
 
 export function VirtualPivotReportBuilder() {
+  const builderPerms = usePermissions();
+  const canExport = builderPerms.has("reports.konstruktor.export");
+  const canCreateSaved = builderPerms.has("reports.konstruktor.create");
+  const canUpdateSaved = builderPerms.has("reports.konstruktor.update");
+  const canDeleteSaved = builderPerms.has("reports.konstruktor.delete");
+  const canShareSaved = builderPerms.has("reports.konstruktor.transfer");
   const rb = getPivotStrings().reportBuilder;
   const tenantSlug = useAuthStore((s) => s.tenantSlug);
   const hydrated = useAuthStoreHydrated();
+  const { confirm, dialog: confirmDialog } = useAppConfirm();
   const [filters, setFilters] = useState<DatasetFiltersPayload>(() => defaultDatasetFilters());
   const [datasetRows, setDatasetRows] = useState<Record<string, unknown>[]>([]);
   const [datasetMeta, setDatasetMeta] = useState<Pick<
@@ -276,6 +311,11 @@ export function VirtualPivotReportBuilder() {
   const [saveDialogOpen, setSaveDialogOpen] = useState(false);
   const [saveName, setSaveName] = useState("");
   const [loadingSavedReportId, setLoadingSavedReportId] = useState<number | null>(null);
+  /** Tanlangan hisobot ochilgandagi holat — o‘zgarishlarni aniqlash uchun. */
+  const [savedReportBaseline, setSavedReportBaseline] = useState<string | null>(null);
+  const [shareDialogOpen, setShareDialogOpen] = useState(false);
+  const [shareReportId, setShareReportId] = useState<number | null>(null);
+  const [shareReportName, setShareReportName] = useState("");
   const [notice, setNotice] = useState<{ message: string; tone: "success" | "error" } | null>(null);
   const [optionsOpen, setOptionsOpen] = useState(false);
   const [fieldsOpen, setFieldsOpen] = useState(false);
@@ -413,7 +453,7 @@ export function VirtualPivotReportBuilder() {
   const showLargeDatasetHint =
     pivotInputRows.length >= 5_000 && (isComputing || Boolean(pivotData));
 
-  const { exportExcel, exportPdf, exportHtml, exportChartPng, exportCsv, isExporting, exportProgressLabel } =
+  const { exportPdf, exportHtml, exportChartPng, isExporting, exportProgressLabel } =
     usePivotExport();
 
   const chartData = useMemo(
@@ -463,7 +503,7 @@ export function VirtualPivotReportBuilder() {
     [pivotData, expandedRows, datasetRows.length]
   );
 
-  const confirmLargeExport = useCallback(() => {
+  const confirmLargeExport = useCallback(async () => {
     if (!pivotData) return false;
     if (
       !shouldConfirmLargeExport(pivotData, {
@@ -474,19 +514,24 @@ export function VirtualPivotReportBuilder() {
       return true;
     }
     const rows = countPivotExportRows(pivotData, { expandedRows });
-    return window.confirm(getPivotStrings().export.confirmLargeExport(rows));
-  }, [pivotData, expandedRows, datasetRows.length]);
+    return confirm({
+      title: "Экспорт",
+      message: getPivotStrings().export.confirmLargeExport(rows),
+      confirmLabel: "Да",
+      cancelLabel: "Нет",
+      destructive: false
+    });
+  }, [pivotData, expandedRows, datasetRows.length, confirm]);
 
-  const handleExportExcel = useCallback(async () => {
-    if (!pivotData) return;
-    if (!confirmLargeExport()) return;
-
+  /** Excel/CSV/PDF/HTML — to‘liq dataset (window bo‘lsa) + ekran bilan bir xil layout. */
+  const preparePivotDataForExport = useCallback(async () => {
+    if (!pivotData) return null;
     let dataForExport = pivotData;
 
     if ((datasetMeta?.hasMore || dataWindowOffset > 0) && tenantSlug) {
       setIsLoadingFullForExport(true);
       setNotice({
-        message: "Excel: загружаются все строки для полного отчёта…",
+        message: "Экспорт: загружаются все строки для полного отчёта…",
         tone: "success"
       });
       try {
@@ -495,74 +540,108 @@ export function VirtualPivotReportBuilder() {
           rowFieldIds: config.rows,
           colFieldIds: config.columns
         };
-        // Sliding window — ekrandagi blok to‘liq emas; Excel uchun 0-dan yig‘amiz
         const full = await fetchAllReportBuilderDatasetPages(tenantSlug, payload, [], {
           totalRowCount: datasetMeta?.totalRowCount ?? 0,
           cap: datasetMeta?.cap ?? 50_000,
           hasMore: true
         });
-        // Ekran oynasini 50k bilan almashtirmaymiz — xotira uchun window saqlanadi
 
         const { buildFlatPivotDataAsync } = await import("@/lib/build-flat-pivot-data");
         const { PivotEngine } = await import("@salec/pivot-engine");
         const layout = resolveLayoutForm(config.options);
+        const formattedRows = applyDateFormatToRows(full.rows, pivotFields, dateFormat);
         dataForExport =
           layout === "flat"
-            ? await buildFlatPivotDataAsync(full.rows, pivotFields, config)
-            : new PivotEngine().compute(full.rows, pivotFields, config);
+            ? await buildFlatPivotDataAsync(formattedRows, pivotFields, config)
+            : new PivotEngine().compute(formattedRows, pivotFields, config);
       } catch (err) {
         setNotice({ message: getUserFacingError(err), tone: "error" });
-        return;
+        return null;
       } finally {
         setIsLoadingFullForExport(false);
       }
     }
 
-    const exported = await exportExcel(dataForExport, {
-      filename: `pivot-report-${new Date().toISOString().slice(0, 10)}.xlsx`,
-      expandedRows,
-      sheetName: "Pivot"
-    });
-    setNotice(
-      exported
-        ? {
-            message: `Экспорт Excel готов — ${dataForExport.metadata.processedRows.toLocaleString("ru-RU")} строк.`,
-            tone: "success"
-          }
-        : { message: "Не удалось экспортировать Excel.", tone: "error" }
-    );
+    return dataForExport;
   }, [
-    confirmLargeExport,
     config,
     dataWindowOffset,
     datasetMeta,
-    exportExcel,
+    dateFormat,
     filters,
     pivotData,
-    expandedRows,
     pivotFields,
     tenantSlug
   ]);
 
+  const handleExportExcel = useCallback(async () => {
+    if (!pivotData) return;
+    if (!(await confirmLargeExport())) return;
+
+    const dataForExport = await preparePivotDataForExport();
+    if (!dataForExport) return;
+
+    try {
+      const aoa = buildScreenMatchingPivotAoA(dataForExport, config, pivotFields, {
+        expandAllForExport: true,
+        useFormattedValues: false
+      });
+      writePivotAoAToExcel(aoa, {
+        filename: `pivot-report-${new Date().toISOString().slice(0, 10)}.xlsx`,
+        sheetName: "Сводная"
+      });
+      setNotice({
+        message: `Экспорт Excel готов — ${Math.max(0, aoa.length - 1).toLocaleString("ru-RU")} строк.`,
+        tone: "success"
+      });
+    } catch {
+      setNotice({ message: "Не удалось экспортировать Excel.", tone: "error" });
+    }
+  }, [confirmLargeExport, config, pivotData, pivotFields, preparePivotDataForExport]);
+
   const handleExportPdf = useCallback(async () => {
-    if (!confirmLargeExport()) return;
-    const exported = await exportPdf(pivotData, {
-      filename: `pivot-report-${new Date().toISOString().slice(0, 10)}.pdf`,
-      title: "Сводная таблица",
-      expandedRows
+    if (!pivotData) return;
+    if (!(await confirmLargeExport())) return;
+    const dataForExport = await preparePivotDataForExport();
+    if (!dataForExport) return;
+
+    const aoa = buildScreenMatchingPivotAoA(dataForExport, config, pivotFields, {
+      expandAllForExport: true,
+      useFormattedValues: true
     });
-    setNotice(exported ? { message: "Экспорт PDF готов — файл скачан.", tone: "success" } : { message: "Не удалось экспортировать PDF.", tone: "error" });
-  }, [confirmLargeExport, exportPdf, pivotData, expandedRows]);
+    const flat = aoaToFlatPivotData(aoa, dataForExport.metadata);
+    const exported = await exportPdf(flat, {
+      filename: `pivot-report-${new Date().toISOString().slice(0, 10)}.pdf`,
+      title: "Сводная таблица"
+    });
+    setNotice(
+      exported
+        ? { message: "Экспорт PDF готов — файл скачан.", tone: "success" }
+        : { message: "Не удалось экспортировать PDF.", tone: "error" }
+    );
+  }, [confirmLargeExport, config, exportPdf, pivotData, pivotFields, preparePivotDataForExport]);
 
   const handleExportHtml = useCallback(async () => {
-    if (!confirmLargeExport()) return;
-    const exported = await exportHtml(pivotData, {
-      filename: `pivot-report-${new Date().toISOString().slice(0, 10)}.html`,
-      title: "Сводная таблица",
-      expandedRows
+    if (!pivotData) return;
+    if (!(await confirmLargeExport())) return;
+    const dataForExport = await preparePivotDataForExport();
+    if (!dataForExport) return;
+
+    const aoa = buildScreenMatchingPivotAoA(dataForExport, config, pivotFields, {
+      expandAllForExport: true,
+      useFormattedValues: true
     });
-    setNotice(exported ? { message: "Экспорт HTML готов — файл скачан.", tone: "success" } : { message: "Не удалось экспортировать HTML.", tone: "error" });
-  }, [confirmLargeExport, exportHtml, pivotData, expandedRows]);
+    const flat = aoaToFlatPivotData(aoa, dataForExport.metadata);
+    const exported = await exportHtml(flat, {
+      filename: `pivot-report-${new Date().toISOString().slice(0, 10)}.html`,
+      title: "Сводная таблица"
+    });
+    setNotice(
+      exported
+        ? { message: "Экспорт HTML готов — файл скачан.", tone: "success" }
+        : { message: "Не удалось экспортировать HTML.", tone: "error" }
+    );
+  }, [confirmLargeExport, config, exportHtml, pivotData, pivotFields, preparePivotDataForExport]);
 
   const handleExportChartPng = useCallback(async () => {
     const exported = await exportChartPng(chartRef.current, {
@@ -572,24 +651,43 @@ export function VirtualPivotReportBuilder() {
   }, [exportChartPng]);
 
   const handleExportCsv = useCallback(async () => {
-    if (!confirmLargeExport()) return;
-    const exported = await exportCsv(pivotData, {
-      filename: `pivot-report-${new Date().toISOString().slice(0, 10)}.csv`,
-      expandedRows
-    });
-    setNotice(
-      exported
-        ? { message: "Экспорт CSV готов — файл скачан.", tone: "success" }
-        : { message: "Не удалось экспортировать CSV.", tone: "error" }
-    );
-  }, [confirmLargeExport, exportCsv, pivotData, expandedRows]);
+    if (!pivotData) return;
+    if (!(await confirmLargeExport())) return;
+    const dataForExport = await preparePivotDataForExport();
+    if (!dataForExport) return;
+
+    try {
+      const aoa = buildScreenMatchingPivotAoA(dataForExport, config, pivotFields, {
+        expandAllForExport: true,
+        useFormattedValues: false
+      });
+      downloadPivotAoAAsCsv(aoa, `pivot-report-${new Date().toISOString().slice(0, 10)}.csv`);
+      setNotice({ message: "Экспорт CSV готов — файл скачан.", tone: "success" });
+    } catch {
+      setNotice({ message: "Не удалось экспортировать CSV.", tone: "error" });
+    }
+  }, [confirmLargeExport, config, pivotData, pivotFields, preparePivotDataForExport]);
 
   const handleCopySelection = useCallback(async () => {
-    const ok = await pivotTableRef.current?.copySelection();
+    const table = pivotTableRef.current;
+    if (!table) {
+      setNotice({ message: "Таблица ещё не готова.", tone: "error" });
+      return;
+    }
+    const hadSelection = table.hasSelection();
+    const ok = await table.copySelection();
     if (ok) {
-      setNotice({ message: "Выделение скопировано в буфер обмена.", tone: "success" });
+      setNotice({
+        message: hadSelection
+          ? "Выделение скопировано в буфер обмена."
+          : "Вся таблица скопирована в буфер обмена (как на экране).",
+        tone: "success"
+      });
     } else {
-      setNotice({ message: "Выделите ячейки в таблице, затем нажмите «Копировать».", tone: "error" });
+      setNotice({
+        message: "Нечего копировать — загрузите данные в таблицу.",
+        tone: "error"
+      });
     }
   }, []);
 
@@ -616,19 +714,36 @@ export function VirtualPivotReportBuilder() {
         }
         updateConfig(pivotConfig);
         setDateFormat(dateFormatStateFromConfig(pivotConfig));
+        setCellFormat({ ...DEFAULT_CELL_FORMAT, ...cellFormatFromConfig(pivotConfig) });
         setImportError(null);
         setActiveSavedReportId(savedId);
+        const nextFilters = restoredFilters ?? filters;
+        setSavedReportBaseline(
+          snapshotSavedReportState(
+            pivotConfig,
+            nextFilters,
+            dateFormatStateFromConfig(pivotConfig)
+          )
+        );
 
         if (tenantSlug) {
           const payload: ReportBuilderDatasetRequest = {
             ...(restoredFilters ?? filters),
             rowFieldIds: pivotConfig.rows,
-            colFieldIds: pivotConfig.columns,
-            pageLimit: DATASET_DISPLAY_PAGE_SIZE,
-            pageOffset: 0
+            colFieldIds: pivotConfig.columns
           };
           try {
-            const result = await fetchReportBuilderDataset(tenantSlug, payload);
+            const layout = resolveLayoutForm(pivotConfig.options);
+            // Klassik/compact: Итого to‘g‘ri bo‘lishi uchun barcha sahifalar.
+            // Flat: sliding window (birinchi sahifa).
+            const result =
+              layout === "flat"
+                ? await fetchReportBuilderDataset(tenantSlug, {
+                    ...payload,
+                    pageLimit: DATASET_DISPLAY_PAGE_SIZE,
+                    pageOffset: 0
+                  })
+                : await fetchAllReportBuilderDatasetPages(tenantSlug, payload);
             setDatasetRows(result.rows);
             setDataWindowOffset(0);
             setDatasetMeta({
@@ -660,11 +775,18 @@ export function VirtualPivotReportBuilder() {
       const payload: ReportBuilderDatasetRequest = {
         ...filters,
         rowFieldIds: config.rows,
-        colFieldIds: config.columns,
-        pageLimit: DATASET_DISPLAY_PAGE_SIZE,
-        pageOffset: 0
+        colFieldIds: config.columns
       };
-      return fetchReportBuilderDataset(tenantSlug!, payload);
+      const layout = resolveLayoutForm(config.options);
+      // Pivot Итого faqat yuklangan qatorlardan — klassik/compact da to‘liq yuklaymiz.
+      if (layout === "flat") {
+        return fetchReportBuilderDataset(tenantSlug!, {
+          ...payload,
+          pageLimit: DATASET_DISPLAY_PAGE_SIZE,
+          pageOffset: 0
+        });
+      }
+      return fetchAllReportBuilderDatasetPages(tenantSlug!, payload);
     },
     onSuccess: (result) => {
       setDatasetRows(result.rows);
@@ -749,15 +871,41 @@ export function VirtualPivotReportBuilder() {
   ]);
 
   const saveMut = useMutation({
-    mutationFn: async (name: string) => {
-      return savePivotConfigReport(tenantSlug!, name.trim(), config, filters);
+    mutationFn: async (args: { name: string; overwriteId?: number | null }) => {
+      const trimmed = args.name.trim();
+      // Sana formati local state da ham — saqlashdan oldin config ga yozamiz.
+      const configToSave = applyDateFormatToConfig(config, pivotFields, dateFormat);
+      if (args.overwriteId != null) {
+        return updatePivotConfigReport(
+          tenantSlug!,
+          args.overwriteId,
+          trimmed,
+          configToSave,
+          filters
+        );
+      }
+      return savePivotConfigReport(tenantSlug!, trimmed, configToSave, filters);
     },
-    onSuccess: (saved) => {
+    onSuccess: (saved, vars) => {
       setSaveError(null);
       setSaveName("");
       setActiveSavedReportId(saved.id);
       setSaveDialogOpen(false);
-      setNotice({ message: `Отчёт «${saved.name}» сохранён.`, tone: "success" });
+      // Yangilangan holat — baseline ni joriy config bilan yangilaymiz
+      setSavedReportBaseline(
+        snapshotSavedReportState(
+          applyDateFormatToConfig(config, pivotFields, dateFormat),
+          filters,
+          dateFormat
+        )
+      );
+      setNotice({
+        message:
+          vars.overwriteId != null
+            ? `Отчёт «${saved.name}» обновлён — последние изменения сохранены.`
+            : `Отчёт «${saved.name}» сохранён.`,
+        tone: "success"
+      });
       void savedQ.refetch();
     },
     onError: (err) => {
@@ -766,6 +914,113 @@ export function VirtualPivotReportBuilder() {
       setNotice({ message, tone: "error" });
     }
   });
+
+  const [saveOverwriteId, setSaveOverwriteId] = useState<number | null>(null);
+
+  const openSaveDialog = useCallback(
+    (mode: "update" | "create") => {
+      setSaveError(null);
+      const updating = mode === "update" && activeSavedReportId != null;
+      if (updating ? !canUpdateSaved : !canCreateSaved) {
+        setNotice({ message: "Нет доступа к сохранению отчёта", tone: "error" });
+        return;
+      }
+      if (mode === "update" && activeSavedReportId != null) {
+        setSaveOverwriteId(activeSavedReportId);
+        const existingName = savedQ.data?.find((s) => s.id === activeSavedReportId)?.name;
+        setSaveName(existingName?.trim() || `Pivot ${new Date().toLocaleDateString("ru-RU")}`);
+      } else {
+        setSaveOverwriteId(null);
+        setSaveName(`Pivot ${new Date().toLocaleDateString("ru-RU")}`);
+      }
+      setSaveDialogOpen(true);
+    },
+    [activeSavedReportId, canCreateSaved, canUpdateSaved, savedQ.data]
+  );
+
+  const commitSave = useCallback(() => {
+    if (!saveName.trim()) return;
+    saveMut.mutate({ name: saveName, overwriteId: saveOverwriteId });
+  }, [saveMut, saveName, saveOverwriteId]);
+
+  const isActiveSavedReportDirty = useMemo(() => {
+    if (activeSavedReportId == null || savedReportBaseline == null) return false;
+    return (
+      snapshotSavedReportState(config, filters, dateFormat) !== savedReportBaseline
+    );
+  }, [activeSavedReportId, config, dateFormat, filters, savedReportBaseline]);
+
+  const saveActiveSelectedReport = useCallback(() => {
+    if (activeSavedReportId == null) return;
+    if (!canSavePivotConfig(config)) return;
+    const existingName =
+      savedQ.data?.find((s) => s.id === activeSavedReportId)?.name?.trim() ||
+      `Pivot ${new Date().toLocaleDateString("ru-RU")}`;
+    saveMut.mutate({ name: existingName, overwriteId: activeSavedReportId });
+  }, [activeSavedReportId, config, saveMut, savedQ.data]);
+
+  const deleteMut = useMutation({
+    mutationFn: async (id: number) => {
+      await deletePivotConfigReport(tenantSlug!, id);
+      return id;
+    },
+    onSuccess: (id) => {
+      if (activeSavedReportId === id) {
+        setActiveSavedReportId(null);
+        setSavedReportBaseline(null);
+      }
+      setNotice({ message: "Отчёт удалён.", tone: "success" });
+      void savedQ.refetch();
+    },
+    onError: (err) => {
+      setNotice({ message: getUserFacingError(err), tone: "error" });
+    }
+  });
+
+  const handleDeleteSavedReport = useCallback(
+    async (id: number, name: string) => {
+      const ok = await confirm({
+        title: "Удалить отчёт?",
+        message: `Отчёт «${name}» будет удалён. Это действие нельзя отменить.`,
+        confirmLabel: "Удалить",
+        cancelLabel: "Отмена",
+        destructive: true
+      });
+      if (!ok) return;
+      deleteMut.mutate(id);
+    },
+    [confirm, deleteMut]
+  );
+
+  const shareCandidatesQ = useQuery({
+    queryKey: ["report-builder-share-candidates", tenantSlug],
+    queryFn: () => fetchReportBuilderShareCandidates(tenantSlug!),
+    enabled: Boolean(tenantSlug) && shareDialogOpen,
+    staleTime: 60_000
+  });
+
+  const shareMut = useMutation({
+    mutationFn: async (args: { id: number; userIds: number[] }) => {
+      return sharePivotConfigReport(tenantSlug!, args.id, args.userIds);
+    },
+    onSuccess: (result) => {
+      setShareDialogOpen(false);
+      setShareReportId(null);
+      setNotice({
+        message: `Отчёт отправлен ${result.sharedCount.toLocaleString("ru-RU")} пользователям.`,
+        tone: "success"
+      });
+    },
+    onError: (err) => {
+      setNotice({ message: getUserFacingError(err), tone: "error" });
+    }
+  });
+
+  const openShareDialog = useCallback((id: number, name: string) => {
+    setShareReportId(id);
+    setShareReportName(name);
+    setShareDialogOpen(true);
+  }, []);
 
   const drillFields = useMemo(
     () => [...pivotFields, ...calculatedMeasuresToFields(config.calculatedMeasures ?? [])],
@@ -852,19 +1107,31 @@ export function VirtualPivotReportBuilder() {
 
   const applyOptions = useCallback(() => {
     const nextLayout = schema;
+    const leavingFlat = isLeavingFlatLayout(config, nextLayout);
     let next: typeof config = {
       ...config,
       options: {
         ...config.options,
         showGrandTotal: grandTotals === "both" || grandTotals === "rows",
         showColumnTotals: grandTotals === "both" || grandTotals === "columns",
-        showSubtotals: subtotals === "both" || subtotals === "rows",
+        showSubtotals: subtotals === "both" || subtotals === "rows" || subtotals === "columns",
         layoutForm: nextLayout,
         compactMode: nextLayout === "compact"
       }
     };
     if (nextLayout === "flat") {
       next = flattenConfigZones(next);
+    } else if (leavingFlat && (nextLayout === "classic" || nextLayout === "compact")) {
+      next = restoreFromPreFlatSnapshot(config, nextLayout, pivotFields);
+      next = {
+        ...next,
+        options: {
+          ...next.options,
+          showGrandTotal: grandTotals === "both" || grandTotals === "rows",
+          showColumnTotals: grandTotals === "both" || grandTotals === "columns",
+          showSubtotals: subtotals === "both" || subtotals === "rows" || subtotals === "columns"
+        }
+      };
     }
     updateConfig(next);
     if (nextLayout === "flat") collapseAll();
@@ -985,8 +1252,8 @@ export function VirtualPivotReportBuilder() {
           {datasetMeta.hasMore
             ? currentLayoutForm === "flat"
               ? " — прокрутите вниз: старый блок очистится, загрузятся следующие 500 строк. Excel — полный набор."
-              : " — прокрутите вниз, чтобы подгрузить следующие 500 строк. Excel выгрузит полный набор."
-            : " — все доступные строки загружены."}
+              : " — ещё есть строки (подгрузка)…"
+            : " — все доступные строки загружены (Итого по полному набору)."}
           {isLoadingMore || isLoadingFullForExport ? (
             <span className="ml-2 inline-flex items-center gap-1">
               <Loader2 className="h-3 w-3 animate-spin" />
@@ -999,20 +1266,27 @@ export function VirtualPivotReportBuilder() {
       {savedQ.data && savedQ.data.length > 0 && (
         <div className="rounded-md border border-border bg-card px-3 py-2">
           <span className="mb-1 block text-[10px] text-muted-foreground">{rb.savedReports}</span>
-          <div className="flex max-w-full flex-wrap gap-1">
+          <div className="flex max-w-full flex-wrap gap-1.5">
             {savedQ.data.map((s) => (
-              <Button
+              <SavedPivotReportItem
                 key={s.id}
-                type="button"
-                variant={activeSavedReportId === s.id ? "default" : "outline"}
-                size="sm"
-                className="h-7 max-w-[180px] truncate text-[10px]"
-                title={s.name}
-                onClick={() => void handleLoadSavedReport(s.id, s.config)}
-              >
-                {s.name}
-                {detectSavedReportFormat(s.config) === "wdr" ? rb.savedReportWdrSuffix : ""}
-              </Button>
+                id={s.id}
+                name={s.name}
+                dense
+                selected={activeSavedReportId === s.id}
+                dirty={activeSavedReportId === s.id && isActiveSavedReportDirty}
+                saveDisabled={!canUpdateSaved || !canSavePivotConfig(config) || saveMut.isPending}
+                loading={
+                  loadingSavedReportId === s.id ||
+                  (deleteMut.isPending && deleteMut.variables === s.id) ||
+                  (saveMut.isPending && saveMut.variables?.overwriteId === s.id)
+                }
+                suffix={detectSavedReportFormat(s.config) === "wdr" ? rb.savedReportWdrSuffix : undefined}
+                onSelect={() => void handleLoadSavedReport(s.id, s.config)}
+                onSave={saveActiveSelectedReport}
+                onShare={canShareSaved ? () => openShareDialog(s.id, s.name) : undefined}
+                onDelete={canDeleteSaved ? () => void handleDeleteSavedReport(s.id, s.name) : undefined}
+              />
             ))}
           </div>
         </div>
@@ -1026,8 +1300,10 @@ export function VirtualPivotReportBuilder() {
           <div className="flex items-stretch">
             <div className="relative flex">
               <ToolbarButton icon={<FolderOpen />} label="Отчёты" onClick={() => setReportsDialogOpen(true)} />
-              <ToolbarButton icon={<Save />} label="Сохр. как" onClick={() => { setSaveError(null); setSaveName(`Pivot ${new Date().toLocaleDateString("ru-RU")}`); setSaveDialogOpen(true); }} disabled={!config.values.length || saveMut.isPending} />
-              <ToolbarButton icon={<Download />} label="Экспорт" onClick={() => setToolbarMenu(toolbarMenu === "export" ? null : "export")} disabled={!hasData || isComputing || isLoadingFullForExport} />
+              <ToolbarButton icon={<Save />} label="Сохр. как" onClick={() => openSaveDialog("create")} disabled={!canSavePivotConfig(config) || saveMut.isPending} />
+              {canExport ? (
+                <ToolbarButton icon={<Download />} label="Экспорт" onClick={() => setToolbarMenu(toolbarMenu === "export" ? null : "export")} disabled={!hasData || isComputing || isLoadingFullForExport} />
+              ) : null}
               <ToolbarButton
                 icon={<Copy />}
                 label="Копировать"
@@ -1042,7 +1318,7 @@ export function VirtualPivotReportBuilder() {
                 disabled={isComputing || !hasData || expandableRowKeys.length === 0 || currentLayoutForm === "flat"}
                 active={hierarchyExpanded}
               />
-              {toolbarMenu === "export" ? (
+              {canExport && toolbarMenu === "export" ? (
                 <div className="absolute left-24 top-full z-30 mt-1 w-44 rounded-sm border border-border bg-popover p-1 text-xs shadow-lg">
                   <button className="block w-full rounded px-2 py-1.5 text-left hover:bg-muted" onClick={() => { void handleExportExcel(); setToolbarMenu(null); }}>{getPivotStrings().toolbar.excel}</button>
                   <button className="block w-full rounded px-2 py-1.5 text-left hover:bg-muted" onClick={() => { void handleExportCsv(); setToolbarMenu(null); }}>{getPivotStrings().toolbar.csv}</button>
@@ -1182,12 +1458,8 @@ export function VirtualPivotReportBuilder() {
             variant="outline"
             size="sm"
             className="h-8 gap-1 text-xs"
-            disabled={!config.values.length || saveMut.isPending}
-            onClick={() => {
-              setSaveError(null);
-              setSaveName(`Pivot ${new Date().toLocaleDateString("ru-RU")}`);
-              setSaveDialogOpen(true);
-            }}
+            disabled={!canSavePivotConfig(config) || saveMut.isPending}
+            onClick={() => openSaveDialog(activeSavedReportId != null ? "update" : "create")}
           >
             {saveMut.isPending ? (
               <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -1363,6 +1635,7 @@ export function VirtualPivotReportBuilder() {
           records={drillRecords}
           fields={drillFields}
           cellContext={drillCell?.drillContext}
+          canExport={canExport}
           onClose={closeDrillThrough}
         />
 
@@ -1390,6 +1663,7 @@ export function VirtualPivotReportBuilder() {
                       if (!next) return;
                       updateConfig(next);
                       setActiveSavedReportId(null);
+                      setSavedReportBaseline(null);
                       setNotice({ message: `Применён шаблон «${template.label}».`, tone: "success" });
                       setReportsDialogOpen(false);
                     }}
@@ -1408,6 +1682,7 @@ export function VirtualPivotReportBuilder() {
                 onClick={() => {
                   resetConfig();
                   setActiveSavedReportId(null);
+                  setSavedReportBaseline(null);
                   setNotice({ message: "Загружена конфигурация по умолчанию.", tone: "success" });
                   setReportsDialogOpen(false);
                 }}
@@ -1420,23 +1695,29 @@ export function VirtualPivotReportBuilder() {
               ) : null}
               <div className="grid gap-2 sm:grid-cols-2">
                 {(savedQ.data ?? []).map((report) => (
-                  <Button
+                  <SavedPivotReportItem
                     key={report.id}
-                    type="button"
-                    variant={activeSavedReportId === report.id ? "default" : "outline"}
-                    className="justify-start truncate"
-                    disabled={loadingSavedReportId === report.id}
-                    onClick={() => {
+                    id={report.id}
+                    name={report.name}
+                    selected={activeSavedReportId === report.id}
+                    dirty={activeSavedReportId === report.id && isActiveSavedReportDirty}
+                    saveDisabled={!canUpdateSaved || !canSavePivotConfig(config) || saveMut.isPending}
+                    loading={
+                      loadingSavedReportId === report.id ||
+                      (deleteMut.isPending && deleteMut.variables === report.id) ||
+                      (saveMut.isPending && saveMut.variables?.overwriteId === report.id)
+                    }
+                    onSelect={() => {
                       void handleLoadSavedReport(report.id, report.config).then((loaded) => {
                         if (!loaded) return;
                         setNotice({ message: `Загружен отчёт «${report.name}».`, tone: "success" });
                         setReportsDialogOpen(false);
                       });
                     }}
-                  >
-                    {loadingSavedReportId === report.id ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : null}
-                    {report.name}
-                  </Button>
+                    onSave={saveActiveSelectedReport}
+                    onShare={canShareSaved ? () => openShareDialog(report.id, report.name) : undefined}
+                    onDelete={canDeleteSaved ? () => void handleDeleteSavedReport(report.id, report.name) : undefined}
+                  />
                 ))}
               </div>
             </section>
@@ -1449,9 +1730,9 @@ export function VirtualPivotReportBuilder() {
         <Dialog open={saveDialogOpen} onOpenChange={setSaveDialogOpen}>
           <DialogContent className="w-[420px] max-w-[calc(100%-2rem)] rounded-sm border border-[#d4d4d4] bg-white shadow-xl">
             <DialogHeader>
-              <DialogTitle>Сохранить как</DialogTitle>
+              <DialogTitle>{saveOverwriteId != null ? "Сохранить отчёт" : "Сохранить как"}</DialogTitle>
               <p className="text-xs text-muted-foreground">
-                Будут сохранены поля, фильтры, группировки и настройки текущей сводной таблицы.
+                Будут сохранены поля, фильтры, группировки, формат ячеек, формат дат и макет (classic/flat/compact).
               </p>
             </DialogHeader>
             <Input
@@ -1460,19 +1741,32 @@ export function VirtualPivotReportBuilder() {
               placeholder="Например: Продажи по агентам"
               onChange={(event) => setSaveName(event.target.value)}
               onKeyDown={(event) => {
-                if (event.key === "Enter" && saveName.trim()) saveMut.mutate(saveName);
+                if (event.key === "Enter" && saveName.trim()) commitSave();
               }}
             />
             {saveError ? <p className="text-xs text-destructive">{saveError}</p> : null}
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setSaveDialogOpen(false)}>Отмена</Button>
-              <Button type="button" disabled={!saveName.trim() || saveMut.isPending} onClick={() => saveMut.mutate(saveName)}>
+              <Button type="button" disabled={!saveName.trim() || saveMut.isPending} onClick={commitSave}>
                 {saveMut.isPending ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : null}
                 Сохранить
               </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
+
+        <SharePivotReportDialog
+          open={shareDialogOpen}
+          onOpenChange={setShareDialogOpen}
+          reportName={shareReportName}
+          candidates={shareCandidatesQ.data ?? []}
+          loadingCandidates={shareCandidatesQ.isLoading || shareCandidatesQ.isFetching}
+          submitting={shareMut.isPending}
+          onConfirm={(userIds) => {
+            if (shareReportId == null) return;
+            shareMut.mutate({ id: shareReportId, userIds });
+          }}
+        />
 
         <Dialog open={optionsOpen} onOpenChange={setOptionsOpen}>
           <DialogContent
@@ -1705,6 +1999,7 @@ export function VirtualPivotReportBuilder() {
             </div>
           </div>
         ) : null}
+        {confirmDialog}
       </div>
     </div>
   );

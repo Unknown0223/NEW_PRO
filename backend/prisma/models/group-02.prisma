@@ -271,6 +271,7 @@ model Client {
   agent_visits          AgentVisit[]
   client_refusals       ClientRefusal[]
   agent_assignments     ClientAgentAssignment[]
+  tenant_tasks          TenantTask[]
   audit_logs            ClientAuditLog[]
   client_balances                ClientBalance[]
   client_opening_balance_entries ClientOpeningBalanceEntry[]

@@ -13,6 +13,7 @@ const KNOWN_OPERATION_LABEL_RU: Record<string, string> = {
 /** Modul yorliqlari — backend `PERMISSION_MODULE_LABEL_RU` bilan mos. */
 const MODULE_PREFIX_RU: Record<string, string> = {
   access: "Доступ",
+  activity: "Активность",
   audit: "Аудит",
   automation: "Автоматизация",
   cash: "Касса",

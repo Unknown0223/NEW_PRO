@@ -20,6 +20,13 @@ export type DashboardMetaResponse = {
   product_categories: Array<{ id: number; name: string }>;
   profile_refs: {
     payment_method_entries?: Array<{ id: string; name: string; active?: boolean; code?: string | null }>;
+    price_type_entries?: Array<{
+      id: string;
+      name: string;
+      code?: string | null;
+      payment_method_id?: string;
+      active?: boolean;
+    }>;
     payment_types?: string[];
     trade_directions?: string[];
     territory_nodes?: TerritoryNode[];

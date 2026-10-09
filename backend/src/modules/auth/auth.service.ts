@@ -4,6 +4,8 @@ import type { FastifyInstance } from "fastify";
 import { prisma } from "../../config/database";
 import { tenantIdFrom } from "../../domain/tenant-id";
 import { toFio } from "../staff/staff.shared.helpers";
+import { isSessionLimitReached, isUnlimitedMaxSessions } from "../../lib/max-sessions";
+import { resolveTenantSlugAlias } from "../../lib/tenant-slug-alias";
 import { isSessionEnforcedRole, MOBILE_FIELD_ROLES } from "./app-access.service";
 
 type LoginInput = {
@@ -22,7 +24,7 @@ type RefreshInput = { refreshToken: string };
 /** Access JWT — kamroq refresh race (mobil uzoq ochiq qoladi). */
 const ACCESS_TOKEN_TTL = "24h";
 /** Refresh sliding TTL — foydalanuvchi chiqmaguncha sessiya yashaydi. */
-const REFRESH_TOKEN_TTL_MS = 180 * 24 * 60 * 60 * 1000;
+const REFRESH_TOKEN_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 /**
  * Parallel refresh (bir nechta 401 bir vaqtda) — eski token rotate qilinganidan
  * keyin qisqa oynada qayta ishlatilsa INVALID_REFRESH emas, yangi juftlik beriladi.
@@ -58,8 +60,35 @@ function refreshExpiresAt(): Date {
   return new Date(Date.now() + REFRESH_TOKEN_TTL_MS);
 }
 
+/** Shu qurilmadan tashqari faol sessiyalar (limit hisobi). Joriy qurilmani oldin o‘chirmaymiz. */
+export function otherActiveSessionsWhere(args: {
+  userId: number;
+  tenantId: number;
+  deviceId: string | null;
+  now?: Date;
+}): {
+  user_id: number;
+  tenant_id: number;
+  revoked_at: null;
+  expires_at: { gt: Date };
+  OR?: Array<{ device_id: null } | { device_id: { not: string } }>;
+} {
+  const now = args.now ?? new Date();
+  const base = {
+    user_id: args.userId,
+    tenant_id: args.tenantId,
+    revoked_at: null,
+    expires_at: { gt: now }
+  };
+  if (!args.deviceId) return base;
+  return {
+    ...base,
+    OR: [{ device_id: null }, { device_id: { not: args.deviceId } }]
+  };
+}
+
 export async function login(app: FastifyInstance, input: LoginInput) {
-  const tenant = await prisma.tenant.findUnique({ where: { slug: input.slug } });
+  const tenant = await prisma.tenant.findUnique({ where: { slug: resolveTenantSlugAlias(input.slug) } });
   if (!tenant || !tenant.is_active) {
     throw new Error("TENANT_NOT_FOUND");
   }
@@ -81,6 +110,11 @@ export async function login(app: FastifyInstance, input: LoginInput) {
     throw new Error("APP_ACCESS_DENIED");
   }
 
+  {
+    const { assertWebPanelLoginAllowed } = await import("./web-panel-access");
+    assertWebPanelLoginAllowed(user.role, { apk_version: input.apk_version });
+  }
+
   /* Admin mustasno: WorkSlot rollari tenantda slotlar bo‘lsa — faol ishchi o‘rni shart. */
   {
     const { assertUserOnWorkSlot } = await import("../work-slots/work-slots.access-gate");
@@ -88,30 +122,27 @@ export async function login(app: FastifyInstance, input: LoginInput) {
   }
 
   const deviceId = input.device_id?.trim().slice(0, 64) || null;
-  const maxSessions = Math.max(1, user.max_sessions ?? 1);
+  const now = new Date();
   const sessionWhere = {
     user_id: user.id,
     tenant_id: tenantId,
     revoked_at: null,
-    expires_at: { gt: new Date() } as const
+    expires_at: { gt: now } as const
   };
 
-  /* Bitta qurilma — bitta sessiya: o'sha qurilmadan qayta kirilsa,
-     uning eski sessiyasi almashtiriladi (o'z slotini band qilmaydi, hech qachon bloklanmaydi). */
-  if (deviceId) {
-    await prisma.refreshToken.updateMany({
-      where: { ...sessionWhere, device_id: deviceId },
-      data: { revoked_at: new Date() }
+  /* Avval limit — joriy qurilma sessiyasini o‘chirmasdan. Aks holda qayta kirish
+     muvaffaqiyatsiz bo‘lsa ham telefon sessiyasi yo‘qoladi (SESSION_REVOKED).
+     max_sessions = 0 — cheksiz. */
+  if (isSessionEnforcedRole(user.role) && !isUnlimitedMaxSessions(user.max_sessions ?? 1)) {
+    const activeSessions = await prisma.refreshToken.count({
+      where: otherActiveSessionsWhere({
+        userId: user.id,
+        tenantId,
+        deviceId,
+        now
+      })
     });
-  }
-
-  /* Admin sessiya cheklovidan ozod (cheksiz qurilma). Qolganlar uchun: boshqa
-     qurilmalardagi faol sessiyalar soni limitga yetgan bo'lsa — yangi qurilmadan
-     kirishni BLOKLAYMIZ (foydalanuvchi boshqa qurilmadan chiqishi yoki admin
-     sessiyani yopishi kerak). */
-  if (isSessionEnforcedRole(user.role)) {
-    const activeSessions = await prisma.refreshToken.count({ where: sessionWhere });
-    if (activeSessions >= maxSessions) {
+    if (isSessionLimitReached(activeSessions, user.max_sessions)) {
       throw new Error("SESSION_LIMIT");
     }
   }
@@ -120,12 +151,13 @@ export async function login(app: FastifyInstance, input: LoginInput) {
   const deviceName = input.device_name?.trim().slice(0, 255) || null;
   const userAgent = input.user_agent?.trim().slice(0, 512) || null;
   const ipAddr = input.ip_address?.trim().slice(0, 64) || null;
+  const newHash = hashToken(tokens.refreshToken);
 
   await prisma.refreshToken.create({
     data: {
       tenant_id: tenantId,
       user_id: user.id,
-      token_hash: hashToken(tokens.refreshToken),
+      token_hash: newHash,
       expires_at: refreshExpiresAt(),
       device_name: deviceName,
       device_id: deviceId,
@@ -134,7 +166,33 @@ export async function login(app: FastifyInstance, input: LoginInput) {
     }
   });
 
+  /* Yangi token yozilgach — shu qurilmadagi eskilar. Hech qachon 0 sessiya oynasi yo‘q. */
+  if (deviceId) {
+    await prisma.refreshToken.updateMany({
+      where: {
+        ...sessionWhere,
+        device_id: deviceId,
+        token_hash: { not: newHash }
+      },
+      data: { revoked_at: new Date() }
+    });
+  }
+
   const apkVersion = input.apk_version?.trim().slice(0, 64) || null;
+  void import("../security/login-alerts.detect")
+    .then(async ({ recordLoginAndDetect }) => {
+      const { platformOfLogin } = await import("../security/login-alerts.pure");
+      await recordLoginAndDetect({
+        tenantId,
+        userId: user.id,
+        platform: platformOfLogin(apkVersion),
+        deviceId,
+        deviceName,
+        ip: ipAddr,
+        userAgent
+      });
+    })
+    .catch(() => undefined);
   await prisma.user.update({
     where: { id: user.id },
     data: {
@@ -201,13 +259,6 @@ export async function refresh(app: FastifyInstance, input: RefreshInput) {
     await assertUserOnWorkSlot(existing.tenant_id, existing.user.id, existing.user.role);
   }
 
-  if (!existing.revoked_at) {
-    await prisma.refreshToken.update({
-      where: { id: existing.id },
-      data: { revoked_at: new Date() }
-    });
-  }
-
   const tokens = buildTokens(app, existing.user, existing.tenant.slug, existing.device_id);
   await prisma.refreshToken.create({
     data: {
@@ -221,6 +272,13 @@ export async function refresh(app: FastifyInstance, input: RefreshInput) {
       ip_address: existing.ip_address
     }
   });
+  /* Avval yangi token — ping /auth/me 0 sessiya ko‘rib SESSION_REVOKED qilmasin. */
+  if (!existing.revoked_at) {
+    await prisma.refreshToken.update({
+      where: { id: existing.id },
+      data: { revoked_at: new Date() }
+    });
+  }
 
   return tokens;
 }

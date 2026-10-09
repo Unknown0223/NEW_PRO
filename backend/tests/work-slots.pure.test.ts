@@ -13,7 +13,8 @@ import {
   patchLockBodySchema,
   patchWorkSlotBodySchema,
   resolvePendingBodySchema,
-  bulkWorkSlotsBodySchema
+  bulkWorkSlotsBodySchema,
+  maxSessionsBySlotTypeBodySchema
 } from "../src/modules/work-slots/work-slots.schema";
 
 describe("work-slots.assign", () => {
@@ -41,8 +42,30 @@ describe("work-slots.assign", () => {
     expect(() => assertUserMatchesSlotType("auditor", "auditor")).not.toThrow();
   });
 
-  it("rejects unknown slot type", () => {
+  it("allows operator on operator slot", () => {
+    expect(() => assertUserMatchesSlotType("operator", "operator")).not.toThrow();
+  });
+
+  it("allows manager only on manager slot (not generic operator)", () => {
+    expect(() => assertUserMatchesSlotType("manager", "manager")).not.toThrow();
+    expect(() => assertUserMatchesSlotType("manager", "operator")).toThrow("BAD_SLOT_TYPE");
+    expect(() => assertUserMatchesSlotType("director", "director")).not.toThrow();
+    expect(() => assertUserMatchesSlotType("regional_manager", "regional_manager")).not.toThrow();
+    expect(() => assertUserMatchesSlotType("accountant", "accountant")).not.toThrow();
+    expect(() => assertUserMatchesSlotType("warehouse_manager", "warehouse_manager")).not.toThrow();
+    expect(() => assertUserMatchesSlotType("sales_director", "sales_director")).not.toThrow();
+  });
+
+  it("rejects agent on operator slot", () => {
     expect(() => assertUserMatchesSlotType("agent", "operator")).toThrow("BAD_SLOT_TYPE");
+  });
+
+  it("rejects admin on operator slot", () => {
+    expect(() => assertUserMatchesSlotType("admin", "operator")).toThrow("BAD_SLOT_TYPE");
+  });
+
+  it("rejects unknown slot type", () => {
+    expect(() => assertUserMatchesSlotType("agent", "partner")).toThrow("BAD_SLOT_TYPE");
   });
 });
 
@@ -59,15 +82,35 @@ describe("work-slots.config-territory", () => {
     const { hasSlotConfigPatch } = await import("../src/modules/work-slots/work-slots.config-mirror");
     expect(hasSlotConfigPatch({})).toBe(false);
     expect(hasSlotConfigPatch({ cash_desk_id: 1 })).toBe(true);
+    expect(hasSlotConfigPatch({ warehouse_ids: [1, 2] })).toBe(true);
+    expect(hasSlotConfigPatch({ territories: ["A / B"] })).toBe(true);
   });
 
-  it("mergeSlotEntitlementsPreservingMobileConfig keeps user mobile_config", async () => {
+  it("warehouseLinkRoleForUser mirrors cash-desk roles plus skladchik", async () => {
+    const { warehouseLinkRoleForUser } = await import(
+      "../src/modules/work-slots/work-slots.config-mirror"
+    );
+    expect(warehouseLinkRoleForUser("expeditor")).toBe("expeditor");
+    expect(warehouseLinkRoleForUser("agent")).toBe("agent");
+    expect(warehouseLinkRoleForUser("skladchik")).toBe("skladchik");
+    expect(warehouseLinkRoleForUser("collector")).toBe("collector");
+    expect(warehouseLinkRoleForUser("sales_director")).toBe("sales_director");
+    expect(warehouseLinkRoleForUser("director")).toBe("director");
+    expect(warehouseLinkRoleForUser("admin")).toBeNull();
+  });
+
+  it("mergeSlotEntitlementsPreservingMobileConfig prefers slot mobile_config", async () => {
     const {
       mergeSlotEntitlementsPreservingMobileConfig,
-      slotEntitlementsFromUserEntitlements
+      slotEntitlementsFromUserEntitlements,
+      personalEntitlementsAfterClearWorkplace
     } = await import("../src/modules/work-slots/work-slots.config-mirror");
     const merged = mergeSlotEntitlementsPreservingMobileConfig(
-      { price_types: ["A"], product_rules: [], mobile_config: { schema_version: 1 } },
+      {
+        price_types: ["A"],
+        product_rules: [],
+        mobile_config: { schema_version: 1, gps: { required_for_order: false } }
+      },
       {
         price_types: ["OLD"],
         mobile_config: {
@@ -79,7 +122,16 @@ describe("work-slots.config-territory", () => {
     expect(merged.price_types).toEqual(["A"]);
     expect(merged.mobile_config).toMatchObject({
       schema_version: 1,
-      gps: { required_for_order: true }
+      gps: { required_for_order: false }
+    });
+
+    const fallback = mergeSlotEntitlementsPreservingMobileConfig(
+      { price_types: ["A"] },
+      { mobile_config: { schema_version: 1, sync: { block_sync: true } } }
+    );
+    expect(fallback.mobile_config).toMatchObject({
+      schema_version: 1,
+      sync: { block_sync: true }
     });
 
     const forSlot = slotEntitlementsFromUserEntitlements({
@@ -87,7 +139,31 @@ describe("work-slots.config-territory", () => {
       mobile_config: { schema_version: 1, sync: { block_sync: true } }
     });
     expect(forSlot.price_types).toEqual(["B"]);
-    expect(forSlot.mobile_config).toBeUndefined();
+    expect(forSlot.mobile_config).toMatchObject({ schema_version: 1, sync: { block_sync: true } });
+
+    expect(personalEntitlementsAfterClearWorkplace({ mobile_config: { schema_version: 1 } })).toEqual(
+      {}
+    );
+  });
+
+  it("inputHasWorkplaceStaffFields detects workplace patch keys", async () => {
+    const { inputHasWorkplaceStaffFields } = await import(
+      "../src/modules/work-slots/work-slots.staff-guard"
+    );
+    expect(inputHasWorkplaceStaffFields({ first_name: "A" })).toBe(false);
+    expect(inputHasWorkplaceStaffFields({ warehouse_id: 1 })).toBe(true);
+    expect(inputHasWorkplaceStaffFields({ agent_entitlements: {} })).toBe(true);
+  });
+});
+
+describe("work-slots.permission-reset-notes", () => {
+  it("assign audit note documents permission reset intent", () => {
+    const swapNote = [
+      "manual",
+      "Права сотрудников сброшены к стандарту роли (предшественник не копируется)"
+    ].join(" · ");
+    expect(swapNote).toContain("стандарту роли");
+    expect(swapNote).toContain("предшественник не копируется");
   });
 });
 
@@ -107,6 +183,30 @@ describe("work-slots.schema", () => {
       label: "Yangi"
     });
     expect(result.success).toBe(false);
+  });
+
+  it("patchWorkSlotBodySchema accepts supervisee_agent_slot_ids", () => {
+    const parsed = patchWorkSlotBodySchema.parse({
+      supervisee_agent_slot_ids: [10, 20]
+    });
+    expect(parsed.supervisee_agent_slot_ids).toEqual([10, 20]);
+  });
+
+  it("createWorkSlotBodySchema accepts branch_codes", () => {
+    const parsed = createWorkSlotBodySchema.parse({
+      slot_code: "D-1",
+      slot_type: "sales_director",
+      branch_codes: ["Farg'ona", "Andijon"]
+    });
+    expect(parsed.branch_codes).toEqual(["Farg'ona", "Andijon"]);
+  });
+
+  it("createWorkSlotBodySchema accepts operator slot_type", () => {
+    const parsed = createWorkSlotBodySchema.parse({
+      slot_code: "O-1",
+      slot_type: "operator"
+    });
+    expect(parsed.slot_type).toBe("operator");
   });
 
   it("patchLockBodySchema accepts contract with reason", () => {
@@ -167,6 +267,56 @@ describe("work-slots.schema", () => {
       consignment: true
     });
     expect(ent.success).toBe(true);
+    const occupant = bulkWorkSlotsBodySchema.safeParse({
+      slot_ids: [1],
+      position: "ТП",
+      app_access: false,
+      max_sessions: 3
+    });
+    expect(occupant.success).toBe(true);
+    const revoke = bulkWorkSlotsBodySchema.safeParse({ slot_ids: [1, 2], revoke_sessions: true });
+    expect(revoke.success).toBe(true);
+    const revokeAmbiguous = bulkWorkSlotsBodySchema.safeParse({
+      slot_ids: [1],
+      revoke_sessions: true,
+      unassign: true
+    });
+    expect(revokeAmbiguous.success).toBe(false);
+  });
+
+  it("patchWorkSlotBodySchema accepts occupant user attrs (write-through)", () => {
+    const parsed = patchWorkSlotBodySchema.parse({
+      position: "Кассир",
+      app_access: true,
+      max_sessions: 2
+    });
+    expect(parsed.position).toBe("Кассир");
+    expect(parsed.app_access).toBe(true);
+    expect(parsed.max_sessions).toBe(2);
+    const unlimited = patchWorkSlotBodySchema.parse({ max_sessions: 0 });
+    expect(unlimited.max_sessions).toBe(0);
+    const byType = maxSessionsBySlotTypeBodySchema.parse({
+      slot_type: "sales_director",
+      max_sessions: 0
+    });
+    expect(byType.max_sessions).toBe(0);
+  });
+});
+
+describe("work-slots.user-attrs occupant", () => {
+  it("detects occupant-only patches", async () => {
+    const {
+      hasOccupantUserAttrsPatch,
+      hasWorkplaceGeoAttrsPatch,
+      occupantUserUpdateData
+    } = await import("../src/modules/work-slots/work-slots.user-attrs");
+    expect(hasOccupantUserAttrsPatch({ position: "X" })).toBe(true);
+    expect(hasWorkplaceGeoAttrsPatch({ position: "X" })).toBe(false);
+    expect(occupantUserUpdateData({ position: "  Y  ", app_access: false, max_sessions: 4 })).toEqual({
+      position: "Y",
+      app_access: false,
+      max_sessions: 4
+    });
   });
 });
 

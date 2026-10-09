@@ -19,7 +19,9 @@ import {
 import { cn } from "@/lib/utils";
 import { useAuthStore, useAuthStoreHydrated, useEffectiveRole } from "@/lib/auth-store";
 import { isAdminOrOperatorLikeRole } from "@/lib/distribution-roles";
+import { usePermissions } from "@/lib/use-permissions";
 import { api } from "@/lib/api";
+import { useDebouncedSearchCommit } from "@/lib/use-debounced-search-commit";
 import {
   DailyReturnWaybillModal,
   type DailyWaybillRef
@@ -58,7 +60,8 @@ function fmtQty(n: number): string {
 export default function ReturnInvoicesPage() {
   const tenantSlug = useAuthStore((s) => s.tenantSlug);
   const role = useEffectiveRole();
-  const canAccept = isAdminOrOperatorLikeRole(role);
+  const { has } = usePermissions();
+  const canAccept = isAdminOrOperatorLikeRole(role) && has("invoices.vozvratnye.approve");
   const hydrated = useAuthStoreHydrated();
 
   const [openWaybill, setOpenWaybill] = useState<{ ref: DailyWaybillRef; confirm: boolean } | null>(
@@ -69,6 +72,7 @@ export default function ReturnInvoicesPage() {
   const [expeditorDraft, setExpeditorDraft] = useState("all");
   const [statusDraft, setStatusDraft] = useState<"all" | "pending" | "posted" | "cancelled">("all");
   const [searchDraft, setSearchDraft] = useState("");
+  useDebouncedSearchCommit(searchDraft, setSearch);
   const [warehouse, setWarehouse] = useState("all");
   const [expeditor, setExpeditor] = useState("all");
   const [status, setStatus] = useState<"all" | "pending" | "posted" | "cancelled">("all");

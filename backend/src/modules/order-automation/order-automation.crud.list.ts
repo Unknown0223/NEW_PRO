@@ -10,7 +10,9 @@ export type ListQuery = {
   archive?: boolean;
   search?: string;
   agent_user_id?: number;
+  agent_user_ids?: number[];
   warehouse_id?: number;
+  warehouse_ids?: number[];
   trade_direction_ref?: string;
   payment_method_ref?: string;
   zone?: string;
@@ -19,6 +21,10 @@ export type ListQuery = {
   execution_type?: string;
   request_type_ref?: string;
 };
+
+function csvParts(raw?: string): string[] {
+  return [...new Set((raw ?? "").split(",").map((s) => s.trim()).filter(Boolean))];
+}
 
 export function buildListWhere(tenantId: number, q: ListQuery): Prisma.OrderRestrictionRuleWhereInput {
   const where: Prisma.OrderRestrictionRuleWhereInput = {
@@ -37,24 +43,38 @@ export function buildListWhere(tenantId: number, q: ListQuery): Prisma.OrderRest
       ]
     });
   }
-  if (q.agent_user_id && q.agent_user_id > 0) {
-    and.push({ scope_agent_user_ids: { has: q.agent_user_id } });
+  const agentIds = [...new Set([...(q.agent_user_ids ?? []), ...(q.agent_user_id ? [q.agent_user_id] : [])])].filter(
+    (id) => id > 0
+  );
+  if (agentIds.length === 1) and.push({ scope_agent_user_ids: { has: agentIds[0] } });
+  else if (agentIds.length > 1) {
+    and.push({ OR: agentIds.map((id) => ({ scope_agent_user_ids: { has: id } })) });
   }
-  if (q.warehouse_id && q.warehouse_id > 0) {
-    and.push({ scope_warehouse_ids: { has: q.warehouse_id } });
+  const warehouseIds = [...new Set([...(q.warehouse_ids ?? []), ...(q.warehouse_id ? [q.warehouse_id] : [])])].filter(
+    (id) => id > 0
+  );
+  if (warehouseIds.length === 1) and.push({ scope_warehouse_ids: { has: warehouseIds[0] } });
+  else if (warehouseIds.length > 1) {
+    and.push({ OR: warehouseIds.map((id) => ({ scope_warehouse_ids: { has: id } })) });
   }
-  if (q.trade_direction_ref?.trim()) {
-    const td = q.trade_direction_ref.trim();
+  const tradeDirs = csvParts(q.trade_direction_ref);
+  if (tradeDirs.length > 0) {
     and.push({
-      OR: [{ trade_direction_ref: td }, { scope_trade_direction_refs: { has: td } }]
+      OR: tradeDirs.flatMap((td) => [{ trade_direction_ref: td }, { scope_trade_direction_refs: { has: td } }])
     });
   }
-  if (q.payment_method_ref?.trim()) {
-    and.push({ payment_method_ref: q.payment_method_ref.trim() });
-  }
-  if (q.zone?.trim()) and.push({ scope_zones: { has: q.zone.trim() } });
-  if (q.region?.trim()) and.push({ scope_regions: { has: q.region.trim() } });
-  if (q.city?.trim()) and.push({ scope_cities: { has: q.city.trim() } });
+  const payMethods = csvParts(q.payment_method_ref);
+  if (payMethods.length === 1) and.push({ payment_method_ref: payMethods[0] });
+  else if (payMethods.length > 1) and.push({ payment_method_ref: { in: payMethods } });
+  const zones = csvParts(q.zone);
+  if (zones.length === 1) and.push({ scope_zones: { has: zones[0] } });
+  else if (zones.length > 1) and.push({ OR: zones.map((z) => ({ scope_zones: { has: z } })) });
+  const regions = csvParts(q.region);
+  if (regions.length === 1) and.push({ scope_regions: { has: regions[0] } });
+  else if (regions.length > 1) and.push({ OR: regions.map((z) => ({ scope_regions: { has: z } })) });
+  const cities = csvParts(q.city);
+  if (cities.length === 1) and.push({ scope_cities: { has: cities[0] } });
+  else if (cities.length > 1) and.push({ OR: cities.map((z) => ({ scope_cities: { has: z } })) });
   if (and.length) where.AND = and;
   return where;
 }
@@ -92,9 +112,13 @@ export async function listAutoConfirmRules(
     : base.AND
       ? [base.AND]
       : [];
-  if (q.execution_type?.trim()) and.push({ execution_type: q.execution_type.trim() });
-  if (q.request_type_ref?.trim()) {
-    and.push({ request_type_refs: { has: q.request_type_ref.trim() } });
+  const execTypes = csvParts(q.execution_type);
+  if (execTypes.length === 1) and.push({ execution_type: execTypes[0] });
+  else if (execTypes.length > 1) and.push({ execution_type: { in: execTypes } });
+  const requestTypes = csvParts(q.request_type_ref);
+  if (requestTypes.length === 1) and.push({ request_type_refs: { has: requestTypes[0] } });
+  else if (requestTypes.length > 1) {
+    and.push({ OR: requestTypes.map((t) => ({ request_type_refs: { has: t } })) });
   }
   const where: Prisma.OrderAutoConfirmRuleWhereInput = {
     tenant_id: tenantId,

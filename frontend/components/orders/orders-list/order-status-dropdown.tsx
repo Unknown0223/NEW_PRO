@@ -6,8 +6,10 @@ import {
   orderListStatusStyle
 } from "@/lib/order-list-status-labels";
 import {
+  ORDER_STATUS_DATE_PERMISSION,
   isBackwardOrderStatusTransition,
   isReopenCancelledTransition,
+  orderStatusTransitionPermission,
   reopenConfirmMessage,
   reopenStatusLabel
 } from "@/lib/order-status-transitions";
@@ -18,6 +20,7 @@ import {
 import { getUserFacingError } from "@/lib/error-utils";
 import { usePermissions } from "@/lib/use-permissions";
 import { cn } from "@/lib/utils";
+import { useAppConfirm } from "@/components/ui/app-confirm-dialog";
 import {
   Ban,
   Check,
@@ -101,6 +104,7 @@ export const OrderStatusDropdown = memo(function OrderStatusDropdown({
   onChangeShipDate
 }: OrderStatusDropdownProps) {
   const router = useRouter();
+  const { confirm, dialog: confirmDialog } = useAppConfirm();
   const anchorRef = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
@@ -108,24 +112,29 @@ export const OrderStatusDropdown = memo(function OrderStatusDropdown({
   const [shelfReturnNotice, setShelfReturnNotice] = useState<string | null>(null);
   const [shelfReturnChecking, setShelfReturnChecking] = useState(false);
 
+  const { has } = usePermissions();
   const nextStatuses = useMemo(() => {
     const allowed = order.allowed_next_statuses ?? [];
-    return allowed.filter((s) => s !== order.status);
-  }, [order.allowed_next_statuses, order.status]);
+    return allowed.filter((s) => {
+      if (s === order.status) return false;
+      const key = orderStatusTransitionPermission(order.status, s, order.order_type);
+      return key != null && has(key);
+    });
+  }, [order.allowed_next_statuses, order.status, order.order_type, has]);
 
-  const { has } = usePermissions();
-  const canInteract = has("orders.zakaz.status") || has("orders.status.status");
+  const canEditStatusDate = has(ORDER_STATUS_DATE_PERMISSION);
+  const canReturnFromShelf = has("orders.vozvrat_po_zakazu.create");
   const actions = useMemo(() => {
     const base = buildStatusActions(order.status, nextStatuses, order.order_type);
     const specials: StatusAction[] = [];
-    if (order.status === "delivered") {
+    if (order.status === "delivered" && canReturnFromShelf) {
       specials.push({
         kind: "special",
         label: "Возврат с полки по заказ",
         value: "return_from_shelf"
       });
     }
-    if (order.status === "confirmed") {
+    if (order.status === "confirmed" && canEditStatusDate && onChangeShipDate) {
       specials.push({
         kind: "special",
         label: "Изменить ожидаемую дату отгрузки",
@@ -133,9 +142,9 @@ export const OrderStatusDropdown = memo(function OrderStatusDropdown({
       });
     }
     return [...specials, ...base];
-  }, [order.status, order.order_type, nextStatuses]);
+  }, [order.status, order.order_type, nextStatuses, canEditStatusDate, canReturnFromShelf, onChangeShipDate]);
 
-  const hasMenu = canInteract && actions.some((a) => a.kind !== "text");
+  const hasMenu = actions.some((a) => a.kind !== "text");
   const style = orderListStatusStyle(order.status, order.order_type);
   const label = orderListStatusLabel(order.status, order.order_type);
 
@@ -244,7 +253,19 @@ export const OrderStatusDropdown = memo(function OrderStatusDropdown({
 
   const onPickStatus = (action: StatusAction) => {
     if (action.kind === "reopen") {
-      if (!window.confirm(reopenConfirmMessage(order.order_type))) return;
+      setOpen(false);
+      void (async () => {
+        const ok = await confirm({
+          title: "Подтверждение",
+          message: reopenConfirmMessage(order.order_type),
+          confirmLabel: "Да",
+          cancelLabel: "Нет",
+          destructive: false
+        });
+        if (!ok) return;
+        onStatusChange(order.id, action.value);
+      })();
+      return;
     }
     onStatusChange(order.id, action.value);
     setOpen(false);
@@ -345,6 +366,7 @@ export const OrderStatusDropdown = memo(function OrderStatusDropdown({
           {shelfReturnNotice}
         </span>
       ) : null}
+      {confirmDialog}
     </span>
   );
 });

@@ -47,6 +47,10 @@ export type CreateOrderInput = {
   is_consignment?: boolean;
   /** ISO sana (ixtiyoriy) */
   consignment_due_date?: string | null;
+  /** Ixtiyoriy hujjat ID; bo‘sh → create dan keyin String(id) */
+  number?: string | null;
+  /** Server-only: mobile API sets `mobile`. Web omits (inferred from viewer role). */
+  creation_channel?: "web" | "mobile" | null;
   items: OrderLineInput[];
   /** `order_type=exchange` uchun majburiy (minus/plus alohida) */
   source_order_ids?: number[];
@@ -67,6 +71,10 @@ export type UpdateOrderLinesInput = {
   /** `false` — chegirma qo‘llanmaydi (bonus yoqilgan bo‘lsa ham). */
   apply_discount?: boolean;
   bonus_gift_overrides?: BonusGiftOverrideInput[];
+  /** Qty bonus: bir qoida uchun bir nechta mahsulot/dona. */
+  bonus_gift_lines?: BonusGiftLineInput[];
+  /** Strategiya tanlovlari (ixtiyoriy — yo‘q bo‘lsa avto). */
+  bonus_strategy_selections?: { strategy_id: number; rule_ids: number[] }[];
 };
 
 export type OrderItemRow = {
@@ -340,9 +348,11 @@ export type OrderDetailLoaded = {
   is_consignment: boolean;
   consignment_due_date: Date | null;
   payment_method_ref: string | null;
+  price_type?: string | null;
   warehouse_block_id: number | null;
   discount_alert: string | null;
   bonus_alert: string | null;
+  creation_channel?: string | null;
   created_at: Date;
   client: {
     name: string;
@@ -418,12 +428,14 @@ export type ListOrdersQuery = {
   /** Raqam, mijoz nomi, izoh bo‘yicha qidiruv */
   search?: string;
   warehouse_id?: number;
+  warehouse_ids?: number[];
   agent_id?: number;
   /** Bir nechta agent (klient profili); `agent_id` bilan bir vaqtda — bu ustun. */
   agent_ids?: number[];
   /** Zakazda agent yo‘q (agent_id IS NULL) */
   include_no_agent?: boolean;
   expeditor_user_id?: number;
+  expeditor_user_ids?: number[];
   /** Mijoz `category` maydoni bilan to‘liq mos (trim) */
   client_category?: string;
   client_region?: string;
@@ -433,6 +445,7 @@ export type ListOrdersQuery = {
   agent_trade_direction?: string;
   /** Shu mahsulot qatori bo’lgan zakazlar */
   product_id?: number;
+  product_ids?: number[];
   /** YYYY-MM-DD (server vaqt zonasi — brauzer `date` input bilan mos) */
   date_from?: string;
   date_to?: string;
@@ -454,6 +467,7 @@ export type ListOrdersQuery = {
   is_consignment?: boolean;
   /** product.category_id — zakazda shu kategoriyadan mahsulot qatori bo‘lsa */
   product_category_id?: number;
+  product_category_ids?: number[];
   /** Shu payment_type bo‘lgan to‘lovi bor zakazlar */
   payment_type?: string;
   /** Sozlamalar → request_type_entries (тип накладной) */
@@ -464,6 +478,7 @@ export type ListOrdersQuery = {
   list_price_type?: string;
   /** Mijoz tashrif kuni (1=Пн … 7=Вс) */
   visit_weekday?: number;
+  visit_weekdays?: number[];
   /** Keyset pagination — `next_cursor` dan keyingi sahifa */
   cursor?: string;
   /** Skidka muammosi: not_applied | cash_desk_missing | bonus_required | any */

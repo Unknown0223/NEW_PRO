@@ -4,6 +4,10 @@ import {
   intersectRequestedAgentIds,
   type ScopedReportActor
 } from "../access/access-agent-scope";
+import {
+  clientWhereForRegionFilter,
+  loadClientTerritoryFilterBundle
+} from "../clients/clients.territory-filter";
 
 function parseUtcDayStart(isoDate: string | undefined): Date | undefined {
   if (!isoDate?.trim()) return undefined;
@@ -57,11 +61,11 @@ export function mapRow(r: Prisma.ClientOpeningBalanceEntryGetPayload<{ include: 
   };
 }
 
-export function buildWhere(
+export async function buildWhere(
   tenantId: number,
   q: OpeningBalanceListQuery,
   actor?: ScopedReportActor
-): Prisma.ClientOpeningBalanceEntryWhereInput {
+): Promise<Prisma.ClientOpeningBalanceEntryWhereInput> {
   const andParts: Prisma.ClientOpeningBalanceEntryWhereInput[] = [{ tenant_id: tenantId }];
 
   if (q.archive) {
@@ -141,6 +145,13 @@ export function buildWhere(
         ...(decMax != null ? { lte: decMax } : {})
       }
     });
+  }
+
+  const region = q.territory_region?.trim();
+  if (region) {
+    const bundle = await loadClientTerritoryFilterBundle(tenantId);
+    const clause = clientWhereForRegionFilter(bundle, [region]);
+    if (clause) andParts.push({ client: clause });
   }
 
   const s = q.search?.trim();

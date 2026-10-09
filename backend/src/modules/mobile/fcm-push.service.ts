@@ -53,10 +53,10 @@ export async function notifyAppUpdateToOutdatedUsers(
 ): Promise<{ users: number; tokens_sent: number; fcm_configured: boolean }> {
   const { listOutdatedMobileUsers } = await import("./app-release.service");
   const outdated = await listOutdatedMobileUsers(tenantId);
-  const title = opts.title?.trim() || "Yangi versiya mavjud";
+  const title = opts.title?.trim() || "Доступна новая версия";
   const body =
     opts.body?.trim() ||
-    (opts.latestVersion ? `Ilovani ${opts.latestVersion} versiyasiga yangilang` : "Ilovani yangilang");
+    (opts.latestVersion ? `Обновите приложение до версии ${opts.latestVersion}` : "Обновите приложение");
 
   let tokensSent = 0;
   const key = env.FCM_SERVER_KEY?.trim();

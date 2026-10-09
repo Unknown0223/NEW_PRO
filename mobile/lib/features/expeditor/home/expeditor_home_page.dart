@@ -31,7 +31,7 @@ class ExpeditorHomePage extends ConsumerWidget {
     return DateFormat('dd.MM, HH:mm').format(dt.toLocal());
   }
 
-  String _fmtMoney(num v) => '${formatMoneySpaced(v.toDouble())} so\'m';
+  String _fmtMoney(num v) => '${formatMoneySpaced(v.toDouble())} сум';
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -73,8 +73,8 @@ class ExpeditorHomePage extends ConsumerWidget {
                 payments['synced_sum'] as num? ??
                 0;
             final paymentsSummary = pendingCount == 0
-                ? 'Tasdiqlanishni kutayotgan to\'lovlar yo\'q'
-                : 'Tasdiqlanishni kutmoqda: $pendingCount — ${_fmtMoney(pendingSum)}';
+                ? 'Нет оплат, ожидающих подтверждения'
+                : 'Ожидают подтверждения: $pendingCount — ${_fmtMoney(pendingSum)}';
 
             return ListView(
               padding: const EdgeInsets.fromLTRB(12, 12, 12, 130),

@@ -14,6 +14,8 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/ui/agent_ui.dart';
 import '../../../core/ui/agent_ui_extended.dart';
+import '../../../core/utils/client_navigation.dart';
+import '../../../core/utils/external_actions.dart';
 import '../../auth/auth_provider.dart';
 import '../route/agent_route_provider.dart';
 import '../route/agent_route_start_provider.dart';
@@ -93,7 +95,7 @@ class _AgentMapPageState extends ConsumerState<AgentMapPage> {
                 Padding(
                   padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
                   child: Text(
-                    'Xaritada ${mapStops.length} / ${stops.length} ta nuqta (tezlik uchun cheklangan)',
+                    'На карте ${mapStops.length} из ${stops.length} точек (ограничено для скорости)',
                     style: AppTypography.caption.copyWith(color: AppColors.info),
                   ),
                 ),
@@ -170,7 +172,7 @@ class _AgentMapPageState extends ConsumerState<AgentMapPage> {
                         icon: Icons.info_outline,
                         onTap: () {
                           ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Yandex Maps — savdo nuqtalari')),
+                            const SnackBar(content: Text('Яндекс Карты — торговые точки')),
                           );
                         },
                       ),
@@ -220,9 +222,19 @@ class _AgentMapPageState extends ConsumerState<AgentMapPage> {
                             final id = _selectedClient!['id'];
                             if (id != null) context.push('/clients/$id');
                           },
-                          onRoute: () {
+                          onRoute: () async {
                             final stop = RouteMapStop.fromClient(_selectedClient!);
-                            if (stop.hasCoords) _mapKey.currentState?.focusStop(stop);
+                            if (!stop.hasCoords) return;
+                            await _mapKey.currentState?.focusStop(stop);
+                            final ok = await openDirectionsToClient(
+                              latitude: stop.latitude,
+                              longitude: stop.longitude,
+                            );
+                            if (!ok && context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(content: Text('Не удалось открыть навигацию')),
+                              );
+                            }
                           },
                         ),
                       ),
@@ -487,15 +499,20 @@ class _OutletDetailBar extends ConsumerWidget {
                 const SizedBox(width: 8),
                 _ActionIcon(
                   icon: Icons.phone,
-                  onTap: () {
+                  onTap: () async {
                     final phone = client['phone']?.toString();
-                    if (phone == null || phone.isEmpty) {
+                    if (!hasDialablePhone(phone)) {
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Telefon raqami yo\'q')),
+                        const SnackBar(content: Text('Нет номера телефона')),
                       );
                       return;
                     }
-                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(phone)));
+                    final ok = await launchPhoneCall(phone!);
+                    if (!ok && context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Не удалось открыть набор номера')),
+                      );
+                    }
                   },
                 ),
               ],

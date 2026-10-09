@@ -3,10 +3,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/api/api_exceptions.dart';
 import '../../../core/api/mobile_api.dart';
+import '../../../core/auth/biometric_transaction_confirm.dart';
 import '../../../core/auth/session.dart';
 import '../../../core/config/mobile_config.dart';
 import '../../../core/config/order_config_policy.dart';
+import '../../../core/config/security_config_policy.dart';
 import '../../../core/config/tenant_refs_provider.dart';
+import '../../../core/errors/error_reporter.dart';
+import '../../../core/face/face_verification_flow.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
 
@@ -67,7 +71,7 @@ class _VanSellingPaymentSheetState extends ConsumerState<VanSellingPaymentSheet>
     if (slug.isEmpty) {
       setState(() {
         _loading = false;
-        _error = 'Tenant topilmadi';
+        _error = 'Компания не выбрана';
       });
       return;
     }
@@ -98,7 +102,16 @@ class _VanSellingPaymentSheetState extends ConsumerState<VanSellingPaymentSheet>
           if (methods.isNotEmpty) _selectedPaymentType = methods.first.paymentType;
         });
       }
-    } catch (e) {
+    } catch (e, st) {
+      ErrorReporter.instance?.reportCaught(
+        e,
+        stack: st,
+        module: ErrorModules.payments,
+        code: 'PaymentContextLoadFailed',
+        message: 'Оплата: контекст заказа не загрузился',
+        path: '/mobile/payments',
+        payload: {'order_id': widget.orderId, 'client_id': widget.clientId},
+      );
       if (mounted) {
         setState(() {
           _loading = false;
@@ -114,18 +127,38 @@ class _VanSellingPaymentSheetState extends ConsumerState<VanSellingPaymentSheet>
     final amount = double.tryParse(_amountCtrl.text.replaceAll(',', '.').trim());
     if (pt == null || pt.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('To‘lov usulini tanlang'), backgroundColor: AppColors.error),
+        const SnackBar(content: Text('Выберите способ оплаты'), backgroundColor: AppColors.error),
       );
       return;
     }
     if (amount == null || amount <= 0) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Summani kiriting'), backgroundColor: AppColors.error),
+        const SnackBar(content: Text('Введите сумму'), backgroundColor: AppColors.error),
       );
       return;
     }
     setState(() => _submitting = true);
     try {
+      final security = SecurityConfigPolicy.fromMobileConfig(
+        ref.read(sessionProvider).mobileConfig,
+      );
+      final confirmed = await BiometricTransactionConfirm.confirm(
+        ref,
+        context: context,
+        required: security.confirmPaymentAccept,
+        reason: 'Подтвердите приём оплаты',
+      );
+      if (!confirmed) return;
+      if (!await FaceVerificationFlow.ensure(
+        context,
+        ref,
+        verifyContext: 'payment_accept',
+        orderId: widget.orderId,
+        clientId: widget.clientId,
+        title: 'Подтверждение лица при приёме оплаты',
+      )) {
+        return;
+      }
       await ref.read(mobileApiProvider).postOrderCashIn(
         slug,
         clientId: widget.clientId,
@@ -134,11 +167,20 @@ class _VanSellingPaymentSheetState extends ConsumerState<VanSellingPaymentSheet>
         amount: amount,
       );
       if (mounted) Navigator.pop(context, true);
-    } catch (e) {
+    } catch (e, st) {
+      ErrorReporter.instance?.reportCaught(
+        e,
+        stack: st,
+        module: ErrorModules.payments,
+        code: 'PaymentSubmitFailed',
+        message: 'Оплата: приём платежа не удался',
+        path: '/mobile/payments',
+        payload: {'order_id': widget.orderId, 'client_id': widget.clientId},
+      );
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(e is ApiException ? e.message : 'To‘lov xato'),
+            content: Text(e is ApiException ? e.message : 'Ошибка оплаты'),
             backgroundColor: AppColors.error,
           ),
         );
@@ -158,10 +200,10 @@ class _VanSellingPaymentSheetState extends ConsumerState<VanSellingPaymentSheet>
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const Text('To‘lov qabul qilish', style: AppTypography.headlineSmall),
+          const Text('Приём оплаты', style: AppTypography.headlineSmall),
           const SizedBox(height: 8),
           Text(
-            'Buyurtma #${widget.orderId}',
+            'Заказ #${widget.orderId}',
             style: AppTypography.caption.copyWith(color: AppColors.textMuted),
           ),
           const SizedBox(height: 16),
@@ -174,10 +216,10 @@ class _VanSellingPaymentSheetState extends ConsumerState<VanSellingPaymentSheet>
             Text(_error!, style: const TextStyle(color: AppColors.error))
           else ...[
             if (methods.isEmpty)
-              const Text('To‘lov usullari konfiguratsiyada yo‘q')
+              const Text('Способы оплаты не заданы в конфигурации')
             else
               DropdownButtonFormField<String>(
-                decoration: const InputDecoration(labelText: 'To‘lov usuli'),
+                decoration: const InputDecoration(labelText: 'Способ оплаты'),
                 initialValue: _selectedPaymentType,
                 items: methods
                     .map((m) => DropdownMenuItem(
@@ -191,7 +233,7 @@ class _VanSellingPaymentSheetState extends ConsumerState<VanSellingPaymentSheet>
             TextField(
               controller: _amountCtrl,
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              decoration: const InputDecoration(labelText: 'Summa'),
+              decoration: const InputDecoration(labelText: 'Сумма'),
             ),
             const SizedBox(height: 16),
             Row(
@@ -199,7 +241,7 @@ class _VanSellingPaymentSheetState extends ConsumerState<VanSellingPaymentSheet>
                 Expanded(
                   child: OutlinedButton(
                     onPressed: _submitting ? null : () => Navigator.pop(context, false),
-                    child: const Text('Keyinroq'),
+                    child: const Text('Позже'),
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -212,7 +254,7 @@ class _VanSellingPaymentSheetState extends ConsumerState<VanSellingPaymentSheet>
                             width: 20,
                             child: CircularProgressIndicator(strokeWidth: 2),
                           )
-                        : const Text('Saqlash'),
+                        : const Text('Сохранить'),
                   ),
                 ),
               ],

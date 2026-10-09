@@ -1,0 +1,314 @@
+/// Зарплата + Аванс moduli. User/Tenant/CashDesk bilan bog'lanish oddiy Int ustunlar orqali.
+
+model PayrollSettings {
+  id                   Int      @id @default(autoincrement())
+  tenant_id            Int      @unique
+  /// Feature flag: tenantda payroll yoqilgan (qo'lda «Зарплата/Аванс» xarajati bloklanadi).
+  enabled              Boolean  @default(false)
+  /// Parallel sinov oyi rejimi (Excel bilan solishtirish).
+  parallel_run         Boolean  @default(false)
+  /// Tasdiqlangan oyliklar kassir navbatiga chiqadi.
+  salary_queue_enabled Boolean  @default(true)
+  created_at           DateTime @default(now())
+  updated_at           DateTime @updatedAt
+
+  @@map("payroll_settings")
+}
+
+model PayrollItem {
+  id         Int      @id @default(autoincrement())
+  tenant_id  Int
+  name       String   @db.VarChar(160)
+  code       String?  @db.VarChar(64)
+  /// allowance | deduction
+  type       String   @db.VarChar(16)
+  /// formula | manual | system
+  calc_type  String   @default("manual") @db.VarChar(16)
+  /// advance | correction | carry — tizim elementlari (o'chirilmaydi)
+  system_key String?  @db.VarChar(32)
+  sort_order Int      @default(100)
+  color      String?  @db.VarChar(16)
+  comment    String?  @db.VarChar(500)
+  is_active  Boolean  @default(true)
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  @@unique([tenant_id, name])
+  @@index([tenant_id, type, is_active])
+  @@map("payroll_items")
+}
+
+model PayrollRoleConfig {
+  id                 Int      @id @default(autoincrement())
+  tenant_id          Int
+  role               String   @db.VarChar(64)
+  base_amount        Decimal  @default(0) @db.Decimal(15, 2)
+  currency           String   @default("UZS") @db.VarChar(8)
+  allowance_item_ids Int[]    @default([])
+  deduction_item_ids Int[]    @default([])
+  comment            String?  @db.VarChar(500)
+  /// Rol bo'yicha standart надбавка qismlari { "<item_id>": amount }; xodim sozlamasi ustun.
+  item_amounts       Json     @default("{}")
+  created_at         DateTime @default(now())
+  updated_at         DateTime @updatedAt
+
+  @@unique([tenant_id, role])
+  @@map("payroll_role_configs")
+}
+
+model PayrollEmployeeConfig {
+  id           Int      @id @default(autoincrement())
+  tenant_id    Int
+  user_id      Int
+  base_amount  Decimal? @db.Decimal(15, 2)
+  cash_desk_id Int?
+  currency     String?  @db.VarChar(8)
+  comment      String?  @db.VarChar(500)
+  /// Надбавка qismlari: { "<item_id>": amount } — formulada «Оклад - <nom>», formulasiz bo'lsa to'g'ridan-to'g'ri qator.
+  item_amounts Json     @default("{}")
+  created_at   DateTime @default(now())
+  updated_at   DateTime @updatedAt
+
+  @@unique([tenant_id, user_id])
+  @@map("payroll_employee_configs")
+}
+
+model PayrollFormula {
+  id             Int      @id @default(autoincrement())
+  tenant_id      Int
+  name           String   @db.VarChar(200)
+  /// bonus | allowance | salary | common
+  scope          String   @default("common") @db.VarChar(16)
+  text           String
+  /// Rol bo'yicha avtomatik qo'llanadi (target_item_id bilan).
+  role           String?  @db.VarChar(64)
+  target_item_id Int?
+  priority       Int      @default(100)
+  is_active      Boolean  @default(true)
+  created_by     Int?
+  created_at     DateTime @default(now())
+  updated_at     DateTime @updatedAt
+
+  @@index([tenant_id, is_active])
+  @@index([tenant_id, role])
+  @@map("payroll_formulas")
+}
+
+model PayrollBonusAssignment {
+  id                    Int      @id @default(autoincrement())
+  tenant_id             Int
+  year                  Int
+  month                 Int
+  user_id               Int
+  /// 0 = barcha KPI guruhlari
+  kpi_group_id          Int      @default(0)
+  /// 0 = barcha yo'nalishlar
+  trade_direction_id    Int      @default(0)
+  formula_id            Int
+  formula_text_snapshot String
+  target_item_id        Int
+  created_by            Int?
+  created_at            DateTime @default(now())
+  updated_at            DateTime @updatedAt
+
+  @@unique([tenant_id, year, month, user_id, kpi_group_id, trade_direction_id, target_item_id], name: "payroll_bonus_assignments_uq", map: "payroll_bonus_assignments_uq")
+  @@index([tenant_id, year, month])
+  @@index([tenant_id, formula_id])
+  @@map("payroll_bonus_assignments")
+}
+
+model PayrollPeriod {
+  id         Int       @id @default(autoincrement())
+  tenant_id  Int
+  year       Int
+  month      Int
+  /// open | closed
+  status     String    @default("open") @db.VarChar(16)
+  closed_by  Int?
+  closed_at  DateTime?
+  created_at DateTime  @default(now())
+  updated_at DateTime  @updatedAt
+
+  @@unique([tenant_id, year, month])
+  @@map("payroll_periods")
+}
+
+model PayrollRecord {
+  id                 Int                 @id @default(autoincrement())
+  tenant_id          Int
+  user_id            Int
+  year               Int
+  month              Int
+  currency           String              @default("UZS") @db.VarChar(8)
+  base_salary        Decimal             @default(0) @db.Decimal(15, 2)
+  plan_days          Decimal             @default(0) @db.Decimal(6, 2)
+  worked_days        Decimal             @default(0) @db.Decimal(6, 2)
+  allowances_total   Decimal             @default(0) @db.Decimal(15, 2)
+  deductions_total   Decimal             @default(0) @db.Decimal(15, 2)
+  advances_total     Decimal             @default(0) @db.Decimal(15, 2)
+  gross              Decimal             @default(0) @db.Decimal(15, 2)
+  paid_total         Decimal             @default(0) @db.Decimal(15, 2)
+  balance            Decimal             @default(0) @db.Decimal(15, 2)
+  /// draft | pending | confirmed | rejected
+  status             String              @default("draft") @db.VarChar(16)
+  role               String?             @db.VarChar(64)
+  position           String?             @db.VarChar(160)
+  branch             String?             @db.VarChar(160)
+  trade_direction_id Int?
+  slot_ids           Int[]               @default([])
+  employment_from    DateTime?
+  employment_to      DateTime?
+  calc_snapshot      Json                @default("{}")
+  inputs_hash        String?             @db.VarChar(64)
+  frozen_inputs_hash String?             @db.VarChar(64)
+  frozen_snapshot    Json?
+  dirty_at           DateTime?
+  dirty_reasons      Json                @default("[]")
+  calculated_at      DateTime?
+  calc_error         String?             @db.VarChar(1000)
+  confirmed_by       Int?
+  confirmed_at       DateTime?
+  rejected_reason    String?             @db.VarChar(500)
+  comment            String?             @db.VarChar(500)
+  created_at         DateTime            @default(now())
+  updated_at         DateTime            @updatedAt
+  lines              PayrollRecordLine[]
+
+  @@unique([tenant_id, user_id, year, month])
+  @@index([tenant_id, year, month, status])
+  @@index([tenant_id, dirty_at])
+  @@map("payroll_records")
+}
+
+model PayrollRecordLine {
+  id                   Int           @id @default(autoincrement())
+  record_id            Int
+  item_id              Int
+  amount               Decimal       @default(0) @db.Decimal(15, 2)
+  /// formula | manual | kpi | advance | correction | carry
+  source               String        @default("formula") @db.VarChar(16)
+  /// "" oddiy qator; "YYYY-MM" — shu oy uchun tuzatish qatori
+  corr_key             String        @default("") @db.VarChar(16)
+  formula_snapshot     String?
+  is_manual_override   Boolean       @default(false)
+  correction_for_year  Int?
+  correction_for_month Int?
+  note                 String?       @db.VarChar(500)
+  created_at           DateTime      @default(now())
+  updated_at           DateTime      @updatedAt
+  record               PayrollRecord @relation(fields: [record_id], references: [id], onDelete: Cascade)
+
+  @@unique([record_id, item_id, corr_key])
+  @@map("payroll_record_lines")
+}
+
+model PayrollAdvance {
+  id                   Int       @id @default(autoincrement())
+  tenant_id            Int
+  user_id              Int
+  year                 Int
+  month                Int
+  amount               Decimal   @db.Decimal(15, 2)
+  currency             String    @default("UZS") @db.VarChar(8)
+  /// draft | sent | approved | rejected | paid | cancelled
+  status               String    @default("draft") @db.VarChar(16)
+  created_by           Int?
+  sent_by              Int?
+  sent_at              DateTime?
+  approved_by          Int?
+  approved_at          DateTime?
+  rejected_by          Int?
+  rejected_at          DateTime?
+  reject_reason        String?   @db.VarChar(500)
+  cancelled_by         Int?
+  cancelled_at         DateTime?
+  branch_snapshot      String?   @db.VarChar(160)
+  queue_key            DateTime?
+  skip_count           Int       @default(0)
+  last_skipped_at      DateTime?
+  last_skipped_by      Int?
+  /// manual | excel
+  source               String    @default("manual") @db.VarChar(16)
+  import_batch_id      String?   @db.VarChar(64)
+  limit_exception_used Boolean   @default(false)
+  comment              String?   @db.VarChar(500)
+  payout_id            Int?
+  created_at           DateTime  @default(now())
+  updated_at           DateTime  @updatedAt
+
+  @@index([tenant_id, status, queue_key])
+  @@index([tenant_id, user_id, year, month])
+  @@map("payroll_advances")
+}
+
+model PayrollAdvanceLimit {
+  id           Int      @id @default(autoincrement())
+  tenant_id    Int
+  /// global | role | user
+  scope        String   @db.VarChar(16)
+  /// "global" | "role:agent" | "user:12"
+  scope_key    String   @db.VarChar(96)
+  role         String?  @db.VarChar(64)
+  user_id      Int?
+  max_amount   Decimal  @db.Decimal(15, 2)
+  is_exception Boolean  @default(false)
+  comment      String?  @db.VarChar(500)
+  created_by   Int?
+  created_at   DateTime @default(now())
+  updated_at   DateTime @updatedAt
+
+  @@unique([tenant_id, scope_key])
+  @@map("payroll_advance_limits")
+}
+
+model PayrollPayout {
+  id                 Int       @id @default(autoincrement())
+  tenant_id          Int
+  /// advance | salary
+  kind               String    @db.VarChar(16)
+  user_id            Int
+  year               Int
+  month              Int
+  record_id          Int?
+  advance_id         Int?
+  cash_desk_id       Int
+  payment_method_ref String?   @db.VarChar(64)
+  amount             Decimal   @db.Decimal(15, 2)
+  currency           String    @default("UZS") @db.VarChar(8)
+  rate               Decimal   @default(1) @db.Decimal(18, 6)
+  rate_date          DateTime?
+  amount_uzs         Decimal   @db.Decimal(15, 2)
+  paid_at            DateTime  @default(now())
+  paid_by            Int?
+  /// paid | reversed
+  status             String    @default("paid") @db.VarChar(16)
+  reversed_by        Int?
+  reversed_at        DateTime?
+  reverse_reason     String?   @db.VarChar(500)
+  expense_id         Int?
+  comment            String?   @db.VarChar(500)
+  created_at         DateTime  @default(now())
+  updated_at         DateTime  @updatedAt
+
+  @@index([tenant_id, user_id, year, month])
+  @@index([tenant_id, cash_desk_id, status])
+  @@index([tenant_id, paid_at])
+  @@map("payroll_payouts")
+}
+
+model PayrollCompareBatch {
+  id            Int       @id @default(autoincrement())
+  tenant_id     Int
+  year          Int
+  month         Int
+  /// [{ code, name?, columns: { [columnName]: amount }, total? }]
+  rows          Json      @default("[]")
+  created_by    Int?
+  signed_off_by Int?
+  signed_off_at DateTime?
+  sign_off_note String?   @db.VarChar(500)
+  created_at    DateTime  @default(now())
+
+  @@index([tenant_id, year, month])
+  @@map("payroll_compare_batches")
+}

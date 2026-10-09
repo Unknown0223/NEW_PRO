@@ -67,9 +67,9 @@ export function ReturnWaybillPrintView({
       {/* Sarlavha */}
       <div style={{ textAlign: "center", marginBottom: "20px", borderBottom: "2px solid #333", paddingBottom: "14px" }}>
         <h1 style={{ margin: 0, fontSize: "19px", fontWeight: "bold" }}>ВОЗВРАТНАЯ НАКЛАДНАЯ</h1>
-        <p style={{ margin: "2px 0 0", fontSize: "12px", color: "#888" }}>Qaytarish nakladnoyi</p>
+        <p style={{ margin: "2px 0 0", fontSize: "12px", color: "#888" }}>Накладная на возврат товара</p>
         <p style={{ margin: "8px 0 0", fontSize: "14px", color: "#444" }}>
-          № <strong>{doc.number}</strong> &nbsp;|&nbsp; Sana:{" "}
+          № <strong>{doc.number}</strong> &nbsp;|&nbsp; Дата:{" "}
           <strong>{new Date(doc.created_at).toLocaleDateString("ru-RU")}</strong>
         </p>
       </div>
@@ -90,7 +90,7 @@ export function ReturnWaybillPrintView({
             <p style={{ margin: "2px 0 0", fontSize: "12px" }}>Экспедитор: {doc.expeditor_name}</p>
           )}
           {doc.note && (
-            <p style={{ margin: "2px 0 0", fontSize: "12px", fontStyle: "italic" }}>Izoh: {doc.note}</p>
+            <p style={{ margin: "2px 0 0", fontSize: "12px", fontStyle: "italic" }}>Комментарий: {doc.note}</p>
           )}
         </div>
       </div>
@@ -100,9 +100,9 @@ export function ReturnWaybillPrintView({
         <thead className="app-table-thead">
           <tr style={{ borderBottom: "2px solid #333" }}>
             <th style={{ padding: "8px", textAlign: "left", fontWeight: "bold", width: "40px" }}>№</th>
-            <th style={{ padding: "8px", textAlign: "left", fontWeight: "bold" }}>Kod</th>
-            <th style={{ padding: "8px", textAlign: "left", fontWeight: "bold" }}>Mahsulot</th>
-            <th style={{ padding: "8px", textAlign: "right", fontWeight: "bold" }}>Miqdor</th>
+            <th style={{ padding: "8px", textAlign: "left", fontWeight: "bold" }}>Код</th>
+            <th style={{ padding: "8px", textAlign: "left", fontWeight: "bold" }}>Товар</th>
+            <th style={{ padding: "8px", textAlign: "right", fontWeight: "bold" }}>Количество</th>
           </tr>
         </thead>
         <tbody>
@@ -117,15 +117,15 @@ export function ReturnWaybillPrintView({
           {lines.length === 0 && (
             <tr>
               <td colSpan={4} style={{ padding: "12px 8px", textAlign: "center", color: "#888" }}>
-                Mahsulotlar yo‘q
+                Нет товаров
               </td>
             </tr>
           )}
         </tbody>
         <tfoot>
           <tr style={{ borderTop: "2px solid #333" }}>
-            <td colSpan={2} style={{ padding: "8px", textAlign: "right", fontWeight: "bold" }}>JAMI:</td>
-            <td style={{ padding: "8px", textAlign: "right", color: "#666" }}>{lines.length} ta nom</td>
+            <td colSpan={2} style={{ padding: "8px", textAlign: "right", fontWeight: "bold" }}>ИТОГО:</td>
+            <td style={{ padding: "8px", textAlign: "right", color: "#666" }}>{lines.length} наим.</td>
             <td style={{ padding: "8px", textAlign: "right", fontWeight: "bold", fontSize: "14px" }}>
               {fmtQty(String(totalQty))}
             </td>
@@ -136,15 +136,15 @@ export function ReturnWaybillPrintView({
       {/* Imzolar */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "40px", marginTop: "48px", fontSize: "12px" }}>
         <div>
-          <div style={{ borderTop: "1px solid #333", paddingTop: "6px" }}>Topshirdi (ekspeditor)</div>
+          <div style={{ borderTop: "1px solid #333", paddingTop: "6px" }}>Сдал (экспедитор)</div>
         </div>
         <div>
-          <div style={{ borderTop: "1px solid #333", paddingTop: "6px" }}>Qabul qildi (ombor / зав.склад)</div>
+          <div style={{ borderTop: "1px solid #333", paddingTop: "6px" }}>Принял (склад / зав.склад)</div>
         </div>
       </div>
 
       <div style={{ marginTop: "28px", borderTop: "1px solid #ddd", paddingTop: "12px", fontSize: "11px", color: "#888", textAlign: "center" }}>
-        <p style={{ margin: 0 }}>Chop etilgan sana: {new Date().toLocaleString("ru-RU")}</p>
+        <p style={{ margin: 0 }}>Дата печати: {new Date().toLocaleString("ru-RU")}</p>
       </div>
     </div>
   );

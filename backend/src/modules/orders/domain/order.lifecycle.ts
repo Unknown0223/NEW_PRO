@@ -34,6 +34,7 @@ import {
   isValidOrderStatus,
   mayActorRevertOneStep
 } from "../order-status";
+import { orderStatusTransitionPermission, type OrderStatusPermissionChecker } from "../order-status-permissions";
 import { resolveAutoExpeditorUserId } from "../expeditor-auto-assign";
 import {
   computeAgentConsignmentOutstanding,
@@ -95,6 +96,11 @@ export type UpdateOrderStatusOptions = {
   deferSideEffects?: boolean;
   /** Natija ishlatilmasa — enrich o‘tkazib yuboriladi. */
   skipEnrich?: boolean;
+  /**
+   * Veb RBAC: `from → to` o'tishi uchun alohida ruxsat (Доступ → Заявки → Статус).
+   * Berilsa, orqaga qadam ham rol ro'yxati o'rniga shu ruxsat bilan hal qilinadi.
+   */
+  canTransition?: OrderStatusPermissionChecker | null;
 };
 
 export async function updateOrderStatus(
@@ -132,7 +138,15 @@ export async function updateOrderStatus(
     throw err;
   }
 
-  if (isBackwardTransition(o.status, trimmed, orderType) && !mayActorRevertOneStep(actorRole)) {
+  if (opts?.canTransition) {
+    if (!opts.canTransition(o.status, trimmed, orderType)) {
+      const err = new Error("FORBIDDEN_STATUS_PERMISSION") as Error & { from: string; to: string; permission: string | null };
+      err.from = o.status;
+      err.to = trimmed;
+      err.permission = orderStatusTransitionPermission(o.status, trimmed, orderType);
+      throw err;
+    }
+  } else if (isBackwardTransition(o.status, trimmed, orderType) && !mayActorRevertOneStep(actorRole)) {
     throw new Error("FORBIDDEN_REVERT");
   }
 
@@ -447,13 +461,18 @@ export async function bulkUpdateOrderStatus(
   nextStatus: string,
   actorUserId: number | null,
   actorRole: string,
-  occurredAtRaw?: string
+  occurredAtRaw?: string,
+  rbac?: { canTransition: OrderStatusPermissionChecker; canEditStatusDate: boolean } | null
 ): Promise<BulkOrderStatusResult> {
   const ids = [...new Set(orderIds.filter((id) => Number.isFinite(id) && id > 0))];
   const updated: number[] = [];
   const failed: BulkOrderStatusResult["failed"] = [];
   const trimmed = nextStatus.trim();
-  const defer = { deferSideEffects: true, skipEnrich: true } as const;
+  const defer: UpdateOrderStatusOptions = {
+    deferSideEffects: true,
+    skipEnrich: true,
+    canTransition: rbac?.canTransition ?? null
+  };
 
   const existingRows = await prisma.order.findMany({
     where: { id: { in: ids }, tenant_id: tenantId },
@@ -480,6 +499,7 @@ export async function bulkUpdateOrderStatus(
       const fromStatus = existing.status;
       if (fromStatus === trimmed) {
         if (occurredAtRaw) {
+          if (rbac && !rbac.canEditStatusDate) throw new Error("FORBIDDEN_STATUS_PERMISSION");
           await updateOrderMilestoneAt(tenantId, id, trimmed, occurredAtRaw, actorRole, defer);
         }
         updated.push(id);
@@ -505,15 +525,15 @@ export async function bulkUpdateOrderStatus(
       failed.push({
         id,
         error: code,
-        ...(code === "INVALID_TRANSITION" ? { from: ex.from, to: ex.to } : {})
+        ...(code === "INVALID_TRANSITION" || code === "FORBIDDEN_STATUS_PERMISSION" ? { from: ex.from, to: ex.to } : {})
       });
     }
   }
 
   if (updated.length > 0) {
     // Bitta SSE — front debounce bilan bir refetch; har bir id uchun alohida emas.
+    await invalidateOrdersListCache(tenantId);
     emitOrderUpdated(tenantId, updated[0]!);
-    void invalidateOrdersListCache(tenantId);
     void invalidateDashboard(tenantId);
     for (const whId of warehouseIds) {
       void invalidateStock(tenantId, whId);
@@ -542,6 +562,7 @@ export async function bulkUpdateOrderExpeditor(
   const ids = [...new Set(orderIds.filter((id) => Number.isFinite(id) && id > 0))];
   const updated: number[] = [];
   const failed: BulkOrderExpeditorResult["failed"] = [];
+  const defer = { deferSideEffects: true, skipEnrich: true } as const;
   for (const id of ids) {
     try {
       await updateOrderMeta(
@@ -549,12 +570,17 @@ export async function bulkUpdateOrderExpeditor(
         id,
         { expeditor_user_id: expeditorUserId },
         viewerRole,
-        actorUserId
+        actorUserId,
+        defer
       );
       updated.push(id);
     } catch (e) {
       failed.push({ id, error: getErrorCode(e) ?? "UNKNOWN" });
     }
+  }
+  if (updated.length > 0) {
+    await invalidateOrdersListCache(tenantId);
+    emitOrderUpdated(tenantId, updated[0]!);
   }
   return { updated, failed };
 }
@@ -601,21 +627,40 @@ export async function bulkUpdateOrderConsignment(
     ? consignmentDueDate.toLocaleDateString("ru-RU", { timeZone: "Asia/Tashkent" })
     : "—";
 
+  const existingRows = await prisma.order.findMany({
+    where: { id: { in: ids }, tenant_id: tenantId },
+    select: {
+      id: true,
+      status: true,
+      order_type: true,
+      is_consignment: true,
+      consignment_due_date: true,
+      comment: true,
+      agent_id: true,
+      total_sum: true
+    }
+  });
+  const existingById = new Map(existingRows.map((r) => [r.id, r]));
+  const agentIds = [
+    ...new Set(existingRows.map((r) => r.agent_id).filter((a): a is number => a != null && a > 0))
+  ];
+  const agentRows =
+    isConsignment && agentIds.length > 0
+      ? await prisma.user.findMany({
+          where: { id: { in: agentIds }, tenant_id: tenantId, is_active: true },
+          select: {
+            id: true,
+            consignment: true,
+            consignment_limit_amount: true,
+            consignment_ignore_previous_months_debt: true
+          }
+        })
+      : [];
+  const agentById = new Map(agentRows.map((a) => [a.id, a]));
+
   for (const id of ids) {
     try {
-      const existing = await prisma.order.findFirst({
-        where: { id, tenant_id: tenantId },
-        select: {
-          id: true,
-          status: true,
-          order_type: true,
-          is_consignment: true,
-          consignment_due_date: true,
-          comment: true,
-          agent_id: true,
-          total_sum: true
-        }
-      });
+      const existing = existingById.get(id);
       if (!existing) {
         failed.push({ id, error: "NOT_FOUND" });
         continue;
@@ -636,14 +681,7 @@ export async function bulkUpdateOrderConsignment(
           failed.push({ id, error: "CONSIGNMENT_REQUIRES_AGENT" });
           continue;
         }
-        const ag = await prisma.user.findFirst({
-          where: { id: existing.agent_id, tenant_id: tenantId, is_active: true },
-          select: {
-            consignment: true,
-            consignment_limit_amount: true,
-            consignment_ignore_previous_months_debt: true
-          }
-        });
+        const ag = agentById.get(existing.agent_id);
         if (!ag?.consignment) {
           failed.push({ id, error: "CONSIGNMENT_AGENT_DISABLED" });
           continue;
@@ -727,13 +765,13 @@ export async function bulkUpdateOrderConsignment(
         });
       });
       updated.push(id);
-      emitOrderUpdated(tenantId, id);
     } catch (e) {
       failed.push({ id, error: getErrorCode(e) ?? "UNKNOWN" });
     }
   }
   if (updated.length > 0) {
     await invalidateOrdersListCache(tenantId);
+    emitOrderUpdated(tenantId, updated[0]!);
   }
   return { updated, failed };
 }

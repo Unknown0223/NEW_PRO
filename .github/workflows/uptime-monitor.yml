@@ -9,13 +9,18 @@ jobs:
   health-check:
     runs-on: ubuntu-latest
     steps:
-      - name: Check /health
+      - name: Check PRODUCTION_HEALTH_URL is set
         env:
-          HEALTH_URL: ${{ vars.PRODUCTION_HEALTH_URL || 'https://api.example.com/health' }}
+          HEALTH_URL: ${{ vars.PRODUCTION_HEALTH_URL }}
         run: |
+          if [ -z "$HEALTH_URL" ] || [ "$HEALTH_URL" = "https://api.example.com/health" ]; then
+            echo "PRODUCTION_HEALTH_URL berilmagan — monitor o'tkazib yuborildi (soxta manzilga urilmaydi)."
+            echo "GitHub → Settings → Variables → PRODUCTION_HEALTH_URL ni haqiqiy /health ga qo'ying."
+            exit 0
+          fi
           echo "Checking $HEALTH_URL"
           code=$(curl -s -o /tmp/health.json -w "%{http_code}" "$HEALTH_URL" --max-time 30)
-          cat /tmp/health.json
+          cat /tmp/health.json || true
           if [ "$code" != "200" ]; then
             echo "Health check failed with HTTP $code"
             exit 1

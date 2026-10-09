@@ -4,6 +4,7 @@ import {
   buildQtyEligibleRowsFromPeeks,
   dedupeEligibleBonusRows,
   filterEligibleBonusesForPreview,
+  preferCategoryGiftPoolForPreview,
   type EligibleBonusRow
 } from "../src/modules/mobile/mobile-order-bonus-preview.compute";
 import type { QtyBonusPeek } from "../src/modules/orders/order-bonus-qty";
@@ -246,5 +247,37 @@ describe("filterEligibleBonusesForPreview", () => {
       []
     );
     expect(out.map((r) => r.rule_id)).toEqual([2]);
+  });
+});
+
+describe("preferCategoryGiftPoolForPreview", () => {
+  const rule = {
+    product_category_ids: [10],
+    scope_restrict_category: true,
+    bonus_product_ids: [],
+    product_ids: []
+  } as BonusRuleRow;
+
+  it("kategoriya 3+1 — katta havzada faqat xarid qilingan o‘lchamlarni qo‘yadi", () => {
+    const qtyByProduct = new Map([
+      [4, 1],
+      [5, 1],
+      [6, 1]
+    ]);
+    const productById = new Map([
+      [4, { id: 4, category_id: 10 }],
+      [5, { id: 5, category_id: 10 }],
+      [6, { id: 6, category_id: 10 }]
+    ]);
+    const hugeAllowed = Array.from({ length: 30 }, (_, i) => 100 + i);
+    const pool = preferCategoryGiftPoolForPreview(rule, qtyByProduct, productById, hugeAllowed, 4);
+    expect(pool.sort((a, b) => a - b)).toEqual([4, 5, 6]);
+  });
+
+  it("kichik to‘liq havzani ham saqlaydi", () => {
+    const qtyByProduct = new Map([[4, 1]]);
+    const productById = new Map([[4, { id: 4, category_id: 10 }]]);
+    const pool = preferCategoryGiftPoolForPreview(rule, qtyByProduct, productById, [4, 5, 6], 4);
+    expect(pool.sort((a, b) => a - b)).toEqual([4, 5, 6]);
   });
 });

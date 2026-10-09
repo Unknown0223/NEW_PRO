@@ -14,7 +14,7 @@ export async function buildRetailStockExportBuffer(
 ): Promise<Buffer> {
   const data = await listRetailStock(tenantId, { ...q, page: 1, limit: 25000 }, actor);
   const workbook = new ExcelJS.Workbook();
-  const sheet = workbook.addWorksheet("Retail stock", { views: [{ state: "frozen", ySplit: 1 }] });
+  const sheet = workbook.addWorksheet("Остатки в рознице", { views: [{ state: "frozen", ySplit: 1 }] });
   if (data.view === "categories") {
     const headers = ["Дата", "Категория", "Кол-во", "Кол-во (продажа)", "Сумма", "ТТ с наличием"];
     headers.forEach((h, i) => {

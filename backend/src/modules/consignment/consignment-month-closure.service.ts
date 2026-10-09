@@ -1,6 +1,10 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "../../config/database";
 import { ORDER_STATUSES_OUTSTANDING_RECEIVABLE } from "../orders/order-status";
+import { notifyUsers } from "../payroll/payroll.notify";
+
+/** Eski oylar birinchi marta sinxronlanganda xabar yog'ilib ketmasligi uchun. */
+const CLOSURE_NOTIFY_WINDOW_MS = 3 * 86400_000;
 import {
   parseConsignmentMonthCloseDay,
   resolveAgentConsignmentCloseSchedule,
@@ -125,6 +129,21 @@ export async function reconcileAgentConsignmentMonthClosure(
     period_closed_at: periodClosedAt,
     debt_cleared_at: debtClearedAt
   });
+
+  const ym = `${String(month).padStart(2, "0")}.${year}`;
+  if (!existing?.period_closed_at && row.period_closed_at && now.getTime() - periodCloseAt.getTime() < CLOSURE_NOTIFY_WINDOW_MS) {
+    void notifyUsers(tenantId, [agentUserId], {
+      title: `🧾 Консигнационный месяц ${ym} закрыт`,
+      body: row.debt_cleared_at ? "Долг погашен полностью." : "Есть непогашенный долг — проверьте список.",
+      href: "/client-balances/consignment"
+    });
+  } else if (existing && !existing.debt_cleared_at && row.debt_cleared_at) {
+    void notifyUsers(tenantId, [agentUserId], {
+      title: `✅ Долг по консигнации за ${ym} погашен`,
+      body: null,
+      href: "/client-balances/consignment"
+    });
+  }
 
   return {
     period_closed_at: row.period_closed_at,

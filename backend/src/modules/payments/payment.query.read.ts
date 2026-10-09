@@ -151,6 +151,19 @@ export async function listPaymentsForClient(tenantId: number, clientId: number, 
   return rows.map((r) => mapPaymentToListRow(r, tenantId));
 }
 
+/** EPR confirm: bir nechta to‘lovni bitta so‘rovda olish */
+export async function listPaymentsByIds(tenantId: number, ids: number[]): Promise<PaymentListRow[]> {
+  const uniq = [...new Set(ids.filter((id) => Number.isFinite(id) && id >= 1))].slice(0, 100);
+  if (!uniq.length) return [];
+  const inc = paymentListInclude(tenantId);
+  const rows = await prisma.payment.findMany({
+    where: { tenant_id: tenantId, id: { in: uniq } },
+    include: inc
+  });
+  const byId = new Map(rows.map((r) => [r.id, mapPaymentToListRow(r, tenantId)]));
+  return uniq.map((id) => byId.get(id)).filter((r): r is PaymentListRow => r != null);
+}
+
 export type CreatePaymentInput = {
   client_id: number;
   order_id?: number | null;
@@ -165,23 +178,32 @@ export type CreatePaymentInput = {
   expeditor_user_id?: number | null;
   /** Vedoma: `COALESCE(ledger_agent_id, zakaz.agent, mijoz.agent)` */
   ledger_agent_id?: number | null;
+  /** Opening-balance Excel: historical agent may be inactive. */
+  ledger_agent_allow_inactive?: boolean;
   /** cash | consignment | none */
   allocation_mode?: AllocationMode;
   /** Qo‘lda tanlangan zakazlar */
   allocation_order_ids?: number[];
   /** Agent+klient kombinatsiyasi bo‘yicha tanlangan agent */
   allocation_agent_id?: number | null;
+  /** Ixtiyoriy hujjat ID (har qanday matn); bo‘sh → create dan keyin String(id) */
+  number?: string | null;
 };
 
 export async function resolveLedgerAgentId(
   tenantId: number,
   raw: number | null | undefined,
-  tx?: Prisma.TransactionClient
+  tx?: Prisma.TransactionClient,
+  opts?: { requireActive?: boolean }
 ): Promise<number | null> {
   if (raw == null || !Number.isFinite(raw) || raw < 1) return null;
   const db = tx ?? prisma;
   const u = await db.user.findFirst({
-    where: { id: raw, tenant_id: tenantId, is_active: true }
+    where: {
+      id: raw,
+      tenant_id: tenantId,
+      ...(opts?.requireActive === false ? {} : { is_active: true })
+    }
   });
   if (!u) throw new Error("BAD_LEDGER_AGENT");
   return u.id;

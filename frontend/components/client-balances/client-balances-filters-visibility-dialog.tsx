@@ -24,9 +24,18 @@ type Props = {
   onOpenChange: (open: boolean) => void;
   value: ClientBalancesFilterVisibility;
   onChange: (next: ClientBalancesFilterVisibility) => void;
+  rememberFilters: boolean;
+  onRememberFiltersChange: (on: boolean) => void;
 };
 
-export function ClientBalancesFiltersVisibilityDialog({ open, onOpenChange, value, onChange }: Props) {
+export function ClientBalancesFiltersVisibilityDialog({
+  open,
+  onOpenChange,
+  value,
+  onChange,
+  rememberFilters,
+  onRememberFiltersChange
+}: Props) {
   const [draft, setDraft] = useState<ClientBalancesFilterVisibility>(value);
   const [q, setQ] = useState("");
 
@@ -67,6 +76,21 @@ export function ClientBalancesFiltersVisibilityDialog({ open, onOpenChange, valu
         </DialogHeader>
 
         <div className="shrink-0 space-y-2 px-4 py-2">
+          <label className="flex cursor-pointer items-start gap-2.5 rounded-md border border-border/70 bg-muted/40 px-2.5 py-2 text-sm">
+            <input
+              type="checkbox"
+              className="mt-0.5 size-4 accent-emerald-600"
+              checked={rememberFilters}
+              onChange={(e) => onRememberFiltersChange(e.target.checked)}
+            />
+            <span>
+              <span className="font-medium">Запоминать фильтры</span>
+              <span className="mt-0.5 block text-xs text-muted-foreground">
+                Если включено, область, агент и остальные фильтры сохраняются при переходе в карточку и возврате.
+                Если выключено, при следующем открытии страница начинается без фильтров.
+              </span>
+            </span>
+          </label>
           <Input
             className="h-8 text-sm"
             placeholder="Поиск…"

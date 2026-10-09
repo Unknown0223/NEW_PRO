@@ -14,6 +14,7 @@ import {
   listAccessHistoryActionTypes
 } from "./history.service";
 import { getUserAccessMatrix } from "./access-matrix.service";
+import { syncEmploymentAfterActiveChange } from "../staff/staff.employment-sync";
 import { getPermissionCatalogGrouped } from "./permission-catalog.service";
 import {
   AccessManageRequiredError,
@@ -59,6 +60,7 @@ import {
 import type { PaymentMethodEntryDto } from "../tenant-settings/finance-refs";
 import { paymentMethodStorageKey } from "../tenant-settings/finance-refs";
 import { adminOrAccessManager, bulkAccessPatchBodySchema } from "./access.route.shared";
+import { assertActorCanPatchUser, grantGuardErrorResponse, isAdminActor, loadActorGrantableKeys } from "./access-grant-guard";
 
 export async function registerAccessUsersBulkRoutes(app: FastifyInstance) {
   app.post("/api/:slug/access/users-bulk-patch", { preHandler: [...adminOrAccessManager] }, async (request, reply) => {
@@ -67,7 +69,7 @@ export async function registerAccessUsersBulkRoutes(app: FastifyInstance) {
     const tenantId = request.tenant!.id;
     const parsed = bulkAccessPatchBodySchema.safeParse(request.body ?? {});
     if (!parsed.success)
-      return sendApiError(reply, request, 400, "ValidationError", "Invalid request body", zodValidationExtras(parsed.error));
+      return sendApiError(reply, request, 400, "ValidationError", "Некорректные данные запроса", zodValidationExtras(parsed.error));
     const actorId = actorUserIdOrNull(request);
     const rawItems = parsed.data.items;
     /** Bir xil `user_id` uchun bir nechta qator — oxirgisi (kam commit, deadlock kam). */
@@ -82,9 +84,23 @@ export async function registerAccessUsersBulkRoutes(app: FastifyInstance) {
       select: { id: true, role: true, is_active: true }
     });
     if (users.length !== userIds.length) {
-      return sendApiError(reply, request, 400, "SomeUsersNotFound", "One or more users are missing in this tenant");
+      return sendApiError(reply, request, 400, "SomeUsersNotFound", "Некоторые пользователи не найдены в этой компании");
     }
     const byId = new Map(users.map((u) => [u.id, u]));
+    const actor = { userId: actorId, role: getAccessUser(request)?.role };
+    if (!isAdminActor(actor)) {
+      try {
+        const grantable = await loadActorGrantableKeys(tenantId, actor);
+        for (const it of items) {
+          const { user_id, ...body } = it;
+          await assertActorCanPatchUser(tenantId, actor, byId.get(user_id)!, body, grantable);
+        }
+      } catch (e) {
+        const res = grantGuardErrorResponse(e);
+        if (res) return sendApiError(reply, request, 403, res.code, res.message, res.keys ? { keys: res.keys } : undefined);
+        throw e;
+      }
+    }
     const allTyped = items as BulkAccessPatchItem[];
     /** Butun body bir xil merge/remove bo‘lsa — bitta commit (chunk’lar orasidagi WAL/fsync tejalishi yo‘q). */
     const fullUniformMerge = tryUniformMergeBulk(allTyped);
@@ -240,6 +256,10 @@ export async function registerAccessUsersBulkRoutes(app: FastifyInstance) {
         return sendApiError(reply, request, 400, "SUPERVISEE_PATCH", e.message);
       }
       throw e;
+    }
+    const activeChangedIds = items.filter((it) => it.is_active != null).map((it) => it.user_id);
+    if (activeChangedIds.length > 0) {
+      await syncEmploymentAfterActiveChange(tenantId, activeChangedIds, actorId);
     }
     void prisma.accessLog
       .create({

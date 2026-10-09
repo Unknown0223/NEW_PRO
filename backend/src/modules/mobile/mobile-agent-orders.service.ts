@@ -16,9 +16,11 @@ import {
   resolvePriceTypeKeyToLabel
 } from "../tenant-settings/finance-refs";
 import { resolveConstraintScope } from "../linkage/linkage.service";
+import { collectWarehouseIdsForUsers } from "../linkage/linkage.warehouse-ids";
 import {
   executionPctFromPlanFact,
-  loadMonitoringPlanAggregates
+  loadMonitoringPlanAggregates,
+  WORKING_KPI_PLAN_STATUSES
 } from "../plans/plans.monitoring-aggregates";
 import { assertOrderAgentAllowedForClient } from "../work-slots/work-slots.lock";
 import { getMobileOrderClientFinance } from "./mobile-order-client-finance";
@@ -102,33 +104,14 @@ export async function getMobileOrderCreateContext(
       : null;
 
   let warehouses = bundle.warehouses;
-  // Mobil: klient×agent kesimi bo‘sh ombor bersa — agent bog‘langan omborlarga qaytamiz
-  // (aks holda «Продолжить» o‘chadi, lekin ostatkalar sahifasi ishlaydi).
+  // Mobil: klient×agent kesimi bo‘sh ombor bersa — faqat agent joy/link omborlariga qaytamiz.
+  // Hech qachon tenant dagi barcha omborlarni ochib yubormaymiz.
   if (warehouses.length === 0) {
-    const allWh = await listWarehousesForTenant(tenantId);
-    const allowed = await resolveAgentDefaultWarehouseId(tenantId, userId, allWh);
-    const links = await prisma.warehouseUserLink.findMany({
-      where: {
-        user_id: userId,
-        warehouse: { tenant_id: tenantId, is_active: true }
-      },
-      select: { warehouse_id: true }
-    });
-    const linkIds = new Set(links.map((l) => l.warehouse_id));
-    if (linkIds.size > 0) {
-      warehouses = allWh.filter((w) => linkIds.has(w.id));
-    } else if (allowed != null) {
-      warehouses = allWh.filter((w) => w.id === allowed);
-    } else {
-      const user = await prisma.user.findFirst({
-        where: { id: userId, tenant_id: tenantId },
-        select: { warehouse_id: true }
-      });
-      if (user?.warehouse_id != null) {
-        warehouses = allWh.filter((w) => w.id === user.warehouse_id);
-      } else if (allWh.length > 0) {
-        warehouses = allWh;
-      }
+    const boundIds = await collectWarehouseIdsForUsers(tenantId, [userId]);
+    if (boundIds.length > 0) {
+      const allWh = await listWarehousesForTenant(tenantId);
+      const allow = new Set(boundIds);
+      warehouses = allWh.filter((w) => allow.has(w.id));
     }
   }
 
@@ -248,6 +231,11 @@ export async function createMobileOrder(
   await assertMobilePhotoReportForClient(tenantId, userId, body.client_id, cfg);
   await assertOrderAgentAllowedForClient(tenantId, body.client_id, userId);
 
+  const boundWarehouses = await collectWarehouseIdsForUsers(tenantId, [userId]);
+  if (boundWarehouses.length > 0 && !boundWarehouses.includes(body.warehouse_id)) {
+    throw new Error("WAREHOUSE_NOT_ALLOWED_FOR_AGENT");
+  }
+
   return createOrder(
     tenantId,
     {
@@ -264,6 +252,7 @@ export async function createMobileOrder(
       bonus_gift_lines: body.bonus_gift_lines,
       bonus_strategy_selections: body.bonus_strategy_selections,
       order_type: "order",
+      creation_channel: "mobile",
       items: body.items
     },
     { role, userId }
@@ -440,7 +429,7 @@ export async function getMobileAgentDashboard(tenantId: number, userId: number) 
       territory_2_list: [],
       territory_3_list: [],
       territory_terms: []
-    })
+    }, WORKING_KPI_PLAN_STATUSES)
   ]);
 
   const ordersSumToday = Number(ordersAgg._sum.total_sum ?? 0);
@@ -627,7 +616,8 @@ export async function getMobileAgentDailySales(tenantId: number, userId: number)
 
 /** Veb mijoz kartochkasi: joriy agent bo‘yicha «Общий» (to‘lov − dolg, boshqa agentlar emas). */
 export async function listMobileAgentClientLedgerBalances(tenantId: number, agentUserId: number) {
-  const excluded = ["cancelled", "returned"] as const;
+  const { ORDER_STATUSES_OUTSTANDING_RECEIVABLE } = await import("../orders/order-status");
+  const receivableStatuses = [...ORDER_STATUSES_OUTSTANDING_RECEIVABLE];
 
   const rows = await prisma.$queryRaw<Array<{ client_id: number; balance: Prisma.Decimal }>>`
     SELECT u.client_id,
@@ -654,7 +644,7 @@ export async function listMobileAgentClientLedgerBalances(tenantId: number, agen
       FROM orders o
       JOIN clients c ON c.id = o.client_id AND c.tenant_id = ${tenantId}
       WHERE o.tenant_id = ${tenantId}
-        AND o.status NOT IN (${Prisma.join(excluded)})
+        AND o.status IN (${Prisma.join(receivableStatuses)})
         AND o.order_type = 'order'
         AND c.is_active = true
         AND c.merged_into_client_id IS NULL
@@ -695,9 +685,10 @@ export async function listMobileAgentClientLedgerBalances(tenantId: number, agen
   return rows.map((r) => ({ id: r.client_id, balance: Number(r.balance) }));
 }
 
-export async function listMobileAgentDebtors(tenantId: number, userId: number, limit = 100) {
+export async function listMobileAgentDebtors(tenantId: number, userId: number, limit = 500) {
   const { isAgentDebtCollectionOnly } = await import("../work-slots/work-slots.agent-gate");
   const debtOnly = await isAgentDebtCollectionOnly(tenantId, userId);
+  const outLimit = Math.min(Math.max(limit, 1), 1000);
 
   if (debtOnly) {
     // Faqat o‘z unpaid delivered qoldig‘i bor mijozlar
@@ -744,7 +735,7 @@ export async function listMobileAgentDebtors(tenantId: number, userId: number, l
       FROM per_client pc
       INNER JOIN clients cl ON cl.id = pc.client_id AND cl.tenant_id = ${tenantId}
       ORDER BY pc.unpaid DESC
-      LIMIT ${Math.min(limit, 200)}
+      LIMIT ${outLimit}
     `;
 
     return rows.map((r) => ({
@@ -756,11 +747,13 @@ export async function listMobileAgentDebtors(tenantId: number, userId: number, l
       overdue_at: r.first_del?.toISOString() ?? null,
       legacy_debt: Number(r.unpaid),
       current_debt: 0,
+      opening_debt: 0,
       debt_collection_only: true
     }));
   }
 
   const clientWhere = await agentScopedClientWhereForUser(tenantId, userId);
+  // take+orderBy name bilan oldin qirqib yuborilmasin — 200+ mijozda qarzdorlar yo‘qoladi.
   const clients = await prisma.client.findMany({
     where: { ...clientWhere, is_active: true },
     select: {
@@ -770,21 +763,32 @@ export async function listMobileAgentDebtors(tenantId: number, userId: number, l
       client_code: true,
       agent_id: true,
       client_balances: { take: 1, select: { balance: true } }
-    },
-    orderBy: { name: "asc" },
-    take: Math.min(limit, 200)
+    }
   });
 
   const clientIds = clients.map((c) => c.id);
-  const deliveryMap = await loadDeliveryDebtByClient(tenantId, clientIds);
-  const { loadDebtSplitByClient } = await import("../client-balances/client-debt-by-agent");
-  const splitMap = await loadDebtSplitByClient(tenantId, clientIds);
+  if (clientIds.length === 0) return [];
 
-  return clients
-    .map((c) => {
+  const { loadOpeningDebtByClient } = await import(
+    "../opening-balances/opening-balances.debt-by-client"
+  );
+  const [deliveryMap, splitMap, openingMap] = await Promise.all([
+    loadDeliveryDebtByClient(tenantId, clientIds),
+    (await import("../client-balances/client-debt-by-agent")).loadDebtSplitByClient(
+      tenantId,
+      clientIds
+    ),
+    loadOpeningDebtByClient(tenantId, clientIds)
+  ]);
+
+  const { pickMobileDebtorsByBalance } = await import("./mobile-debtors-rank");
+  return pickMobileDebtorsByBalance(
+    clients.map((c) => {
       const ledger = c.client_balances[0]?.balance ?? new Prisma.Decimal(0);
       const merged = mergeLedgerWithUnpaidDelivered(ledger, deliveryMap.get(c.id));
       const split = splitMap.get(c.id);
+      const openingRaw = openingMap.get(c.id) ?? new Prisma.Decimal(0);
+      const openingDebt = openingRaw.gt(0) ? openingRaw : new Prisma.Decimal(0);
       return {
         id: c.id,
         name: c.name,
@@ -794,10 +798,10 @@ export async function listMobileAgentDebtors(tenantId: number, userId: number, l
         overdue_at: deliveryMap.get(c.id)?.firstDel?.toISOString() ?? null,
         legacy_debt: Number(split?.legacy_debt ?? 0),
         current_debt: Number(split?.current_debt ?? 0),
+        opening_debt: Number(openingDebt),
         debt_collection_only: false
       };
-    })
-    .filter((c) => c.balance < -0.01)
-    .sort((a, b) => a.balance - b.balance)
-    .slice(0, limit);
+    }),
+    outLimit
+  );
 }

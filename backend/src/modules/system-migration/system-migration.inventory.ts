@@ -70,7 +70,9 @@ export async function getMigrationInventory(tenantId: number): Promise<{
     warehouseCorrections,
     stockTakes,
     tenantTasks,
-    inAppNotifications
+    inAppNotifications,
+    bonusStrategies,
+    bankTransferInbox
   ] = await Promise.all([
     prisma.client.count({ where: { tenant_id: tenantId } }),
     prisma.product.count({ where: { tenant_id: tenantId } }),
@@ -107,7 +109,9 @@ export async function getMigrationInventory(tenantId: number): Promise<{
     prisma.warehouseCorrection.count({ where: { tenant_id: tenantId } }),
     prisma.stockTake.count({ where: { tenant_id: tenantId } }),
     prisma.tenantTask.count({ where: { tenant_id: tenantId } }),
-    prisma.inAppNotification.count({ where: { tenant_id: tenantId } })
+    prisma.inAppNotification.count({ where: { tenant_id: tenantId } }),
+    prisma.bonusStrategy.count({ where: { tenant_id: tenantId } }).catch(() => 0),
+    prisma.bankTransferInbox.count({ where: { tenant_id: tenantId } }).catch(() => 0)
   ]);
 
   const countByModule: Record<string, Record<string, number>> = {
@@ -129,7 +133,12 @@ export async function getMigrationInventory(tenantId: number): Promise<{
     refusals: { client_refusals: refusals },
     visits: { agent_visits: agentVisits, agent_location_pings: agentPings },
     expenses: { expenses, payment_allocations: paymentAllocations },
-    bonus_plans: { kpi_groups: kpiGroups, bonus_rules: bonusRules, sales_kpi_plans: salesKpiPlans },
+    bonus_plans: {
+      kpi_groups: kpiGroups,
+      bonus_rules: bonusRules,
+      sales_kpi_plans: salesKpiPlans,
+      bonus_strategies: bonusStrategies
+    },
     files: { client_photo_reports: clientPhotoReports },
     extended: {
       product_categories: productCategories,
@@ -144,7 +153,8 @@ export async function getMigrationInventory(tenantId: number): Promise<{
       warehouse_corrections: warehouseCorrections,
       stock_takes: stockTakes,
       tenant_tasks: tenantTasks,
-      in_app_notifications: inAppNotifications
+      in_app_notifications: inAppNotifications,
+      bank_transfer_inbox: bankTransferInbox
     }
   };
 

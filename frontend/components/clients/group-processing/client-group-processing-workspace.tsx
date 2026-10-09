@@ -6,8 +6,10 @@ import { GroupProcessingActionDialog } from "@/components/clients/group-processi
 import {
   GROUP_PROCESSING_ACTIONS,
   GROUP_PROCESSING_IDS_STORAGE_KEY,
+  canUseGroupProcessingAction,
   type GroupProcessingActionId
 } from "@/components/clients/group-processing/group-processing-actions";
+import { usePermissions } from "@/lib/use-permissions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useClientBulkActive, useClientBulkPatch } from "@/hooks/use-client-bulk-patch";
@@ -76,6 +78,7 @@ export function ClientGroupProcessingWorkspace() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const qc = useQueryClient();
+  const perms = usePermissions();
 
   const [page, setPage] = useState(1);
   const [pageSize] = useState(50);
@@ -176,7 +179,7 @@ export function ClientGroupProcessingWorkspace() {
     staleTime: STALE.reference,
     queryFn: async () => {
       const { data } = await api.get<{ data: Array<{ id: number; name: string; login?: string }> }>(
-        `/api/${tenantSlug}/expeditors`
+        `/api/${tenantSlug}/expeditors?picker=1&for_new_work=1`
       );
       return (data.data ?? []).map((a) => ({ id: a.id, name: a.name, login: a.login ?? "" }));
     }
@@ -275,12 +278,12 @@ export function ClientGroupProcessingWorkspace() {
         if (p > 100) break;
       }
       setSelectedIds(new Set(ids.slice(0, maxIds)));
-      setStatusMsg(`${Math.min(ids.length, maxIds)} ta mijoz tanlandi`);
+      setStatusMsg(`Выбрано клиентов: ${Math.min(ids.length, maxIds)}`);
       if (ids.length >= maxIds) {
-        setStatusMsg("Limit: birinchi 5000 ta ID tanlandi");
+        setStatusMsg("Лимит: выбраны первые 5000 ID");
       }
     } catch (e) {
-      setStatusMsg(getUserFacingError(e, "Tanlashda xato"));
+      setStatusMsg(getUserFacingError(e, "Ошибка при выборе"));
     } finally {
       setSelectingAll(false);
     }
@@ -289,7 +292,7 @@ export function ClientGroupProcessingWorkspace() {
   const openAction = (id: GroupProcessingActionId) => {
     if (id === "map") {
       if (selectedIds.size === 0) {
-        setStatusMsg("Avval mijozlarni belgilang");
+        setStatusMsg("Сначала отметьте клиентов");
         return;
       }
       try {
@@ -301,7 +304,7 @@ export function ClientGroupProcessingWorkspace() {
       return;
     }
     if (selectedIds.size === 0) {
-      setStatusMsg("Avval mijozlarni belgilang");
+      setStatusMsg("Сначала отметьте клиентов");
       return;
     }
     setActionId(id);
@@ -315,7 +318,7 @@ export function ClientGroupProcessingWorkspace() {
           clientIds: selectedArray,
           is_active: Boolean(payload.__bulk_active)
         });
-        setStatusMsg(`${res.updated} ta yangilandi`);
+        setStatusMsg(`Обновлено: ${res.updated}`);
         setActionId(null);
         return;
       }
@@ -333,7 +336,7 @@ export function ClientGroupProcessingWorkspace() {
           await qc.invalidateQueries({ queryKey: ["client-tags", tenantSlug] });
         }
         if (addIds.length === 0 && removeIds.length === 0) {
-          setStatusMsg("Teg tanlang yoki yangi nom kiriting");
+          setStatusMsg("Выберите тег или введите название нового");
           return;
         }
         let updated = 0;
@@ -350,7 +353,7 @@ export function ClientGroupProcessingWorkspace() {
           updated += data.updated;
           failed.push(...(data.failed ?? []));
         }
-        setStatusMsg(`${updated} ta yangilandi${failed.length ? `, xato: ${failed.length}` : ""}`);
+        setStatusMsg(`Обновлено: ${updated}${failed.length ? `, ошибок: ${failed.length}` : ""}`);
         await qc.invalidateQueries({ queryKey: ["clients", tenantSlug] });
         setActionId(null);
         return;
@@ -364,17 +367,17 @@ export function ClientGroupProcessingWorkspace() {
       delete patch.create_tag_name;
 
       if (Object.keys(patch).length === 0) {
-        setStatusMsg("Bo‘sh o‘zgarish");
+        setStatusMsg("Нет изменений");
         return;
       }
 
       const res = await bulkPatch.mutateAsync({ clientIds: selectedArray, patch });
       setStatusMsg(
-        `${res.updated} ta yangilandi${res.failed.length ? `, xato: ${res.failed.length}` : ""}`
+        `Обновлено: ${res.updated}${res.failed.length ? `, ошибок: ${res.failed.length}` : ""}`
       );
       setActionId(null);
     } catch (e) {
-      setStatusMsg(getUserFacingError(e, "Saqlashda xato"));
+      setStatusMsg(getUserFacingError(e, "Ошибка при сохранении"));
     }
   };
 
@@ -402,11 +405,11 @@ export function ClientGroupProcessingWorkspace() {
         <div>
           <h1 className="text-lg font-semibold tracking-tight">Групповые обработки</h1>
           <p className="text-sm text-muted-foreground">
-            Filtr → tanlash → amal. Tanlangan: <b>{selectedIds.size}</b>
+            Фильтр → выбор → действие. Выбрано: <b>{selectedIds.size}</b>
             {total > 0 ? (
               <>
                 {" "}
-                / filtrda jami: <b>{total}</b>
+                / всего по фильтру: <b>{total}</b>
               </>
             ) : null}
           </p>
@@ -414,7 +417,7 @@ export function ClientGroupProcessingWorkspace() {
         </div>
         <div className="flex flex-wrap gap-2">
           <Button type="button" variant="outline" size="sm" onClick={() => setSelectedIds(new Set())}>
-            Tanlovni tozalash
+            Сбросить выбор
           </Button>
           <Button
             type="button"
@@ -423,7 +426,7 @@ export function ClientGroupProcessingWorkspace() {
             disabled={selectingAll || !tenantSlug}
             onClick={() => void selectMatchingFilters()}
           >
-            {selectingAll ? "Tanlanmoqda…" : "Filtr bo‘yicha barcha"}
+            {selectingAll ? "Выбор…" : "Все по фильтру"}
           </Button>
         </div>
       </div>
@@ -431,7 +434,7 @@ export function ClientGroupProcessingWorkspace() {
       <div className="rounded-xl border border-border bg-card p-3">
         <div className="mb-3">
           <Input
-            placeholder="Qidiruv…"
+            placeholder="Поиск…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="max-w-md"
@@ -486,7 +489,7 @@ export function ClientGroupProcessingWorkspace() {
           />
           <div className="flex items-center justify-between gap-2 border-t border-border px-3 py-2 text-sm">
             <span>
-              Sahifa {page} · {rows.length} / {total}
+              Стр. {page} · {rows.length} / {total}
             </span>
             <div className="flex gap-2">
               <Button
@@ -496,7 +499,7 @@ export function ClientGroupProcessingWorkspace() {
                 disabled={page <= 1}
                 onClick={() => setPage((p) => Math.max(1, p - 1))}
               >
-                Oldingi
+                Назад
               </Button>
               <Button
                 type="button"
@@ -505,16 +508,16 @@ export function ClientGroupProcessingWorkspace() {
                 disabled={page * pageSize >= total}
                 onClick={() => setPage((p) => p + 1)}
               >
-                Keyingi
+                Далее
               </Button>
             </div>
           </div>
         </div>
 
         <aside className="h-fit rounded-xl border border-border bg-card p-3">
-          <p className="mb-2 text-sm font-medium">Amallar</p>
+          <p className="mb-2 text-sm font-medium">Действия</p>
           <div className="flex flex-col gap-1.5">
-            {GROUP_PROCESSING_ACTIONS.map((a) => (
+            {GROUP_PROCESSING_ACTIONS.filter((a) => canUseGroupProcessingAction(a.id, perms.has)).map((a) => (
               <Button
                 key={a.id}
                 type="button"

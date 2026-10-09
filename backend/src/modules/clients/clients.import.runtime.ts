@@ -23,11 +23,11 @@ export function chunkNumericIds(ids: readonly number[], chunkSize = IMPORT_ID_LO
 /** Prisma/PostgreSQL texnik xabarlarini import UI uchun qisqartirish. */
 export function humanizeImportDbError(err: unknown): string {
   const raw =
-    err instanceof Error ? err.message : typeof err === "string" ? err : "Import xatosi";
+    err instanceof Error ? err.message : typeof err === "string" ? err : "Ошибка импорта";
   if (/too many bind variables/i.test(raw) || /expected maximum of 32767/i.test(raw)) {
     return (
-      "Ma’lumotlar bazasi so‘rovi juda katta (PostgreSQL bind limiti). " +
-      "Backend worker qayta ishga tushirilganini tekshiring va importni qayta urinib ko‘ring."
+      "Слишком большой запрос к базе данных (лимит параметров PostgreSQL). " +
+      "Проверьте, что backend worker перезапущен, и повторите импорт."
     );
   }
   if (/Invalid `prisma\./i.test(raw)) {
@@ -36,7 +36,7 @@ export function humanizeImportDbError(err: unknown): string {
       .map((l) => l.trim())
       .find((l) => /Assertion violation|too many bind variables/i.test(l));
     if (assertion) return humanizeImportDbError(assertion);
-    return "Ma’lumotlar bazasida import vaqtida xato. Faylni kichikroq qilib qayta urinib ko‘ring.";
+    return "Ошибка базы данных во время импорта. Уменьшите файл и повторите попытку.";
   }
   return raw.length > 500 ? `${raw.slice(0, 500)}…` : raw;
 }
@@ -193,8 +193,10 @@ export type ClientXlsxImportOptions = {
   /** Tizim maydoni → fayldagi ustun indeksi (0 dan). */
   columnMap?: Record<string, number>;
   /**
-   * UI rejimi: `create` bo‘lsa `client_db_id` ustuni e’tiborsiz (faqat yangi yozuvlar).
-   * Berilmasa — avvalgidek: xaritada `client_db_id` bo‘lsa «yangilash» rejimi.
+   * UI rejimi:
+   * - `create` — yangi yozuvlar; `client_db_id`/`ИД`/`id` bo‘lsa tenant ichida upsert (bor → update, yo‘q → create with id).
+   * - `update` — faqat mavjudlarni yangilash (`client_db_id` / ИД majburiy: raqam yoki matnli kod).
+   * - berilmasa — xaritada `client_db_id` bo‘lsa «yangilash» rejimi.
    */
   importMode?: "create" | "update";
   /**
@@ -209,6 +211,11 @@ export type ClientXlsxImportOptions = {
   onProgress?: ClientImportProgressSink;
   /** Import aktori (yo‘q bo‘lsa audit null-safe). */
   actorUserId?: number | null;
+  /**
+   * Yangi klient: xato bo‘lsa default — yozmasdan `needsDecision`.
+   * `accept_valid` — faqat to‘g‘ri qatorlar; `reject_all` — hech narsa.
+   */
+  commitDecision?: "accept_valid" | "reject_all";
 };
 
 /** Import tugagach job/API javobida qatorlar bo‘yicha aniq hisob (UI «N / M» uchun). */
@@ -223,10 +230,13 @@ export type ClientImportFinalStats = {
 
 export type ClientXlsxImportResult = {
   created: number;
-  /** «Обновление с Excel»: `ИД` ustuni bo‘lsa */
+  /** «Обновление с Excel»: `client_db_id`/`ИД` ustuni bo‘lsa */
   updated: number;
   errors: string[];
   importStats?: ClientImportFinalStats;
+  /** Xato+to‘g‘ri aralash: foydalanuvchi tanlovi kerak (hech narsa yozilmagan) */
+  needsDecision?: boolean;
+  decisionPreview?: import("./clients.import.commit-policy").ClientImportDecisionPreview;
 };
 
 export type ImportFlowContext = {

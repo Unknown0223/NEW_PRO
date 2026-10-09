@@ -195,6 +195,9 @@ export function OrdersPageContent({ page }: { page: UseOrdersListPageResult }) {
         setBulkExpFeedback={page.setBulkExpFeedback}
         bulkConsignmentMut={page.bulkConsignmentMut}
         bulkConsignmentFeedback={page.bulkConsignmentFeedback}
+        bulkBonusRefreshMut={page.bulkBonusRefreshMut}
+        bulkBonusRefreshFeedback={page.bulkBonusRefreshFeedback}
+        setBulkBonusRefreshFeedback={page.setBulkBonusRefreshFeedback}
         canBulkCatalog={page.canBulkCatalog}
         totalsPanelOpen={page.totalsPanelOpen}
         setTotalsPanelOpen={page.setTotalsPanelOpen}

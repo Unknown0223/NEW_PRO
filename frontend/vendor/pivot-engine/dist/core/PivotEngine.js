@@ -175,7 +175,9 @@ export class PivotEngine {
                 const measureChildren = onRows && !(config.options.drillDown && config.rows.length > 1)
                     ? this.buildMeasureChildRows(groupData, colSpecs, config, enrichedFields, groupKey, 1)
                     : undefined;
-                const cells = onRows
+                // values-on-rows: faqat metrika bola qatorlari bo‘lsa ota bo‘sh;
+                // viloyat→agent kabi o‘lcham otasi — guruh summasi ko‘rinsin (— emas).
+                const cells = onRows && measureChildren
                     ? this.buildEmptyLabelCells(colSpecs, config, rowLabel)
                     : this.buildCellsForData(groupData, colSpecs, config, enrichedFields, groupKey);
                 const subtotal = config.options.showSubtotals && config.rows.length > 1
@@ -537,9 +539,20 @@ export class PivotEngine {
         return colFields.every((field, i) => String(row[field] ?? "N/A") === parts[i]);
     }
     extractNumericValues(data, fieldId) {
-        return data
-            .map((r) => r[fieldId])
-            .filter((v) => typeof v === "number" && Number.isFinite(v));
+        const out = [];
+        for (const r of data) {
+            const v = r[fieldId];
+            if (typeof v === "number" && Number.isFinite(v)) {
+                out.push(v);
+                continue;
+            }
+            if (typeof v === "string") {
+                const n = Number(v.trim());
+                if (Number.isFinite(n))
+                    out.push(n);
+            }
+        }
+        return out;
     }
     buildFlatRow(data, colSpecs, config, fields, label, depth, rowGroupKey) {
         const cells = this.buildCellsForData(data, colSpecs, config, fields, rowGroupKey);
@@ -567,10 +580,10 @@ export class PivotEngine {
             const measureChildren = onRows && isLeaf
                 ? this.buildMeasureChildRows(groupData, colSpecs, config, fields, rowGroupKey, depth + 1)
                 : undefined;
-            const cells = onRows
+            const cells = onRows && measureChildren
                 ? this.buildEmptyLabelCells(colSpecs, config, rowLabel)
                 : this.buildCellsForData(groupData, colSpecs, config, fields, rowGroupKey);
-            if (!onRows && cells[0]) {
+            if (cells[0] && !(onRows && measureChildren)) {
                 cells[0] = {
                     ...cells[0],
                     value: rowLabel,
@@ -593,15 +606,13 @@ export class PivotEngine {
         return this.sortEngine.sortRows(result, config.options.sortBy, config);
     }
     buildSubtotalRow(data, colSpecs, config, fields, parentLabel, rowGroupKey) {
-        const onRows = valuesOnRows(config.options);
-        const cells = onRows
-            ? this.buildEmptyLabelCells(colSpecs, config, getPivotStrings().engine.subtotalInline(parentLabel))
-            : this.buildCellsForData(data, colSpecs, config, fields, rowGroupKey);
-        if (!onRows && cells[0]) {
+        const label = getPivotStrings().engine.subtotalInline(parentLabel);
+        const cells = this.buildCellsForData(data, colSpecs, config, fields, rowGroupKey);
+        if (cells[0]) {
             cells[0] = {
                 ...cells[0],
-                value: getPivotStrings().engine.subtotalInline(parentLabel),
-                formatted: getPivotStrings().engine.subtotalInline(parentLabel),
+                value: label,
+                formatted: label,
                 isEmpty: false
             };
         }

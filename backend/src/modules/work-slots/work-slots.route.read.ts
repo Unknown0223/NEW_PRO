@@ -61,6 +61,9 @@ function mapAssignError(reply: Parameters<typeof sendApiError>[0], request: Para
     msg === "BAD_DIRECTION" ||
     msg === "BAD_WAREHOUSE" ||
     msg === "BAD_CASH_DESK" ||
+    msg === "BAD_SUPERVISOR" ||
+    msg === "BAD_SUPERVISEE_AGENT_SLOTS" ||
+    msg === "BAD_SLOT_CODE_PREFIX" ||
     msg === "NO_ACTIVE_USER" ||
     msg === "CASH_DESK_ROLE_UNSUPPORTED"
   ) {
@@ -260,12 +263,12 @@ export async function registerWorkSlotListRoutes(app: FastifyInstance) {
     const fromRaw = q.date_from?.trim();
     const toRaw = q.date_to?.trim();
     if (!fromRaw || !toRaw) {
-      return sendApiError(reply, request, 400, "ValidationError", "date_from and date_to required");
+      return sendApiError(reply, request, 400, "ValidationError", "Требуются date_from и date_to");
     }
     const dateFrom = new Date(fromRaw);
     const dateTo = new Date(toRaw);
     if (Number.isNaN(dateFrom.getTime()) || Number.isNaN(dateTo.getTime())) {
-      return sendApiError(reply, request, 400, "ValidationError", "Invalid date");
+      return sendApiError(reply, request, 400, "ValidationError", "Неверная дата");
     }
     try {
       const data = await getWorkSlotActivityReport(request.tenant!.id, {
@@ -284,5 +287,17 @@ export async function registerWorkSlotListRoutes(app: FastifyInstance) {
       }
       throw e;
     }
+  });
+
+  app.get("/api/:slug/staff/users/:userId/face-reference", { preHandler: preRead }, async (request, reply) => {
+    if (!ensureTenantContext(request, reply)) return;
+    const userId = Number.parseInt(String((request.params as { userId: string }).userId), 10);
+    if (!Number.isFinite(userId) || userId <= 0) {
+      return sendApiError(reply, request, 400, "ValidationError");
+    }
+    const { readFaceReferenceBuffer } = await import("../mobile/mobile-face.service");
+    const buf = await readFaceReferenceBuffer(request.tenant!.id, userId);
+    if (!buf) return sendApiError(reply, request, 404, "NotFound");
+    return reply.header("Content-Type", "image/jpeg").header("Cache-Control", "private, max-age=60").send(buf);
   });
 }

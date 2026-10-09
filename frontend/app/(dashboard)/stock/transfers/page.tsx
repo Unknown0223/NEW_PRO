@@ -33,9 +33,11 @@ import Link from "next/link";
 import { Eye, FileSpreadsheet, FileText, LayoutGrid, RefreshCw, Search } from "lucide-react";
 import { apiFetch, useTenant } from "@/lib/api-client";
 import { api } from "@/lib/api";
+import { useDebouncedSearchCommit } from "@/lib/use-debounced-search-commit";
 import { getUserFacingError } from "@/lib/error-utils";
 import { downloadXlsxSheet } from "@/lib/download-xlsx";
 import { useUserTablePrefs } from "@/hooks/use-user-table-prefs";
+import { usePermissions } from "@/lib/use-permissions";
 import { cn } from "@/lib/utils";
 import { formatNumberGrouped } from "@/lib/format-numbers";
 
@@ -95,10 +97,10 @@ interface TransferDetail {
 }
 
 const statusLabels: Record<string, string> = {
-  draft: "Qoralama",
-  in_transit: "Yo'lda",
-  received: "Qabul qilindi",
-  cancelled: "Bekor qilindi",
+  draft: "Черновик",
+  in_transit: "В пути",
+  received: "Принято",
+  cancelled: "Отменено",
 };
 
 const statusColors: Record<string, string> = {
@@ -169,6 +171,7 @@ function parseFilenameFromDisposition(cd: string | undefined): string | null {
 
 export default function TransfersPage() {
   const tenant = useTenant();
+  const canExport = usePermissions().has("warehouse.peremeshchenie.export");
   const [loading, setLoading] = useState(true);
   const [warehouses, setWarehouses] = useState<WarehouseOption[]>([]);
   const [rawTransfers, setRawTransfers] = useState<Transfer[]>([]);
@@ -180,6 +183,10 @@ export default function TransfersPage() {
   const [draftDestinationWarehouseId, setDraftDestinationWarehouseId] = useState("all");
   const [searchDraft, setSearchDraft] = useState("");
   const [searchApplied, setSearchApplied] = useState("");
+  useDebouncedSearchCommit(searchDraft, (q) => {
+    setSearchApplied(q);
+    setPage(1);
+  });
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
   const [columnOpen, setColumnOpen] = useState(false);
@@ -224,7 +231,7 @@ export default function TransfersPage() {
         responseType: "blob",
       });
       const ct = String(res.headers["content-type"] ?? "").toLowerCase();
-      if (!ct.includes("pdf")) throw new Error("PDF tayyor bo‘lmadi");
+      if (!ct.includes("pdf")) throw new Error("PDF не сформирован");
       const blob = res.data as Blob;
       const filename =
         parseFilenameFromDisposition(res.headers["content-disposition"]) ??
@@ -239,7 +246,7 @@ export default function TransfersPage() {
       a.remove();
       URL.revokeObjectURL(url);
     } catch (e) {
-      setViewError(getUserFacingError(e, "PDF yuklashda xatolik"));
+      setViewError(getUserFacingError(e, "Ошибка при скачивании PDF"));
     } finally {
       setViewPdfLoading(false);
     }
@@ -309,7 +316,7 @@ export default function TransfersPage() {
       } catch (e) {
         if (!cancelled) {
           setViewDetail(null);
-          setViewError(getUserFacingError(e, "Yuklashda xatolik"));
+          setViewError(getUserFacingError(e, "Ошибка загрузки"));
         }
       } finally {
         if (!cancelled) setViewLoading(false);
@@ -360,20 +367,20 @@ export default function TransfersPage() {
   const runGeneralExport = () => {
     if (transfers.length === 0) return;
     const headers = [
-      "Raqam",
-      "Holat",
-      "Ko‘chirish (sana, mahalliy vaqt)",
-      "Ko‘chirish (ISO UTC)",
-      "Manba ombor",
-      "Qabul ombori",
-      "Jami miqdor",
-      "Yaratilgan (sana, mahalliy vaqt)",
-      "Yaratilgan (ISO UTC)",
-      "Kim yaratgan (ism)",
-      "Kim yaratgan (login)",
-      "Qabul qilgan (ism)",
-      "Qabul qilgan (login)",
-      "Izoh",
+      "Номер",
+      "Статус",
+      "Перемещение (дата, местное время)",
+      "Перемещение (ISO UTC)",
+      "Склад-отправитель",
+      "Склад-получатель",
+      "Всего количество",
+      "Создано (дата, местное время)",
+      "Создано (ISO UTC)",
+      "Кто создал (имя)",
+      "Кто создал (логин)",
+      "Кто принял (имя)",
+      "Кто принял (логин)",
+      "Комментарий",
     ];
     const rows = transfers.map((t) => {
       const primary = transferDisplayDate(t);
@@ -394,7 +401,7 @@ export default function TransfersPage() {
         t.comment ?? "",
       ];
     });
-    downloadXlsxSheet(`transfers_umumiy_${exportStamp()}`, "Ko‘chirishlar", headers, rows, {
+    downloadXlsxSheet(`transfers_umumiy_${exportStamp()}`, "Перемещения", headers, rows, {
       colWidths: [14, 12, 22, 24, 18, 18, 12, 22, 24, 18, 16, 18, 16, 28],
     });
     setExportOpen(false);
@@ -405,24 +412,24 @@ export default function TransfersPage() {
     setExportBusy(true);
     try {
       const headers = [
-        "Hujjat raqami",
-        "Holat",
-        "Ko‘chirish (sana, mahalliy vaqt)",
-        "Ko‘chirish (ISO UTC)",
-        "Yaratilgan (sana, mahalliy vaqt)",
-        "Yaratilgan (ISO UTC)",
-        "Kim yaratgan (ism)",
-        "Kim yaratgan (login)",
-        "Qabul qilgan (ism)",
-        "Qabul qilgan (login)",
-        "Manba ombor",
-        "Qabul ombori",
-        "Mahsulot kodi (SKU)",
-        "Mahsulot nomi",
-        "Partiya",
-        "Miqdor",
-        "Qabul qilingan",
-        "Qator izoh",
+        "Номер документа",
+        "Статус",
+        "Перемещение (дата, местное время)",
+        "Перемещение (ISO UTC)",
+        "Создано (дата, местное время)",
+        "Создано (ISO UTC)",
+        "Кто создал (имя)",
+        "Кто создал (логин)",
+        "Кто принял (имя)",
+        "Кто принял (логин)",
+        "Склад-отправитель",
+        "Склад-получатель",
+        "Код товара (SKU)",
+        "Наименование товара",
+        "Партия",
+        "Количество",
+        "Принято",
+        "Комментарий к строке",
       ];
       const rows: (string | number)[][] = [];
       for (const t of transfers) {
@@ -453,7 +460,7 @@ export default function TransfersPage() {
           ]);
         }
       }
-      downloadXlsxSheet(`transfers_batafsil_${exportStamp()}`, "Qatorlar", headers, rows, {
+      downloadXlsxSheet(`transfers_batafsil_${exportStamp()}`, "Строки", headers, rows, {
         colWidths: [14, 12, 22, 24, 22, 24, 18, 16, 18, 16, 16, 16, 14, 28, 12, 10, 12, 20],
       });
       setExportOpen(false);
@@ -472,13 +479,13 @@ export default function TransfersPage() {
           <p className="text-muted-foreground">Журнал перемещений между складами.</p>
         </div>
         <Link href="/stock/transfers/amaliyot" className={cn(buttonVariants({ variant: "default" }))}>
-          Rasmiylashtirish
+          Оформить
         </Link>
       </div>
 
       <Card>
         <CardHeader className="pb-3">
-          <CardTitle>Filtrlash</CardTitle>
+          <CardTitle>Фильтр</CardTitle>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
           <div className="flex flex-wrap gap-3 items-end justify-between">
@@ -529,7 +536,7 @@ export default function TransfersPage() {
                 <SelectValue placeholder="Статус" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">Barchasi</SelectItem>
+                <SelectItem value="all">Все</SelectItem>
                 <SelectItem value="draft">Черновик</SelectItem>
                 <SelectItem value="in_transit">В пути</SelectItem>
                 <SelectItem value="received">Принят</SelectItem>
@@ -547,9 +554,9 @@ export default function TransfersPage() {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="10">10 / sahifa</SelectItem>
-                <SelectItem value="20">20 / sahifa</SelectItem>
-                <SelectItem value="50">50 / sahifa</SelectItem>
+                <SelectItem value="10">10 / стр.</SelectItem>
+                <SelectItem value="20">20 / стр.</SelectItem>
+                <SelectItem value="50">50 / стр.</SelectItem>
               </SelectContent>
             </Select>
             </div>
@@ -597,17 +604,19 @@ export default function TransfersPage() {
                 <RefreshCw className={cn("size-4", loading && "animate-spin")} />
                 Обновить
               </Button>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="gap-2"
-                onClick={() => setExportOpen(true)}
-                disabled={!tenant}
-              >
-                <FileSpreadsheet className="size-4" />
-                Excel
-              </Button>
+              {canExport ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="gap-2"
+                  onClick={() => setExportOpen(true)}
+                  disabled={!tenant}
+                >
+                  <FileSpreadsheet className="size-4" />
+                  Excel
+                </Button>
+              ) : null}
             </div>
           </div>
         </CardContent>
@@ -692,13 +701,13 @@ export default function TransfersPage() {
               </div>
               <div className="min-w-0 space-y-1 pr-6">
                 <DialogTitle className="text-base font-semibold leading-tight">
-                  Excel eksport
+                  Экспорт в Excel
                 </DialogTitle>
                 <DialogDescription className="text-xs leading-relaxed text-muted-foreground">
-                  Joriy sahifa va holat filtri. Qidiruvdan keyin jadvalda qolgan qatorlar eksportga kiradi.
-                  Fayl <span className="font-medium text-foreground/80">.xlsx</span> (Unicode UTF-8) — o‘zbek va
-                  kirill matnlari Excelda to‘g‘ri ochiladi; vaqtlar mahalliy va{" "}
-                  <span className="font-medium text-foreground/80">ISO UTC</span> ustunlarida beriladi.
+                  Текущая страница и фильтр по статусу. В экспорт попадают строки, оставшиеся в таблице после поиска.
+                  Файл <span className="font-medium text-foreground/80">.xlsx</span> (Unicode UTF-8) — латиница и
+                  кириллица корректно открываются в Excel; время указывается в столбцах местного времени и{" "}
+                  <span className="font-medium text-foreground/80">ISO UTC</span>.
                 </DialogDescription>
               </div>
             </div>
@@ -716,9 +725,9 @@ export default function TransfersPage() {
                 "disabled:pointer-events-none disabled:opacity-45"
               )}
             >
-              <span className="text-sm font-medium">Umumiy ro‘yxat</span>
+              <span className="text-sm font-medium">Общий список</span>
               <span className="text-xs text-muted-foreground">
-                Hujjatlar: vaqt, omborlar, miqdor, kim yaratgan / qabul qilgan, izoh
+                Документы: время, склады, количество, кто создал / принял, комментарий
               </span>
             </button>
 
@@ -734,16 +743,16 @@ export default function TransfersPage() {
               )}
             >
               <span className="text-sm font-medium">
-                {exportBusy ? "Загрузка…" : "Batafsil (mahsulot qatorlari)"}
+                {exportBusy ? "Загрузка…" : "Подробно (строки товаров)"}
               </span>
               <span className="text-xs text-muted-foreground">
-                Mahsulot qatorlari, yaratgan / qabul qilgan foydalanuvchilar, vaqtlar
+                Строки товаров, пользователи, создавшие / принявшие документ, время
               </span>
             </button>
 
             {transfers.length === 0 && (
               <p className="rounded-lg bg-muted/50 px-3 py-2 text-center text-xs text-muted-foreground">
-                Eksport uchun jadvalda kamida bitta qator bo‘lishi kerak.
+                Для экспорта в таблице должна быть хотя бы одна строка.
               </p>
             )}
           </div>
@@ -767,10 +776,10 @@ export default function TransfersPage() {
               </div>
               <div className="min-w-0 flex-1 space-y-1">
                 <DialogTitle className="text-base font-semibold leading-tight">
-                  {viewLoading ? "Ko‘chirish" : viewDetail?.number ?? "Ko‘chirish"}
+                  {viewLoading ? "Перемещение" : viewDetail?.number ?? "Перемещение"}
                 </DialogTitle>
                 <DialogDescription className="sr-only">
-                  Ombor ko‘chirish hujjati: raqam, holat, omborlar, vaqtlar va mahsulot qatorlari.
+                  Документ перемещения между складами: номер, статус, склады, время и строки товаров.
                 </DialogDescription>
                 <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                   {viewDetail && (
@@ -778,7 +787,7 @@ export default function TransfersPage() {
                       {statusLabels[viewDetail.status] ?? viewDetail.status}
                     </Badge>
                   )}
-                  <span>Hujjat tafsilotlari va mahsulot qatorlari</span>
+                  <span>Реквизиты документа и строки товаров</span>
                 </div>
               </div>
             </div>
@@ -797,45 +806,45 @@ export default function TransfersPage() {
               <div className="space-y-5">
                 <dl className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
                   <div className="rounded-lg border border-border/70 bg-muted/20 px-3 py-2">
-                    <dt className="text-xs font-medium text-muted-foreground">Manba ombor</dt>
+                    <dt className="text-xs font-medium text-muted-foreground">Склад-отправитель</dt>
                     <dd className="mt-0.5 font-medium">{viewDetail.source_warehouse_name}</dd>
                   </div>
                   <div className="rounded-lg border border-border/70 bg-muted/20 px-3 py-2">
-                    <dt className="text-xs font-medium text-muted-foreground">Qabul ombori</dt>
+                    <dt className="text-xs font-medium text-muted-foreground">Склад-получатель</dt>
                     <dd className="mt-0.5 font-medium">{viewDetail.destination_warehouse_name}</dd>
                   </div>
                   <div className="rounded-lg border border-border/70 bg-muted/20 px-3 py-2 sm:col-span-2">
-                    <dt className="text-xs font-medium text-muted-foreground">Izoh</dt>
+                    <dt className="text-xs font-medium text-muted-foreground">Комментарий</dt>
                     <dd className="mt-0.5 whitespace-pre-wrap break-words">
                       {viewDetail.comment?.trim() ? viewDetail.comment : "—"}
                     </dd>
                   </div>
                   <div className="rounded-lg border border-border/70 bg-muted/20 px-3 py-2">
-                    <dt className="text-xs font-medium text-muted-foreground">Reja sanasi</dt>
+                    <dt className="text-xs font-medium text-muted-foreground">Плановая дата</dt>
                     <dd className="mt-0.5 font-mono text-xs">
                       {formatDateTimeLocal(viewDetail.planned_date)}
                     </dd>
                   </div>
                   <div className="rounded-lg border border-border/70 bg-muted/20 px-3 py-2">
-                    <dt className="text-xs font-medium text-muted-foreground">Boshlangan</dt>
+                    <dt className="text-xs font-medium text-muted-foreground">Начато</dt>
                     <dd className="mt-0.5 font-mono text-xs">
                       {formatDateTimeLocal(viewDetail.started_at)}
                     </dd>
                   </div>
                   <div className="rounded-lg border border-border/70 bg-muted/20 px-3 py-2">
-                    <dt className="text-xs font-medium text-muted-foreground">Qabul qilingan</dt>
+                    <dt className="text-xs font-medium text-muted-foreground">Принято</dt>
                     <dd className="mt-0.5 font-mono text-xs">
                       {formatDateTimeLocal(viewDetail.received_at)}
                     </dd>
                   </div>
                   <div className="rounded-lg border border-border/70 bg-muted/20 px-3 py-2">
-                    <dt className="text-xs font-medium text-muted-foreground">Yaratilgan</dt>
+                    <dt className="text-xs font-medium text-muted-foreground">Создано</dt>
                     <dd className="mt-0.5 font-mono text-xs">
                       {formatDateTimeLocal(viewDetail.created_at)}
                     </dd>
                   </div>
                   <div className="rounded-lg border border-border/70 bg-muted/20 px-3 py-2">
-                    <dt className="text-xs font-medium text-muted-foreground">Kim yaratgan</dt>
+                    <dt className="text-xs font-medium text-muted-foreground">Кто создал</dt>
                     <dd className="mt-0.5">
                       {actorSummary(
                         viewDetail.created_by_name,
@@ -845,7 +854,7 @@ export default function TransfersPage() {
                     </dd>
                   </div>
                   <div className="rounded-lg border border-border/70 bg-muted/20 px-3 py-2">
-                    <dt className="text-xs font-medium text-muted-foreground">Qabul qilgan</dt>
+                    <dt className="text-xs font-medium text-muted-foreground">Кто принял</dt>
                     <dd className="mt-0.5">
                       {actorSummary(
                         viewDetail.received_by_name,
@@ -857,21 +866,21 @@ export default function TransfersPage() {
                 </dl>
 
                 <div>
-                  <h3 className="mb-2 text-sm font-medium text-foreground">Mahsulot qatorlari</h3>
+                  <h3 className="mb-2 text-sm font-medium text-foreground">Строки товаров</h3>
                   {viewDetail.lines.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">Qatorlar yo‘q</p>
+                    <p className="text-sm text-muted-foreground">Строк нет</p>
                   ) : (
                     <div className="overflow-x-auto rounded-lg border border-border/80">
                       <Table>
                         <TableHeader>
                           <TableRow className="hover:bg-transparent">
                             <TableHead className="w-10">№</TableHead>
-                            <TableHead>Kod</TableHead>
-                            <TableHead>Nomi</TableHead>
-                            <TableHead>Partiya</TableHead>
-                            <TableHead className="text-right">Miqdor</TableHead>
-                            <TableHead className="text-right">Qabul</TableHead>
-                            <TableHead>Izoh</TableHead>
+                            <TableHead>Код</TableHead>
+                            <TableHead>Наименование</TableHead>
+                            <TableHead>Партия</TableHead>
+                            <TableHead className="text-right">Количество</TableHead>
+                            <TableHead className="text-right">Принято</TableHead>
+                            <TableHead>Комментарий</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -905,10 +914,10 @@ export default function TransfersPage() {
 
           <div className="flex justify-end gap-2 border-t border-border/80 bg-muted/40 px-4 py-3">
             <Button type="button" variant="outline" onClick={() => void downloadViewPdf()} disabled={viewPdfLoading}>
-              {viewPdfLoading ? "PDF…" : "PDF yuklab olish"}
+              {viewPdfLoading ? "PDF…" : "Скачать PDF"}
             </Button>
             <Button type="button" variant="outline" onClick={closeTransferView}>
-              Yopish
+              Закрыть
             </Button>
           </div>
         </DialogContent>
@@ -920,7 +929,7 @@ export default function TransfersPage() {
             <div className="text-center py-8">Загрузка…</div>
           ) : transfers.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">
-              Hech qanday ko‘chirish topilmadi
+              Перемещения не найдены
             </div>
           ) : visible.length === 0 ? (
             <div className="p-8 text-center text-muted-foreground">
@@ -982,7 +991,7 @@ export default function TransfersPage() {
                                 onClick={() => openTransferView(t.id)}
                               >
                                 <Eye className="size-3.5 opacity-80" />
-                                Ko‘rish
+                                Просмотр
                               </Button>
                               {t.status === "draft" && (
                                 <Button
@@ -997,7 +1006,7 @@ export default function TransfersPage() {
                                     })
                                   }
                                 >
-                                  Boshlash
+                                  Начать
                                 </Button>
                               )}
                               {t.status === "in_transit" && (
@@ -1015,7 +1024,7 @@ export default function TransfersPage() {
                                     })
                                   }
                                 >
-                                  Qabul qilish
+                                  Принять
                                 </Button>
                               )}
                               {(t.status === "draft" || t.status === "in_transit") && (
@@ -1031,7 +1040,7 @@ export default function TransfersPage() {
                                     })
                                   }
                                 >
-                                  Bekor qilish
+                                  Отменить
                                 </Button>
                               )}
                             </div>
@@ -1052,7 +1061,7 @@ export default function TransfersPage() {
               </span>
               <div className="flex gap-2">
                 <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>
-                  Oldingi
+                  Назад
                 </Button>
                 <Button
                   variant="outline"
@@ -1060,7 +1069,7 @@ export default function TransfersPage() {
                   disabled={page * tablePrefs.pageSize >= total}
                   onClick={() => setPage((p) => p + 1)}
                 >
-                  Keyingi
+                  Далее
                 </Button>
               </div>
             </div>

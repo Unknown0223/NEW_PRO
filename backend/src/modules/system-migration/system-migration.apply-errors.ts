@@ -10,44 +10,70 @@ function isTechnicalPrismaMessage(m: string): boolean {
 
 /** Async sessiya / sync apply — foydalanuvchiga sodda o‘zbekcha matn. */
 export function humanizeMigrationApplyError(e: unknown): string {
+  const prismaCode =
+    e !== null && typeof e === "object" && "code" in e
+      ? String((e as { code?: unknown }).code ?? "")
+      : "";
+  if (prismaCode === "P2002") {
+    return "Найдена дублирующая запись. Загрузите в пустую компанию или выберите «Оставить старое / Заменить новым».";
+  }
+  if (prismaCode === "P2003") {
+    return "Ошибка связи (foreign key). Сначала импортируйте справочники или загрузите в пустую компанию.";
+  }
+  if (prismaCode === "P2021" || prismaCode === "P2022") {
+    return "База данных не обновлена. Обратитесь к администратору.";
+  }
+
   if (e instanceof Error) {
     const m = e.message.trim();
     if (m === "TARGET_NOT_EMPTY") {
-      return "Bu tenant allaqachon ma’lumotlarga ega. Bo‘sh tenantga yuklang yoki dublikat oynasida davom eting.";
+      return "В этой компании уже есть данные. Загрузите в пустую компанию или продолжите в окне дубликатов.";
     }
     if (m === "PROFILE_MISSING") {
-      return "Kompaniya profili topilmadi. Arxiv to‘liq emas — qayta eksport qiling.";
+      return "Профиль компании не найден. Архив неполный — выполните экспорт заново.";
+    }
+    if (m === "NOT_FOUND") {
+      return "Компания или профиль не найдены. Обновите страницу и попробуйте снова.";
+    }
+    if (m === "INVALID_BRANCH_CASH_DESK") {
+      return "ID кассы филиала отсутствует в целевой компании. Сначала импортируйте кассы/справочники или загрузите в пустую компанию.";
+    }
+    if (m === "DUPLICATE_BRANCH_CASH_DESK") {
+      return "В настройках филиала одна и та же касса привязана дважды. Проверьте связи филиал/касса в архиве.";
+    }
+    if (m === "EMPTY_EXPORT") {
+      return "Экспорт получился пустым. Выполните экспорт заново.";
     }
     if (m.startsWith("INVALID_BACKUP:")) {
-      return m.replace("INVALID_BACKUP:", "").trim() || "Zaxira arxivi yaroqsiz.";
+      return m.replace("INVALID_BACKUP:", "").trim() || "Архив резервной копии недействителен.";
     }
     if (m.startsWith("IMPORT_MAP_ERROR:")) {
       return (
         m.replace("IMPORT_MAP_ERROR:", "").trim() ||
-        "Bog‘lanish xatosi: ba’zi yozuvlar topilmadi. Avval spravochniklarni import qiling."
+        "Ошибка связей: некоторые записи не найдены. Сначала импортируйте справочники."
       );
     }
     if (/Unexpected token|JSON|SyntaxError/i.test(m) || e instanceof SyntaxError) {
-      return "Arxiv ichidagi ma’lumot buzilgan. Qayta eksport qiling.";
+      return "Данные в архиве повреждены. Выполните экспорт заново.";
     }
     if (/Transaction.*timeout|Interactive transaction/i.test(m)) {
-      return "Import juda uzoq davom etdi. Kichikroq arxiv yoki bo‘sh tenantga urinib ko‘ring.";
+      return "Импорт выполнялся слишком долго. Попробуйте архив поменьше или пустую компанию.";
     }
     if (/Argument [`']?product[`']? is missing|product_id/i.test(m) && /missing|null|Invalid/i.test(m)) {
-      return "Mahsulot narxi import qilinmadi: mahsulot topilmadi. Avval asosiy spravochniklarni (mahsulotlar) belgilang.";
+      return "Цена товара не импортирована: товар не найден. Сначала отметьте основные справочники (товары).";
     }
     if (isTechnicalPrismaMessage(m)) {
-      return "Import amalga oshmadi: ba’zi bog‘lanishlar topilmadi. Spravochniklarni tekshirib, qayta urinib ko‘ring.";
+      return "Импорт не выполнен: некоторые связи не найдены. Проверьте справочники и повторите попытку.";
     }
     if (/^[A-Z][A-Z0-9_]+$/.test(m) || /^P20\d{2}/.test(m)) {
-      return "Import amalga oshmadi. Qayta urinib ko‘ring yoki bo‘sh tenantga yuklang.";
+      return `Импорт не выполнен (${m}). Повторите попытку или загрузите в пустую компанию.`;
     }
     if (/[A-Za-z]:\\|node_modules|\.ts:\d+/.test(m)) {
-      return "Import amalga oshmadi. Qayta urinib ko‘ring.";
+      return "Импорт не выполнен. Повторите попытку.";
     }
     if (m) return m;
   }
-  return "Import amalga oshmadi. Qayta urinib ko‘ring.";
+  return "Импорт не выполнен. Повторите попытку.";
 }
 
 /** Sync apply xatolarini API javobiga aylantirish. true = javob yuborildi. */
@@ -62,7 +88,7 @@ export function mapMigrationApplyError(
       request,
       409,
       "TargetNotEmpty",
-      "Bu tenant allaqachon ma’lumotlarga ega. Bo‘sh tenantga yuklang yoki dublikat oynasida «davom etish»ni tasdiqlang."
+      "В этой компании уже есть данные. Загрузите в пустую компанию или подтвердите «Продолжить» в окне дубликатов."
     );
     return true;
   }
@@ -72,7 +98,27 @@ export function mapMigrationApplyError(
       request,
       400,
       "ProfileMissing",
-      "Kompaniya profili topilmadi. Arxiv to‘liq emas — qayta eksport qiling."
+      "Профиль компании не найден. Архив неполный — выполните экспорт заново."
+    );
+    return true;
+  }
+  if (e instanceof Error && e.message === "INVALID_BRANCH_CASH_DESK") {
+    void sendApiError(
+      reply,
+      request,
+      400,
+      "InvalidBranchCashDesk",
+      humanizeMigrationApplyError(e)
+    );
+    return true;
+  }
+  if (e instanceof Error && e.message === "DUPLICATE_BRANCH_CASH_DESK") {
+    void sendApiError(
+      reply,
+      request,
+      400,
+      "DuplicateBranchCashDesk",
+      humanizeMigrationApplyError(e)
     );
     return true;
   }
@@ -83,7 +129,7 @@ export function mapMigrationApplyError(
       422,
       "ImportMapError",
       e.message.replace("IMPORT_MAP_ERROR:", "").trim() ||
-        "Bog‘lanish xatosi: ba’zi yozuvlar topilmadi. Avval spravochniklarni import qiling."
+        "Ошибка связей: некоторые записи не найдены. Сначала импортируйте справочники."
     );
     return true;
   }
@@ -93,7 +139,7 @@ export function mapMigrationApplyError(
       request,
       400,
       "InvalidBackup",
-      e.message.replace("INVALID_BACKUP:", "").trim() || "Zaxira arxivi yaroqsiz."
+      e.message.replace("INVALID_BACKUP:", "").trim() || "Архив резервной копии недействителен."
     );
     return true;
   }
@@ -107,7 +153,7 @@ export function mapMigrationApplyError(
       request,
       409,
       "DuplicateKey",
-      "Dublikat yozuv topildi. Bo‘sh tenantga yuklang yoki «Eskisini qoldirish / Yangisini almashtirish» ni tanlang."
+      "Найдена дублирующая запись. Загрузите в пустую компанию или выберите «Оставить старое / Заменить новым»."
     );
     return true;
   }
@@ -117,7 +163,7 @@ export function mapMigrationApplyError(
       request,
       503,
       "DatabaseSchemaMismatch",
-      "Ma’lumotlar bazasi yangilanmagan. Administratorga murojaat qiling."
+      "База данных не обновлена. Обратитесь к администратору."
     );
     return true;
   }
@@ -127,7 +173,7 @@ export function mapMigrationApplyError(
       request,
       504,
       "ImportTimeout",
-      "Import juda uzoq davom etdi. Kichikroq arxiv yoki bo‘sh tenantga urinib ko‘ring."
+      "Импорт выполнялся слишком долго. Попробуйте архив поменьше или пустую компанию."
     );
     return true;
   }
@@ -137,7 +183,7 @@ export function mapMigrationApplyError(
       request,
       400,
       "InvalidBackup",
-      "Arxiv ichidagi ma’lumot buzilgan (JSON). Qayta eksport qiling."
+      "Данные в архиве повреждены (JSON). Выполните экспорт заново."
     );
     return true;
   }

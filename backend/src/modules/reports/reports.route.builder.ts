@@ -116,7 +116,7 @@ export async function registerReportsBuilderRoutes(app: FastifyInstance, guards:
   app.get("/api/:slug/reports/report-builder/saved", { preHandler: reportViewPreHandler }, async (request, reply) => {
     if (!ensureTenantContext(request, reply)) return;
     const userId = actorUserIdOrNull(request);
-    if (userId == null) return sendApiError(reply, request, 401, "Unauthorized", "User context required");
+    if (userId == null) return sendApiError(reply, request, 401, "Unauthorized", "Требуется контекст пользователя");
     const q = request.query as Record<string, string | undefined>;
     const archive = q.archive === "true" || q.archive === "1";
     const data = await reportBuilderSaved.list(request.tenant!.id, userId, { archive });
@@ -126,7 +126,7 @@ export async function registerReportsBuilderRoutes(app: FastifyInstance, guards:
   app.post("/api/:slug/reports/report-builder/saved", { preHandler: reportViewPreHandler }, async (request, reply) => {
     if (!ensureTenantContext(request, reply)) return;
     const userId = actorUserIdOrNull(request);
-    if (userId == null) return sendApiError(reply, request, 401, "Unauthorized", "User context required");
+    if (userId == null) return sendApiError(reply, request, 401, "Unauthorized", "Требуется контекст пользователя");
     const body = parseZodOr400<{ name: string; config: ReportBuilderSavedConfigValidated }>(
       reply,
       request,
@@ -148,7 +148,7 @@ export async function registerReportsBuilderRoutes(app: FastifyInstance, guards:
   app.put("/api/:slug/reports/report-builder/saved/:id", { preHandler: reportViewPreHandler }, async (request, reply) => {
     if (!ensureTenantContext(request, reply)) return;
     const userId = actorUserIdOrNull(request);
-    if (userId == null) return sendApiError(reply, request, 401, "Unauthorized", "User context required");
+    if (userId == null) return sendApiError(reply, request, 401, "Unauthorized", "Требуется контекст пользователя");
     const id = Number.parseInt((request.params as { id: string }).id, 10);
     if (!Number.isFinite(id)) return sendApiError(reply, request, 400, "InvalidId");
     const body = request.body as { name?: string; config?: ReportBuilderConfigPayload };
@@ -174,7 +174,7 @@ export async function registerReportsBuilderRoutes(app: FastifyInstance, guards:
   app.delete("/api/:slug/reports/report-builder/saved/:id", { preHandler: reportViewPreHandler }, async (request, reply) => {
     if (!ensureTenantContext(request, reply)) return;
     const userId = actorUserIdOrNull(request);
-    if (userId == null) return sendApiError(reply, request, 401, "Unauthorized", "User context required");
+    if (userId == null) return sendApiError(reply, request, 401, "Unauthorized", "Требуется контекст пользователя");
     const id = Number.parseInt((request.params as { id: string }).id, 10);
     if (!Number.isFinite(id)) return sendApiError(reply, request, 400, "InvalidId");
     try {
@@ -192,7 +192,7 @@ export async function registerReportsBuilderRoutes(app: FastifyInstance, guards:
   app.post("/api/:slug/reports/report-builder/saved/:id/restore", { preHandler: reportViewPreHandler }, async (request, reply) => {
     if (!ensureTenantContext(request, reply)) return;
     const userId = actorUserIdOrNull(request);
-    if (userId == null) return sendApiError(reply, request, 401, "Unauthorized", "User context required");
+    if (userId == null) return sendApiError(reply, request, 401, "Unauthorized", "Требуется контекст пользователя");
     const id = Number.parseInt((request.params as { id: string }).id, 10);
     if (!Number.isFinite(id)) return sendApiError(reply, request, 400, "InvalidId");
     try {
@@ -206,4 +206,48 @@ export async function registerReportsBuilderRoutes(app: FastifyInstance, guards:
       throw e;
     }
   });
+
+  /** Ulashish uchun: veb + konstruktor ruxsati bo‘lgan foydalanuvchilar. */
+  app.get(
+    "/api/:slug/reports/report-builder/saved/share-candidates",
+    { preHandler: reportViewPreHandler },
+    async (request, reply) => {
+      if (!ensureTenantContext(request, reply)) return;
+      const userId = actorUserIdOrNull(request);
+      if (userId == null) return sendApiError(reply, request, 401, "Unauthorized", "Требуется контекст пользователя");
+      const data = await reportBuilderSaved.listShareCandidates(request.tenant!.id, userId);
+      return reply.send({ data });
+    }
+  );
+
+  /** Tanlangan hisobotni boshqa foydalanuvchilarga ulashish (ularning saqlanganlariga nusxa). */
+  app.post(
+    "/api/:slug/reports/report-builder/saved/:id/share",
+    { preHandler: reportViewPreHandler },
+    async (request, reply) => {
+      if (!ensureTenantContext(request, reply)) return;
+      const userId = actorUserIdOrNull(request);
+      if (userId == null) return sendApiError(reply, request, 401, "Unauthorized", "Требуется контекст пользователя");
+      const id = Number.parseInt((request.params as { id: string }).id, 10);
+      if (!Number.isFinite(id)) return sendApiError(reply, request, 400, "InvalidId");
+      const body = request.body as { userIds?: unknown };
+      const userIds = Array.isArray(body?.userIds)
+        ? body.userIds.map((x) => Number(x)).filter((n) => Number.isFinite(n) && n > 0)
+        : [];
+      if (userIds.length === 0) {
+        return sendApiError(reply, request, 400, "EMPTY_RECIPIENTS", "Выберите хотя бы одного пользователя");
+      }
+      try {
+        const data = await reportBuilderSaved.share(request.tenant!.id, userId, id, userIds);
+        return reply.send({ data });
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : "";
+        if (msg === "NOT_FOUND") return sendApiError(reply, request, 404, "NotFound");
+        if (msg === "EMPTY_RECIPIENTS" || msg === "NO_VALID_RECIPIENTS") {
+          return sendApiError(reply, request, 400, msg, "Нет подходящих получателей с доступом к конструктору");
+        }
+        throw e;
+      }
+    }
+  );
 }

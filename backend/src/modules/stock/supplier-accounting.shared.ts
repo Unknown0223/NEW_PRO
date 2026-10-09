@@ -40,11 +40,29 @@ export function buildSupplierPaymentWhere(tenantId: number, opts: ListSupplierPa
   if (!opts.include_reversed) {
     where.reversed_at = null;
   }
-  if (opts.supplier_id != null && opts.supplier_id > 0) where.supplier_id = opts.supplier_id;
-  if (opts.cash_desk_id != null && opts.cash_desk_id > 0) where.cash_desk_id = opts.cash_desk_id;
-  if (opts.payment_method != null && String(opts.payment_method).trim()) {
-    where.payment_method = String(opts.payment_method).trim();
-  }
+  const supplierIds = [
+    ...(opts.supplier_ids ?? []).filter((n) => Number.isFinite(n) && n > 0),
+    ...(opts.supplier_id != null && opts.supplier_id > 0 ? [opts.supplier_id] : [])
+  ];
+  const uniqSup = [...new Set(supplierIds)];
+  if (uniqSup.length === 1) where.supplier_id = uniqSup[0];
+  else if (uniqSup.length > 1) where.supplier_id = { in: uniqSup };
+  const deskIds = [
+    ...(opts.cash_desk_ids ?? []).filter((n) => Number.isFinite(n) && n > 0),
+    ...(opts.cash_desk_id != null && opts.cash_desk_id > 0 ? [opts.cash_desk_id] : [])
+  ];
+  const uniqDesk = [...new Set(deskIds)];
+  if (uniqDesk.length === 1) where.cash_desk_id = uniqDesk[0];
+  else if (uniqDesk.length > 1) where.cash_desk_id = { in: uniqDesk };
+  const methods = [
+    ...(opts.payment_methods ?? []).map((m) => String(m).trim()).filter(Boolean),
+    ...(opts.payment_method != null && String(opts.payment_method).trim()
+      ? [String(opts.payment_method).trim()]
+      : [])
+  ];
+  const uniqMethods = [...new Set(methods)];
+  if (uniqMethods.length === 1) where.payment_method = uniqMethods[0];
+  else if (uniqMethods.length > 1) where.payment_method = { in: uniqMethods };
   const paidFilter: Prisma.DateTimeFilter = {};
   if (opts.paid_from != null && Number.isFinite(opts.paid_from.getTime())) paidFilter.gte = opts.paid_from;
   if (opts.paid_to != null && Number.isFinite(opts.paid_to.getTime())) paidFilter.lte = opts.paid_to;

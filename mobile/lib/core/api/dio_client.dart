@@ -4,7 +4,9 @@ import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
+import '../app/app_build_info.dart';
 import '../auth/session_expired.dart';
+import '../auth/workday_off.dart';
 import '../time/server_clock.dart';
 import '../config/app_env.dart';
 import '../errors/error_reporter.dart';
@@ -22,6 +24,7 @@ Dio _plainDio() => Dio(BaseOptions(
 final dioProvider = Provider<Dio>((ref) {
   final dio = _plainDio();
   dio.interceptors.add(ServerTimeInterceptor());
+  dio.interceptors.add(AppVersionInterceptor());
   dio.interceptors.add(AuthInterceptor(ref));
   dio.interceptors.add(ErrorReportInterceptor(ref));
   ErrorReporter.bind(ref);
@@ -63,6 +66,24 @@ class ServerTimeInterceptor extends Interceptor {
   void onError(DioException err, ErrorInterceptorHandler handler) {
     _anchor(err.response?.headers);
     handler.next(err);
+  }
+}
+
+/// `X-App-Version` — server shu sarlavha bo‘yicha yangi ilova qoidalarini (majburiy vizit) qo‘llaydi.
+class AppVersionInterceptor extends Interceptor {
+  static String? _version;
+
+  @override
+  void onRequest(RequestOptions options, RequestInterceptorHandler handler) async {
+    if (_version == null) {
+      try {
+        _version = await AppBuildInfo.versionWithBuild();
+      } catch (_) {
+        _version = 'unknown';
+      }
+    }
+    options.headers['X-App-Version'] = _version;
+    handler.next(options);
   }
 }
 
@@ -119,15 +140,14 @@ class AuthInterceptor extends Interceptor {
       handler.next(err);
       return;
     }
-    if (isSessionRevokedResponse(err.response?.statusCode, err.response?.data)) {
-      await clearAuthTokens(_ref);
-      Future.microtask(() => notifySessionExpired(_ref, forceLogout: true));
-      handler.next(err);
-      return;
-    }
     if (isAppAccessDeniedResponse(err.response?.statusCode, err.response?.data)) {
       await clearAuthTokens(_ref);
       Future.microtask(() => notifyAppAccessDenied(_ref));
+      handler.next(err);
+      return;
+    }
+    if (isWorkdayOffResponse(err.response?.statusCode, err.response?.data)) {
+      _ref.read(workdayOffProvider.notifier).state = workdayOffFromErrorBody(err.response?.data);
       handler.next(err);
       return;
     }
@@ -135,7 +155,13 @@ class AuthInterceptor extends Interceptor {
       handler.next(err);
       return;
     }
+    // SESSION_REVOKED ham shu yerda: avval refresh. Admin haqiqatan yopgan
+    // bo‘lsa refresh ham fail — faqat shunda chiqamiz. Race/ping — chiqarmaydi.
     if (err.requestOptions.extra['_authRetried'] == true) {
+      if (isSessionRevokedResponse(err.response?.statusCode, err.response?.data)) {
+        await clearAuthTokens(_ref);
+        Future.microtask(() => notifySessionExpired(_ref, forceLogout: true));
+      }
       handler.next(err);
       return;
     }
@@ -168,7 +194,12 @@ class AuthInterceptor extends Interceptor {
       final response = await _plainDio().fetch(retry);
       handler.resolve(response);
     } catch (e) {
-      handler.next(e is DioException ? e : err);
+      final retryErr = e is DioException ? e : err;
+      if (isSessionRevokedResponse(retryErr.response?.statusCode, retryErr.response?.data)) {
+        await clearAuthTokens(_ref);
+        Future.microtask(() => notifySessionExpired(_ref, forceLogout: true));
+      }
+      handler.next(retryErr);
     }
   }
 }

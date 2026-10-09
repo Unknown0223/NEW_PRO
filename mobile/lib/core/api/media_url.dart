@@ -65,12 +65,19 @@ class MediaImage extends StatelessWidget {
       );
     }
 
+    final dpr = MediaQuery.devicePixelRatioOf(context);
+    final cacheW = width != null ? (width! * dpr).round().clamp(1, 2048) : null;
+    final cacheH = height != null ? (height! * dpr).round().clamp(1, 2048) : null;
+
     return Image.network(
       resolveMediaUrl(source),
       width: width,
       height: height,
       fit: fit,
       errorBuilder: onError,
+      cacheWidth: cacheW,
+      cacheHeight: cacheH,
+      filterQuality: FilterQuality.low,
     );
   }
 }

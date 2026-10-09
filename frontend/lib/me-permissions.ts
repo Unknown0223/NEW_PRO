@@ -1,8 +1,11 @@
 import type { QueryClient } from "@tanstack/react-query";
 
-/** React Query key — app-shell / usePermissions / RouteAccessGate ulashadi. */
-export function mePermissionsQueryKey(tenantSlug: string | null | undefined) {
-  return ["me", "access-permissions", tenantSlug] as const;
+/** React Query key — app-shell / usePermissions / RouteAccessGate ulashadi. Actor id bilan ajratiladi. */
+export function mePermissionsQueryKey(
+  tenantSlug: string | null | undefined,
+  userId?: number | null
+) {
+  return ["me", "access-permissions", tenantSlug ?? null, userId ?? null] as const;
 }
 
 /** Qisqa stale + polling: Access o‘zgarishi operator sessiyasida tez ko‘rinsin. */
@@ -84,7 +87,9 @@ export function invalidateMePermissionsQueries(
   opts?: { userId?: number | null }
 ) {
   void qc.invalidateQueries({
-    queryKey: tenantSlug ? mePermissionsQueryKey(tenantSlug) : ["me", "access-permissions"],
+    queryKey: tenantSlug
+      ? mePermissionsQueryKey(tenantSlug, opts?.userId)
+      : ["me", "access-permissions"],
     refetchType: "active"
   });
   broadcastMePermissionsInvalidate({ tenantSlug, userId: opts?.userId });

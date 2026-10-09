@@ -88,7 +88,7 @@ export function displayAgentName(row: ClientRow, slot: number): string | null {
   return null;
 }
 
-const WD_LABEL = ["", "Du", "Se", "Ch", "Pa", "Ju", "Sh", "Ya"];
+const WD_LABEL = ["", "Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
 
 /** Slot bo‘yicha tanlangan hafta kunlari (1..7) */
 export function getVisitWeekdaysForSlot(row: ClientRow, slot: number): number[] {

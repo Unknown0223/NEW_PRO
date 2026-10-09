@@ -40,36 +40,36 @@ export function GeoBoundaryOverlapModal({
         overlayClassName="z-[2999] bg-black/50"
       >
         <DialogHeader>
-          <DialogTitle>Chegaralar kesishadi</DialogTitle>
+          <DialogTitle>Границы пересекаются</DialogTitle>
           <DialogDescription>
-            «{incomingName}» yangi chegara «{existingLabel}» bilan kesishadi. Qaysi chegara ustun bo‘lsin?
+            Новая граница «{incomingName}» пересекается с «{existingLabel}». Какая граница должна иметь приоритет?
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-3 text-sm">
           <div className="rounded-lg border border-border bg-muted/40 p-3">
-            <p className="font-semibold">A — Avval chizilgan saqlanadi</p>
+            <p className="font-semibold">A — Сохраняется ранее нарисованная</p>
             <p className="mt-1 text-muted-foreground">
-              Mavjud chegara o‘zgarmaydi. Yangi chegara uning atrofida qirqiladi.
+              Существующая граница не меняется. Новая граница обрезается по её контуру.
             </p>
           </div>
           <div className="rounded-lg border border-border bg-muted/40 p-3">
-            <p className="font-semibold">B — Yangi chegara ustun</p>
+            <p className="font-semibold">B — Приоритет у новой границы</p>
             <p className="mt-1 text-muted-foreground">
-              Yangi chizilgan shakl saqlanadi. Mavjud chegara unga moslab qirqiladi.
+              Новая фигура сохраняется целиком. Существующая граница обрезается под неё.
             </p>
           </div>
         </div>
 
         <DialogFooter className="flex-col gap-2 sm:flex-col">
           <Button type="button" disabled={saving} onClick={onChooseExistingWins} className="w-full">
-            A — {conflicts[0]?.name ?? "Mavjud"} ustun
+            A — приоритет у «{conflicts[0]?.name ?? "существующей"}»
           </Button>
           <Button type="button" variant="secondary" disabled={saving} onClick={onChooseIncomingWins} className="w-full">
-            B — {incomingName} ustun
+            B — приоритет у «{incomingName}»
           </Button>
           <Button type="button" variant="ghost" disabled={saving} onClick={onCancel} className="w-full">
-            Bekor
+            Отмена
           </Button>
         </DialogFooter>
       </DialogContent>

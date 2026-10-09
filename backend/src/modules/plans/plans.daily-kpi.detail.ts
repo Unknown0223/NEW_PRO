@@ -3,6 +3,7 @@ import { getMobileAgentKpi } from "../mobile/mobile-agent-kpi.service";
 import type { KpiDailyRoutePlan } from "../mobile/mobile-agent-kpi-daily-route";
 import type { DailyKpiDetailQuery } from "./plans.daily-kpi.schema";
 import { sectionLinks, statusFromDay } from "./plans.daily-kpi.helpers";
+import { isDailyKpiAgentAllowed } from "./plans.daily-kpi.scope";
 import type { DailyKpiAgentSummary, DailyKpiOverviewResult } from "./plans.daily-kpi.service";
 
 export type DailyKpiDetailResult = {
@@ -18,11 +19,21 @@ export type DailyKpiDetailResult = {
 export async function getDailyKpiAgentDetail(
   tenantId: number,
   agentId: number,
-  query: DailyKpiDetailQuery
+  query: DailyKpiDetailQuery,
+  allowedAgentIds: number[] | null = null
 ): Promise<DailyKpiDetailResult> {
+  if (!isDailyKpiAgentAllowed(agentId, allowedAgentIds)) throw new Error("NOT_FOUND");
   const user = await prisma.user.findFirst({
     where: { id: agentId, tenant_id: tenantId, role: "agent" },
-    select: { id: true, name: true, code: true, trade_direction_id: true }
+    select: {
+      id: true,
+      name: true,
+      code: true,
+      branch: true,
+      trade_direction_id: true,
+      supervisor_user_id: true,
+      supervisor: { select: { name: true } }
+    }
   });
   if (!user) throw new Error("NOT_FOUND");
 
@@ -31,27 +42,31 @@ export async function getDailyKpiAgentDetail(
   const route = kpi.daily_route;
   const todayFact = kpi.today.sales_sum;
   const isWorkingToday = route.days.some((d) => d.date === kpi.period.today && d.is_working_day);
+  const todayPlan = isWorkingToday ? kpi.today.plan_day_sum : 0;
 
   const overview: DailyKpiAgentSummary = {
     agent_id: user.id,
     name: user.name,
     code: user.code,
+    branch: user.branch?.trim() || null,
+    supervisor_id: user.supervisor_user_id,
+    supervisor_name: user.supervisor?.name ?? null,
     trade_direction_id: user.trade_direction_id,
     trade_direction_name: null,
     month_plan_sum: kpi.month.plan_sum,
     month_fact_sum: kpi.month.fact_sum,
     month_execution_pct: kpi.month.execution_pct,
-    today_plan_sum: kpi.today.plan_day_sum,
+    today_plan_sum: todayPlan,
     today_fact_sum: todayFact,
-    today_execution_pct: kpi.today.execution_pct,
-    today_remaining_sum: kpi.today.remaining_sum,
+    today_execution_pct: isWorkingToday ? kpi.today.execution_pct : null,
+    today_remaining_sum: isWorkingToday ? kpi.today.remaining_sum : 0,
     working_days_total: route.working_days_total,
     remaining_working_days: route.remaining_working_days,
     carry_forward_sum: route.carry_forward_sum,
     surplus_sum: route.surplus_sum,
     status: statusFromDay({
       hasPlans: kpi.month.has_plans,
-      todayPlan: kpi.today.plan_day_sum,
+      todayPlan,
       todayFact,
       isWorkingToday
     }),

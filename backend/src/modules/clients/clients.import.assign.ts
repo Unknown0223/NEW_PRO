@@ -6,6 +6,7 @@ import { CONTACT_SLOTS } from "./clients.helpers";
 import { VALID_IMPORT_KEYS } from "./clients.import.keys";
 import { isPlaceholderCell, readArrayCell } from "./clients.import.parse";
 import type { ImportWarningCollector } from "./clients.import.runtime";
+import { parseVisitWeekdaysFromCell } from "./clients.visit-weekdays";
 
 export function buildManualColumnMap(raw: Record<string, number> | undefined): Record<string, number> | null {
   if (raw == null) return null;
@@ -26,58 +27,6 @@ function isAssignmentClearToken(raw: string | null): boolean {
   if (raw == null) return false;
   const t = raw.trim().toLocaleLowerCase("ru-RU");
   return t !== "" && IMPORT_ASSIGNMENT_CLEAR_TOKENS.has(t);
-}
-
-/** «Пн», «Вт» … yoki raqam 1..7 (1=Du … 7=Ya); «1,2;3» vergul/bo‘shliq bilan. */
-function parseRussianVisitDaysDetailed(raw: string | null): { days: number[]; unknownTokens: string[] } {
-  if (raw == null || isPlaceholderCell(raw)) return { days: [], unknownTokens: [] };
-  const tokenMap: Record<string, number> = {
-    пн: 1,
-    понедельник: 1,
-    вт: 2,
-    вторник: 2,
-    ср: 3,
-    среда: 3,
-    чт: 4,
-    четверг: 4,
-    четвер: 4,
-    пт: 5,
-    пятница: 5,
-    сб: 6,
-    суббота: 6,
-    вс: 7,
-    воскресенье: 7,
-    вск: 7
-  };
-  let normalized = String(raw).trim().replace(/\u00a0/g, " ").replace(/;+/g, ",");
-  const compact = normalized.replace(/\s/g, "");
-  /** Excel: `1.2` matn sifatida ikki kun (1 va 2); `12` yoki `1.25` bundan mustasno. */
-  const dotPair = /^([1-7])\.([1-7])$/.exec(compact);
-  if (dotPair) {
-    normalized = `${dotPair[1]},${dotPair[2]}`;
-  }
-  const parts = normalized
-    .split(/[,|/]+|\s+/)
-    .map((x) => x.trim().toLowerCase().replace(/\./g, ""))
-    .filter(Boolean);
-  const out: number[] = [];
-  const unknownTokens: string[] = [];
-  for (const p of parts) {
-    if (/^\d{1,2}$/.test(p)) {
-      const num = Number.parseInt(p, 10);
-      if (num >= 1 && num <= 7) {
-        out.push(num);
-        continue;
-      }
-    }
-    const n = tokenMap[p];
-    if (n != null && n >= 1 && n <= 7) out.push(n);
-    else unknownTokens.push(p);
-  }
-  return {
-    days: [...new Set(out)].sort((a, b) => a - b),
-    unknownTokens: [...new Set(unknownTokens)]
-  };
 }
 
 type ImportStaffRole = "agent" | "expeditor";
@@ -150,6 +99,22 @@ export async function loadImportStaffLookup(
     const phoneDigits = normalizePhoneDigits(user.phone);
     if (phoneDigits) indexImportStaffLookup(byPhone, phoneDigits, user);
   }
+  const userIds = [...byId.keys()];
+  if (userIds.length > 0) {
+    const links = await prisma.slotUserLink.findMany({
+      where: { tenant_id: tenantId, ended_at: null, user_id: { in: userIds } },
+      select: {
+        user_id: true,
+        slot: { select: { slot_code: true, deleted_at: true } }
+      }
+    });
+    for (const link of links) {
+      if (link.slot.deleted_at) continue;
+      const user = byId.get(link.user_id);
+      if (!user) continue;
+      indexImportStaffLookup(byCode, link.slot.slot_code, user);
+    }
+  }
   return { byId, byCode, byName, byPhone };
 }
 
@@ -218,6 +183,9 @@ type ImportAssignmentRowOutcome = {
   createPatches: AgentAssignmentPatch[];
   updatePatches: AgentAssignmentPatch[];
   touched: boolean;
+  /** Yangi klient: topilmagan / nofaol agent yoki ekspeditor — qator qabul qilinmasin */
+  hardErrors: string[];
+  hardErrorFields: string[];
 };
 
 function staffUserById(lookup: ImportStaffLookup, id: number): ImportStaffLookupUser | null {
@@ -333,6 +301,13 @@ export function buildAgentAssignmentPatchesFromImportRow(
   );
   const updateBySlot = new Map<number, AgentAssignmentPatch>();
   let touched = false;
+  const hardErrors: string[] = [];
+  const hardErrorFields: string[] = [];
+  const strictNewClient = currentAssignments == null;
+  const pushHard = (field: string, msg: string) => {
+    hardErrors.push(msg);
+    if (!hardErrorFields.includes(field)) hardErrorFields.push(field);
+  };
   for (let slot = 1; slot <= CONTACT_SLOTS; slot++) {
     const agentKey = `import_agent_${slot}`;
     const daysKey = `import_agent_${slot}_days`;
@@ -360,12 +335,17 @@ export function buildAgentAssignmentPatchesFromImportRow(
     if (agentMapped) {
       slotTouched = true;
       const agentRaw = readArrayCell(row, colIndexByKey[agentKey]);
-      if (
-        agentRaw == null ||
-        isPlaceholderCell(String(agentRaw)) ||
-        isAssignmentClearToken(agentRaw)
-      ) {
+      const clearAgent = isAssignmentClearToken(agentRaw);
+      const emptyAgent =
+        agentRaw == null || isPlaceholderCell(String(agentRaw));
+      if (clearAgent) {
         next.agent_id = null;
+      } else if (emptyAgent) {
+        /**
+         * Yangilash: bo‘sh / «---» → avvalgi agent saqlanadi (faqat tanlangan ustunlar).
+         * Yangi import: bo‘sh → agent yo‘q.
+         */
+        if (currentAssignments == null) next.agent_id = null;
       } else {
         const resolved = resolveStaffByRefForImport(staffLookup, agentRaw, ["agent"]);
         if (resolved.id != null) {
@@ -373,16 +353,31 @@ export function buildAgentAssignmentPatchesFromImportRow(
           if (resolved.id !== prev.agent_id) {
             const staff = staffUserById(staffLookup, resolved.id);
             if (staff && !staff.is_active) {
-              warn(
-                `Qator ${rowNumExcel}: «Агент ${slot}» («${agentRaw.trim()}») faol emas — tayinlandi.`
-              );
+              if (strictNewClient) {
+                pushHard(
+                  agentKey,
+                  `«Агент ${slot}» («${agentRaw.trim()}») неактивен — строка не принята.`
+                );
+                next.agent_id = null;
+              } else {
+                warn(
+                  `Строка ${rowNumExcel}: «Агент ${slot}» («${agentRaw.trim()}») неактивен — всё равно назначен.`
+                );
+              }
             }
           }
         } else {
           next.agent_id = null;
-          warn(
-            `Qator ${rowNumExcel}: «Агент ${slot}» qiymati topilmadi («${agentRaw.trim()}») — agent olib tashlandi.`
-          );
+          if (strictNewClient) {
+            pushHard(
+              agentKey,
+              `Значение «Агент ${slot}» не найдено («${agentRaw.trim()}») — строка не принята (допускается только смарт-код агента).`
+            );
+          } else {
+            warn(
+              `Строка ${rowNumExcel}: значение «Агент ${slot}» не найдено («${agentRaw.trim()}») — агент снят.`
+            );
+          }
         }
       }
     }
@@ -390,9 +385,16 @@ export function buildAgentAssignmentPatchesFromImportRow(
     if (expMapped) {
       slotTouched = true;
       const expRaw = readArrayCell(row, colIndexByKey[expKey]);
-      if (expRaw == null || isPlaceholderCell(String(expRaw)) || isAssignmentClearToken(expRaw)) {
+      const clearExp = isAssignmentClearToken(expRaw);
+      const emptyExp = expRaw == null || isPlaceholderCell(String(expRaw));
+      if (clearExp) {
         next.expeditor_user_id = null;
         next.expeditor_phone = null;
+      } else if (emptyExp) {
+        if (currentAssignments == null) {
+          next.expeditor_user_id = null;
+          next.expeditor_phone = null;
+        }
       } else {
         const expLabel = expRaw.trim();
         const resolved = resolveStaffByRefForImport(staffLookup, expRaw, ["expeditor", "agent"]);
@@ -402,9 +404,17 @@ export function buildAgentAssignmentPatchesFromImportRow(
           if (resolved.id !== prev.expeditor_user_id) {
             const staff = staffUserById(staffLookup, resolved.id);
             if (staff && !staff.is_active) {
-              warn(
-                `Qator ${rowNumExcel}: «Экспедитор ${slot}» («${expLabel}») faol emas — tayinlandi.`
-              );
+              if (strictNewClient) {
+                pushHard(
+                  expKey,
+                  `«Экспедитор ${slot}» («${expLabel}») неактивен — строка не принята.`
+                );
+                next.expeditor_user_id = null;
+              } else {
+                warn(
+                  `Строка ${rowNumExcel}: «Экспедитор ${slot}» («${expLabel}») неактивен — всё равно назначен.`
+                );
+              }
             }
           }
         } else if (/^\+?\d[\d\s\-()]{6,}$/.test(expLabel)) {
@@ -413,9 +423,16 @@ export function buildAgentAssignmentPatchesFromImportRow(
         } else {
           next.expeditor_user_id = null;
           next.expeditor_phone = null;
-          warn(
-            `Qator ${rowNumExcel}: «Экспедитор ${slot}» qiymati topilmadi («${expLabel}») — ekspeditor olib tashlandi.`
-          );
+          if (strictNewClient) {
+            pushHard(
+              expKey,
+              `Значение «Экспедитор ${slot}» не найдено («${expLabel}») — строка не принята.`
+            );
+          } else {
+            warn(
+              `Строка ${rowNumExcel}: значение «Экспедитор ${slot}» не найдено («${expLabel}») — экспедитор снят.`
+            );
+          }
         }
       }
     }
@@ -423,14 +440,18 @@ export function buildAgentAssignmentPatchesFromImportRow(
     if (daysMapped) {
       slotTouched = true;
       const daysRaw = readArrayCell(row, colIndexByKey[daysKey]);
-      if (daysRaw == null || isPlaceholderCell(String(daysRaw)) || isAssignmentClearToken(daysRaw)) {
+      const clearDays = isAssignmentClearToken(daysRaw);
+      const emptyDays = daysRaw == null || isPlaceholderCell(String(daysRaw));
+      if (clearDays) {
         next.visit_weekdays = [];
+      } else if (emptyDays) {
+        if (currentAssignments == null) next.visit_weekdays = [];
       } else {
-        const parsedDays = parseRussianVisitDaysDetailed(daysRaw);
+        const parsedDays = parseVisitWeekdaysFromCell(daysRaw);
         next.visit_weekdays = parsedDays.days;
         if (parsedDays.unknownTokens.length > 0) {
           warn(
-            `Qator ${rowNumExcel}: «Агент ${slot} день»da noma’lum kunlar (${parsedDays.unknownTokens.join(", ")}).`
+            `Строка ${rowNumExcel}: в «Агент ${slot} день» неизвестные дни (${parsedDays.unknownTokens.join(", ")}).`
           );
         }
       }
@@ -469,16 +490,21 @@ export function buildAgentAssignmentPatchesFromImportRow(
   }
   const updatePatches =
     currentAssignments != null
-      ? mergeAssignmentPatchesForImportReplace(updateBySlot, currentAssignments)
+      ? updateBySlot.size > 0
+        ? mergeAssignmentPatchesForImportReplace(updateBySlot, currentAssignments)
+        : []
       : [...updateBySlot.values()].sort((a, b) => a.slot - b.slot);
-  return { createPatches, updatePatches, touched };
+  return { createPatches, updatePatches, touched, hardErrors, hardErrorFields };
 }
 
-export function parseClientDbIdFromCell(raw: string | null): number | null {
-  if (raw == null || isPlaceholderCell(raw)) return null;
-  const s = String(raw).trim();
-  if (!s) return null;
-  const n = Number.parseInt(s, 10);
-  if (!Number.isFinite(n) || n < 1) return null;
-  return n;
-}
+export {
+  classifyFlexibleImportId,
+  classifyImportClientDbId,
+  parseClientDbIdFromCell,
+  normalizeExternalDocNumber,
+  MAX_CLIENT_CODE_ID_LEN,
+  type ImportFlexibleIdParse,
+  type ImportClientDbIdParse
+} from "./clients.import.flexible-id";
+
+/** Excel `ИД` / `id` — raqam (DB id) yoki matn (client_code), masalan ks_1652. */

@@ -59,18 +59,17 @@ export const settingsSections: SettingsSection[] = [
         status: "available"
       },
       {
-        title: "Qaytarish filtri",
+        title: "Фильтр возврата",
         slug: "qaytarish-filtri",
         href: "/settings/returns/filter",
         status: "available",
         requiredRoles: ["admin"] as const
       },
       {
-        title: "Mobil ilova",
+        title: "Мобильное приложение",
         slug: "mobil-ilova",
         href: "/settings/mobile-app",
-        status: "available",
-        requiredRoles: ["admin"] as const
+        status: "available"
       }
     ]
   },
@@ -82,7 +81,7 @@ export const settingsSections: SettingsSection[] = [
       makeItem("osnovnye-nastroiki", "Единицы измерения", "available", 1),
       makeItem("osnovnye-nastroiki", "Филиалы", "available", 2),
       {
-        title: "Xarita chegaralari",
+        title: "Границы на карте",
         slug: "geo-boundaries",
         href: "/settings/geo-boundaries",
         status: "available"
@@ -90,9 +89,10 @@ export const settingsSections: SettingsSection[] = [
       {
         title: "Должности",
         slug: "dolzhnosti-osnovnye",
-        href: "/settings/catalog/osnovnye-nastroiki/dolzhnosti-osnovnye",
+        href: "/settings/web-staff-position-presets",
         status: "available",
-        requiredRoles: ["admin"] as const
+        requiredRoles: ["admin"] as const,
+        description: "Справочник должностей (роль, код, порядок)"
       }
     ]
   },
@@ -233,7 +233,14 @@ export const settingsSections: SettingsSection[] = [
     slug: "kompaniya-personal",
     items: [
       makeItem("kompaniya-personal", "Компания", "available", 0),
-      makeItem("kompaniya-personal", "Должности веб-сотрудников", "available", 1, ["admin"] as const)
+      {
+        title: "Должности",
+        slug: "dolzhnosti-personal",
+        href: "/settings/web-staff-position-presets",
+        status: "available",
+        requiredRoles: ["admin"] as const,
+        description: "Справочник должностей — роль, код, порядок; привязка к сотрудникам"
+      }
     ]
   },
   {
@@ -241,12 +248,11 @@ export const settingsSections: SettingsSection[] = [
     slug: "period-reglament",
     items: [
       {
-        title: "Davr cheklovi",
+        title: "Ограничение периода",
         slug: "document-edit-lock",
         href: "/settings/document-edit-lock",
         status: "available",
-        requiredRoles: ["admin"] as const,
-        description: "Hujjatlarni tahrirlash uchun davr cheklovi"
+        description: "Ограничение периода для редактирования документов"
       },
       {
         title: "Заказы → консигнация",
@@ -255,7 +261,7 @@ export const settingsSections: SettingsSection[] = [
         status: "available",
         requiredRoles: ["admin"] as const,
         description:
-          "Доставлен + N кун + тўланмаган заказларни консигнацияга; комментарийда ким/шартлар"
+          "Доставленные и неоплаченные в течение N дней заказы — в консигнацию; в комментарии кто/условия"
       }
     ]
   },
@@ -264,23 +270,31 @@ export const settingsSections: SettingsSection[] = [
     slug: "sistema",
     items: [
       {
-        title: "Vaqt mintaqasi",
+        title: "Часовой пояс",
         slug: "timezone",
         href: "/settings/timezone",
         status: "available",
         requiredRoles: ["admin"] as const,
         opensModal: "timezone",
-        description: "Ish soati / sinxron oynasi — qurilma standart IANA mintaqalari"
+        description: "Рабочие часы / окно синхронизации — стандартные часовые пояса IANA"
       },
       {
-        title: "Boshlang‘ich sozlash",
+        title: "Начальная настройка",
         slug: "initial-setup",
         href: "/settings/initial-setup",
         status: "available",
         requiredRoles: ["admin"] as const
       },
       {
-        title: "Tizim migratsiyasi",
+        title: "Должности",
+        slug: "dolzhnosti-sistema",
+        href: "/settings/web-staff-position-presets",
+        status: "available",
+        requiredRoles: ["admin"] as const,
+        description: "Системные должности и привязка к ролям"
+      },
+      {
+        title: "Миграция системы",
         slug: "system-migration",
         href: "/settings/system-migration",
         status: "available",
@@ -328,6 +342,9 @@ const existingHrefByItemTitle: Record<string, string> = {
   "должности веб сотрудников": "/settings/web-staff-position-presets",
   "lavozimlar": "/settings/web-staff-position-presets",
   "веб ходим лавозимлари": "/settings/web-staff-position-presets",
+  "dolzhnosti-sistema": "/settings/web-staff-position-presets",
+  "dolzhnosti-personal": "/settings/web-staff-position-presets",
+  "dolzhnosti-osnovnye": "/settings/web-staff-position-presets",
   "причины заявок": "/settings/reasons/request-types",
   "причины отмены оплаты": "/settings/reasons/cancel-payment-reasons",
   "примечание к заказу": "/settings/reasons/order-notes",
@@ -347,6 +364,8 @@ const existingHrefByItemTitle: Record<string, string> = {
   "boshlang‘ich sozlash": "/settings/initial-setup",
   "начальная настройка": "/settings/initial-setup",
   "davr cheklovi": "/settings/document-edit-lock",
+  "ограничение периода": "/settings/document-edit-lock",
+  "границы на карте": "/settings/geo-boundaries",
   "заказы → консигнация": "/settings/period/orders-consignment",
   "консигнация (oy yopish)": "/settings/spravochnik/consignment"
 };
@@ -355,18 +374,116 @@ export function resolveSettingsItemHref(item: SettingsItem): string {
   return existingHrefByItemTitle[item.title.toLowerCase()] ?? item.href;
 }
 
-function filterSettingsItemByRole(item: SettingsItem, role: string | null): SettingsItem | null {
-  if (item.requiredRoles?.length) {
-    if (!role || !item.requiredRoles.includes(role)) return null;
+/** Sozlamalar punkty — Dostup kaliti (href yoki slug). */
+const SETTINGS_HREF_VIEW_PERMS: Record<string, readonly string[]> = {
+  "/settings/appearance": ["settings.appearance.view"],
+  "/settings/returns/filter": ["settings.returns_filter.view"],
+  "/settings/mobile-app": ["settings.mobile_app.view", "settings.mobile_app.update"],
+  "/settings/territories": ["settings.territoriya.view"],
+  "/settings/units": ["settings.edinitsy.view"],
+  "/settings/branches": ["settings.filial.view"],
+  "/settings/geo-boundaries": ["settings.geo_granitsy.view"],
+  "/settings/web-staff-position-presets": ["settings.web_staff_positions.view", "settings.dolzhnost.view"],
+  "/settings/client-formats": ["settings.format_klienta.view"],
+  "/settings/client-types": ["settings.tip_klienta.view"],
+  "/settings/client-categories": ["settings.kategoriya_klienta.view"],
+  "/settings/product-categories": ["settings.kategoriya_tovara.view"],
+  "/settings/products": ["settings.tovar.view"],
+  "/settings/products?tab=product-groups": ["settings.kategoriya_tovara.view", "settings.tovar.view"],
+  "/settings/products?tab=interchangeable": ["settings.tovar.view"],
+  "/settings/products?tab=brands": ["settings.brend.view"],
+  "/settings/products?tab=manufacturers": ["settings.tovar.view"],
+  "/settings/products?tab=segments": ["settings.segment.view"],
+  "/settings/currencies": ["settings.valyuty.view"],
+  "/settings/payment-methods": ["settings.sposob_oplaty.view"],
+  "/settings/price-types": ["settings.tip_tseny.view"],
+  "/settings/prices": ["settings.tsena.view"],
+  "/settings/sales-directions/trade": ["settings.napravlenie_torgovli.view"],
+  "/settings/sales-directions/sales-channels": ["settings.kanal_sbyta.view"],
+  "/settings/sales-directions/kpi-groups": ["settings.napravlenie_torgovli.view"],
+  "/settings/bonus-rules": ["settings.bonusy.view"],
+  "/settings/discount-rules": ["settings.skidki.view"],
+  "/settings/bonus-strategies": ["settings.bonus_strategiya.view"],
+  "/settings/bonus-stack": ["settings.bonusy.view", "settings.skidki.view", "settings.bonus_strategiya.view"],
+  "/settings/reasons/request-types": ["settings.prichiny.view"],
+  "/settings/reasons/refusal-reasons": ["settings.prichiny.view"],
+  "/settings/reasons/cancel-payment-reasons": ["settings.prichiny.view"],
+  "/settings/reasons/order-notes": ["settings.prichiny.view"],
+  "/settings/reasons/photo-categories": ["settings.prichiny.view"],
+  "/settings/reasons/finance-categories": ["settings.prichiny.view"],
+  "/settings/inventory/type": ["settings.inventar_i_korobka.view"],
+  "/settings/inventory/box-type": ["settings.inventar_i_korobka.view"],
+  "/settings/equipment/printers": ["settings.oborudovanie.view"],
+  "/settings/equipment/tare": ["settings.oborudovanie.view"],
+  "/settings/knowledge-base/type": ["settings.baza_znaniy.view"],
+  "/settings/knowledge-base/base": ["settings.baza_znaniy.view"],
+  "/settings/company": ["settings.profil_kompanii.view"],
+  "/settings/document-edit-lock": [
+    "settings.document_edit_lock.view",
+    "settings.document_edit_lock.update",
+    "settings.document_edit_lock.assign"
+  ],
+  "/settings/period/orders-consignment": ["settings.orders_consignment.view"],
+  "/settings/timezone": ["settings.timezone.view"],
+  "/settings/initial-setup": ["settings.initial_setup.view"],
+  "/settings/system-migration": ["settings.system_migration.view"],
+  "/settings/audit": ["audit.log.view"]
+};
+
+export function settingsItemViewPermissions(item: SettingsItem): readonly string[] | null {
+  const href = resolveSettingsItemHref(item);
+  if (SETTINGS_HREF_VIEW_PERMS[href]) return SETTINGS_HREF_VIEW_PERMS[href];
+  const path = href.split("?")[0] ?? href;
+  return SETTINGS_HREF_VIEW_PERMS[path] ?? null;
+}
+
+export function isSettingsItemAllowedForAccess(
+  item: SettingsItem,
+  role: string | null,
+  permissionKeys: Set<string> | null
+): boolean {
+  if (role === "admin") return true;
+  const perms = settingsItemViewPermissions(item);
+  if (perms?.length) {
+    if (permissionKeys && perms.some((k) => permissionKeys.has(k))) return true;
+    if (item.requiredRoles?.length) {
+      return role != null && item.requiredRoles.includes(role);
+    }
+    return false;
   }
+  if (item.requiredRoles?.length) {
+    return role != null && item.requiredRoles.includes(role);
+  }
+  return true;
+}
+
+function filterSettingsItemByAccess(
+  item: SettingsItem,
+  role: string | null,
+  permissionKeys: Set<string> | null
+): SettingsItem | null {
   if (item.children?.length) {
-    const kids = item.children.filter(
-      (c) => !c.requiredRoles?.length || (role != null && c.requiredRoles.includes(role))
-    );
+    const kids = item.children.filter((c) => isSettingsItemAllowedForAccess(c, role, permissionKeys));
     if (!kids.length) return null;
     return { ...item, children: kids };
   }
-  return item;
+  return isSettingsItemAllowedForAccess(item, role, permissionKeys) ? item : null;
+}
+
+/** Katalog yon paneli: rol + Dostup kalitlari. */
+export function filterSettingsSectionsForAccess(
+  sections: SettingsSection[],
+  role: string | null,
+  permissionKeys: Set<string> | null
+): SettingsSection[] {
+  const out: SettingsSection[] = [];
+  for (const section of sections) {
+    const items = section.items
+      .map((item) => filterSettingsItemByAccess(item, role, permissionKeys))
+      .filter((item): item is SettingsItem => item != null);
+    if (items.length) out.push({ ...section, items });
+  }
+  return out;
 }
 
 /** Katalog yon paneli: `requiredRoles` bo‘yicha (null rol — admin-only punktlar yashirin). */
@@ -374,14 +491,7 @@ export function filterSettingsSectionsByRole(
   sections: SettingsSection[],
   role: string | null
 ): SettingsSection[] {
-  const out: SettingsSection[] = [];
-  for (const section of sections) {
-    const items = section.items
-      .map((item) => filterSettingsItemByRole(item, role))
-      .filter((item): item is SettingsItem => item != null);
-    if (items.length) out.push({ ...section, items });
-  }
-  return out;
+  return filterSettingsSectionsForAccess(sections, role, null);
 }
 
 export function findSettingsItem(sectionSlug: string, itemSlug: string): SettingsItem | null {
@@ -395,22 +505,31 @@ export function findSettingsItem(sectionSlug: string, itemSlug: string): Setting
   return null;
 }
 
-/** Deep-link: pathname bo‘yicha `requiredRoles` bandini topish. */
-export function findSettingsItemRequiringRolesForPath(pathname: string): SettingsItem | null {
+/** Deep-link: pathname (+ ixtiyoriy query) bo‘yicha sozlama bandini topish. */
+export function findSettingsItemForPath(pathname: string, search = ""): SettingsItem | null {
   const path = pathname.split("?")[0] ?? pathname;
   const normalized = path.length > 1 && path.endsWith("/") ? path.slice(0, -1) : path;
+  const cur = new URLSearchParams(search.replace(/^\?/, ""));
   let best: SettingsItem | null = null;
-  let bestLen = -1;
+  let bestScore = -1;
 
   const visit = (item: SettingsItem) => {
-    if (!item.requiredRoles?.length) return;
-    const href = resolveSettingsItemHref(item).split("?")[0] ?? "";
-    const hrefNorm = href.length > 1 && href.endsWith("/") ? href.slice(0, -1) : href;
-    if (normalized === hrefNorm || normalized.startsWith(`${hrefNorm}/`)) {
-      if (hrefNorm.length > bestLen) {
-        best = item;
-        bestLen = hrefNorm.length;
+    const href = resolveSettingsItemHref(item);
+    const hrefPath = (href.split("?")[0] ?? "").trim();
+    const hrefNorm = hrefPath.length > 1 && hrefPath.endsWith("/") ? hrefPath.slice(0, -1) : hrefPath;
+    if (!(normalized === hrefNorm || normalized.startsWith(`${hrefNorm}/`))) return;
+    const qIdx = href.indexOf("?");
+    const hrefQuery = qIdx >= 0 ? new URLSearchParams(href.slice(qIdx + 1)) : null;
+    let score = hrefNorm.length * 10;
+    if (hrefQuery && Array.from(hrefQuery.keys()).length > 0) {
+      for (const [k, v] of Array.from(hrefQuery.entries())) {
+        if (cur.get(k) !== v) return;
       }
+      score += 50;
+    }
+    if (score > bestScore) {
+      best = item;
+      bestScore = score;
     }
   };
 
@@ -423,8 +542,13 @@ export function findSettingsItemRequiringRolesForPath(pathname: string): Setting
   return best;
 }
 
+/** Deep-link: pathname bo‘yicha `requiredRoles` bandini topish. */
+export function findSettingsItemRequiringRolesForPath(pathname: string): SettingsItem | null {
+  const item = findSettingsItemForPath(pathname);
+  if (!item?.requiredRoles?.length) return null;
+  return item;
+}
+
 export function isSettingsItemAllowedForRole(item: SettingsItem, role: string | null): boolean {
-  if (!item.requiredRoles?.length) return true;
-  if (role === "admin") return true;
-  return role != null && item.requiredRoles.includes(role);
+  return isSettingsItemAllowedForAccess(item, role, null);
 }

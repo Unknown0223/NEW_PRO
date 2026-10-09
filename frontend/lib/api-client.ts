@@ -51,7 +51,7 @@ export async function apiFetch<T = unknown>(path: string, init?: RequestInit): P
     return h;
   };
 
-  const doFetch = () => fetch(url, { ...init, headers: buildHeaders() });
+  const doFetch = () => fetch(url, { ...init, credentials: init?.credentials ?? "include", headers: buildHeaders() });
 
   let res = await doFetch();
 
@@ -59,28 +59,26 @@ export async function apiFetch<T = unknown>(path: string, init?: RequestInit): P
     const store = useAuthStore.getState();
     const disk = readPersistedAuth();
     const refreshToken = store.refreshToken ?? disk.refreshToken;
-    if (refreshToken) {
-      try {
-        const r = await fetch(`${base}/auth/refresh`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          credentials: "include",
-          body: JSON.stringify(refreshToken ? { refreshToken } : {})
+    try {
+      const r = await fetch(`${base}/auth/refresh`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify(refreshToken ? { refreshToken } : {})
+      });
+      if (r.ok) {
+        const data = (await r.json()) as { accessToken: string; refreshToken: string };
+        const prevSlug = store.tenantSlug ?? disk.tenantSlug;
+        const slugFromJwt = decodeAccessTokenTenantSlug(data.accessToken);
+        store.setSession({
+          accessToken: data.accessToken,
+          refreshToken: data.refreshToken,
+          tenantSlug: slugFromJwt ?? prevSlug ?? undefined
         });
-        if (r.ok) {
-          const data = (await r.json()) as { accessToken: string; refreshToken: string };
-          const prevSlug = store.tenantSlug ?? disk.tenantSlug;
-          const slugFromJwt = decodeAccessTokenTenantSlug(data.accessToken);
-          store.setSession({
-            accessToken: data.accessToken,
-            refreshToken: data.refreshToken,
-            tenantSlug: slugFromJwt ?? prevSlug ?? undefined
-          });
-          res = await doFetch();
-        }
-      } catch {
-        /* clear below if still 401 */
+        res = await doFetch();
       }
+    } catch {
+      /* still 401 below */
     }
     if (res.status === 401) {
       useAuthStore.getState().clearSession();

@@ -29,19 +29,19 @@ class ExpeditorConfigPolicy {
   bool get fingerprintRequired => config?.fingerprintRequiredForShipmentConfirm ?? false;
   bool get requirePhotoReportBeforeVisit =>
       config?.requirePhotoReportBeforeVisit ?? false;
-  String get currencySymbol => config?.currencySymbol ?? "so'm";
+  String get currencySymbol => config?.currencySymbol ?? 'сум';
 
   bool get returnsEnabled => allowPartialReturn || allowReloadFromVehicle;
 
   String blockPaymentMessage() {
     if (!acceptPaymentForOrder) {
-      return 'Buyurtma uchun to\'lov qabul qilish admin panelda o\'chirilgan';
+      return 'Приём оплаты по заказу отключён в админ-панели';
     }
     if (!paymentsEnabled) {
-      return 'Yetkazishda to\'lov qabul qilish admin panelda o\'chirilgan';
+      return 'Приём оплаты при доставке отключён в админ-панели';
     }
     if (!acceptPaymentOnDelivery) {
-      return 'Faqat qarzdor mijozlardan to\'lov qabul qilish ruxsat etilgan';
+      return 'Разрешён приём оплаты только от клиентов-должников';
     }
     return '';
   }

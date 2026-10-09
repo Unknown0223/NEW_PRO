@@ -1,16 +1,21 @@
 import type { Prisma } from "@prisma/client";
 import { prisma } from "../../config/database";
 import { applyAccessResetToRoleDefaultTx } from "../access/access.reset.service";
-import { SLOT_TYPE_TO_USER_ROLE, isWorkSlotType } from "./work-slots.constants";
+import { isWorkSlotType, userRoleMatchesSlotType } from "./work-slots.constants";
 import {
-  linkAgentAssignmentsToWorkSlot,
-  migrateClientsOnAgentSlotSwap,
-  migrateClientsOnVacantSlotAssign
+    migrateClientsOnAgentSlotSwap,
+    migrateClientsOnVacantSlotAssign,
+    migrateExpeditorAssignmentsOnSlotSwap
 } from "./work-slots.client-sync";
 import {
   clearWorkplaceFieldsOnUser,
   mirrorSlotConfigToUser
 } from "./work-slots.config-mirror";
+import { syncUserLinksToWorkSlotTx } from "./work-slots.link-sync";
+import {
+  syncAfterAgentSlotOccupancyChange,
+  syncSupervisorTeamToUsers
+} from "./work-slots.supervisor-team";
 
 /** Slotdan chiqarilganda shaxsiy ekstra ruxsatlar olib tashlanadi — rol standarti qoladi. */
 async function resetLeavingUserAccess(
@@ -28,8 +33,7 @@ async function resetLeavingUserAccess(
 
 export function assertUserMatchesSlotType(userRole: string, slotType: string): void {
   if (!isWorkSlotType(slotType)) throw new Error("BAD_SLOT_TYPE");
-  const need = SLOT_TYPE_TO_USER_ROLE[slotType];
-  if (userRole !== need) throw new Error("BAD_SLOT_TYPE");
+  if (!userRoleMatchesSlotType(userRole, slotType)) throw new Error("BAD_SLOT_TYPE");
 }
 
 export async function assignUserToSlot(
@@ -48,11 +52,18 @@ export async function assignUserToSlot(
     if (!slot.is_active) throw new Error("SLOT_INACTIVE");
 
     const user = await tx.user.findFirst({
-      where: { id: newUserId, tenant_id: tenantId, is_active: true },
-      select: { id: true, role: true, branch: true }
+      where: { id: newUserId, tenant_id: tenantId },
+      select: { id: true, role: true, branch: true, is_active: true, hired_at: true }
     });
     if (!user) throw new Error("BAD_USER");
     assertUserMatchesSlotType(user.role, slot.slot_type);
+    const reactivated = !user.is_active;
+    if (reactivated) {
+      await tx.user.update({
+        where: { id: user.id },
+        data: { is_active: true, dismissed_at: null, ...(user.hired_at ? {} : { hired_at: new Date() }) }
+      });
+    }
 
     const current = await tx.slotUserLink.findFirst({
       where: { slot_id: slotId, ended_at: null },
@@ -85,6 +96,19 @@ export async function assignUserToSlot(
     await resetLeavingUserAccess(tx, tenantId, newUserId);
     await mirrorSlotConfigToUser(tx, tenantId, slotId, newUserId);
 
+    if (current?.user_id != null && current.user_id !== newUserId) {
+      await syncUserLinksToWorkSlotTx(tx, tenantId, current.user_id, null);
+    }
+    await syncUserLinksToWorkSlotTx(tx, tenantId, newUserId, slotId);
+
+    const auditNoteParts = [
+      note?.trim() || null,
+      current
+        ? "Права сотрудников сброшены к стандарту роли (предшественник не копируется)"
+        : "Права нового сотрудника сброшены к стандарту роли",
+      reactivated ? "Сотрудник активирован" : null
+    ].filter(Boolean);
+
     await tx.slotAuditEntry.create({
       data: {
         tenant_id: tenantId,
@@ -93,7 +117,7 @@ export async function assignUserToSlot(
         next_user_id: newUserId,
         action: current ? "swap" : "assign",
         actor_id: actorId,
-        note: note?.trim() || null
+        note: auditNoteParts.join(" · ") || null
       }
     });
 
@@ -110,6 +134,13 @@ export async function assignUserToSlot(
         // VACANT / birinchi biriktirish: slotdagi eski assignmentlar yangi agentga.
         await migrateClientsOnVacantSlotAssign(tx, tenantId, slotId, newUserId);
       }
+      await syncAfterAgentSlotOccupancyChange(tx, tenantId, slotId);
+    } else if (slot.slot_type === "expeditor") {
+      if (current?.user_id != null && current.user_id !== newUserId) {
+        await migrateExpeditorAssignmentsOnSlotSwap(tx, tenantId, current.user_id, newUserId);
+      }
+    } else if (slot.slot_type === "supervisor") {
+      await syncSupervisorTeamToUsers(tx, tenantId, slotId);
     }
 
     return link;
@@ -123,6 +154,12 @@ export async function unassignUserFromSlot(
   note?: string | null
 ) {
   return prisma.$transaction(async (tx) => {
+    const slot = await tx.workSlot.findFirst({
+      where: { id: slotId, tenant_id: tenantId },
+      select: { id: true, slot_type: true }
+    });
+    if (!slot) throw new Error("NOT_FOUND");
+
     const current = await tx.slotUserLink.findFirst({
       where: { tenant_id: tenantId, slot_id: slotId, ended_at: null },
       select: { id: true, user_id: true }
@@ -136,6 +173,12 @@ export async function unassignUserFromSlot(
 
     await clearWorkplaceFieldsOnUser(tx, tenantId, current.user_id);
     await resetLeavingUserAccess(tx, tenantId, current.user_id);
+    await syncUserLinksToWorkSlotTx(tx, tenantId, current.user_id, null);
+
+    const auditNoteParts = [
+      note?.trim() || null,
+      "Права снятого сотрудника сброшены к стандарту роли"
+    ].filter(Boolean);
 
     await tx.slotAuditEntry.create({
       data: {
@@ -145,9 +188,15 @@ export async function unassignUserFromSlot(
         next_user_id: null,
         action: "unassign",
         actor_id: actorId,
-        note: note?.trim() || null
+        note: auditNoteParts.join(" · ") || null
       }
     });
+
+    if (slot.slot_type === "agent") {
+      await syncAfterAgentSlotOccupancyChange(tx, tenantId, slotId);
+    } else if (slot.slot_type === "supervisor") {
+      await syncSupervisorTeamToUsers(tx, tenantId, slotId);
+    }
   });
 }
 
@@ -197,20 +246,29 @@ export async function getAssignChecklist(tenantId: number, slotId: number) {
   const activeUserId = active?.user_id ?? null;
   const [clientsAffected, lockedSkipped] = await Promise.all([
     activeUserId
-      ? prisma.client.count({
-          where: {
-            tenant_id: tenantId,
-            merged_into_client_id: null,
-            agent_id: activeUserId
-          }
-        })
+      ? slot.slot_type === "expeditor"
+        ? prisma.clientAgentAssignment.count({
+            where: {
+              tenant_id: tenantId,
+              expeditor_user_id: activeUserId
+            }
+          })
+        : prisma.client.count({
+            where: {
+              tenant_id: tenantId,
+              merged_into_client_id: null,
+              agent_id: activeUserId
+            }
+          })
       : Promise.resolve(0),
     activeUserId
       ? prisma.clientAgentAssignment.count({
           where: {
             tenant_id: tenantId,
-            agent_id: activeUserId,
-            lock_type: { in: ["manual", "contract"] }
+            lock_type: { in: ["manual", "contract"] },
+            ...(slot.slot_type === "expeditor"
+              ? { expeditor_user_id: activeUserId }
+              : { agent_id: activeUserId })
           }
         })
       : Promise.resolve(0)

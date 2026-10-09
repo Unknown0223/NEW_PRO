@@ -10,7 +10,9 @@ import { FilterSearchableSelect } from "@/components/ui/filter-searchable-select
 import { Input } from "@/components/ui/input";
 import { useUserTablePrefs } from "@/hooks/use-user-table-prefs";
 import { api } from "@/lib/api";
+import { useDebouncedSearchCommit } from "@/lib/use-debounced-search-commit";
 import { STALE } from "@/lib/query-stale";
+import { usePermissions } from "@/lib/use-permissions";
 import { cn } from "@/lib/utils";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -108,6 +110,7 @@ function coverageClass(r: RecommendedRow): string {
 }
 
 export function StockRecommendedWorkspace({ tenantSlug }: { tenantSlug: string }) {
+  const canExport = usePermissions().has("warehouse.rekomendovannyy_zapas.export");
   const today = localYmd(new Date());
   const [draftDateFrom, setDraftDateFrom] = useState(monthStartYmd);
   const [draftDateTo, setDraftDateTo] = useState(today);
@@ -116,6 +119,10 @@ export function StockRecommendedWorkspace({ tenantSlug }: { tenantSlug: string }
   const [draftProductId, setDraftProductId] = useState("");
   const [draftQtyMode, setDraftQtyMode] = useState<QtyMode>("all");
   const [searchDraft, setSearchDraft] = useState("");
+  useDebouncedSearchCommit(searchDraft, (q) => {
+    setFilters((prev) => (prev.q === q ? prev : { ...prev, q }));
+    setPage(1);
+  });
   const [sortBy, setSortBy] = useState<SortBy>("category");
   const [sortDir, setSortDir] = useState<SortDir>("asc");
   const [filters, setFilters] = useState({
@@ -337,7 +344,7 @@ export function StockRecommendedWorkspace({ tenantSlug }: { tenantSlug: string }
     <PageShell>
       <PageHeader
         title="Остатки товара на складе (рекомендованный запас)"
-        description="Forecast по складу: среднесуточные продажи, покрытие запаса и рекомендованный объём пополнения."
+        description="Прогноз по складу: среднесуточные продажи, покрытие запаса и рекомендованный объём пополнения."
       />
 
       <div className="orders-hub-section orders-hub-section--filters orders-hub-section--stack-tight">
@@ -523,10 +530,12 @@ export function StockRecommendedWorkspace({ tenantSlug }: { tenantSlug: string }
                     onKeyDown={(e) => e.key === "Enter" && applyFilters()}
                   />
                 </div>
-                <Button type="button" variant="outline" size="sm" className="h-9" disabled={exporting} onClick={() => void downloadExcel()}>
-                  <Download className="mr-1 size-3.5" />
-                  {exporting ? "…" : "Excel"}
-                </Button>
+                {canExport ? (
+                  <Button type="button" variant="outline" size="sm" className="h-9" disabled={exporting} onClick={() => void downloadExcel()}>
+                    <Download className="mr-1 size-3.5" />
+                    {exporting ? "…" : "Excel"}
+                  </Button>
+                ) : null}
                 <Button type="button" variant="outline" size="icon" className="h-9 w-9" onClick={() => void listQ.refetch()}>
                   <RefreshCw className={cn("size-4", listQ.isFetching && "animate-spin")} />
                 </Button>

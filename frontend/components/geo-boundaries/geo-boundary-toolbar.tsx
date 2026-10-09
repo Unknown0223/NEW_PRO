@@ -1,5 +1,7 @@
 "use client";
 
+import { usePermissions } from "@/lib/use-permissions";
+import { cn } from "@/lib/utils";
 import type { GeoCatalogItem } from "@/hooks/use-visit-planner-catalog";
 import type { GeoBoundaryTab } from "@/lib/geo-territory-layers";
 import type { BoundaryDrawStyle, GeoBoundary } from "@/components/geo-boundaries/use-geo-boundary-editor-state";
@@ -42,10 +44,10 @@ type Props = {
 };
 
 const TAB_LABELS: Record<GeoBoundaryTab, string> = {
-  branch: "Filial",
-  zona: "Zona",
-  oblast: "Oblast",
-  gorod: "Gorod"
+  branch: "Филиал",
+  zona: "Зона",
+  oblast: "Область",
+  gorod: "Город"
 };
 
 export function GeoBoundaryToolbar({
@@ -84,6 +86,9 @@ export function GeoBoundaryToolbar({
   cashDesks = [],
   onSaveZoneLinks
 }: Props) {
+  const { has } = usePermissions();
+  const canAssign = has("settings.geo_granitsy.assign");
+  const canDelete = has("settings.geo_granitsy.void");
   const selectedItem = tabItems.find((i) => i.ref_id === refId);
   const tabLabel =
     activeTab === "branch" ? TAB_LABELS.branch : layerLabels[activeTab] || TAB_LABELS[activeTab];
@@ -132,7 +137,7 @@ export function GeoBoundaryToolbar({
               disabled={drawActive}
               onClick={() => onDrawStyleChange("lasso")}
             >
-              Kursor
+              Курсор
             </button>
             <button
               type="button"
@@ -140,12 +145,12 @@ export function GeoBoundaryToolbar({
               disabled={drawActive}
               onClick={() => onDrawStyleChange("click")}
             >
-              Nuqta
+              Точки
             </button>
           </div>
         ) : null}
 
-        <label className="vp-geo-toolbar-color" title="Chegara rangi">
+        <label className="vp-geo-toolbar-color" title="Цвет границы">
           <input
             type="color"
             value={customColor || effectiveColor}
@@ -159,13 +164,13 @@ export function GeoBoundaryToolbar({
           <span className="vp-geo-toolbar-status">
             {usesAdminBoundary
               ? hasSavedPolygon
-                ? "Davlat chegarasi saqlangan"
+                ? "Государственная граница сохранена"
                 : hasAdminPolygon
-                  ? "Davlat chegarasi"
-                  : "Topilmadi"
+                  ? "Государственная граница"
+                  : "Не найдено"
               : hasSavedPolygon
-                ? `${selectedBoundary!.polygon.length} nuqta`
-                : "Chizilmagan"}
+                ? `Точек: ${selectedBoundary!.polygon.length}`
+                : "Не нарисована"}
           </span>
         ) : null}
 
@@ -178,7 +183,7 @@ export function GeoBoundaryToolbar({
                 onChange={(e) => onWarehouseIdChange?.(e.target.value)}
                 disabled={drawActive}
               >
-                <option value="">— Sklad —</option>
+                <option value="">— Склад —</option>
                 {warehouses.map((w) => (
                   <option key={w.id} value={String(w.id)}>
                     {w.name}
@@ -194,7 +199,7 @@ export function GeoBoundaryToolbar({
                 onChange={(e) => onCashDeskIdChange?.(e.target.value)}
                 disabled={drawActive}
               >
-                <option value="">— Kassa —</option>
+                <option value="">— Касса —</option>
                 {cashDesks.map((d) => (
                   <option key={d.id} value={String(d.id)}>
                     {d.name}
@@ -215,13 +220,13 @@ export function GeoBoundaryToolbar({
             disabled={!refId || saving || !hasAdminPolygon}
             onClick={onApplyAdminBoundary}
           >
-            {hasSavedPolygon ? "Davlat chegarasini yangilash" : "Davlat chegarasini qo‘llash"}
+            {hasSavedPolygon ? "Обновить государственную границу" : "Применить государственную границу"}
           </button>
         ) : null}
 
         {canManualDraw && !drawActive ? (
           <button type="button" className="vp-btn vp-primary" disabled={!refId || saving} onClick={onStartDraw}>
-            {hasSavedPolygon ? "Qayta chizish" : "Chizish"}
+            {hasSavedPolygon ? "Перерисовать" : "Нарисовать"}
           </button>
         ) : null}
 
@@ -233,10 +238,10 @@ export function GeoBoundaryToolbar({
               disabled={drawPointCount < 3 || saving}
               onClick={onFinishDraw}
             >
-              {saving ? "…" : `Saqlash (${drawPointCount})`}
+              {saving ? "…" : `Сохранить (${drawPointCount})`}
             </button>
             <button type="button" className="vp-btn" onClick={onCancelDraw}>
-              Bekor
+              Отмена
             </button>
             {drawStyle === "click" && drawPointCount > 0 ? (
               <button type="button" className="vp-btn" onClick={onUndoLastPoint}>
@@ -250,14 +255,14 @@ export function GeoBoundaryToolbar({
           <>
             {showZoneLinks ? (
               <button type="button" className="vp-btn" disabled={saving} onClick={onSaveZoneLinks}>
-                Sklad/Kassa
+                Склад/Касса
               </button>
             ) : null}
-            <button type="button" className="vp-btn" disabled={saving} onClick={onAssignClients}>
-              Bog‘lash
+            <button type="button" className={cn("vp-btn", !canAssign && "hidden")} disabled={saving} onClick={onAssignClients}>
+              Привязать
             </button>
-            <button type="button" className="vp-btn vp-danger" disabled={saving} onClick={onDeleteBoundary}>
-              O‘chirish
+            <button type="button" className={cn("vp-btn vp-danger", !canDelete && "hidden")} disabled={saving} onClick={onDeleteBoundary}>
+              Удалить
             </button>
           </>
         ) : null}

@@ -71,6 +71,7 @@ export async function registerClientImportRoutes(app: FastifyInstance) {
         importMode: parsed.importMode,
         duplicateKeyFields: parsed.duplicateKeyFields,
         updateApplyFields: parsed.updateApplyFields,
+        commitDecision: parsed.commitDecision,
         actorUserId
       });
       return reply.send(result);
@@ -97,14 +98,15 @@ export async function registerClientImportRoutes(app: FastifyInstance) {
           columnMap: parsed.columnMap,
           importMode: parsed.importMode,
           duplicateKeyFields: parsed.duplicateKeyFields,
-          updateApplyFields: parsed.updateApplyFields
+          updateApplyFields: parsed.updateApplyFields,
+          commitDecision: parsed.commitDecision
         });
         tempPath = null;
         return reply.status(202).send({
           queue,
           jobId,
           message:
-            "Worker ishga tushgan bo‘lsa, natija uchun GET /api/:slug/jobs/{jobId} ni so‘rang (bir xil JWT)."
+            "Если worker запущен, результат можно получить через GET /api/:slug/jobs/{jobId} (тот же JWT)."
         });
       } catch (err) {
         if (tempPath) {
@@ -116,7 +118,7 @@ export async function registerClientImportRoutes(app: FastifyInstance) {
           request,
           503,
           "JobQueueUnavailable",
-          "Redis yoki navbat mavjud emas. Worker va REDIS_URL ni tekshiring."
+          "Redis или очередь задач недоступны. Проверьте worker и REDIS_URL."
         );
       }
     }

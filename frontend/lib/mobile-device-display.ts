@@ -17,7 +17,7 @@ export function formatDeviceName(v: string | null | undefined): string {
     lower.includes("goldfish") ||
     /^google\s+sdk/i.test(s)
   ) {
-    return "Android Emulator";
+    return "Эмулятор Android";
   }
   return s;
 }

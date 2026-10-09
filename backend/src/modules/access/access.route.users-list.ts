@@ -68,17 +68,21 @@ export async function registerAccessUsersListRoutes(app: FastifyInstance) {
     const tenantId = request.tenant!.id;
     const q = listUsersQuerySchema.safeParse(request.query ?? {});
     if (!q.success)
-      return sendApiError(reply, request, 400, "ValidationError", "Invalid query", zodValidationExtras(q.error));
+      return sendApiError(reply, request, 400, "ValidationError", "Некорректные параметры запроса", zodValidationExtras(q.error));
 
     if (q.data.mode === "supervisor_pick") {
       const rows = await prisma.user.findMany({
-        where: { tenant_id: tenantId },
+        where: {
+          tenant_id: tenantId,
+          OR: [{ is_active: true }, { filter_visible: true }]
+        },
         select: {
           id: true,
           name: true,
           code: true,
           role: true,
           is_active: true,
+          filter_visible: true,
           supervisor_user_id: true,
           branch: true
         },
@@ -91,6 +95,7 @@ export async function registerAccessUsersListRoutes(app: FastifyInstance) {
           code: u.code,
           role: u.role,
           is_active: u.is_active,
+          filter_visible: u.filter_visible,
           supervisor_user_id: u.supervisor_user_id,
           branch: u.branch
         }))

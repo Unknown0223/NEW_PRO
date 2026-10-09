@@ -101,6 +101,13 @@ describeOrdersIntegrationSuite("patch and meta", (ctx) => {
     expect(locked.status).toBe(400);
     expect(locked.body.error).toBe("OrderHeaderLocked");
 
+    const linesLocked = await request(ctx.app.server)
+      .patch(`/api/test1/orders/${orderId}`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({ warehouse_id: whB, items: [{ product_id: productId, qty: 1 }] });
+    expect(linesLocked.status).toBe(400);
+    expect(linesLocked.body.error).toBe("OrderHeaderLocked");
+
     const commentPatched = await request(ctx.app.server)
       .patch(`/api/test1/orders/${orderId}/meta`)
       .set("Authorization", `Bearer ${token}`)

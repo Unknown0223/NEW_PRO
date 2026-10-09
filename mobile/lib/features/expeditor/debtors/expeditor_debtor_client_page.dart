@@ -279,7 +279,7 @@ class _ExpeditorDebtorClientPageState
             ),
             Expanded(
               child: Text(
-                "${formatMoneySpaced(balance)} So'm",
+                '${formatMoneySpaced(balance)} сум',
                 textAlign: TextAlign.right,
                 style: TextStyle(
                   fontWeight: FontWeight.w800,
@@ -892,16 +892,16 @@ class _PaymentCard extends StatelessWidget {
   static String _methodLabel(String? type) {
     switch ((type ?? '').trim().toLowerCase()) {
       case 'cash':
-        return 'Naqd';
+        return 'Наличные';
       case 'card':
         return 'Карта';
       case 'terminal':
-        return 'Terminal';
+        return 'Терминал';
       case 'transfer':
       case 'bank':
-        return 'Pereches';
+        return 'Перечисление';
       default:
-        return (type == null || type.isEmpty) ? 'Naqd' : type;
+        return (type == null || type.isEmpty) ? 'Наличные' : type;
     }
   }
 
@@ -1095,7 +1095,7 @@ class _ReturnCard extends StatelessWidget {
                   style: AppTypography.bodyMedium
                       .copyWith(color: AppColors.textMuted),),
               Expanded(
-                child: Text("${formatMoneySpaced(sum)} So'm",
+                child: Text('${formatMoneySpaced(sum)} сум',
                     textAlign: TextAlign.right,
                     style: const TextStyle(
                         fontWeight: FontWeight.w800,

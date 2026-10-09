@@ -19,6 +19,7 @@ import {
 import { buttonVariants } from "@/components/ui/button-variants";
 import { api } from "@/lib/api";
 import { useAuthStore, useAuthStoreHydrated, useEffectiveRole } from "@/lib/auth-store";
+import { usePermissions } from "@/lib/use-permissions";
 import { formatNumberGrouped } from "@/lib/format-numbers";
 import type { PaymentDetailPayload } from "@/lib/payment-detail-types";
 import { STALE } from "@/lib/query-stale";
@@ -122,6 +123,9 @@ export function PaymentHistoryDetailWorkspace() {
 
   const invalid = !Number.isFinite(paymentId) || paymentId < 1;
   const canDelete = effectiveRole === "admin";
+  const { has } = usePermissions();
+  const canAllocate = has("cash.oplaty_klientov.update");
+  const canApprove = has("cash.oplaty_klientov.approve");
 
   const detailQ = useQuery({
     queryKey: ["payment-detail", tenantSlug, paymentId],
@@ -330,7 +334,7 @@ export function PaymentHistoryDetailWorkspace() {
               Печать
             </button>
 
-            {!isVoided ? (
+            {!isVoided && canAllocate ? (
               <button
                 type="button"
                 className={cn(buttonVariants({ variant: "outline", size: "sm" }), "inline-flex items-center gap-1.5")}
@@ -341,7 +345,7 @@ export function PaymentHistoryDetailWorkspace() {
               </button>
             ) : null}
 
-            {isPending ? (
+            {isPending && canApprove ? (
               <>
                 <button
                   type="button"

@@ -1,16 +1,15 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "../../config/database";
-import {
-  buildCityTerritoryHints,
-  expandRegionFilterSynonyms,
-  referencesWithResolvedTerritoryNodes
-} from "../tenant-settings/tenant-settings.service";
-import type { CityTerritoryHintDto } from "../tenant-settings/tenant-settings.service";
-import { normKeyTerritoryMatch } from "../../../shared/territory-lalaku-seed";
 import type { ListClientsQuery } from "./clients.types";
 import { buildClientListSearchOrClause } from "./clients.list.search";
 import type { ScopedReportActor } from "../access/access-agent-scope";
 import { intersectRequestedAgentIds } from "../access/access-agent-scope";
+import {
+  clientWhereForCityFilter,
+  clientWhereForRegionFilter,
+  clientWhereForZoneFilter,
+  loadClientTerritoryFilterBundle
+} from "./clients.territory-filter";
 
 export async function clientIdsWithVisitWeekday(tenantId: number, day: number): Promise<number[]> {
   const d = Math.floor(day);
@@ -49,74 +48,6 @@ export async function clientIdsWithAgentVisitWeekday(
   return rows.map((r) => r.client_id);
 }
 
-async function loadTenantReferencesForClientTerritoryFilters(tenantId: number): Promise<{
-  hints: Record<string, CityTerritoryHintDto>;
-  ref: Record<string, unknown> | undefined;
-}> {
-  const row = await prisma.tenant.findUnique({
-    where: { id: tenantId },
-    select: { settings: true }
-  });
-  const refRaw = (row?.settings as { references?: Record<string, unknown> } | null)?.references as
-    | Record<string, unknown>
-    | undefined;
-  const ref = refRaw ? referencesWithResolvedTerritoryNodes(refRaw) : undefined;
-  return {
-    hints: buildCityTerritoryHints(ref),
-    ref
-  };
-}
-
-function cityKeysMatchingRegionInHints(
-  hints: Record<string, CityTerritoryHintDto>,
-  regionFilter: string
-): string[] {
-  const rf = regionFilter.trim();
-  if (!rf) return [];
-  const rfNorm = normKeyTerritoryMatch(rf);
-  const uniq = new Set<string>();
-  for (const [cityKey, hint] of Object.entries(hints)) {
-    const rs = (hint.region_stored ?? "").trim();
-    const rl = (hint.region_label ?? "").trim();
-    if (!rs && !rl) continue;
-    const match =
-      rs === rf ||
-      rl === rf ||
-      normKeyTerritoryMatch(rs) === rfNorm ||
-      normKeyTerritoryMatch(rl) === rfNorm;
-    if (match) {
-      const k = cityKey.trim();
-      if (k) uniq.add(k);
-    }
-  }
-  return [...uniq];
-}
-
-function cityKeysMatchingZoneInHints(
-  hints: Record<string, CityTerritoryHintDto>,
-  zoneFilter: string
-): string[] {
-  const zf = zoneFilter.trim();
-  if (!zf) return [];
-  const zfNorm = normKeyTerritoryMatch(zf);
-  const uniq = new Set<string>();
-  for (const [cityKey, hint] of Object.entries(hints)) {
-    const zs = (hint.zone_stored ?? "").trim();
-    const zl = (hint.zone_label ?? "").trim();
-    if (!zs && !zl) continue;
-    const match =
-      zs === zf ||
-      zl === zf ||
-      normKeyTerritoryMatch(zs) === zfNorm ||
-      normKeyTerritoryMatch(zl) === zfNorm;
-    if (match) {
-      const k = cityKey.trim();
-      if (k) uniq.add(k);
-    }
-  }
-  return [...uniq];
-}
-
 /** Ro‘yxat, eksport va count uchun umumiy WHERE. `null` — hech qachon mos kelmas (masalan hafta kuni bo‘yicha bo‘sh). */
 export async function buildClientListWhereInput(
   tenantId: number,
@@ -125,54 +56,72 @@ export async function buildClientListWhereInput(
 ): Promise<Prisma.ClientWhereInput | null> {
   const andList: Prisma.ClientWhereInput[] = [{ tenant_id: tenantId, merged_into_client_id: null }];
 
-  const regionQ = q.region?.trim();
+  const regionList = [
+    ...(q.regions?.map((r) => r.trim()).filter(Boolean) ?? []),
+    ...(q.region?.trim() ? [q.region.trim()] : [])
+  ];
+  const regionKeys = [...new Set(regionList)];
   const zoneList = [
     ...(q.zones?.map((z) => z.trim()).filter(Boolean) ?? []),
     ...(q.zone?.trim() ? [q.zone.trim()] : [])
   ];
   const zoneKeys = [...new Set(zoneList)];
+  const cities = [
+    ...(q.cities?.map((c) => c.trim()).filter(Boolean) ?? []),
+    ...(q.city?.trim() ? [q.city.trim()] : [])
+  ];
+  const cityKeys = [...new Set(cities)];
   const territoryBundle =
-    regionQ || zoneKeys.length > 0
-      ? await loadTenantReferencesForClientTerritoryFilters(tenantId)
-      : { hints: {} as Record<string, CityTerritoryHintDto>, ref: undefined as Record<string, unknown> | undefined };
+    regionKeys.length > 0 || zoneKeys.length > 0 || cityKeys.length > 0
+      ? await loadClientTerritoryFilterBundle(tenantId)
+      : { hints: {}, ref: undefined };
 
   if (q.is_active === true) andList.push({ is_active: true });
   if (q.is_active === false) andList.push({ is_active: false });
-  const cat = q.category?.trim();
-  if (cat) andList.push({ category: cat });
-  if (regionQ) {
-    const cityKeys = cityKeysMatchingRegionInHints(territoryBundle.hints, regionQ);
-    const regionSynonyms = expandRegionFilterSynonyms(territoryBundle.ref, regionQ);
-    const orRegion: Prisma.ClientWhereInput[] = regionSynonyms.map((v) => ({
-      region: { equals: v, mode: "insensitive" }
-    }));
-    if (cityKeys.length > 0) orRegion.push({ city: { in: cityKeys } });
-    andList.push({ OR: orRegion });
+  const categories = [
+    ...(q.categories?.map((c) => c.trim()).filter(Boolean) ?? []),
+    ...(q.category?.trim() ? [q.category.trim()] : [])
+  ];
+  const categoryKeys = [...new Set(categories)];
+  if (categoryKeys.length === 1) andList.push({ category: categoryKeys[0] });
+  else if (categoryKeys.length > 1) andList.push({ category: { in: categoryKeys } });
+  if (regionKeys.length > 0) {
+    const clause = clientWhereForRegionFilter(territoryBundle, regionKeys);
+    if (clause) andList.push(clause);
   }
   const district = q.district?.trim();
   if (district) andList.push({ district });
   const neighborhood = q.neighborhood?.trim();
   if (neighborhood) andList.push({ neighborhood });
   if (zoneKeys.length > 0) {
-    const orZone: Prisma.ClientWhereInput[] = [];
-    for (const zoneQ of zoneKeys) {
-      const cityKeys = cityKeysMatchingZoneInHints(territoryBundle.hints, zoneQ);
-      orZone.push(
-        { zone: zoneQ },
-        { zone: { equals: zoneQ, mode: "insensitive" } },
-        ...(cityKeys.length > 0 ? [{ city: { in: cityKeys } }] : [])
-      );
-    }
-    andList.push({ OR: orZone });
+    const clause = clientWhereForZoneFilter(territoryBundle, zoneKeys);
+    if (clause) andList.push(clause);
   }
-  const city = q.city?.trim();
-  if (city) andList.push({ city });
-  const ctc = q.client_type_code?.trim();
-  if (ctc) andList.push({ client_type_code: ctc });
-  const cf = q.client_format?.trim();
-  if (cf) andList.push({ client_format: cf });
-  const sc = q.sales_channel?.trim();
-  if (sc) andList.push({ sales_channel: sc });
+  if (cityKeys.length > 0) {
+    const clause = clientWhereForCityFilter(territoryBundle, cityKeys);
+    if (clause) andList.push(clause);
+  }
+  const typeCodes = [
+    ...(q.client_type_codes?.map((c) => c.trim()).filter(Boolean) ?? []),
+    ...(q.client_type_code?.trim() ? [q.client_type_code.trim()] : [])
+  ];
+  const typeKeys = [...new Set(typeCodes)];
+  if (typeKeys.length === 1) andList.push({ client_type_code: typeKeys[0] });
+  else if (typeKeys.length > 1) andList.push({ client_type_code: { in: typeKeys } });
+  const formats = [
+    ...(q.client_formats?.map((c) => c.trim()).filter(Boolean) ?? []),
+    ...(q.client_format?.trim() ? [q.client_format.trim()] : [])
+  ];
+  const formatKeys = [...new Set(formats)];
+  if (formatKeys.length === 1) andList.push({ client_format: formatKeys[0] });
+  else if (formatKeys.length > 1) andList.push({ client_format: { in: formatKeys } });
+  const channels = [
+    ...(q.sales_channels?.map((c) => c.trim()).filter(Boolean) ?? []),
+    ...(q.sales_channel?.trim() ? [q.sales_channel.trim()] : [])
+  ];
+  const channelKeys = [...new Set(channels)];
+  if (channelKeys.length === 1) andList.push({ sales_channel: channelKeys[0] });
+  else if (channelKeys.length > 1) andList.push({ sales_channel: { in: channelKeys } });
 
   const agentIds = [
     ...(q.agent_ids?.filter((n) => Number.isFinite(n) && n > 0) ?? []),
@@ -269,8 +218,13 @@ export async function buildClientListWhereInput(
     });
   }
 
-  const equipQ = q.equipment_kind?.trim();
-  if (equipQ) {
+  const equipKinds = [
+    ...(q.equipment_kinds?.map((k) => k.trim()).filter(Boolean) ?? []),
+    ...(q.equipment_kind?.trim() ? [q.equipment_kind.trim()] : [])
+  ];
+  const equipKeys = [...new Set(equipKinds)];
+  if (equipKeys.length === 1) {
+    const equipQ = equipKeys[0]!;
     andList.push({
       client_equipment: {
         some: {
@@ -279,6 +233,18 @@ export async function buildClientListWhereInput(
             { equipment_kind: { contains: equipQ, mode: "insensitive" } },
             { inventory_type: { contains: equipQ, mode: "insensitive" } }
           ]
+        }
+      }
+    });
+  } else if (equipKeys.length > 1) {
+    andList.push({
+      client_equipment: {
+        some: {
+          removed_at: null,
+          OR: equipKeys.flatMap((equipQ) => [
+            { equipment_kind: { contains: equipQ, mode: "insensitive" as const } },
+            { inventory_type: { contains: equipQ, mode: "insensitive" as const } }
+          ])
         }
       }
     });

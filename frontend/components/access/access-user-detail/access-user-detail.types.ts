@@ -24,7 +24,7 @@ export function userMessageAfterAccessPatchFailure(err: unknown, fallback: strin
   const flat = getZodFlattenFromApiErrorBody(ax.response?.data);
   if (flat) {
     const hint = firstValidationUserHint(flat);
-    return withApiSupportLine(hint ?? "Ma’lumotlarni tekshiring.", err);
+    return withApiSupportLine(hint ?? "Проверьте введённые данные.", err);
   }
   return getUserFacingError(err, fallback);
 }
@@ -75,6 +75,10 @@ export type DetailResponse = {
   matrix: MatrixRow[];
   /** Operatsiya kalitlari — foydalanuvchi boshqalarga berishi mumkin (mustaqil ro‘yxat). */
   grant_delegation_operation_keys?: string[];
+  /** Asosiy `user.role` dan tashqari `user_roles` paketlari. */
+  extra_role_keys?: string[];
+  /** Kim tahrirlayapti: admin — hammasi; boshqalar faqat `grantable_keys` ni bera / ola oladi. */
+  actor?: { is_admin: boolean; can_edit_user: boolean; grantable_keys: string[] | null };
   supervisees: { id: number; login: string; name: string; code: string | null; role: string; is_active: boolean }[];
   scope: {
     branches: string[];
@@ -87,6 +91,24 @@ export type DetailResponse = {
 };
 
 export type DimRow = { key: string; label: string; attached_users_count: number; is_active: boolean };
+
+export type AccessRoleDefaultRow = {
+  id: number;
+  key: string;
+  name: string;
+  operations_count: number;
+};
+
+export type DetailModalKind =
+  | "operations"
+  | "role_packs"
+  | "cash"
+  | "warehouse"
+  | "branch"
+  | "payment"
+  | "direction"
+  | "territory"
+  | "staff";
 
 /** Ответ GET /access/territories — плоский список. */
 export type TerritoryApiRow = {
@@ -105,6 +127,7 @@ export type SupervisorPickRow = {
   code: string | null;
   role: string;
   is_active: boolean;
+  filter_visible?: boolean;
   supervisor_user_id: number | null;
   branch: string | null;
 };
@@ -142,7 +165,9 @@ export function sortStaffRoleKeys(roles: string[]): string[] {
 
 export function formatStaffPickLine(u: SupervisorPickRow): string {
   const name = formatPersonDisplayName({ fio: u.full_name, name: u.full_name });
-  return name || `#${u.id}`;
+  const base = name || `#${u.id}`;
+  const code = u.code?.trim();
+  return code ? `${base} (${code})` : base;
 }
 
 /** Дерево из `tenant.settings.references.territory_nodes` (как на странице Territoriya). */
@@ -337,7 +362,8 @@ export function formatTerritoryAssigneeSubtitle(u: DetailResponse["user"]): stri
 
 
 export function patchTouchesUserDirectory(body: Record<string, unknown>): boolean {
-  if (body.role != null || body.is_active != null) return true;
+  if (body.role != null || body.is_active != null || body.extra_role_keys != null) return true;
+  if (body.permissions != null || body.denied_permissions != null || body.remove_permission_keys != null) return true;
   if (
     body.branch_codes != null ||
     body.warehouse_ids != null ||

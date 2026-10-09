@@ -81,7 +81,7 @@ final deliveriesProvider = FutureProvider.family<List<Map<String, dynamic>>, Str
 final expeditorOrderDetailProvider = FutureProvider.family<Map<String, dynamic>, int>(
   (ref, orderId) async {
     final slug = ref.watch(sessionProvider).tenantSlug ?? '';
-    if (slug.isEmpty) throw Exception('Tenant yo\'q');
+    if (slug.isEmpty) throw Exception('Компания не выбрана');
     final online = await ref.read(connectivityProvider).isOnline();
     if (online) {
       try {
@@ -96,7 +96,7 @@ final expeditorOrderDetailProvider = FutureProvider.family<Map<String, dynamic>,
     }
     final cached = await _orderCache.loadDetail(slug, orderId);
     if (cached != null) return cached;
-    throw Exception('Offline — buyurtma keshda yo\'q');
+    throw Exception('Нет сети — заказ отсутствует в кэше');
   },
 );
 
@@ -197,7 +197,7 @@ final expeditorShipmentDocsProvider = FutureProvider.family<List<Map<String, dyn
 final expeditorShipmentDetailProvider = FutureProvider.family<Map<String, dynamic>, String>(
   (ref, docId) async {
     final slug = ref.watch(sessionProvider).tenantSlug ?? '';
-    if (slug.isEmpty) throw Exception('Tenant yo\'q');
+    if (slug.isEmpty) throw Exception('Компания не выбрана');
     return ref.read(expeditorApiProvider).getShipmentDocument(slug, docId);
   },
 );
@@ -235,14 +235,14 @@ final expeditorMyReturnsProvider =
 final expeditorReturnCompositionProvider =
     FutureProvider.family<Map<String, dynamic>, int>((ref, orderId) async {
   final slug = ref.watch(sessionProvider).tenantSlug ?? '';
-  if (slug.isEmpty) throw Exception('Tenant yo\'q');
+  if (slug.isEmpty) throw Exception('Компания не выбрана');
   return ref.read(expeditorApiProvider).getReturnByOrderComposition(slug, orderId);
 });
 
 final expeditorPaymentContextProvider = FutureProvider.family<Map<String, dynamic>, int>(
   (ref, orderId) async {
     final slug = ref.watch(sessionProvider).tenantSlug ?? '';
-    if (slug.isEmpty) throw Exception('Tenant yo\'q');
+    if (slug.isEmpty) throw Exception('Компания не выбрана');
     final online = await ref.read(connectivityProvider).isOnline();
     if (online) {
       try {
@@ -257,6 +257,6 @@ final expeditorPaymentContextProvider = FutureProvider.family<Map<String, dynami
     }
     final cached = await _orderCache.loadPaymentContext(slug, orderId);
     if (cached != null) return cached;
-    throw Exception('Offline — to\'lov ma\'lumoti keshda yo\'q');
+    throw Exception('Нет сети — данные об оплате отсутствуют в кэше');
   },
 );

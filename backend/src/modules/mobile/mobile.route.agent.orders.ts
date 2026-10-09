@@ -1,4 +1,4 @@
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyRequest } from "fastify";
 import { positiveIntPathIdParamsSchema } from "../../contracts/route-params.schemas";
 import { sendApiError, zodValidationExtras } from "../../lib/api-error";
 import {
@@ -20,13 +20,41 @@ import {
 } from "./mobile.route.agent.schemas";
 import {
   createMobileOrder, enqueueOrder, getMobileAgentOrderDetail, getMobileOrderStock,
-  getMobileWarehouseStockView, getPendingCount, listMobileAgentOrdersHistory, syncOrders
+  getMobileWarehouseStockView, listMobileAgentOrdersHistory
 } from "./mobile.service";
 import {
   mobileAgentConfigPreHandler,
   mobileOfflineOrderPreHandler,
   parseDateLike
 } from "./mobile.route.shared";
+import {
+  assertFaceGateForAction,
+  bumpOrderFaceActionCount,
+  isFaceGateError,
+  loadMobileConfigForFaceGate
+} from "./mobile-face.guard";
+import {
+  attachOrderVisit,
+  isStrictOrderVisitRequest,
+  OrderVisitError,
+  prepareOrderVisit,
+  sendOrderVisitError,
+  type PreparedOrderVisit
+} from "./mobile-order-visit.guard";
+
+/** Zakaz allaqachon yaratilgan — bog‘lash xatosi qayta yuborish (dublikat zakaz) ga olib kelmasin. */
+async function linkOrderVisitSafe(
+  request: FastifyRequest,
+  userId: number,
+  orderId: number,
+  visit: PreparedOrderVisit
+) {
+  try {
+    await attachOrderVisit(request.tenant!.id, userId, orderId, visit);
+  } catch (err) {
+    request.log.warn({ err, orderId }, "order visit link failed");
+  }
+}
 
 export async function registerMobileAgentOrderRoutes(app: FastifyInstance) {
 
@@ -94,6 +122,15 @@ export async function registerMobileAgentOrderRoutes(app: FastifyInstance) {
         return reply.send(data);
       } catch (e) {
         const msg = getErrorCode(e) ?? "";
+        if (msg === "CLIENT_INACTIVE") {
+          return sendApiError(
+            reply,
+            request,
+            400,
+            "ClientInactive",
+            "Клиент неактивен — акции и заказы недоступны до подтверждения оператором"
+          );
+        }
         if (msg === "BAD_CLIENT") return sendApiError(reply, request, 400, "BadClient");
         if (msg === "BAD_WAREHOUSE") return sendApiError(reply, request, 400, "BadWarehouse");
         if (msg === "BAD_AGENT") return sendApiError(reply, request, 400, "BadAgent");
@@ -138,9 +175,24 @@ export async function registerMobileAgentOrderRoutes(app: FastifyInstance) {
         return sendApiError(reply, request, 403, "ForbiddenRole");
       }
       try {
+        const mc = await loadMobileConfigForFaceGate(request.tenant!.id, userId);
+        await assertFaceGateForAction(request.tenant!.id, userId, "order_submit", mc);
+        const visit = await prepareOrderVisit(
+          request.tenant!.id,
+          parsed.data.client_id,
+          parsed.data.visit,
+          mc,
+          isStrictOrderVisitRequest(request)
+        );
         const row = await createMobileOrder(request.tenant!.id, userId, viewer.role, parsed.data);
+        await linkOrderVisitSafe(request, userId, row.id, visit);
+        await bumpOrderFaceActionCount(request.tenant!.id, userId, mc);
         return reply.status(201).send(row);
       } catch (e) {
+        if (isFaceGateError(e)) {
+          return sendApiError(reply, request, 403, e.code, e.message);
+        }
+        if (e instanceof OrderVisitError) return sendOrderVisitError(reply, request, e);
         const msg = getErrorCode(e) ?? "";
         if (msg === "PHOTO_REPORT_REQUIRED") {
           return sendApiError(reply, request, 400, "PhotoReportRequired");
@@ -150,6 +202,15 @@ export async function registerMobileAgentOrderRoutes(app: FastifyInstance) {
         }
         if (msg === "SHIPMENT_DATE_REQUIRED" || msg === "SHIPMENT_DATE_INVALID") {
           return sendApiError(reply, request, 400, "ShipmentDateRequired");
+        }
+        if (msg === "CLIENT_INACTIVE") {
+          return sendApiError(
+            reply,
+            request,
+            400,
+            "ClientInactive",
+            "Клиент неактивен — акции и заказы недоступны до подтверждения оператором"
+          );
         }
         if (msg === "BAD_CLIENT") return sendApiError(reply, request, 400, "BadClient");
         if (msg === "BAD_WAREHOUSE") return sendApiError(reply, request, 400, "BadWarehouse");
@@ -278,7 +339,7 @@ export async function registerMobileAgentOrderRoutes(app: FastifyInstance) {
       }
       const offlineCreatedAtParsed = parseDateLike(parsed.data.offline_created_at);
       if (offlineCreatedAtParsed === undefined) {
-        return sendApiError(reply, request, 400, "ValidationError", "Invalid date format", {
+        return sendApiError(reply, request, 400, "ValidationError", "Неверный формат даты", {
           field: "offline_created_at"
         });
       }
@@ -300,6 +361,18 @@ export async function registerMobileAgentOrderRoutes(app: FastifyInstance) {
       }
       try {
         await assertDocWritableByDate(request, "orders", offlineCreated);
+        const rawClient = parsed.data.client_local_id ?? parsed.data.client_id!;
+        const visitClientId = typeof rawClient === "number" ? rawClient : Number.parseInt(String(rawClient), 10);
+        if (!Number.isFinite(visitClientId) || visitClientId < 1) {
+          return sendApiError(reply, request, 400, "BadClient");
+        }
+        const visit = await prepareOrderVisit(
+          request.tenant!.id,
+          visitClientId,
+          parsed.data.visit,
+          await loadMobileConfigForFaceGate(request.tenant!.id, userId),
+          isStrictOrderVisitRequest(request)
+        );
         const result = await enqueueOrder(
           request.tenant!.id,
           userId,
@@ -309,12 +382,23 @@ export async function registerMobileAgentOrderRoutes(app: FastifyInstance) {
           offlineCreated,
           { price_type: parsed.data.price_type, comment: parsed.data.comment }
         );
+        await linkOrderVisitSafe(request, userId, result.id, visit);
         return reply.status(201).send(result);
       } catch (e) {
         if (isDocumentEditPeriodLockedError(e)) return sendDocumentEditPeriodLocked(reply, request);
+        if (e instanceof OrderVisitError) return sendOrderVisitError(reply, request, e);
         const msg = getErrorCode(e) ?? "";
         if (msg === "PHOTO_REPORT_REQUIRED") {
           return sendApiError(reply, request, 400, "PhotoReportRequired");
+        }
+        if (msg === "CLIENT_INACTIVE") {
+          return sendApiError(
+            reply,
+            request,
+            400,
+            "ClientInactive",
+            "Клиент неактивен — акции и заказы недоступны до подтверждения оператором"
+          );
         }
         if (msg === "BAD_CLIENT") return sendApiError(reply, request, 400, "BadClient");
         if (msg === "BAD_WAREHOUSE") return sendApiError(reply, request, 400, "BadWarehouse");
@@ -366,29 +450,4 @@ export async function registerMobileAgentOrderRoutes(app: FastifyInstance) {
     }
   );
 
-  app.get(
-    "/api/:slug/mobile/orders/pending",
-    { preHandler: [...mobileOfflineOrderPreHandler] },
-    async (request, reply) => {
-      if (!ensureTenantContext(request, reply)) return;
-      const userId = Number(getAccessUser(request).sub);
-      const result = await getPendingCount(request.tenant!.id, userId);
-      return reply.send(result);
-    },
-  );
-
-  app.post(
-    "/api/:slug/mobile/orders/sync-flush",
-    { preHandler: [...mobileOfflineOrderPreHandler] },
-    async (request, reply) => {
-      if (!ensureTenantContext(request, reply)) return;
-      const viewer = getAccessUser(request);
-      if (viewer.role !== "agent") {
-        return sendApiError(reply, request, 403, "ForbiddenRole");
-      }
-      const userId = Number(getAccessUser(request).sub);
-      const result = await syncOrders(request.tenant!.id, userId);
-      return reply.send(result);
-    }
-  );
 }

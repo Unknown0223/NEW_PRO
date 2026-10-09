@@ -2,9 +2,11 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
+import { useAuthStore } from "@/lib/auth-store";
 import {
   ME_PERMISSIONS_REFETCH_INTERVAL_MS,
   ME_PERMISSIONS_STALE_MS,
+  decodeAccessTokenUserId,
   isMePermissionsInitialLoad,
   mePermissionKeySet,
   mePermissionsQueryKey,
@@ -13,8 +15,10 @@ import {
 
 /** «Доступ» va tegishli sahifalar: `admin` yoki `access.upravlenie.view`. */
 export function useAccessModuleGate(tenantSlug: string | null | undefined, effectiveRole: string | null) {
+  const accessToken = useAuthStore((s) => s.accessToken);
+  const userId = decodeAccessTokenUserId(accessToken);
   const q = useQuery({
-    queryKey: mePermissionsQueryKey(tenantSlug),
+    queryKey: mePermissionsQueryKey(tenantSlug, userId),
     enabled: Boolean(tenantSlug),
     staleTime: ME_PERMISSIONS_STALE_MS,
     refetchOnWindowFocus: true,

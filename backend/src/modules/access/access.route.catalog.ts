@@ -59,6 +59,7 @@ import {
 import type { PaymentMethodEntryDto } from "../tenant-settings/finance-refs";
 import { paymentMethodStorageKey } from "../tenant-settings/finance-refs";
 import { adminOrAccessManager } from "./access.route.shared";
+import { buildAccessOperationsTree } from "./access-operations-tree";
 
 export async function registerAccessCatalogRoutes(app: FastifyInstance) {
   app.get("/api/:slug/access/permissions/catalog", { preHandler: [...adminOrAccessManager] }, async (request, reply) => {
@@ -66,6 +67,12 @@ export async function registerAccessCatalogRoutes(app: FastifyInstance) {
     if (!ok) return;
     const data = await getPermissionCatalogGrouped(request.tenant!.id);
     return reply.send({ data });
+  });
+
+  app.get("/api/:slug/access/operations-tree", { preHandler: [...adminOrAccessManager] }, async (request, reply) => {
+    const ok = ensureTenantContext(request, reply);
+    if (!ok) return;
+    return reply.send({ data: buildAccessOperationsTree() });
   });
 
   app.get("/api/:slug/access/territories", { preHandler: [...adminOrAccessManager] }, async (request, reply) => {

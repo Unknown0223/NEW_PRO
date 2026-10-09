@@ -86,7 +86,7 @@ export async function buildDailyKpiGroupSummaries(opts: {
         JOIN kpi_group_products kgp ON kgp.product_id = oi.product_id
         WHERE o.tenant_id = ${tenantId}
           AND o.agent_id IN (${Prisma.join(agentIds)})
-          AND o.order_type = 'order'
+          AND o.order_type = 'order' AND o.status <> 'cancelled'
           AND o.created_at >= ${monthStart}
           AND o.created_at < ${monthEnd}
           AND kgp.kpi_group_id IN (${Prisma.join(groupIds)})
@@ -99,7 +99,7 @@ export async function buildDailyKpiGroupSummaries(opts: {
         JOIN kpi_group_products kgp ON kgp.product_id = oi.product_id
         WHERE o.tenant_id = ${tenantId}
           AND o.agent_id IN (${Prisma.join(agentIds)})
-          AND o.order_type = 'order'
+          AND o.order_type = 'order' AND o.status <> 'cancelled'
           AND o.created_at >= ${todayStart}
           AND o.created_at <= ${todayEnd}
           AND kgp.kpi_group_id IN (${Prisma.join(groupIds)})

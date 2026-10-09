@@ -43,6 +43,7 @@ backend/.env
 **/.env
 **/.env.*
 !**/.env.example
+!**/.env.production.example
 mobile/.env.local
 mobile/.env.*.local
 **/*.backup-*/
@@ -86,6 +87,9 @@ backend/tmp-import-*.err
 backend/tmp-import-*.out
 backend/scripts/_audit*.ts
 backend/scripts/_final-audit.ts
+
+# Production DB dump / backup (maxfiy ma’lumot, juda katta)
+backups/
 mobile/releases/ota-demo/
 
 # Excel import (scripts/data ildizidagi qo‘lda fayllar)
@@ -100,3 +104,23 @@ backend/scripts/out/*
 mobile/dist/
 mobile/releases/*.apk
 !mobile/releases/README.txt
+
+# Android OTA imzo kaliti — faqat GitHub Secrets / local seyf
+mobile/android/key.properties
+mobile/android/keystore/*.jks
+mobile/android/keystore/*.keystore
+
+# Lokal object storage / yuklangan fayllar (etalon selfie va h.k.)
+backend/uploads/
+**/uploads/object-storage/
+
+# TypeScript incremental
+*.tsbuildinfo
+**/*.tsbuildinfo
+
+**/*.bak-*
+**/*.bak.*
+
+
+backend/tmp/
+

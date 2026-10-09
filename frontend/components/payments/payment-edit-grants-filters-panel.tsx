@@ -5,7 +5,7 @@ import {
   type TemplateSelectOption
 } from "@/components/clients/clients-template-select-field";
 import { DateRangePopover, formatDateRangeButton } from "@/components/ui/date-range-popover";
-import { uiFromSingleValue } from "@/lib/client-filter-select-value";
+import { joinMultiFilterValues, splitMultiFilterValues } from "@/lib/client-filter-select-value";
 import { ChevronLeft, ChevronRight, Filter, RotateCcw } from "lucide-react";
 import { useRef, useState } from "react";
 
@@ -107,21 +107,24 @@ export function PaymentEditGrantsFiltersPanel({
       <div className="mb-2 grid grid-cols-1 gap-2 sm:grid-cols-2 md:grid-cols-3">
         <ClientsTemplateSelectField
           label="Статус"
+          multi
           options={statusOptions}
-          values={uiFromSingleValue(draft.status)}
-          onChange={(v) => onDraftChange({ status: v[0]?.trim() ?? "" })}
+          values={splitMultiFilterValues(draft.status)}
+          onChange={(v) => onDraftChange({ status: joinMultiFilterValues(v) })}
         />
         <ClientsTemplateSelectField
           label="Экспедитор"
+          multi
           options={expeditorOptions}
-          values={uiFromSingleValue(draft.access_user_id)}
-          onChange={(v) => onDraftChange({ access_user_id: v[0]?.trim() ?? "" })}
+          values={splitMultiFilterValues(draft.access_user_id)}
+          onChange={(v) => onDraftChange({ access_user_id: joinMultiFilterValues(v) })}
         />
         <ClientsTemplateSelectField
           label="Причины отмены оп..."
+          multi
           options={reasonOptions}
-          values={uiFromSingleValue(draft.cancel_reason_ref)}
-          onChange={(v) => onDraftChange({ cancel_reason_ref: v[0]?.trim() ?? "" })}
+          values={splitMultiFilterValues(draft.cancel_reason_ref)}
+          onChange={(v) => onDraftChange({ cancel_reason_ref: joinMultiFilterValues(v) })}
         />
       </div>
 

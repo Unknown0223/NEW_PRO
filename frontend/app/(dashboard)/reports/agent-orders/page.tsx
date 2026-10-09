@@ -10,6 +10,7 @@ import { SearchableMultiSelectPanel } from "@/components/ui/searchable-multi-sel
 import { Button } from "@/components/ui/button";
 import { formatNumberGrouped } from "@/lib/format-numbers";
 import { DateRangePopover, formatDateRangeButton } from "@/components/ui/date-range-popover";
+import { monthToDateRange } from "@/components/dashboard/shared/date-ranges";
 import { CalendarDays } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ORDER_STATUS_LABELS } from "@/lib/order-status";
@@ -134,9 +135,7 @@ function kpiCardTone(status: string): { head: string; body: string } {
 export default function ReportAgentOrdersPage() {
   const tenantSlug = useAuthStore((s) => s.tenantSlug);
   const hydrated = useAuthStoreHydrated();
-  const today = new Date();
-  const from0 = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().slice(0, 10);
-  const to0 = new Date(today.getFullYear(), today.getMonth() + 1, 0).toISOString().slice(0, 10);
+  const { from: from0, to: to0 } = monthToDateRange();
 
   const [draft, setDraft] = useState({
     date_type: "order_date",

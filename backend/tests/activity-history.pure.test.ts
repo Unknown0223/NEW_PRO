@@ -88,9 +88,9 @@ describe("activity konstantalari", () => {
   it("qaytarish tarixi `sales_return` entity bilan", () => {
     for (const key of ["sales_return", "return"]) {
       const ret = resolveEntityHistory(key);
-      expect(ret?.module).toBe("orders");
-      expect(ret?.section).toBe("vozvrat");
-      expect(ret?.permissionHistory).toBe("orders.vozvrat.history");
+      expect(ret?.module).toBe("invoices");
+      expect(ret?.section).toBe("vozvratnye");
+      expect(ret?.permissionView).toBe("invoices.vozvratnye.view");
       expect(ret?.auditEntityTypes).toContain("sales_return");
     }
   });

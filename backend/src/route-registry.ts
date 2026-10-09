@@ -5,6 +5,8 @@ import { registerActivityRoutes } from "./modules/activity/activity.route";
 import { registerErrorEventRoutes } from "./modules/error-events/error-events.route";
 import { registerAuditEventRoutes } from "./modules/audit-events/audit-events.route";
 import { registerAuthRoutes } from "./modules/auth/auth.route";
+import { registerTelegramBotRoutes } from "./modules/telegram-bot/telegram-bot.route";
+import { registerTgAppRoutes } from "./modules/tg-app/tg-app.route";
 import { registerBonusRuleRoutes } from "./modules/bonus-rules/bonus-rules.route";
 import { registerBonusStrategyRoutes } from "./modules/bonus-strategies/bonus-strategies.route";
 import { registerCashDeskRoutes } from "./modules/cash-desks/cash-desks.route";
@@ -21,6 +23,9 @@ import { registerJobRoutes } from "./modules/jobs/jobs.route";
 import { registerLinkageRoutes } from "./modules/linkage/linkage.route";
 import { registerMobileRoutes } from "./modules/mobile/mobile.route";
 import { registerNotificationRoutes } from "./modules/notifications/notifications.route";
+import { registerTaskRoutes } from "./modules/tasks/tasks.route";
+import { registerLoginAlertRoutes } from "./modules/security/login-alerts.route";
+import { registerAgentRoutePlanRoutes } from "./modules/field/agent-route-plan.route";
 import { registerOpeningBalanceRoutes } from "./modules/opening-balances/opening-balances.route";
 import { registerOrderAutomationRoutes } from "./modules/order-automation/order-automation.route";
 import { registerOrderRoutes } from "./modules/orders/orders.route";
@@ -53,12 +58,15 @@ import { registerTimesheetRoutes } from "./modules/timesheet/timesheet.route";
 import { registerTabelRoutes } from "./modules/tabel/tabel.route";
 import { registerUserUiRoutes } from "./modules/users/user-ui.route";
 import { registerWorkSlotRoutes } from "./modules/work-slots/work-slots.route";
+import { registerPayrollRoutes } from "./modules/payroll/payroll.route";
 
 type RouteRegistrar = (app: FastifyInstance) => void | Promise<void>;
 
 /** Barcha API route register funksiyalari — tartib `app.ts` dagi avvalgi tartib bilan mos. */
 export const routeRegistrars: RouteRegistrar[] = [
   registerAuthRoutes,
+  registerTelegramBotRoutes,
+  registerTgAppRoutes,
   registerAccessRoutes,
   registerUserUiRoutes,
   registerClientRoutes,
@@ -105,9 +113,12 @@ export const routeRegistrars: RouteRegistrar[] = [
   registerGeoBoundaryRoutes,
   registerPriceMatrixRoutes,
   registerFieldRoutes,
+  registerAgentRoutePlanRoutes,
   registerGpsMonitoringRoutes,
   registerRefusalRoutes,
   registerNotificationRoutes,
+  registerTaskRoutes,
+  registerLoginAlertRoutes,
   registerMobileRoutes,
   registerLinkageRoutes,
   registerJobRoutes,
@@ -115,6 +126,7 @@ export const routeRegistrars: RouteRegistrar[] = [
   registerTabelRoutes,
   registerWorkSlotRoutes,
   registerPlansRoutes,
+  registerPayrollRoutes,
   registerSystemMigrationRoutes
 ];
 

@@ -3,7 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/api/expeditor_api.dart';
+import '../../../core/auth/biometric_transaction_confirm.dart';
 import '../../../core/auth/session.dart';
+import '../../../core/face/face_verification_flow.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/ui/agent_ui_extended.dart';
@@ -12,6 +14,7 @@ import '../config/expeditor_config_enforcement.dart';
 import '../expeditor_status_labels.dart';
 import '../expeditor_providers.dart';
 import '../shared/expeditor_order_picker.dart';
+import '../shell/expeditor_drawer.dart';
 import 'expeditor_returned_payments_banner.dart';
 
 class ExpeditorPaymentsPage extends ConsumerStatefulWidget {
@@ -44,12 +47,31 @@ class _ExpeditorPaymentsPageState extends ConsumerState<ExpeditorPaymentsPage> {
     final pt = _selectedPaymentType;
     if (amount <= 0 || pt == null || pt.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Summa va to\'lov usulini kiriting')),
+        const SnackBar(content: Text('Укажите сумму и способ оплаты')),
       );
       return;
     }
     setState(() => _submitting = true);
     try {
+      final policy = ExpeditorConfigPolicy.fromMobileConfig(
+        ref.read(sessionProvider).mobileConfig,
+      );
+      final confirmed = await BiometricTransactionConfirm.confirm(
+        ref,
+        context: context,
+        required: policy.fingerprintRequired,
+        reason: 'Подтвердите оплату',
+      );
+      if (!confirmed) return;
+      if (!await FaceVerificationFlow.ensure(
+        context,
+        ref,
+        verifyContext: 'payment_accept',
+        orderId: orderId,
+        title: 'Подтверждение лица при оплате',
+      )) {
+        return;
+      }
       await ref.read(expeditorApiProvider).createPayment(
             slug,
             orderId,
@@ -61,7 +83,7 @@ class _ExpeditorPaymentsPageState extends ConsumerState<ExpeditorPaymentsPage> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('To\'lov arizasi yuborildi. Kassa tasdiqlashini kuting.'),
+            content: Text('Заявка на оплату отправлена. Ожидайте подтверждения кассы.'),
             backgroundColor: AppColors.warning,
           ),
         );
@@ -87,15 +109,16 @@ class _ExpeditorPaymentsPageState extends ConsumerState<ExpeditorPaymentsPage> {
 
     if (!policy.paymentsEnabled) {
       return Scaffold(
-        appBar: AppBar(title: const Text('To\'lovlar')),
+        drawer: const ExpeditorDrawer(),
+        appBar: AppBar(title: const Text('Оплаты')),
         body: Center(child: Text(policy.blockPaymentMessage())),
       );
     }
 
     if (orderId == null) {
       return ExpeditorOrderPicker(
-        title: 'To\'lov uchun buyurtma',
-        emptyMessage: 'To\'lov qabul qilish uchun yetkazilgan buyurtma yo\'q',
+        title: 'Заказ для оплаты',
+        emptyMessage: 'Нет доставленных заказов для приёма оплаты',
         onlyDelivered: true,
         onlyWithDebt: true,
         header: const ExpeditorReturnedPaymentsBanner(),
@@ -106,7 +129,8 @@ class _ExpeditorPaymentsPageState extends ConsumerState<ExpeditorPaymentsPage> {
     final ctxAsync = ref.watch(expeditorPaymentContextProvider(orderId));
 
     return Scaffold(
-      appBar: AppBar(title: Text('To\'lov #$orderId')),
+      drawer: const ExpeditorDrawer(),
+      appBar: AppBar(title: Text('Оплата #$orderId')),
       body: ctxAsync.when(
         data: (ctx) {
           final methods = (ctx['payment_methods'] as List?)?.cast<Map>() ?? [];
@@ -132,11 +156,11 @@ class _ExpeditorPaymentsPageState extends ConsumerState<ExpeditorPaymentsPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Text('Qoldiq: ${formatMoneySpaced(remaining)} $currency', style: AppTypography.titleMedium),
+                Text('Остаток: ${formatMoneySpaced(remaining)} $currency', style: AppTypography.titleMedium),
                 if (pendingTotal > 0) ...[
                   const SizedBox(height: 8),
                   Text(
-                    'Tasdiqlanishni kutmoqda: ${formatMoneySpaced(pendingTotal)} $currency',
+                    'Ожидает подтверждения: ${formatMoneySpaced(pendingTotal)} $currency',
                     style: AppTypography.bodyMedium.copyWith(color: AppColors.warning),
                   ),
                 ],
@@ -148,7 +172,7 @@ class _ExpeditorPaymentsPageState extends ConsumerState<ExpeditorPaymentsPage> {
                       dense: true,
                       contentPadding: EdgeInsets.zero,
                       title: Text('${formatMoneySpaced((m['amount'] as num?)?.toDouble() ?? 0)} $currency — ${expeditorPaymentWorkflowLabel(m['workflow_status']?.toString() ?? '')}'),
-                      subtitle: const Text('Web panelda «Заявки на оплату экспедиторов» orqali tasdiqlanadi'),
+                      subtitle: const Text('Подтверждается в веб-панели через «Заявки на оплату экспедиторов»'),
                     );
                   }),
                 ],
@@ -158,12 +182,12 @@ class _ExpeditorPaymentsPageState extends ConsumerState<ExpeditorPaymentsPage> {
                   keyboardType: TextInputType.number,
                   inputFormatters: const [ThousandsTextInputFormatter()],
                   decoration: InputDecoration(
-                    labelText: 'Summa ($currency)',
+                    labelText: 'Сумма ($currency)',
                     border: const OutlineInputBorder(),
                   ),
                 ),
                 const SizedBox(height: 16),
-                const Text('To\'lov usuli', style: AppTypography.labelLarge),
+                const Text('Способ оплаты', style: AppTypography.labelLarge),
                 ...methods.map((m) {
                   final map = Map<String, dynamic>.from(m);
                   final pt = map['payment_type']?.toString() ?? '';
@@ -182,14 +206,14 @@ class _ExpeditorPaymentsPageState extends ConsumerState<ExpeditorPaymentsPage> {
                   onPressed: _submitting || !canSubmit ? null : () => _submit(orderId, slug),
                   child: _submitting
                       ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))
-                      : const Text('ARIZA YUBORISH'),
+                      : const Text('ОТПРАВИТЬ ЗАЯВКУ'),
                 ),
               ],
             ),
           );
         },
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(child: Text('Xato: $e')),
+        error: (e, _) => Center(child: Text('Ошибка: $e')),
       ),
     );
   }

@@ -9,21 +9,27 @@ import type {
   SupervisorProductRow,
   SupervisorVisitRow
 } from "./dashboard.supervisor.scope";
-import { orderScopeSql, planScopeSql, visitScopeSql } from "./dashboard.supervisor.scope";
+import {
+  expandSupervisorPaymentFilters,
+  orderScopeSql,
+  planScopeSql,
+  visitScopeSql
+} from "./dashboard.supervisor.scope";
 import { loadSupervisorProductAnalyticsBlocks } from "./dashboard.supervisor.snapshot-products";
 import { loadSupervisorVisitAndSalesBlocks } from "./dashboard.supervisor.snapshot-visits";
 import { loadSupervisorMonthlyKpiPlanBlock } from "../plans/plans.monitoring-aggregates";
 
 async function buildSupervisorScopes(tenantId: number, filters: SupervisorDashboardFilters) {
-  const dayStart = new Date(`${filters.date}T00:00:00.000Z`);
+  const expanded = await expandSupervisorPaymentFilters(tenantId, filters);
+  const dayStart = new Date(`${expanded.date}T00:00:00.000Z`);
   const dayEnd = new Date(dayStart.getTime() + 86400000);
   const weekday = ((dayStart.getUTCDay() + 6) % 7) + 1;
   return {
     dayStart,
     dayEnd,
-    orderScope: orderScopeSql(tenantId, dayStart, dayEnd, filters),
-    visitScope: visitScopeSql(tenantId, dayStart, dayEnd, filters),
-    planScope: planScopeSql(tenantId, dayStart, dayEnd, weekday, filters)
+    orderScope: orderScopeSql(tenantId, dayStart, dayEnd, expanded),
+    visitScope: visitScopeSql(tenantId, dayStart, dayEnd, expanded),
+    planScope: planScopeSql(tenantId, dayStart, dayEnd, weekday, expanded)
   };
 }
 
@@ -32,8 +38,8 @@ function buildEfficiencyReport(mappedVisitRows: Awaited<ReturnType<typeof loadSu
     id: r.agent_id,
     name: r.agent_name,
     agent_code: r.agent_code,
-    order_count: r.visits_with_orders,
-    cancelled_count: 0,
+    order_count: r.order_count,
+    cancelled_count: r.cancelled_count,
     planned_visits: r.planned_visits,
     visited_total: r.visited_total,
     rejected_visits: r.visits_without_orders,
@@ -63,7 +69,8 @@ function buildEfficiencyReport(mappedVisitRows: Awaited<ReturnType<typeof loadSu
       photo_count: 0,
       total_sales_sum: "0"
     };
-    prev.order_count += row.visits_with_orders;
+    prev.order_count += row.order_count;
+    prev.cancelled_count += row.cancelled_count;
     prev.planned_visits += row.planned_visits;
     prev.visited_total += row.visited_total;
     prev.rejected_visits += row.visits_without_orders;

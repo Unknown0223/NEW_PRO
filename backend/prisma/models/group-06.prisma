@@ -57,6 +57,14 @@ model Expense {
   deleted_at          DateTime?
   deleted_by_user_id  Int?
   delete_reason_ref   String?  @db.VarChar(128)
+  /// Qaysi kassadan chiqqan (kassa qoldig'iga ta'sir qiladi)
+  cash_desk_id        Int?
+  /// Payroll: kimga berilgan (avans/oylik)
+  employee_user_id    Int?
+  /// manual | payroll_advance | payroll_salary
+  source_type         String   @default("manual") @db.VarChar(32)
+  /// source_type != manual bo'lsa — payroll_payouts.id
+  source_id           Int?
   tenant              Tenant   @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
   created_by          User?    @relation("ExpenseCreator", fields: [created_by_user_id], references: [id])
   approved_by         User?    @relation("ExpenseApprover", fields: [approved_by_user_id], references: [id])
@@ -68,6 +76,8 @@ model Expense {
   @@index([tenant_id, agent_id])
   @@index([tenant_id, warehouse_id])
   @@index([tenant_id, deleted_at])
+  @@index([tenant_id, cash_desk_id])
+  @@index([tenant_id, source_type, source_id])
   @@map("expenses")
 }
 
@@ -184,6 +194,36 @@ model UserBranchLink {
   @@index([tenant_id, branch_code])
   @@index([user_id])
   @@map("user_branches")
+}
+
+/// Dostup «Сотрудники»: foydalanuvchi (`user_id`) ko‘radigan xodimlar; bitta xodim bir nechta foydalanuvchiga.
+model UserStaffLink {
+  id            Int      @id @default(autoincrement())
+  tenant_id     Int
+  user_id       Int
+  staff_user_id Int
+  created_at    DateTime @default(now())
+  tenant        Tenant   @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  user          User     @relation("UserStaffLinkViewer", fields: [user_id], references: [id], onDelete: Cascade)
+  staff         User     @relation("UserStaffLinkStaff", fields: [staff_user_id], references: [id], onDelete: Cascade)
+
+  @@unique([user_id, staff_user_id])
+  @@index([tenant_id, staff_user_id])
+  @@map("user_staff_links")
+}
+
+/// `users.consignment` o‘zgarishlar tarixi — DB trigger yozadi (Табель kunlik normasi uchun).
+model UserConsignmentLog {
+  id         Int      @id @default(autoincrement())
+  tenant_id  Int
+  user_id    Int
+  enabled    Boolean
+  changed_at DateTime @default(now())
+  tenant     Tenant   @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  user       User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([tenant_id, user_id, changed_at])
+  @@map("user_consignment_logs")
 }
 
 

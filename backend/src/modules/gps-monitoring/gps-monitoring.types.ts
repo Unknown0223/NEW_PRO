@@ -15,9 +15,13 @@ export type GpsEmployeeDto = {
   type: GpsEmployeeType;
   supervisorId: string | null;
   battery: number | null;
+  /** Oxirgi GPS ping tarmog‘i (4G / 3G / WiFi / —) */
+  network: "4G" | "3G" | "WiFi" | "—" | null;
   online: boolean;
   lastSeen: string;
   region: string;
+  /** Tanlangan kunda GPS/zakaz/vizit/foto faoliyati bor */
+  activeOnDate: boolean;
 };
 
 /** GPS monitoring — mijozdagi fotootchyot (balloon / yon panel). */
@@ -65,7 +69,7 @@ export type GpsVisitPointDto = {
   wasAtPoint: boolean;
   placeType: string;
   accuracy: number;
-  internet: "4G" | "3G" | "—";
+  internet: "4G" | "3G" | "WiFi" | "—";
   batteryAt: number | null;
   module: GpsVisitModule;
   cashExpected: number;

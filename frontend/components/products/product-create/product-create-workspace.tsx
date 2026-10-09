@@ -162,7 +162,7 @@ export function ProductCreateWorkspace({ tenantSlug, backHref, onDone }: Props) 
 
   const saveMut = useMutation({
     mutationFn: async () => {
-      if (!tenantSlug) throw new Error("Tenant topilmadi");
+      if (!tenantSlug) throw new Error("Организация не найдена");
       const payload = buildProductCreatePayload(form, packages);
       await api.post(`/api/${tenantSlug}/products`, payload);
     },

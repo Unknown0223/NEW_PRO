@@ -1,0 +1,66 @@
+http:
+  routers:
+    salec-app-http:
+      rule: "Host(`salesarena.sale`) || Host(`www.salesarena.sale`)"
+      entryPoints:
+        - http
+      middlewares:
+        - salec-https-redirect
+      service: salec-frontend
+      priority: 200
+    salec-app-https:
+      rule: "Host(`salesarena.sale`) || Host(`www.salesarena.sale`)"
+      entryPoints:
+        - https
+      service: salec-frontend
+      tls:
+        certResolver: letsencrypt
+        domains:
+          - main: salesarena.sale
+            sans:
+              - www.salesarena.sale
+      priority: 200
+    salec-api-http:
+      rule: "Host(`api.salesarena.sale`)"
+      entryPoints:
+        - http
+      middlewares:
+        - salec-https-redirect
+      service: salec-backend
+      priority: 200
+    salec-api-https:
+      rule: "Host(`api.salesarena.sale`)"
+      entryPoints:
+        - https
+      service: salec-backend
+      tls:
+        certResolver: letsencrypt
+        domains:
+          - main: api.salesarena.sale
+      priority: 200
+    salec-app-sslip:
+      rule: "Host(`salesarena.157.180.116.50.sslip.io`)"
+      entryPoints:
+        - http
+      service: salec-frontend
+      priority: 50
+    salec-api-sslip:
+      rule: "Host(`api.salesarena.157.180.116.50.sslip.io`)"
+      entryPoints:
+        - http
+      service: salec-backend
+      priority: 50
+  middlewares:
+    salec-https-redirect:
+      redirectScheme:
+        scheme: https
+        permanent: true
+  services:
+    salec-frontend:
+      loadBalancer:
+        servers:
+          - url: "http://salec-frontend-1:3000"
+    salec-backend:
+      loadBalancer:
+        servers:
+          - url: "http://salec-backend-1:4000"

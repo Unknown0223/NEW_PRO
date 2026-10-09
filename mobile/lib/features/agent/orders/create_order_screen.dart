@@ -9,19 +9,26 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/api/api_exceptions.dart';
 import '../../../core/api/orders_api.dart';
+import '../../../core/auth/biometric_transaction_confirm.dart';
 import '../../../core/auth/session.dart';
-import '../../../core/agent/outlet_radius.dart';
 import '../../../core/config/agent_action_guards.dart';
 import '../../../core/config/gps_config_policy.dart';
+import '../../../core/config/security_config_policy.dart';
+import '../../../core/face/face_verification_flow.dart';
 import '../config/agent_config_enforcement.dart';
 import '../../../core/config/client_field_policy.dart';
 import '../../../core/config/mobile_config.dart';
 import '../../../core/config/mobile_order_guards.dart';
+import '../../../core/config/order_config_policy.dart';
 import '../../../core/prefs/agent_local_prefs_provider.dart';
 import '../../../core/connectivity/connectivity_service.dart';
 import '../../../core/database/app_database.dart';
+import '../../../core/clients/client_outlet_filters.dart';
+import '../../../core/errors/error_reporter.dart';
+import '../../../core/errors/user_facing_error.dart';
 import '../visits/visit_stats_helper.dart';
 import '../visits/agent_visits_page.dart' show visitFromRow;
+import '../visits/visit_starter.dart';
 import '../../../core/sync/sync_data_refresh.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
@@ -40,10 +47,12 @@ import 'order_create_sheets.dart';
 import 'order_draft_model.dart';
 import 'order_draft_provider.dart';
 import 'order_draft_ui.dart';
+import 'create_order_exit_guard.dart';
 import 'bonus_stock_utils.dart';
 import '../warehouse/warehouse_stock_providers.dart';
 import 'held_orders_provider.dart';
 import 'held_order_sync_sheet.dart';
+import '../home/last_created_order_banner.dart';
 import 'orders_providers.dart';
 import 'van_selling_payment_sheet.dart';
 
@@ -115,6 +124,7 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
 
   final _productSearchCtrl = TextEditingController();
   Timer? _productSearchDebounce;
+  late final CreateOrderExitGuard _exitGuard;
 
   static const _createContextCacheTtl = Duration(minutes: 5);
   static const _photoStatusCacheTtl = Duration(minutes: 2);
@@ -125,6 +135,10 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
   void dispose() {
     _productSearchDebounce?.cancel();
     _productSearchCtrl.dispose();
+    final cur = ref.read(createOrderExitGuardProvider);
+    if (identical(cur, _exitGuard)) {
+      ref.read(createOrderExitGuardProvider.notifier).state = null;
+    }
     super.dispose();
   }
 
@@ -157,11 +171,43 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
           clientId: clientId,
           warehouseId: wh,
         );
+    // Bo‘sh ombor javobini keshga yozmaslik — aks holda 5 daqiqa «Склад не назначен».
+    if (ctx.warehouses.isEmpty) {
+      _createContextCache = null;
+      _createContextCacheClientId = null;
+      _createContextCacheWarehouseId = null;
+      _createContextCacheAt = null;
+      return ctx;
+    }
     _createContextCache = ctx;
     _createContextCacheClientId = clientId;
     _createContextCacheWarehouseId = wh;
     _createContextCacheAt = now;
     return ctx;
+  }
+
+  /// create-context bo‘sh/xato bo‘lsa — agent omborlari (warehouse-stock).
+  Future<bool> _fallbackWarehousesFromStockView() async {
+    try {
+      final slug = ref.read(sessionProvider).tenantSlug ?? '';
+      if (slug.isEmpty) return false;
+      final raw = await ref.read(ordersApiProvider).getWarehouseStockView(slug);
+      final list = (raw['warehouses'] as List? ?? [])
+          .whereType<Map>()
+          .map((e) => Map<String, dynamic>.from(e))
+          .toList();
+      if (list.isEmpty || !mounted) return false;
+      final def = (raw['warehouse_id'] as num?)?.toInt() ??
+          (list.first['id'] as num?)?.toInt();
+      setState(() {
+        _warehouses = list;
+        _defaultWarehouseId = def;
+        _warehouseId ??= def;
+      });
+      return true;
+    } catch (_) {
+      return false;
+    }
   }
 
   Future<void> _refreshAgentConfigIfStale() async {
@@ -185,6 +231,11 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
   @override
   void initState() {
     super.initState();
+    _exitGuard = CreateOrderExitGuard(_confirmLeaveForNavigation);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      ref.read(createOrderExitGuardProvider.notifier).state = _exitGuard;
+    });
     _heldOrderId = widget.heldOrderId;
     if (_heldOrderId != null && _heldOrderId! > 0) {
       _bootstrappingInitialClient = true;
@@ -220,6 +271,7 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
       'id': held.clientId,
       'name': held.clientName.isNotEmpty ? held.clientName : 'Клиент #${held.clientId}',
     };
+    if (!await _requireVisitOrLeave(client)) return;
     setState(() {
       _selectedClient = client;
       _warehouseId = held.warehouseId;
@@ -289,6 +341,7 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
     }
 
     if (!mounted) return;
+    if (!await _requireVisitOrLeave(client)) return;
     setState(() => _selectedClient = client);
 
     final draft = await ref.read(orderDraftRepositoryProvider).loadForClient(id);
@@ -308,6 +361,20 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
       await _openSetupSheet(fromInitialClient: true);
     }
     if (mounted) setState(() => _bootstrappingInitialClient = false);
+  }
+
+  /// Zakaz faqat faol vizit ichida; vizit boshlanmasa — ekrandan chiqamiz.
+  Future<bool> _requireVisitOrLeave(Map<String, dynamic> client) async {
+    if (await ensureActiveVisitForOrder(context, ref, client)) return mounted;
+    if (!mounted) return false;
+    setState(() => _bootstrappingInitialClient = false);
+    _releaseExitGuard();
+    if (context.canPop()) {
+      context.pop();
+    } else {
+      context.go('/visits');
+    }
+    return false;
   }
 
   Future<void> _waitAuthReady() async {
@@ -426,7 +493,7 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
 
   Future<bool> _saveDraft({bool popAfter = false}) async {
     if (_selectedClientId <= 0 || _warehouseId == null || _cartQty == 0) {
-      _toast('Kamida bitta mahsulot tanlang', accent: AppColors.warning);
+      _toast('Выберите хотя бы один товар', accent: AppColors.warning);
       return false;
     }
     final now = DateTime.now();
@@ -450,7 +517,7 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
     ref.invalidate(orderDraftListProvider);
     ref.invalidate(orderDraftForClientProvider(_selectedClientId));
     if (mounted) {
-      _toast(S.orderDraftSaved, accent: AppColors.success);
+      _toast('${S.orderDraftSaved} — меню «Черновик»', accent: AppColors.success);
       if (popAfter && context.canPop()) context.pop();
     }
     return true;
@@ -465,17 +532,37 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
       return;
     }
     if (_hasUnsavedChanges) {
-      final save = await showOrderDraftExitDialog(context);
-      if (!mounted) return;
-      if (save == null) return;
-      if (save) {
-        final ok = await _saveDraft(popAfter: false);
-        if (!ok || !mounted) return;
-      }
+      final leave = await _confirmLeaveForNavigation();
+      if (!leave || !mounted) return;
       if (context.canPop()) context.pop();
       return;
     }
     if (context.canPop()) context.pop();
+  }
+
+  /// Drawer / `context.go` orqali chiqish: dialog + ixtiyoriy chernovik.
+  /// `true` — chiqish mumkin; `false` — qoling.
+  /// Ekran unmount bo‘lsa true: eski guard Vizit/Главная ni bloklamasin.
+  Future<bool> _confirmLeaveForNavigation() async {
+    if (!mounted) return true;
+    if (!_hasUnsavedChanges) return true;
+    final save = await showOrderDraftExitDialog(context);
+    if (!mounted) return true;
+    if (save == null) return false;
+    if (save) {
+      final ok = await _saveDraft(popAfter: false);
+      if (ok) _releaseExitGuard();
+      return ok;
+    }
+    _releaseExitGuard();
+    return true;
+  }
+
+  void _releaseExitGuard() {
+    final cur = ref.read(createOrderExitGuardProvider);
+    if (identical(cur, _exitGuard)) {
+      ref.read(createOrderExitGuardProvider.notifier).state = null;
+    }
   }
 
   Future<void> _initClients() async {
@@ -545,6 +632,7 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
       ),
     );
     if (picked != null && mounted) {
+      if (!await ensureActiveVisitForOrder(context, ref, picked) || !mounted) return;
       setState(() {
         _selectedClient = picked;
         _hasUnlinkedPhotoToday = false;
@@ -560,7 +648,7 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
   Future<void> _prefetchWarehouses() async {
     if (_effectiveClientId <= 0) return;
     try {
-      final ctx = await _getCreateContext();
+      final ctx = await _getCreateContext(forceRefresh: true);
       if (ctx == null || !mounted) return;
       setState(() {
         _applyCreateContextMeta(ctx);
@@ -579,7 +667,17 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
           }
         }
       });
-    } catch (_) {}
+      if (_warehouses.isEmpty) {
+        await _fallbackWarehousesFromStockView();
+      }
+    } catch (e) {
+      final ok = await _fallbackWarehousesFromStockView();
+      if (!ok && mounted) {
+        _toast(
+          'Не удалось загрузить склад. Проверьте интернет и синхронизацию.',
+        );
+      }
+    }
   }
 
   /// create-context + session: narx turlari / label / moliya (retail-placeholder ni almashtirish).
@@ -816,7 +914,7 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
       if (ctx == null) {
         if (mounted) {
           setState(() {
-            _loadError = 'Katalog yuklanmadi';
+            _loadError = 'Не удалось загрузить каталог';
             _loadingCatalog = false;
           });
         }
@@ -844,11 +942,29 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
         prices[id] = unitPriceForProduct(p, _priceType);
       }
 
-      // Zakaz katalogida qoldig‘i 0 mahsulotlar ko‘rinmasin.
-      products = products.where((p) {
-        final id = (p['id'] as num?)?.toInt() ?? 0;
-        return (stockMap[id] ?? 0) > 0;
-      }).toList();
+      // Zakaz katalogida qoldig‘i 0 mahsulotlar ko‘rinmasin — lekin
+      // stock javobi bo‘sh bo‘lsa (xato/bo‘sh ombor mapping) hammasini yashirmaymiz.
+      final beforeStock = products.length;
+      if (stock.isNotEmpty) {
+        products = products.where((p) {
+          final id = (p['id'] as num?)?.toInt() ?? 0;
+          return (stockMap[id] ?? 0) > 0;
+        }).toList();
+      }
+      if (beforeStock > 0 && products.isEmpty) {
+        ErrorReporter.instance?.reportSyncIssue(
+          code: 'OrderCatalogEmpty',
+          message: 'Заказ: категории товаров пустые после загрузки склада',
+          module: 'orders',
+          path: '/mobile/orders/create-context',
+          payload: {
+            'products_before_stock': beforeStock,
+            'stock_rows': stock.length,
+            'warehouse_id': whId,
+            'client_id': clientId,
+          },
+        );
+      }
 
       if (!mounted) return;
       setState(() {
@@ -879,16 +995,33 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
       });
       await _refreshPhotoStatus();
     } on ApiException catch (e) {
+      ErrorReporter.instance?.reportCaught(
+        e,
+        module: ErrorModules.orders,
+        code: 'OrderCatalogLoadFailed',
+        message: 'Заказ: каталог не загрузился',
+        path: '/mobile/orders/catalog',
+        payload: {'client_id': _selectedClientId},
+      );
       if (mounted) {
         setState(() {
           _loadError = e.message;
           _loadingCatalog = false;
         });
       }
-    } catch (_) {
+    } catch (e, st) {
+      ErrorReporter.instance?.reportCaught(
+        e,
+        stack: st,
+        module: ErrorModules.orders,
+        code: 'OrderCatalogLoadUnexpected',
+        message: 'Заказ: каталог — неожиданная ошибка',
+        path: '/mobile/orders/catalog',
+        payload: {'client_id': _selectedClientId},
+      );
       if (mounted) {
         setState(() {
-          _loadError = 'Katalog yuklanmadi';
+          _loadError = 'Не удалось загрузить каталог';
           _loadingCatalog = false;
         });
       }
@@ -924,7 +1057,7 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
     if (_selectedClient != null) {
       if (isNewClientBlockedForOrder(_selectedClient!, cfg.client, cfg.productList)) {
         if (mounted) {
-          _toast('Yangi mijozga buyurtma berish taqiqlangan (konfiguratsiya)');
+          _toast('Заказы для новых клиентов запрещены (конфигурация)');
         }
         return false;
       }
@@ -933,29 +1066,27 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
       final online = await ref.read(connectivityProvider).isOnline();
       if (!online) {
         if (mounted) {
-          _toast('Buyurtma uchun internet kerak (konfiguratsiya)');
+          _toast('Для заказа нужен интернет (конфигурация)');
         }
         return false;
       }
     }
     if (_selectedClient != null) {
-      final clat = (_selectedClient!['latitude'] as num?)?.toDouble();
-      final clng = (_selectedClient!['longitude'] as num?)?.toDouble();
-      if (!await ensureWithinOutletRadius(
-        context: context,
-        config: cfg,
-        clientLat: clat,
-        clientLng: clng,
-        blockedMessage: 'Buyurtma uchun mijoz radiusida bo‘ling',
-      )) {
-        return false;
+      if (offerPhotoCapture) {
+        if (!mounted || !await ensureActiveVisitForOrder(context, ref, _selectedClient!)) return false;
+      } else {
+        final visitError = await recordOrderPositionForVisit(ref, _selectedClient!);
+        if (visitError != null) {
+          if (mounted) _toast(visitError);
+          return false;
+        }
       }
     }
     if (cfg.gps.requiredForOrder) {
       final perm = await Geolocator.checkPermission();
       if (perm == LocationPermission.denied || perm == LocationPermission.deniedForever) {
         if (mounted) {
-          _toast('Buyurtma uchun GPS ruxsati kerak');
+          _toast('Для заказа нужно разрешение GPS');
         }
         return false;
       }
@@ -963,7 +1094,7 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
       final check = checkGpsPosition(cfg.gps, pos);
       if (!check.ok) {
         if (mounted) {
-          _toast(check.message ?? 'GPS aniqligi yetarli emas');
+          _toast(check.message ?? 'Недостаточная точность GPS');
         }
         return false;
       }
@@ -980,11 +1111,12 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
       final slug = ref.read(sessionProvider).tenantSlug ?? '';
       if (slug.isEmpty) return false;
       try {
-        // Oflayn fotolarni avval serverga yuborish — so‘ng tekshiruv ishlaydi.
+        // Faqat shu mijozning oflayn fotosini yuborish — to‘liq sinxron emas.
         await PhotoReportQueue.flush(
           api: ref.read(mobileApiProvider),
           slug: slug,
           photoConfig: cfg.photo,
+          clientId: _selectedClientId,
         );
         if (!_hasUnlinkedPhotoToday) {
           await _refreshPhotoStatus(force: true);
@@ -1001,13 +1133,14 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
             api: ref.read(mobileApiProvider),
             slug: slug,
             photoConfig: cfg.photo,
+            clientId: _selectedClientId,
           );
           await _refreshPhotoStatus(force: true);
           if (!_hasUnlinkedPhotoToday) return false;
         }
       } catch (_) {
         if (mounted) {
-          _toast('Фотоотчет tekshirilmadi — internetni tekshiring');
+          _toast('Фотоотчёт не проверен — проверьте интернет');
         }
         return false;
       }
@@ -1019,14 +1152,14 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
     );
     if (!stockCheck.allowed) {
       if (mounted) {
-        _toast(stockCheck.message ?? 'Qoldiq snapshot kerak');
+        _toast(stockCheck.message ?? 'Нужен снимок остатков');
       }
       return false;
     }
     final shipCheck = checkShipmentDateRequired(cfg.misc, _shipmentDate);
     if (!shipCheck.allowed) {
       if (mounted) {
-        _toast(shipCheck.message ?? 'Jo\'natish sanasi kerak');
+        _toast(shipCheck.message ?? 'Укажите дату отгрузки');
       }
       return false;
     }
@@ -1097,7 +1230,7 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
       context,
       onPhotoReport: _addPhotoReport,
       onRefusal: () {
-        _toast('Отказ — tashriflar bo‘limida', accent: AppColors.warning);
+        _toast('Отказ — в разделе «Визиты»', accent: AppColors.warning);
       },
       onCreateOrder: null,
       createOrderEnabled: false,
@@ -1141,6 +1274,29 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
       return;
     }
 
+    final security = SecurityConfigPolicy.fromMobileConfig(
+      ref.read(sessionProvider).mobileConfig,
+    );
+    if (!await BiometricTransactionConfirm.confirm(
+      ref,
+      context: context,
+      required: security.confirmOrderSubmit,
+      reason: 'Подтвердите отправку заказа',
+    )) {
+      if (mounted) setState(() => _submitting = false);
+      return;
+    }
+
+    if (!await FaceVerificationFlow.ensure(
+      context,
+      ref,
+      verifyContext: 'order_submit',
+      title: 'Подтверждение лица перед заказом',
+    )) {
+      if (mounted) setState(() => _submitting = false);
+      return;
+    }
+
     final slug = ref.read(sessionProvider).tenantSlug ?? '';
     final items = <OrderLineInput>[];
     for (final e in _quantities.entries) {
@@ -1148,7 +1304,7 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
       final avail = _stockAvailable[e.key] ?? 0;
       if (e.value > avail) {
         if (mounted) {
-          _toast('Mahsulot #${e.key}: omborda yetarli emas');
+          _toast('Товар #${e.key}: недостаточно на складе');
         }
         setState(() => _submitting = false);
         return;
@@ -1157,7 +1313,7 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
       if (price <= 0) {
         if (mounted) {
           final ptLabel = _priceTypeLabels[_priceType] ?? _priceType;
-          _toast('Mahsulot #${e.key}: «$ptLabel» narxi yo\'q — asosiy ma\'lumotlarni tekshiring');
+          _toast('Товар #${e.key}: нет цены «$ptLabel» — проверьте справочники');
         }
         setState(() => _submitting = false);
         return;
@@ -1177,7 +1333,7 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
         }
       } catch (_) {
         if (mounted) {
-          _toast('Фотоотчет tekshirilmadi — internetni tekshiring');
+          _toast('Фотоотчёт не проверен — проверьте интернет');
           setState(() => _submitting = false);
         }
         return;
@@ -1198,22 +1354,28 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
           comment: _comment.isEmpty ? null : _comment,
         );
         await ref.read(orderDraftRepositoryProvider).delete(_selectedClientId);
-        await ensureVisitCompletedForClientToday(
-          _selectedClientId,
-          clientName: _selectedClient?['name']?.toString(),
-        );
         ref.invalidate(orderDraftsProvider);
         ref.invalidate(orderDraftListProvider);
         ref.invalidate(orderDraftForClientProvider(_selectedClientId));
         refreshVisitStatsProviders(ref.invalidate);
         if (mounted) {
-          _toast('Oflayn navbatga qo\'shildi', accent: AppColors.warning);
-          if (context.canPop()) context.pop();
+          _toast('Добавлено в офлайн-очередь', accent: AppColors.warning);
+          _releaseExitGuard();
+          context.go('/visits/active/$_selectedClientId');
           ref.invalidate(pendingCountProvider);
         }
-      } catch (e) {
+      } catch (e, st) {
+        ErrorReporter.instance?.reportCaught(
+          e,
+          stack: st,
+          module: ErrorModules.orders,
+          code: 'OrderOfflineEnqueueFailed',
+          message: 'Заказ: не удалось сохранить в офлайн очередь',
+          path: '/mobile/orders/offline',
+          payload: {'client_id': _selectedClientId},
+        );
         if (mounted) {
-          _toast('Oflayn xato: $e');
+          _toast(UserFacingError.toast(e, action: 'Не удалось сохранить офлайн'));
         }
       }
       if (mounted) setState(() => _submitting = false);
@@ -1245,7 +1407,6 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
           existingId: _heldOrderId,
         );
         await ref.read(orderDraftRepositoryProvider).delete(_selectedClientId);
-        // Vizit hold oynasida ochiq qoladi — «Отправить сейчас» vizit bo‘limida.
         ref.invalidate(orderDraftsProvider);
         ref.invalidate(orderDraftListProvider);
         ref.invalidate(orderDraftForClientProvider(_selectedClientId));
@@ -1256,6 +1417,7 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
         refreshVisitStatsProviders(ref.invalidate);
         if (mounted) setState(() => _submitting = false);
         if (mounted) {
+          _releaseExitGuard();
           final action = await showHeldOrderSyncSheet(
             context,
             order: held,
@@ -1285,7 +1447,7 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
           }
         }
       } catch (e) {
-        if (mounted) _toast('Ошибка очереди: $e');
+        if (mounted) _toast(UserFacingError.toast(e, action: 'Не удалось поставить в очередь'));
       } finally {
         if (mounted) setState(() => _submitting = false);
       }
@@ -1308,6 +1470,7 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
         isConsignment: _isConsignment,
         consignmentDueDate: _isConsignment ? _consignmentDueDate : null,
         shipmentDate: _shipmentDate.isEmpty ? null : _shipmentDate,
+        visit: await orderVisitPayload(_selectedClientId),
       );
       final orderId = parseOrderInt(row['id']);
       final orderNumber = row['number']?.toString() ?? (orderId != null ? '$orderId' : '—');
@@ -1340,10 +1503,6 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
       if (mounted) {
         setState(() => _hasUnlinkedPhotoToday = false);
         await ref.read(orderDraftRepositoryProvider).delete(_selectedClientId);
-        await ensureVisitCompletedForClientToday(
-          _selectedClientId,
-          clientName: _selectedClient?['name']?.toString(),
-        );
         ref.invalidate(orderDraftsProvider);
         ref.invalidate(orderDraftListProvider);
         ref.invalidate(orderDraftForClientProvider(_selectedClientId));
@@ -1364,21 +1523,42 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
           );
           if (!mounted) return;
           if (paid != true) {
-            _toast('To‘lov qayd etilmadi — keyinroq kassadan kiriting', accent: AppColors.warning);
+            _toast('Оплата не зафиксирована — внесите её позже через кассу', accent: AppColors.warning);
           }
         }
         if (!mounted) return;
-        context.go('/home');
-        invalidateSyncedData(ref.invalidate);
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          ref.read(authStateProvider.notifier).resync();
-        });
+        _releaseExitGuard();
+        ref.read(lastCreatedOrderBannerProvider.notifier).state = LastCreatedOrderBanner(
+          number: orderNumber,
+          orderId: orderId,
+          clientName: _selectedClient?['name']?.toString(),
+        );
+        _toast('Заказ №$orderNumber отправлен — завершите визит', accent: AppColors.success);
+        context.go('/visits/active/$_selectedClientId');
+        invalidateAfterOrderSubmit(ref.invalidate);
       }
     } on ApiException catch (e) {
+      ErrorReporter.instance?.reportCaught(
+        e,
+        module: ErrorModules.orders,
+        code: 'OrderSubmitFailed',
+        message: 'Заказ: отправка на сервер не удалась',
+        path: '/mobile/orders',
+        payload: {'client_id': _selectedClientId},
+      );
       if (mounted) {
         _toast(e.message);
       }
-    } catch (e) {
+    } catch (e, st) {
+      ErrorReporter.instance?.reportCaught(
+        e,
+        stack: st,
+        module: ErrorModules.orders,
+        code: 'OrderSubmitUnexpected',
+        message: 'Заказ: неожиданная ошибка отправки',
+        path: '/mobile/orders',
+        payload: {'client_id': _selectedClientId},
+      );
       if (mounted) {
         final msg = e is ApiException
             ? e.message
@@ -1397,7 +1577,7 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
 
   Future<void> _onFinishOrder() async {
     if (_cartQty == 0) {
-      _toast('Kamida bitta mahsulot tanlang', accent: AppColors.warning);
+      _toast('Выберите хотя бы один товар', accent: AppColors.warning);
       return;
     }
 
@@ -1418,16 +1598,27 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
     final slug = ref.read(sessionProvider).tenantSlug ?? '';
     if (slug.isEmpty) {
       if (mounted) {
-        _toast('Sessiya yo‘q — qayta kiring');
+        _toast('Нет сессии — войдите заново');
       }
       return;
     }
     if (_warehouseId == null) {
       if (mounted) {
-        _toast('Avval omborni tanlang');
+        _toast('Сначала выберите склад');
       }
       await _openSetupSheet();
       return;
+    }
+
+    final clientMap = _selectedClient;
+    if (clientMap != null) {
+      final session = ref.read(sessionProvider);
+      final clientCfg = session.mobileConfig?.client ?? const ClientConfig();
+      final productList = session.mobileConfig?.productList ?? const ProductListConfig();
+      if (isNewClientBlockedForOrder(clientMap, clientCfg, productList)) {
+        _toast(kClientInactiveOrderMessage, accent: AppColors.warning);
+        return;
+      }
     }
 
     final items = <OrderLineInput>[];
@@ -1438,6 +1629,9 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
 
     if (!mounted) return;
     final ordersCfg = ref.read(sessionProvider).mobileConfig?.orders ?? const OrdersConfig();
+    final defaultBonusKey = defaultBonusModeKey(ordersCfg);
+    final defaultBonusMode =
+        defaultBonusKey == 'none' ? BonusMode.none : BonusMode.auto;
     final fp = OrderBonusDraftState.fingerprintFor(items);
     final draft = _bonusDraft == null
         ? null
@@ -1453,7 +1647,7 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
       items: items,
       ordersApi: ref.read(ordersApiProvider),
       ordersConfig: ordersCfg,
-      initialBonusMode: draft?.bonusMode ?? BonusMode.auto,
+      initialBonusMode: draft?.bonusMode ?? defaultBonusMode,
       initialDiscountMode: draft?.discountMode ?? DiscountMode.auto,
       initialDraft: draft,
       isConsignment: _isConsignment,
@@ -1842,7 +2036,7 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
           Padding(
             padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
             child: Chip(
-              label: Text('Filtr: $_productSearch'),
+              label: Text('Фильтр: $_productSearch'),
               onDeleted: () {
                 _productSearchCtrl.clear();
                 setState(() => _productSearch = '');
@@ -2040,16 +2234,16 @@ class _ProductSearchDialogState extends State<_ProductSearchDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: const Text('Mahsulot qidirish'),
+      title: const Text('Поиск товара'),
       content: TextField(
         controller: _ctrl,
         autofocus: true,
-        decoration: const InputDecoration(hintText: 'Nom yoki SKU...'),
+        decoration: const InputDecoration(hintText: 'Название или SKU...'),
         onSubmitted: (v) => Navigator.pop(context, v),
       ),
       actions: [
-        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Bekor')),
-        TextButton(onPressed: () => Navigator.pop(context, _ctrl.text), child: const Text('OK')),
+        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Отмена')),
+        TextButton(onPressed: () => Navigator.pop(context, _ctrl.text), child: const Text('Найти')),
       ],
     );
   }
@@ -2070,6 +2264,7 @@ class _ClientPickerSheet extends StatefulWidget {
 class _ClientPickerSheetState extends State<_ClientPickerSheet> {
   late final TextEditingController _searchCtrl;
   late final FocusNode _focusNode;
+  List<Map<String, dynamic>> _suggested = [];
   List<Map<String, dynamic>> _results = [];
   var _searching = false;
   var _query = '';
@@ -2081,6 +2276,7 @@ class _ClientPickerSheetState extends State<_ClientPickerSheet> {
     super.initState();
     _searchCtrl = TextEditingController();
     _focusNode = FocusNode();
+    unawaited(_loadSuggested());
   }
 
   @override
@@ -2089,6 +2285,28 @@ class _ClientPickerSheetState extends State<_ClientPickerSheet> {
     _searchCtrl.dispose();
     _focusNode.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadSuggested() async {
+    final cfg = widget.mobileConfig;
+    final all = await AppDatabase().getAllClients(activeOnly: false);
+    final filtered = all
+        .where((c) => !isNewClientBlockedForOrder(c, cfg.client, cfg.productList))
+        .toList();
+    final wd = workRegionNow().weekday;
+    final planned = <Map<String, dynamic>>[];
+    final rest = <Map<String, dynamic>>[];
+    for (final c in filtered) {
+      if (clientPlannedForWeekday(c, wd)) {
+        planned.add(c);
+      } else {
+        rest.add(c);
+      }
+    }
+    if (!mounted) return;
+    setState(() {
+      _suggested = [...planned, ...rest].take(80).toList();
+    });
   }
 
   void _closeSheet() {
@@ -2106,7 +2324,7 @@ class _ClientPickerSheetState extends State<_ClientPickerSheet> {
     if (!mounted) return;
     setState(() => _query = q);
 
-    if (trimmed.length < 2) {
+    if (trimmed.isEmpty) {
       setState(() {
         _results = [];
         _searching = false;
@@ -2130,10 +2348,28 @@ class _ClientPickerSheetState extends State<_ClientPickerSheet> {
     });
   }
 
+  Widget _clientTile(Map<String, dynamic> c) {
+    final days = formatClientVisitDaysDisplay(c);
+    return ListTile(
+      title: Text(c['name']?.toString() ?? ''),
+      subtitle: Text(
+        [
+          c['phone']?.toString() ?? '',
+          if (days != null && days.isNotEmpty) days,
+        ].where((s) => s.trim().isNotEmpty).join(' · '),
+      ),
+      onTap: () {
+        _focusNode.unfocus();
+        Navigator.pop(context, c);
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final bottom = MediaQuery.viewInsetsOf(context).bottom;
-    final queryLen = _query.trim().length;
+    final query = _query.trim();
+    final showingSearch = query.isNotEmpty;
 
     return Padding(
       padding: EdgeInsets.only(bottom: bottom),
@@ -2147,16 +2383,16 @@ class _ClientPickerSheetState extends State<_ClientPickerSheet> {
               const SizedBox(height: 8),
               const Padding(
                 padding: EdgeInsets.all(16),
-                child: Text('Mijoz tanlang', style: AppTypography.headlineSmall),
+                child: Text('Выберите клиента', style: AppTypography.headlineSmall),
               ),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 child: TextField(
                   controller: _searchCtrl,
                   focusNode: _focusNode,
-                  autofocus: true,
+                  autofocus: false,
                   decoration: InputDecoration(
-                    hintText: 'Nom yoki telefon (kamida 2 harf)...',
+                    hintText: 'Название, код или телефон',
                     prefixIcon: const Icon(Icons.search),
                     suffixIcon: IconButton(
                       icon: const Icon(Icons.close),
@@ -2166,33 +2402,42 @@ class _ClientPickerSheetState extends State<_ClientPickerSheet> {
                   onChanged: _scheduleSearch,
                 ),
               ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    showingSearch
+                        ? 'Поиск (${_results.length})'
+                        : 'Клиенты (${widget.clientCount})',
+                    style: AppTypography.caption.copyWith(color: AppColors.textMuted),
+                  ),
+                ),
+              ),
               Expanded(
                 child: _searching
                     ? const Center(child: CircularProgressIndicator())
-                    : queryLen < 2
-                        ? Center(
-                            child: Text(
-                              'Qidiruv: kamida 2 harf\n(${widget.clientCount} mijoz)',
-                              textAlign: TextAlign.center,
-                              style: AppTypography.caption.copyWith(color: AppColors.textMuted),
-                            ),
-                          )
-                        : _results.isEmpty
+                    : showingSearch
+                        ? (_results.isEmpty
                             ? const Center(child: AgentEmptyState(message: S.emptyClientSearch))
                             : ListView.builder(
                                 itemCount: _results.length,
-                                itemBuilder: (_, i) {
-                                  final c = _results[i];
-                                  return ListTile(
-                                    title: Text(c['name']?.toString() ?? ''),
-                                    subtitle: Text(c['phone']?.toString() ?? ''),
-                                    onTap: () {
-                                      _focusNode.unfocus();
-                                      Navigator.pop(context, c);
-                                    },
-                                  );
-                                },
-                              ),
+                                itemBuilder: (_, i) => _clientTile(_results[i]),
+                              ))
+                        : (_suggested.isEmpty
+                            ? Center(
+                                child: Text(
+                                  widget.clientCount == 0
+                                      ? S.syncFirst
+                                      : 'Загрузка клиентов…',
+                                  textAlign: TextAlign.center,
+                                  style: AppTypography.caption.copyWith(color: AppColors.textMuted),
+                                ),
+                              )
+                            : ListView.builder(
+                                itemCount: _suggested.length,
+                                itemBuilder: (_, i) => _clientTile(_suggested[i]),
+                              )),
               ),
             ],
           ),

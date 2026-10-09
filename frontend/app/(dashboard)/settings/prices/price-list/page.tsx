@@ -120,7 +120,7 @@ export default function PriceListPage() {
   if (!hydrated) {
     return (
       <PageShell>
-        <p className="text-sm text-muted-foreground">Sessiya…</p>
+        <p className="text-sm text-muted-foreground">Сессия…</p>
       </PageShell>
     );
   }
@@ -130,7 +130,7 @@ export default function PriceListPage() {
       <PageShell>
         <p className="text-sm text-destructive">
           <Link href="/login" className="underline">
-            Kirish
+            Войти
           </Link>
         </p>
       </PageShell>
@@ -141,17 +141,17 @@ export default function PriceListPage() {
     <PageShell>
       <PageHeader
         title="Прайс-лист"
-        description="Mahsulotlar va profildagi narx turlari ustunlari (product_prices)."
+        description="Товары и столбцы типов цен из профиля компании."
         actions={
           <div className="flex flex-wrap gap-2">
             <Link href="/settings/prices" className={cn(buttonVariants({ variant: "outline", size: "sm" }))}>
               ← Цена
             </Link>
             <Link href="/settings/prices/matrix" className={cn(buttonVariants({ variant: "secondary", size: "sm" }))}>
-              Narx matritsasi
+              Матрица цен
             </Link>
             <Link href="/settings/price-types" className={cn(buttonVariants({ variant: "outline", size: "sm" }))}>
-              Narx turlari
+              Типы цен
             </Link>
           </div>
         }
@@ -163,7 +163,7 @@ export default function PriceListPage() {
             <Search className="absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
             <Input
               className="pl-9"
-              placeholder="SKU yoki nom bo‘yicha qidiruv…"
+              placeholder="Поиск по SKU или названию…"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               onKeyDown={(e) => {
@@ -172,50 +172,49 @@ export default function PriceListPage() {
             />
           </div>
           <p className="text-sm text-muted-foreground">
-            Jami:{" "}
-            <span className="font-medium text-foreground">{formatNumberGrouped(total, { maxFractionDigits: 0 })}</span>{" "}
-            ta mahsulot
+            Всего товаров:{" "}
+            <span className="font-medium text-foreground">{formatNumberGrouped(total, { maxFractionDigits: 0 })}</span>
           </p>
         </div>
 
         {profileQ.isLoading ? (
           <div className="flex min-h-[240px] items-center justify-center rounded-xl border border-dashed border-muted-foreground/20 bg-muted/15">
-            <p className="text-sm text-muted-foreground">Profil Загрузка…</p>
+            <p className="text-sm text-muted-foreground">Загрузка профиля…</p>
           </div>
         ) : priceColumns.length === 0 ? (
           <div className="flex min-h-[min(50vh,400px)] flex-col items-center justify-center rounded-xl border border-dashed border-amber-500/30 bg-amber-500/5 px-6 py-12 text-center">
             <p className="text-sm text-amber-800 dark:text-amber-200">
-              Faol narx turi yo‘q.{" "}
+              Нет активных типов цен.{" "}
               <Link href="/settings/price-types" className="underline">
-                Narx turlarini
-              </Link>{" "}
-              sozlang.
+                Настройте типы цен
+              </Link>
+              .
             </p>
           </div>
         ) : productsQ.isLoading ? (
           <div className="flex min-h-[320px] items-center justify-center rounded-xl border border-dashed border-muted-foreground/20 bg-muted/15">
-            <p className="text-sm text-muted-foreground">Mahsulotlar Загрузка…</p>
+            <p className="text-sm text-muted-foreground">Загрузка товаров…</p>
           </div>
         ) : productsQ.isError ? (
           <div className="rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-8 text-center text-sm text-destructive">
-            Yuklashda xato.{" "}
+            Ошибка загрузки.{" "}
             <Button type="button" variant="outline" size="sm" className="ml-2" onClick={() => productsQ.refetch()}>
-              Qayta
+              Повторить
             </Button>
           </div>
         ) : total === 0 ? (
           <div className="flex min-h-[min(50vh,400px)] flex-col items-center justify-center rounded-xl border border-dashed border-muted-foreground/25 bg-muted/25 px-6 py-16 text-center">
             <Package className="mb-4 size-10 text-muted-foreground" strokeWidth={1.5} />
-            <h2 className="text-lg font-semibold tracking-tight">Ma&apos;lumot yo&apos;q</h2>
+            <h2 className="text-lg font-semibold tracking-tight">Нет данных</h2>
             <p className="mt-2 max-w-md text-sm text-muted-foreground">
-              Mahsulot qo‘shing yoki import qiling.
+              Добавьте товары или выполните импорт.
             </p>
             <div className="mt-6 flex flex-wrap justify-center gap-2">
               <Link href="/settings/products/excel" className={cn(buttonVariants({ size: "sm" }))}>
-                Excel import
+                Импорт из Excel
               </Link>
-              <Link href="/products" className={cn(buttonVariants({ variant: "outline", size: "sm" }))}>
-                Mahsulotlar
+              <Link href="/settings/products" className={cn(buttonVariants({ variant: "outline", size: "sm" }))}>
+                Товары
               </Link>
             </div>
           </div>
@@ -226,9 +225,9 @@ export default function PriceListPage() {
                 <thead className="app-table-thead">
                   <tr className="border-b bg-muted/40 text-left">
                     <th className="whitespace-nowrap px-3 py-2 font-medium">SKU</th>
-                    <th className="min-w-[12rem] px-3 py-2 font-medium">Nomi</th>
-                    <th className="whitespace-nowrap px-3 py-2 font-medium text-muted-foreground">Birlik</th>
-                    <th className="whitespace-nowrap px-3 py-2 font-medium text-muted-foreground">Kategoriya</th>
+                    <th className="min-w-[12rem] px-3 py-2 font-medium">Название</th>
+                    <th className="whitespace-nowrap px-3 py-2 font-medium text-muted-foreground">Единица измерения</th>
+                    <th className="whitespace-nowrap px-3 py-2 font-medium text-muted-foreground">Категория</th>
                     {priceColumns.map((col) => (
                       <th
                         key={col.id}
@@ -278,7 +277,7 @@ export default function PriceListPage() {
 
             <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
               <p className="text-xs text-muted-foreground">
-                Sahifa {page} / {totalPages} · {limit} ta/sahifa
+                Стр. {page} / {totalPages} · {limit} на стр.
               </p>
               <div className="flex items-center gap-2">
                 <Button

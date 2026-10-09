@@ -13,9 +13,11 @@ import {
   GROUP_PROCESSING_IDS_STORAGE_KEY,
   GROUP_PROCESSING_MISC_ALIASES,
   GROUP_PROCESSING_OPS_ALIASES,
+  canUseGroupProcessingAction,
   type GroupProcessingActionId
 } from "@/components/clients/group-processing/group-processing-actions";
 import { buttonVariants } from "@/components/ui/button-variants";
+import { usePermissions } from "@/lib/use-permissions";
 import { cn } from "@/lib/utils";
 import Link from "next/link";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
@@ -75,10 +77,24 @@ function MapRedirect() {
 }
 
 function ActionBody({ action }: { action: string }) {
+  const perms = usePermissions();
   if (!VALID.has(action as GroupProcessingActionId)) {
     return (
       <div className="space-y-3 p-6">
         <p className="text-sm text-destructive">Неизвестный раздел: {action}</p>
+        <Link href="/clients" className={cn(buttonVariants({ variant: "outline", size: "sm" }))}>
+          Назад · клиенты
+        </Link>
+      </div>
+    );
+  }
+
+  if (!perms.isLoading && !canUseGroupProcessingAction(action as GroupProcessingActionId, perms.has)) {
+    return (
+      <div className="space-y-3 p-6">
+        <p className="text-sm text-muted-foreground">
+          Нет доступа к этой групповой обработке (Доступ → Клиенты → Групповая обработка).
+        </p>
         <Link href="/clients" className={cn(buttonVariants({ variant: "outline", size: "sm" }))}>
           Назад · клиенты
         </Link>

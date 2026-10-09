@@ -4,8 +4,10 @@ import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { CalendarDays, FileSpreadsheet, Filter, ListOrdered, RotateCcw, Search } from "lucide-react";
 import { api } from "@/lib/api";
+import { usePermissions } from "@/lib/use-permissions";
 import { STALE } from "@/lib/query-stale";
 import { useAuthStore, useAuthStoreHydrated } from "@/lib/auth-store";
+import { monthToDateRange } from "@/components/dashboard/shared/date-ranges";
 import { FilterSelect } from "@/components/ui/filter-select";
 import { SearchableMultiSelectPanel } from "@/components/ui/searchable-multi-select-panel";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -67,14 +69,14 @@ function monthBounds(ym: string): { from: string; to: string } {
   const [ys, ms] = ym.split("-");
   const y = Number.parseInt(ys ?? "", 10);
   const m = Number.parseInt(ms ?? "", 10);
-  if (!Number.isFinite(y) || !Number.isFinite(m) || m < 1 || m > 12) {
-    const t = new Date();
-    const from = new Date(t.getFullYear(), t.getMonth(), 1).toISOString().slice(0, 10);
-    const to = new Date(t.getFullYear(), t.getMonth() + 1, 0).toISOString().slice(0, 10);
-    return { from, to };
-  }
-  const from = new Date(y, m - 1, 1).toISOString().slice(0, 10);
-  const to = new Date(y, m, 0).toISOString().slice(0, 10);
+  const today = monthToDateRange();
+  if (!Number.isFinite(y) || !Number.isFinite(m) || m < 1 || m > 12) return today;
+  const fromD = new Date(y, m - 1, 1);
+  const endD = new Date(y, m, 0);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const from = `${fromD.getFullYear()}-${pad(fromD.getMonth() + 1)}-${pad(fromD.getDate())}`;
+  let to = `${endD.getFullYear()}-${pad(endD.getMonth() + 1)}-${pad(endD.getDate())}`;
+  if (from <= today.to && to > today.to) to = today.to;
   return { from, to };
 }
 
@@ -130,6 +132,7 @@ const CLIENT_COLUMNS: ColumnDefItem[] = [
 ];
 
 export default function ReportClientSales4Page() {
+  const canExport = usePermissions().has("reports.prodazhi_klientov_4.export");
   const tenantSlug = useAuthStore((s) => s.tenantSlug);
   const hydrated = useAuthStoreHydrated();
   const ym0 = defaultYearMonth();
@@ -470,12 +473,14 @@ export default function ReportClientSales4Page() {
               Только с значением
             </label>
           </div>
-          <div className="flex shrink-0 items-center">
-            <Button variant="outline" size="sm" onClick={() => void downloadExcel()} disabled={exporting}>
-              <FileSpreadsheet className="mr-1 h-4 w-4" />
-              Excel
-            </Button>
-          </div>
+          {canExport ? (
+            <div className="flex shrink-0 items-center">
+              <Button variant="outline" size="sm" onClick={() => void downloadExcel()} disabled={exporting}>
+                <FileSpreadsheet className="mr-1 h-4 w-4" />
+                Excel
+              </Button>
+            </div>
+          ) : null}
         </div>
 
         <div className="overflow-auto">

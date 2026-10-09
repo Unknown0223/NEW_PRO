@@ -10,7 +10,9 @@ import { FilterSearchableSelect } from "@/components/ui/filter-searchable-select
 import { Input } from "@/components/ui/input";
 import { useUserTablePrefs } from "@/hooks/use-user-table-prefs";
 import { api } from "@/lib/api";
+import { useDebouncedSearchCommit } from "@/lib/use-debounced-search-commit";
 import { STALE } from "@/lib/query-stale";
+import { usePermissions } from "@/lib/use-permissions";
 import { priceTypeOptionsFromResponse, type PriceTypeOption } from "@/lib/price-type-label";
 import { cn } from "@/lib/utils";
 import { useQuery } from "@tanstack/react-query";
@@ -53,6 +55,7 @@ function labelOf(id: string): string {
 }
 
 export function StockByDateWorkspace({ tenantSlug }: { tenantSlug: string }) {
+  const canExport = usePermissions().has("warehouse.ostatki_na_datu.copy");
   const [date, setDate] = useState(localValueToDatetimeInput(new Date()));
   const [warehouseId, setWarehouseId] = useState("");
   const [categoryId, setCategoryId] = useState("");
@@ -60,6 +63,10 @@ export function StockByDateWorkspace({ tenantSlug }: { tenantSlug: string }) {
   const [priceType, setPriceType] = useState("");
   const [searchDraft, setSearchDraft] = useState("");
   const [q, setQ] = useState("");
+  useDebouncedSearchCommit(searchDraft, (next) => {
+    setQ(next);
+    setPage(1);
+  });
   const [page, setPage] = useState(1);
   const [columnDialogOpen, setColumnDialogOpen] = useState(false);
   const [exporting, setExporting] = useState(false);
@@ -195,7 +202,7 @@ export function StockByDateWorkspace({ tenantSlug }: { tenantSlug: string }) {
 
   return (
     <PageShell>
-      <PageHeader title="Остатки на определенную дату" description="Historical warehouse snapshot на выбранную дату." />
+      <PageHeader title="Остатки на определенную дату" description="Исторический срез остатков склада на выбранную дату." />
 
       <div className="orders-hub-section orders-hub-section--filters orders-hub-section--stack-tight">
         <Card className="rounded-none border-0 bg-transparent shadow-none hover:shadow-none">
@@ -347,10 +354,12 @@ export function StockByDateWorkspace({ tenantSlug }: { tenantSlug: string }) {
                     }}
                   />
                 </div>
-                <Button type="button" variant="outline" size="sm" className="h-9" disabled={exporting || !warehouseId} onClick={() => void downloadExcel()}>
-                  <Download className="mr-1 size-3.5" />
-                  {exporting ? "…" : "Excel"}
-                </Button>
+                {canExport ? (
+                  <Button type="button" variant="outline" size="sm" className="h-9" disabled={exporting || !warehouseId} onClick={() => void downloadExcel()}>
+                    <Download className="mr-1 size-3.5" />
+                    {exporting ? "…" : "Excel"}
+                  </Button>
+                ) : null}
                 <Button type="button" variant="outline" size="icon" className="h-9 w-9" onClick={() => void listQ.refetch()}>
                   <RefreshCw className={cn("size-4", listQ.isFetching && "animate-spin")} />
                 </Button>

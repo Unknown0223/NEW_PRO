@@ -12,6 +12,7 @@ import '../../../core/update/app_update_info.dart';
 import 'agent_display_title.dart';
 import 'agent_menu_config.dart';
 import '../warehouse/warehouse_stock_providers.dart';
+import '../orders/create_order_exit_guard.dart';
 
 /// Menyu ekrani — salec-agent-mobile-ui-design shablon.
 class AgentDrawer extends ConsumerStatefulWidget {
@@ -75,14 +76,27 @@ class _AgentDrawerState extends ConsumerState<AgentDrawer> {
         ? session.tenantName!
         : 'Сервер: ${session.tenantSlug ?? "-"}';
 
-    void go(String path) {
-      Navigator.pop(context);
-      if (path.isEmpty) return;
-      final loc = GoRouterState.of(context).matchedLocation;
-      if (loc == path) {
-        ref.read(agentRouteReselectProvider.notifier).state = path;
+    Future<void> go(String path) async {
+      if (path.isEmpty) {
+        Navigator.pop(context);
+        return;
       }
-      context.go(path);
+      // Drawer `pop` qilingach bu widget unmount bo‘ladi — router/container
+      // ni oldindan olamiz, aks holda modal javobidan keyin `go` chaqirilmaydi.
+      final router = GoRouter.of(context);
+      final loc = GoRouterState.of(context).uri.path;
+      final container = ProviderScope.containerOf(context);
+      Navigator.pop(context);
+      await WidgetsBinding.instance.endOfFrame;
+      await leaveCreateOrderThenGo(
+        container: container,
+        go: router.go,
+        path: path,
+        currentLocation: loc,
+        onSameLocation: (p) {
+          container.read(agentRouteReselectProvider.notifier).state = p;
+        },
+      );
     }
 
     return Drawer(
@@ -160,30 +174,8 @@ class _AgentDrawerState extends ConsumerState<AgentDrawer> {
                     ],
                   ),
                   const SizedBox(height: 12),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                        const AgentRoleBadge(label: 'Агент'),
-                        const SizedBox(width: 8),
-                        OutlinedButton.icon(
-                          onPressed: _soonSnack,
-                          icon: const Icon(Icons.add_rounded, size: 14),
-                          label: const Text(
-                            'Добавить аккаунт',
-                            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
-                          ),
-                          style: OutlinedButton.styleFrom(
-                            minimumSize: const Size(0, 36),
-                            padding: const EdgeInsets.symmetric(horizontal: 10),
-                            foregroundColor: AppColors.primaryDark,
-                            side: const BorderSide(color: AppColors.primary),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
+                  const Center(child: AgentRoleBadge(label: 'Агент')),
+                ],
                 ),
               ),
             const SizedBox(height: 14),

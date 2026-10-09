@@ -1,9 +1,45 @@
 import type { BonusRuleRow } from "../bonus-rules/bonus-rules.service";
 import { primaryQtyCondition } from "../bonus-rules/bonus-rules.qty";
 import { bonusGiftSelectionMeta } from "../orders/bonus-gift-selection";
+import {
+  qtyRuleMatchingProductIds,
+  ruleAggregatesMatchingSkuQty
+} from "../orders/order-bonus-context.match-scope";
 import type { QtyBonusPeek } from "../orders/order-bonus-qty";
 import { parseBonusStackPolicy, resolveBonusSlotTakeCount } from "../orders/bonus-stack-policy";
 import { mapGiftProducts, type GiftProductPreview } from "./mobile-order-bonus-preview.query";
+
+/** Kategoriya havzasi shunchadan kichik bo‘lsa — modalda hammasini ko‘rsatamiz. */
+export const CATEGORY_GIFT_PREVIEW_FULL_POOL_MAX = 24;
+
+/**
+ * Kategoriya 3+1 preview: avval xarid qilingan o‘lchamlar + auto sovg‘a.
+ * Butun katalogni 100+ qator qilib tashlamaymiz — tanlash ishlashi kerak.
+ */
+export function preferCategoryGiftPoolForPreview(
+  rule: BonusRuleRow,
+  qtyByProduct: ReadonlyMap<number, number>,
+  productById: ReadonlyMap<number, { id: number; category_id: number | null }>,
+  resolvedAllowedIds: readonly number[],
+  peekGiftPid?: number
+): number[] {
+  const allowed = [...new Set(resolvedAllowedIds.filter((id) => id > 0))];
+  if (!ruleAggregatesMatchingSkuQty(rule)) return allowed;
+
+  const ordered = qtyRuleMatchingProductIds(rule, qtyByProduct, productById);
+  const prefer = new Set<number>();
+  for (const id of ordered) prefer.add(id);
+  if (peekGiftPid != null && peekGiftPid > 0) prefer.add(peekGiftPid);
+  for (const id of rule.bonus_product_ids) {
+    if (id > 0) prefer.add(id);
+  }
+
+  if (allowed.length > 0 && allowed.length <= CATEGORY_GIFT_PREVIEW_FULL_POOL_MAX) {
+    return [...new Set([...prefer, ...allowed])];
+  }
+  if (prefer.size > 0) return [...prefer];
+  return allowed;
+}
 
 export type EligibleBonusRow = {
   rule_id: number;

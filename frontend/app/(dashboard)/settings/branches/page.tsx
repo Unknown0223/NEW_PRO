@@ -116,7 +116,7 @@ function summaryMultiFilterStrings(
   const labels = items.filter((i) => selected.has(i.id)).map((i) => i.title);
   const joined = labels.join(", ");
   if (joined.length <= 52) return joined;
-  return `Tanlangan: ${selected.size}`;
+  return `Выбрано: ${selected.size}`;
 }
 
 function summaryMultiFilterCash(
@@ -128,7 +128,7 @@ function summaryMultiFilterCash(
   const labels = items.filter((i) => selected.has(i.id)).map((i) => i.title);
   const joined = labels.join(", ");
   if (joined.length <= 52) return joined;
-  return `Tanlangan: ${selected.size}`;
+  return `Выбрано: ${selected.size}`;
 }
 
 /** Jadval: bir nechta qiymatda birinchi + «(+N)», to‘liq ro‘yxat `title` / tooltip uchun */
@@ -290,7 +290,7 @@ export default function BranchesSettingsPage() {
       await qc.invalidateQueries({ queryKey: ["settings", "profile", tenantSlug] });
       await qc.invalidateQueries({ queryKey: ["geo-boundaries", tenantSlug] });
       setServerFieldErrs({});
-      setMsg("Saqlandi.");
+      setMsg("Сохранено.");
     },
     onError: (e: unknown) => {
       if (isAxiosError(e)) {
@@ -301,14 +301,14 @@ export default function BranchesSettingsPage() {
           const top = flat.formErrors.map((s) => s.trim()).find(Boolean);
           const hint = firstValidationUserHint(flat);
           const line = top ?? hint ?? Object.values(per).find((m) => m.trim() !== "");
-          setMsg(line ? withApiSupportLine(line, e) : getUserFacingError(e, "Saqlashda xatolik."));
+          setMsg(line ? withApiSupportLine(line, e) : getUserFacingError(e, "Ошибка сохранения."));
           return;
         }
         setServerFieldErrs({});
       } else {
         setServerFieldErrs({});
       }
-      setMsg(getUserFacingError(e, "Saqlashda xatolik."));
+      setMsg(getUserFacingError(e, "Ошибка сохранения."));
     }
   });
 
@@ -451,9 +451,9 @@ export default function BranchesSettingsPage() {
       await qc.invalidateQueries({ queryKey: ["settings", "profile", tenantSlug] });
       setUsersOpen(false);
       setUsersBranchId(null);
-      setMsg("Saqlandi.");
+      setMsg("Сохранено.");
     },
-    onError: (e: unknown) => setMsg(getUserFacingError(e, "Saqlashda xatolik."))
+    onError: (e: unknown) => setMsg(getUserFacingError(e, "Ошибка сохранения."))
   });
 
   function applyUsersToBranch() {
@@ -464,21 +464,21 @@ export default function BranchesSettingsPage() {
     saveUsersMut.mutate({ branchId: usersBranchId, links });
   }
 
-  if (!hydrated) return <PageShell><p className="text-sm text-muted-foreground">Sessiya...</p></PageShell>;
-  if (!tenantSlug) return <PageShell><p className="text-sm text-destructive"><Link href="/login" className="underline">Kirish</Link></p></PageShell>;
+  if (!hydrated) return <PageShell><p className="text-sm text-muted-foreground">Сессия...</p></PageShell>;
+  if (!tenantSlug) return <PageShell><p className="text-sm text-destructive"><Link href="/login" className="underline">Войти</Link></p></PageShell>;
 
   return (
     <PageShell>
       <PageHeader
         title="Филиалы"
-        description="Filiallar, territoriya/shahar va kassa bog'lanishi."
+        description="Филиалы, привязка к территории/городу и кассе."
         actions={
           <div className="flex gap-2">
             <Button size="sm" disabled={!isAdmin} onClick={openAdd}>Добавить</Button>
             <Link href="/settings/cash-desks" className={cn(buttonVariants({ variant: "outline", size: "sm" }))}>
-              Kassalar
+              Кассы
             </Link>
-            <Link href="/settings" className={cn(buttonVariants({ variant: "outline", size: "sm" }))}>Katalog</Link>
+            <Link href="/settings" className={cn(buttonVariants({ variant: "outline", size: "sm" }))}>Каталог</Link>
           </div>
         }
       />
@@ -552,14 +552,14 @@ export default function BranchesSettingsPage() {
                     <td className="px-3 py-2">{r.comment ?? "-"}</td>
                     <td className="px-3 py-2 text-right">
                       {isAdmin ? (
-                        <TableRowActionGroup className="justify-end" ariaLabel="Filial">
+                        <TableRowActionGroup className="justify-end" ariaLabel="Филиал">
                           <Button
                             variant="outline"
                             size="icon-sm"
                             className="text-muted-foreground hover:text-foreground"
                             type="button"
-                            title="Foydalanuvchilar"
-                            aria-label="Foydalanuvchilar"
+                            title="Пользователи"
+                            aria-label="Пользователи"
                             onClick={() => openUsersModal(r)}
                           >
                             <Users className="size-3.5" aria-hidden />
@@ -569,8 +569,8 @@ export default function BranchesSettingsPage() {
                             size="icon-sm"
                             className="text-muted-foreground hover:text-foreground"
                             type="button"
-                            title="Tahrirlash"
-                            aria-label="Tahrirlash"
+                            title="Редактировать"
+                            aria-label="Редактировать"
                             onClick={() => openEdit(r)}
                           >
                             <Pencil className="size-3.5" aria-hidden />
@@ -582,7 +582,7 @@ export default function BranchesSettingsPage() {
                 ))}
                 {filtered.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="px-3 py-6 text-center text-muted-foreground">Ma’lumot yo‘q</td>
+                    <td colSpan={8} className="px-3 py-6 text-center text-muted-foreground">Нет данных</td>
                   </tr>
                 ) : null}
               </tbody>
@@ -607,7 +607,7 @@ export default function BranchesSettingsPage() {
         <DialogContent className="sm:max-w-[460px]" showCloseButton>
           <DialogHeader>
             <DialogTitle>{editId ? "Редактировать" : "Добавить"}</DialogTitle>
-            <DialogDescription>Kichik modal: filial + bog‘lanishlar.</DialogDescription>
+            <DialogDescription>Филиал и его привязки.</DialogDescription>
           </DialogHeader>
           <div className="grid gap-3">
             {msg && open ? <p className="text-sm text-muted-foreground">{msg}</p> : null}
@@ -637,13 +637,13 @@ export default function BranchesSettingsPage() {
                 search={terrPanelSearch}
                 onSearchChange={setTerrPanelSearch}
                 filterItemsBySearch
-                searchPlaceholder="Qidiruv"
+                searchPlaceholder="Поиск"
                 closeToken={branchFilterCloseTok}
                 minPopoverWidth={280}
                 maxListHeightClass="max-h-44"
-                emptyMessage="Katalogda hudud yo‘q"
-                selectAllLabel="Ekrandagilarni hammasi"
-                clearVisibleLabel="Ekrandan yechish"
+                emptyMessage="В каталоге нет территорий"
+                selectAllLabel="Выбрать все видимые"
+                clearVisibleLabel="Снять видимые"
                 formatTriggerSummary={(sel, items) =>
                   summaryMultiFilterStrings("Территория", sel, items)
                 }
@@ -672,13 +672,13 @@ export default function BranchesSettingsPage() {
                 search={cityPanelSearch}
                 onSearchChange={setCityPanelSearch}
                 filterItemsBySearch
-                searchPlaceholder="Qidiruv"
+                searchPlaceholder="Поиск"
                 closeToken={branchFilterCloseTok}
                 minPopoverWidth={280}
                 maxListHeightClass="max-h-44"
-                emptyMessage="Shahar ro‘yxati bo‘sh"
-                selectAllLabel="Ekrandagilarni hammasi"
-                clearVisibleLabel="Ekrandan yechish"
+                emptyMessage="Список городов пуст"
+                selectAllLabel="Выбрать все видимые"
+                clearVisibleLabel="Снять видимые"
                 formatTriggerSummary={(sel, items) => summaryMultiFilterStrings("Город", sel, items)}
               />
               {pickZodLeaf(serverFieldErrs, "city") || pickZodLeaf(serverFieldErrs, "cities") ? (
@@ -688,12 +688,12 @@ export default function BranchesSettingsPage() {
               ) : null}
             </div>
             <div className="grid gap-1.5">
-              <Label>Kassa (tizim)</Label>
+              <Label>Касса (система)</Label>
               <SearchableMultiSelectPanel<number>
-                label="Kassa"
+                label="Касса"
                 hideOuterLabel
                 hidePopoverHeader
-                triggerPlaceholder="Kassa tanlanmagan"
+                triggerPlaceholder="Касса не выбрана"
                 triggerClassName={BRANCH_FILTER_TRIGGER}
                 items={cashPanelItems}
                 selected={new Set(selectedCashDeskIds)}
@@ -706,7 +706,7 @@ export default function BranchesSettingsPage() {
                 search={cashPanelSearch}
                 onSearchChange={setCashPanelSearch}
                 filterItemsBySearch
-                searchPlaceholder="Qidiruv"
+                searchPlaceholder="Поиск"
                 loading={cashDesksQ.isLoading}
                 closeToken={branchFilterCloseTok}
                 minPopoverWidth={280}
@@ -714,12 +714,12 @@ export default function BranchesSettingsPage() {
                 emptyMessage={
                   cashDesksQ.isLoading
                     ? "…"
-                    : "Kassa yo‘q — avval kassa yarating (sozlamalar → Kassalar)."
+                    : "Касс нет — сначала создайте кассу (Настройки → Кассы)."
                 }
-                selectAllLabel="Ekrandagilarni hammasi"
-                clearVisibleLabel="Ekrandan yechish"
+                selectAllLabel="Выбрать все видимые"
+                clearVisibleLabel="Снять видимые"
                 formatTriggerSummary={(sel, items) =>
-                  summaryMultiFilterCash("Kassa tanlanmagan", sel, items)
+                  summaryMultiFilterCash("Касса не выбрана", sel, items)
                 }
               />
               {pickZodLeaf(serverFieldErrs, "cash_desk_ids") || pickZodLeaf(serverFieldErrs, "cash_desk_id") ? (
@@ -728,16 +728,16 @@ export default function BranchesSettingsPage() {
                 </p>
               ) : null}
               <p className="text-xs text-muted-foreground">
-                Ro‘yxat bo‘sh bo‘lsa:{" "}
+                Если список пуст:{" "}
                 <Link href="/settings/cash-desks" className="underline">
-                  kassa yarating
+                  создайте кассу
                 </Link>
                 .
               </p>
             </div>
             <div className="grid gap-1.5">
-              <Label>Kassa izohi (ixtiyoriy)</Label>
-              <Input value={cashbox} onChange={(e) => setCashbox(e.target.value)} placeholder="Eski matn maydoni" />
+              <Label>Примечание к кассе (необязательно)</Label>
+              <Input value={cashbox} onChange={(e) => setCashbox(e.target.value)} placeholder="Старое текстовое поле" />
               {pickZodLeaf(serverFieldErrs, "cashbox") ? (
                 <p className="text-xs text-destructive">{pickZodLeaf(serverFieldErrs, "cashbox")}</p>
               ) : null}
@@ -789,7 +789,7 @@ export default function BranchesSettingsPage() {
         <DialogContent className="max-h-[85vh] sm:max-w-[860px]" showCloseButton>
           <DialogHeader>
             <DialogTitle>Прикрепить пользователей</DialogTitle>
-            <DialogDescription>Rol ustiga bosing — hodimlar ro‘yxati ochiladi.</DialogDescription>
+            <DialogDescription>Нажмите на роль — откроется список сотрудников.</DialogDescription>
           </DialogHeader>
           {msg && usersOpen ? <p className="text-sm text-muted-foreground">{msg}</p> : null}
 
@@ -808,7 +808,7 @@ export default function BranchesSettingsPage() {
                       {isOpen ? <ChevronDown className="size-4" /> : <ChevronRight className="size-4" />}
                       <span className="font-medium">{group.role}</span>
                     </div>
-                    <span className="text-xs text-muted-foreground">{selectedCount} tanlangan</span>
+                    <span className="text-xs text-muted-foreground">Выбрано: {selectedCount}</span>
                   </button>
                   {isOpen ? (
                     <div className="max-h-56 space-y-1 overflow-y-auto border-t px-3 py-2">

@@ -8,7 +8,7 @@ describe("evaluateMobileSyncPolicy", () => {
   it("blocks when block_sync is true", () => {
     const r = evaluateMobileSyncPolicy({ block_sync: true }, new Date(Date.UTC(2026, 5, 1, 12, 0)), "UTC");
     expect(r.allowed).toBe(false);
-    expect(r.message).toContain("bloklangan");
+    expect(r.message).toContain("заблокирована");
   });
 
   it("denies after allowed_window_to (in given time zone)", () => {

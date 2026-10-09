@@ -71,23 +71,55 @@ function branchStorageKey(b: Pick<BranchDto, "id" | "code">): string {
   return b.id.trim();
 }
 
+function normBranchToken(s: string): string {
+  return s.trim().toLocaleUpperCase("en-US");
+}
+
+/** Katalog filialining barcha mumkin alias kalitlari (id, code, storage). */
+export function branchAliasKeys(b: Pick<BranchDto, "id" | "code">): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const raw of [b.id, b.code, branchStorageKey(b)]) {
+    const t = raw?.trim();
+    if (!t) continue;
+    for (const k of [t, normBranchToken(t)]) {
+      if (seen.has(k)) continue;
+      seen.add(k);
+      out.push(k);
+    }
+  }
+  return out;
+}
+
 function branchLinkMatchesRef(b: BranchDto, linkCode: string): boolean {
   const k = linkCode.trim();
   if (!k) return false;
-  if (b.id.trim() === k) return true;
+  const kn = normBranchToken(k);
+  if (normBranchToken(b.id) === kn) return true;
   const code = b.code?.trim();
-  if (code && code === k) return true;
-  return branchStorageKey(b) === k;
+  if (code && normBranchToken(code) === kn) return true;
+  return normBranchToken(branchStorageKey(b)) === kn;
 }
 
 export function pickBranchDimensionKey(b: BranchDto, countBy: Map<string, number>): string {
   const sk = branchStorageKey(b);
   const id = b.id.trim();
   const codeOnly = b.code?.trim();
-  const n = (x: string) => countBy.get(x) ?? 0;
-  if (n(sk) > 0) return sk;
-  if (id && n(id) > 0) return id;
-  if (codeOnly && n(codeOnly) > 0) return codeOnly;
+  const nExact = (x: string) => {
+    if (!x) return 0;
+    let s = countBy.get(x) ?? 0;
+    const up = normBranchToken(x);
+    if (up !== x) s += countBy.get(up) ?? 0;
+    if (s === 0) {
+      for (const [ck, c] of countBy) {
+        if (normBranchToken(ck) === up) return c;
+      }
+    }
+    return s;
+  };
+  if (nExact(sk) > 0) return sk;
+  if (id && nExact(id) > 0) return id;
+  if (codeOnly && nExact(codeOnly) > 0) return codeOnly;
   return sk;
 }
 
@@ -96,8 +128,9 @@ export function sumBranchLinkCounts(b: BranchDto, countBy: Map<string, number>):
   const seenCodes = new Set<string>();
   for (const [code, c] of countBy) {
     if (!branchLinkMatchesRef(b, code)) continue;
-    if (seenCodes.has(code)) continue;
-    seenCodes.add(code);
+    const nk = normBranchToken(code);
+    if (seenCodes.has(nk)) continue;
+    seenCodes.add(nk);
     sum += c;
   }
   return sum;
@@ -162,7 +195,9 @@ export const patchAccessBodySchema = z.object({
   supervisee_user_ids: z.array(z.number().int().positive()).max(5000).optional(),
   /** Operatsiya kaliti — foydalanuvchi boshqalarga berishi (`access.grant.<key>`, faqat shaxsiy). */
   grant_delegation_allow: z.array(accessPermissionKeyZ).optional(),
-  grant_delegation_revoke: z.array(accessPermissionKeyZ).optional()
+  grant_delegation_revoke: z.array(accessPermissionKeyZ).optional(),
+  /** Qo‘shimcha rol paketlari. Bo‘sh massiv — faqat asosiy `users.role`. */
+  extra_role_keys: z.array(z.string().trim().min(1).max(80)).max(24).optional()
 });
 
 const bulkAccessPatchItemSchema = z

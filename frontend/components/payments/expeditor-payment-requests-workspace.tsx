@@ -32,11 +32,14 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useUserTablePrefs } from "@/hooks/use-user-table-prefs";
 import { api } from "@/lib/api";
+import { useDebouncedSearchCommit } from "@/lib/use-debounced-search-commit";
 import { useAuthStore, useAuthStoreHydrated, useEffectiveRole } from "@/lib/auth-store";
 import type { ClientBalanceTerritoryOptions } from "@/lib/client-balances-types";
 import { isAdminOrOperatorLikeRole } from "@/lib/distribution-roles";
+import { usePermissions } from "@/lib/use-permissions";
 import { downloadXlsxSheet } from "@/lib/download-xlsx";
 import { staffPickerDisplayName, staffPickerSearchText } from "@/lib/person-display";
+import { splitMultiFilterValues } from "@/lib/client-filter-select-value";
 import { formatNumberGrouped } from "@/lib/format-numbers";
 import { paymentMethodSelectOptions, type ProfilePaymentMethodEntry } from "@/lib/payment-method-options";
 import type { PaymentListApiResponse, PaymentListApiRow } from "@/lib/payment-list-types";
@@ -45,6 +48,7 @@ import { useActiveTradeDirectionsCatalog } from "@/hooks/use-active-trade-direct
 import {
   buildClientTerritoryFilterLevels,
   buildPaymentTerritorySelectOptions,
+  buildZoneRegionCityCascadeOptions,
   type ClientTerritoryFilterField
 } from "@/lib/territory-client-filters";
 import type { TerritoryNode } from "@/lib/territory-tree";
@@ -155,12 +159,27 @@ function buildListQuery(
   if (f.dateTo.trim()) p.set("date_to", f.dateTo.trim());
   if (f.dealType !== "both") p.set("deal_type", f.dealType);
   p.set("application_channel", f.tab);
-  if (args.archive) p.set("payment_status", "deleted");
-  else if (f.status) p.set("payment_status", f.status);
+  if (args.archive) {
+    p.set("payment_status", "deleted");
+  } else if (f.status.trim()) {
+    const statuses = splitMultiFilterValues(f.status).filter((s) =>
+      ["pending_confirmation", "confirmed", "rejected", "deleted"].includes(s)
+    );
+    if (statuses.length === 1) p.set("payment_status", statuses[0]!);
+    else if (statuses.length > 1) p.set("payment_statuses", statuses.join(","));
+  }
   if (f.expeditorIds.length > 0) p.set("expeditor_user_ids", f.expeditorIds.join(","));
   if (f.agentIds.length > 0) p.set("agent_ids", f.agentIds.join(","));
-  if (f.paymentType.trim() && f.paymentType !== "__all__") p.set("payment_type", f.paymentType.trim());
-  if (f.tradeDirection.trim() && f.tradeDirection !== "__all__") p.set("trade_direction", f.tradeDirection.trim());
+  if (f.paymentType.trim() && f.paymentType !== "__all__") {
+    const types = splitMultiFilterValues(f.paymentType).filter((t) => t && t !== "__all__");
+    if (types.length === 1) p.set("payment_type", types[0]!);
+    else if (types.length > 1) p.set("payment_types", types.join(","));
+  }
+  if (f.tradeDirection.trim() && f.tradeDirection !== "__all__") {
+    const dirs = splitMultiFilterValues(f.tradeDirection).filter((d) => d && d !== "__all__");
+    if (dirs.length === 1) p.set("trade_direction", dirs[0]!);
+    else if (dirs.length > 1) p.set("trade_directions", dirs.join(","));
+  }
   if (f.territoryZone.trim()) p.set("territory_zone", f.territoryZone.trim());
   if (f.territoryRegion.trim()) p.set("territory_region", f.territoryRegion.trim());
   if (f.territoryCity.trim()) p.set("territory_city", f.territoryCity.trim());
@@ -211,11 +230,17 @@ export function ExpeditorPaymentRequestsWorkspace() {
   const hydrated = useAuthStoreHydrated();
   const role = useEffectiveRole();
   const qc = useQueryClient();
-  const canAct = isAdminOrOperatorLikeRole(role);
+  const { has } = usePermissions();
+  const canAct = isAdminOrOperatorLikeRole(role) && has("cash.oplaty_klientov.approve");
+  const canExport = has("cash.zayavki_na_oplatu.export");
   const isAdmin = role === "admin";
 
   const [applied, setApplied] = useState<EprFilterState>(() => defaultEprFilters());
   const [draft, setDraft] = useState<EprFilterState>(() => defaultEprFilters());
+  useDebouncedSearchCommit(draft.search, (q) => {
+    setApplied((prev) => (prev.search === q ? prev : { ...prev, search: q }));
+    setPage(1);
+  });
   const [page, setPage] = useState(1);
   const [sortBy, setSortBy] = useState<EprPaymentRequestSortKey>(EPR_SORT_DEFAULT.sortBy);
   const [sortDir, setSortDir] = useState<"asc" | "desc">(EPR_SORT_DEFAULT.sortDir);
@@ -255,7 +280,7 @@ export function ExpeditorPaymentRequestsWorkspace() {
     enabled: Boolean(tenantSlug) && hydrated,
     staleTime: STALE.reference,
     queryFn: async () => {
-      const { data } = await api.get<{ data: StaffPick[] }>(`/api/${tenantSlug}/expeditors?is_active=true`);
+      const { data } = await api.get<{ data: StaffPick[] }>(`/api/${tenantSlug}/expeditors?picker=1`);
       return data.data ?? [];
     }
   });
@@ -265,7 +290,7 @@ export function ExpeditorPaymentRequestsWorkspace() {
     enabled: Boolean(tenantSlug) && hydrated,
     staleTime: STALE.reference,
     queryFn: async () => {
-      const { data } = await api.get<{ data: StaffPick[] }>(`/api/${tenantSlug}/agents?is_active=true`);
+      const { data } = await api.get<{ data: StaffPick[] }>(`/api/${tenantSlug}/agents?picker=1`);
       return data.data ?? [];
     }
   });
@@ -513,16 +538,48 @@ export function ExpeditorPaymentRequestsWorkspace() {
     });
   }, [rows]);
 
+  const territoryCascade = useMemo(
+    () =>
+      buildZoneRegionCityCascadeOptions(
+        clientRefsQ.data,
+        territoryOptsQ.data,
+        profileQ.data?.territory_nodes,
+        {
+          zone: draft.territoryZone,
+          region: draft.territoryRegion,
+          city: draft.territoryCity
+        }
+      ),
+    [
+      clientRefsQ.data,
+      territoryOptsQ.data,
+      profileQ.data?.territory_nodes,
+      draft.territoryZone,
+      draft.territoryRegion,
+      draft.territoryCity
+    ]
+  );
+
   const territoryFilterOptions = useMemo(
     () =>
       territoryFilterSpecs.map((spec) => {
-        const opts = buildPaymentTerritorySelectOptions(
-          spec.field,
-          clientRefsQ.data,
-          territoryOptsQ.data,
-          profileQ.data?.territory_nodes,
-          readTerritoryFilter(draft, spec.field)
-        );
+        const cascaded =
+          spec.field === "zone"
+            ? territoryCascade.zones
+            : spec.field === "region"
+              ? territoryCascade.regions
+              : spec.field === "city"
+                ? territoryCascade.cities
+                : null;
+        const opts =
+          cascaded ??
+          buildPaymentTerritorySelectOptions(
+            spec.field,
+            clientRefsQ.data,
+            territoryOptsQ.data,
+            profileQ.data?.territory_nodes,
+            readTerritoryFilter(draft, spec.field)
+          );
         return {
           key:
             spec.field === "zone"
@@ -537,7 +594,14 @@ export function ExpeditorPaymentRequestsWorkspace() {
           value: readTerritoryFilter(draft, spec.field)
         };
       }),
-    [territoryFilterSpecs, clientRefsQ.data, territoryOptsQ.data, profileQ.data?.territory_nodes, draft]
+    [
+      territoryFilterSpecs,
+      territoryCascade,
+      clientRefsQ.data,
+      territoryOptsQ.data,
+      profileQ.data?.territory_nodes,
+      draft
+    ]
   );
 
   const handleBulkDelete = useCallback(() => {
@@ -546,11 +610,10 @@ export function ExpeditorPaymentRequestsWorkspace() {
       void (async () => {
         setRejectBusy(true);
         try {
-          for (const id of Array.from(selected)) {
-            await api.post(`/api/${tenantSlug}/payments/${id}/reject`, {
-              reason: reason.trim() || undefined
-            });
-          }
+          await api.post(`/api/${tenantSlug}/payments/batch-reject`, {
+            ids: Array.from(selected),
+            reason: reason.trim() || undefined
+          });
           setSelected(new Set());
           void qc.invalidateQueries({ queryKey: ["expeditor-payment-requests", tenantSlug] });
           void qc.invalidateQueries({ queryKey: ["payments", tenantSlug] });
@@ -570,11 +633,10 @@ export function ExpeditorPaymentRequestsWorkspace() {
       void (async () => {
         setDeleteBusy(true);
         try {
-          for (const id of Array.from(selected)) {
-            const sp = new URLSearchParams();
-            sp.set("cancel_reason_ref", reason.trim().slice(0, 128));
-            await api.delete(`/api/${tenantSlug}/payments/${id}?${sp.toString()}`);
-          }
+          await api.post(`/api/${tenantSlug}/payments/batch-delete`, {
+            ids: Array.from(selected),
+            cancel_reason_ref: reason.trim().slice(0, 128)
+          });
           setSelected(new Set());
           void qc.invalidateQueries({ queryKey: ["expeditor-payment-requests", tenantSlug] });
           void qc.invalidateQueries({ queryKey: ["payments", tenantSlug] });
@@ -616,12 +678,11 @@ export function ExpeditorPaymentRequestsWorkspace() {
     void (async () => {
       setReturnBusy(true);
       try {
-        for (const id of Array.from(selected)) {
-          await api.post(`/api/${tenantSlug}/payments/${id}/return-to-expeditor`, {
-            reason: reason || undefined,
-            duration_minutes: duration
-          });
-        }
+        await api.post(`/api/${tenantSlug}/payments/batch-return-to-expeditor`, {
+          ids: Array.from(selected),
+          reason: reason || undefined,
+          duration_minutes: duration
+        });
         setSelected(new Set());
         setReturnModalOpen(false);
         void qc.invalidateQueries({ queryKey: ["expeditor-payment-requests", tenantSlug] });
@@ -648,9 +709,10 @@ export function ExpeditorPaymentRequestsWorkspace() {
     void (async () => {
       setRestoreBusy(true);
       try {
-        for (const id of Array.from(selected)) {
-          await api.post(`/api/${tenantSlug}/payments/${id}/restore`, { comment });
-        }
+        await api.post(`/api/${tenantSlug}/payments/batch-restore`, {
+          ids: Array.from(selected),
+          comment
+        });
         setSelected(new Set());
         setRestoreModalOpen(false);
         void qc.invalidateQueries({ queryKey: ["expeditor-payment-requests", tenantSlug] });
@@ -685,7 +747,7 @@ export function ExpeditorPaymentRequestsWorkspace() {
         "Кто изменил"
       ],
       rows.map((r) => [
-        r.id,
+        r.number?.trim() || r.id,
         r.paid_at?.slice(0, 10) ?? r.created_at?.slice(0, 10) ?? "",
         r.expeditor_name ?? "",
         r.client_name,
@@ -725,7 +787,7 @@ export function ExpeditorPaymentRequestsWorkspace() {
         return (
           <td key={colId} className="whitespace-nowrap border-b border-border px-2 py-2 font-medium text-slate-700">
             <Link href={`/payments/${r.id}`} className="text-[#063b36] hover:underline">
-              {r.id}
+              {r.number?.trim() || r.id}
             </Link>
           </td>
         );
@@ -1011,15 +1073,17 @@ export function ExpeditorPaymentRequestsWorkspace() {
               </div>
             </div>
             <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
-              <Button
-                type="button"
-                size="sm"
-                className="h-9 gap-1 bg-green-600 px-3 text-white hover:bg-green-700"
-                onClick={() => void exportXlsx()}
-              >
-                <Download className="size-3.5" />
-                Excel
-              </Button>
+              {canExport ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  className="h-9 gap-1 bg-green-600 px-3 text-white hover:bg-green-700"
+                  onClick={() => void exportXlsx()}
+                >
+                  <Download className="size-3.5" />
+                  Excel
+                </Button>
+              ) : null}
               <Button
                 type="button"
                 variant="outline"
@@ -1046,6 +1110,7 @@ export function ExpeditorPaymentRequestsWorkspace() {
                       disabled={!canAct || selectableOnPage.length === 0}
                       className="accent-teal-600"
                       aria-label="Выбрать все на странице"
+                      title="Выбрать все на текущей странице (не весь отфильтрованный список)"
                     />
                   </th>
                   {visibleDataColumns.map((colId) => {
@@ -1155,7 +1220,11 @@ export function ExpeditorPaymentRequestsWorkspace() {
             </table>
           </div>
 
-          {!archiveView && applied.status === "pending_confirmation" && total === 0 && !listQ.isFetching ? (
+          {!archiveView &&
+          splitMultiFilterValues(applied.status).length === 1 &&
+          splitMultiFilterValues(applied.status)[0] === "pending_confirmation" &&
+          total === 0 &&
+          !listQ.isFetching ? (
             <div className="border-t border-amber-100 bg-amber-50/80 px-4 py-3 text-xs text-amber-800">
               Нет заявок в статусе «Ожидание подтверждения». Экспедитор создаёт их в мобильном приложении при
               приёме оплаты; после подтверждения они переходят в «Подтверждено».

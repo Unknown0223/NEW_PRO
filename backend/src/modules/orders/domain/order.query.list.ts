@@ -56,7 +56,10 @@ import {
   mergeLedgerWithUnpaidDelivered
 } from "../../client-balances/client-balances.service";
 import {
-  resolvePaymentMethodRefToLabel,
+  expandPaymentMethodFilterValues,
+  findPriceTypeEntry,
+  orderListPriceTypeLabel,
+  priceTypeKey,
   resolvePriceTypeKeyToLabel
 } from "../../tenant-settings/finance-refs";
 import {
@@ -71,7 +74,11 @@ import {
   loadOrdersFinanceEnrichment,
   sumBonusQty
 } from "./order.detail-mappers";
-import { loadOrdersListMetaEnrichment } from "./order.list-enrichment";
+import {
+  loadAgentTradeDirectionFromSlots,
+  loadOrdersListMetaEnrichment
+} from "./order.list-enrichment";
+import { normalizeStoredCreationChannel } from "./order.creation-channel";
 import {
   orderDetailInclude,
   type ListOrdersQuery,
@@ -160,6 +167,11 @@ export async function listOrdersPaged(
 
   const andClauses: Prisma.OrderWhereInput[] = [{ tenant_id: tenantId }];
 
+  const [pmEntriesForLabel, ptEntriesForLabel] = await Promise.all([
+    loadPaymentMethodEntriesForResolve(tenantId),
+    loadPriceTypeEntriesForResolve(tenantId)
+  ]);
+
   const scopedActor = await enrichScopedReportActor(tenantId, {
     userId: viewerUserId ?? null,
     role: viewerRole
@@ -169,15 +181,17 @@ export async function listOrdersPaged(
     andClauses.push(agentScopeWhere);
   }
 
-  if (q.status?.trim()) {
-    andClauses.push({ status: q.status.trim() });
-  }
+  const statusParts = (q.status ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+  if (statusParts.length === 1) andClauses.push({ status: statusParts[0] });
+  else if (statusParts.length > 1) andClauses.push({ status: { in: statusParts } });
   if (q.client_id != null && Number.isFinite(q.client_id) && q.client_id > 0) {
     andClauses.push({ client_id: q.client_id });
   }
-  if (q.warehouse_id != null && Number.isFinite(q.warehouse_id) && q.warehouse_id > 0) {
-    andClauses.push({ warehouse_id: q.warehouse_id });
-  }
+  const warehouseIds = (q.warehouse_ids?.length ? q.warehouse_ids : q.warehouse_id ? [q.warehouse_id] : []).filter(
+    (id) => Number.isFinite(id) && id > 0
+  );
+  if (warehouseIds.length === 1) andClauses.push({ warehouse_id: warehouseIds[0] });
+  else if (warehouseIds.length > 1) andClauses.push({ warehouse_id: { in: warehouseIds } });
   const multiAgent =
     Array.isArray(q.agent_ids) && q.agent_ids.length > 0
       ? q.agent_ids.filter((id) => Number.isFinite(id) && id > 0)
@@ -199,60 +213,81 @@ export async function listOrdersPaged(
   } else if (q.agent_id != null && Number.isFinite(q.agent_id) && q.agent_id > 0) {
     andClauses.push({ agent_id: q.agent_id });
   }
-  if (q.expeditor_user_id != null && Number.isFinite(q.expeditor_user_id) && q.expeditor_user_id > 0) {
-    andClauses.push({ expeditor_user_id: q.expeditor_user_id });
-  }
+  const expeditorIds = (
+    q.expeditor_user_ids?.length ? q.expeditor_user_ids : q.expeditor_user_id ? [q.expeditor_user_id] : []
+  ).filter((id) => Number.isFinite(id) && id > 0);
+  if (expeditorIds.length === 1) andClauses.push({ expeditor_user_id: expeditorIds[0] });
+  else if (expeditorIds.length > 1) andClauses.push({ expeditor_user_id: { in: expeditorIds } });
   if (viewerRole === "gruzchik" && viewerUserId != null && viewerUserId > 0) {
     andClauses.push({ warehouse_block: { is: { gruzchik_user_id: viewerUserId } } });
   }
-  if (q.visit_weekday != null && Number.isFinite(q.visit_weekday)) {
-    const visitClientIds = await clientIdsWithVisitWeekday(tenantId, q.visit_weekday);
+  const visitDays = (
+    q.visit_weekdays?.length ? q.visit_weekdays : q.visit_weekday != null ? [q.visit_weekday] : []
+  ).filter((n) => Number.isFinite(n) && n >= 1 && n <= 7);
+  if (visitDays.length > 0) {
+    const visitSets = await Promise.all(visitDays.map((d) => clientIdsWithVisitWeekday(tenantId, d)));
+    const visitClientIds = [...new Set(visitSets.flat())];
     if (visitClientIds.length === 0) {
       return { data: [], total: 0, page: q.page, limit: q.limit };
     }
     andClauses.push({ client_id: { in: visitClientIds } });
   }
-  const discountAlert = q.discount_alert?.trim();
-  if (discountAlert === "any") {
+  const discountParts = (q.discount_alert ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+  if (discountParts.includes("any")) {
     andClauses.push({ discount_alert: { not: null } });
-  } else if (discountAlert && isDiscountAlertCode(discountAlert)) {
-    andClauses.push({ discount_alert: discountAlert });
+  } else {
+    const codes = discountParts.filter((s) => isDiscountAlertCode(s));
+    if (codes.length === 1) andClauses.push({ discount_alert: codes[0] });
+    else if (codes.length > 1) andClauses.push({ discount_alert: { in: codes } });
   }
-  const bonusAlert = q.bonus_alert?.trim();
-  if (bonusAlert === "any") {
+  const bonusParts = (q.bonus_alert ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+  if (bonusParts.includes("any")) {
     andClauses.push({ bonus_alert: { not: null } });
-  } else if (bonusAlert && isBonusAlertCode(bonusAlert)) {
-    andClauses.push({ bonus_alert: bonusAlert });
+  } else {
+    const codes = bonusParts.filter((s) => isBonusAlertCode(s));
+    if (codes.length === 1) andClauses.push({ bonus_alert: codes[0] });
+    else if (codes.length > 1) andClauses.push({ bonus_alert: { in: codes } });
   }
   const orderAlert = q.order_alert?.trim();
   if (orderAlert === "any") {
     andClauses.push({ OR: [{ discount_alert: { not: null } }, { bonus_alert: { not: null } }] });
   }
-  const cat = q.client_category?.trim();
-  if (cat) {
-    andClauses.push({ client: { category: cat } });
+  const cats = (q.client_category ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+  if (cats.length === 1) andClauses.push({ client: { category: cats[0] } });
+  else if (cats.length > 1) andClauses.push({ client: { category: { in: cats } } });
+  const regs = (q.client_region ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+  if (regs.length === 1) andClauses.push({ client: { region: { equals: regs[0], mode: "insensitive" } } });
+  else if (regs.length > 1) {
+    andClauses.push({ OR: regs.map((reg) => ({ client: { region: { equals: reg, mode: "insensitive" as const } } })) });
   }
-  const reg = q.client_region?.trim();
-  if (reg) {
-    andClauses.push({ client: { region: { equals: reg, mode: "insensitive" } } });
-  }
-  const cityF = q.client_city?.trim();
-  if (cityF) {
+  const cities = (q.client_city ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+  if (cities.length > 0) {
     andClauses.push({
-      client: {
-        OR: [
-          { city: { equals: cityF, mode: "insensitive" } },
-          { district: { equals: cityF, mode: "insensitive" } }
-        ]
-      }
+      OR: cities.flatMap((cityF) => [
+        { client: { city: { equals: cityF, mode: "insensitive" as const } } },
+        { client: { district: { equals: cityF, mode: "insensitive" as const } } }
+      ])
     });
   }
-  const zoneF = q.client_zone?.trim();
-  if (zoneF) {
-    andClauses.push({ client: { zone: { equals: zoneF, mode: "insensitive" } } });
+  const zones = (q.client_zone ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+  if (zones.length === 1) andClauses.push({ client: { zone: { equals: zones[0], mode: "insensitive" } } });
+  else if (zones.length > 1) {
+    andClauses.push({ OR: zones.map((zoneF) => ({ client: { zone: { equals: zoneF, mode: "insensitive" as const } } })) });
   }
-  const tradeDir = q.agent_trade_direction?.trim();
-  if (tradeDir) {
+  const tradeDirs = (q.agent_trade_direction ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+  const tradeDir = tradeDirs[0];
+  if (tradeDirs.length > 1) {
+    andClauses.push({
+      OR: tradeDirs.map((dir) => ({
+        agent: {
+          OR: [
+            { trade_direction: dir },
+            { trade_direction_row: { is: { OR: [{ code: dir }, { name: dir }] } } }
+          ]
+        }
+      }))
+    });
+  } else if (tradeDir) {
     andClauses.push({
       agent: {
         OR: [
@@ -262,45 +297,67 @@ export async function listOrdersPaged(
       }
     });
   }
-  if (q.product_id != null && Number.isFinite(q.product_id) && q.product_id > 0) {
-    andClauses.push({ items: { some: { product_id: q.product_id } } });
-  }
-  if (q.order_type?.trim()) {
-    andClauses.push({ order_type: q.order_type.trim() });
-  }
+  const productIds = (q.product_ids?.length ? q.product_ids : q.product_id ? [q.product_id] : []).filter(
+    (id) => Number.isFinite(id) && id > 0
+  );
+  if (productIds.length === 1) andClauses.push({ items: { some: { product_id: productIds[0] } } });
+  else if (productIds.length > 1) andClauses.push({ items: { some: { product_id: { in: productIds } } } });
+  const orderTypes = (q.order_type ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+  if (orderTypes.length === 1) andClauses.push({ order_type: orderTypes[0] });
+  else if (orderTypes.length > 1) andClauses.push({ order_type: { in: orderTypes } });
   if (q.is_consignment === true) {
     andClauses.push({ is_consignment: true });
   } else if (q.is_consignment === false) {
     andClauses.push({ is_consignment: false });
   }
-  if (q.product_category_id != null && Number.isFinite(q.product_category_id) && q.product_category_id > 0) {
+  const categoryIds = (
+    q.product_category_ids?.length ? q.product_category_ids : q.product_category_id ? [q.product_category_id] : []
+  ).filter((id) => Number.isFinite(id) && id > 0);
+  if (categoryIds.length > 0) {
     andClauses.push({
       items: {
         some: {
           is_bonus: false,
-          product: { tenant_id: tenantId, category_id: q.product_category_id }
+          product: { tenant_id: tenantId, category_id: categoryIds.length === 1 ? categoryIds[0] : { in: categoryIds } }
         }
       }
     });
   }
-  const payT = q.payment_type?.trim();
-  if (payT) {
+  const payTypes = (q.payment_type ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+  if (payTypes.length === 1) {
+    andClauses.push({ payments: { some: { payment_type: payTypes[0], deleted_at: null } } });
+  } else if (payTypes.length > 1) {
+    andClauses.push({ payments: { some: { payment_type: { in: payTypes }, deleted_at: null } } });
+  }
+
+  const reqTypes = (q.request_type_ref ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+  if (reqTypes.length === 1) andClauses.push({ request_type_ref: reqTypes[0] });
+  else if (reqTypes.length > 1) andClauses.push({ request_type_ref: { in: reqTypes } });
+
+  const pmRefs = (q.payment_method_ref ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+  const priceTypes = (q.list_price_type ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+  if (pmRefs.length > 0) {
+    const aliases = expandPaymentMethodFilterValues(
+      pmRefs,
+      pmEntriesForLabel,
+      ptEntriesForLabel
+    );
+    andClauses.push({ payment_method_ref: { in: aliases } });
+  } else if (priceTypes.length > 0) {
+    const aliases = expandPaymentMethodFilterValues(priceTypes, pmEntriesForLabel, ptEntriesForLabel);
+    const ptKeys = [
+      ...new Set(
+        priceTypes.flatMap((listPriceType) => {
+          const pt = findPriceTypeEntry(listPriceType, ptEntriesForLabel);
+          return [listPriceType, ...(pt ? [priceTypeKey(pt), pt.id, pt.code ?? "", pt.name] : [])];
+        })
+          .map((s) => s.trim())
+          .filter(Boolean)
+      )
+    ];
     andClauses.push({
-      payments: { some: { payment_type: payT, deleted_at: null } }
+      OR: [{ price_type: { in: ptKeys } }, { price_type: null, payment_method_ref: { in: aliases } }]
     });
-  }
-
-  const reqTypeRef = q.request_type_ref?.trim();
-  if (reqTypeRef) {
-    andClauses.push({ request_type_ref: reqTypeRef });
-  }
-
-  const pmRef = q.payment_method_ref?.trim();
-  const listPriceType = q.list_price_type?.trim();
-  if (pmRef) {
-    andClauses.push({ payment_method_ref: pmRef });
-  } else if (listPriceType) {
-    andClauses.push({ payment_method_ref: listPriceType });
   }
 
   const parsedPeriods = (() => {
@@ -328,14 +385,14 @@ export async function listOrdersPaged(
   }
 
   const rawMode = (q.date_mode?.trim() || "order").toLowerCase();
-  const shipMode = rawMode === "ship";
+  const statusLogDate = rawMode === "ship" ? "delivering" : rawMode === "delivery" ? "delivered" : null;
 
   const pushDateRangeClause = (range: Prisma.DateTimeFilter) => {
-    if (shipMode) {
+    if (statusLogDate) {
       andClauses.push({
         status_logs: {
           some: {
-            to_status: "delivering",
+            to_status: statusLogDate,
             created_at: range
           }
         }
@@ -347,12 +404,12 @@ export async function listOrdersPaged(
   };
 
   if (parsedPeriods.length > 0) {
-    if (shipMode) {
+    if (statusLogDate) {
       andClauses.push({
         OR: parsedPeriods.map((p) => ({
           status_logs: {
             some: {
-              to_status: "delivering",
+              to_status: statusLogDate,
               created_at: { gte: p.from, lte: p.to }
             }
           }
@@ -422,6 +479,7 @@ export async function listOrdersPaged(
         warehouse_block: { select: { id: true, name: true } },
         agent: {
           select: {
+            login: true,
             name: true,
             code: true,
             consignment: true,
@@ -466,22 +524,36 @@ export async function listOrdersPaged(
       comment: o.comment ?? null,
       exchange_meta: exchangeMetaById.get(o.id) ?? null,
       agent_id: o.agent_id,
+      client_id: o.client_id,
+      agent_login: o.agent?.login ?? null,
+      agent_name: o.agent?.name ?? null,
       created_at: o.created_at,
       status: o.status
     }))
   );
 
+  const agentsMissingTradeDir = [
+    ...new Set(
+      rows
+        .filter((o) => {
+          if (o.agent_id == null) return false;
+          const fromUser =
+            o.agent?.trade_direction_row?.name?.trim() ||
+            o.agent?.trade_direction_row?.code?.trim() ||
+            o.agent?.trade_direction?.trim() ||
+            null;
+          return !fromUser;
+        })
+        .map((o) => o.agent_id as number)
+    )
+  ];
+  const slotTradeDir = await loadAgentTradeDirectionFromSlots(tenantId, agentsMissingTradeDir);
+
   // «Тип цены» ustuni: xom ref (UUID/kod) o‘rniga spravochnikdagi nom.
-  const [pmEntriesForLabel, ptEntriesForLabel] = await Promise.all([
-    loadPaymentMethodEntriesForResolve(tenantId),
-    loadPriceTypeEntriesForResolve(tenantId)
-  ]);
-  const priceTypeDisplayLabel = (refRaw: string | null): string | null => {
-    if (!refRaw) return null;
-    const viaPm = resolvePaymentMethodRefToLabel(refRaw, pmEntriesForLabel);
-    if (viaPm != null && viaPm !== refRaw) return viaPm;
-    return resolvePriceTypeKeyToLabel(refRaw, ptEntriesForLabel);
-  };
+  const priceTypeDisplayLabel = (storedKey: string | null, refRaw: string | null): string | null =>
+    storedKey
+      ? resolvePriceTypeKeyToLabel(storedKey, ptEntriesForLabel)
+      : orderListPriceTypeLabel(refRaw, pmEntriesForLabel, ptEntriesForLabel);
 
   const finance = await loadOrdersFinanceEnrichment(
     tenantId,
@@ -564,10 +636,10 @@ export async function listOrdersPaged(
       agent_name: o.agent?.name ?? null,
       agent_code: o.agent?.code ?? null,
       agent_trade_direction:
-        o.agent?.trade_direction_row?.code?.trim() ||
         o.agent?.trade_direction_row?.name?.trim() ||
+        o.agent?.trade_direction_row?.code?.trim() ||
         o.agent?.trade_direction?.trim() ||
-        null,
+        (o.agent_id != null ? slotTradeDir.get(o.agent_id) ?? null : null),
       expeditors: expeditorDisplay,
       expeditor_id: ex?.id ?? null,
       expeditor_display: expeditorDisplay,
@@ -576,13 +648,16 @@ export async function listOrdersPaged(
       zone: o.client.zone ?? null,
       consignment: o.agent?.consignment ?? null,
       is_consignment: o.is_consignment ?? false,
-      day: null,
+      day: metaRow?.day ?? null,
       created_by: metaRow?.created_by ?? null,
       created_by_role: metaRow?.created_by_role ?? null,
       source_order_numbers: metaRow?.source_order_numbers ?? [],
       source_order_ids: metaRow?.source_order_ids ?? [],
       returned_at: metaRow?.returned_at ?? null,
-      creation_channel: metaRow?.creation_channel ?? "web",
+      creation_channel: normalizeStoredCreationChannel(
+        (o as { creation_channel?: string | null }).creation_channel,
+        metaRow?.creation_channel ?? "web"
+      ),
       expected_ship_date: metaRow?.expected_ship_date ?? null,
       shipped_at: metaRow?.shipped_at ?? finRow?.shipped_at ?? null,
       delivered_at: metaRow?.delivered_at ?? finRow?.delivered_at ?? null,
@@ -601,7 +676,7 @@ export async function listOrdersPaged(
       bonus_sum: o.bonus_sum.toString(),
       balance: finRow?.balance ?? null,
       debt: finRow?.debt ?? null,
-      price_type: priceTypeDisplayLabel(o.payment_method_ref?.trim() || null),
+      price_type: priceTypeDisplayLabel(o.price_type?.trim() || null, o.payment_method_ref?.trim() || null),
       comment: (o as { comment?: string | null }).comment ?? null,
       request_type_ref: (o as { request_type_ref?: string | null }).request_type_ref ?? null,
       payment_method_ref: o.payment_method_ref?.trim() || null,

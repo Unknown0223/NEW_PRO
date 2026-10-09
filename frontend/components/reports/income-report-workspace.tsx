@@ -6,6 +6,7 @@ import { DateRangePopover, formatDateRangeButton } from "@/components/ui/date-ra
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { FilterSearchableSelect } from "@/components/ui/filter-searchable-select";
 import { api } from "@/lib/api";
+import { usePermissions } from "@/lib/use-permissions";
 import { useAuthStore, useAuthStoreHydrated } from "@/lib/auth-store";
 import { formatNumberGrouped } from "@/lib/format-numbers";
 import {
@@ -14,7 +15,7 @@ import {
   type ProfilePaymentMethodEntry
 } from "@/lib/payment-method-options";
 import { STALE } from "@/lib/query-stale";
-import { quickRangeToDates } from "@/components/dashboard/shared/date-ranges";
+import { monthToDateRange } from "@/components/dashboard/shared/date-ranges";
 import { useQuery } from "@tanstack/react-query";
 import { CalendarDays, ChevronDown, ChevronRight, Download, Filter, RotateCcw } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
@@ -90,14 +91,12 @@ function downloadBlob(blob: Blob, fileName: string) {
 }
 
 export function IncomeReportWorkspace() {
+  const canExport = usePermissions().has("cash.otchety.export");
   const tenantSlug = useAuthStore((s) => s.tenantSlug);
   const hydrated = useAuthStoreHydrated();
   const enabled = Boolean(tenantSlug && hydrated);
   const defaultFilters: ReportFilters = useMemo(() => {
-    const range = quickRangeToDates("last30") ?? {
-      from: new Date().toISOString().slice(0, 10),
-      to: new Date().toISOString().slice(0, 10)
-    };
+    const range = monthToDateRange();
     return {
       from: range.from,
       to: range.to,
@@ -333,7 +332,7 @@ export function IncomeReportWorkspace() {
 
   return (
     <PageShell>
-      <PageHeader title="Отчёт по приходам" description="Касса bo‘yicha kirimlar hisobotlari" />
+      <PageHeader title="Отчёт по приходам" description="Отчёты по поступлениям в разрезе касс" />
       <Card className="shadow-panel">
         <CardContent className="space-y-2 p-3">
           <div className="flex flex-wrap items-center justify-end gap-2">
@@ -584,13 +583,15 @@ export function IncomeReportWorkspace() {
                       >
                         <RotateCcw className="size-3.5" />
                       </button>
-                      <button
-                        className="inline-flex h-8 items-center gap-1 rounded-md border px-3 text-xs"
-                        onClick={() => void exportSheet(section.key as "period" | "territory" | "clients" | "agents")}
-                      >
-                        <Download className="size-3.5" />
-                        Excel
-                      </button>
+                      {canExport ? (
+                        <button
+                          className="inline-flex h-8 items-center gap-1 rounded-md border px-3 text-xs"
+                          onClick={() => void exportSheet(section.key as "period" | "territory" | "clients" | "agents")}
+                        >
+                          <Download className="size-3.5" />
+                          Excel
+                        </button>
+                      ) : null}
                     </div>
 
                     {section.key === "period" && (() => {

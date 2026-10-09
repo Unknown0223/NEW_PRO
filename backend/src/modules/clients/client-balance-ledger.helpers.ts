@@ -133,13 +133,29 @@ function isDiscountDebtNote(note: string | null | undefined): boolean {
   return n === "Долг скидка" || n.startsWith("Долг скидка ·");
 }
 
+function isReturnRefundNote(note: string | null | undefined): boolean {
+  const n = (note ?? "").trim();
+  return (
+    n === "Возврат" ||
+    n.startsWith("Возврат ·") ||
+    n.startsWith("Vazvrat:")
+  );
+}
+
 export function mapUnionToLedgerRow(r: UnionRaw): ClientLedgerRow {
   const rk = r.row_kind === "order" ? "order" : "payment";
   const bonusDebtPayment = rk === "payment" && isBonusDebtNote(r.note);
   const discountDebtPayment = rk === "payment" && isDiscountDebtNote(r.note);
+  const returnRefundPayment =
+    rk === "payment" &&
+    (String(r.entry_kind ?? "") === "refund" || isReturnRefundNote(r.note));
   let type_label: string;
   if (rk === "order") {
     type_label = `Заказ (${r.order_number ?? r.order_id})`;
+  } else if (returnRefundPayment) {
+    type_label = r.order_number
+      ? `Возврат (${r.order_number})`
+      : `Возврат (${r.payment_id ?? "—"})`;
   } else if (bonusDebtPayment) {
     type_label = "Долг бонус";
   } else if (discountDebtPayment) {
@@ -158,19 +174,23 @@ export function mapUnionToLedgerRow(r: UnionRaw): ClientLedgerRow {
     operation_type_code = "2";
   } else if (String(r.entry_kind ?? "") === "client_expense") {
     operation_type_code = "2";
+  } else if (returnRefundPayment) {
+    operation_type_code = "8";
   }
 
-  const order_kind_label = rk === "order" ? "Заказ" : null;
+  const order_kind_label = rk === "order" ? "Заказ" : returnRefundPayment ? "Возврат" : null;
   const comment_primary =
     rk === "order"
       ? "Удержание долга по заказу"
-      : bonusDebtPayment
-        ? "Долг бонус (возврат с полки)"
-        : discountDebtPayment
-          ? "Долг скидка (возврат с полки по заказу)"
-          : rk === "payment" && String(r.entry_kind) === "client_expense"
-            ? "Расход клиента"
-            : null;
+      : returnRefundPayment
+        ? "Возврат с полки"
+        : bonusDebtPayment
+          ? "Долг бонус (возврат с полки)"
+          : discountDebtPayment
+            ? "Долг скидка (возврат с полки по заказу)"
+            : rk === "payment" && String(r.entry_kind) === "client_expense"
+              ? "Расход клиента"
+              : null;
   const comment_transaction = (r.note ?? "").trim() || null;
 
   const created_by_display =

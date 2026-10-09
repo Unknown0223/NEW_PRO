@@ -89,6 +89,11 @@ const HEADER_ALIASES: Record<string, string> = {
   ид_клиента: "client_code",
   id_клиента: "client_code",
   ид: "client_db_id",
+  id: "client_db_id",
+  db_id: "client_db_id",
+  client_id: "client_db_id",
+  client_db_id: "client_db_id",
+  идентификатор: "client_db_id",
   код_клиента: "client_code",
   клиент_код: "client_code",
   код: "client_code",
@@ -167,7 +172,7 @@ export function headerToClientImportKey(header: string): string | null {
 export function suggestColumnMapping(headerCells: string[]): Record<string, number> {
   const out: Record<string, number> = {};
   headerCells.forEach((raw, idx) => {
-    const key = headerToClientImportKey(String(raw ?? ""));
+    const key = headerToClientImportKey(String(raw ?? "")) ?? headerToAgentImportKey(String(raw ?? ""));
     if (key && out[key] === undefined) out[key] = idx;
   });
   return out;
@@ -205,8 +210,8 @@ export function rowToHeaderLabels(row: unknown[] | undefined, maxCols = 80): str
   const n = Math.min(row.length, maxCols);
   for (let i = 0; i < n; i++) {
     const c = row[i];
-    if (c == null || c === "") labels.push(`Ustun ${i + 1}`);
-    else labels.push(String(c).trim() || `Ustun ${i + 1}`);
+    if (c == null || c === "") labels.push(`Столбец ${i + 1}`);
+    else labels.push(String(c).trim() || `Столбец ${i + 1}`);
   }
   return labels;
 }

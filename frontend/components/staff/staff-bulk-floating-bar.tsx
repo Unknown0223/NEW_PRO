@@ -4,17 +4,20 @@ import { cn } from "@/lib/utils";
 
 export type StaffBulkFloatingBarProps = {
   count: number;
-  allAccessOn: boolean;
+  allAccessOn?: boolean;
   isActiveTab: boolean;
   busy: boolean;
-  onToggleAccess: () => void;
-  onToggleActive: () => void;
-  onClearSessions: () => void;
+  /** App access toggle — omit to hide (moved to Рабочее место). */
+  onToggleAccess?: () => void;
+  onToggleActive?: () => void;
+  /** Clear sessions — omit to hide (moved to Рабочее место / sessions UI). */
+  onClearSessions?: () => void;
   onClearSelection: () => void;
+  /** Неактивные: показать в фильтрах и доступе */
+  filterVisibleOn?: boolean;
+  onToggleFilterVisible?: () => void;
   /** Agent bo‘limi: ommaviy cheklovlar */
   onRestrictions?: () => void;
-  /** Agent bo‘limi: mobil konfiguratsiya (shu jumladan kechiktirilgan sinxron) */
-  onConfigurations?: () => void;
   /** Agent bo‘limi: umumiy maydonlarni tahrirlash */
   onBulkEdit?: () => void;
   clearSessionsLabel?: string;
@@ -23,15 +26,16 @@ export type StaffBulkFloatingBarProps = {
 /** Agent shablonidagi pastki suzuvchi guruhli amallar paneli — barcha KOMANDA rollari uchun. */
 export function StaffBulkFloatingBar({
   count,
-  allAccessOn,
+  allAccessOn = false,
   isActiveTab,
   busy,
   onToggleAccess,
   onToggleActive,
   onClearSessions,
   onClearSelection,
+  filterVisibleOn = false,
+  onToggleFilterVisible,
   onRestrictions,
-  onConfigurations,
   onBulkEdit,
   clearSessionsLabel = "Очистить сессии"
 }: StaffBulkFloatingBarProps) {
@@ -47,36 +51,39 @@ export function StaffBulkFloatingBar({
           </span>
         </span>
 
-        <span className="mx-1 h-6 w-px bg-slate-200" />
+        {onToggleAccess ? (
+          <>
+            <span className="mx-1 h-6 w-px bg-slate-200" />
+            <button
+              type="button"
+              onClick={onToggleAccess}
+              disabled={busy}
+              title={
+                allAccessOn
+                  ? "Выключить доступ к приложению у всех выбранных"
+                  : "Включить доступ к приложению у всех выбранных"
+              }
+              className="flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-100 disabled:opacity-50"
+            >
+              Доступ
+              <span
+                className={cn(
+                  "relative inline-block h-5 w-9 rounded-full transition-colors",
+                  allAccessOn ? "bg-teal-500" : "bg-slate-300"
+                )}
+              >
+                <span
+                  className={cn(
+                    "absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-all",
+                    allAccessOn ? "left-[18px]" : "left-0.5"
+                  )}
+                />
+              </span>
+            </button>
+          </>
+        ) : null}
 
-        <button
-          type="button"
-          onClick={onToggleAccess}
-          disabled={busy}
-          title={
-            allAccessOn
-              ? "Выключить доступ к приложению у всех выбранных"
-              : "Включить доступ к приложению у всех выбранных"
-          }
-          className="flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-100 disabled:opacity-50"
-        >
-          Доступ
-          <span
-            className={cn(
-              "relative inline-block h-5 w-9 rounded-full transition-colors",
-              allAccessOn ? "bg-teal-500" : "bg-slate-300"
-            )}
-          >
-            <span
-              className={cn(
-                "absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-all",
-                allAccessOn ? "left-[18px]" : "left-0.5"
-              )}
-            />
-          </span>
-        </button>
-
-        {onRestrictions || onConfigurations || onBulkEdit ? (
+        {onRestrictions || onBulkEdit ? (
           <>
             <span className="mx-1 h-6 w-px bg-slate-200" />
 
@@ -89,18 +96,6 @@ export function StaffBulkFloatingBar({
                 className="flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 text-slate-500 hover:bg-slate-100 disabled:opacity-50"
               >
                 ⚙
-              </button>
-            ) : null}
-
-            {onConfigurations ? (
-              <button
-                type="button"
-                onClick={onConfigurations}
-                disabled={busy}
-                title="Конфигурация приложения (синхронизация, задержка заказа…)"
-                className="flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 text-teal-600 hover:bg-teal-50 disabled:opacity-50"
-              >
-                📱
               </button>
             ) : null}
 
@@ -118,6 +113,36 @@ export function StaffBulkFloatingBar({
           </>
         ) : null}
 
+        {onToggleFilterVisible ? (
+          <button
+            type="button"
+            onClick={onToggleFilterVisible}
+            disabled={busy}
+            title={
+              filterVisibleOn
+                ? "Скрыть выбранных из фильтров и доступа"
+                : "Показать выбранных в фильтрах и доступе (красным)"
+            }
+            className="flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50 disabled:opacity-50"
+          >
+            Фильтр
+            <span
+              className={cn(
+                "relative inline-block h-5 w-9 rounded-full transition-colors",
+                filterVisibleOn ? "bg-red-500" : "bg-slate-300"
+              )}
+            >
+              <span
+                className={cn(
+                  "absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-all",
+                  filterVisibleOn ? "left-[18px]" : "left-0.5"
+                )}
+              />
+            </span>
+          </button>
+        ) : null}
+
+        {onToggleActive ? (
         <button
           type="button"
           onClick={onToggleActive}
@@ -130,18 +155,22 @@ export function StaffBulkFloatingBar({
         >
           {isActiveTab ? "🚫" : "✔"}
         </button>
+        ) : null}
 
-        <span className="mx-1 h-6 w-px bg-slate-200" />
-
-        <button
-          type="button"
-          onClick={onClearSessions}
-          disabled={busy}
-          title="Завершить все активные сессии у выбранных"
-          className="flex items-center gap-2 rounded-full px-4 py-2 text-xs font-medium text-amber-700 hover:bg-amber-50 disabled:opacity-50"
-        >
-          🧹 {clearSessionsLabel}
-        </button>
+        {onClearSessions ? (
+          <>
+            <span className="mx-1 h-6 w-px bg-slate-200" />
+            <button
+              type="button"
+              onClick={onClearSessions}
+              disabled={busy}
+              title="Завершить все активные сессии у выбранных"
+              className="flex items-center gap-2 rounded-full px-4 py-2 text-xs font-medium text-amber-700 hover:bg-amber-50 disabled:opacity-50"
+            >
+              🧹 {clearSessionsLabel}
+            </button>
+          </>
+        ) : null}
 
         <span className="mx-1 h-6 w-px bg-slate-200" />
 

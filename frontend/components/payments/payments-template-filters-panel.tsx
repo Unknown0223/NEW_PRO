@@ -7,8 +7,7 @@ import {
 import { DateRangePopover, formatDateRangeButton } from "@/components/ui/date-range-popover";
 import {
   joinMultiFilterValues,
-  splitMultiFilterValues,
-  uiFromSingleValue
+  splitMultiFilterValues
 } from "@/lib/client-filter-select-value";
 import type { PaymentFilterVisibility } from "@/lib/payment-filters-visibility";
 import { ChevronLeft, ChevronRight, RotateCcw } from "lucide-react";
@@ -105,9 +104,10 @@ export function PaymentsTemplateFiltersPanel({
       <ClientsTemplateSelectField
         key="status"
         label="Статус"
+        multi
         options={statusOptions}
-        values={uiFromSingleValue(draft.payment_status)}
-        onChange={(v) => onDraftChange({ payment_status: v[0]?.trim() ?? "" })}
+        values={splitMultiFilterValues(draft.payment_status)}
+        onChange={(v) => onDraftChange({ payment_status: joinMultiFilterValues(v) })}
       />
     ) : null,
     filterVis.cash_desk ? (
@@ -144,29 +144,32 @@ export function PaymentsTemplateFiltersPanel({
       <ClientsTemplateSelectField
         key="payment"
         label="Способ оплаты"
+        multi
         options={paymentMethodOptions}
-        values={uiFromSingleValue(draft.payment_type)}
-        onChange={(v) => onDraftChange({ payment_type: v[0]?.trim() ?? "" })}
+        values={splitMultiFilterValues(draft.payment_type)}
+        onChange={(v) => onDraftChange({ payment_type: joinMultiFilterValues(v) })}
       />
     ) : null,
     filterVis.trade_direction ? (
       <ClientsTemplateSelectField
         key="trade"
         label="Направление торг..."
+        multi
         options={tradeDirectionOptions}
-        values={uiFromSingleValue(draft.trade_direction)}
-        onChange={(v) => onDraftChange({ trade_direction: v[0]?.trim() ?? "" })}
+        values={splitMultiFilterValues(draft.trade_direction)}
+        onChange={(v) => onDraftChange({ trade_direction: joinMultiFilterValues(v) })}
       />
     ) : null,
     filterVis.territory1 ? (
       <ClientsTemplateSelectField
         key="zone"
         label="Зона"
+        multi
         options={zoneOptions}
-        values={uiFromSingleValue(draft.territory_zone)}
+        values={splitMultiFilterValues(draft.territory_zone)}
         onChange={(v) =>
           onDraftChange({
-            territory_zone: v[0]?.trim() ?? "",
+            territory_zone: joinMultiFilterValues(v),
             territory_region: "",
             territory_city: ""
           })
@@ -252,19 +255,21 @@ export function PaymentsTemplateFiltersPanel({
         {filterVis.territory2 ? (
           <ClientsTemplateSelectField
             label="Область"
+            multi
             options={regionOptions}
-            values={uiFromSingleValue(draft.territory_region)}
+            values={splitMultiFilterValues(draft.territory_region)}
             onChange={(v) =>
-              onDraftChange({ territory_region: v[0]?.trim() ?? "", territory_city: "" })
+              onDraftChange({ territory_region: joinMultiFilterValues(v), territory_city: "" })
             }
           />
         ) : null}
         {filterVis.territory3 ? (
           <ClientsTemplateSelectField
             label="Город"
+            multi
             options={cityOptions}
-            values={uiFromSingleValue(draft.territory_city)}
-            onChange={(v) => onDraftChange({ territory_city: v[0]?.trim() ?? "" })}
+            values={splitMultiFilterValues(draft.territory_city)}
+            onChange={(v) => onDraftChange({ territory_city: joinMultiFilterValues(v) })}
           />
         ) : null}
         {!isExpenses && filterVis.amount ? (

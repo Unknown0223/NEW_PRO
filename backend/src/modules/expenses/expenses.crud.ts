@@ -3,6 +3,7 @@ import { prisma } from "../../config/database";
 import { appendTenantAuditEvent, AuditEntityType } from "../../lib/tenant-audit";
 import type { CreateExpenseInput, ExpenseListRow } from "./expenses.types";
 import { assertTenantAccess, enrichExpense, resolveNames } from "./expenses.shared";
+import { assertManualExpenseTypeAllowed, assertNotPayrollExpense } from "./expenses.payroll-guard";
 
 export async function createExpense(
   tenantId: number,
@@ -17,6 +18,7 @@ export async function createExpense(
 
   const type = input.expense_type.trim();
   if (!type) throw new Error("BAD_EXPENSE_TYPE");
+  await assertManualExpenseTypeAllowed(tenantId, type);
 
   if (input.agent_id != null && input.agent_id > 0) {
     const agent = await prisma.user.findFirst({
@@ -86,7 +88,9 @@ export async function updateExpense(
   });
   if (!existing) throw new Error("NOT_FOUND");
   if (existing.deleted_at != null) throw new Error("VOIDED");
+  assertNotPayrollExpense(existing);
   if (existing.status !== "draft") throw new Error("CANNOT_EDIT_NON_DRAFT");
+  if (input.expense_type) await assertManualExpenseTypeAllowed(tenantId, input.expense_type);
 
   if (input.amount != null && (!Number.isFinite(input.amount) || input.amount <= 0)) {
     throw new Error("BAD_AMOUNT");

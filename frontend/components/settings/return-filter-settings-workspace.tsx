@@ -93,7 +93,7 @@ export function ReturnFilterSettingsWorkspace() {
   const saveMut = useMutation({
     mutationFn: async () => {
       const pv = Number.parseInt(periodValue, 10);
-      if (!Number.isFinite(pv) || pv < 1) throw new Error("Davr qiymati noto‘g‘ri");
+      if (!Number.isFinite(pv) || pv < 1) throw new Error("Некорректное значение периода");
       await api.patch(`/api/${tenantSlug}/settings/profile`, {
         return_filter: {
           period_enabled: periodEnabled,
@@ -104,7 +104,7 @@ export function ReturnFilterSettingsWorkspace() {
       });
     },
     onSuccess: async () => {
-      setMsg("Saqlandi — qaytarish sahifasida yangi filtr qo‘llanadi.");
+      setMsg("Сохранено — на странице возвратов будет применён новый фильтр.");
       await invalidateReturnFilterCaches(qc, tenantSlug);
     },
     onError: (e) => setMsg(getUserFacingError(e))
@@ -113,11 +113,11 @@ export function ReturnFilterSettingsWorkspace() {
   if (!hydrated) return null;
 
   return (
-    <div className="mx-auto max-w-4xl space-y-8 pb-8">
+    <div className="w-full space-y-8 pb-8">
       <header>
-        <h1 className="text-lg font-semibold tracking-tight text-slate-900">Qaytarish filtri</h1>
+        <h1 className="text-lg font-semibold tracking-tight text-slate-900">Фильтр возвратов</h1>
         <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-          Vozvrat s polki (po zakaz va erkin) uchun qaysi yetkazilgan zakazlar tanlash ro‘yxatida ko‘rinadi.
+          Какие доставленные заказы отображаются в списке выбора для возврата с полки (по заказу и свободного).
         </p>
       </header>
 
@@ -129,7 +129,7 @@ export function ReturnFilterSettingsWorkspace() {
 
       <section className="space-y-3" aria-labelledby="filter-mode-heading">
         <h2 id="filter-mode-heading" className="text-sm font-medium text-foreground">
-          Rejim tanlash
+          Выбор режима
         </h2>
         <div className="grid gap-3 sm:grid-cols-2">
           {RETURN_FILTER_MODE_PRESETS.map((preset) => {
@@ -180,7 +180,7 @@ export function ReturnFilterSettingsWorkspace() {
       </section>
 
       <section className="space-y-4 rounded-xl border border-border bg-card p-5 shadow-sm">
-        <h2 className="text-sm font-medium text-foreground">Batafsil sozlamalar</h2>
+        <h2 className="text-sm font-medium text-foreground">Подробные настройки</h2>
 
         <label className="flex cursor-pointer items-start gap-3 text-sm">
           <input
@@ -191,9 +191,9 @@ export function ReturnFilterSettingsWorkspace() {
             onChange={(e) => setPeriodEnabled(e.target.checked)}
           />
           <span>
-            <span className="font-medium">Davr filtri</span>
+            <span className="font-medium">Фильтр по периоду</span>
             <span className="mt-0.5 block text-muted-foreground">
-              Yetkazilgan zakazlar sanasi cheklanadi.
+              Ограничивается дата доставленных заказов.
             </span>
           </span>
         </label>
@@ -201,7 +201,7 @@ export function ReturnFilterSettingsWorkspace() {
         {periodEnabled ? (
           <div className="flex flex-wrap items-end gap-4 border-l-2 border-teal-200/80 pl-4">
             <div className="space-y-1.5">
-              <Label htmlFor="period-value">Son</Label>
+              <Label htmlFor="period-value">Количество</Label>
               <Input
                 id="period-value"
                 type="number"
@@ -214,7 +214,7 @@ export function ReturnFilterSettingsWorkspace() {
               />
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="period-unit">Birlik</Label>
+              <Label htmlFor="period-unit">Единица</Label>
               <select
                 id="period-unit"
                 value={periodUnit}
@@ -222,8 +222,8 @@ export function ReturnFilterSettingsWorkspace() {
                 onChange={(e) => setPeriodUnit(e.target.value === "month" ? "month" : "day")}
                 className="h-10 min-w-[100px] rounded-md border border-input bg-background px-3 text-sm"
               >
-                <option value="day">kun</option>
-                <option value="month">oy</option>
+                <option value="day">дней</option>
+                <option value="month">месяцев</option>
               </select>
             </div>
           </div>
@@ -238,18 +238,18 @@ export function ReturnFilterSettingsWorkspace() {
             onChange={(e) => setBalanceZeroEnabled(e.target.checked)}
           />
           <span>
-            <span className="font-medium">Balans 0 filtri</span>
+            <span className="font-medium">Фильтр «баланс 0»</span>
             <span className="mt-0.5 block text-muted-foreground">
-              Zakaz + to‘lov ledger bo‘yicha oxirgi «balans 0» nuqtasidan keyingi zakazlar.
+              Заказы после последней точки «баланс 0» по журналу заказов и оплат.
             </span>
           </span>
         </label>
       </section>
 
       <section className="rounded-xl border border-dashed border-border bg-muted/60 p-4 text-xs text-slate-600">
-        <p className="font-medium text-slate-800">Test mijoz</p>
+        <p className="font-medium text-slate-800">Тестовый клиент</p>
         <p className="mt-1">
-          <code className="rounded bg-card px-1 py-0.5">FILTR-TEST mijoz (polki)</code> — backend:{" "}
+          <code className="rounded bg-card px-1 py-0.5">FILTR-TEST mijoz (polki)</code> — бэкенд:{" "}
           <code className="rounded bg-card px-1 py-0.5">npm run seed:return-filter-test</code>
         </p>
       </section>
@@ -257,16 +257,16 @@ export function ReturnFilterSettingsWorkspace() {
       <footer className="flex flex-wrap items-center gap-3 border-t border-border pt-4">
         {isAdmin ? (
           <Button type="button" disabled={saveMut.isPending || isLoading} onClick={() => saveMut.mutate()}>
-            {saveMut.isPending ? "Saqlanmoqda…" : "Saqlash"}
+            {saveMut.isPending ? "Сохранение…" : "Сохранить"}
           </Button>
         ) : (
-          <p className="text-sm text-muted-foreground">Faqat admin o‘zgartira oladi.</p>
+          <p className="text-sm text-muted-foreground">Изменять может только администратор.</p>
         )}
         {msg ? (
           <p
             className={cn(
               "text-sm",
-              msg.startsWith("Saqlandi") ? "text-teal-800" : "text-red-700"
+              msg.startsWith("Сохранено") ? "text-teal-800" : "text-red-700"
             )}
           >
             {msg}

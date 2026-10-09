@@ -6,6 +6,7 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import type { TableSortDir } from "@/components/ui/table-sort-button";
 import type { SearchableMultiSelectItem } from "@/components/ui/searchable-multi-select-panel";
 import { api } from "@/lib/api";
+import { useAccessOperationsTree } from "@/components/access/permission-tree/use-access-operations-tree";
 import { invalidateMePermissionsQueries } from "@/lib/me-permissions";
 import { filterAccessWebPanelUsers } from "@/lib/access-web-users";
 import {
@@ -176,12 +177,24 @@ export function useAccessWorkspacePart2(ctx: ReturnType<typeof useAccessWorkspac
       .map(([group, items]: [string, SideRow[]]) => ({ group, items }));
   }, [filteredSideRows]);
 
+  const opsTreeQ = useAccessOperationsTree(tenantSlug);
   const operationNestedGroups = useMemo(() => {
     if (tab !== "operations") return [] as Array<{ group: string; subgroups: Array<{ subgroup: string; items: SideRow[] }> }>;
+    const modOrder = new Map<string, number>();
+    const secOrder = new Map<string, number>();
+    const opOrder = new Map<string, number>();
+    (opsTreeQ.data ?? []).forEach((mod, mi) => {
+      modOrder.set(mod.label, mi);
+      mod.sections.forEach((sec, si) => {
+        secOrder.set(`${mod.label}\0${sec.label}`, si);
+        sec.operations.forEach((op, oi) => opOrder.set(op.key, oi));
+      });
+    });
+    const rank = (map: Map<string, number>, key: string) => map.get(key) ?? 10_000;
     const groupMap = new Map<string, Map<string, SideRow[]>>();
     for (const row of filteredSideRows) {
       const first = row.group || "Прочее";
-      const second = row.subgroup || "Прочее";
+      const second = row.subgroup || first;
       const nested = groupMap.get(first) ?? new Map<string, SideRow[]>();
       const rowsBySubgroup = nested.get(second) ?? [];
       rowsBySubgroup.push(row);
@@ -189,14 +202,23 @@ export function useAccessWorkspacePart2(ctx: ReturnType<typeof useAccessWorkspac
       groupMap.set(first, nested);
     }
     return Array.from(groupMap.entries())
-      .sort((a, b) => a[0].localeCompare(b[0], "ru"))
+      .sort((a, b) => rank(modOrder, a[0]) - rank(modOrder, b[0]) || a[0].localeCompare(b[0], "ru"))
       .map(([group, subgroupMap]) => ({
         group,
         subgroups: Array.from(subgroupMap.entries())
-          .sort((a, b) => a[0].localeCompare(b[0], "ru"))
-          .map(([subgroup, items]) => ({ subgroup, items }))
+          .sort(
+            (a, b) =>
+              rank(secOrder, `${group}\0${a[0]}`) - rank(secOrder, `${group}\0${b[0]}`) ||
+              a[0].localeCompare(b[0], "ru")
+          )
+          .map(([subgroup, items]) => ({
+            subgroup,
+            items: [...items].sort(
+              (a, b) => rank(opOrder, a.key) - rank(opOrder, b.key) || a.title.localeCompare(b.title, "ru")
+            )
+          }))
       }));
-  }, [tab, filteredSideRows]);
+  }, [tab, filteredSideRows, opsTreeQ.data]);
 
   /** Список имён групп слева: при смене набора — все свёрнуты (как матрица «Операции»). */
   const leftPanelGroupListSignature = useMemo(() => {

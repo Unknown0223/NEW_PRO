@@ -16,6 +16,11 @@ import {
   REPORT_BUILDER_PREVIEW_ROW_CAP
 } from "./report-builder.constants";
 import { dateExprForMode, fieldExprSql } from "./report-builder.metadata";
+import {
+  resolvedCitySql,
+  resolvedRegionSql,
+  resolvedZoneSql
+} from "./report-builder.territory-sql";
 import type { ReportBuilderConfigPayload, ReportBuilderMatrixView, ReportBuilderPreviewResult } from "./report-builder.types";
 
 /** CTE: order_status_logs dan shipped_at / delivered_at. */
@@ -60,7 +65,8 @@ export function buildReportBuilderWhereSql(
   if (c.statuses.length > 0) {
     parts.push(Prisma.sql`o.status IN (${sqlInStrings(c.statuses)})`);
   } else {
-    parts.push(Prisma.sql`o.status <> 'cancelled'`);
+    // Supervayzer Fact MTD bilan: cancelled + returned chiqariladi
+    parts.push(Prisma.sql`o.status NOT IN ('cancelled', 'returned')`);
   }
 
   if (c.orderTypes.length > 0) {
@@ -141,13 +147,13 @@ export function buildReportBuilderWhereSql(
     parts.push(Prisma.sql`btrim(COALESCE(c.category, '')) IN (${sqlInStrings(c.clientCategoryValues)})`);
   }
   if (c.territoryLevel1Values.length > 0) {
-    parts.push(Prisma.sql`btrim(COALESCE(c.zone, '')) IN (${sqlInStrings(c.territoryLevel1Values)})`);
+    parts.push(Prisma.sql`btrim(${resolvedZoneSql()}) IN (${sqlInStrings(c.territoryLevel1Values)})`);
   }
   if (c.territoryLevel2Values.length > 0) {
-    parts.push(Prisma.sql`btrim(COALESCE(c.region, '')) IN (${sqlInStrings(c.territoryLevel2Values)})`);
+    parts.push(Prisma.sql`btrim(${resolvedRegionSql()}) IN (${sqlInStrings(c.territoryLevel2Values)})`);
   }
   if (c.territoryLevel3Values.length > 0) {
-    parts.push(Prisma.sql`btrim(COALESCE(c.city, '')) IN (${sqlInStrings(c.territoryLevel3Values)})`);
+    parts.push(Prisma.sql`btrim(${resolvedCitySql()}) IN (${sqlInStrings(c.territoryLevel3Values)})`);
   }
 
   return Prisma.join(parts, " AND ");
@@ -190,19 +196,29 @@ export function reportBuilderJoinSql(tenantId: number): Prisma.Sql {
     INNER JOIN order_items oi ON oi.order_id = o.id
     INNER JOIN products p ON p.id = oi.product_id AND p.tenant_id = ${tenantId}
     LEFT JOIN status_logs sl ON sl.order_id = o.id
-    LEFT JOIN users agent ON agent.id = COALESCE(o.agent_id, c.agent_id) AND agent.tenant_id = ${tenantId}
+    LEFT JOIN users agent ON agent.id = COALESCE(o.agent_id, c.agent_id)
+      AND agent.tenant_id = ${tenantId}
+      AND agent.role = 'agent'
     LEFT JOIN LATERAL (
-      SELECT ws.slot_code
+      SELECT
+        ws.slot_code,
+        COALESCE(NULLIF(btrim(ws.territory), ''), NULLIF(btrim(ws.territories[1]), '')) AS territory
       FROM slot_user_links sul
       INNER JOIN work_slots ws ON ws.id = sul.slot_id AND ws.tenant_id = ${tenantId}
       WHERE sul.user_id = agent.id
         AND sul.tenant_id = ${tenantId}
         AND sul.ended_at IS NULL
-      ORDER BY sul.id DESC
+      ORDER BY
+        CASE WHEN ws.slot_type = 'agent' THEN 0 ELSE 1 END,
+        sul.id DESC
       LIMIT 1
     ) agent_ws ON true
-    LEFT JOIN users sup ON sup.id = agent.supervisor_user_id AND sup.tenant_id = ${tenantId}
-    LEFT JOIN users exp ON exp.id = o.expeditor_user_id AND exp.tenant_id = ${tenantId}
+    LEFT JOIN users sup ON sup.id = agent.supervisor_user_id
+      AND sup.tenant_id = ${tenantId}
+      AND sup.role = 'supervisor'
+    LEFT JOIN users exp ON exp.id = o.expeditor_user_id
+      AND exp.tenant_id = ${tenantId}
+      AND exp.role = 'expeditor'
     LEFT JOIN warehouses w ON w.id = o.warehouse_id AND w.tenant_id = ${tenantId}
     LEFT JOIN product_categories pc ON pc.id = p.category_id AND pc.tenant_id = ${tenantId}
     LEFT JOIN product_categories pcp ON pcp.id = pc.parent_id AND pcp.tenant_id = ${tenantId}

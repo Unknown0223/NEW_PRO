@@ -35,7 +35,7 @@ class SupervisorConfigPolicy {
     if (s == null) return [];
     final out = <String>[];
     if (s.checkReceiptFaces) out.add('Чеки');
-    if (s.checkMerchandising) out.add('Merchandising');
+    if (s.checkMerchandising) out.add('Мерчандайзинг');
     if (s.checkDefaultPrice) out.add('Цена');
     if (s.checkMotivation) out.add('Мотивация');
     if (s.checkStock) out.add('Склад');

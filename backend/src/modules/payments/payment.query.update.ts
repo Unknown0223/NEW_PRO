@@ -115,6 +115,8 @@ export async function updatePayment(
           where: { id: input.expeditor_user_id, tenant_id: tenantId, is_active: true }
         });
         if (!ex) throw new Error("BAD_EXPEDITOR");
+        const { assertExpeditorCanTakeNewWork } = await import("../work-slots/work-slots.expeditor-gate");
+        await assertExpeditorCanTakeNewWork(tenantId, ex.id);
         expeditorPatch = ex.id;
       }
     }
@@ -130,12 +132,12 @@ export async function updatePayment(
           where: { id: bal.id },
           data: { balance: { increment: movementDelta } }
         });
-        const kindLabel = isExpense ? "Rasxod" : "To‘lov";
+        const kindLabel = isExpense ? "Расход" : "Оплата";
         await tx.clientBalanceMovement.create({
           data: {
             client_balance_id: bal.id,
             delta: movementDelta,
-            note: `${kindLabel} #${paymentId} tahrir (summa)`,
+            note: `${kindLabel} #${paymentId}: изменение суммы`,
             user_id: uid
           }
         });

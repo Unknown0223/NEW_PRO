@@ -140,8 +140,12 @@ type VisitRow = {
   not_visited: number;
   visits_with_orders: number;
   visits_without_orders: number;
+  order_count?: number;
+  cancelled_count?: number;
   gps_visits: number;
   photo_reports: number;
+  photo_outlets?: number;
+  photo_count?: number;
   sales_sum: string;
   sales_qty: string;
   plan_detail: VisitPlanDetail;
@@ -197,6 +201,15 @@ function buildPaymentSlotMatchKeys(
   def: { value: string; label: string },
   entries:
     | Array<{ id: string; name: string; code?: string | null; active?: boolean }>
+    | undefined,
+  priceTypes?:
+    | Array<{
+        id: string;
+        name: string;
+        code?: string | null;
+        payment_method_id?: string;
+        active?: boolean;
+      }>
     | undefined
 ): Set<string> {
   const keys = new Set<string>();
@@ -226,6 +239,17 @@ function buildPaymentSlotMatchKeys(
       add(e.code ?? undefined);
       add(sk);
     }
+  }
+  for (const pt of priceTypes ?? []) {
+    if (pt.active === false) continue;
+    const pmId = normTrim(pt.payment_method_id);
+    if (!pmId) continue;
+    if (!keys.has(pmId) && !keys.has(pmId.toLowerCase())) continue;
+    add(pt.id);
+    add(pt.name);
+    add(pt.code ?? undefined);
+    const ptKey = String(pt.code ?? "").trim() || String(pt.name ?? "").trim();
+    add(ptKey);
   }
   return keys;
 }
@@ -680,7 +704,8 @@ export function DashboardHome({
         data: undefined as SupervisorDashboardData | undefined,
         isLoading: summaryQ.isLoading,
         isFetching: summaryQ.isFetching || visitsQ.isFetching || productsQ.isFetching,
-        isError: summaryQ.isError || visitsQ.isError || productsQ.isError,
+        // KPI asosiy — summary xatosi; products/visits alohida bo‘limda ko‘rsatiladi.
+        isError: summaryQ.isError,
         refetch: () => {
           void summaryQ.refetch();
           void visitsQ.refetch();
@@ -706,7 +731,7 @@ export function DashboardHome({
       data: merged,
       isLoading: summaryQ.isLoading,
       isFetching: summaryQ.isFetching || visitsQ.isFetching || productsQ.isFetching,
-      isError: summaryQ.isError || visitsQ.isError || productsQ.isError,
+      isError: summaryQ.isError,
       refetch: () => {
         void summaryQ.refetch();
         void visitsQ.refetch();
@@ -758,6 +783,7 @@ export function DashboardHome({
     const kpi = dataQ.data.kpi;
     const breakdown = kpi.sales_by_payment_method ?? [];
     const entries = profileRefs?.payment_method_entries;
+    const priceTypes = profileRefs?.price_type_entries;
     const defs = paymentFilterOptions;
 
     if (defs.length === 0) {
@@ -774,7 +800,7 @@ export function DashboardHome({
 
     const slotMeta = defs.map((def) => ({
       def,
-      keys: buildPaymentSlotMatchKeys(def, entries)
+      keys: buildPaymentSlotMatchKeys(def, entries, priceTypes)
     }));
     const slotSums = slotMeta.map(() => "0");
     let orphanSum = "0";
@@ -808,7 +834,7 @@ export function DashboardHome({
       out.push({ title: "Не указано", amount: orphanSum, empty: false });
     }
     return out;
-  }, [dataQ.data, paymentFilterOptions, profileRefs?.payment_method_entries]);
+  }, [dataQ.data, paymentFilterOptions, profileRefs?.payment_method_entries, profileRefs?.price_type_entries]);
 
   const enterprisePaymentSlots = useMemo((): SupervisorPaymentSlot[] => {
     if (!kpiPaymentColumnSlots) return [];
@@ -849,10 +875,11 @@ export function DashboardHome({
     ]
   );
 
-  /** Kaskad: «Продажи по товарам» filter-options + mijozlar references (kod → ном) */
+  /** Kaskad: settings daraxti (Dostup prune) ustuvor — Xorazmning barcha shaharlari */
   const supervisorTerritoryZoneOptions = useMemo(() => {
-    const hasReport = (reportFilters?.territory_1?.length ?? 0) > 0;
-    const list = hasReport ? (reportFilters?.territory_1 ?? []) : (clientRefs?.zones ?? []);
+    const scopedZones = clientRefs?.zones ?? [];
+    const reportZones = reportFilters?.territory_1 ?? [];
+    const list = scopedZones.length > 0 ? scopedZones : reportZones;
     return uniqSortedTerritoryValues(list).map((z) => ({
       value: z,
       label: resolveTerritoryDisplay(z)
@@ -861,10 +888,10 @@ export function DashboardHome({
 
   const supervisorTerritoryRegionOptions = useMemo(() => {
     const zones = draft.territory_1_list.map(normTrim).filter(Boolean);
+    const scopedRegions = clientRefs?.regions ?? [];
     let rows: string[];
     if (zones.length === 0) {
-      const hasReport = (reportFilters?.territory_2?.length ?? 0) > 0;
-      rows = hasReport ? (reportFilters?.territory_2 ?? []) : (clientRefs?.regions ?? []);
+      rows = scopedRegions.length > 0 ? scopedRegions : (reportFilters?.territory_2 ?? []);
     } else {
       const acc = new Set<string>();
       for (const z of zones) {
@@ -875,7 +902,13 @@ export function DashboardHome({
         for (const r of chunk) acc.add(r);
       }
       rows = [...acc];
-      if (rows.length === 0) rows = reportFilters?.territory_2 ?? clientRefs?.regions ?? [];
+      if (rows.length === 0) {
+        rows = scopedRegions.length > 0 ? scopedRegions : (reportFilters?.territory_2 ?? []);
+      } else if (scopedRegions.length > 0) {
+        const allow = new Set(scopedRegions.map((r) => r.toLowerCase()));
+        const filtered = rows.filter((r) => allow.has(r.toLowerCase()));
+        if (filtered.length > 0) rows = filtered;
+      }
     }
     return uniqSortedTerritoryValues(rows).map((r) => ({
       value: r,
@@ -886,12 +919,21 @@ export function DashboardHome({
   const supervisorTerritoryCityOptions = useMemo(() => {
     const zones = draft.territory_1_list.map(normTrim).filter(Boolean);
     const regions = draft.territory_2_list.map(normTrim).filter(Boolean);
+    const scopedCities = clientRefs?.cities ?? [];
     let rows: string[];
 
     if (regions.length === 0) {
       if (zones.length === 0) {
-        const hasReport = (reportFilters?.territory_3?.length ?? 0) > 0;
-        rows = hasReport ? (reportFilters?.territory_3 ?? []) : (clientRefs?.cities ?? []);
+        const reportCities = reportFilters?.territory_3 ?? [];
+        // Settings daraxti to‘liq (Xorazm 15 shahar) — mijoz distinct bilan siqilmasin
+        rows =
+          scopedCities.length >= reportCities.length
+            ? scopedCities.length > 0
+              ? scopedCities
+              : reportCities
+            : reportCities.length > 0
+              ? reportCities
+              : scopedCities;
       } else {
         const set = new Set<string>();
         for (const row of reportFilters?.territory_tree ?? []) {
@@ -901,7 +943,9 @@ export function DashboardHome({
           if (zones.some((z) => z.toLowerCase() === rz.toLowerCase())) set.add(city);
         }
         rows = [...set];
-        if (rows.length === 0) rows = reportFilters?.territory_3 ?? clientRefs?.cities ?? [];
+        if (rows.length === 0) {
+          rows = scopedCities.length > 0 ? scopedCities : (reportFilters?.territory_3 ?? []);
+        }
       }
     } else {
       const set = new Set<string>();
@@ -954,7 +998,9 @@ export function DashboardHome({
         }
       }
       rows = [...set];
-      if (rows.length === 0) rows = [...(reportFilters?.territory_3 ?? clientRefs?.cities ?? [])];
+      if (rows.length === 0) {
+        rows = scopedCities.length > 0 ? scopedCities : (reportFilters?.territory_3 ?? []);
+      }
     }
 
     return uniqSortedTerritoryValues(rows).map((c) => ({
@@ -1001,9 +1047,15 @@ export function DashboardHome({
 
   const supervisorPickOptions = useMemo((): StaffPick[] => {
     const s = reportFilters?.supervisors;
-    if (s?.length) return s.map((x) => ({ id: x.id, fio: x.name, code: x.code }));
-    return supervisors ?? [];
-  }, [reportFilters?.supervisors, supervisors]);
+    const fromReport = s?.length
+      ? s.map((x) => ({ id: x.id, fio: x.name, code: x.code }))
+      : null;
+    const base = fromReport ?? supervisors ?? [];
+    if (!selfSupervisorIdStr) return base;
+    const selfId = Number(selfSupervisorIdStr);
+    if (!Number.isFinite(selfId) || base.some((x) => x.id === selfId)) return base;
+    return [{ id: selfId, fio: "Только вы", code: null }, ...base];
+  }, [reportFilters?.supervisors, supervisors, selfSupervisorIdStr]);
 
   const filterRowSelect = cn(filterSelectClassName, FILTER_TRIGGER);
 
@@ -1175,7 +1227,11 @@ export function DashboardHome({
                   triggerClassName={filterRowSelect}
                   disabled={Boolean(selfSupervisorIdStr)}
                   items={supervisorPickOptions.map((a) => staffDashboardMultiItem(a))}
-                  selectedValues={draft.supervisor_ids}
+                  selectedValues={
+                    selfSupervisorIdStr
+                      ? [selfSupervisorIdStr]
+                      : draft.supervisor_ids
+                  }
                   onChange={(next) => setDraft((p) => ({ ...p, supervisor_ids: next }))}
                 />
               </div>
@@ -1289,6 +1345,8 @@ export function DashboardHome({
               >
                 {productsQ.isLoading && activeSection === "analytics" ? (
                   <p className="text-sm text-muted-foreground">Загрузка аналитики…</p>
+                ) : productsQ.isError ? (
+                  <p className="text-sm text-destructive">Не удалось загрузить аналитику по товарам.</p>
                 ) : (
                   <SupervisorProductAnalyticsTable
                     rows={analyticsRows}

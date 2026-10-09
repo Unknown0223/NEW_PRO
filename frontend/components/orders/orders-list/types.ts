@@ -8,8 +8,8 @@ import { ORDER_TYPE_VALUES } from "@/lib/order-types";
 export const VALID_STATUSES = new Set<string>(ORDER_STATUS_VALUES);
 export const VALID_ORDER_TYPES = new Set<string>(ORDER_TYPE_VALUES);
 const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
-export type OrdersDateMode = "created" | "order" | "ship";
-const VALID_DATE_MODES = new Set<OrdersDateMode>(["created", "order", "ship"]);
+export type OrdersDateMode = "created" | "order" | "ship" | "delivery";
+const VALID_DATE_MODES = new Set<OrdersDateMode>(["created", "order", "ship", "delivery"]);
 
 function pad2(n: number): string {
   return String(n).padStart(2, "0");
@@ -188,7 +188,7 @@ const FILTER_VISIBILITY_LABELS: Record<keyof OrdersFilterVisibility, string> = {
   territory2: "Область",
   territory3: "Город",
   discountAlert: "Проблемы со скидкой",
-  bonusAlert: "Проблемы с бонусом",
+  bonusAlert: "Проблемы заявок",
   orderAlert: "Проблемные заявки"
 };
 
@@ -200,15 +200,25 @@ export const FILTER_VISIBILITY_ITEMS: Array<{ key: keyof OrdersFilterVisibility;
 
 export function parseOrdersUrl(searchParams: URLSearchParams): OrdersUrlFilters {
   const rawStatus = searchParams.get("status")?.trim() ?? "";
-  const status = VALID_STATUSES.has(rawStatus) ? rawStatus : "";
+  const status = rawStatus
+    .split(",")
+    .map((s) => s.trim())
+    .filter((s) => VALID_STATUSES.has(s))
+    .join(",");
   const rawPage = Number.parseInt(searchParams.get("page") ?? "1", 10);
   const page = Number.isFinite(rawPage) && rawPage >= 1 ? rawPage : 1;
+  const digitsCsv = (raw: string) =>
+    raw
+      .split(",")
+      .map((s) => s.trim())
+      .filter((s) => /^\d+$/.test(s))
+      .join(",");
   const wh = searchParams.get("warehouse_id")?.trim() ?? "";
-  const warehouse_id = /^\d+$/.test(wh) ? wh : "";
+  const warehouse_id = digitsCsv(wh);
   const ag = searchParams.get("agent_id")?.trim() ?? "";
-  const agent_id = /^\d+$/.test(ag) ? ag : "";
+  const agent_id = digitsCsv(ag);
   const ex = searchParams.get("expeditor_id")?.trim() ?? "";
-  const expeditor_id = /^\d+$/.test(ex) ? ex : "";
+  const expeditor_id = digitsCsv(ex);
   const df = searchParams.get("date_from")?.trim() ?? "";
   const date_from = ISO_DATE_RE.test(df) ? df : "";
   const dt = searchParams.get("date_to")?.trim() ?? "";
@@ -217,10 +227,14 @@ export function parseOrdersUrl(searchParams: URLSearchParams): OrdersUrlFilters 
   const cr = searchParams.get("client_id")?.trim() ?? "";
   const client_id = /^\d+$/.test(cr) ? cr : "";
   const pr = searchParams.get("product_id")?.trim() ?? "";
-  const product_id = /^\d+$/.test(pr) ? pr : "";
-  const client_category = (searchParams.get("client_category")?.trim() ?? "").slice(0, 128);
+  const product_id = digitsCsv(pr);
+  const client_category = (searchParams.get("client_category")?.trim() ?? "").slice(0, 400);
   const rawOrderType = searchParams.get("order_type")?.trim() ?? "";
-  const order_type = VALID_ORDER_TYPES.has(rawOrderType) ? rawOrderType : "";
+  const order_type = rawOrderType
+    .split(",")
+    .map((s) => s.trim())
+    .filter((s) => VALID_ORDER_TYPES.has(s))
+    .join(",");
   const rawDm = (searchParams.get("date_mode")?.trim().toLowerCase() ?? "") as OrdersDateMode;
   const date_mode: OrdersDateMode = VALID_DATE_MODES.has(rawDm) ? rawDm : "order";
   const icRaw = searchParams.get("is_consignment")?.trim().toLowerCase() ?? "";
@@ -231,20 +245,24 @@ export function parseOrdersUrl(searchParams: URLSearchParams): OrdersUrlFilters 
         ? "false"
         : "";
   const pc = searchParams.get("product_category_id")?.trim() ?? "";
-  const product_category_id = /^\d+$/.test(pc) ? pc : "";
-  const payment_type = (searchParams.get("payment_type")?.trim() ?? "").slice(0, 64);
-  const payment_method_ref = (searchParams.get("payment_method_ref")?.trim() ?? "").slice(0, 64);
-  const request_type_ref = (searchParams.get("request_type_ref")?.trim() ?? "").slice(0, 128);
+  const product_category_id = digitsCsv(pc);
+  const payment_type = (searchParams.get("payment_type")?.trim() ?? "").slice(0, 400);
+  const payment_method_ref = (searchParams.get("payment_method_ref")?.trim() ?? "").slice(0, 400);
+  const request_type_ref = (searchParams.get("request_type_ref")?.trim() ?? "").slice(0, 400);
   const search = (searchParams.get("q") ?? searchParams.get("search") ?? "").trim().slice(0, 200);
-  const client_region = (searchParams.get("client_region")?.trim() ?? "").slice(0, 128);
-  const client_city = (searchParams.get("client_city")?.trim() ?? "").slice(0, 128);
-  const client_zone = (searchParams.get("client_zone")?.trim() ?? "").slice(0, 128);
-  const trade_direction = (searchParams.get("trade_direction")?.trim() ?? "").slice(0, 128);
+  const client_region = (searchParams.get("client_region")?.trim() ?? "").slice(0, 400);
+  const client_city = (searchParams.get("client_city")?.trim() ?? "").slice(0, 400);
+  const client_zone = (searchParams.get("client_zone")?.trim() ?? "").slice(0, 400);
+  const trade_direction = (searchParams.get("trade_direction")?.trim() ?? "").slice(0, 400);
   const rawWd = searchParams.get("visit_weekday")?.trim() ?? "";
-  const visit_weekday = /^[1-7]$/.test(rawWd) ? rawWd : "";
-  const price_type = (searchParams.get("price_type")?.trim() ?? "").slice(0, 64);
-  const discount_alert = (searchParams.get("discount_alert")?.trim() ?? "").slice(0, 32);
-  const bonus_alert = (searchParams.get("bonus_alert")?.trim() ?? "").slice(0, 32);
+  const visit_weekday = rawWd
+    .split(",")
+    .map((s) => s.trim())
+    .filter((s) => /^[1-7]$/.test(s))
+    .join(",");
+  const price_type = (searchParams.get("price_type")?.trim() ?? "").slice(0, 400);
+  const discount_alert = (searchParams.get("discount_alert")?.trim() ?? "").slice(0, 200);
+  const bonus_alert = (searchParams.get("bonus_alert")?.trim() ?? "").slice(0, 200);
   const order_alert = (searchParams.get("order_alert")?.trim() ?? "").slice(0, 32);
   return {
     status,
@@ -296,6 +314,40 @@ export type BulkExpeditorResponse = {
 };
 
 export type BulkConsignmentResponse = BulkExpeditorResponse;
+
+function expeditorBulkErrorLabel(code: string): string {
+  switch (code) {
+    case "ORDER_NOT_EDITABLE":
+      return "статус не «Новый»/«Подтверждён»";
+    case "BAD_EXPEDITOR":
+      return "доставщик не найден или неактивен";
+    case "EXPEDITOR_NOT_ON_SLOT":
+      return "доставщик не на рабочем месте";
+    case "ORDER_BLOCK_EXPEDITOR_MISMATCH":
+      return "не совпадает с водителем блока склада";
+    case "NOT_FOUND":
+      return "заказ не найден";
+    default:
+      return code;
+  }
+}
+
+export function formatExpeditorBulkFeedback(res: BulkExpeditorResponse, detach: boolean): {
+  message: string;
+  isError: boolean;
+} {
+  const action = detach ? "Доставщик откреплён" : "Доставщик привязан";
+  if (res.failed.length === 0) {
+    return { message: `${action}: ${res.updated.length} заказ(ов).`, isError: false };
+  }
+  const byError = new Map<string, number>();
+  for (const f of res.failed) byError.set(f.error, (byError.get(f.error) ?? 0) + 1);
+  const parts = [...byError.entries()].map(([code, cnt]) => `${cnt} × ${expeditorBulkErrorLabel(code)}`);
+  return {
+    message: `${action}: ${res.updated.length} OK, ${res.failed.length} ошибок (${parts.join("; ")}).`,
+    isError: true
+  };
+}
 
 /** Bulk «Консигнация» — faqat «Новый» / «Подтверждён» va `order_type === order`. */
 export function isBulkConsignmentEligible(
@@ -358,7 +410,7 @@ export function buildPaymentPrefillFromSelection(
   if (delivered.length === 0) {
     return {
       href: "/orders",
-      note: "«Приход в кассу» uchun kamida bitta «Доставлен» zakaz belgilang.",
+      note: "Для «Приход в кассу» отметьте хотя бы один заказ «Доставлен».",
       disabled: true
     };
   }
@@ -369,7 +421,7 @@ export function buildPaymentPrefillFromSelection(
   if (clientIds.length === 0) {
     return {
       href: "/orders",
-      note: "Tanlangan zakazlarda mijoz yo‘q.",
+      note: "В выбранных заказах нет клиента.",
       disabled: true
     };
   }
@@ -389,12 +441,12 @@ export function buildPaymentPrefillFromSelection(
   if (delivered.length > 1) {
     notes.push(
       clientIds.length > 1
-        ? `${delivered.length} ta «Доставлен» zakaz (${clientIds.length} mijoz).`
-        : `${delivered.length} ta «Доставлен» zakaz.`
+        ? `Заказов «Доставлен»: ${delivered.length} (клиентов: ${clientIds.length}).`
+        : `Заказов «Доставлен»: ${delivered.length}.`
     );
   }
   if (skipped > 0) {
-    notes.push(`${skipped} ta yetkazilmagan zakaz o‘tkazib yuborildi.`);
+    notes.push(`Пропущено недоставленных заказов: ${skipped}.`);
   }
 
   return {
@@ -404,19 +456,20 @@ export function buildPaymentPrefillFromSelection(
 }
 
 export function rowStatusPatchError(err: unknown): string {
-  if (!axios.isAxiosError(err)) return getUserFacingError(err, "Holatni yangilab bo‘lmadi.");
+  if (!axios.isAxiosError(err)) return getUserFacingError(err, "Не удалось обновить статус.");
   const code = (err.response?.data as { error?: string } | undefined)?.error;
   if (code === "InvalidTransition") return "Недопустимый переход статуса.";
-  if (code === "ForbiddenRevert") return "Oldingi bosqichga qaytarish faqat admin uchun.";
-  if (code === "ForbiddenReopenCancelled") return "Bekor qilingan zakazni qayta ochish faqat admin uchun.";
-  if (code === "ForbiddenOperatorCancelLate") return "Bu bosqichda bekor qilish taqiqlangan.";
-  if (code === "ApprovalPending") return "Tasdiqlash zanjirini kuting — joriy tasdiqlovchi tasdiqlashi kerak.";
-  if (code === "ApprovalRejected") return "Tasdiqlash rad etilgan — qayta sozlash kerak.";
-  if (code === "NotFound") return "Zakaz topilmadi.";
+  if (code === "ForbiddenRevert") return "Возврат на предыдущий этап доступен только администратору.";
+  if (code === "ForbiddenReopenCancelled") return "Повторно открыть отменённый заказ может только администратор.";
+  if (code === "ForbiddenOperatorCancelLate") return "На этом этапе отмена запрещена.";
+  if (code === "ForbiddenPermission") return "Нет права на этот переход статуса (Доступ → Заявки → Статус).";
+  if (code === "ApprovalPending") return "Дождитесь цепочки согласования — текущий согласующий должен подтвердить.";
+  if (code === "ApprovalRejected") return "Согласование отклонено — требуется повторная настройка.";
+  if (code === "NotFound") return "Заказ не найден.";
   const flat = getZodFlattenFromApiErrorBody(err.response?.data);
   const hint = flat ? firstValidationUserHint(flat) : undefined;
   if (hint) return withApiSupportLine(hint, err);
-  return getUserFacingError(err, "Holatni yangilab bo‘lmadi.");
+  return getUserFacingError(err, "Не удалось обновить статус.");
 }
 
 export function ordersMutationFeedback(err: unknown, fallback: string): string {

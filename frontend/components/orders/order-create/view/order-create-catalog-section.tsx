@@ -238,34 +238,34 @@ export function OrderCreateCatalogSection({ vm }: { vm: OrderCreateVm }) {
           ) : (
             <div className="mb-4 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
               <div>
-                <h2 className="text-sm font-semibold text-foreground">Buyurtma tarkibi</h2>
+                <h2 className="text-sm font-semibold text-foreground">Состав заказа</h2>
                 <p className="mt-1 text-xs text-muted-foreground">
                   {canShowOrderCatalog
                     ? selectedCategoryIds.length > 0
-                      ? "Kategoriyalar tepada tanlanadi; pastdagi yorliqdan birini tanlang — jadval faqat shu toifada. Miqdorni boshqa yorliqqa o‘tsangiz ham saqlanadi."
-                      : "Miqdor kiriting. Jadvalda taxminiy summa tanlangan narx turiga qarab."
+                      ? "Категории выбираются вверху; выберите вкладку ниже — таблица покажет только эту категорию. Количество сохраняется при переходе на другую вкладку."
+                      : "Введите количество. Ориентировочная сумма в таблице — по выбранному типу цены."
                     : canPickProducts
-                      ? "Agentni tanlang — katalog shu agentga kaskadlangan mahsulotlar bo‘yicha ochiladi."
-                      : "Klient va omborni tanlang."}
+                      ? "Выберите агента — откроется каталог товаров, привязанных к этому агенту."
+                      : "Выберите клиента и склад."}
                 </p>
               </div>
               <div className="grid w-full grid-cols-1 gap-3 sm:grid-cols-3 lg:max-w-3xl lg:shrink-0">
                 <div className="rounded-lg border border-emerald-600/25 bg-emerald-600/8 px-3 py-3 text-sm shadow-sm dark:bg-emerald-950/30">
-                  <p className="text-xs font-medium text-emerald-800/90 dark:text-emerald-200/90">Jami hajm</p>
+                  <p className="text-xs font-medium text-emerald-800/90 dark:text-emerald-200/90">Общий объём</p>
                   <p className="mt-1 text-lg font-semibold tabular-nums text-emerald-900 dark:text-emerald-100">
                     {formatNumberGrouped(totalVolumeM3, { maxFractionDigits: 3 })}{" "}
                     <span className="text-sm font-normal text-emerald-800/80 dark:text-emerald-300/80">m³</span>
                   </p>
                 </div>
                 <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-3 text-sm shadow-sm dark:bg-amber-950/35">
-                  <p className="text-xs font-medium text-amber-900/90 dark:text-amber-100/90">Jami miqdor</p>
+                  <p className="text-xs font-medium text-amber-900/90 dark:text-amber-100/90">Общее количество</p>
                   <p className="mt-1 text-lg font-semibold tabular-nums text-amber-950 dark:text-amber-50">
                     {formatNumberGrouped(Number(selectedTotalQty) || 0, { maxFractionDigits: 3 })}{" "}
-                    <span className="text-sm font-normal text-amber-800/90 dark:text-amber-200/80">dona</span>
+                    <span className="text-sm font-normal text-amber-800/90 dark:text-amber-200/80">шт.</span>
                   </p>
                 </div>
                 <div className="rounded-lg border border-teal-600/25 bg-teal-600/10 px-3 py-3 text-sm shadow-sm dark:bg-teal-950/35">
-                  <p className="text-xs font-medium text-teal-900/90 dark:text-teal-100/90">Taxminiy summa</p>
+                  <p className="text-xs font-medium text-teal-900/90 dark:text-teal-100/90">Ориентировочная сумма</p>
                   <p className="mt-1 text-lg font-semibold tabular-nums text-teal-900 dark:text-teal-100">
                     {estimatedSum > 0
                       ? formatNumberGrouped(estimatedSum, { maxFractionDigits: 0 })
@@ -303,11 +303,11 @@ export function OrderCreateCatalogSection({ vm }: { vm: OrderCreateVm }) {
           {!isPolkiSheet && !isExchangeFlow && canShowOrderCatalog && selectedCategoryIds.length > 0 ? (
             <div className="mb-3 rounded-lg border border-border bg-muted/20 px-2 pt-2">
               <p className="mb-1 px-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                Tanlangan kategoriyalar
+                Выбранные категории
               </p>
               <div
                 role="tablist"
-                aria-label="Katalog kategoriyalari"
+                aria-label="Категории каталога"
                 className="flex flex-wrap gap-x-0.5 overflow-x-auto border-b border-border/80"
               >
                 {selectedCategoryIds.map((cid) => {
@@ -348,7 +348,7 @@ export function OrderCreateCatalogSection({ vm }: { vm: OrderCreateVm }) {
                 />
               ) : null}
               <Input
-                placeholder={isPolkiSheet ? "Поиск: название, SKU" : "Qidiruv: nom, SKU"}
+                placeholder={isPolkiSheet ? "Поиск: название, SKU" : "Поиск: название, SKU"}
                 value={productSearch}
                 onChange={(e) => setProductSearch(e.target.value)}
                 disabled={
@@ -366,40 +366,40 @@ export function OrderCreateCatalogSection({ vm }: { vm: OrderCreateVm }) {
               <table className="w-full min-w-[980px] border-collapse text-sm">
                 <thead className="app-table-thead sticky top-0 z-[1] backdrop-blur-sm">
                   <tr className="text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                    <th className="min-w-[12rem] px-3 py-2.5">Mahsulot</th>
-                    <th className="min-w-[5.5rem] px-3 py-2.5 text-right">Narx</th>
+                    <th className="min-w-[12rem] px-3 py-2.5">Товар</th>
+                    <th className="min-w-[5.5rem] px-3 py-2.5 text-right">Цена</th>
                     <th
                       className="min-w-[5.5rem] px-3 py-2.5 text-center"
-                      title="Qadoq / blok. Kartotekada blokdagi dona bo‘lsa, miqdor = blok × dona."
+                      title="Упаковка / блок. Если в карточке указано шт. в блоке, количество = блок × шт."
                     >
-                      Blok
+                      Блок
                     </th>
-                    <th className="min-w-[5.5rem] px-3 py-2.5 text-center">Miqdor</th>
-                    <th className="min-w-[4.5rem] px-3 py-2.5 text-right">Hajm m³</th>
-                    <th className="min-w-[4.5rem] px-3 py-2.5 text-right" title="Fakt qoldiq (jami omborda)">
-                      Fakt
+                    <th className="min-w-[5.5rem] px-3 py-2.5 text-center">Количество</th>
+                    <th className="min-w-[4.5rem] px-3 py-2.5 text-right">Объём м³</th>
+                    <th className="min-w-[4.5rem] px-3 py-2.5 text-right" title="Фактический остаток (всего на складе)">
+                      Факт
                     </th>
-                    <th className="min-w-[4.5rem] px-3 py-2.5 text-right" title="Band qilingan miqdor">
-                      Bron
+                    <th className="min-w-[4.5rem] px-3 py-2.5 text-right" title="Зарезервированное количество">
+                      Бронь
                     </th>
-                    <th className="min-w-[5rem] px-3 py-2.5 text-right" title="Mavjud (fakt − bron)">
-                      Mavjud
+                    <th className="min-w-[5rem] px-3 py-2.5 text-right" title="Доступно (факт − бронь)">
+                      Доступно
                     </th>
-                    <th className="min-w-[6rem] px-3 py-2.5 text-right">Jami</th>
+                    <th className="min-w-[6rem] px-3 py-2.5 text-right">Итого</th>
                   </tr>
                 </thead>
                 <tbody>
                   {canShowOrderCatalog && stockQ.isLoading ? (
                     <tr>
                       <td colSpan={9} className="px-3 py-10 text-center text-sm text-muted-foreground">
-                        Ombor qoldiqlari Загрузка…
+                        Загрузка складских остатков…
                       </td>
                     </tr>
                   ) : null}
                   {canShowOrderCatalog && stockQ.isError ? (
                     <tr>
                       <td colSpan={9} className="px-3 py-10 text-center text-sm text-destructive">
-                        Qoldiqlarni yuklab bo‘lmadi. Internet yoki omborni tekshiring.
+                        Не удалось загрузить остатки. Проверьте интернет или склад.
                       </td>
                     </tr>
                   ) : null}
@@ -475,7 +475,7 @@ export function OrderCreateCatalogSection({ vm }: { vm: OrderCreateVm }) {
                               <div className="mx-auto flex max-w-[6.5rem] flex-col items-stretch">
                                 {blockOver ? (
                                   <span className="mb-0.5 text-center text-[11px] font-semibold text-destructive">
-                                    Maks: {maxLabel}
+                                    Макс.: {maxLabel}
                                   </span>
                                 ) : null}
                                 <Input
@@ -485,8 +485,8 @@ export function OrderCreateCatalogSection({ vm }: { vm: OrderCreateVm }) {
                                   placeholder="0"
                                   title={
                                     qpb != null && qpb > 0
-                                      ? `1 blok = ${qpb} dona`
-                                      : "Blok va miqdor bir xil (kartotekada blok/o‘lcham yo‘q)"
+                                      ? `1 блок = ${qpb} шт.`
+                                      : "Блок и количество совпадают (в карточке не указан блок/размер)"
                                   }
                                   className={cn(
                                     "h-9 w-full tabular-nums text-center",
@@ -547,7 +547,7 @@ export function OrderCreateCatalogSection({ vm }: { vm: OrderCreateVm }) {
                               <div className="mx-auto flex max-w-[6.5rem] flex-col items-stretch">
                                 {qtyOver ? (
                                   <span className="mb-0.5 text-center text-[11px] font-semibold text-destructive">
-                                    Maks: {maxLabel}
+                                    Макс.: {maxLabel}
                                   </span>
                                 ) : null}
                                 <Input
@@ -619,7 +619,7 @@ export function OrderCreateCatalogSection({ vm }: { vm: OrderCreateVm }) {
                             </td>
                             <td
                               className="px-3 py-2 text-right tabular-nums font-semibold text-foreground align-middle"
-                              title={`Fakt: ${qtyTotal}, bron: ${reserved}`}
+                              title={`Факт: ${qtyTotal}, бронь: ${reserved}`}
                             >
                               {formatNumberGrouped(availNum, { maxFractionDigits: 3 })}
                             </td>
@@ -642,7 +642,7 @@ export function OrderCreateCatalogSection({ vm }: { vm: OrderCreateVm }) {
                   catalogProducts.length > 0 ? (
                     <tr>
                       <td colSpan={9} className="px-3 py-10 text-center text-xs text-muted-foreground">
-                        Tanlangan yorliq bo‘yicha mahsulot yo‘q (qoldiq yoki qidiruv). Boshqa yorliqni tanlang.
+                        На выбранной вкладке нет товаров (по остатку или поиску). Выберите другую вкладку.
                       </td>
                     </tr>
                   ) : null}
@@ -653,7 +653,7 @@ export function OrderCreateCatalogSection({ vm }: { vm: OrderCreateVm }) {
                   displayProducts.length === 0 ? (
                     <tr>
                       <td colSpan={9} className="px-3 py-10 text-center text-xs text-muted-foreground">
-                        Qidiruv bo‘yicha mahsulot topilmadi.
+                        По запросу товары не найдены.
                       </td>
                     </tr>
                   ) : null}
@@ -663,7 +663,7 @@ export function OrderCreateCatalogSection({ vm }: { vm: OrderCreateVm }) {
                   catalogProducts.length === 0 ? (
                     <tr>
                       <td colSpan={9} className="px-3 py-10 text-center text-xs text-muted-foreground">
-                        Bu kategoriya / ombor bo‘yicha noldan yuqori qoldiqli mahsulot yo‘q.
+                        В этой категории / на этом складе нет товаров с остатком больше нуля.
                       </td>
                     </tr>
                   ) : null}
@@ -671,8 +671,8 @@ export function OrderCreateCatalogSection({ vm }: { vm: OrderCreateVm }) {
                     <tr>
                       <td colSpan={9} className="px-3 py-10 text-center text-xs text-muted-foreground">
                         {!canPickProducts
-                          ? "Avval klient va omborni tanlang — keyin jadval ochiladi."
-                          : "Avval agentni tanlang — jadval shu agentga bog‘langan mahsulotlar uchun ochiladi."}
+                          ? "Сначала выберите клиента и склад — затем откроется таблица."
+                          : "Сначала выберите агента — таблица откроется для товаров, привязанных к нему."}
                       </td>
                     </tr>
                   ) : null}
@@ -681,7 +681,7 @@ export function OrderCreateCatalogSection({ vm }: { vm: OrderCreateVm }) {
                   <tfoot>
                     <tr className="border-t-2 border-border bg-muted/40 font-semibold">
                       <td className="px-3 py-2.5 text-foreground" colSpan={3}>
-                        Jami
+                        Итого
                       </td>
                       <td className="px-3 py-2.5 text-center tabular-nums text-foreground">
                         {formatNumberGrouped(selectedTotalQty, { maxFractionDigits: 3 })}
@@ -733,10 +733,10 @@ export function OrderCreateCatalogSection({ vm }: { vm: OrderCreateVm }) {
 
           {!isPolkiSheet && !isExchangeFlow && hasMissingPriceForSelected ? (
             <p className="mt-3 text-xs text-destructive">
-              Tanlangan narx turi ({priceType}) bo‘yicha narxi yo‘q mahsulot bor:{" "}
+              Есть товары без цены для выбранного типа цены ({priceType}):{" "}
               {missingPriceProductNames.join(", ")}
-              {missingPriceProductNames.length >= 3 ? "..." : ""}. Narx turini almashtiring yoki mahsulot narxini
-              kiriting.
+              {missingPriceProductNames.length >= 3 ? "..." : ""}. Смените тип цены или укажите цену
+              товара.
             </p>
           ) : null}
 
@@ -756,10 +756,10 @@ export function OrderCreateCatalogSection({ vm }: { vm: OrderCreateVm }) {
               </>
             ) : (
               <>
-                <span className="font-medium text-foreground">Ombor: </span>
-                yaratishda bloklangan miqdor oshadi; tasdiqlanganda qoldiq kamayadi. Bekor qilsangiz — blokdan
-                qaytariladi.{" "}
-                <span className="font-medium text-foreground">Taxminiy summa</span> bonus va yakuniy chegirmasiz.
+                <span className="font-medium text-foreground">Склад: </span>
+                при создании растёт зарезервированное количество; при подтверждении остаток уменьшается. При отмене —
+                резерв снимается.{" "}
+                <span className="font-medium text-foreground">Ориентировочная сумма</span> — без бонуса и итоговой скидки.
               </>
             )}
           </p>

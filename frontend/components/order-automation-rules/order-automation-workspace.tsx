@@ -22,6 +22,8 @@ import { api } from "@/lib/api";
 import { getUserFacingError } from "@/lib/error-utils";
 import { STALE } from "@/lib/query-stale";
 import { useAuthStore, useAuthStoreHydrated } from "@/lib/auth-store";
+import { usePermissions } from "@/lib/use-permissions";
+import { useAppConfirm } from "@/components/ui/app-confirm-dialog";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useMemo, useState } from "react";
 
@@ -57,6 +59,8 @@ export function OrderAutomationWorkspace() {
   const hydrated = useAuthStoreHydrated();
   const tenantSlug = useAuthStore((s) => s.tenantSlug);
   const qc = useQueryClient();
+  const { confirm, dialog: confirmDialog } = useAppConfirm();
+  const { has } = usePermissions();
 
   const [tab, setTab] = useState<TabId>("restrictions");
   const [statusFilter, setStatusFilter] = useState<"active" | "inactive">("active");
@@ -218,7 +222,7 @@ export function OrderAutomationWorkspace() {
       <AutomationPageHeader
         activeTab={tab}
         onTabChange={handleTabChange}
-        onCreateClick={openCreate}
+        onCreateClick={has("orders.avtomatizatsiya.create") ? openCreate : undefined}
       />
 
       {msg ? (
@@ -269,7 +273,7 @@ export function OrderAutomationWorkspace() {
         itemsPerPage={itemsPerPage}
         onItemsPerPageChange={(n) => { setItemsPerPage(n); setPage(1); }}
         onRefresh={() => listQ.refetch()}
-        onExport={() => void exportCsv()}
+        onExport={has("orders.avtomatizatsiya.export") ? () => void exportCsv() : undefined}
       />
 
       <div className="min-h-0 flex-1 overflow-hidden">
@@ -286,12 +290,26 @@ export function OrderAutomationWorkspace() {
             tab={tab}
             rows={listQ.data?.data ?? []}
             refLabelByCode={refLabelByCode}
-            onEdit={openEdit}
-            onDelete={(id) => {
-              if (window.confirm("Удалить правило?")) deleteM.mutate(id);
-            }}
-            onToggleActive={(id, active) => toggleM.mutate({ id, active })}
-            onDuplicate={(id) => duplicateM.mutate(id)}
+            onEdit={has("orders.avtomatizatsiya.update") ? openEdit : undefined}
+            onDelete={
+              has("orders.avtomatizatsiya.delete")
+                ? (id) => {
+                    void (async () => {
+                      const ok = await confirm({
+                        title: "Удалить",
+                        message: "Удалить правило?",
+                        confirmLabel: "Да",
+                        cancelLabel: "Нет",
+                        destructive: true
+                      });
+                      if (ok) deleteM.mutate(id);
+                    })();
+                  }
+                : undefined
+            }
+            onActivate={has("orders.avtomatizatsiya.activate") ? (id) => toggleM.mutate({ id, active: true }) : undefined}
+            onDeactivate={has("orders.avtomatizatsiya.deactivate") ? (id) => toggleM.mutate({ id, active: false }) : undefined}
+            onDuplicate={has("orders.avtomatizatsiya.create") ? (id) => duplicateM.mutate(id) : undefined}
           />
         )}
       </div>
@@ -324,6 +342,7 @@ export function OrderAutomationWorkspace() {
         onSubmit={() => saveM.mutate()}
         saving={saveM.isPending}
       />
+      {confirmDialog}
     </div>
   );
 }

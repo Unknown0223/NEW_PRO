@@ -59,7 +59,7 @@ export async function loadLastPaymentByClient(
         MAX(COALESCE(paid_at, created_at)) AS lp
       FROM client_payments
       WHERE tenant_id = ${tenantId}
-        AND entry_kind = 'payment'
+        AND entry_kind IN ('payment', 'refund')
         AND deleted_at IS NULL
         AND client_id IN (${Prisma.join(chunk)})
         ${dateClause}

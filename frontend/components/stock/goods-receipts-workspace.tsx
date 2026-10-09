@@ -2,6 +2,7 @@
 
 import { PageHeader } from "@/components/dashboard/page-header";
 import { PageShell } from "@/components/dashboard/page-shell";
+import { ClientsTemplateSelectField } from "@/components/clients/clients-template-select-field";
 import { TableColumnSettingsDialog } from "@/components/data-table/table-column-settings-dialog";
 import { Button } from "@/components/ui/button";
 import { buttonVariants } from "@/components/ui/button-variants";
@@ -11,11 +12,18 @@ import { DateRangePopover, formatDateRangeButton } from "@/components/ui/date-ra
 import { ExcelDropTarget } from "@/components/ui/excel-file-drop-zone";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  appendNamedStringListParam,
+  appendPositiveIntListParam,
+  joinMultiFilterValues,
+  splitMultiFilterValues
+} from "@/lib/client-filter-select-value";
 import { useUserTablePrefs } from "@/hooks/use-user-table-prefs";
 import { cn } from "@/lib/utils";
 import { formatGroupedDecimal } from "@/lib/format-numbers";
 import { pickFirstExcelFile } from "@/lib/excel-file-pick";
 import { api } from "@/lib/api";
+import { useDebouncedSearchCommit } from "@/lib/use-debounced-search-commit";
 import { downloadXlsxSheet } from "@/lib/download-xlsx";
 import { STALE } from "@/lib/query-stale";
 import { usePermissions } from "@/lib/use-permissions";
@@ -179,6 +187,7 @@ export function GoodsReceiptsWorkspace({ tenantSlug }: Props) {
     has("warehouse.postuplenie.create") ||
     has("warehouse.postuplenie.update") ||
     has("warehouse.postuplenie.status");
+  const canExport = has("warehouse.postuplenie.export");
   const qc = useQueryClient();
 
   const [draftWh, setDraftWh] = useState("");
@@ -189,6 +198,10 @@ export function GoodsReceiptsWorkspace({ tenantSlug }: Props) {
   const [draftRangeOpen, setDraftRangeOpen] = useState(false);
   const draftRangeAnchorRef = useRef<HTMLButtonElement>(null);
   const [searchDraft, setSearchDraft] = useState("");
+  useDebouncedSearchCommit(searchDraft, (q) => {
+    setApplied((prev) => (prev.q === q ? prev : { ...prev, q }));
+    setPage(1);
+  });
   const [uploading, setUploading] = useState(false);
   const [uploadReport, setUploadReport] = useState<{ applied: number; errors: string[] } | null>(null);
   const importFileRef = useRef<HTMLInputElement | null>(null);
@@ -282,9 +295,9 @@ export function GoodsReceiptsWorkspace({ tenantSlug }: Props) {
       const p = new URLSearchParams();
       p.set("page", String(page));
       p.set("limit", String(tablePrefs.pageSize));
-      if (applied.warehouseId) p.set("warehouse_id", applied.warehouseId);
-      if (applied.supplierId) p.set("supplier_id", applied.supplierId);
-      if (applied.status) p.set("status", applied.status);
+      appendPositiveIntListParam(p, "warehouse_id", "warehouse_ids", applied.warehouseId);
+      appendPositiveIntListParam(p, "supplier_id", "supplier_ids", applied.supplierId);
+      appendNamedStringListParam(p, "status", "statuses", applied.status);
       if (applied.dateFrom) p.set("date_from", applied.dateFrom);
       if (applied.dateTo) p.set("date_to", applied.dateTo);
       if (applied.q) p.set("q", applied.q);
@@ -445,7 +458,7 @@ export function GoodsReceiptsWorkspace({ tenantSlug }: Props) {
       await qc.invalidateQueries({ queryKey: ["goods-receipts", tenantSlug] });
       await qc.invalidateQueries({ queryKey: ["stock", tenantSlug] });
     } catch {
-      setNotice({ kind: "error", text: "Статусni o‘zgartirib bo‘lmadi (workflow cheklovi yoki ruxsat)." });
+      setNotice({ kind: "error", text: "Не удалось изменить статус (ограничение процесса или нет прав)." });
     } finally {
       setStatusBusyId(null);
     }
@@ -468,7 +481,7 @@ export function GoodsReceiptsWorkspace({ tenantSlug }: Props) {
                   disabled={uploading}
                 >
                   <Upload className="mr-1 size-3.5" />
-                  {uploading ? "Импорт..." : "Импортировать с excel"}
+                  {uploading ? "Импорт…" : "Импорт из Excel"}
                 </Button>
               </ExcelDropTarget>
               <Link
@@ -477,10 +490,12 @@ export function GoodsReceiptsWorkspace({ tenantSlug }: Props) {
               >
                 Добавить
               </Link>
-              <Button type="button" variant="outline" size="sm" onClick={() => setExportOpen(true)}>
-                <Download className="mr-1 size-3.5" />
-                Excel
-              </Button>
+              {canExport ? (
+                <Button type="button" variant="outline" size="sm" onClick={() => setExportOpen(true)}>
+                  <Download className="mr-1 size-3.5" />
+                  Excel
+                </Button>
+              ) : null}
               <input
                 ref={importFileRef}
                 type="file"
@@ -499,7 +514,7 @@ export function GoodsReceiptsWorkspace({ tenantSlug }: Props) {
 
       <div className="mb-4 flex flex-wrap items-center gap-2">
         <Link className={cn(buttonVariants({ variant: "outline", size: "sm" }))} href="/stock">
-          ← Kirim / qoldiq
+          ← Приход / остатки
         </Link>
         <Link className={cn(buttonVariants({ variant: "outline", size: "sm" }))} href="/stock/balances">
           Остатки товаров
@@ -532,52 +547,47 @@ export function GoodsReceiptsWorkspace({ tenantSlug }: Props) {
 
       <Card className="border-border/60 shadow-sm">
         <CardContent className="space-y-4 p-4">
-          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Filter Panel</p>
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Панель фильтров</p>
           <div className="flex flex-wrap items-end justify-between gap-3">
             <div className="flex min-w-0 flex-1 flex-wrap items-end gap-3">
-            <div className="grid min-w-[9rem] gap-1.5">
-              <Label className="text-xs">Склад</Label>
-              <select
-                className="flex h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
-                value={draftWh}
-                onChange={(e) => setDraftWh(e.target.value)}
-              >
-                <option value="">Все</option>
-                {(warehousesQ.data ?? []).map((w) => (
-                  <option key={w.id} value={String(w.id)}>
-                    {w.name}
-                  </option>
-                ))}
-              </select>
+            <div className="grid min-w-[11rem] gap-1.5">
+              <ClientsTemplateSelectField
+                label="Склад"
+                multi
+                options={(warehousesQ.data ?? []).map((w) => ({
+                  value: String(w.id),
+                  label: w.name
+                }))}
+                values={splitMultiFilterValues(draftWh)}
+                onChange={(v) => setDraftWh(joinMultiFilterValues(v))}
+              />
             </div>
-            <div className="grid min-w-[9rem] gap-1.5">
-              <Label className="text-xs">Поставщики</Label>
-              <select
-                className="flex h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
-                value={draftSupplier}
-                onChange={(e) => setDraftSupplier(e.target.value)}
-              >
-                <option value="">Все</option>
-                {(suppliersQ.data ?? []).map((s) => (
-                  <option key={s.id} value={String(s.id)}>
-                    {s.name}
-                  </option>
-                ))}
-              </select>
+            <div className="grid min-w-[11rem] gap-1.5">
+              <ClientsTemplateSelectField
+                label="Поставщики"
+                multi
+                options={(suppliersQ.data ?? []).map((s) => ({
+                  value: String(s.id),
+                  label: s.name
+                }))}
+                values={splitMultiFilterValues(draftSupplier)}
+                onChange={(v) => setDraftSupplier(joinMultiFilterValues(v))}
+              />
             </div>
-            <div className="grid min-w-[9rem] gap-1.5">
-              <Label className="text-xs">Статус</Label>
-              <select
-                className="flex h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
-                value={draftStatus}
-                onChange={(e) => setDraftStatus(e.target.value)}
-              >
-                <option value="">Все</option>
-                <option value="draft">Новый</option>
-                <option value="editing">Редактирование</option>
-                <option value="posted">Одобренный</option>
-                <option value="cancelled">Отменен</option>
-              </select>
+            <div className="grid min-w-[11rem] gap-1.5">
+              <ClientsTemplateSelectField
+                label="Статус"
+                multi
+                searchable={false}
+                options={[
+                  { value: "draft", label: "Новый" },
+                  { value: "editing", label: "Редактирование" },
+                  { value: "posted", label: "Одобренный" },
+                  { value: "cancelled", label: "Отменен" }
+                ]}
+                values={splitMultiFilterValues(draftStatus)}
+                onChange={(v) => setDraftStatus(joinMultiFilterValues(v))}
+              />
             </div>
             <div className="grid min-w-[11rem] max-w-[16rem] gap-1.5">
               <Label className="text-xs">Период</Label>
@@ -658,10 +668,12 @@ export function GoodsReceiptsWorkspace({ tenantSlug }: Props) {
             }}
           />
         </div>
-        <Button type="button" variant="outline" size="sm" className="h-9" onClick={() => setExportOpen(true)}>
-          <Download className="mr-1 size-3.5" />
-          Excel
-        </Button>
+        {canExport ? (
+          <Button type="button" variant="outline" size="sm" className="h-9" onClick={() => setExportOpen(true)}>
+            <Download className="mr-1 size-3.5" />
+            Excel
+          </Button>
+        ) : null}
         <Button
           type="button"
           variant="outline"
@@ -834,10 +846,10 @@ export function GoodsReceiptsWorkspace({ tenantSlug }: Props) {
                 <FileSpreadsheet className="size-5" />
               </div>
               <div className="min-w-0 space-y-1 pr-6">
-                <DialogTitle className="text-base font-semibold leading-tight">Excel eksport</DialogTitle>
+                <DialogTitle className="text-base font-semibold leading-tight">Экспорт в Excel</DialogTitle>
                 <DialogDescription className="text-xs leading-relaxed text-muted-foreground">
-                  Joriy sahifa va filtrlangan qatorlar eksport qilinadi. Fayl{" "}
-                  <span className="font-medium text-foreground/80">.xlsx</span> formatida.
+                  Экспортируются текущая страница и отфильтрованные строки. Файл в формате{" "}
+                  <span className="font-medium text-foreground/80">.xlsx</span>.
                 </DialogDescription>
               </div>
             </div>
@@ -854,9 +866,9 @@ export function GoodsReceiptsWorkspace({ tenantSlug }: Props) {
                 "disabled:pointer-events-none disabled:opacity-45"
               )}
             >
-              <span className="text-sm font-medium">Umumiy ro‘yxat</span>
+              <span className="text-sm font-medium">Общий список</span>
               <span className="text-xs text-muted-foreground">
-                Hujjatlar ro‘yxati: status, sana, sklad, summalar va izoh
+                Список документов: статус, дата, склад, суммы и комментарий
               </span>
             </button>
             <button
@@ -871,15 +883,15 @@ export function GoodsReceiptsWorkspace({ tenantSlug }: Props) {
               )}
             >
               <span className="text-sm font-medium">
-                {exportBusy ? "Загрузка…" : "Batafsil (mahsulot qatorlari)"}
+                {exportBusy ? "Загрузка…" : "Подробно (строки товаров)"}
               </span>
               <span className="text-xs text-muted-foreground">
-                Har hujjat ichidagi barcha product qatorlari bilan eksport
+                Экспорт со всеми строками товаров каждого документа
               </span>
             </button>
             {rows.length === 0 ? (
               <p className="rounded-lg bg-muted/50 px-3 py-2 text-center text-xs text-muted-foreground">
-                Eksport uchun jadvalda kamida bitta qator bo‘lishi kerak.
+                Для экспорта в таблице должна быть хотя бы одна строка.
               </p>
             ) : null}
           </div>

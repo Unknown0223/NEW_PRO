@@ -28,16 +28,23 @@ export async function registerNotificationRoutes(app: FastifyInstance) {
     const qParsed = z
       .object({
         unread_only: z.enum(["true", "false"]).optional(),
+        status: z.enum(["all", "unread", "read"]).optional(),
+        q: z.string().max(200).optional(),
+        page: z.coerce.number().int().min(1).max(500).optional(),
         limit: z.coerce.number().int().min(1).max(100).optional()
       })
       .safeParse(request.query);
     if (!qParsed.success) {
-      return sendApiError(reply, request, 400, "ValidationError", "Invalid query", zodValidationExtras(qParsed.error));
+      return sendApiError(reply, request, 400, "ValidationError", "Некорректные параметры запроса", zodValidationExtras(qParsed.error));
     }
     const q = qParsed.data;
+    const limit = q.limit ?? 40;
+    const page = q.page ?? 1;
     const result = await listNotifications(tenantId, userId, {
-      unread_only: q.unread_only === "true",
-      limit: q.limit ?? 40
+      status: q.unread_only === "true" ? "unread" : q.status ?? "all",
+      q: q.q,
+      limit,
+      offset: (page - 1) * limit
     });
     return reply.send(result);
   });
@@ -52,7 +59,7 @@ export async function registerNotificationRoutes(app: FastifyInstance) {
     if (!Number.isFinite(userId) || userId < 1) return sendApiError(reply, request, 400, "BadUser");
     const idParsed = z.coerce.number().int().positive().safeParse((request.params as { id: string }).id);
     if (!idParsed.success) {
-      return sendApiError(reply, request, 400, "ValidationError", "Invalid id", zodValidationExtras(idParsed.error));
+      return sendApiError(reply, request, 400, "ValidationError", "Некорректный ID", zodValidationExtras(idParsed.error));
     }
     const id = idParsed.data;
     const row = await markNotificationRead(tenantId, userId, id);
@@ -85,7 +92,7 @@ export async function registerNotificationRoutes(app: FastifyInstance) {
       })
       .safeParse(request.body);
     if (!bodyParsed.success) {
-      return sendApiError(reply, request, 400, "ValidationError", "Invalid request body", zodValidationExtras(bodyParsed.error));
+      return sendApiError(reply, request, 400, "ValidationError", "Некорректные данные запроса", zodValidationExtras(bodyParsed.error));
     }
     const body = bodyParsed.data;
     const target = await prisma.user.findFirst({

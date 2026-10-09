@@ -1,11 +1,56 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { Columns3, FileSpreadsheet, Loader2 } from "lucide-react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { ArrowDown, ArrowUp, ArrowUpDown, Columns3, FileSpreadsheet, Loader2 } from "lucide-react";
+import { usePermissions } from "@/lib/use-permissions";
 import { downloadXlsxAoa } from "@/lib/download-xlsx";
 import { cn } from "@/lib/utils";
 import type { DailyKpiDayMatrix } from "./daily-kpi-api";
+import {
+  dayMetricSortKey,
+  nextDailyKpiDaySort,
+  sortDailyKpiDayAgents,
+  type DailyKpiDaySort,
+  type DailyKpiDaySortKey
+} from "./daily-kpi-day-sort";
 import { fmtMoney, fmtPct } from "./daily-kpi-format";
+
+function SortButton({
+  label,
+  sortKey,
+  sort,
+  onSort,
+  alignRight
+}: {
+  label: string;
+  sortKey: DailyKpiDaySortKey;
+  sort: DailyKpiDaySort;
+  onSort: (key: DailyKpiDaySortKey) => void;
+  alignRight?: boolean;
+}) {
+  const active = sort.key === sortKey;
+  const Icon = active ? (sort.dir === "asc" ? ArrowUp : ArrowDown) : ArrowUpDown;
+  return (
+    <button
+      type="button"
+      onClick={() => onSort(sortKey)}
+      className={cn(
+        "inline-flex items-center gap-1 whitespace-nowrap hover:text-slate-900",
+        alignRight && "flex-row-reverse",
+        active && "text-teal-700"
+      )}
+      title="Сортировать"
+    >
+      {label}
+      <Icon className={cn("size-3 shrink-0", !active && "opacity-40")} />
+    </button>
+  );
+}
+
+function ariaSort(sort: DailyKpiDaySort, key: DailyKpiDaySortKey): "ascending" | "descending" | "none" {
+  if (sort.key !== key) return "none";
+  return sort.dir === "asc" ? "ascending" : "descending";
+}
 
 type MetricKey = "day_plan" | "sales" | "returns" | "fact" | "execution_pct";
 
@@ -52,11 +97,15 @@ function cellValue(
 
 export function DailyKpiDayTable({
   data,
-  dayLabel
+  dayLabel,
+  toolbar
 }: {
   data: DailyKpiDayMatrix;
   dayLabel: string;
+  toolbar?: ReactNode;
 }) {
+  const isRange = (data.days_count ?? 1) > 1;
+  const canExport = usePermissions().has("reports.dnevnye_kpi_plany.export");
   const [exporting, setExporting] = useState(false);
   const [colsOpen, setColsOpen] = useState(false);
   const [visible, setVisible] = useState<VisibleMetrics>(DEFAULT_VISIBLE);
@@ -66,12 +115,23 @@ export function DailyKpiDayTable({
   }, []);
 
   const groups = data.kpi_groups;
-  const agents = data.agents;
+  const [sort, setSort] = useState<DailyKpiDaySort>({ key: "name", dir: "asc" });
 
   const activeMetrics = useMemo(
     () => ALL_METRICS.filter((m) => visible[m.key]),
     [visible]
   );
+
+  const effectiveSort = useMemo<DailyKpiDaySort>(() => {
+    if (!sort.key.startsWith("m:")) return sort;
+    const [, groupId, metric] = sort.key.split(":");
+    const ok =
+      groups.some((g) => String(g.kpi_group_id) === groupId) && activeMetrics.some((m) => m.key === metric);
+    return ok ? sort : { key: "name", dir: "asc" };
+  }, [sort, groups, activeMetrics]);
+
+  const agents = useMemo(() => sortDailyKpiDayAgents(data.agents, effectiveSort), [data.agents, effectiveSort]);
+  const onSort = (key: DailyKpiDaySortKey) => setSort((prev) => nextDailyKpiDaySort(prev, key));
 
   const footerCells = useMemo(() => {
     const out: Record<string, { day_plan: number; sales: number; returns: number; fact: number }> =
@@ -171,8 +231,8 @@ export function DailyKpiDayTable({
       ];
 
       await downloadXlsxAoa(
-        `daily-kpi-${data.day}.xlsx`,
-        "KPI день",
+        isRange ? `daily-kpi-${data.day_from}_${data.day_to}.xlsx` : `daily-kpi-${data.day}.xlsx`,
+        isRange ? "KPI период" : "KPI день",
         [header1, header2, ...dataRows, totalLine],
         { colWidths, merges }
       );
@@ -184,10 +244,30 @@ export function DailyKpiDayTable({
     }
   };
 
+  const titleBlock = (
+    <div className="shrink-0">
+      <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-teal-600">
+        {isRange ? "KPI · период" : "KPI · день"}
+      </p>
+      <h2 className="text-sm font-semibold text-slate-900">Агенты × группы · {dayLabel}</h2>
+    </div>
+  );
+  const toolbarBlock = toolbar ? (
+    <div className="order-3 w-full min-w-0 2xl:order-none 2xl:w-auto 2xl:flex-1 2xl:[&>div]:justify-center">
+      {toolbar}
+    </div>
+  ) : null;
+
   if (groups.length === 0) {
     return (
-      <div className="rounded-xl border border-dashed border-slate-200 bg-white px-4 py-14 text-center text-sm text-slate-500">
-        Нет KPI планов на выбранный день / направление
+      <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-slate-100 px-4 py-3">
+          {titleBlock}
+          {toolbarBlock}
+        </div>
+        <div className="px-4 py-14 text-center text-sm text-slate-500">
+          {isRange ? "Нет KPI планов на выбранный период / направление" : "Нет KPI планов на выбранный день / направление"}
+        </div>
       </div>
     );
   }
@@ -197,16 +277,10 @@ export function DailyKpiDayTable({
 
   return (
     <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 px-4 py-3">
-        <div>
-          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-teal-600">
-            KPI · день
-          </p>
-          <h2 className="text-sm font-semibold text-slate-900">
-            Агенты × группы · {dayLabel}
-          </h2>
-        </div>
-        <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-slate-100 px-4 py-3">
+        {titleBlock}
+        {toolbarBlock}
+        <div className="ml-auto flex items-center gap-2">
           <div className="relative">
             <button
               type="button"
@@ -250,19 +324,21 @@ export function DailyKpiDayTable({
               </>
             ) : null}
           </div>
-          <button
-            type="button"
-            disabled={exporting || agents.length === 0}
-            onClick={() => void exportExcel()}
-            className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 text-xs font-semibold text-emerald-800 hover:bg-emerald-100 disabled:opacity-50"
-          >
-            {exporting ? (
-              <Loader2 className="size-3.5 animate-spin" />
-            ) : (
-              <FileSpreadsheet className="size-3.5" />
-            )}
-            Excel
-          </button>
+          {canExport ? (
+            <button
+              type="button"
+              disabled={exporting || agents.length === 0}
+              onClick={() => void exportExcel()}
+              className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 text-xs font-semibold text-emerald-800 hover:bg-emerald-100 disabled:opacity-50"
+            >
+              {exporting ? (
+                <Loader2 className="size-3.5 animate-spin" />
+              ) : (
+                <FileSpreadsheet className="size-3.5" />
+              )}
+              Excel
+            </button>
+          ) : null}
         </div>
       </div>
 
@@ -272,9 +348,9 @@ export function DailyKpiDayTable({
             <tr className="border-b border-slate-200 bg-slate-50/90">
               {(
                 [
-                  { label: "Агент", i: 0 },
-                  { label: "Smart код", i: 1 },
-                  { label: "Филиал", i: 2 }
+                  { label: "Агент", i: 0, key: "name" },
+                  { label: "Smart код", i: 1, key: "code" },
+                  { label: "Филиал", i: 2, key: "branch" }
                 ] as const
               ).map((col) => (
                 <th
@@ -282,8 +358,9 @@ export function DailyKpiDayTable({
                   rowSpan={2}
                   style={{ left: stickyLeft[col.i], minWidth: stickyWidths[col.i] }}
                   className="sticky z-20 border-r border-slate-200 bg-slate-50 px-3 py-2 text-[11px] font-semibold text-slate-600"
+                  aria-sort={ariaSort(effectiveSort, col.key)}
                 >
-                  {col.label}
+                  <SortButton label={col.label} sortKey={col.key} sort={effectiveSort} onSort={onSort} />
                 </th>
               ))}
               {groups.map((g) => (
@@ -301,17 +378,21 @@ export function DailyKpiDayTable({
             </tr>
             <tr className="border-b border-slate-200 bg-slate-50/60">
               {groups.map((g) =>
-                activeMetrics.map((m, idx) => (
-                  <th
-                    key={`${g.kpi_group_id}-${m.key}`}
-                    className={cn(
-                      "whitespace-nowrap px-2 py-1.5 text-right text-[10px] font-medium uppercase tracking-wide text-slate-500",
-                      idx === activeMetrics.length - 1 && "border-r border-slate-200"
-                    )}
-                  >
-                    {m.label}
-                  </th>
-                ))
+                activeMetrics.map((m, idx) => {
+                  const key = dayMetricSortKey(g.kpi_group_id, m.key);
+                  return (
+                    <th
+                      key={`${g.kpi_group_id}-${m.key}`}
+                      className={cn(
+                        "whitespace-nowrap px-2 py-1.5 text-right text-[10px] font-medium uppercase tracking-wide text-slate-500",
+                        idx === activeMetrics.length - 1 && "border-r border-slate-200"
+                      )}
+                      aria-sort={ariaSort(effectiveSort, key)}
+                    >
+                      <SortButton label={m.label} sortKey={key} sort={effectiveSort} onSort={onSort} alignRight />
+                    </th>
+                  );
+                })
               )}
             </tr>
           </thead>

@@ -9,7 +9,9 @@ import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import { buttonVariants } from "@/components/ui/button-variants";
 import { api } from "@/lib/api";
+import { useDebouncedSearchCommit } from "@/lib/use-debounced-search-commit";
 import { getUserFacingError } from "@/lib/error-utils";
+import { usePermissions } from "@/lib/use-permissions";
 import { formatNumberGrouped } from "@/lib/format-numbers";
 import { STALE } from "@/lib/query-stale";
 import { priceTypeOptionsFromResponse, type PriceTypeOption } from "@/lib/price-type-label";
@@ -21,7 +23,7 @@ import { isAxiosError } from "axios";
 import { Download, LayoutGrid, ListFilter, RefreshCw, Search } from "lucide-react";
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 type BalanceView = "summary" | "valuation" | "by_warehouse";
 
@@ -254,11 +256,11 @@ function thClassNumeric(numericIds: Set<string>, colId: string): string {
 }
 
 const SUMMARY_HEADER_TITLE: Partial<Record<string, string>> = {
-  reserved: "Данные из Stock.reserved_qty. Авто по заказам пока не заполняется."
+  reserved: "Резерв из остатков склада. Автоматически по заказам пока не заполняется."
 };
 
 const BY_WH_HEADER_TITLE: Partial<Record<string, string>> = {
-  reserved: "Stock.reserved_qty по строке склад+товар."
+  reserved: "Резерв по строке «склад + товар»."
 };
 
 function renderSummaryDataCell(row: BalanceRow, colId: string): ReactNode {
@@ -403,6 +405,7 @@ function renderValuationTotalCell(colId: string, totals: TotalsBase): ReactNode 
 }
 
 export function StockBalancesWorkspace({ tenantSlug }: Props) {
+  const canExport = usePermissions().has("warehouse.ostatki.copy");
   const [purpose, setPurpose] = useState<WarehouseStockPurpose>("sales");
   const [balanceView, setBalanceView] = useState<BalanceView>("summary");
   const [draftWh, setDraftWh] = useState("");
@@ -413,6 +416,10 @@ export function StockBalancesWorkspace({ tenantSlug }: Props) {
   const [draftProductScope, setDraftProductScope] = useState<ProductScope>("active");
   const [draftSort, setDraftSort] = useState<BalanceSort>("name_asc");
   const [searchDraft, setSearchDraft] = useState("");
+  useDebouncedSearchCommit(searchDraft, (q) => {
+    setApplied((prev) => (prev.q === q ? prev : { ...prev, q }));
+    setPage(1);
+  });
   const [applied, setApplied] = useState<{
     warehouseId: string;
     categoryId: string;
@@ -497,16 +504,25 @@ export function StockBalancesWorkspace({ tenantSlug }: Props) {
   });
 
   const groupsQ = useQuery({
-    queryKey: ["catalog-product-groups-balances", tenantSlug],
+    queryKey: ["catalog-product-groups-balances", tenantSlug, draftCat],
     queryFn: async () => {
+      const params = new URLSearchParams({ limit: "200", page: "1", is_active: "true" });
+      if (draftCat.trim()) params.set("category_id", draftCat.trim());
       const { data } = await api.get<{ data: GroupOpt[]; total: number }>(
-        `/api/${tenantSlug}/catalog/product-groups?limit=200&page=1`
+        `/api/${tenantSlug}/catalog/product-groups?${params.toString()}`
       );
       return data.data;
     },
     enabled: Boolean(tenantSlug),
     staleTime: STALE.reference
   });
+
+  useEffect(() => {
+    if (!draftGroup || !groupsQ.data) return;
+    if (!groupsQ.data.some((g) => String(g.id) === draftGroup)) {
+      setDraftGroup("");
+    }
+  }, [groupsQ.data, draftGroup]);
 
   const priceTypesQ = useQuery({
     queryKey: ["price-types", tenantSlug, "stock-balances"],
@@ -524,6 +540,18 @@ export function StockBalancesWorkspace({ tenantSlug }: Props) {
     const list = warehousesQ.data ?? [];
     return list.filter((w) => w.stock_purpose === purpose && w.stock_purpose != null);
   }, [warehousesQ.data, purpose]);
+
+  // Bitta bog‘langan ombor bo‘lsa — avtomatik tanlash (boshqa filial yig‘indisiga tushmaslik).
+  useEffect(() => {
+    if (warehousesQ.isLoading) return;
+    if (warehousesForPurpose.length !== 1) return;
+    const onlyId = String(warehousesForPurpose[0]!.id);
+    if (draftWh !== onlyId) setDraftWh(onlyId);
+    if (applied.warehouseId !== onlyId) {
+      setApplied((prev) => ({ ...prev, warehouseId: onlyId }));
+      setPage(1);
+    }
+  }, [warehousesForPurpose, warehousesQ.isLoading, draftWh, applied.warehouseId]);
 
   const balancesEnabled =
     Boolean(tenantSlug) &&
@@ -741,7 +769,11 @@ export function StockBalancesWorkspace({ tenantSlug }: Props) {
                 value={draftWh}
                 onChange={(e) => setDraftWh(e.target.value)}
               >
-                <option value="">Все ({PURPOSE_TABS.find((x) => x.value === purpose)?.label})</option>
+                {warehousesForPurpose.length > 1 ? (
+                  <option value="">
+                    Мои склады ({PURPOSE_TABS.find((x) => x.value === purpose)?.label})
+                  </option>
+                ) : null}
                 {warehousesForPurpose.map((w) => (
                   <option key={w.id} value={String(w.id)}>
                     {w.name}
@@ -754,7 +786,10 @@ export function StockBalancesWorkspace({ tenantSlug }: Props) {
               <select
                 className="flex h-9 w-full rounded-md border border-input bg-background px-2 text-sm text-foreground"
                 value={draftCat}
-                onChange={(e) => setDraftCat(e.target.value)}
+                onChange={(e) => {
+                  setDraftCat(e.target.value);
+                  setDraftGroup("");
+                }}
               >
                 <option value="">Все</option>
                 {(categoriesQ.data ?? []).map((c) => (
@@ -910,17 +945,19 @@ export function StockBalancesWorkspace({ tenantSlug }: Props) {
                     }}
                   />
                 </div>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="h-9"
-                  disabled={exporting || (balanceView === "valuation" && !applied.priceType.trim())}
-                  onClick={() => void downloadExcel()}
-                >
-                  <Download className="mr-1 size-3.5" />
-                  {exporting ? "…" : "Excel"}
-                </Button>
+                {canExport ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-9"
+                    disabled={exporting || (balanceView === "valuation" && !applied.priceType.trim())}
+                    onClick={() => void downloadExcel()}
+                  >
+                    <Download className="mr-1 size-3.5" />
+                    {exporting ? "…" : "Excel"}
+                  </Button>
+                ) : null}
                 <Button
                   type="button"
                   variant="outline"
@@ -967,7 +1004,7 @@ export function StockBalancesWorkspace({ tenantSlug }: Props) {
                       Движения товаров на складе
                     </Link>
                     <Link
-                      href="/products"
+                      href="/settings/products"
                       className={cn(
                         buttonVariants({ variant: "outline", size: "sm" }),
                         "h-9 whitespace-nowrap"

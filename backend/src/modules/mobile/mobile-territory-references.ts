@@ -93,6 +93,26 @@ export function regionFilterNormKeys(region: string): Set<string> {
   return out;
 }
 
+/** Filtrdagi viloyat uchun `clients.city` prefikslari (`XR_` → XORAZM). */
+export function cityStartsWithPrefixesForRegion(regionFilter: string): string[] {
+  const norms = regionFilterNormKeys(regionFilter);
+  if (norms.size === 0) return [];
+  const out: string[] = [];
+  for (const row of CITY_CODE_PREFIX_TERRITORY) {
+    if (norms.has(normKeyTerritoryMatch(row.region))) out.push(row.prefix);
+  }
+  return out;
+}
+
+/** Filtrdagi zona uchun `clients.city` prefikslari (`SOUTH-WEST` → XR_, SM_, …). */
+export function cityStartsWithPrefixesForZone(zoneFilter: string): string[] {
+  const zf = normKeyTerritoryMatch(zoneFilter);
+  if (!zf) return [];
+  return CITY_CODE_PREFIX_TERRITORY.filter((row) => normKeyTerritoryMatch(row.zone) === zf).map(
+    (row) => row.prefix
+  );
+}
+
 export function mergeMobileCitiesByZoneRegion(input: {
   fromTree: Record<string, string[]>;
   fromClientRows: Record<string, string[]>;
@@ -133,6 +153,40 @@ export function mergeMobileCitiesByZoneRegion(input: {
     const inferred = inferCityTerritoryFromCode(city);
     if (inferred) addCitiesToMap(map, inferred.zone, inferred.region, [city]);
   }
+
+  return Object.fromEntries(
+    Object.entries(map).map(([k, set]) => [k, [...set].sort((a, b) => a.localeCompare(b, "ru"))])
+  );
+}
+
+type TerritoryTreeNode = {
+  name?: string;
+  active?: boolean;
+  children?: TerritoryTreeNode[];
+};
+
+/** `territory_nodes` → `zone|||region` → shaharlar (mobil cascade / agent_cities). */
+export function citiesByZoneRegionFromTerritoryNodes(
+  nodes: TerritoryTreeNode[] | null | undefined
+): Record<string, string[]> {
+  const map: Record<string, Set<string>> = {};
+  if (!nodes?.length) return {};
+
+  const walk = (list: TerritoryTreeNode[], depth: number, path: string[]) => {
+    for (const n of list) {
+      if (n.active === false) continue;
+      const name = typeof n.name === "string" ? n.name.trim() : "";
+      if (!name) continue;
+      const nextPath = [...path, name];
+      if (depth >= 2) {
+        const zone = nextPath[0] ?? "";
+        const region = nextPath[1] ?? "";
+        if (region) addCitiesToMap(map, zone, region, [name]);
+      }
+      if (n.children?.length) walk(n.children, depth + 1, nextPath);
+    }
+  };
+  walk(nodes, 0, []);
 
   return Object.fromEntries(
     Object.entries(map).map(([k, set]) => [k, [...set].sort((a, b) => a.localeCompare(b, "ru"))])

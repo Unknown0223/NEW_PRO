@@ -15,6 +15,7 @@ export const SALES_CAT_PERF_COL_DEFS: ColumnDefItem[] = [
   { id: "sales_sum", label: "Сумма продаж" },
   { id: "sold_qty", label: "Кол-во" },
   { id: "volume", label: "Объем" },
+  { id: "bonus_qty", label: "Бонус" },
   { id: "akb", label: "АКБ" },
   { id: "share_pct", label: "Доля" }
 ];
@@ -45,7 +46,7 @@ export function SalesCategoryTable({
   const visibleCols = tablePrefs.visibleColumnOrder;
   const labelById = Object.fromEntries(SALES_CAT_PERF_COL_DEFS.map((c) => [c.id, c.label]));
   const pageRows = data.category_performance_table.slice((page - 1) * pageSize, page * pageSize);
-  const rightCols = new Set(["sales_sum", "sold_qty", "volume", "akb", "share_pct"]);
+  const rightCols = new Set(["sales_sum", "sold_qty", "volume", "bonus_qty", "akb", "share_pct"]);
 
   const renderCell = (id: string, r: Row) => {
     if (id === "category") return <td key={id} className="px-2 py-1.5">{r.category}</td>;
@@ -55,6 +56,8 @@ export function SalesCategoryTable({
       return <td key={id} className="px-2 py-1.5 text-right tabular-nums">{fmtCount(r.sold_qty)}</td>;
     if (id === "volume")
       return <td key={id} className="px-2 py-1.5 text-right tabular-nums">{fmtCount(r.volume)}</td>;
+    if (id === "bonus_qty")
+      return <td key={id} className="px-2 py-1.5 text-right tabular-nums">{fmtCount(r.bonus_qty ?? 0)}</td>;
     if (id === "akb") return <td key={id} className="px-2 py-1.5 text-right tabular-nums">{fmtCount(r.akb)}</td>;
     if (id === "share_pct")
       return <td key={id} className="px-2 py-1.5 text-right tabular-nums">{r.share_pct.toFixed(1)}%</td>;

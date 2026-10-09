@@ -4,19 +4,20 @@ import { useEffect, useMemo, useState } from "react";
 import type { AxiosError } from "axios";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
+import { useStaffCrudPermissions } from "@/lib/use-staff-crud-permissions";
 import { firstValidationUserHint, getZodFlattenFromApiErrorBody } from "@/lib/api-validation-details";
 import { withApiSupportLine } from "@/lib/error-utils";
 import { STALE } from "@/lib/query-stale";
 import { Button } from "@/components/ui/button";
-import { WorkplaceMovedNotice } from "@/components/staff/workplace-moved-notice";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { downloadXlsxSheet } from "@/lib/download-xlsx";
 import { TableColumnSettingsDialog } from "@/components/data-table/table-column-settings-dialog";
 import { useUserTablePrefs } from "@/hooks/use-user-table-prefs";
 import { DEFAULT_TABLE_PAGE_SIZES } from "@/lib/table-page-sizes";
-import { MonitorSmartphone, Pencil, Settings2, UserMinus } from "lucide-react";
-import { StaffActiveSessionsDialog } from "@/components/staff/staff-active-sessions-dialog";
+import { Pencil, KeyRound, UserMinus } from "lucide-react";
+import { WorkplaceMovedNotice } from "@/components/staff/workplace-moved-notice";
+import { StaffPasswordChangeDialog } from "@/components/staff/staff-password-change-dialog";
 import { messageFromStaffCreateError } from "@/lib/staff-api-errors";
 import { AgentIconButton, AgentTemplateConfirmDialog } from "@/components/staff/agent-workspace-template-ui";
 import { StaffBulkFloatingBar } from "@/components/staff/staff-bulk-floating-bar";
@@ -30,20 +31,18 @@ import {
 import { StaffImportDialog } from "@/components/staff/staff-import-dialog";
 import { useStaffExcelImport } from "@/components/staff/use-staff-excel-import";
 import { useStaffKomandaBulk } from "@/hooks/use-staff-komanda-bulk";
+import { useStaffFilterVisible } from "@/hooks/use-staff-filter-visible";
 import { formatPersonDisplayName } from "@/lib/person-display";
+import { buildTerritoryTreeOnlyCascade } from "@/lib/territory-client-filters";
+import type { TerritoryNode } from "@/lib/territory-tree";
 import {
-  StaffKomandaActiveSessionsCell,
   StaffKomandaApkCell,
-  StaffKomandaAppAccessToggle,
   StaffKomandaBranchCell,
-  StaffKomandaCodeCell,
   StaffKomandaDeviceCell,
   StaffKomandaFioCell,
   StaffKomandaLoginCell,
-  StaffKomandaMaxSessionsCell,
   StaffKomandaPhoneCell,
   StaffKomandaPinflCell,
-  StaffKomandaPositionCell,
   StaffKomandaTerritoryCell
 } from "@/components/staff/staff-komanda-table-cells";
 
@@ -62,44 +61,39 @@ type AuditorRow = {
   apk_version: string | null;
   app_access: boolean;
   territory: string | null;
+  work_slot_territories?: string[];
   device_name: string | null;
   active_session_count: number;
   max_sessions: number;
   is_active: boolean;
+  filter_visible?: boolean;
   agent_entitlements?: Record<string, unknown> & { mobile_config?: unknown };
+  work_slot_id?: number | null;
+  work_slot_code?: string | null;
 };
 
 const COLS = [
   "Ф.И.О",
   "Авторизоваться",
   "Телефон",
-  "Код",
   "Территория",
   "Версия APK",
   "ПИНФЛ",
   "Филиал",
-  "Должность",
-  "Название устройства",
-  "Доступ к приложение",
-  "Количество активных сессий",
-  "Максимальное количество сессий"
+  "Название устройства"
 ] as const;
 
-const AUDITOR_TABLE_ID = "staff.auditors.v1";
+/** v2: код / должность / сессии / app_access olib tashlandi — Рабочее место */
+const AUDITOR_TABLE_ID = "staff.auditors.v2";
 const AUDITOR_COLUMN_IDS = [
   "fio",
   "login",
   "phone",
-  "code",
   "territory",
   "apk_version",
   "pinfl",
   "branch",
-  "position",
-  "device_name",
-  "app_access",
-  "active_sessions",
-  "max_sessions"
+  "device_name"
 ] as const;
 const AUDITOR_COLUMNS = AUDITOR_COLUMN_IDS.map((id, i) => ({
   id,
@@ -112,21 +106,21 @@ const AUDITOR_COLUMN_LABEL_BY_ID = new Map<string, string>(
 type Props = { tenantSlug: string };
 
 export function AuditorsWorkspace({ tenantSlug }: Props) {
+  const perms = useStaffCrudPermissions("auditor");
   const qc = useQueryClient();
   const [tab, setTab] = useState<"active" | "inactive">("active");
   const [search, setSearch] = useState("");
-  const [draftPos, setDraftPos] = useState("");
-  const [draftTerritory, setDraftTerritory] = useState("");
-  const [appliedPos, setAppliedPos] = useState("");
-  const [appliedTerritory, setAppliedTerritory] = useState("");
+  const [draftOblast, setDraftOblast] = useState("");
+  const [draftCity, setDraftCity] = useState("");
+  const [appliedOblast, setAppliedOblast] = useState("");
+  const [appliedCity, setAppliedCity] = useState("");
   const [page, setPage] = useState(1);
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [columnDialogOpen, setColumnDialogOpen] = useState(false);
   const [editRow, setEditRow] = useState<AuditorRow | null>(null);
+  const [passwordRow, setPasswordRow] = useState<AuditorRow | null>(null);
   const [addOpen, setAddOpen] = useState(false);
-  const [sessionRow, setSessionRow] = useState<AuditorRow | null>(null);
   const [deactivateRow, setDeactivateRow] = useState<AuditorRow | null>(null);
-  const [configRow, setConfigRow] = useState<AuditorRow | null>(null);
   const [createError, setCreateError] = useState<string | null>(null);
 
   const tablePrefs = useUserTablePrefs({
@@ -148,22 +142,71 @@ export function AuditorsWorkspace({ tenantSlug }: Props) {
     enabled: Boolean(tenantSlug),
     staleTime: STALE.reference,
     queryFn: async () => {
-      const { data } = await api.get<{ data: { positions: string[]; territories: string[] } }>(
-        `/api/${tenantSlug}/auditors/filter-options`
-      );
+      const { data } = await api.get<{
+        data: {
+          positions: string[];
+          territories: string[];
+          territory_oblasts?: string[];
+          territory_cities?: string[];
+        };
+      }>(`/api/${tenantSlug}/auditors/filter-options`);
       return data.data;
     }
   });
 
+  const profileQ = useQuery({
+    queryKey: ["settings", "profile", tenantSlug, "auditors-workspace"],
+    enabled: Boolean(tenantSlug),
+    staleTime: STALE.profile,
+    queryFn: async () => {
+      const { data } = await api.get<{
+        references: { territory_nodes?: TerritoryNode[] };
+      }>(`/api/${tenantSlug}/settings/profile`);
+      return data;
+    }
+  });
+
+  const territoryNodes = profileQ.data?.references?.territory_nodes;
+  const hasTerritoryTree = (territoryNodes?.length ?? 0) > 0;
+
+  const oblastOptions = useMemo(() => {
+    if (hasTerritoryTree) {
+      const cascaded = buildTerritoryTreeOnlyCascade(territoryNodes, {
+        zones: [],
+        regions: draftOblast ? [draftOblast] : []
+      });
+      return cascaded.regions.map((o) => o.value);
+    }
+    return filterQ.data?.territory_oblasts ?? [];
+  }, [hasTerritoryTree, territoryNodes, draftOblast, filterQ.data]);
+
+  const cityOptions = useMemo(() => {
+    if (hasTerritoryTree) {
+      const cascaded = buildTerritoryTreeOnlyCascade(territoryNodes, {
+        zones: [],
+        regions: draftOblast ? [draftOblast] : []
+      });
+      return cascaded.cities.map((o) => o.value);
+    }
+    return filterQ.data?.territory_cities ?? [];
+  }, [hasTerritoryTree, territoryNodes, draftOblast, filterQ.data]);
+
+  useEffect(() => {
+    if (!draftCity) return;
+    if (cityOptions.length > 0 && !cityOptions.some((c) => c === draftCity)) {
+      setDraftCity("");
+    }
+  }, [cityOptions, draftCity]);
+
   const listQ = useQuery({
-    queryKey: ["auditors", tenantSlug, tab, appliedPos, appliedTerritory],
+    queryKey: ["auditors", tenantSlug, tab, appliedOblast, appliedCity],
     enabled: Boolean(tenantSlug),
     staleTime: STALE.list,
     queryFn: async () => {
       const p = new URLSearchParams();
       p.set("is_active", tab === "active" ? "true" : "false");
-      if (appliedPos.trim()) p.set("position", appliedPos.trim());
-      if (appliedTerritory.trim()) p.set("territory", appliedTerritory.trim());
+      if (appliedOblast.trim()) p.set("territory_oblast", appliedOblast.trim());
+      if (appliedCity.trim()) p.set("territory_city", appliedCity.trim());
       const { data } = await api.get<{ data: AuditorRow[] }>(`/api/${tenantSlug}/auditors?${p.toString()}`);
       return data.data;
     }
@@ -196,7 +239,7 @@ export function AuditorsWorkspace({ tenantSlug }: Props) {
       const flat = getZodFlattenFromApiErrorBody(ax.response?.data);
       if (flat) {
         const hint = firstValidationUserHint(flat);
-        setCreateError(withApiSupportLine(hint ?? "Ma'lumotlarni tekshiring.", e));
+        setCreateError(withApiSupportLine(hint ?? "Проверьте данные.", e));
         return;
       }
       setCreateError(messageFromStaffCreateError(e));
@@ -245,22 +288,22 @@ export function AuditorsWorkspace({ tenantSlug }: Props) {
 
   useEffect(() => {
     setPage(1);
-  }, [tab, appliedPos, appliedTerritory, search, pageSize]);
+  }, [tab, appliedOblast, appliedCity, search, pageSize]);
 
   useEffect(() => {
     setSelected(new Set());
-  }, [tab, appliedPos, appliedTerritory, safePage, pageSize]);
+  }, [tab, appliedOblast, appliedCity, safePage, pageSize]);
 
   const applyFilters = () => {
-    setAppliedPos(draftPos);
-    setAppliedTerritory(draftTerritory);
+    setAppliedOblast(draftOblast);
+    setAppliedCity(draftCity);
   };
 
   const resetFilters = () => {
-    setDraftPos("");
-    setDraftTerritory("");
-    setAppliedPos("");
-    setAppliedTerritory("");
+    setDraftOblast("");
+    setDraftCity("");
+    setAppliedOblast("");
+    setAppliedCity("");
     setPage(1);
   };
 
@@ -297,6 +340,15 @@ export function AuditorsWorkspace({ tenantSlug }: Props) {
     selectedRows
   });
 
+  const filterVisibleMut = useStaffFilterVisible({
+    tenantSlug,
+    segment: "auditors",
+    invalidateQueryKeys: [
+      ["auditors", tenantSlug],
+      ["auditors-filter-options", tenantSlug]
+    ]
+  });
+
   function exportCellString(r: AuditorRow, colId: string): string {
     switch (colId) {
       case "fio":
@@ -305,8 +357,6 @@ export function AuditorsWorkspace({ tenantSlug }: Props) {
         return r.login;
       case "phone":
         return r.phone ?? "";
-      case "code":
-        return r.code ?? "";
       case "territory":
         return r.territory ?? "";
       case "apk_version":
@@ -315,16 +365,8 @@ export function AuditorsWorkspace({ tenantSlug }: Props) {
         return r.pinfl ?? "";
       case "branch":
         return r.branch ?? "";
-      case "position":
-        return r.position ?? "";
       case "device_name":
         return r.device_name ?? "";
-      case "app_access":
-        return r.app_access ? "Да" : "Нет";
-      case "active_sessions":
-        return String(r.active_session_count);
-      case "max_sessions":
-        return String(r.max_sessions);
       default:
         return "";
     }
@@ -345,38 +387,21 @@ export function AuditorsWorkspace({ tenantSlug }: Props) {
         return <StaffKomandaLoginCell login={r.login} />;
       case "phone":
         return <StaffKomandaPhoneCell phone={r.phone} />;
-      case "code":
-        return <StaffKomandaCodeCell code={r.code} />;
       case "territory":
-        return <StaffKomandaTerritoryCell territory={r.territory} />;
+        return (
+          <StaffKomandaTerritoryCell
+            territory={r.territory}
+            territories={r.work_slot_territories}
+          />
+        );
       case "apk_version":
         return <StaffKomandaApkCell version={r.apk_version} />;
       case "pinfl":
         return <StaffKomandaPinflCell pinfl={r.pinfl} />;
       case "branch":
         return <StaffKomandaBranchCell branch={r.branch} />;
-      case "position":
-        return <StaffKomandaPositionCell position={r.position} />;
       case "device_name":
         return <StaffKomandaDeviceCell name={r.device_name} />;
-      case "app_access":
-        return (
-          <StaffKomandaAppAccessToggle
-            checked={r.app_access}
-            disabled={patchMut.isPending}
-            onChange={(next) => patchMut.mutate({ id: r.id, body: { app_access: next } })}
-          />
-        );
-      case "active_sessions":
-        return (
-          <StaffKomandaActiveSessionsCell
-            count={r.active_session_count}
-            max={r.max_sessions}
-            onClick={() => setSessionRow(r)}
-          />
-        );
-      case "max_sessions":
-        return <StaffKomandaMaxSessionsCell max={r.max_sessions} />;
       default:
         return "—";
     }
@@ -388,6 +413,7 @@ export function AuditorsWorkspace({ tenantSlug }: Props) {
         title="Аудиторы"
         subtitle="Управление аудиторами: территории, доступ к приложению и контроль сессий"
         addLabel="Добавить аудитора"
+        canAdd={perms.canCreate}
         onAdd={() => {
           setCreateError(null);
           setAddOpen(true);
@@ -399,25 +425,28 @@ export function AuditorsWorkspace({ tenantSlug }: Props) {
         filters={
           <>
             <StaffFilterSelect
-              label="Должность"
-              value={draftPos}
-              onChange={setDraftPos}
-              emptyLabel="Все должности"
+              label="Область"
+              value={draftOblast}
+              onChange={(v) => {
+                setDraftOblast(v);
+                setDraftCity("");
+              }}
+              emptyLabel="Все области"
             >
-              {(filterQ.data?.positions ?? []).map((x) => (
-                <option key={x} value={x}>
+              {oblastOptions.map((x) => (
+                <option key={`obl-${x}`} value={x}>
                   {x}
                 </option>
               ))}
             </StaffFilterSelect>
             <StaffFilterSelect
-              label="Территория"
-              value={draftTerritory}
-              onChange={setDraftTerritory}
-              emptyLabel="Все территории"
+              label="Город"
+              value={draftCity}
+              onChange={setDraftCity}
+              emptyLabel="Все города"
             >
-              {(filterQ.data?.territories ?? []).map((x) => (
-                <option key={x} value={x}>
+              {cityOptions.map((x) => (
+                <option key={`city-${x}`} value={x}>
                   {x}
                 </option>
               ))}
@@ -435,18 +464,24 @@ export function AuditorsWorkspace({ tenantSlug }: Props) {
         onColumnSettings={() => setColumnDialogOpen(true)}
         onSearch={setSearch}
         searchPlaceholder="Поиск по ФИО, коду, логину…"
-        onExport={() => {
-          const order = tablePrefs.visibleColumnOrder;
-          const headers = order.map((id) => AUDITOR_COLUMN_LABEL_BY_ID.get(id) ?? id);
-          const exportData = filteredRows.map((r) => order.map((colId) => exportCellString(r, colId)));
-          downloadXlsxSheet(
-            `auditors_${tab}_${new Date().toISOString().slice(0, 10)}.xlsx`,
-            "Аудиторы",
-            headers,
-            exportData
-          );
-        }}
-        onImport={() => staffImport.setOpen(true)}
+        onExport={
+          perms.canExport
+            ? () => {
+                const order = tablePrefs.visibleColumnOrder;
+                const headers = order.map((id) => AUDITOR_COLUMN_LABEL_BY_ID.get(id) ?? id);
+                const exportData = filteredRows.map((r) =>
+                  order.map((colId) => exportCellString(r, colId))
+                );
+                downloadXlsxSheet(
+                  `auditors_${tab}_${new Date().toISOString().slice(0, 10)}.xlsx`,
+                  "Аудиторы",
+                  headers,
+                  exportData
+                );
+              }
+            : undefined
+        }
+        onImport={perms.canImport ? () => staffImport.setOpen(true) : undefined}
         onRefresh={() => void listQ.refetch()}
         isFetching={listQ.isFetching}
       />
@@ -477,21 +512,33 @@ export function AuditorsWorkspace({ tenantSlug }: Props) {
         selectedIds={selected}
         onToggleSelection={toggleSelection}
         onToggleAllOnPage={toggleAllOnPage}
+        filterVisible={
+          tab === "inactive"
+            ? {
+                checked: (id) => pageRows.find((r) => r.id === id)?.filter_visible === true,
+                busy: filterVisibleMut.isPending,
+                onToggle: (ids, next) => void filterVisibleMut.mutate({ ids, filter_visible: next }),
+                groupLabel: (id) => pageRows.find((r) => r.id === id)?.branch?.trim() || "Без филиала"
+              }
+            : undefined
+        }
         renderCell={(colId, row) => renderDataCell(colId, pageRows.find((r) => r.id === row.id)!)}
         renderActions={(row) => {
+          if (!perms.canAnyRowAction) return null;
           const r = pageRows.find((x) => x.id === row.id)!;
           return (
             <div className="flex items-center justify-end gap-1">
-              <AgentIconButton title="Конфигурации" onClick={() => setConfigRow(r)}>
-                <Settings2 className="h-4 w-4" />
-              </AgentIconButton>
-              <AgentIconButton title="Сессии" onClick={() => setSessionRow(r)}>
-                <MonitorSmartphone className="h-4 w-4" />
-              </AgentIconButton>
-              <AgentIconButton title="Редактировать" onClick={() => setEditRow(r)}>
-                <Pencil className="h-4 w-4 text-amber-600" />
-              </AgentIconButton>
-              {tab === "active" ? (
+              {perms.canUpdate ? (
+                <AgentIconButton title="Изменить пароль" onClick={() => setPasswordRow(r)}>
+                  <KeyRound className="h-4 w-4" />
+                </AgentIconButton>
+              ) : null}
+              {perms.canUpdate ? (
+                <AgentIconButton title="Редактировать" onClick={() => setEditRow(r)}>
+                  <Pencil className="h-4 w-4 text-amber-600" />
+                </AgentIconButton>
+              ) : null}
+              {tab === "active" && perms.canDeactivate ? (
                 <AgentIconButton title="Деактивировать" onClick={() => setDeactivateRow(r)}>
                   <UserMinus className="h-4 w-4 text-rose-600" />
                 </AgentIconButton>
@@ -501,16 +548,31 @@ export function AuditorsWorkspace({ tenantSlug }: Props) {
         }}
       />
 
-      <StaffBulkFloatingBar
-        count={selected.size}
-        allAccessOn={bulk.allAccessOn}
-        isActiveTab={tab === "active"}
-        busy={bulk.bulkBusy}
-        onToggleAccess={bulk.onToggleAccess}
-        onToggleActive={() => bulk.onRequestToggleActive(tab === "active")}
-        onClearSessions={bulk.onClearSessions}
-        onClearSelection={() => setSelected(new Set())}
-      />
+      {perms.canUpdate || perms.canDeactivate || perms.canActivate ? (
+        <StaffBulkFloatingBar
+          count={selected.size}
+          isActiveTab={tab === "active"}
+          busy={bulk.bulkBusy}
+          onToggleActive={
+            (tab === "active" && perms.canDeactivate) || (tab === "inactive" && perms.canActivate)
+              ? () => bulk.onRequestToggleActive(tab === "active")
+              : undefined
+          }
+          onClearSelection={() => setSelected(new Set())}
+          filterVisibleOn={tab === "inactive" && selectedRows.every((r) => r.filter_visible)}
+          onToggleFilterVisible={
+            tab === "inactive"
+              ? () => {
+                  const allOn = selectedRows.every((r) => r.filter_visible);
+                  void filterVisibleMut.mutate({
+                    ids: selectedRows.map((r) => r.id),
+                    filter_visible: !allOn
+                  });
+                }
+              : undefined
+          }
+        />
+      ) : null}
 
       <AgentTemplateConfirmDialog
         open={bulk.confirmBulk != null}
@@ -520,9 +582,27 @@ export function AuditorsWorkspace({ tenantSlug }: Props) {
         onConfirm={bulk.handleConfirmBulk}
       />
 
-      <AuditorEditDialog row={editRow} onClose={() => setEditRow(null)} onPatch={(id, body) => patchMut.mutateAsync({ id, body })} />
+      <AuditorEditDialog
+        row={editRow}
+        tenantSlug={tenantSlug}
+        onClose={() => setEditRow(null)}
+        onPatch={(id, body) => patchMut.mutateAsync({ id, body })}
+      />
+      <StaffPasswordChangeDialog
+        open={passwordRow != null}
+        tenantSlug={tenantSlug}
+        apiSegment="auditors"
+        userId={passwordRow?.id ?? null}
+        login={passwordRow?.login ?? ""}
+        onClose={() => setPasswordRow(null)}
+        onDone={() => {
+          setPasswordRow(null);
+          void qc.invalidateQueries({ queryKey: ["auditors", tenantSlug] });
+        }}
+      />
       <AuditorAddDialog
         open={addOpen}
+        tenantSlug={tenantSlug}
         onOpenChange={(o) => {
           setAddOpen(o);
           if (!o) setCreateError(null);
@@ -533,46 +613,6 @@ export function AuditorsWorkspace({ tenantSlug }: Props) {
           setCreateError(null);
           createMut.mutate(body);
         }}
-      />
-      <AuditorConfigDialog
-        row={configRow}
-        onClose={() => setConfigRow(null)}
-        onSave={async (id, photoRequired) => {
-          const prevEnt = (configRow?.agent_entitlements ?? {}) as Record<string, unknown>;
-          const prevMc =
-            prevEnt.mobile_config && typeof prevEnt.mobile_config === "object" && !Array.isArray(prevEnt.mobile_config)
-              ? (prevEnt.mobile_config as Record<string, unknown>)
-              : {};
-          await patchMut.mutateAsync({
-            id,
-            body: {
-              agent_entitlements: {
-                ...prevEnt,
-                mobile_config: {
-                  ...prevMc,
-                  schema_version: 1,
-                  photo: {
-                    ...(prevMc.photo && typeof prevMc.photo === "object" && !Array.isArray(prevMc.photo)
-                      ? (prevMc.photo as Record<string, unknown>)
-                      : {}),
-                    required_for_order: photoRequired
-                  }
-                }
-              }
-            }
-          });
-          setConfigRow(null);
-        }}
-      />
-
-      <StaffActiveSessionsDialog
-        open={sessionRow != null}
-        onOpenChange={(o) => !o && setSessionRow(null)}
-        tenantSlug={tenantSlug}
-        staffKind="auditor"
-        userId={sessionRow?.id ?? null}
-        maxSessions={sessionRow?.max_sessions ?? 1}
-        onPatched={() => void qc.invalidateQueries({ queryKey: ["auditors", tenantSlug] })}
       />
 
       <StaffImportDialog
@@ -619,10 +659,12 @@ export function AuditorsWorkspace({ tenantSlug }: Props) {
 
 function AuditorEditDialog({
   row,
+  tenantSlug,
   onClose,
   onPatch
 }: {
   row: AuditorRow | null;
+  tenantSlug: string;
   onClose: () => void;
   onPatch: (id: number, body: Record<string, unknown>) => Promise<unknown>;
 }) {
@@ -631,11 +673,7 @@ function AuditorEditDialog({
   const [last_name, setLast] = useState("");
   const [middle_name, setMid] = useState("");
   const [phone, setPhone] = useState("");
-  const [code, setCode] = useState("");
   const [pinfl, setPinfl] = useState("");
-  const [branch, setBranch] = useState("");
-  const [position, setPosition] = useState("");
-  const [territory, setTerritory] = useState("");
   const [login, setLogin] = useState("");
 
   useEffect(() => {
@@ -645,11 +683,7 @@ function AuditorEditDialog({
     setFirst(parts[1] ?? parts[0] ?? "");
     setMid(parts[2] ?? "");
     setPhone(row.phone ?? "");
-    setCode(row.code ?? "");
     setPinfl(row.pinfl ?? "");
-    setBranch(row.branch ?? "");
-    setPosition(row.position ?? "");
-    setTerritory(row.territory ?? "");
     setLogin(row.login);
   }, [row]);
 
@@ -665,9 +699,7 @@ function AuditorEditDialog({
           <Input placeholder="Фамилия" value={last_name} onChange={(e) => setLast(e.target.value)} />
           <Input placeholder="Отчество" value={middle_name} onChange={(e) => setMid(e.target.value)} />
           <Input placeholder="Телефон" value={phone} onChange={(e) => setPhone(e.target.value)} />
-          <Input placeholder="Код" value={code} onChange={(e) => setCode(e.target.value)} />
           <Input placeholder="ПИНФЛ" value={pinfl} onChange={(e) => setPinfl(e.target.value)} />
-          <Input placeholder="Должность" value={position} onChange={(e) => setPosition(e.target.value)} />
           <Input
             className="font-mono sm:col-span-2"
             placeholder="Логин *"
@@ -690,9 +722,7 @@ function AuditorEditDialog({
                   last_name: last_name.trim() || null,
                   middle_name: middle_name.trim() || null,
                   phone: phone.trim() || null,
-                  code: code.trim() || null,
                   pinfl: pinfl.trim() || null,
-                  position: position.trim() || null,
                   login: login.trim().toLowerCase()
                 });
                 onClose();
@@ -712,12 +742,14 @@ function AuditorEditDialog({
 function AuditorAddDialog({
   open,
   onOpenChange,
+  tenantSlug,
   loading,
   submitError,
   onSubmit
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  tenantSlug: string;
   loading: boolean;
   submitError: string | null;
   onSubmit: (body: Record<string, unknown>) => void;
@@ -726,15 +758,10 @@ function AuditorAddDialog({
   const [last_name, setLast] = useState("");
   const [middle_name, setMid] = useState("");
   const [phone, setPhone] = useState("");
-  const [code, setCode] = useState("");
   const [pinfl, setPinfl] = useState("");
-  const [branch, setBranch] = useState("");
-  const [position, setPosition] = useState("");
-  const [territory, setTerritory] = useState("");
   const [login, setLogin] = useState("");
   const [password, setPassword] = useState("");
   const [can_authorize, setCanAuthorize] = useState(true);
-  const [app_access, setAppAccess] = useState(true);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -742,25 +769,18 @@ function AuditorAddDialog({
         <DialogHeader>
           <DialogTitle>Добавить аудитор</DialogTitle>
         </DialogHeader>
+        <WorkplaceMovedNotice className="mb-1" />
         <div className="grid gap-3 sm:grid-cols-2">
           <Input placeholder="Имя *" value={first_name} onChange={(e) => setFirst(e.target.value)} />
           <Input placeholder="Фамилия" value={last_name} onChange={(e) => setLast(e.target.value)} />
           <Input placeholder="Отчество" value={middle_name} onChange={(e) => setMid(e.target.value)} />
           <Input placeholder="Телефон" value={phone} onChange={(e) => setPhone(e.target.value)} />
-          <Input placeholder="Код" value={code} onChange={(e) => setCode(e.target.value)} />
           <Input placeholder="ПИНФЛ" value={pinfl} onChange={(e) => setPinfl(e.target.value)} />
-          <Input placeholder="Филиал" value={branch} onChange={(e) => setBranch(e.target.value)} />
-          <Input placeholder="Должность" value={position} onChange={(e) => setPosition(e.target.value)} />
-          <Input className="sm:col-span-2" placeholder="Территория" value={territory} onChange={(e) => setTerritory(e.target.value)} />
-          <Input className="sm:col-span-2 font-mono" placeholder="Логин *" value={login} onChange={(e) => setLogin(e.target.value)} />
-          <Input className="sm:col-span-2" type="password" placeholder="Пароль * (min 6)" value={password} onChange={(e) => setPassword(e.target.value)} />
+          <Input className="font-mono" placeholder="Логин *" value={login} onChange={(e) => setLogin(e.target.value)} />
+          <Input className="sm:col-span-2" type="password" placeholder="Пароль * (мин. 6)" value={password} onChange={(e) => setPassword(e.target.value)} />
           <label className="inline-flex items-center gap-2 text-xs">
             <input type="checkbox" checked={can_authorize} onChange={(e) => setCanAuthorize(e.target.checked)} />
             Авторизация включена
-          </label>
-          <label className="inline-flex items-center gap-2 text-xs">
-            <input type="checkbox" checked={app_access} onChange={(e) => setAppAccess(e.target.checked)} />
-            Доступ к приложению
           </label>
         </div>
         {submitError ? <p className="text-sm text-destructive">{submitError}</p> : null}
@@ -776,78 +796,14 @@ function AuditorAddDialog({
                 last_name: last_name.trim() || null,
                 middle_name: middle_name.trim() || null,
                 phone: phone.trim() || null,
-                code: code.trim() || null,
                 pinfl: pinfl.trim() || null,
-                position: position.trim() || null,
                 login: login.trim(),
                 password,
-                can_authorize,
-                app_access
+                can_authorize
               })
             }
           >
             {loading ? "Сохранение..." : "Сохранить"}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-function AuditorConfigDialog({
-  row,
-  onClose,
-  onSave
-}: {
-  row: AuditorRow | null;
-  onClose: () => void;
-  onSave: (id: number, photoRequired: boolean) => Promise<void>;
-}) {
-  const [photoRequired, setPhotoRequired] = useState(false);
-  const [saving, setSaving] = useState(false);
-
-  useEffect(() => {
-    if (!row) return;
-    const mc = row.agent_entitlements?.mobile_config;
-    const photo =
-      mc && typeof mc === "object" && !Array.isArray(mc) ? (mc as Record<string, unknown>).photo : undefined;
-    const required =
-      photo && typeof photo === "object" && !Array.isArray(photo)
-        ? Boolean((photo as Record<string, unknown>).required_for_order)
-        : false;
-    setPhotoRequired(required);
-  }, [row]);
-
-  return (
-    <Dialog open={Boolean(row)} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-xl">
-        <DialogHeader>
-          <DialogTitle>Прикрепить/открепить все конфигурации</DialogTitle>
-        </DialogHeader>
-        <div className="space-y-3">
-          <div className="rounded border border-border p-2 text-sm font-medium">Фото</div>
-          <label className="inline-flex items-center gap-2 text-xs">
-            <input type="checkbox" checked={photoRequired} onChange={(e) => setPhotoRequired(e.target.checked)} />
-            Обязательная фотофиксация при создании заказа
-          </label>
-        </div>
-        <DialogFooter className="justify-between">
-          <Button variant="outline" className="border-red-500 text-red-600" onClick={() => setPhotoRequired(false)}>
-            Сбросить настройки
-          </Button>
-          <Button
-            disabled={saving || !row}
-            onClick={async () => {
-              if (!row) return;
-              setSaving(true);
-              try {
-                await onSave(row.id, photoRequired);
-              } finally {
-                setSaving(false);
-              }
-            }}
-          >
-            {saving ? "Сохранение..." : "Сохранить"}
           </Button>
         </DialogFooter>
       </DialogContent>

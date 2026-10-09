@@ -89,7 +89,11 @@ export async function importBonusPlansTables(
     const userId = requireMap(maps, "user", row.user_id, "kpi_group_agent.user_id");
     if (kpiGroupId == null || userId == null) continue;
     await tx.kpiGroupAgent.create({
-      data: { kpi_group_id: kpiGroupId, user_id: userId }
+      data: {
+        kpi_group_id: kpiGroupId,
+        user_id: userId,
+        work_slot_id: remapId(maps.workSlot, row.work_slot_id) ?? null
+      }
     });
   }
   counts.kpi_group_agents = kpiGroupAgents.length;
@@ -108,7 +112,7 @@ export async function importBonusPlansTables(
         tenant_id: tenantId,
         product_ids: remapIntArray(maps.product, data.product_ids),
         bonus_product_ids: remapIntArray(maps.product, data.bonus_product_ids),
-        product_category_ids: [],
+        product_category_ids: remapIntArray(maps.productCategory, data.product_category_ids),
         selected_client_ids: remapIntArray(maps.client, data.selected_client_ids),
         scope_agent_user_ids: remapIntArray(maps.user, data.scope_agent_user_ids),
         scope_trade_direction_ids: remapIntArray(maps.tradeDirection, data.scope_trade_direction_ids),
@@ -262,12 +266,15 @@ export async function importBonusPlansTables(
       "volume",
       "acb"
     ]);
+    const workSlotId = remapId(maps.workSlot, data.work_slot_id);
     await tx.salesKpiPlanTarget.create({
       data: {
         ...(data as Prisma.SalesKpiPlanTargetUncheckedCreateInput),
         tenant_id: tenantId,
         plan_id: planId,
         user_id: userId,
+        // Eski work_slot_id spread qolsa P2003 bo‘ladi — faqat remap (yoki null).
+        work_slot_id: workSlotId,
         updated_by: remapId(maps.user, data.updated_by) ?? null
       }
     });
@@ -309,6 +316,41 @@ export async function importBonusPlansTables(
     });
   }
   counts.price_matrix = priceMatrix.length;
+
+  const [bonusStrategies, bonusStrategyMembers] = await Promise.all([
+    readZipJson<Record<string, unknown>>(zip, "data/bonus_strategies.json"),
+    readZipJson<Record<string, unknown>>(zip, "data/bonus_strategy_members.json")
+  ]);
+
+  for (const row of bonusStrategies) {
+    const oldId = Number(row.id);
+    const data = hydrateDates(stripIdTenant(row), ["created_at", "updated_at"]);
+    const created = await tx.bonusStrategy.create({
+      data: {
+        ...(data as Prisma.BonusStrategyUncheckedCreateInput),
+        tenant_id: tenantId,
+        scope_agent_user_ids: remapIntArray(maps.user, data.scope_agent_user_ids),
+        scope_trade_direction_ids: remapIntArray(maps.tradeDirection, data.scope_trade_direction_ids)
+      }
+    });
+    maps.bonusStrategy.set(oldId, created.id);
+  }
+  counts.bonus_strategies = bonusStrategies.length;
+
+  for (const row of bonusStrategyMembers) {
+    const strategyId = requireMap(maps, "bonusStrategy", row.strategy_id, "bonus_strategy_member.strategy_id");
+    const ruleId = requireMap(maps, "bonusRule", row.bonus_rule_id, "bonus_strategy_member.bonus_rule_id");
+    if (strategyId == null || ruleId == null) continue;
+    const data = hydrateDates(stripIdTenant(row), ["created_at"]);
+    await tx.bonusStrategyMember.create({
+      data: {
+        ...(data as Prisma.BonusStrategyMemberUncheckedCreateInput),
+        strategy_id: strategyId,
+        bonus_rule_id: ruleId
+      }
+    });
+  }
+  counts.bonus_strategy_members = bonusStrategyMembers.length;
 
   return counts;
 }

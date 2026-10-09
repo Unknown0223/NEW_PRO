@@ -6,7 +6,7 @@ import type { WarehouseLayoutId } from "@/lib/bulk-export-templates";
 /** Backend `bulk/nakladnoy` `template` qiymatlari bilan mos. */
 export const NAKLADNOY_TEMPLATE_OPTIONS = [
   { id: "nakladnoy_warehouse", label: "Загруз зав.склада 5.1.8" },
-  { id: "nakladnoy_expeditor", label: "Накладные 2.1.0 (2 нусха)" }
+  { id: "nakladnoy_expeditor", label: "Накладные 2.1.7 (2 нусха)" }
 ] as const;
 
 export type NakladnoyTemplateId = (typeof NAKLADNOY_TEMPLATE_OPTIONS)[number]["id"];
@@ -112,7 +112,7 @@ export async function fetchOrdersNakladnoyXlsxBlob(args: {
     fallbackFilename
   } = args;
   if (orderIds.length === 0) {
-    throw new Error("Zakaz tanlanmagan.");
+    throw new Error("Заказ не выбран.");
   }
   try {
     const res = await api.post<Blob>(
@@ -133,7 +133,7 @@ export async function fetchOrdersNakladnoyXlsxBlob(args: {
     const ct = (res.headers["content-type"] ?? "").toLowerCase();
     if (ct.includes("application/json")) {
       const text = await (res.data as Blob).text();
-      let msg = "Xato";
+      let msg = "Ошибка";
       try {
         const j = JSON.parse(text) as { error?: string; message?: string };
         msg = j.message ?? j.error ?? msg;
@@ -155,13 +155,13 @@ export async function fetchOrdersNakladnoyXlsxBlob(args: {
       try {
         j = JSON.parse(text) as { error?: string };
       } catch {
-        throw new Error(text.slice(0, 160) || "So‘rov xatosi");
+        throw new Error(text.slice(0, 160) || "Ошибка запроса");
       }
-      if (j.error === "OrdersNotFound") throw new Error("Ba’zi zakazlar topilmadi.");
+      if (j.error === "OrdersNotFound") throw new Error("Некоторые заказы не найдены.");
       if (j.error) throw new Error(String(j.error));
-      throw new Error(text.slice(0, 160) || "So‘rov xatosi");
+      throw new Error(text.slice(0, 160) || "Ошибка запроса");
     }
-    throw new Error(getUserFacingError(e, "Nakladnoyni yuklab bo‘lmadi."));
+    throw new Error(getUserFacingError(e, "Не удалось скачать накладную."));
   }
 }
 

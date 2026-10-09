@@ -3,6 +3,7 @@
 import {
   collectGroupKeysInOrder,
   isGroupInterleaveCategory,
+  isNumberedGroupSheetName,
   normalizeSheetGroupKey,
   shouldInterleaveBulkSheetsByGroup
 } from "@/lib/bulk-export-sheet-grouping";
@@ -60,33 +61,26 @@ export function uniqueExcelSheetName(base: string, used: Set<string>): string {
   return fallback;
 }
 
+type SheetModel = {
+  id?: number;
+  name?: string;
+  merges?: string[];
+  mergeCells?: string[];
+  media?: unknown[];
+  tables?: unknown[];
+};
+
+/** Qiymat + uslub (rang, chegara, shrift) + merge + sahifa sozlamasi. */
 function copyWorksheet(src: Worksheet, dest: Worksheet): void {
-  src.columns?.forEach((col, idx) => {
-    const w = col.width;
-    if (w != null && w > 0) dest.getColumn(idx + 1).width = w;
-  });
-
-  const values = src.getSheetValues();
-  if (values && values.length > 0) {
-    dest.addRows(values);
-  } else {
-    src.eachRow({ includeEmpty: false }, (row, rowNumber) => {
-      const destRow = dest.getRow(rowNumber);
-      row.eachCell({ includeEmpty: false }, (cell, colNumber) => {
-        destRow.getCell(colNumber).value = cell.value;
-      });
-      destRow.commit();
-    });
-  }
-
-  const model = src as Worksheet & { model?: { merges?: string[] } };
-  for (const range of model.model?.merges ?? []) {
-    try {
-      dest.mergeCells(range);
-    } catch {
-      /* ignore */
-    }
-  }
+  const model = (src as Worksheet & { model: SheetModel }).model;
+  (dest as Worksheet & { model: SheetModel }).model = {
+    ...model,
+    id: dest.id,
+    name: dest.name,
+    media: [],
+    tables: [],
+    mergeCells: model.merges ?? []
+  };
 }
 
 async function toArrayBuffer(data: Blob | ArrayBuffer): Promise<ArrayBuffer> {
@@ -103,14 +97,14 @@ async function loadWorkbook(source: XlsxSheetSource): Promise<LoadedWorkbook> {
     await wb.xlsx.load(buf);
   } catch (e: unknown) {
     const detail = e instanceof Error ? e.message : String(e);
-    throw new Error(`Excel o‘qish (${source.label}): ${detail}`);
+    throw new Error(`Ошибка чтения Excel (${source.label}): ${detail}`);
   }
   const sheets = wb.worksheets.map((worksheet) => ({
     name: worksheet.name,
     worksheet
   }));
   if (sheets.length === 0) {
-    throw new Error(`Bo‘sh hujjat: ${source.label}`);
+    throw new Error(`Пустой документ: ${source.label}`);
   }
   return { source, sheets };
 }
@@ -122,8 +116,11 @@ function appendSheet(
   sourceLabel: string,
   multiInSource: boolean
 ): void {
-  const suffix =
-    multiInSource && srcSheet.name ? `${sourceLabel} - ${srcSheet.name}` : sourceLabel;
+  const suffix = isNumberedGroupSheetName(srcSheet.name)
+    ? srcSheet.name
+    : multiInSource && srcSheet.name
+      ? `${sourceLabel} - ${srcSheet.name}`
+      : sourceLabel;
   const sheetName = uniqueExcelSheetName(suffix, usedSheetNames);
   const destSheet = outWb.addWorksheet(sheetName);
   copyWorksheet(srcSheet.worksheet, destSheet);
@@ -207,13 +204,13 @@ function withTimeout<T>(promise: Promise<T>, ms: number, message: string): Promi
 
 export async function mergeXlsxSourcesToBuffer(sources: XlsxSheetSource[]): Promise<ArrayBuffer> {
   if (sources.length === 0) {
-    throw new Error("Birlashtirish uchun fayl yo‘q.");
+    throw new Error("Нет файлов для объединения.");
   }
 
   return withTimeout(
     mergeXlsxSourcesToBufferInner(sources),
     90_000,
-    "Birlashtirish juda uzoq davom etdi (90s). Qayta urinib ko‘ring."
+    "Объединение заняло слишком много времени (90 с). Попробуйте ещё раз."
   );
 }
 
@@ -235,13 +232,13 @@ async function mergeXlsxSourcesToBufferInner(sources: XlsxSheetSource[]): Promis
   }
 
   if (outWb.worksheets.length === 0) {
-    throw new Error("Birlashtirilgan fayl bo‘sh.");
+    throw new Error("Объединённый файл пуст.");
   }
 
   try {
     return (await outWb.xlsx.writeBuffer()) as ArrayBuffer;
   } catch (e: unknown) {
     const detail = e instanceof Error ? e.message : String(e);
-    throw new Error(`Excel yozish: ${detail}`);
+    throw new Error(`Ошибка записи Excel: ${detail}`);
   }
 }

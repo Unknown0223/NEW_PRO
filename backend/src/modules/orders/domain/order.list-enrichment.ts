@@ -1,5 +1,7 @@
-import { Prisma } from "@prisma/client";
 import { prisma } from "../../../config/database";
+import { parseVisitWeekdaysJson } from "../../clients/clients.types";
+import { formatVisitWeekdaysRuAbbrev } from "../../clients/clients.visit-weekdays";
+import { inferListCreationChannel } from "./order.creation-channel";
 
 const PO_ZAKAZU_RE = /По\s+заказу\s+(\S+)/i;
 
@@ -14,6 +16,8 @@ export type OrderListMetaRow = {
   creation_channel: "web" | "mobile";
   created_by: string | null;
   created_by_role: string | null;
+  /** Клиент + агент assignment: «Пн,Ср» */
+  day: string | null;
 };
 
 function parseExchangeSourceIds(exchangeMeta: unknown): number[] {
@@ -34,15 +38,9 @@ function parseSourceFromComment(comment: string | null): string | null {
   return m?.[1]?.trim() || null;
 }
 
-function roleToChannel(role: string | null | undefined): "web" | "mobile" {
-  const r = (role ?? "").toLowerCase();
-  // Agent va ekspeditor (dastavchik) — mobil ilovadan yaratadi.
-  if (r.includes("agent") || r.includes("expeditor")) return "mobile";
-  return "web";
-}
-
 /**
- * Ro‘yxat uchun qo‘shimcha maydonlar: manba zakaz, qaytish/otgruzka sanalari, yaratilish kanali.
+ * Ro‘yxat uchun qo‘shimcha maydonlar: manba zakaz, qaytish/otgruzka sanalari, yaratilish kanali,
+ * «Кто создал», «День» (vizit kunlari).
  */
 export async function loadOrdersListMetaEnrichment(
   tenantId: number,
@@ -52,6 +50,9 @@ export async function loadOrdersListMetaEnrichment(
     comment: string | null;
     exchange_meta: unknown;
     agent_id: number | null;
+    client_id: number;
+    agent_login?: string | null;
+    agent_name?: string | null;
     created_at: Date;
     status: string;
   }>
@@ -62,12 +63,13 @@ export async function loadOrdersListMetaEnrichment(
   const ids = rows.map((r) => r.id);
 
   const statusRows = await prisma.orderStatusLog.findMany({
-    where: { order_id: { in: ids }, superseded_at: null },
+    where: { order_id: { in: ids } },
     orderBy: [{ order_id: "asc" }, { created_at: "asc" }],
     select: {
       order_id: true,
       to_status: true,
       created_at: true,
+      superseded_at: true,
       user: { select: { login: true, name: true, role: true } }
     }
   });
@@ -89,17 +91,19 @@ export async function loadOrdersListMetaEnrichment(
         role: log.user.role
       });
     }
-    if (log.to_status === "confirmed" && !confirmedAt.has(log.order_id)) {
-      confirmedAt.set(log.order_id, log.created_at);
-    }
-    if (log.to_status === "delivering" && !deliveringAt.has(log.order_id)) {
-      deliveringAt.set(log.order_id, log.created_at);
-    }
-    if (log.to_status === "delivered" && !deliveredAt.has(log.order_id)) {
-      deliveredAt.set(log.order_id, log.created_at);
-    }
-    if (log.to_status === "returned" && !returnedAt.has(log.order_id)) {
-      returnedAt.set(log.order_id, log.created_at);
+    if (log.superseded_at == null) {
+      if (log.to_status === "confirmed" && !confirmedAt.has(log.order_id)) {
+        confirmedAt.set(log.order_id, log.created_at);
+      }
+      if (log.to_status === "delivering" && !deliveringAt.has(log.order_id)) {
+        deliveringAt.set(log.order_id, log.created_at);
+      }
+      if (log.to_status === "delivered" && !deliveredAt.has(log.order_id)) {
+        deliveredAt.set(log.order_id, log.created_at);
+      }
+      if (log.to_status === "returned" && !returnedAt.has(log.order_id)) {
+        returnedAt.set(log.order_id, log.created_at);
+      }
     }
   }
 
@@ -151,6 +155,41 @@ export async function loadOrdersListMetaEnrichment(
     }
   }
 
+  /** clientId:agentId → «Пн,Ср» */
+  const visitDayByPair = new Map<string, string>();
+  const clientIds = [...new Set(rows.map((r) => r.client_id).filter((id) => id > 0))];
+  if (clientIds.length > 0 && agentIds.length > 0) {
+    const assignments = await prisma.clientAgentAssignment.findMany({
+      where: {
+        tenant_id: tenantId,
+        client_id: { in: clientIds },
+        agent_id: { in: agentIds }
+      },
+      select: {
+        client_id: true,
+        agent_id: true,
+        visit_weekdays: true,
+        visit_date: true,
+        slot: true
+      },
+      orderBy: { slot: "asc" }
+    });
+    for (const a of assignments) {
+      if (a.agent_id == null) continue;
+      const key = `${a.client_id}:${a.agent_id}`;
+      if (visitDayByPair.has(key)) continue;
+      const wd = parseVisitWeekdaysJson(a.visit_weekdays);
+      if (wd.length > 0) {
+        visitDayByPair.set(key, formatVisitWeekdaysRuAbbrev(wd));
+        continue;
+      }
+      if (a.visit_date) {
+        const iso = a.visit_date.toISOString().slice(0, 10);
+        visitDayByPair.set(key, iso);
+      }
+    }
+  }
+
   for (const r of rows) {
     const metaIds = parseExchangeSourceIds(r.exchange_meta);
     const metaNumbers = metaIds
@@ -172,9 +211,10 @@ export async function loadOrdersListMetaEnrichment(
 
     const firstUser = firstLogUser.get(r.id);
     const agentRole = r.agent_id != null ? agentRoleById.get(r.agent_id) : undefined;
-    const channel = firstUser?.role
-      ? roleToChannel(firstUser.role)
-      : roleToChannel(agentRole);
+    const channel = inferListCreationChannel({
+      firstLogRole: firstUser?.role,
+      agentRole
+    });
 
     const isReturnType =
       r.order_type === "return" ||
@@ -187,7 +227,12 @@ export async function loadOrdersListMetaEnrichment(
     const creatorLabel =
       firstUser?.login?.trim() ||
       firstUser?.name?.trim() ||
+      r.agent_login?.trim() ||
+      r.agent_name?.trim() ||
       null;
+
+    const dayLabel =
+      r.agent_id != null ? visitDayByPair.get(`${r.client_id}:${r.agent_id}`) ?? null : null;
 
     out.set(r.id, {
       source_order_numbers: sourceNumbers ?? [],
@@ -199,8 +244,59 @@ export async function loadOrdersListMetaEnrichment(
       list_created_at: r.created_at.toISOString(),
       creation_channel: channel,
       created_by: creatorLabel,
-      created_by_role: firstUser?.role ?? agentRole ?? null
+      created_by_role: firstUser?.role ?? agentRole ?? null,
+      day: dayLabel
     });
+  }
+
+  return out;
+}
+
+/**
+ * Agent User.trade_direction bo‘sh bo‘lsa — faol work_slot.direction dan olish.
+ */
+export async function loadAgentTradeDirectionFromSlots(
+  tenantId: number,
+  agentIds: number[]
+): Promise<Map<number, string>> {
+  const out = new Map<number, string>();
+  const ids = [...new Set(agentIds.filter((id) => id > 0))];
+  if (ids.length === 0) return out;
+
+  const links = await prisma.slotUserLink.findMany({
+    where: {
+      tenant_id: tenantId,
+      user_id: { in: ids },
+      ended_at: null
+    },
+    select: {
+      user_id: true,
+      slot: {
+        select: {
+          slot_type: true,
+          direction: { select: { name: true, code: true } }
+        }
+      }
+    },
+    orderBy: { id: "desc" }
+  });
+
+  for (const link of links) {
+    if (out.has(link.user_id)) continue;
+    if (link.slot.slot_type !== "agent") continue;
+    const dir =
+      link.slot.direction?.name?.trim() ||
+      link.slot.direction?.code?.trim() ||
+      null;
+    if (dir) out.set(link.user_id, dir);
+  }
+  for (const link of links) {
+    if (out.has(link.user_id)) continue;
+    const dir =
+      link.slot.direction?.name?.trim() ||
+      link.slot.direction?.code?.trim() ||
+      null;
+    if (dir) out.set(link.user_id, dir);
   }
 
   return out;

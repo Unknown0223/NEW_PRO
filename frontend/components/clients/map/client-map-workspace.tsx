@@ -22,7 +22,8 @@ import {
 } from "@/lib/client-map-filters";
 import type { ClientRow } from "@/lib/client-types";
 import { mergeRefSelectOptions } from "@/lib/ref-select-options";
-import { buildZoneRegionCityCascadeOptions } from "@/lib/territory-client-filters";
+import { buildZoneRegionCityCascadeOptions, buildTerritoryTreeOnlyCascade } from "@/lib/territory-client-filters";
+import type { TerritoryNode } from "@/lib/territory-tree";
 import { STALE } from "@/lib/query-stale";
 import { useAuthStore, useAuthStoreHydrated } from "@/lib/auth-store";
 import { useQuery } from "@tanstack/react-query";
@@ -145,6 +146,18 @@ export function ClientMapWorkspace() {
     }
   });
 
+  const profileTerritoryQ = useQuery({
+    queryKey: ["settings", "profile", tenantSlug, "client-map-territory"],
+    enabled: Boolean(tenantSlug),
+    staleTime: STALE.profile,
+    queryFn: async () => {
+      const { data } = await api.get<{
+        references?: { territory_nodes?: TerritoryNode[] };
+      }>(`/api/${tenantSlug}/settings/profile`);
+      return data.references?.territory_nodes ?? [];
+    }
+  });
+
   const agentsQ = useQuery({
     queryKey: ["agents", tenantSlug, "map"],
     enabled: Boolean(tenantSlug),
@@ -160,6 +173,7 @@ export function ClientMapWorkspace() {
   const allClients = useMemo(() => clientsQ.data?.data ?? [], [clientsQ.data?.data]);
   const gpsTotal = clientsQ.data?.total ?? allClients.length;
   const refData = refsQ.data;
+  const territoryNodes = profileTerritoryQ.data;
   const focusSet = useMemo(() => (focusIds?.length ? new Set(focusIds) : null), [focusIds]);
 
   const cityLabelByValue = useMemo(() => {
@@ -178,15 +192,19 @@ export function ClientMapWorkspace() {
     return m;
   }, [refData?.region_options]);
 
-  const territoryCascade = useMemo(
-    () =>
-      buildZoneRegionCityCascadeOptions(refData, undefined, undefined, {
-        zone: "",
-        region: "",
-        city: ""
-      }),
-    [refData]
-  );
+  const territoryCascade = useMemo(() => {
+    if ((territoryNodes?.length ?? 0) > 0) {
+      return buildTerritoryTreeOnlyCascade(territoryNodes, {
+        zones: draftFilters.zones,
+        regions: draftFilters.regions
+      });
+    }
+    return buildZoneRegionCityCascadeOptions(refData, undefined, undefined, {
+      zone: draftFilters.zones.length === 1 ? (draftFilters.zones[0] ?? "") : "",
+      region: draftFilters.regions.length === 1 ? (draftFilters.regions[0] ?? "") : "",
+      city: draftFilters.cities.length === 1 ? (draftFilters.cities[0] ?? "") : ""
+    });
+  }, [refData, territoryNodes, draftFilters.zones, draftFilters.regions, draftFilters.cities]);
 
   const categorySelectOptions = useMemo(() => {
     if (!refData) return [];
@@ -215,13 +233,13 @@ export function ClientMapWorkspace() {
   const agentSelectOptions = useMemo(() => {
     const fromApi = (agentsQ.data ?? []).map((a) => ({
       value: String(a.id),
-      label: a.name || a.login || `Agent #${a.id}`
+      label: a.name || a.login || `Агент #${a.id}`
     }));
     if (fromApi.length > 0) return fromApi;
     const m = new Map<number, string>();
     for (const c of allClients) {
       if (c.agent_id != null && c.agent_id > 0) {
-        m.set(c.agent_id, c.agent_name?.trim() || `Agent #${c.agent_id}`);
+        m.set(c.agent_id, c.agent_name?.trim() || `Агент #${c.agent_id}`);
       }
     }
     return [...m.entries()]
@@ -337,7 +355,7 @@ export function ClientMapWorkspace() {
   if (!tenantSlug) {
     return (
       <PageShell className="flex flex-1 items-center justify-center bg-transparent">
-        <p className="text-sm text-destructive">Tenant не найден.</p>
+        <p className="text-sm text-destructive">Организация не найдена.</p>
       </PageShell>
     );
   }

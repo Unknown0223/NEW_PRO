@@ -67,6 +67,11 @@ export function AccessUserDetailModals({ vm }: { vm: AccessUserDetailVm }) {
     visibleDimPickKeys,
     dimPickAllSelected,
     dimPickSomeSelected,
+    rolePacksModal,
+    roleDefaultsQ,
+    visibleRolePackKeys,
+    rolePacksAllSelected,
+    rolePacksSomeSelected,
     saveModal
   } = vm;
 
@@ -470,7 +475,7 @@ export function AccessUserDetailModals({ vm }: { vm: AccessUserDetailVm }) {
                                   key={u.id}
                                   className={cn(
                                     "flex cursor-pointer items-start gap-2 py-1.5 pl-0.5 sm:pl-1",
-                                    !u.is_active && "opacity-75"
+                                    !u.is_active && "text-red-600"
                                   )}
                                 >
                                   <input
@@ -487,7 +492,9 @@ export function AccessUserDetailModals({ vm }: { vm: AccessUserDetailVm }) {
                                     }}
                                   />
                                   <span className="min-w-0 text-sm leading-snug">
-                                    <span className="font-medium text-foreground">{formatStaffPickLine(u)}</span>
+                                    <span className={cn("font-medium", u.is_active ? "text-foreground" : "text-red-600")}>
+                                      {formatStaffPickLine(u)}
+                                    </span>
                                   </span>
                                 </label>
                               ))}
@@ -718,6 +725,95 @@ export function AccessUserDetailModals({ vm }: { vm: AccessUserDetailVm }) {
                 )}
               </div>
             </div>
+          ) : rolePacksModal ? (
+            <div className="flex min-h-0 flex-col gap-2 pb-1">
+              <p className="text-[11px] text-muted-foreground">
+                Выберите готовые пакеты операций других ролей. Основная роль не меняется — добавляются только права.
+                Пакет «Администратор» сюда не назначается.
+              </p>
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="relative min-w-[10rem] flex-1">
+                  <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    placeholder="Поиск по роли"
+                    className="h-8 w-full pl-8 text-xs"
+                    value={modalSearch}
+                    onChange={(e) => setModalSearch(e.target.value)}
+                    aria-label="Поиск по ролям"
+                  />
+                </div>
+                <label className="flex shrink-0 cursor-pointer items-center gap-2 text-sm font-medium">
+                  <IndeterminateCheckbox
+                    checked={rolePacksAllSelected}
+                    indeterminate={rolePacksSomeSelected}
+                    disabled={patchMut.isPending || roleDefaultsQ.isLoading || visibleRolePackKeys.length === 0}
+                    onChange={(e) => {
+                      const n = new Set(modalSel);
+                      if (e.target.checked) {
+                        for (const k of visibleRolePackKeys) n.add(k);
+                      } else {
+                        for (const k of visibleRolePackKeys) n.delete(k);
+                      }
+                      setModalSel(n);
+                    }}
+                  />
+                  Выбрать все
+                </label>
+              </div>
+              <label className="flex cursor-pointer items-center gap-2 text-[11px] text-muted-foreground">
+                <input
+                  type="checkbox"
+                  className="accent-teal-700"
+                  checked={showSelOnly}
+                  onChange={(e) => setShowSelOnly(e.target.checked)}
+                />
+                Показать только выбранные
+              </label>
+              <div className="max-h-[min(52vh,440px)] min-h-[220px] overflow-auto rounded-lg border border-border/60 bg-muted/15 p-2">
+                {roleDefaultsQ.isLoading ? (
+                  <div className="flex flex-col items-center gap-3 py-12 text-sm text-muted-foreground">
+                    <Loader2 className="h-8 w-8 animate-spin text-teal-700" aria-hidden />
+                    <span>Загрузка ролей…</span>
+                  </div>
+                ) : filteredModalItems.length === 0 ? (
+                  <p className="py-10 text-center text-sm text-muted-foreground">Ничего не найдено</p>
+                ) : (
+                  <div className="space-y-0">
+                    {filteredModalItems.map((item) => {
+                      const count = item.sub.trim();
+                      return (
+                        <label
+                          key={item.key}
+                          className="flex cursor-pointer items-start gap-2 border-b border-border/40 py-2 last:border-b-0"
+                        >
+                          <input
+                            type="checkbox"
+                            className="mt-0.5 h-4 w-4 shrink-0 accent-teal-700"
+                            disabled={patchMut.isPending}
+                            checked={modalSel.has(item.key)}
+                            onChange={(e) => {
+                              const n = new Set(modalSel);
+                              if (e.target.checked) n.add(item.key);
+                              else n.delete(item.key);
+                              setModalSel(n);
+                            }}
+                          />
+                          <span className="min-w-0 text-sm leading-snug">
+                            <span className="font-medium text-foreground">{item.label}</span>
+                            {count ? (
+                              <span className="mt-0.5 block text-[11px] text-muted-foreground">
+                                Операций в пакете:{" "}
+                                <span className="tabular-nums text-foreground/80">{count}</span>
+                              </span>
+                            ) : null}
+                          </span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
           ) : dimPickModal ? (
             <div className="flex min-h-0 flex-col gap-2 pb-1">
               <div className="flex flex-wrap items-center gap-2">
@@ -789,6 +885,11 @@ export function AccessUserDetailModals({ vm }: { vm: AccessUserDetailVm }) {
                           />
                           <span className="min-w-0 text-sm leading-snug">
                             <span className="font-medium text-foreground">{item.label}</span>
+                            {item.key && item.key !== item.label ? (
+                              <span className="mt-0.5 block text-[11px] font-mono text-muted-foreground/90">
+                                {item.key}
+                              </span>
+                            ) : null}
                             {count ? (
                               <span className="mt-0.5 block text-[11px] text-muted-foreground">
                                 Пользователей с доступом к объекту:{" "}
@@ -834,6 +935,7 @@ export function AccessUserDetailModals({ vm }: { vm: AccessUserDetailVm }) {
                 disabled={
                   patchMut.isPending ||
                   (modal === "operations" && catalogQ.isLoading) ||
+                  (modal === "role_packs" && roleDefaultsQ.isLoading) ||
                   (modal === "territory" && territoriesQ.isLoading) ||
                   (modal === "staff" && staffPickBootstrapping) ||
                   (dimPickModal && dimQ.isLoading)

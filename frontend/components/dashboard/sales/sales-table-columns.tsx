@@ -15,6 +15,7 @@ export function useSalesCategoryColumns(data: CategoryRow[]) {
       sales: data.reduce((s, i) => s + Number(i.sales_sum), 0),
       quantity: data.reduce((s, i) => s + Number(i.sold_qty), 0),
       volume: data.reduce((s, i) => s + Number(i.volume), 0),
+      bonus: data.reduce((s, i) => s + Number(i.bonus_qty ?? 0), 0),
       akb: data.reduce((s, i) => s + i.akb, 0)
     };
     const cols: SalesTableColumn<CategoryRow>[] = [
@@ -44,6 +45,12 @@ export function useSalesCategoryColumns(data: CategoryRow[]) {
         cell: (r) => fmtCount(r.volume)
       },
       {
+        id: "bonus_qty",
+        header: "Бонус",
+        footer: fmtCount(totals.bonus),
+        cell: (r) => fmtCount(r.bonus_qty ?? 0)
+      },
+      {
         id: "akb",
         header: "АКБ",
         footer: fmtCount(totals.akb),
@@ -58,36 +65,6 @@ export function useSalesCategoryColumns(data: CategoryRow[]) {
     ];
     return cols;
   }, [data]);
-}
-
-export function useSalesCoverageColumns(data: CategoryRow[]) {
-  void data;
-  return useMemo(() => {
-    const cols: SalesTableColumn<CategoryRow>[] = [
-      {
-        id: "category",
-        header: "По категориям",
-        searchText: (r) => r.category,
-        cell: (r) => <span className="font-semibold">{r.category}</span>
-      },
-      {
-        id: "akb",
-        header: "АКБ",
-        cell: (r) => fmtCount(r.akb)
-      },
-      {
-        id: "share_pct",
-        header: "Процент",
-        cell: (r) => `${r.share_pct.toFixed(1)} %`
-      },
-      {
-        id: "sales_sum",
-        header: "Сумма продаж",
-        cell: (r) => fmtMoney(r.sales_sum)
-      }
-    ];
-    return cols;
-  }, []);
 }
 
 export function useSalesTerritoryColumns(resolveTerritory: (t: string) => string) {
