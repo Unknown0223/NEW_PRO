@@ -27,6 +27,7 @@ import { registerOrderRoutes } from "./modules/orders/orders.route";
 import { registerOrderStreamRoutes } from "./modules/orders/order-stream.route";
 import { registerPaymentRoutes } from "./modules/payments/payments.route";
 import { registerBankTransferInboxRoutes } from "./modules/bank-transfer-inbox/bank-transfer-inbox.route";
+import { registerPayrollRoutes } from "./modules/payroll/payroll.route";
 import { registerPlansRoutes } from "./modules/plans/plans.route";
 import { registerProductCatalogRoutes } from "./modules/products/product-catalog.route";
 import { registerProductPriceRoutes } from "./modules/products/product-prices.route";
@@ -115,6 +116,7 @@ export const routeRegistrars: RouteRegistrar[] = [
   registerTabelRoutes,
   registerWorkSlotRoutes,
   registerPlansRoutes,
+  registerPayrollRoutes,
   registerSystemMigrationRoutes
 ];
 

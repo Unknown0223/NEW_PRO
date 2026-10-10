@@ -288,8 +288,19 @@ export const dashboardUsersNav: {
           label: "Консигнация",
           showIfAnyPermission: [...NAV_PERM.staffConsignment]
         },
-        { href: "#", label: "Настройки бонусов и зарплат", placeholder: true },
         { href: "/settings/payroll", label: "Зарплата", showIfAnyPermission: [...NAV_PERM.staffPayroll] },
+        {
+          href: "/settings/payroll/formulas",
+          label: "Формулы зарплаты",
+          showIfAnyPermission: [...NAV_PERM.staffPayroll]
+        },
+        { href: "/settings/payroll/grids", label: "Сетки KPI", showIfAnyPermission: [...NAV_PERM.staffPayroll] },
+        {
+          href: "/settings/payroll/calc",
+          label: "Расчёт за месяц",
+          showIfAnyPermission: [...NAV_PERM.staffPayroll]
+        },
+        { href: "/settings/payroll/payments", label: "Выплаты", showIfAnyPermission: [...NAV_PERM.staffPayroll] },
         { href: "/users/workdays", label: "Рабочие дни", showIfAnyPermission: [...NAV_PERM.staffWorkdays] },
         { href: "/users/timesheet", label: "Табель", showIfAnyPermission: [...NAV_PERM.staffTimesheet] },
         {

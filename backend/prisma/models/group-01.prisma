@@ -92,6 +92,13 @@ model Tenant {
   sales_kpi_plan_targets        SalesKpiPlanTarget[]
   job_logs                      JobLog[]
   agent_consignment_month_status AgentConsignmentMonthStatus[]
+  payroll_formulas               PayrollFormula[]
+  payroll_grids                  PayrollGrid[]
+  payroll_grid_rows              PayrollGridRow[]
+  payroll_assignments            PayrollAssignment[]
+  payroll_periods                PayrollPeriod[]
+  payroll_entries                PayrollEntry[]
+  payroll_payments               PayrollPayment[]
 
   @@map("tenants")
 }
@@ -247,6 +254,9 @@ model User {
   sales_kpi_plan_targets              SalesKpiPlanTarget[] @relation("SalesKpiPlanTargetUser")
   sales_kpi_plan_targets_edited       SalesKpiPlanTarget[] @relation("SalesKpiPlanTargetEditor")
   consignment_month_status            AgentConsignmentMonthStatus[]
+  payroll_assignment                  PayrollAssignment[]     @relation("PayrollAssignmentUser")
+  payroll_entries                     PayrollEntry[]          @relation("PayrollEntryUser")
+  payroll_payments                    PayrollPayment[]        @relation("PayrollPaymentUser")
 
   @@unique([tenant_id, login])
   @@index([tenant_id, role])

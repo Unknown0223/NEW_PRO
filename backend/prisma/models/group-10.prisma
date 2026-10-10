@@ -1,0 +1,216 @@
+/// ══════════════════════════════════════════════════════════════════════
+/// ЗАРПЛАТА (payroll) — formula + сетка + oylik hisob + to‘lovlar.
+///
+/// Bog‘lanish zanjiri:
+///   KpiGroup ──< PayrollFormula / PayrollGrid   (formula va сетка guruhga bog‘lanadi)
+///   KpiGroup ──< KpiGroupAgent >── User         (guruhga bog‘langan xodimlar)
+///   PayrollPeriod ──< PayrollEntry >── User     (oylik hisob: bitta xodim = bitta qator)
+///
+/// Muhim qoida: `kpi_group_id` to‘ldirilgan formula FAQAT shu guruhga
+/// bog‘langan xodimlarga qo‘llanadi; guruhga bog‘lanmagan formula (`null`)
+/// rol bo‘yicha zaxira (fallback) hisoblanadi.
+/// ══════════════════════════════════════════════════════════════════════
+
+/// Hisoblash formulasi: rol(lar) + KPI guruhi uchun qoida.
+model PayrollFormula {
+  id           Int       @id @default(autoincrement())
+  tenant_id    Int
+  name         String
+  code         String?   @db.VarChar(32)
+  /// Hisob turi: fixed | percent_sales | kpi_bonus | team_percent | per_delivery | per_collection | per_visit | piece
+  kind         String    @db.VarChar(32)
+  /// Bo‘sh = barcha rollar. Aks holda faqat shu `User.role` larda qo‘llanadi.
+  roles        String[]  @default([])
+  /// KPI guruhi: to‘ldirilsa — faqat shu guruh xodimlariga; `null` — rol bo‘yicha zaxira.
+  kpi_group_id Int?
+  /// Standart oklad (so‘m). Xodimning `PayrollAssignment.base_amount` qiymati ustidan yozadi.
+  base_amount  Decimal   @default(0) @db.Decimal(18, 2)
+  /// Hisob turi bo‘yicha parametrlar (foiz, stawka, min/max, yaxlitlash …)
+  config       Json      @default("{}")
+  /// Ustama/ushlanma komponentlari: [{ code, label, kind: allowance|deduction, mode, value }]
+  components   Json      @default("[]")
+  /// Shartlar (gate): [{ metric, op, value, effect }] — bajarilmasa bonus/ustama kesiladi
+  gates        Json      @default("[]")
+  priority     Int       @default(0)
+  /// Rol bo‘yicha standart formula (guruhga bog‘lanmagan holda ham qo‘llanadi)
+  is_default   Boolean   @default(false)
+  is_active    Boolean   @default(true)
+  valid_from   DateTime?
+  valid_to     DateTime?
+  sort_order   Int       @default(0)
+  comment      String?
+  created_at   DateTime  @default(now())
+  updated_at   DateTime  @updatedAt
+
+  tenant      Tenant              @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  kpi_group   KpiGroup?           @relation(fields: [kpi_group_id], references: [id], onDelete: SetNull)
+  assignments PayrollAssignment[]
+  entries     PayrollEntry[]
+
+  @@unique([tenant_id, code])
+  @@index([tenant_id, is_active])
+  @@index([tenant_id, kpi_group_id])
+  @@map("payroll_formulas")
+}
+
+/// «Сетка» — metrika bo‘yicha bosqichli tarif jadvali (KPI guruhiga bog‘lanadi).
+model PayrollGrid {
+  id           Int      @id @default(autoincrement())
+  tenant_id    Int
+  name         String
+  code         String?  @db.VarChar(32)
+  kpi_group_id Int?
+  /// Qaysi ko‘rsatkich bo‘yicha bosqich tanlanadi: kpi_percent | sales_sum | order_count | collection_sum | deliveries | warehouse_ops …
+  metric       String   @default("kpi_percent") @db.VarChar(32)
+  /// Bosqich natijasi: coefficient (koeffitsiyent) | amount (qat’iy summa) | percent (foiz)
+  mode         String   @default("coefficient") @db.VarChar(16)
+  is_active    Boolean  @default(true)
+  sort_order   Int      @default(0)
+  comment      String?
+  created_at   DateTime @default(now())
+  updated_at   DateTime @updatedAt
+
+  tenant    Tenant           @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  kpi_group KpiGroup?        @relation(fields: [kpi_group_id], references: [id], onDelete: SetNull)
+  rows      PayrollGridRow[]
+
+  @@unique([tenant_id, code])
+  @@index([tenant_id, is_active])
+  @@index([tenant_id, kpi_group_id])
+  @@map("payroll_grids")
+}
+
+/// Сетка qatori. `month` bo‘sh = doimiy (baza) qator; `month` = «2026-10» bo‘lsa — oylik сетка.
+model PayrollGridRow {
+  id          Int      @id @default(autoincrement())
+  tenant_id   Int
+  grid_id     Int
+  month       String?  @db.VarChar(7)
+  from_value  Decimal? @db.Decimal(18, 4)
+  to_value    Decimal? @db.Decimal(18, 4)
+  coefficient Decimal  @default(1) @db.Decimal(10, 4)
+  amount      Decimal  @default(0) @db.Decimal(18, 2)
+  sort_order  Int      @default(0)
+
+  tenant Tenant      @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  grid   PayrollGrid @relation(fields: [grid_id], references: [id], onDelete: Cascade)
+
+  @@index([tenant_id, grid_id, month])
+  @@map("payroll_grid_rows")
+}
+
+/// Xodimga individual bog‘lash: formula tanlovi va oklad (ustidan yozish).
+model PayrollAssignment {
+  id          Int       @id @default(autoincrement())
+  tenant_id   Int
+  user_id     Int
+  formula_id  Int?
+  base_amount Decimal?  @db.Decimal(18, 2)
+  comment     String?
+  updated_by  Int?
+  created_at  DateTime  @default(now())
+  updated_at  DateTime  @updatedAt
+
+  tenant  Tenant          @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  user    User            @relation("PayrollAssignmentUser", fields: [user_id], references: [id], onDelete: Cascade)
+  formula PayrollFormula? @relation(fields: [formula_id], references: [id], onDelete: SetNull)
+
+  @@unique([tenant_id, user_id])
+  @@index([tenant_id, formula_id])
+  @@map("payroll_assignments")
+}
+
+/// Oylik hisob davri: draft → calculated → approved → paid (+ locked).
+model PayrollPeriod {
+  id            Int       @id @default(autoincrement())
+  tenant_id     Int
+  month         String    @db.VarChar(7)
+  status        String    @default("draft") @db.VarChar(16)
+  calculated_at DateTime?
+  calculated_by Int?
+  approved_at   DateTime?
+  approved_by   Int?
+  locked_at     DateTime?
+  locked_by     Int?
+  total_amount  Decimal   @default(0) @db.Decimal(18, 2)
+  paid_amount   Decimal   @default(0) @db.Decimal(18, 2)
+  comment       String?
+  created_at    DateTime  @default(now())
+  updated_at    DateTime  @updatedAt
+
+  tenant   Tenant           @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  entries  PayrollEntry[]
+  payments PayrollPayment[]
+
+  @@unique([tenant_id, month])
+  @@index([tenant_id, status])
+  @@map("payroll_periods")
+}
+
+/// Bitta xodimning oylik hisobi (breakdown bilan — har bir qism alohida saqlanadi).
+model PayrollEntry {
+  id                  Int      @id @default(autoincrement())
+  tenant_id           Int
+  period_id           Int
+  user_id             Int
+  formula_id          Int?
+  kpi_group_id        Int?
+  kind                String   @db.VarChar(32)
+  base_amount         Decimal  @default(0) @db.Decimal(18, 2)
+  variable_amount     Decimal  @default(0) @db.Decimal(18, 2)
+  allowance_amount    Decimal  @default(0) @db.Decimal(18, 2)
+  deduction_amount    Decimal  @default(0) @db.Decimal(18, 2)
+  adjustment_amount   Decimal  @default(0) @db.Decimal(18, 2)
+  gross_amount        Decimal  @default(0) @db.Decimal(18, 2)
+  net_amount          Decimal  @default(0) @db.Decimal(18, 2)
+  worked_days         Decimal  @default(0) @db.Decimal(6, 2)
+  planned_days        Decimal  @default(0) @db.Decimal(6, 2)
+  achievement_percent Decimal? @db.Decimal(8, 2)
+  /// Hisobda ishlatilgan ko‘rsatkichlar (traceability)
+  metrics             Json     @default("{}")
+  /// Har bir qism: [{ code, label, amount, note }]
+  breakdown           Json     @default("[]")
+  /// Qo‘lda kiritilgan yakuniy summa (hisobni ustidan yozadi)
+  manual_net          Decimal? @db.Decimal(18, 2)
+  status              String   @default("calculated") @db.VarChar(16)
+  comment             String?
+  updated_by          Int?
+  created_at          DateTime @default(now())
+  updated_at          DateTime @updatedAt
+
+  tenant  Tenant          @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  period  PayrollPeriod   @relation(fields: [period_id], references: [id], onDelete: Cascade)
+  user    User            @relation("PayrollEntryUser", fields: [user_id], references: [id], onDelete: Cascade)
+  formula PayrollFormula? @relation(fields: [formula_id], references: [id], onDelete: SetNull)
+
+  @@unique([period_id, user_id])
+  @@index([tenant_id, period_id])
+  @@index([tenant_id, user_id])
+  @@map("payroll_entries")
+}
+
+/// To‘langan зарплата (выплата). `voided_at` — bekor qilingan to‘lov.
+model PayrollPayment {
+  id          Int       @id @default(autoincrement())
+  tenant_id   Int
+  period_id   Int?
+  user_id     Int
+  amount      Decimal   @db.Decimal(18, 2)
+  method      String    @default("cash") @db.VarChar(16)
+  cash_desk_id Int?
+  paid_at     DateTime  @default(now())
+  comment     String?
+  created_by  Int?
+  voided_at   DateTime?
+  voided_by   Int?
+  created_at  DateTime  @default(now())
+  updated_at  DateTime  @updatedAt
+
+  tenant Tenant         @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  period PayrollPeriod? @relation(fields: [period_id], references: [id], onDelete: SetNull)
+  user   User           @relation("PayrollPaymentUser", fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([tenant_id, period_id])
+  @@index([tenant_id, user_id, paid_at])
+  @@map("payroll_payments")
+}

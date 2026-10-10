@@ -547,6 +547,8 @@ model KpiGroup {
   agents          KpiGroupAgent[]
   products        KpiGroupProduct[]
   sales_kpi_plans SalesKpiPlan[]
+  payroll_formulas PayrollFormula[]
+  payroll_grids    PayrollGrid[]
   tenant          Tenant            @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
 
   @@index([tenant_id, is_active])
