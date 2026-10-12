@@ -35,6 +35,18 @@ export type UserFact = {
 
 const r2 = (n: number) => Math.round(n * 100) / 100;
 
+/** Tovar xodimning KPI guruhlaridan faqat bittasiga yoziladi. `allowed` berilmasa — eski umumiy xaritalash. */
+export function kpiGroupsForProduct(
+  productId: number,
+  productGroups: Map<number, number[]>,
+  allowed?: Set<number>
+): number[] {
+  const all = productGroups.get(productId) ?? [];
+  if (!allowed) return all;
+  const hit = all.filter((g) => allowed.has(g)).sort((a, b) => a - b);
+  return hit.length ? [hit[0]!] : [];
+}
+
 function keyOf(userId: number, slotId: number | null): string {
   return `${userId}:${slotId ?? 0}`;
 }
@@ -75,7 +87,8 @@ export function aggregateKpiFact(
   lines: FactLine[],
   returns: ReturnAlloc[],
   productGroups: Map<number, number[]>,
-  pick: (l: FactLine) => number | null = (l) => l.agent_id
+  pick: (l: FactLine) => number | null = (l) => l.agent_id,
+  allowedByUser?: Map<number, Set<number>>
 ): Map<string, UserFact> {
   const retLeft = new Map<string, number>();
   for (const r of returns) {
@@ -108,7 +121,7 @@ export function aggregateKpiFact(
     addToAcc(tot, l.client_id, l.order_id, netCost, netQty, netVol);
     totalAcc.set(key, tot);
 
-    const groups = productGroups.get(l.product_id) ?? [];
+    const groups = kpiGroupsForProduct(l.product_id, productGroups, uid != null ? allowedByUser?.get(uid) : undefined);
     let gm = groupAcc.get(key);
     if (!gm) {
       gm = new Map();
@@ -142,10 +155,12 @@ export function mergeUserFacts(
   returns: ReturnAlloc[],
   productGroups: Map<number, number[]>,
   userId: number,
-  pick: (l: FactLine) => number | null = (l) => l.agent_id
+  pick: (l: FactLine) => number | null = (l) => l.agent_id,
+  allowed?: Set<number>
 ): UserFact {
   const onlyUser = lines.filter((l) => pick(l) === userId).map((l) => ({ ...l, work_slot_id: null }));
-  const agg = aggregateKpiFact(onlyUser, returns, productGroups, pick);
+  const allowedByUser = allowed ? new Map([[userId, allowed]]) : undefined;
+  const agg = aggregateKpiFact(onlyUser, returns, productGroups, pick, allowedByUser);
   return (
     agg.get(keyOf(userId, null)) ?? {
       user_id: userId,
@@ -208,7 +223,8 @@ export type OrphanReturn = {
 export function applyOrphanReturns(
   fact: UserFact,
   orphans: OrphanReturn[],
-  productGroups: Map<number, number[]>
+  productGroups: Map<number, number[]>,
+  allowed?: Set<number>
 ): UserFact {
   if (!orphans.length) return fact;
   const sub = (m: KpiMetrics, cost: number, count: number, volume: number): KpiMetrics => ({
@@ -225,7 +241,7 @@ export function applyOrphanReturns(
     const cost = o.qty * o.unit_price;
     const vol = o.qty * o.volume_unit;
     total = sub(total, cost, o.qty, vol);
-    for (const g of productGroups.get(o.product_id) ?? []) {
+    for (const g of kpiGroupsForProduct(o.product_id, productGroups, allowed)) {
       byGroup.set(g, sub(byGroup.get(g) ?? { ...ZERO_METRICS }, cost, o.qty, vol));
     }
     returned += cost;

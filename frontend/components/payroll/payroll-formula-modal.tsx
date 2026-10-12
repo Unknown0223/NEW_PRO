@@ -5,7 +5,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Pencil, Search } from "lucide-react";
 import { usePermissions } from "@/lib/use-permissions";
 import { useTenant } from "@/lib/api-client";
-import { payrollApi, payrollErrorText, roleLabel, STATUS_TONE } from "@/lib/payroll/payroll-api";
+import { currentYm, payrollApi, payrollErrorText, roleLabel, STATUS_TONE } from "@/lib/payroll/payroll-api";
 import { cn } from "@/lib/utils";
 import { TonePill } from "@/components/payroll/payroll-ui";
 import type { PayrollItem } from "@/components/payroll/payroll-items-workspace";
@@ -27,7 +27,10 @@ import {
 
 type Tab = "write" | "saved";
 const SCOPE_LABEL = Object.fromEntries(FORMULA_SCOPES.map((s) => [s.v, s.label])) as Record<string, string>;
-const emptyDraft = (scope: FormulaDraft["scope"]): FormulaDraft => ({ name: "", scope, text: "", role: null, target_item_id: null, priority: 100, is_active: true });
+const emptyDraft = (scope: FormulaDraft["scope"]): FormulaDraft => {
+  const ym = currentYm();
+  return { name: "", scope, text: "", role: null, kpi_group_id: null, year: ym.year, month: ym.month, target_item_id: null, priority: 100, is_active: true };
+};
 
 export function useSaveFormula(onSuccess: () => void, onError: (e: unknown) => void) {
   const tenant = useTenant();
@@ -40,6 +43,9 @@ export function useSaveFormula(onSuccess: () => void, onError: (e: unknown) => v
         scope: d.scope,
         text: d.text,
         role: d.role,
+        kpi_group_id: d.kpi_group_id,
+        year: d.year,
+        month: d.month,
         target_item_id: d.scope === "salary" ? null : d.target_item_id,
         priority: d.priority,
         is_active: d.is_active
@@ -105,7 +111,7 @@ export function PayrollFormulaModal({
   );
 
   const edit = (f: Formula) => {
-    setDraft({ id: f.id, name: f.name, scope: f.scope, text: f.text, role: f.role, target_item_id: f.target_item_id, priority: f.priority, is_active: f.is_active });
+    setDraft({ id: f.id, name: f.name, scope: f.scope, text: f.text, role: f.role, kpi_group_id: f.kpi_group_id, year: f.year, month: f.month, target_item_id: f.target_item_id, priority: f.priority, is_active: f.is_active });
     setTab("write");
   };
 

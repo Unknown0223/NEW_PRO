@@ -2,7 +2,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "../../config/database";
 import { loadTenantTimezone } from "../tenant-settings/tenant-timezone";
 import { ymdInTimeZone } from "../../lib/workday-calendar";
-import { enqueuePayrollRecalc, enqueuePayrollSweep } from "./payroll.jobs";
+import { schedulePayrollBatch } from "./payroll.batch";
 
 export type DirtyTarget = { userIds?: number[]; year?: number; month?: number };
 type Ym = { year: number; month: number };
@@ -10,7 +10,6 @@ type Ym = { year: number; month: number };
 const ENABLED_TTL_MS = 30_000;
 const enabledCache = new Map<number, { v: boolean; at: number }>();
 const MAX_REASONS = 20;
-const MAX_FANOUT_JOBS = 500;
 
 export async function enabledCached(tenantId: number): Promise<boolean> {
   const hit = enabledCache.get(tenantId);
@@ -75,14 +74,12 @@ export async function markPayrollDirty(tenantId: number, target: DirtyTarget, re
           WHERE u.tenant_id = ${tenantId} AND u.id = ANY(${userIds}::int[]) AND u.role <> 'admin'
           ON CONFLICT (tenant_id, user_id, year, month)
           DO UPDATE SET dirty_at = now(), dirty_reasons = ${reasonSql(reason)}`;
-        for (const uid of userIds.slice(0, MAX_FANOUT_JOBS)) {
-          await enqueuePayrollRecalc({ tenant_id: tenantId, user_id: uid, year: ym.year, month: ym.month });
-        }
+        schedulePayrollBatch(tenantId, ym.year, ym.month, userIds);
       } else {
         await prisma.$executeRaw`
           UPDATE payroll_records SET dirty_at = now(), dirty_reasons = ${reasonSql(reason)}
           WHERE tenant_id = ${tenantId} AND year = ${ym.year} AND month = ${ym.month}`;
-        await enqueuePayrollSweep({ tenant_id: tenantId, year: ym.year, month: ym.month });
+        schedulePayrollBatch(tenantId, ym.year, ym.month, null);
       }
     }
   } catch (e) {

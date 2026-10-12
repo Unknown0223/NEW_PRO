@@ -9,7 +9,7 @@ import { usePayrollConfirm } from "@/components/payroll/kit/payroll-kit-modal";
 import { useUserTablePrefs } from "@/hooks/use-user-table-prefs";
 import { usePermissions } from "@/lib/use-permissions";
 import { useTenant } from "@/lib/api-client";
-import { fmtDateTime, payrollApi, roleLabel, STATUS_TONE } from "@/lib/payroll/payroll-api";
+import { currentYm, fmtDateTime, payrollApi, roleLabel, STATUS_TONE, ymLabel } from "@/lib/payroll/payroll-api";
 import { cn } from "@/lib/utils";
 import { TonePill, useNotice } from "@/components/payroll/payroll-ui";
 import type { PayrollItem } from "@/components/payroll/payroll-items-workspace";
@@ -32,11 +32,14 @@ import {
   usePagedRows
 } from "@/components/payroll/kit/payroll-kit-table";
 
-export type Formula = FormulaDraft & { id: number; target_item_name: string | null; assignments: number; updated_at: string };
+export type Formula = FormulaDraft & { id: number; target_item_name: string | null; kpi_group_name: string | null; assignments: number; updated_at: string };
 type Tab = "write" | "saved";
 
 const SCOPE_LABEL = Object.fromEntries(FORMULA_SCOPES.map((s) => [s.v, s.label])) as Record<string, string>;
-const EMPTY: FormulaDraft = { name: "", scope: "bonus", text: "", role: null, target_item_id: null, priority: 100, is_active: true };
+const blankDraft = (): FormulaDraft => {
+  const ym = currentYm();
+  return { name: "", scope: "bonus", text: "", role: null, kpi_group_id: null, year: ym.year, month: ym.month, target_item_id: null, priority: 100, is_active: true };
+};
 
 export function PayrollFormulasWorkspace() {
   const tenant = useTenant();
@@ -47,7 +50,7 @@ export function PayrollFormulasWorkspace() {
   const notice = useNotice();
   const { confirm, dialog } = usePayrollConfirm();
   const [tab, setTab] = useState<Tab>("write");
-  const [draft, setDraft] = useState<FormulaDraft>({ ...EMPTY });
+  const [draft, setDraft] = useState<FormulaDraft>(blankDraft());
   const [q, setQ] = useState("");
   const prefs = useUserTablePrefs({ tenantSlug: tenant, tableId: "payroll.formulas", defaultColumnOrder: ["name"], defaultPageSize: 20 });
 
@@ -69,7 +72,7 @@ export function PayrollFormulasWorkspace() {
   const invalidate = () => void qc.invalidateQueries({ queryKey: ["payroll-formulas", tenant] });
 
   const save = useSaveFormula(() => {
-    setDraft({ ...EMPTY });
+    setDraft(blankDraft());
     setTab("saved");
     notice.ok("Формула сохранена. Зарплаты пересчитаются автоматически.");
   }, notice.fail);
@@ -120,7 +123,7 @@ export function PayrollFormulasWorkspace() {
   };
 
   const edit = (f: Formula) => {
-    setDraft({ id: f.id, name: f.name, scope: f.scope, text: f.text, role: f.role, target_item_id: f.target_item_id, priority: f.priority, is_active: f.is_active });
+    setDraft({ id: f.id, name: f.name, scope: f.scope, text: f.text, role: f.role, kpi_group_id: f.kpi_group_id, year: f.year, month: f.month, target_item_id: f.target_item_id, priority: f.priority, is_active: f.is_active });
     setTab("write");
   };
 
@@ -154,7 +157,7 @@ export function PayrollFormulasWorkspace() {
             draft={draft}
             onChange={setDraft}
             onSave={() => save.mutate(draft)}
-            onClear={() => setDraft({ ...EMPTY })}
+            onClear={() => setDraft(blankDraft())}
             saving={save.isPending}
             canEdit={canEdit}
             items={itemsQ.data ?? []}
@@ -179,8 +182,10 @@ export function PayrollFormulasWorkspace() {
               <thead className={PAYROLL_THEAD}>
                 <tr>
                   <th className={TH}>Название</th>
+                  <th className={TH}>Месяц</th>
                   <th className={TH}>Раздел</th>
                   <th className={TH}>Роль</th>
+                  <th className={TH}>KPI</th>
                   <th className={TH}>Статья</th>
                   <th className={TH}>Формула</th>
                   <th className={cn(TH, "text-right")}>Назначений</th>
@@ -190,12 +195,14 @@ export function PayrollFormulasWorkspace() {
                 </tr>
               </thead>
               <tbody>
-                {listQ.isLoading || rows.length === 0 ? <PayrollEmptyRow colSpan={9} loading={listQ.isLoading} text="Формул пока нет" /> : null}
+                {listQ.isLoading || rows.length === 0 ? <PayrollEmptyRow colSpan={11} loading={listQ.isLoading} text="Формул пока нет" /> : null}
                 {paged.pageRows.map((f) => (
                   <tr key={f.id} className={cn(PAYROLL_TR, !f.is_active && "opacity-60")}>
                     <td className={cn(TD, "font-medium text-foreground")}>{f.name}</td>
+                    <td className={cn(TD, "text-muted-foreground")}>{f.year && f.month ? ymLabel({ year: f.year, month: f.month }) : "Все месяцы"}</td>
                     <td className={TD}>{SCOPE_LABEL[f.scope] ?? f.scope}</td>
                     <td className={cn(TD, "text-muted-foreground")}>{f.role ? roleLabel(f.role) : "—"}</td>
+                    <td className={cn(TD, "text-muted-foreground")}>{f.kpi_group_name ?? "—"}</td>
                     <td className={cn(TD, "text-muted-foreground")}>{f.target_item_name ?? "—"}</td>
                     <td className={cn(TD, "max-w-md truncate font-mono text-xs")} title={f.text}>{f.text}</td>
                     <td className={cn(TD, "text-right tabular-nums")}>{f.assignments}</td>

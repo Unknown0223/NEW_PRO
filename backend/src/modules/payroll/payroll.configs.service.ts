@@ -23,6 +23,8 @@ export type EmployeeConfigDto = {
   code: string | null;
   role: string;
   branch: string | null;
+  territory: string | null;
+  trade_direction: string | null;
   is_active: boolean;
   role_base_amount: number;
   base_amount: number | null;
@@ -151,6 +153,8 @@ export async function listEmployeeConfigs(
         code: true,
         role: true,
         branch: true,
+        territory: true,
+        trade_direction: true,
         is_active: true
       },
       orderBy: [{ role: "asc" }, { last_name: "asc" }, { name: "asc" }],
@@ -174,6 +178,8 @@ export async function listEmployeeConfigs(
       code: u.code,
       role: u.role,
       branch: u.branch,
+      territory: u.territory,
+      trade_direction: u.trade_direction,
       is_active: u.is_active,
       role_base_amount: rb,
       base_amount: own,

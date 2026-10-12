@@ -130,7 +130,7 @@ export async function loadMonthReturnEvents(
 }
 
 /** Oflayn zakazlarda `work_slot_id` yo'q bo'lsa — zakaz paytidagi o'rin oralig'i. */
-async function fillMissingSlots(tenantId: number, lines: DatedFactLine[]): Promise<void> {
+export async function fillMissingSlots(tenantId: number, lines: DatedFactLine[]): Promise<void> {
   const need = lines.filter((l) => l.work_slot_id == null && l.agent_id != null);
   if (!need.length) return;
   const agentIds = [...new Set(need.map((l) => l.agent_id!))];
@@ -161,10 +161,20 @@ function emptyFact(userId: number): UserFact {
   return { user_id: userId, work_slot_id: null, byGroup: new Map(), total: { ...ZERO_METRICS }, returned_sum: 0 };
 }
 
+export const LEADER_ROLES = new Set(["supervisor", "manager", "regional_manager", "sales_director", "director"]);
+
+async function memberGroups(tenantId: number, userId: number): Promise<Set<number>> {
+  const rows = await prisma.kpiGroupAgent.findMany({
+    where: { user_id: userId, kpi_group: { tenant_id: tenantId, is_active: true } },
+    select: { kpi_group_id: true }
+  });
+  return new Set(rows.map((r) => r.kpi_group_id));
+}
+
 type TeamScope = { filter: LineFilter; match: (agentId: number | null, slotId: number | null, at: Date) => boolean } | null;
 
 /** Supervayzer jamoasi: ish o'rni bog'lanish oynalari (bo'lmasa — `supervisor_user_id` agentlari). */
-async function teamScope(tenantId: number, userId: number, range: Range): Promise<TeamScope> {
+export async function teamScope(tenantId: number, userId: number, range: Range): Promise<TeamScope> {
   const links = await prisma.slotUserLink.findMany({
     where: {
       tenant_id: tenantId,
@@ -188,12 +198,20 @@ async function teamScope(tenantId: number, userId: number, range: Range): Promis
         slotId != null && windows.some((w) => w.slots.has(slotId) && at.getTime() >= w.from && at.getTime() < w.to)
     };
   }
-  const agents = await prisma.user.findMany({
-    where: { tenant_id: tenantId, supervisor_user_id: userId, role: "agent" },
-    select: { id: true }
+  const people = await prisma.user.findMany({
+    where: { tenant_id: tenantId, supervisor_user_id: userId },
+    select: { id: true, role: true }
   });
-  if (!agents.length) return null;
-  const ids = new Set(agents.map((a) => a.id));
+  const ids = new Set(people.filter((p) => p.role === "agent").map((p) => p.id));
+  const leaders = people.filter((p) => p.role !== "agent").map((p) => p.id);
+  if (leaders.length) {
+    const nested = await prisma.user.findMany({
+      where: { tenant_id: tenantId, role: "agent", supervisor_user_id: { in: leaders } },
+      select: { id: true }
+    });
+    for (const n of nested) ids.add(n.id);
+  }
+  if (!ids.size) return null;
   return { filter: { agentIds: [...ids] }, match: (agentId) => agentId != null && ids.has(agentId) };
 }
 
@@ -207,6 +225,7 @@ export async function computeUserMonthFact(
 ): Promise<UserMonthFact> {
   const groups = productGroups ?? (await loadProductGroups(tenantId));
   const multiGroup = [...groups.values()].filter((g) => g.length > 1).length;
+  const ownGroups = await memberGroups(tenantId, userId);
 
   const agentLines = await loadDeliveredLines(tenantId, range, { agentIds: [userId] });
   await fillMissingSlots(tenantId, agentLines);
@@ -216,15 +235,16 @@ export async function computeUserMonthFact(
   );
   const orphans = [...(await loadOrphanReturns(tenantId, range, [userId])), ...own.earlier];
   const agent = applyOrphanReturns(
-    agentLines.length ? mergeUserFacts(agentLines, own.sameMonth, groups, userId) : emptyFact(userId),
+    agentLines.length ? mergeUserFacts(agentLines, own.sameMonth, groups, userId, undefined, ownGroups) : emptyFact(userId),
     orphans,
-    groups
+    groups,
+    ownGroups
   );
   const bySlot = new Map<number, UserFact>();
-  for (const f of aggregateKpiFact(agentLines, own.sameMonth, groups).values()) {
+  for (const f of aggregateKpiFact(agentLines, own.sameMonth, groups, undefined, new Map([[userId, ownGroups]])).values()) {
     if (f.user_id !== userId || f.work_slot_id == null) continue;
     const slotId = f.work_slot_id;
-    bySlot.set(slotId, applyOrphanReturns(f, orphans.filter((o) => o.work_slot_id === slotId), groups));
+    bySlot.set(slotId, applyOrphanReturns(f, orphans.filter((o) => o.work_slot_id === slotId), groups, ownGroups));
   }
 
   const expeditor: ExpeditorFact = { delivered_count: 0, delivered_sum: 0, delivered_volume: 0, clients: 0 };
@@ -246,7 +266,7 @@ export async function computeUserMonthFact(
 
   let team: UserFact | null = null;
   let teamOrphans = 0;
-  if (role === "supervisor") {
+  if (LEADER_ROLES.has(role)) {
     const scope = await teamScope(tenantId, userId, range);
     if (scope) {
       const tl = (await loadDeliveredLines(tenantId, range, scope.filter)).filter((l) =>
@@ -257,9 +277,10 @@ export async function computeUserMonthFact(
       const to = await loadOrphanReturns(tenantId, range, teamAgents);
       teamOrphans = to.length;
       team = applyOrphanReturns(
-        mergeUserFacts(tl.map((l) => ({ ...l, agent_id: userId })), tr.sameMonth, groups, userId),
+        mergeUserFacts(tl.map((l) => ({ ...l, agent_id: userId })), tr.sameMonth, groups, userId, undefined, ownGroups),
         [...to, ...tr.earlier],
-        groups
+        groups,
+        ownGroups
       );
     } else {
       team = emptyFact(userId);

@@ -10,8 +10,8 @@ const NUM_KEY = "h-8 [@media(max-height:760px)]:h-7 rounded-[9px] bg-[#eef2f6] t
 const HEAD_BTN = "rounded-md p-1 text-muted-foreground/70 transition-colors hover:bg-muted hover:text-foreground";
 
 const FUNCS = [
-  { label: "MIN", text: "MIN(" },
-  { label: "MAX", text: "MAX(" },
+  { label: "МИН", text: "МИН(" },
+  { label: "МАКС", text: "МАКС(" },
   { label: "ЕСЛИ", text: "ЕСЛИ(" },
   { label: "ОКР", text: "ОКРУГЛ(" }
 ];

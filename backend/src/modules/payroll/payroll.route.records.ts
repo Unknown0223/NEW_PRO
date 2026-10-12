@@ -9,7 +9,6 @@ import {
   setPayrollRecordLine,
   transferPayrollData
 } from "./payroll.records.actions";
-import { recalcPayrollRecord } from "./payroll.recalc";
 import { recalcPayrollMonth } from "./payroll.recalc-month";
 import { csvList, parseYm, payrollCtx, perm, runPayroll, sendZod } from "./payroll.route-helpers";
 import { prisma } from "../../config/database";
@@ -119,16 +118,13 @@ export async function registerPayrollRecordRoutes(app: FastifyInstance) {
     const p = recalcBody.safeParse(req.body);
     if (!p.success) return sendZod(reply, req, p.error);
     const { year, month, user_ids, force } = p.data;
-    if (user_ids?.length && user_ids.length <= 50) {
-      const results = [];
-      for (const uid of user_ids) {
-        results.push({ user_id: uid, ...(await recalcPayrollRecord(c.tenantId, uid, year, month, { trigger: "manual", force: force ?? true })) });
-      }
-      return reply.send({ data: { mode: "sync", results } });
+    const run = () =>
+      recalcPayrollMonth(c.tenantId, year, month, { trigger: "manual", force: force ?? true, userIds: user_ids });
+    if (user_ids?.length && user_ids.length <= 20) {
+      const summary = await run();
+      return reply.send({ data: { mode: "sync", ...summary } });
     }
-    void recalcPayrollMonth(c.tenantId, year, month, { trigger: "manual", force: force ?? true, userIds: user_ids }).catch((e) =>
-      logger.warn({ err: e, tenantId: c.tenantId }, "payroll manual month recalc failed")
-    );
+    void run().catch((e) => logger.warn({ err: e, tenantId: c.tenantId }, "payroll manual month recalc failed"));
     return reply.status(202).send({ data: { mode: "async" } });
   });
 

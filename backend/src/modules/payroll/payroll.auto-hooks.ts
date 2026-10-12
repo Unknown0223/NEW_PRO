@@ -87,6 +87,39 @@ const RULES: Rule[] = [
   { re: /^\/api\/[^/]+\/clients\/merge$/, reason: "clients_merge", target: tenantWide }
 ];
 
+type TimesheetCell = { userId: number; year: number; month: number };
+
+/** Tabel saqlanganda shu xodim va oyni darhol qayta hisoblash (navbat 2 daqiqa kutmasin). */
+function timesheetCells(path: string, req: FastifyRequest): TimesheetCell[] | null {
+  const one = path.match(/^\/api\/[^/]+\/timesheet\/(\d+)\/(\d{4})-(\d{2})-\d{2}$/);
+  if (one) return [{ userId: Number(one[1]), year: Number(one[2]), month: Number(one[3]) }];
+  if (!/^\/api\/[^/]+\/timesheet\/batch$/.test(path)) return null;
+  const entries = (req.body as { entries?: Array<{ userId?: unknown; date?: unknown }> } | null)?.entries;
+  if (!Array.isArray(entries)) return [];
+  const map = new Map<string, TimesheetCell>();
+  for (const e of entries) {
+    const userId = Number(e?.userId);
+    const ym = typeof e?.date === "string" ? /^(\d{4})-(\d{2})-\d{2}$/.exec(e.date) : null;
+    if (!Number.isInteger(userId) || userId <= 0 || !ym) continue;
+    const cell = { userId, year: Number(ym[1]), month: Number(ym[2]) };
+    map.set(`${cell.userId}:${cell.year}-${cell.month}`, cell);
+  }
+  return [...map.values()];
+}
+
+async function recalcTimesheet(tenantId: number, cells: TimesheetCell[]): Promise<void> {
+  const groups = new Map<string, { year: number; month: number; ids: number[] }>();
+  for (const c of cells.slice(0, 300)) {
+    const key = `${c.year}-${c.month}`;
+    const g = groups.get(key) ?? { year: c.year, month: c.month, ids: [] };
+    if (!g.ids.includes(c.userId)) g.ids.push(c.userId);
+    groups.set(key, g);
+  }
+  for (const g of groups.values()) {
+    await markPayrollDirty(tenantId, { userIds: g.ids, year: g.year, month: g.month }, "timesheet");
+  }
+}
+
 /** Muvaffaqiyatli o'zgartiruvchi so'rovlardan keyin oylikni «eskirgan» deb belgilash (fire-and-forget). */
 export function registerPayrollMutationHook(app: FastifyInstance): void {
   app.addHook("onResponse", async (request, reply) => {
@@ -95,6 +128,11 @@ export function registerPayrollMutationHook(app: FastifyInstance): void {
     const tenantId = request.tenant?.id;
     if (!tenantId) return;
     const path = request.url.split("?")[0] ?? "";
+    const cells = timesheetCells(path, request);
+    if (cells?.length) {
+      void recalcTimesheet(tenantId, cells);
+      return;
+    }
     for (const rule of RULES) {
       const m = path.match(rule.re);
       if (!m) continue;

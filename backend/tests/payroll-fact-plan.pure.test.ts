@@ -3,10 +3,12 @@ import {
   aggregateKpiFact,
   allocatePeriodReturns,
   applyOrphanReturns,
+  kpiGroupsForProduct,
   mergeUserFacts,
   splitReturnEvents,
   type FactLine
 } from "../src/modules/payroll/payroll-kpi-fact.pure";
+import { formatKpiProductConflict } from "../src/modules/sales-directions/sales-directions.kpi-conflict";
 import { splitSlotPlan } from "../src/modules/payroll/payroll-slot-plan.pure";
 
 const line = (p: Partial<FactLine>): FactLine => ({
@@ -40,6 +42,17 @@ describe("aggregateKpiFact", () => {
     expect(f.total.acb).toBe(2);
   });
 
+  it("counts a product only in the employee's own KPI group", () => {
+    const lines = [line({ product_id: 2, qty: 5, total: 500 })];
+    const allowed = new Map<number, Set<number>>([[10, new Set([8])]]);
+    const res = aggregateKpiFact(lines, [], groups, undefined, allowed);
+    const f = res.get("10:100")!;
+    expect(f.total.cost).toBe(500);
+    expect(f.byGroup.get(8)!.cost).toBe(500);
+    expect(f.byGroup.has(7)).toBe(false);
+    expect(kpiGroupsForProduct(2, groups, new Set([7, 8]))).toEqual([7]);
+  });
+
   it("full return removes client from АКБ and order count", () => {
     const res = aggregateKpiFact([line({})], [{ order_id: 1, product_id: 1, qty: 10 }], groups);
     const f = res.get("10:100")!;
@@ -60,6 +73,16 @@ describe("aggregateKpiFact", () => {
     const merged = mergeUserFacts(lines, [], groups, 10);
     expect(merged.total.cost).toBe(2000);
     expect(merged.total.acb).toBe(1);
+  });
+});
+
+describe("formatKpiProductConflict", () => {
+  it("names the employee, product and the other group", () => {
+    const text = formatKpiProductConflict([{ user: "Мадина", product: "Chikako", group: "BEBELIS" }]);
+    expect(text).toContain("Мадина");
+    expect(text).toContain("Chikako");
+    expect(text).toContain("BEBELIS");
+    expect(text).toContain("одной KPI-группе");
   });
 });
 

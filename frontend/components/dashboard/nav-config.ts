@@ -319,51 +319,17 @@ export const dashboardPayrollNav: {
   sectionTitle: "Зарплата",
   groups: [
     {
-      title: "ОСНОВНОЕ",
+      title: "ПОРЯДОК",
       items: [
-        { href: "/users/salary", label: "Зарплата", showIfAnyPermission: [...NAV_PERM.staffPayroll] },
-        { href: "/users/salary/compare", label: "Сверка с Excel", showIfAnyPermission: [...NAV_PERM.staffPayroll] }
-      ]
-    },
-    {
-      title: "НАСТРОЙКИ",
-      items: [
-        { href: "/users/salary/schemes", label: "Схемы расчёта", showIfAnyPermission: [...NAV_PERM.staffPayroll] },
-        { href: "/users/salary/role-salaries", label: "Базовые оклады", showIfAnyPermission: [...NAV_PERM.staffPayroll] },
-        { href: "/users/salary/formulas", label: "Формулы", showIfAnyPermission: [...NAV_PERM.staffPayroll] },
-        {
-          href: "/users/bonus-and-salary-settings",
-          label: "Настройки бонусов и зарплат",
-          showIfAnyPermission: [...NAV_PERM.staffPayroll]
-        },
-        { href: "/settings/payroll/adjustments", label: "Надбавки и вычеты к зарплате", showIfAnyPermission: [...NAV_PERM.staffPayroll] },
-        { href: "/settings/payroll", label: "Настройки зарплаты", showIfAnyPermission: [...NAV_PERM.staffPayroll] }
-      ]
-    },
-    {
-      title: "АВАНС",
-      items: [
-        { href: "/users/advances", label: "Аванс", showIfAnyPermission: [...NAV_PERM.staffAdvances] },
-        {
-          href: "/finance/advances/approval",
-          label: "Утверждение авансов",
-          showIfAnyPermission: [...NAV_PERM.financeAdvances]
-        },
-        {
-          href: "/settings/payroll/advance-limits",
-          label: "Лимиты авансов",
-          showIfAnyPermission: [...NAV_PERM.staffAdvanceLimits]
-        }
-      ]
-    },
-    {
-      title: "ВЫДАЧА",
-      items: [
-        {
-          href: "/finance/cashier-queue",
-          label: "Выдача аванса и зарплаты",
-          showIfAnyPermission: [...NAV_PERM.cashPayrollQueue]
-        }
+        { href: "/settings/payroll/adjustments", label: "1. Надбавки и вычеты", showIfAnyPermission: [...NAV_PERM.staffPayroll] },
+        { href: "/users/salary/formulas", label: "2. Формулы", showIfAnyPermission: [...NAV_PERM.staffPayroll] },
+        { href: "/users/bonus-and-salary-settings", label: "Настройки бонусов и зарплат", showIfAnyPermission: [...NAV_PERM.staffPayroll] },
+        { href: "/users/salary/role-salaries", label: "3. Базовые оклады", showIfAnyPermission: [...NAV_PERM.staffPayroll] },
+        { href: "/users/salary", label: "4. Зарплата", showIfAnyPermission: [...NAV_PERM.staffPayroll] },
+        { href: "/users/advances", label: "5. Аванс", showIfAnyPermission: [...NAV_PERM.staffAdvances] },
+        { href: "/finance/advances/approval", label: "6. Утверждение авансов", showIfAnyPermission: [...NAV_PERM.financeAdvances] },
+        { href: "/finance/cashier-queue", label: "7. Выдача аванса и зарплаты", showIfAnyPermission: [...NAV_PERM.cashPayrollQueue] },
+        { href: "/users/salary/compare", label: "8. Сверка с Excel", showIfAnyPermission: [...NAV_PERM.staffPayroll] }
       ]
     }
   ]
@@ -547,6 +513,10 @@ export const dashboardSidebarLayout: SidebarLayoutEntry[] = [
     kind: "link",
     item: { href: "/suspicious-logins", label: "Подозрительные входы", showIfAnyPermission: [...NAV_PERM.suspiciousLogins] }
   },
+  {
+    kind: "link",
+    item: { href: "/assistant", label: "Помощник", showIfAnyPermission: [...NAV_PERM.assistant] }
+  },
   { kind: "link", item: { href: "/activity", label: "Активность и история", showIfAnyPermission: [...NAV_PERM.activity] } },
   {
     kind: "link",
@@ -672,6 +642,7 @@ const BREADCRUMB_ENTRIES: Array<{ path: string; section: string | null; label: s
     { href: "/reports/gps/map", label: "GPS мониторинг" },
     { href: "/audit", label: "Аудит" },
     { href: "/suspicious-logins", label: "Подозрительные входы" },
+    { href: "/assistant", label: "Помощник" },
     { href: "/activity", label: "Активность и история" },
     { href: "/diagnostics/errors", label: "Журнал ошибок" },
     { href: "/access", label: "Доступ" },

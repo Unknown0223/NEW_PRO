@@ -1,5 +1,10 @@
-import sharp from "sharp";
 import { l2Normalize } from "./face-match.pure";
+
+/** Native `sharp` is loaded only when a face photo is processed, so a blocked binary does not stop the API. */
+async function loadSharp() {
+  const mod = await import("sharp");
+  return mod.default;
+}
 
 const SIZE = 128;
 const BLOCK = 8; // 8x8 → 64 block means
@@ -20,6 +25,7 @@ function meanCenter(vec: number[]): number[] {
  * (non-negative vectors alone stay near cosine ≈ 1).
  */
 export async function buildFaceDescriptor(imageBuf: Buffer): Promise<number[]> {
+  const sharp = await loadSharp();
   const { data, info } = await sharp(imageBuf)
     .rotate()
     .resize(SIZE, SIZE, { fit: "cover", position: "attention" })

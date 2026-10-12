@@ -9,6 +9,9 @@ import {
   upsertEmployeeConfig,
   upsertRoleConfig
 } from "./payroll.configs.service";
+import { copyGrids, overlayEmployeeGrids, overlayRoleGrids, saveRoleGrid, saveUserGrid } from "./payroll.grid-month";
+import { payrollKpiGrid, savePayrollKpiAmounts } from "./payroll.grid-kpi";
+import { prisma } from "../../config/database";
 import { mapPayrollError, payrollCtx, perm, sendZod } from "./payroll.route-helpers";
 
 const VIEW = ["staff.zarplaty.view"];
@@ -37,14 +40,18 @@ const roleCfgBody = z.object({
   allowance_item_ids: z.array(z.number().int().positive()).max(200).optional(),
   deduction_item_ids: z.array(z.number().int().positive()).max(200).optional(),
   comment: z.string().max(500).nullable().optional(),
-  item_amounts: z.record(z.string().regex(/^\d+$/), z.number().min(0).max(1e13).nullable()).optional()
+  item_amounts: z.record(z.string().regex(/^\d+$/), z.number().min(0).max(1e13).nullable()).optional(),
+  year: z.number().int().min(2000).max(2100).optional(),
+  month: z.number().int().min(1).max(12).optional()
 });
 
 const empCfgBody = z.object({
   base_amount: z.number().min(0).max(1e13).nullable().optional(),
   cash_desk_id: z.number().int().positive().nullable().optional(),
   comment: z.string().max(500).nullable().optional(),
-  item_amounts: z.record(z.string().regex(/^\d+$/), z.number().min(0).max(1e13).nullable()).optional()
+  item_amounts: z.record(z.string().regex(/^\d+$/), z.number().min(0).max(1e13).nullable()).optional(),
+  year: z.number().int().min(2000).max(2100).optional(),
+  month: z.number().int().min(1).max(12).optional()
 });
 
 const empImportBody = z.object({
@@ -131,7 +138,12 @@ export async function registerPayrollCatalogRoutes(app: FastifyInstance) {
   app.get("/api/:slug/payroll/role-configs", perm(...VIEW), async (req, reply) => {
     const c = payrollCtx(req, reply);
     if (!c) return;
-    return reply.send({ data: await listRoleConfigs(c.tenantId) });
+    const q = req.query as { year?: string; month?: string };
+    let data = await listRoleConfigs(c.tenantId);
+    const year = Number(q.year);
+    const month = Number(q.month);
+    if (year && month) data = await overlayRoleGrids(c.tenantId, year, month, data);
+    return reply.send({ data });
   });
 
   app.put("/api/:slug/payroll/role-configs/:role", perm(...UPDATE), async (req, reply) => {
@@ -141,7 +153,16 @@ export async function registerPayrollCatalogRoutes(app: FastifyInstance) {
     const p = roleCfgBody.safeParse(req.body);
     if (!p.success) return sendZod(reply, req, p.error);
     try {
-      await upsertRoleConfig(c.tenantId, role, p.data, c.actorId);
+      const { year, month, ...rest } = p.data;
+      if (year && month) await saveRoleGrid(c.tenantId, role, year, month, { base_amount: rest.base_amount, item_amounts: rest.item_amounts });
+      const live = { ...rest };
+      if (year && month) {
+        delete live.base_amount;
+        delete live.item_amounts;
+      }
+      if (!year || !month || live.allowance_item_ids || live.deduction_item_ids || live.comment !== undefined || live.currency) {
+        await upsertRoleConfig(c.tenantId, role, live, c.actorId);
+      }
       return reply.send({ ok: true });
     } catch (e) {
       if (mapPayrollError(reply, req, e)) return;
@@ -152,12 +173,15 @@ export async function registerPayrollCatalogRoutes(app: FastifyInstance) {
   app.get("/api/:slug/payroll/employee-configs", perm(...VIEW), async (req, reply) => {
     const c = payrollCtx(req, reply);
     if (!c) return;
-    const q = req.query as { role?: string; q?: string; include_inactive?: string };
-    const data = await listEmployeeConfigs(c.tenantId, {
+    const q = req.query as { role?: string; q?: string; include_inactive?: string; year?: string; month?: string };
+    let data = await listEmployeeConfigs(c.tenantId, {
       role: q.role?.trim() || undefined,
       q: q.q,
       includeInactive: q.include_inactive === "1"
     });
+    const year = Number(q.year);
+    const month = Number(q.month);
+    if (year && month) data = await overlayEmployeeGrids(c.tenantId, year, month, data);
     return reply.send({ data });
   });
 
@@ -168,7 +192,19 @@ export async function registerPayrollCatalogRoutes(app: FastifyInstance) {
     const p = empCfgBody.safeParse(req.body);
     if (!p.success) return sendZod(reply, req, p.error);
     try {
-      await upsertEmployeeConfig(c.tenantId, userId, p.data, c.actorId);
+      const { year, month, ...rest } = p.data;
+      if (year && month) {
+        const u = await prisma.user.findFirst({ where: { id: userId, tenant_id: c.tenantId }, select: { role: true } });
+        await saveUserGrid(c.tenantId, userId, u?.role ?? "", year, month, { base_amount: rest.base_amount, item_amounts: rest.item_amounts });
+      }
+      const live = { ...rest };
+      if (year && month) {
+        delete live.base_amount;
+        delete live.item_amounts;
+      }
+      if (!year || !month || live.cash_desk_id !== undefined || live.comment !== undefined) {
+        await upsertEmployeeConfig(c.tenantId, userId, live, c.actorId);
+      }
       return reply.send({ ok: true });
     } catch (e) {
       if (mapPayrollError(reply, req, e)) return;
@@ -182,5 +218,51 @@ export async function registerPayrollCatalogRoutes(app: FastifyInstance) {
     const p = empImportBody.safeParse(req.body);
     if (!p.success) return sendZod(reply, req, p.error);
     return reply.send({ data: await importEmployeeConfigs(c.tenantId, p.data.rows, p.data.apply, c.actorId) });
+  });
+
+  app.get("/api/:slug/payroll/kpi-grid", perm(...VIEW), async (req, reply) => {
+    const c = payrollCtx(req, reply);
+    if (!c) return;
+    const q = req.query as { year?: string; month?: string };
+    const year = Number(q.year);
+    const month = Number(q.month);
+    if (!year || !month) return reply.status(400).send({ error: "BadMonth" });
+    return reply.send({ data: await payrollKpiGrid(c.tenantId, year, month) });
+  });
+
+  app.put("/api/:slug/payroll/kpi-grid", perm(...UPDATE), async (req, reply) => {
+    const c = payrollCtx(req, reply);
+    if (!c) return;
+    const p = z.object({
+      year: z.number().int(),
+      month: z.number().int().min(1).max(12),
+      rows: z.array(z.object({
+        user_id: z.number().int().positive(),
+        amounts: z.record(z.string(), z.number().min(0).max(1e13).nullable())
+      })).max(2000)
+    }).safeParse(req.body);
+    if (!p.success) return sendZod(reply, req, p.error);
+    try {
+      return reply.send({ data: await savePayrollKpiAmounts(c.tenantId, p.data.year, p.data.month, p.data.rows) });
+    } catch (e) {
+      if (mapPayrollError(reply, req, e)) return;
+      throw e;
+    }
+  });
+
+  app.post("/api/:slug/payroll/grids/copy", perm(...UPDATE), async (req, reply) => {
+    const c = payrollCtx(req, reply);
+    if (!c) return;
+    const p = z.object({
+      from: z.object({ year: z.number().int(), month: z.number().int().min(1).max(12) }),
+      to: z.object({ year: z.number().int(), month: z.number().int().min(1).max(12) })
+    }).safeParse(req.body);
+    if (!p.success) return sendZod(reply, req, p.error);
+    try {
+      return reply.send({ data: await copyGrids(c.tenantId, p.data.from, p.data.to) });
+    } catch (e) {
+      if (mapPayrollError(reply, req, e)) return;
+      throw e;
+    }
   });
 }

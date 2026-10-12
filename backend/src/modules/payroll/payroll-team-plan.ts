@@ -1,7 +1,7 @@
 import { prisma } from "../../config/database";
 import type { WorkdaysState } from "../tabel/workdays.service";
 import { sumMetrics, ZERO_METRICS, type KpiMetrics } from "./payroll-kpi-fact.pure";
-import { computeUserMonthPlan } from "./payroll-slot-plan";
+import { computeUserMonthPlan, loadPlanMonthCache, type PlanMonthCache } from "./payroll-slot-plan";
 
 type Range = { from: Date; to: Date };
 
@@ -79,13 +79,15 @@ export async function computeTeamMonthPlan(
   month: number,
   range: Range,
   timeZone: string,
-  workdays: WorkdaysState
+  workdays: WorkdaysState,
+  cache?: PlanMonthCache
 ): Promise<{ total: KpiMetrics; byGroup: Map<number, KpiMetrics>; coverage: number }> {
   const ids = await teamAgentIds(tenantId, userId, range);
   const coverage = await supervisionCoverage(tenantId, userId, range);
+  const planCache = cache ?? (await loadPlanMonthCache(tenantId, year, month, range));
   const byGroup = new Map<number, KpiMetrics>();
   for (const id of ids) {
-    const p = await computeUserMonthPlan(tenantId, id, year, month, range, timeZone, workdays);
+    const p = await computeUserMonthPlan(tenantId, id, year, month, range, timeZone, workdays, planCache);
     for (const [g, m] of p.byGroup) byGroup.set(g, sumMetrics([byGroup.get(g) ?? { ...ZERO_METRICS }, m]));
   }
   for (const [g, m] of byGroup) byGroup.set(g, scale(m, coverage));

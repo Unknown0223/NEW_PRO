@@ -22,8 +22,7 @@ let running = false;
 const nightlyDone = new Set<string>();
 
 async function processDirty(tenantId: number): Promise<number> {
-  const { recalcPayrollRecord } = await import("../modules/payroll/payroll.recalc");
-  const { loadPayrollCalcContext } = await import("../modules/payroll/payroll.calc-context");
+  const { recalcPayrollMonth } = await import("../modules/payroll/payroll.recalc-month");
   const rows = await prisma.payrollRecord.findMany({
     where: { tenant_id: tenantId, dirty_at: { lt: new Date(Date.now() - DIRTY_AGE_MS) } },
     select: { user_id: true, year: true, month: true },
@@ -31,10 +30,16 @@ async function processDirty(tenantId: number): Promise<number> {
     take: DIRTY_BATCH
   });
   if (!rows.length) return 0;
-  const ctx = await loadPayrollCalcContext(tenantId);
+  const groups = new Map<string, { year: number; month: number; ids: number[] }>();
   for (const r of rows) {
-    await recalcPayrollRecord(tenantId, r.user_id, r.year, r.month, { trigger: "cron", ctx }).catch((e) =>
-      console.error("[payroll-cron] recalc failed", { tenantId, userId: r.user_id, err: e instanceof Error ? e.message : e })
+    const key = `${r.year}-${r.month}`;
+    const g = groups.get(key) ?? { year: r.year, month: r.month, ids: [] };
+    g.ids.push(r.user_id);
+    groups.set(key, g);
+  }
+  for (const g of groups.values()) {
+    await recalcPayrollMonth(tenantId, g.year, g.month, { trigger: "cron", userIds: g.ids }).catch((e) =>
+      console.error("[payroll-cron] recalc failed", { tenantId, year: g.year, month: g.month, err: e instanceof Error ? e.message : e })
     );
   }
   return rows.length;
@@ -122,8 +127,33 @@ export async function runPayrollCron(): Promise<void> {
   }
 }
 
+function kickDirtyPayroll(): void {
+  setTimeout(() => {
+    void (async () => {
+      const { recalcPayrollMonth } = await import("../modules/payroll/payroll.recalc-month");
+      const tenants = await prisma.payrollSettings.findMany({ where: { enabled: true }, select: { tenant_id: true } });
+      for (const t of tenants) {
+        const cur = await currentPayrollMonth(t.tenant_id);
+        for (const ym of [cur, prevYm(cur)]) {
+          const rows = await prisma.payrollRecord.findMany({
+            where: { tenant_id: t.tenant_id, year: ym.year, month: ym.month, NOT: { dirty_at: null } },
+            select: { user_id: true }
+          });
+          if (!rows.length) continue;
+          const sum = await recalcPayrollMonth(t.tenant_id, ym.year, ym.month, {
+            trigger: "boot",
+            userIds: rows.map((r) => r.user_id)
+          });
+          console.log("[payroll-cron] boot recalc tenant=%d %d-%d users=%d %j", t.tenant_id, ym.year, ym.month, rows.length, sum);
+        }
+      }
+    })().catch((e) => console.error("[payroll-cron] boot recalc failed", e));
+  }, 2_000);
+}
+
 export function enablePayrollCron(): void {
   if (intervalHandle != null) return;
+  kickDirtyPayroll();
   intervalHandle = setInterval(() => {
     void runPayrollCron().catch((err) => console.error("[payroll-cron] error:", err));
   }, CHECK_INTERVAL_MS);

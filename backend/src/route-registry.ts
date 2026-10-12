@@ -59,6 +59,7 @@ import { registerTabelRoutes } from "./modules/tabel/tabel.route";
 import { registerUserUiRoutes } from "./modules/users/user-ui.route";
 import { registerWorkSlotRoutes } from "./modules/work-slots/work-slots.route";
 import { registerPayrollRoutes } from "./modules/payroll/payroll.route";
+import { registerLocalAssistantRoutes } from "./modules/assistant/local-assistant.route";
 
 type RouteRegistrar = (app: FastifyInstance) => void | Promise<void>;
 
@@ -127,6 +128,7 @@ export const routeRegistrars: RouteRegistrar[] = [
   registerWorkSlotRoutes,
   registerPlansRoutes,
   registerPayrollRoutes,
+  registerLocalAssistantRoutes,
   registerSystemMigrationRoutes
 ];
 

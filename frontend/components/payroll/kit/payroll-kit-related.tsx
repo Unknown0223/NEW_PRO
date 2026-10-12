@@ -25,23 +25,18 @@ export type PayrollSection =
 
 type RelatedLink = { id: PayrollSection; label: string; href: string };
 
-const SALARY_LINKS: RelatedLink[] = [
-  { id: "salary", label: "Зарплата", href: "/users/salary" },
-  { id: "schemes", label: "Схемы расчёта", href: "/users/salary/schemes" },
-  { id: "role-salaries", label: "Базовые оклады", href: "/users/salary/role-salaries" },
-  { id: "formulas", label: "Формулы", href: "/users/salary/formulas" },
-  { id: "bonus", label: "Настройки бонусов и зарплат", href: "/users/bonus-and-salary-settings" },
-  { id: "items", label: "Надбавки и вычеты", href: "/settings/payroll/adjustments" }
+const FLOW: RelatedLink[] = [
+  { id: "items", label: "1. Надбавки", href: "/settings/payroll/adjustments" },
+  { id: "formulas", label: "2. Формулы", href: "/users/salary/formulas" },
+  { id: "role-salaries", label: "3. Оклады", href: "/users/salary/role-salaries" },
+  { id: "salary", label: "4. Зарплата", href: "/users/salary" },
+  { id: "advances", label: "5. Аванс", href: "/users/advances" },
+  { id: "approvals", label: "6. Утверждение", href: "/finance/advances/approval" },
+  { id: "cashier", label: "7. Выдача", href: "/finance/cashier-queue" },
+  { id: "compare", label: "8. Сверка", href: "/users/salary/compare" }
 ];
 
-const ADVANCE_LINKS: RelatedLink[] = [
-  { id: "advances", label: "Аванс", href: "/users/advances" },
-  { id: "approvals", label: "Утверждение авансов", href: "/finance/advances/approval" },
-  { id: "limits", label: "Лимиты авансов", href: "/settings/payroll/advance-limits" },
-  { id: "cashier", label: "Выдача аванса и зарплаты", href: "/finance/cashier-queue" }
-];
-
-const ADVANCE_SECTIONS = new Set<PayrollSection>(ADVANCE_LINKS.map((l) => l.id));
+const ADVANCE_SECTIONS = new Set<PayrollSection>(["advances", "approvals", "limits", "cashier"]);
 const NAV_ITEMS = dashboardPayrollNav.groups.flatMap((g) => g.items);
 
 type ItemLite = { type: string; is_active: boolean };
@@ -105,7 +100,7 @@ export function PayrollRelatedBar({ current }: { current: PayrollSection }) {
   const advance = ADVANCE_SECTIONS.has(current);
   const salaryStats = useSalaryStats(!advance);
   const advanceStats = useAdvanceStats(advance, allowed);
-  const links = (advance ? ADVANCE_LINKS : SALARY_LINKS).filter((l) => l.id === current || allowed(l.href));
+  const links = FLOW.filter((l) => l.id === current || allowed(l.href));
   const stats = advance ? advanceStats : salaryStats;
 
   return (

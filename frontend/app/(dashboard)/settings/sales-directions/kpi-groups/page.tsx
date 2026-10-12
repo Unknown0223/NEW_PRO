@@ -21,7 +21,7 @@ export default function KpiGroupsSettingsPage() {
         </Link>
       </div>
       <p className="text-sm text-muted-foreground">
-        Связывается с товарами и агентами; хранится в базе данных для дальнейшего использования в отчётах и логике KPI.
+        Связывается с товарами и сотрудниками по ролям: агенты, супервайзеры, менеджеры и остальные. Используется в отчётах и расчёте KPI.
       </p>
       <KpiGroupsWorkspace tenantSlug={tenantSlug} />
     </div>

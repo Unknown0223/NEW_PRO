@@ -2,6 +2,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "../../config/database";
 import { logger } from "../../config/logger";
 import { tenantMonthRangeUtc, ymdOf } from "../../lib/workday-calendar";
+import { dropUnconfiguredDrafts, usersWithPaySetup } from "./payroll.calc-gate";
 import { loadPayrollCalcContext } from "./payroll.calc-context";
 import { prevYm } from "./payroll.dirty";
 import { recalcPayrollRecord } from "./payroll.recalc";
@@ -105,11 +106,23 @@ export async function recalcPayrollMonth(
       })
     ).map((r) => r.user_id);
   } else ids = await listPayrollCandidateUserIds(tenantId, year, month, ctx.env.timeZone);
+  if (!ids.length) return sum;
+  const keep = await usersWithPaySetup(tenantId, year, month, ids);
+  const skip = ids.filter((id) => !keep.has(id));
+  await dropUnconfiguredDrafts(tenantId, year, month, skip);
+  ids = ids.filter((id) => keep.has(id));
+  if (!ids.length) return sum;
+
+  const { loadPayrollMonthBundle } = await import("./payroll.month-shared");
+  const { prepareAttendance } = await import("./payroll.inputs");
+  const bundle = await loadPayrollMonthBundle(tenantId, year, month, ids, ctx.env.timeZone);
+  const attendance = await prepareAttendance(tenantId, [...bundle.users.values()], year, month, ctx.env);
+  const shared = { ...bundle, attendance };
 
   for (const uid of ids) {
     sum.processed++;
     try {
-      const r = await recalcPayrollRecord(tenantId, uid, year, month, { trigger: opts.trigger, force: opts.force, ctx });
+      const r = await recalcPayrollRecord(tenantId, uid, year, month, { trigger: opts.trigger, force: opts.force, ctx, shared });
       if (r.status === "updated" || r.status === "frozen") sum.updated++;
       else if (r.status === "unchanged") sum.unchanged++;
       else if (r.status === "error") sum.errors++;

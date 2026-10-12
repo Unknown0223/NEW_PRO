@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Banknote, CheckCircle2, Search, XCircle } from "lucide-react";
 import { useTenant } from "@/lib/api-client";
-import { currentYm, money, payrollApi, payrollErrorText, roleLabel, type Ym } from "@/lib/payroll/payroll-api";
+import { currentYm, payrollApi, roleLabel, type Ym } from "@/lib/payroll/payroll-api";
 import { cn } from "@/lib/utils";
 import type { PayrollItem } from "@/components/payroll/payroll-items-workspace";
 import { FORMULA_SCOPES, type FormulaDraft } from "@/components/payroll/payroll-formula-editor";
@@ -15,11 +15,9 @@ import { PayrollPickMonth, PayrollPickSelect } from "@/components/payroll/kit/pa
 
 type Vars = { groups: Array<{ group: string; items: string[] }>; functions: string[]; kpi_groups: Array<{ id: number; name: string }> };
 type Validation = { ok: boolean; error?: string; unknown: string[] };
-type Preview = { ok: boolean; value?: number; warnings?: string[]; variables?: Record<string, number>; validation?: Validation };
 
 const FIELD =
   "h-[46px] w-full rounded-lg border border-[var(--pr-input)] bg-card pl-3 pt-[18px] text-[13px] font-medium text-foreground shadow-sm transition-colors placeholder:font-normal placeholder:text-muted-foreground/50 hover:border-[var(--pr-field-hover)] focus:border-primary focus:outline-none focus:ring-2 focus:ring-[var(--pr-brand-100)] disabled:cursor-not-allowed disabled:opacity-60";
-const SMALL = "h-8 rounded-lg border border-[var(--pr-input)] bg-card px-2 text-[12.5px] shadow-sm focus:border-primary focus:outline-none";
 const BASE_VAR = "Базовый оклад";
 const LAST_TOKEN = /(\[[^\]]*\]?|>=|<=|<>|[^\s()+\-*/;<>=[\]]+|\S)$/;
 
@@ -34,6 +32,7 @@ type Props = {
   roles: string[];
   employees: Array<{ user_id: number; fio: string; role: string }>;
   bodyHeight?: string;
+  hideActions?: boolean;
 };
 
 /** Template «Установка формулу» layout: selects on top, values list, formula canvas with keypad. */
@@ -41,22 +40,17 @@ export function PayrollFormulaBuilder({
   draft: d,
   onChange,
   onSave,
-  onClear,
   saving,
   canEdit,
   items,
   roles,
-  employees,
-  bodyHeight = "lg:h-[clamp(360px,calc(94vh-256px),600px)]"
+  bodyHeight = "lg:h-[clamp(360px,calc(94vh-256px),600px)]",
+  hideActions = false
 }: Props) {
   const tenant = useTenant();
   const api = payrollApi(tenant);
   const [search, setSearch] = useState("");
   const [validation, setValidation] = useState<Validation | null>(null);
-  const [preview, setPreview] = useState<Preview | null>(null);
-  const [previewUser, setPreviewUser] = useState("");
-  const [previewYm, setPreviewYm] = useState<Ym>(currentYm());
-  const [previewGroup, setPreviewGroup] = useState("");
   const [manual, setManual] = useState(false);
   const [hint, setHint] = useState<string | null>(null);
   const textRef = useRef<HTMLTextAreaElement>(null);
@@ -64,7 +58,6 @@ export function PayrollFormulaBuilder({
 
   const varsQ = useQuery({ queryKey: ["payroll-formula-vars", tenant], enabled: Boolean(tenant), queryFn: () => api.get<Vars>("/formulas/variables") });
 
-  useEffect(() => setPreview(null), [d.id, d.text]);
   useEffect(() => {
     if (!d.text.trim()) {
       setValidation(null);
@@ -130,31 +123,22 @@ export function PayrollFormulaBuilder({
     }
   };
 
-  const runPreview = async () => {
-    if (!d.text.trim()) return flash("Сначала составьте формулу");
-    if (!previewUser) return flash("Выберите сотрудника для расчёта");
-    try {
-      setPreview(
-        await api.send<Preview>("POST", "/formulas/preview", {
-          text: d.text,
-          user_id: Number(previewUser),
-          ...previewYm,
-          kpi_group_id: previewGroup ? Number(previewGroup) : null,
-          target_item_id: d.target_item_id
-        })
-      );
-    } catch (e) {
-      setPreview({ ok: false, warnings: [payrollErrorText(e)] });
-    }
-  };
-
   const targetItems = items.filter((i) => !i.system_key && i.is_active);
   const needsTarget = d.scope !== "salary";
   const canSave = canEdit && !saving && d.name.trim() && d.text.trim() && validation?.ok !== false && !(d.scope === "allowance" && !d.target_item_id);
 
   return (
     <div>
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-6">
+        <PayrollModalField label="Название формулы">
+          <input className={cn(FIELD, "pr-3")} value={d.name} disabled={!canEdit} placeholder="Например: Бонус за план" onChange={(e) => onChange({ ...d, name: e.target.value })} />
+        </PayrollModalField>
+        <PayrollPickMonth
+          size="field"
+          label="Месяц"
+          value={{ year: d.year ?? currentYm().year, month: d.month ?? currentYm().month } satisfies Ym}
+          onChange={(v) => onChange({ ...d, year: v.year, month: v.month })}
+        />
         <PayrollPickSelect
           size="field"
           label="Роль"
@@ -163,6 +147,16 @@ export function PayrollFormulaBuilder({
           disabled={!canEdit}
           options={roles.map((r) => ({ value: r, label: roleLabel(r) }))}
           onChange={(v) => onChange({ ...d, role: v || null })}
+        />
+        <PayrollPickSelect
+          size="field"
+          label="KPI"
+          placeholder="Все KPI"
+          value={d.kpi_group_id != null ? String(d.kpi_group_id) : ""}
+          disabled={!canEdit}
+          searchable
+          options={(varsQ.data?.kpi_groups ?? []).map((g) => ({ value: String(g.id), label: g.name }))}
+          onChange={(v) => onChange({ ...d, kpi_group_id: v ? Number(v) : null })}
         />
         <PayrollPickSelect
           size="field"
@@ -185,9 +179,6 @@ export function PayrollFormulaBuilder({
           options={targetItems.map((i) => ({ value: String(i.id), label: i.name, hint: i.type === "allowance" ? "Надбавка (+)" : "Удержание (−)" }))}
           onChange={(v) => onChange({ ...d, target_item_id: v ? Number(v) : null })}
         />
-        <PayrollModalField label="Название формулы">
-          <input className={cn(FIELD, "pr-3")} value={d.name} disabled={!canEdit} placeholder="Например: Бонус за план" onChange={(e) => onChange({ ...d, name: e.target.value })} />
-        </PayrollModalField>
       </div>
       <p className="mt-4 text-[13px] font-bold text-foreground">
         Выберите значения к формуле
@@ -283,76 +274,23 @@ export function PayrollFormulaBuilder({
             ) : null}
           </div>
 
-          {preview ? (
-            <div className="absolute bottom-4 left-4 right-4 lg:right-[272px]">
-              <div className="max-h-[180px] overflow-auto rounded-lg border border-[var(--pr-border)] bg-card px-3 py-2 text-[12.5px] shadow-sm">
-                {preview.ok ? (
-                  <p className="text-[14px] font-bold">Результат: <span className="text-[var(--pr-brand-600)]">{money(preview.value ?? 0, 2)}</span></p>
-                ) : (
-                  <p className="text-rose-700">{preview.validation?.error ?? "Ошибка"}</p>
-                )}
-                {Object.entries(preview.variables ?? {}).map(([k, v]) => (
-                  <div key={k} className="flex justify-between border-b border-dashed border-[var(--pr-line)] py-0.5 text-[12px] text-muted-foreground">
-                    <span>[{k}]</span><span className="tabular-nums text-foreground">{money(v, 2)}</span>
-                  </div>
-                ))}
-                {(preview.warnings ?? []).map((w) => <p key={w} className="text-[12px] text-amber-700">{w}</p>)}
-              </div>
-            </div>
-          ) : null}
-
-          <PayrollFormulaCalc canvasRef={canvasRef} disabled={!canEdit} onInsert={insert} onBackspace={backspace} onClear={() => setText("")} onEquals={() => void runPreview()} />
+          <PayrollFormulaCalc canvasRef={canvasRef} disabled={!canEdit} onInsert={insert} onBackspace={backspace} onClear={() => setText("")} onEquals={() => undefined} />
         </section>
       </div>
 
-      <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 text-[13px]">
-        <label className="flex items-center gap-2" title="Выключенная формула сохраняется, но не участвует в расчёте зарплаты">
+      {hideActions ? null : (
+      <div className="mt-4 flex items-center justify-end gap-4 text-[13px]">
+        <label className="flex items-center gap-2" title="Выключенная формула сохраняется, но не участвует в расчёте">
           <input type="checkbox" className={PAYROLL_CHECKBOX} checked={d.is_active} disabled={!canEdit} onChange={(e) => onChange({ ...d, is_active: e.target.checked })} />
           Активна
         </label>
-        <label className="flex items-center gap-2 text-muted-foreground" title="Очерёдность расчёта: формула с меньшим числом считается раньше, её результат могут использовать следующие формулы">
-          Порядок
-          <input type="number" className={cn(SMALL, "w-[72px] text-foreground")} value={d.priority} disabled={!canEdit} onChange={(e) => onChange({ ...d, priority: Number(e.target.value) || 0 })} />
-        </label>
-        {canEdit ? (
-          <button
-            type="button"
-            onClick={onClear}
-            title={d.id ? "Выйти из редактирования без сохранения" : "Очистить все поля"}
-            className="text-[12.5px] font-medium text-muted-foreground hover:text-rose-600"
-          >
-            {d.id ? "Отменить изменение" : "Очистить"}
-          </button>
-        ) : null}
-        <div className="ml-auto flex flex-wrap items-center gap-2" title="Проверка формулы на данных сотрудника — затем нажмите «=» на калькуляторе">
-          <PayrollPickSelect
-            className="w-[190px]"
-            panelClassName="w-[280px]"
-            side="top"
-            searchable
-            placeholder="Проверка: сотрудник…"
-            value={previewUser}
-            options={employees.filter((x) => !d.role || x.role === d.role).map((x) => ({ value: String(x.user_id), label: x.fio, hint: roleLabel(x.role) }))}
-            onChange={setPreviewUser}
-          />
-          <PayrollPickMonth className="w-[150px]" side="top" value={previewYm} onChange={setPreviewYm} />
-          <PayrollPickSelect
-            className="w-[150px]"
-            panelClassName="right-0 w-[240px]"
-            side="top"
-            placeholder="Все KPI-группы"
-            emptyText="KPI-группы не настроены"
-            value={previewGroup}
-            options={(varsQ.data?.kpi_groups ?? []).map((g) => ({ value: String(g.id), label: g.name }))}
-            onChange={setPreviewGroup}
-          />
-        </div>
         {canEdit ? (
           <button type="button" className={cn(PAYROLL_BTN.primary, "min-w-[96px] rounded-[10px] px-5")} disabled={!canSave} onClick={onSave}>
             {d.id ? "Сохранить изменения" : "Сохранить"}
           </button>
         ) : null}
       </div>
+      )}
     </div>
   );
 }

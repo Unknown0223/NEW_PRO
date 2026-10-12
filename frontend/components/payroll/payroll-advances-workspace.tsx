@@ -15,6 +15,7 @@ import { cn } from "@/lib/utils";
 import { StatusBadge, useNotice, useSelection } from "@/components/payroll/payroll-ui";
 import { PayrollExcelImportDialog, type ImportPreviewRow } from "@/components/payroll/payroll-excel-import-dialog";
 import { PayrollAdvanceFormDialog, type AdvanceEditTarget } from "@/components/payroll/payroll-advance-form-dialog";
+import { PayrollAdvanceLimitsWorkspace } from "@/components/payroll/payroll-advance-limits-workspace";
 import { PayrollFilterCard, PayrollFloatSelect, PayrollRelatedBar, PayrollSegmentedTabs } from "@/components/payroll/kit/payroll-kit-layout";
 import {
   PAYROLL_TABLE,
@@ -76,6 +77,7 @@ export function PayrollAdvancesWorkspace() {
   const sel = useSelection<number>();
   const [ym, setYm] = useState<Ym>(currentYm());
   const [status, setStatus] = useState("all");
+  const [pane, setPane] = useState<"requests" | "limits">("requests");
   const [draft, setDraft] = useState<Filters>(EMPTY);
   const [filters, setFilters] = useState<Filters>(EMPTY);
   const [q, setQ] = useState("");
@@ -182,11 +184,14 @@ export function PayrollAdvancesWorkspace() {
                 <FileUp className="mr-1.5 size-4 text-emerald-600" /> Из Excel
               </Button>
             ) : null}
-            {can("staff.avans.create") ? (
+            {can("staff.avans.create") && pane === "requests" ? (
               <Button onClick={() => setEdit("new")}>
                 <Plus className="mr-1.5 size-4" /> Добавить
               </Button>
             ) : null}
+            <Button variant={pane === "limits" ? "default" : "outline"} onClick={() => setPane((p) => (p === "limits" ? "requests" : "limits"))}>
+              Лимиты
+            </Button>
           </>
         }
         month={{ value: ym, onChange: (v) => { setYm(v); sel.clear(); } }}
@@ -200,6 +205,8 @@ export function PayrollAdvancesWorkspace() {
           options={uniq(all.map((r) => r.role)).map((r) => ({ value: r, label: roleLabel(r) }))}
         />
       </PayrollFilterCard>
+      {pane === "limits" ? <PayrollAdvanceLimitsWorkspace embedded /> : null}
+      {pane === "requests" ? <>
       <PayrollSegmentedTabs
         tabs={[
           { id: "all", label: "Все", count: scoped.length },
@@ -313,6 +320,7 @@ export function PayrollAdvancesWorkspace() {
         </div>
         <PayrollPagination page={paged.page} pageSize={prefs.pageSize} total={paged.total} onPage={paged.setPage} />
       </PayrollTableCard>
+      </> : null}
 
       <PayrollAdvanceFormDialog target={edit} ym={ym} onClose={() => setEdit(null)} onSaved={(t) => { notice.ok(t); refresh(); }} />
       <PayrollExcelImportDialog<ImportRow>

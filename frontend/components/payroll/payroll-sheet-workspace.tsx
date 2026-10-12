@@ -15,8 +15,7 @@ import { currentYm, payrollApi, RECORD_STATUS, roleLabel, ymLabel, ymQuery, ymTo
 import { downloadXlsx } from "@/lib/payroll/payroll-xlsx";
 import { cn } from "@/lib/utils";
 import { useNotice, useSelection } from "@/components/payroll/payroll-ui";
-import { PayrollHealthBanner } from "@/components/payroll/payroll-health-banner";
-import { PAYROLL_FILTER_TRIGGER, PayrollFilterCard, PayrollFloatSelect, PayrollRelatedBar } from "@/components/payroll/kit/payroll-kit-layout";
+import { PAYROLL_FILTER_TRIGGER, PayrollFilterCard, PayrollFloatSelect } from "@/components/payroll/kit/payroll-kit-layout";
 import { PayrollPagination, PayrollTableCard, PayrollTableToolbar, usePagedRows, useSortedRows } from "@/components/payroll/kit/payroll-kit-table";
 import { PayrollMoreMenu } from "@/components/payroll/kit/payroll-kit-menu";
 import {
@@ -86,7 +85,7 @@ export function PayrollSheetWorkspace() {
   const recordsQ = useQuery({
     queryKey: ["payroll-records", tenant, params],
     enabled: Boolean(tenant),
-    refetchInterval: (query) => ((query.state.data as Records | undefined)?.rows.some((r) => r.dirty) ? 10_000 : 60_000),
+    refetchInterval: (query) => ((query.state.data as Records | undefined)?.rows.some((r) => r.dirty) ? 5_000 : 60_000),
     queryFn: () => api.get<Records>(`/records?${params}`)
   });
   const filtersQ = useQuery({
@@ -122,7 +121,7 @@ export function PayrollSheetWorkspace() {
       return api.send<{ mode: string }>("POST", "/records/recalc", { ...ym, user_ids: userIds });
     },
     onSuccess: (r) => {
-      notice.ok(r.mode === "async" ? "Пересчёт запущен — таблица обновится через минуту" : "Пересчитано");
+      notice.ok(r.mode === "async" ? "Пересчёт запущен — таблица обновится сама" : "Пересчитано");
       refresh();
     },
     onError: notice.fail
@@ -201,7 +200,6 @@ export function PayrollSheetWorkspace() {
 
   return (
     <PageShell className="payroll-template">
-      <PayrollRelatedBar current="salary" />
       <PayrollFilterCard
         title="Зарплата"
         actions={
@@ -252,7 +250,6 @@ export function PayrollSheetWorkspace() {
         />
       </PayrollFilterCard>
 
-      <PayrollHealthBanner ym={ym} />
       {notice.element}
 
       <PayrollTableCard>

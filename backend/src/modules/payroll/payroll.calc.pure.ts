@@ -132,13 +132,16 @@ export function computePayroll(input: {
   }
 
   const formulaTargets = new Set(input.formulas.map((f) => f.target_item_id));
+  const dayShare = inputs.plan_days > 0 ? Math.min(Math.max(inputs.worked_days, 0), inputs.plan_days) / inputs.plan_days : 0;
   for (const [itemId, amount] of input.scheme ? [] : inputs.item_parts ?? []) {
     const it = items.get(itemId);
     if (!it || it.system_key || it.type !== "allowance" || it.calc_type === "formula" || formulaTargets.has(itemId)) continue;
     if (lines.has(keyOf(itemId, "")) || !amount) continue;
+    const paid = r2(amount * dayShare);
+    if (!paid) continue;
     lines.set(keyOf(itemId, ""), {
       item_id: itemId,
-      amount: r2(amount),
+      amount: paid,
       source: "config",
       corr_key: "",
       formula_snapshot: null,
@@ -147,7 +150,7 @@ export function computePayroll(input: {
       correction_for_month: null,
       note: null
     });
-    bumpItem(itemId, amount);
+    bumpItem(itemId, paid);
   }
 
   if (input.salaryFormula && !input.scheme) {

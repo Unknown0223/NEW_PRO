@@ -25,6 +25,43 @@ type Snap = {
   formula_values?: Record<string, number>;
 };
 
+const n = (v: unknown) => Number(v) || 0;
+const add = (a: number, b: number) => Math.round((a + b) * 100) / 100;
+
+/** Oy rejasida shu xodimga qo‘yilgan summa/son — guruh bo‘yicha. */
+async function loadUserGroupPlans(tenantId: number, year: number, month: number, userIds: number[]) {
+  const out = new Map<string, KpiMetrics>();
+  if (!userIds.length) return out;
+  const plans = await prisma.salesKpiPlan.findMany({
+    where: { tenant_id: tenantId, year, month },
+    select: { id: true, kpi_group_id: true }
+  });
+  if (!plans.length) return out;
+  const groupOf = new Map(plans.map((p) => [p.id, p.kpi_group_id]));
+  const targets = await prisma.salesKpiPlanTarget.findMany({
+    where: { tenant_id: tenantId, plan_id: { in: plans.map((p) => p.id) }, user_id: { in: userIds } },
+    select: { plan_id: true, user_id: true, cost: true, count: true, volume: true, acb: true, order_count: true }
+  });
+  for (const t of targets) {
+    const gid = groupOf.get(t.plan_id);
+    if (gid == null) continue;
+    const key = `${t.user_id}:${gid}`;
+    const prev = out.get(key) ?? { ...ZERO_METRICS };
+    out.set(key, {
+      cost: add(prev.cost, n(t.cost)),
+      count: add(prev.count, n(t.count)),
+      volume: add(prev.volume, n(t.volume)),
+      acb: add(prev.acb, n(t.acb)),
+      order_count: prev.order_count + n(t.order_count)
+    });
+  }
+  return out;
+}
+
+function hasMetrics(m: KpiMetrics) {
+  return m.cost > 0 || m.count > 0 || m.volume > 0 || m.acb > 0 || m.order_count > 0;
+}
+
 async function periodClosed(tenantId: number, year: number, month: number) {
   const p = await prisma.payrollPeriod.findUnique({
     where: { tenant_id_year_month: { tenant_id: tenantId, year, month } },
@@ -54,7 +91,7 @@ export async function listBonusKpi(tenantId: number, f: BonusKpiFilter) {
   const q = f.q?.trim().toLocaleLowerCase("ru");
   const list = q ? users.filter((u) => `${toFio(u)} ${u.code ?? ""}`.toLocaleLowerCase("ru").includes(q)) : users;
   const ids = list.map((u) => u.id);
-  const [records, assigns, groups, formulas, items] = await Promise.all([
+  const [records, assigns, groups, formulas, items, planMap] = await Promise.all([
     prisma.payrollRecord.findMany({
       where: { tenant_id: tenantId, year: f.year, month: f.month, user_id: { in: ids } },
       select: { user_id: true, calc_snapshot: true, status: true }
@@ -66,7 +103,8 @@ export async function listBonusKpi(tenantId: number, f: BonusKpiFilter) {
       orderBy: [{ sort_order: "asc" }, { name: "asc" }]
     }),
     prisma.payrollFormula.findMany({ where: { tenant_id: tenantId }, select: { id: true, name: true } }),
-    prisma.payrollItem.findMany({ where: { tenant_id: tenantId }, select: { id: true, name: true } })
+    prisma.payrollItem.findMany({ where: { tenant_id: tenantId }, select: { id: true, name: true } }),
+    loadUserGroupPlans(tenantId, f.year, f.month, ids)
   ]);
   const recBy = new Map(records.map((r) => [r.user_id, r]));
   const fName = new Map(formulas.map((x) => [x.id, x.name]));
@@ -96,14 +134,18 @@ export async function listBonusKpi(tenantId: number, f: BonusKpiFilter) {
       fact: snap.kpi?.fact_total ?? ZERO_METRICS,
       plan: snap.kpi?.plan_total ?? ZERO_METRICS,
       assignments_all: mine.filter((a) => a.kpi_group_id === 0).map(toAssign),
-      groups: groups.map((g) => ({
-        kpi_group_id: g.id,
-        name: g.name,
-        bonus_formula: g.bonus_formula,
-        fact: snap.kpi?.fact_by_group?.[String(g.id)] ?? ZERO_METRICS,
-        plan: snap.kpi?.plan_by_group?.[String(g.id)] ?? ZERO_METRICS,
-        assignments: mine.filter((a) => a.kpi_group_id === g.id).map(toAssign)
-      }))
+      groups: groups.map((g) => {
+        const snapPlan = snap.kpi?.plan_by_group?.[String(g.id)] ?? ZERO_METRICS;
+        const live = planMap.get(`${u.id}:${g.id}`);
+        return {
+          kpi_group_id: g.id,
+          name: g.name,
+          bonus_formula: g.bonus_formula,
+          fact: snap.kpi?.fact_by_group?.[String(g.id)] ?? ZERO_METRICS,
+          plan: live && hasMetrics(live) ? live : snapPlan,
+          assignments: mine.filter((a) => a.kpi_group_id === g.id).map(toAssign)
+        };
+      })
     };
   });
   const [closed, directions] = await Promise.all([
@@ -148,34 +190,41 @@ export async function assignBonusFormula(tenantId: number, input: AssignInput, a
   });
   const frozen = new Set(confirmed.map((c) => c.user_id));
   const td = input.trade_direction_id ?? 0;
-  let saved = 0;
-  for (const u of users) {
-    if (frozen.has(u.id)) continue;
-    const key = {
-      tenant_id: tenantId,
-      year: input.year,
-      month: input.month,
-      user_id: u.id,
-      kpi_group_id: input.kpi_group_id,
-      trade_direction_id: td,
-      target_item_id: target
-    };
-    await prisma.payrollBonusAssignment.upsert({
-      where: { payroll_bonus_assignments_uq: key },
-      create: {
-        ...key,
-        formula_id: formula.id,
-        formula_text_snapshot: input.group_formula ?? formula.text,
-        created_by: actorId
-      },
-      update: {
-        formula_id: formula.id,
-        formula_text_snapshot: input.group_formula ?? formula.text,
-        created_by: actorId
-      }
-    });
-    saved++;
+  const text = input.group_formula ?? formula.text;
+  const savedIds = users.map((u) => u.id).filter((id) => !frozen.has(id));
+  if (savedIds.length) {
+    await prisma.$transaction(
+      savedIds.map((userId) =>
+        prisma.payrollBonusAssignment.upsert({
+          where: {
+            payroll_bonus_assignments_uq: {
+              tenant_id: tenantId,
+              year: input.year,
+              month: input.month,
+              user_id: userId,
+              kpi_group_id: input.kpi_group_id,
+              trade_direction_id: td,
+              target_item_id: target
+            }
+          },
+          create: {
+            tenant_id: tenantId,
+            year: input.year,
+            month: input.month,
+            user_id: userId,
+            kpi_group_id: input.kpi_group_id,
+            trade_direction_id: td,
+            target_item_id: target,
+            formula_id: formula.id,
+            formula_text_snapshot: text,
+            created_by: actorId
+          },
+          update: { formula_id: formula.id, formula_text_snapshot: text, created_by: actorId }
+        })
+      )
+    );
   }
+  const saved = savedIds.length;
   await appendTenantAuditEvent({
     tenantId,
     actorUserId: actorId,
@@ -184,7 +233,7 @@ export async function assignBonusFormula(tenantId: number, input: AssignInput, a
     action: "payroll.bonus.assign",
     payload: { ...input, saved, skipped_confirmed: [...frozen] }
   });
-  await markPayrollDirty(tenantId, { userIds: users.map((u) => u.id), year: input.year, month: input.month }, "bonus_assign");
+  if (savedIds.length) await markPayrollDirty(tenantId, { userIds: savedIds, year: input.year, month: input.month }, "bonus_assign");
   return { saved, skipped_confirmed: [...frozen] };
 }
 

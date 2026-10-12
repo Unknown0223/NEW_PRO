@@ -40,7 +40,7 @@ const SCOPE_TONE: Record<LimitScope, (typeof STATUS_TONE)[keyof typeof STATUS_TO
 };
 const sortValue = (l: AdvanceLimit, k: SortKey) => (k === "amount" ? l.max_amount : k === "updated" ? l.updated_at : limitWhom(l));
 
-export function PayrollAdvanceLimitsWorkspace() {
+export function PayrollAdvanceLimitsWorkspace({ embedded = false }: { embedded?: boolean }) {
   const tenant = useTenant();
   const api = payrollApi(tenant);
   const qc = useQueryClient();
@@ -80,9 +80,9 @@ export function PayrollAdvanceLimitsWorkspace() {
     }
   };
 
-  return (
-    <PageShell className="payroll-template">
-      <PayrollRelatedBar current="limits" />
+  const body = (
+    <>
+      {embedded ? null : <PayrollRelatedBar current="limits" />}
       <PayrollPageTitle
         title="Лимиты авансов"
         description="Максимальная сумма авансов на сотрудника за месяц. Приоритет: исключение для сотрудника → лимит роли → общий лимит."
@@ -160,6 +160,7 @@ export function PayrollAdvanceLimitsWorkspace() {
       </PayrollTableCard>
 
       <PayrollAdvanceLimitDialog target={target} canEdit={canEdit} onClose={() => setTarget(null)} onSaved={(t) => { notice.ok(t); refresh(); }} />
-    </PageShell>
+    </>
   );
+  return embedded ? body : <PageShell className="payroll-template">{body}</PageShell>;
 }

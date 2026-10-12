@@ -46,6 +46,10 @@ export type PayrollFormulaDto = {
   scope: string;
   text: string;
   role: string | null;
+  kpi_group_id: number | null;
+  kpi_group_name: string | null;
+  year: number | null;
+  month: number | null;
   target_item_id: number | null;
   target_item_name: string | null;
   priority: number;
@@ -59,6 +63,9 @@ export type PayrollFormulaInput = {
   scope?: "bonus" | "allowance" | "salary" | "common";
   text?: string;
   role?: string | null;
+  kpi_group_id?: number | null;
+  year?: number | null;
+  month?: number | null;
   target_item_id?: number | null;
   priority?: number;
   is_active?: boolean;
@@ -80,18 +87,24 @@ async function assertValid(tenantId: number, text: string) {
 }
 
 export async function listPayrollFormulas(tenantId: number): Promise<PayrollFormulaDto[]> {
-  const [rows, names, counts] = await Promise.all([
+  const [rows, names, counts, groups] = await Promise.all([
     prisma.payrollFormula.findMany({ where: { tenant_id: tenantId }, orderBy: [{ priority: "asc" }, { name: "asc" }] }),
     itemNames(tenantId),
-    prisma.payrollBonusAssignment.groupBy({ by: ["formula_id"], where: { tenant_id: tenantId }, _count: { _all: true } })
+    prisma.payrollBonusAssignment.groupBy({ by: ["formula_id"], where: { tenant_id: tenantId }, _count: { _all: true } }),
+    prisma.kpiGroup.findMany({ where: { tenant_id: tenantId }, select: { id: true, name: true } })
   ]);
   const cnt = new Map(counts.map((c) => [c.formula_id, c._count._all]));
+  const groupName = new Map(groups.map((g) => [g.id, g.name]));
   return rows.map((r) => ({
     id: r.id,
     name: r.name,
     scope: r.scope,
     text: r.text,
     role: r.role,
+    kpi_group_id: r.kpi_group_id,
+    kpi_group_name: r.kpi_group_id ? groupName.get(r.kpi_group_id) ?? null : null,
+    year: r.year,
+    month: r.month,
     target_item_id: r.target_item_id,
     target_item_name: r.target_item_id ? names.get(r.target_item_id) ?? null : null,
     priority: r.priority,
@@ -121,6 +134,9 @@ export async function createPayrollFormula(tenantId: number, input: PayrollFormu
       scope: input.scope ?? "common",
       text,
       role: input.role?.trim() || null,
+      kpi_group_id: input.kpi_group_id ?? null,
+      year: input.year ?? null,
+      month: input.month ?? null,
       target_item_id: input.target_item_id ?? null,
       priority: input.priority ?? 100,
       is_active: input.is_active ?? true,
@@ -156,6 +172,9 @@ export async function updatePayrollFormula(tenantId: number, id: number, input: 
       ...(input.scope !== undefined ? { scope: input.scope } : {}),
       ...(text !== undefined ? { text } : {}),
       ...(input.role !== undefined ? { role: input.role?.trim() || null } : {}),
+      ...(input.kpi_group_id !== undefined ? { kpi_group_id: input.kpi_group_id } : {}),
+      ...(input.year !== undefined ? { year: input.year } : {}),
+      ...(input.month !== undefined ? { month: input.month } : {}),
       ...(input.target_item_id !== undefined ? { target_item_id: input.target_item_id } : {}),
       ...(input.priority !== undefined ? { priority: input.priority } : {}),
       ...(input.is_active !== undefined ? { is_active: input.is_active } : {})

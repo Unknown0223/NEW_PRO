@@ -26,6 +26,8 @@ export type PayrollCalcInputs = {
   advances_paid: number;
   /** Базовые оклады: xodimning надбавка qismlari (item_id → summa). */
   item_parts?: Map<number, number>;
+  /** KPI guruhiga yozilgan oylik setka (kpi_group_id → summa). */
+  kpi_amounts?: Map<number, number>;
 };
 
 const METRIC_LABELS: Array<[keyof KpiMetrics, string]> = [
@@ -99,6 +101,12 @@ export function knownVariableSet(itemNames: string[]): Set<string> {
 
 const pct = (fact: number, plan: number) => (plan > 0 ? (fact / plan) * 100 : 0);
 
+/** Tabel: to‘liq oylik summa shu ulushda to‘lanadi (ishlangan / reja kun). */
+export function timesheetFactor(inp: { plan_days: number; worked_days: number }): number {
+  if (!(inp.plan_days > 0)) return 0;
+  return Math.min(Math.max(inp.worked_days, 0), inp.plan_days) / inp.plan_days;
+}
+
 /**
  * Formula o'zgaruvchilari. `kpiGroupId` berilsa — KPI qiymatlari shu guruh bo'yicha,
  * aks holda barcha guruhlar jami (АКБ — umumiy mijozlar soni).
@@ -116,7 +124,10 @@ export function buildFormulaVars(
 
   set(VAR_BASE, inp.base_full);
   set(VAR_BASE_WORKED, inp.base_salary);
-  set(VAR_ITEM_AMOUNT, targetItemId != null ? inp.item_parts?.get(targetItemId) ?? 0 : 0);
+  const days = timesheetFactor(inp);
+  const kpiAmount = kpiGroupId != null ? inp.kpi_amounts?.get(kpiGroupId) : undefined;
+  const rawItem = kpiAmount != null ? kpiAmount : targetItemId != null ? inp.item_parts?.get(targetItemId) ?? 0 : 0;
+  set(VAR_ITEM_AMOUNT, rawItem * days);
   set(VAR_WORKED_DAYS, inp.worked_days);
   set(VAR_PLAN_DAYS, inp.plan_days);
   set("Рабочие дни (план)", inp.plan_days);
@@ -161,7 +172,7 @@ export function buildFormulaVars(
   set("Аванс", inp.advances_paid);
   for (const [name, v] of itemValues) set(name, v);
   if (items) {
-    for (const [id, it] of items) set(partVarName(it.name), inp.item_parts?.get(id) ?? 0);
+    for (const [id, it] of items) set(partVarName(it.name), (inp.item_parts?.get(id) ?? 0) * timesheetFactor(inp));
   }
   return m;
 }

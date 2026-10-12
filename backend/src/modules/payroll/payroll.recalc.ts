@@ -12,12 +12,18 @@ import {
   resolveUserScheme,
   type PayrollCalcContext
 } from "./payroll.calc-context";
-import { nextYm, prevYm } from "./payroll.dirty";
-import { loadPayrollInputs, stableInputsJson, type LoadedPayrollInputs, type PayrollUserSnapshot } from "./payroll.inputs";
+import { dropUnconfiguredDrafts, usersWithPaySetup } from "./payroll.calc-gate";
+import { enabledCached, nextYm, prevYm } from "./payroll.dirty";
+import { loadPayrollInputs, stableInputsJson, type AttendancePrep, type LoadedPayrollInputs, type PayrollUserSnapshot } from "./payroll.inputs";
+import type { PayrollMonthBundle } from "./payroll.month-shared";
 import { notifyPermissionHolders } from "./payroll.notify";
-import { isPayrollEnabled } from "./payroll.settings";
-
-export type RecalcOpts = { trigger: string; force?: boolean; ctx?: PayrollCalcContext };
+export type RecalcOpts = {
+  trigger: string;
+  force?: boolean;
+  ctx?: PayrollCalcContext;
+  /** Oy bo'yicha bir marta yuklangan ma'lumot. Berilsa har xodimga qayta so'rov ketmaydi. */
+  shared?: PayrollMonthBundle & { attendance: AttendancePrep };
+};
 export type RecalcOutcome = {
   status: "skipped" | "unchanged" | "updated" | "frozen" | "error";
   record_id?: number;
@@ -123,12 +129,12 @@ export async function recalcPayrollRecord(
   opts: RecalcOpts
 ): Promise<RecalcOutcome> {
   const startedAt = new Date();
-  if (!(await isPayrollEnabled(tenantId))) return { status: "skipped" };
+  if (!(await enabledCached(tenantId))) return { status: "skipped" };
   const record = await prisma.payrollRecord.findUnique({
     where: { tenant_id_user_id_year_month: { tenant_id: tenantId, user_id: userId, year, month } },
     include: { lines: true }
   });
-  const user = await loadPayrollUser(tenantId, userId);
+  const user = opts.shared?.users.get(userId) ?? (await loadPayrollUser(tenantId, userId));
   if (!user || user.role === "admin") {
     if (record) await clearDirty(record.id, startedAt);
     return { status: "skipped", record_id: record?.id };
@@ -144,17 +150,24 @@ export async function recalcPayrollRecord(
     if (user.hired_at && user.hired_at >= range.to) return dropPlaceholder();
     if (user.dismissed_at && user.dismissed_at < range.from) return dropPlaceholder();
   }
+  if (!opts.shared) {
+    const keep = await usersWithPaySetup(tenantId, year, month, [userId]);
+    if (!keep.has(userId)) {
+      if (record?.status === "draft") await dropUnconfiguredDrafts(tenantId, year, month, [userId]);
+      else if (record) await clearDirty(record.id, startedAt);
+      return { status: "skipped", record_id: record?.id };
+    }
+  }
 
   try {
-    const loaded = await loadPayrollInputs(tenantId, user, year, month, ctx.env, ctx.productGroups);
-    const schemeHit = await resolveUserScheme(ctx, user, year, month);
+    const shared = opts.shared;
+    const loaded = await loadPayrollInputs(tenantId, user, year, month, ctx.env, ctx.productGroups, shared);
+    const schemeHit = await resolveUserScheme(ctx, user, year, month, shared ? (shared.overrides.get(userId) ?? []) : undefined);
     const { salaryFormula, formulas } = schemeHit
       ? { salaryFormula: null, formulas: [] }
-      : await resolveUserFormulas(ctx, user, year, month);
-    const [carry, salaryPaid] = await Promise.all([
-      carryFromPrev(tenantId, userId, year, month),
-      sumSalaryPaid(tenantId, userId, year, month)
-    ]);
+      : await resolveUserFormulas(ctx, user, year, month, shared ? (shared.assignments.get(userId) ?? []) : undefined);
+    const carry = shared ? (shared.carry.get(userId) ?? 0) : await carryFromPrev(tenantId, userId, year, month);
+    const salaryPaid = shared ? (shared.salaryPaid.get(userId) ?? 0) : await sumSalaryPaid(tenantId, userId, year, month);
     const kept: KeptLine[] = (record?.lines ?? [])
       .filter((l) => l.source === "manual" || l.is_manual_override || l.corr_key !== "")
       .map((l) => ({
@@ -189,10 +202,12 @@ export async function recalcPayrollRecord(
       )
       .digest("hex");
 
-    if ((!record || placeholder) && loaded.base.base_full === 0 && res.lines.length === 0 && res.paid_total === 0 && carry === 0) {
+    const fact = loaded.inputs.fact_total;
+    const hasWork = loaded.inputs.plan_days > 0 || loaded.inputs.worked_days > 0 || fact.cost !== 0 || fact.count !== 0 || fact.order_count !== 0;
+    if ((!record || placeholder) && !hasWork && loaded.base.base_full === 0 && res.lines.length === 0 && res.paid_total === 0 && carry === 0) {
       return dropPlaceholder();
     }
-    const frozen = record != null && (record.status === "confirmed" || (await isMonthFrozen(tenantId, year, month)));
+    const frozen = record != null && (record.status === "confirmed" || (opts.shared ? opts.shared.monthFrozen : await isMonthFrozen(tenantId, year, month)));
     if (record && record.inputs_hash === hash && !opts.force && !record.calc_error) {
       await clearDirty(record.id, startedAt);
       return { status: "unchanged", record_id: record.id };
@@ -221,7 +236,7 @@ export async function recalcPayrollRecord(
       slot_ids: slotIds,
       employment_from: user.hired_at,
       employment_to: user.dismissed_at,
-      calc_snapshot: snapshot as Prisma.InputJsonValue,
+      calc_snapshot: snapshot as unknown as Prisma.InputJsonValue,
       scheme_id: schemeHit?.scheme.scheme_id ?? null,
       inputs_hash: hash,
       calculated_at: new Date(),

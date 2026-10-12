@@ -1,15 +1,11 @@
 "use client";
 
-import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronRight } from "lucide-react";
-import { PageShell } from "@/components/dashboard/page-shell";
 import { usePermissions } from "@/lib/use-permissions";
 import { useTenant } from "@/lib/api-client";
 import { payrollApi } from "@/lib/payroll/payroll-api";
 import { cn } from "@/lib/utils";
 import { useNotice } from "@/components/payroll/payroll-ui";
-import { PayrollPageTitle } from "@/components/payroll/kit/payroll-kit-layout";
 import { PayrollTableCard } from "@/components/payroll/kit/payroll-kit-table";
 
 type Settings = { enabled: boolean; parallel_run: boolean; salary_queue_enabled: boolean };
@@ -32,38 +28,6 @@ const TOGGLES: Array<{ key: keyof Settings; title: string; hint: string }> = [
   }
 ];
 
-const GROUPS: Array<{ title: string; links: Array<{ href: string; title: string; hint: string }> }> = [
-  {
-    title: "Расчёт",
-    links: [
-      { href: "/users/salary", title: "Зарплата", hint: "Расчёт, статусы, закрытие месяца" },
-      { href: "/users/salary/compare", title: "Сверка с Excel", hint: "Пробный месяц" }
-    ]
-  },
-  {
-    title: "Аванс",
-    links: [
-      { href: "/users/advances", title: "Аванс", hint: "Заявки руководителя" },
-      { href: "/finance/advances/approval", title: "Утверждение авансов", hint: "Финансы" },
-      { href: "/settings/payroll/advance-limits", title: "Лимиты авансов", hint: "Общий, по роли, исключения" }
-    ]
-  },
-  {
-    title: "Выдача",
-    links: [{ href: "/finance/cashier-queue", title: "Выдача аванса и зарплаты", hint: "Очередь кассира филиала" }]
-  },
-  {
-    title: "Настройки",
-    links: [
-      { href: "/users/salary/schemes", title: "Схемы расчёта", hint: "Правила по ролям, KPI-шкала, условия, версии" },
-      { href: "/users/salary/role-salaries", title: "Базовые оклады", hint: "Оклад по роли и индивидуально" },
-      { href: "/users/salary/formulas", title: "Формулы", hint: "KPI-бонусы, надбавки, оклад" },
-      { href: "/users/bonus-and-salary-settings", title: "Настройки бонусов и зарплат", hint: "Назначение формул сотрудникам" },
-      { href: "/settings/payroll/adjustments", title: "Надбавки и вычеты", hint: "Статьи ведомости" }
-    ]
-  }
-];
-
 function Toggle({ checked, disabled, onChange }: { checked: boolean; disabled: boolean; onChange: (v: boolean) => void }) {
   return (
     <button
@@ -82,7 +46,7 @@ function Toggle({ checked, disabled, onChange }: { checked: boolean; disabled: b
   );
 }
 
-export function PayrollSettingsHub() {
+export function PayrollModuleSwitches() {
   const tenant = useTenant();
   const api = payrollApi(tenant);
   const qc = useQueryClient();
@@ -101,8 +65,7 @@ export function PayrollSettingsHub() {
   });
 
   return (
-    <PageShell className="payroll-template">
-      <PayrollPageTitle title="Настройки зарплаты" description="Включение модуля и переходы ко всем разделам зарплаты и аванса." />
+    <>
       {notice.element}
       <PayrollTableCard title="Параметры модуля">
         <div className="divide-y divide-[var(--pr-line)]">
@@ -121,24 +84,6 @@ export function PayrollSettingsHub() {
           ))}
         </div>
       </PayrollTableCard>
-
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        {GROUPS.map((g) => (
-          <PayrollTableCard key={g.title} title={g.title}>
-            <div className="divide-y divide-[var(--pr-line)]">
-              {g.links.map((l) => (
-                <Link key={l.href} href={l.href} className="group flex items-center justify-between gap-3 px-4 py-3 transition-colors hover:bg-[var(--pr-row-hover)] sm:px-5">
-                  <span className="min-w-0">
-                    <span className="block text-[13px] font-medium text-foreground group-hover:text-[var(--pr-brand-700)]">{l.title}</span>
-                    <span className="block text-[12px] text-muted-foreground">{l.hint}</span>
-                  </span>
-                  <ChevronRight className="size-4 shrink-0 text-muted-foreground group-hover:text-primary" />
-                </Link>
-              ))}
-            </div>
-          </PayrollTableCard>
-        ))}
-      </div>
-    </PageShell>
+    </>
   );
 }

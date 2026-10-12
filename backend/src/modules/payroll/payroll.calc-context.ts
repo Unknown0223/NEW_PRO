@@ -13,6 +13,9 @@ type FormulaRow = {
   scope: string;
   text: string;
   role: string | null;
+  kpi_group_id: number | null;
+  year: number | null;
+  month: number | null;
   target_item_id: number | null;
   priority: number;
 };
@@ -58,7 +61,7 @@ export async function loadPayrollCalcContext(tenantId: number): Promise<PayrollC
     getSystemItemIds(tenantId),
     prisma.payrollFormula.findMany({
       where: { tenant_id: tenantId, is_active: true },
-      select: { id: true, scope: true, text: true, role: true, target_item_id: true, priority: true }
+      select: { id: true, scope: true, text: true, role: true, kpi_group_id: true, year: true, month: true, target_item_id: true, priority: true }
     }),
     loadProductGroups(tenantId),
     loadSchemes(tenantId),
@@ -92,11 +95,12 @@ export async function resolveUserScheme(
   ctx: PayrollCalcContext,
   user: PayrollUserSnapshot,
   year: number,
-  month: number
+  month: number,
+  cachedOverrides?: Array<{ rule_code: string; amount: unknown; valid_from: number; valid_to: number | null }>
 ): Promise<{ scheme: SchemeCalcInput; errors: string[] } | null> {
   const s = pickScheme(ctx.schemes, user, ymInt(year, month));
   if (!s) return null;
-  return { scheme: await buildSchemeInput(ctx, user, year, month, s.id, s.rules), errors: s.errors };
+  return { scheme: await buildSchemeInput(ctx, user, year, month, s.id, s.rules, cachedOverrides), errors: s.errors };
 }
 
 export async function buildSchemeInput(
@@ -105,12 +109,15 @@ export async function buildSchemeInput(
   year: number,
   month: number,
   schemeId: number,
-  rules: SchemeRule[]
+  rules: SchemeRule[],
+  cachedOverrides?: Array<{ rule_code: string; amount: unknown; valid_from: number; valid_to: number | null }>
 ): Promise<SchemeCalcInput> {
-  const rows = await prisma.payrollSchemeOverride.findMany({
-    where: { tenant_id: ctx.tenantId, user_id: user.id },
-    select: { rule_code: true, amount: true, valid_from: true, valid_to: true }
-  });
+  const rows =
+    cachedOverrides ??
+    (await prisma.payrollSchemeOverride.findMany({
+      where: { tenant_id: ctx.tenantId, user_id: user.id },
+      select: { rule_code: true, amount: true, valid_from: true, valid_to: true }
+    }));
   return {
     scheme_id: schemeId,
     rules,
@@ -130,25 +137,36 @@ export async function resolveUserFormulas(
   ctx: PayrollCalcContext,
   user: PayrollUserSnapshot,
   year: number,
-  month: number
+  month: number,
+  cachedAssignments?: Array<{
+    id: number;
+    kpi_group_id: number;
+    trade_direction_id: number;
+    formula_id: number;
+    formula_text_snapshot: string;
+    target_item_id: number;
+  }>
 ): Promise<{ salaryFormula: string | null; formulas: CalcFormula[] }> {
   const role = user.role;
+  const inMonth = (f: { year: number | null; month: number | null }) => f.year == null || f.month == null || (f.year === year && f.month === month);
   const salary = ctx.formulas
-    .filter((f) => f.scope === "salary" && f.role === role)
+    .filter((f) => f.scope === "salary" && f.role === role && inMonth(f))
     .sort((a, b) => a.priority - b.priority)[0];
   const out: CalcFormula[] = ctx.formulas
-    .filter((f) => f.scope !== "salary" && f.role === role && f.target_item_id != null)
+    .filter((f) => f.scope !== "salary" && f.role === role && f.target_item_id != null && inMonth(f))
     .map((f) => ({
       ref: `formula:${f.id}`,
       text: f.text,
       target_item_id: f.target_item_id!,
-      kpi_group_id: null,
+      kpi_group_id: f.kpi_group_id,
       priority: f.priority
     }));
-  const assignments = await prisma.payrollBonusAssignment.findMany({
-    where: { tenant_id: ctx.tenantId, user_id: user.id, year, month },
-    select: { id: true, kpi_group_id: true, trade_direction_id: true, formula_id: true, formula_text_snapshot: true, target_item_id: true }
-  });
+  const assignments =
+    cachedAssignments ??
+    (await prisma.payrollBonusAssignment.findMany({
+      where: { tenant_id: ctx.tenantId, user_id: user.id, year, month },
+      select: { id: true, kpi_group_id: true, trade_direction_id: true, formula_id: true, formula_text_snapshot: true, target_item_id: true }
+    }));
   for (const a of assignments) {
     if (a.trade_direction_id !== 0 && user.trade_direction_id != null && a.trade_direction_id !== user.trade_direction_id) continue;
     out.push({
@@ -162,22 +180,29 @@ export async function resolveUserFormulas(
   return { salaryFormula: salary?.text ?? null, formulas: out };
 }
 
-export async function loadPayrollUser(tenantId: number, userId: number): Promise<PayrollUserSnapshot | null> {
-  const u = await prisma.user.findFirst({
-    where: { id: userId, tenant_id: tenantId },
-    select: {
-      id: true,
-      role: true,
-      position: true,
-      branch: true,
-      trade_direction_id: true,
-      is_active: true,
-      hired_at: true,
-      dismissed_at: true,
-      branch_links: { select: { branch_code: true }, take: 1 }
-    }
-  });
-  if (!u) return null;
+const USER_SELECT = {
+  id: true,
+  role: true,
+  position: true,
+  branch: true,
+  trade_direction_id: true,
+  is_active: true,
+  hired_at: true,
+  dismissed_at: true,
+  branch_links: { select: { branch_code: true }, take: 1 }
+} as const;
+
+function toPayrollUser(u: {
+  id: number;
+  role: string;
+  position: string | null;
+  branch: string | null;
+  trade_direction_id: number | null;
+  is_active: boolean;
+  hired_at: Date | null;
+  dismissed_at: Date | null;
+  branch_links: Array<{ branch_code: string | null }>;
+}): PayrollUserSnapshot {
   return {
     id: u.id,
     role: u.role,
@@ -188,4 +213,15 @@ export async function loadPayrollUser(tenantId: number, userId: number): Promise
     hired_at: u.hired_at,
     dismissed_at: u.dismissed_at
   };
+}
+
+export async function loadPayrollUser(tenantId: number, userId: number): Promise<PayrollUserSnapshot | null> {
+  const u = await prisma.user.findFirst({ where: { id: userId, tenant_id: tenantId }, select: USER_SELECT });
+  return u ? toPayrollUser(u) : null;
+}
+
+export async function loadPayrollUsers(tenantId: number, userIds: number[]): Promise<Map<number, PayrollUserSnapshot>> {
+  if (!userIds.length) return new Map();
+  const rows = await prisma.user.findMany({ where: { tenant_id: tenantId, id: { in: userIds } }, select: USER_SELECT });
+  return new Map(rows.map((u) => [u.id, toPayrollUser(u)]));
 }

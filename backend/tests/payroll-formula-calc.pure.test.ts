@@ -97,6 +97,57 @@ const items = new Map<number, CalcItem>([
 ]);
 const systemIds = { advance: 900, correction: 910, carry: 920 };
 
+const KPI_GRID = "ЕСЛИ([KPI - Выполнение (%)] < 60,9; 0; [Оклад статьи] * МИН([KPI - Выполнение (%)]; 120) / 100)";
+
+describe("KPI setka formulasi", () => {
+  const run = (fact: number) =>
+    computePayroll({
+      inputs: baseInputs({
+        fact_by_group: new Map([[7, { ...ZERO_METRICS, cost: fact }]]),
+        plan_by_group: new Map([[7, { ...ZERO_METRICS, cost: 50_000_000 }]]),
+        item_parts: new Map([[1, 1_000_000]])
+      }),
+      items,
+      salaryFormula: null,
+      formulas: [{ ref: "kpi", text: KPI_GRID, target_item_id: 1, kpi_group_id: 7, priority: 1 }],
+      kept: [],
+      systemIds,
+      carryAmount: 0,
+      salaryPaid: 0
+    });
+
+  it("60,9% dan past — 0", () => {
+    expect(run(30_000_000).lines.find((l) => l.item_id === 1)?.amount ?? 0).toBe(0);
+  });
+
+  it("80% — setkaning 80%", () => {
+    expect(run(40_000_000).lines.find((l) => l.item_id === 1)?.amount).toBe(800_000);
+  });
+
+  it("120% dan oshsa — setkaning 120%", () => {
+    expect(run(70_000_000).lines.find((l) => l.item_id === 1)?.amount).toBe(1_200_000);
+  });
+
+  it("tabel: yarim oy — setka ham yarmiga tushadi", () => {
+    const r = computePayroll({
+      inputs: baseInputs({
+        worked_days: 12,
+        fact_by_group: new Map([[7, { ...ZERO_METRICS, cost: 40_000_000 }]]),
+        plan_by_group: new Map([[7, { ...ZERO_METRICS, cost: 50_000_000 }]]),
+        kpi_amounts: new Map([[7, 1_000_000]])
+      }),
+      items,
+      salaryFormula: null,
+      formulas: [{ ref: "kpi", text: KPI_GRID, target_item_id: 1, kpi_group_id: 7, priority: 1 }],
+      kept: [],
+      systemIds,
+      carryAmount: 0,
+      salaryPaid: 0
+    });
+    expect(r.lines.find((l) => l.item_id === 1)?.amount).toBe(400_000);
+  });
+});
+
 describe("computePayroll", () => {
   it("Аванс gross ga kirmaydi, balansdan bir marta ayiriladi", () => {
     const r = computePayroll({

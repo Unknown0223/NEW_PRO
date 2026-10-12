@@ -1,5 +1,5 @@
-import { PayrollSettingsHub } from "@/components/payroll/payroll-settings-hub";
+import { redirect } from "next/navigation";
 
 export default function PayrollHubPage() {
-  return <PayrollSettingsHub />;
+  redirect("/users/salary");
 }

@@ -2,7 +2,6 @@
 
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronsUpDown } from "lucide-react";
 import { PageShell } from "@/components/dashboard/page-shell";
 import { Button } from "@/components/ui/button";
 import { PayrollFormulaModal } from "@/components/payroll/payroll-formula-modal";
@@ -56,7 +55,6 @@ export function PayrollBonusWorkspace() {
   const [filters, setFilters] = useState<Filters>({ role: "", users: [], group: "", direction: "" });
   const [q, setQ] = useState("");
   const [fq, setFq] = useState("");
-  const [expanded, setExpanded] = useState<Set<number>>(new Set());
   const [formulaOpen, setFormulaOpen] = useState(false);
   const [target, setTarget] = useState<AssignTarget | null>(null);
   const prefs = useUserTablePrefs({ tenantSlug: tenant, tableId: "payroll.bonus-kpi", defaultColumnOrder: ["fio"], defaultPageSize: 20 });
@@ -112,15 +110,6 @@ export function PayrollBonusWorkspace() {
     setFilters({ role: draftRole, users: [...draftUsers], group: draftGroup, direction: draftDirection });
     sel.clear();
   };
-  const toggleExpand = (id: number) =>
-    setExpanded((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  const allExpanded = paged.pageRows.length > 0 && paged.pageRows.every((r) => expanded.has(r.user_id));
-
   return (
     <PageShell className="payroll-template">
       <PayrollRelatedBar current="bonus" />
@@ -146,7 +135,7 @@ export function PayrollBonusWorkspace() {
               hideOuterLabel
               triggerPlaceholder="Сотрудники"
               triggerClassName={PAYROLL_FILTER_TRIGGER}
-              items={everyone.filter((r) => !draftRole || r.role === draftRole).map((r) => ({ id: r.user_id, title: r.fio, subtitle: r.code, searchText: r.code }))}
+              items={everyone.filter((r) => !draftRole || r.role === draftRole).map((r) => ({ id: r.user_id, title: r.code ? `${r.code} ${r.fio}` : r.fio, searchText: `${r.code ?? ""} ${r.fio}` }))}
               selected={draftUsers}
               onSelectedChange={setDraftUsers}
               filterItemsBySearch
@@ -185,22 +174,13 @@ export function PayrollBonusWorkspace() {
             refreshing={dataQ.isFetching}
           >
             {data?.closed ? <span className="rounded-full bg-zinc-800 px-2.5 py-1 text-xs font-medium text-white">Месяц закрыт</span> : null}
-            <Button
-              size="sm"
-              variant="outline"
-              className="h-9"
-              onClick={() => setExpanded(allExpanded ? new Set() : new Set(paged.pageRows.map((r) => r.user_id)))}
-            >
-              <ChevronsUpDown className="mr-1 size-4" /> {allExpanded ? "Свернуть все" : "Развернуть все"}
-            </Button>
           </PayrollTableToolbar>
           <PayrollBonusTable
             rows={paged.pageRows}
+            planRows={rows}
             groupFilter={filters.group ? Number(filters.group) : null}
             loading={dataQ.isLoading}
             editable={editable}
-            expanded={expanded}
-            onExpand={toggleExpand}
             selected={sel.ids}
             onToggle={sel.toggle}
             onToggleAll={(on) => sel.setAll(paged.pageRows.map((r) => r.user_id), on)}
@@ -254,9 +234,9 @@ export function PayrollBonusWorkspace() {
         groups={groups}
         formulas={bonusFormulas.filter((f) => f.is_active)}
         items={(itemsQ.data ?? []).filter((i) => !i.system_key && i.is_active && i.type === "allowance")}
+        roles={roles}
         onClose={() => setTarget(null)}
-        onDone={(t) => { notice.ok(t); sel.clear(); refresh(); }}
-        onCreateFormula={() => setFormulaOpen(true)}
+        onDone={(t) => { notice.ok(t); sel.clear(); refresh(); void formulasQ.refetch(); }}
       />
       <PayrollFormulaModal
         open={formulaOpen}

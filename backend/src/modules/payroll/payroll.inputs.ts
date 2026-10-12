@@ -5,12 +5,13 @@ import { parseWorkdaysState, type WorkdaysState } from "../tabel/workdays.servic
 import { loadTimezoneFromSettingsJson } from "../tenant-settings/tenant-timezone";
 import { defaultTimesheetDay, employmentYmd, visitDayKeys } from "../timesheet/timesheet.day-status";
 import { parseTimesheetState } from "../timesheet/timesheet.service";
-import { applyAgentNormForUser, loadAgentNormContext } from "../timesheet/timesheet.agent-norm";
+import { applyAgentNormForUser, loadAgentNormContext, type AgentNormContext } from "../timesheet/timesheet.agent-norm";
 import type { NormDay } from "../timesheet/timesheet.agent-norm.pure";
 import { computeUserMonthFact } from "./payroll-kpi-month";
-import { computeUserMonthPlan } from "./payroll-slot-plan";
+import { userMonthFactFromCache, type BaseBundle, type MonthFactCache } from "./payroll.month-shared";
+import { computeUserMonthPlan, type PlanMonthCache } from "./payroll-slot-plan";
 import { computeTeamMonthPlan } from "./payroll-team-plan";
-import { parseItemAmounts } from "./payroll.item-amounts.pure";
+import { parseItemAmounts, parseKpiAmounts } from "./payroll.item-amounts.pure";
 import type { PayrollCalcInputs } from "./payroll.formula-vars";
 
 export type TenantPayrollEnv = {
@@ -52,24 +53,62 @@ export type AttendanceSummary = {
   half: number;
 };
 
+export type AttendancePrep = { visitKeys: Set<string>; norm: AgentNormContext };
+
+/** Oy bo'yicha tashrif va agent normasi — barcha xodimlar uchun bir marta. */
+export async function prepareAttendance(
+  tenantId: number,
+  users: PayrollUserSnapshot[],
+  year: number,
+  month: number,
+  env: TenantPayrollEnv
+): Promise<AttendancePrep> {
+  const agents = users.filter((u) => u.role === "agent");
+  const ids = agents.map((u) => u.id);
+  const { from, to } = tenantMonthRangeUtc(year, month, env.timeZone);
+  const [visits, flags] = await Promise.all([
+    ids.length
+      ? prisma.agentVisit.findMany({
+          where: { tenant_id: tenantId, agent_id: { in: ids }, checked_in_at: { gte: from, lt: to } },
+          select: { agent_id: true, checked_in_at: true }
+        })
+      : Promise.resolve([]),
+    ids.length ? prisma.user.findMany({ where: { id: { in: ids } }, select: { id: true, consignment: true } }) : Promise.resolve([])
+  ]);
+  const consignment = new Map(flags.map((f) => [f.id, f.consignment]));
+  const norm = await loadAgentNormContext(
+    tenantId,
+    env.settings,
+    agents.map((a) => ({ id: a.id, role: a.role, consignment: consignment.get(a.id) ?? false })),
+    year,
+    month,
+    env.timeZone
+  );
+  return { visitKeys: visitDayKeys(visits, env.timeZone), norm };
+}
+
 /** Tabel: qo'lda belgilangan kun ustun, aks holda grafik/GPS default. Kelajak kunlar hisoblanmaydi. */
 export async function computeUserAttendance(
   tenantId: number,
   user: PayrollUserSnapshot,
   year: number,
   month: number,
-  env: TenantPayrollEnv
+  env: TenantPayrollEnv,
+  prep?: AttendancePrep
 ): Promise<AttendanceSummary> {
   const { from, to } = tenantMonthRangeUtc(year, month, env.timeZone);
   const today = ymdInTimeZone(new Date(), env.timeZone);
-  const visits =
-    user.role === "agent"
-      ? await prisma.agentVisit.findMany({
-          where: { tenant_id: tenantId, agent_id: user.id, checked_in_at: { gte: from, lt: to } },
-          select: { agent_id: true, checked_in_at: true }
-        })
-      : [];
-  const visitKeys = visitDayKeys(visits, env.timeZone);
+  const visitKeys = prep
+    ? prep.visitKeys
+    : visitDayKeys(
+        user.role === "agent"
+          ? await prisma.agentVisit.findMany({
+              where: { tenant_id: tenantId, agent_id: user.id, checked_in_at: { gte: from, lt: to } },
+              select: { agent_id: true, checked_in_at: true }
+            })
+          : [],
+        env.timeZone
+      );
   const hiredYmd = employmentYmd(user.hired_at, env.timeZone);
   const dismissedYmd = employmentYmd(user.dismissed_at, env.timeZone);
   const s: AttendanceSummary = {
@@ -102,15 +141,22 @@ export async function computeUserAttendance(
     };
   });
   if (user.role === "agent") {
-    const flag = await prisma.user.findUnique({ where: { id: user.id }, select: { consignment: true } });
-    const ctx = await loadAgentNormContext(
-      tenantId,
-      env.settings,
-      [{ id: user.id, role: user.role, consignment: flag?.consignment ?? false }],
-      year,
-      month,
-      env.timeZone
-    );
+    const ctx =
+      prep?.norm ??
+      (await loadAgentNormContext(
+        tenantId,
+        env.settings,
+        [
+          {
+            id: user.id,
+            role: user.role,
+            consignment: (await prisma.user.findUnique({ where: { id: user.id }, select: { consignment: true } }))?.consignment ?? false
+          }
+        ],
+        year,
+        month,
+        env.timeZone
+      ));
     applyAgentNormForUser(ctx, user, days, env.workdays, year, month);
   }
   for (const { date: ymd, status } of days) {
@@ -132,20 +178,44 @@ export type BaseSalaryInfo = {
   currency: string;
   cash_desk_id: number | null;
   item_parts: Map<number, number>;
+  kpi_amounts: Map<number, number>;
 };
 
-export async function resolveBaseSalary(tenantId: number, userId: number, role: string): Promise<BaseSalaryInfo> {
-  const [emp, rc] = await Promise.all([
-    prisma.payrollEmployeeConfig.findUnique({ where: { tenant_id_user_id: { tenant_id: tenantId, user_id: userId } } }),
-    prisma.payrollRoleConfig.findUnique({ where: { tenant_id_role: { tenant_id: tenantId, role } } })
-  ]);
-  const base = emp?.base_amount != null ? Number(emp.base_amount) : rc ? Number(rc.base_amount) : 0;
-  const parts = { ...parseItemAmounts(rc?.item_amounts), ...parseItemAmounts(emp?.item_amounts) };
+export async function resolveBaseSalary(
+  tenantId: number,
+  userId: number,
+  role: string,
+  year?: number,
+  month?: number,
+  bases?: BaseBundle
+): Promise<BaseSalaryInfo> {
+  const [emp, rc] = bases
+    ? [bases.emp.get(userId) ?? null, bases.role.get(role) ?? null]
+    : await Promise.all([
+        prisma.payrollEmployeeConfig.findUnique({ where: { tenant_id_user_id: { tenant_id: tenantId, user_id: userId } } }),
+        prisma.payrollRoleConfig.findUnique({ where: { tenant_id_role: { tenant_id: tenantId, role } } })
+      ]);
+  let base = emp?.base_amount != null ? Number(emp.base_amount) : rc ? Number(rc.base_amount) : 0;
+  let parts = { ...parseItemAmounts(rc?.item_amounts), ...parseItemAmounts(emp?.item_amounts) };
+  let kpiRaw: unknown = emp?.item_amounts;
+  if (year && month) {
+    const { gridForCalc } = await import("./payroll.grid-month");
+    const snap = await gridForCalc(tenantId, userId, role, year, month, bases?.grids);
+    if (snap?.scope === "user") {
+      parts = snap.item_amounts;
+      kpiRaw = snap.raw ?? kpiRaw;
+      if (snap.base_amount != null) base = snap.base_amount;
+    } else if (snap) {
+      parts = { ...snap.item_amounts, ...parseItemAmounts(emp?.item_amounts) };
+      if (emp?.base_amount == null && snap.base_amount != null) base = snap.base_amount;
+    }
+  }
   return {
     base_full: base,
     currency: emp?.currency || rc?.currency || "UZS",
     cash_desk_id: emp?.cash_desk_id ?? null,
-    item_parts: new Map(Object.entries(parts).map(([k, v]) => [Number(k), v]))
+    item_parts: new Map(Object.entries(parts).map(([k, v]) => [Number(k), v])),
+    kpi_amounts: new Map(Object.entries(parseKpiAmounts(kpiRaw)).map(([k, v]) => [Number(k), v]))
   };
 }
 
@@ -165,23 +235,34 @@ export type LoadedPayrollInputs = {
   fact_meta: { unallocated_returns: number; multi_group_products: number; slot_ids: number[] };
 };
 
+export type PayrollInputCache = {
+  facts?: MonthFactCache;
+  plans?: PlanMonthCache;
+  attendance?: AttendancePrep;
+  bases?: BaseBundle;
+  advances?: Map<number, number>;
+};
+
 export async function loadPayrollInputs(
   tenantId: number,
   user: PayrollUserSnapshot,
   year: number,
   month: number,
   env: TenantPayrollEnv,
-  productGroups?: Map<number, number[]>
+  productGroups?: Map<number, number[]>,
+  cache?: PayrollInputCache
 ): Promise<LoadedPayrollInputs> {
   const range = tenantMonthRangeUtc(year, month, env.timeZone);
   const [attendance, base, fact, plan, advances, teamPlan] = await Promise.all([
-    computeUserAttendance(tenantId, user, year, month, env),
-    resolveBaseSalary(tenantId, user.id, user.role),
-    computeUserMonthFact(tenantId, user.id, user.role, range, productGroups),
-    computeUserMonthPlan(tenantId, user.id, year, month, range, env.timeZone, env.workdays),
-    sumPaidAdvances(tenantId, user.id, year, month),
+    computeUserAttendance(tenantId, user, year, month, env, cache?.attendance),
+    resolveBaseSalary(tenantId, user.id, user.role, year, month, cache?.bases),
+    cache?.facts
+      ? userMonthFactFromCache(tenantId, user.id, user.role, range, cache.facts)
+      : computeUserMonthFact(tenantId, user.id, user.role, range, productGroups),
+    computeUserMonthPlan(tenantId, user.id, year, month, range, env.timeZone, env.workdays, cache?.plans),
+    cache?.advances ? Promise.resolve(cache.advances.get(user.id) ?? 0) : sumPaidAdvances(tenantId, user.id, year, month),
     user.role === "supervisor"
-      ? computeTeamMonthPlan(tenantId, user.id, year, month, range, env.timeZone, env.workdays)
+      ? computeTeamMonthPlan(tenantId, user.id, year, month, range, env.timeZone, env.workdays, cache?.plans)
       : Promise.resolve(null)
   ]);
   const worked = Math.min(attendance.worked, attendance.plan_days);
@@ -208,7 +289,8 @@ export async function loadPayrollInputs(
     team_plan_total: teamPlan?.total ?? null,
     team_plan_by_group: teamPlan?.byGroup ?? null,
     advances_paid: advances,
-    item_parts: base.item_parts
+    item_parts: base.item_parts,
+    kpi_amounts: base.kpi_amounts
   };
   return {
     inputs,

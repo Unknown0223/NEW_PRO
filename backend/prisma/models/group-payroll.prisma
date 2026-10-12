@@ -82,6 +82,11 @@ model PayrollFormula {
   text           String
   /// Rol bo'yicha avtomatik qo'llanadi (target_item_id bilan).
   role           String?  @db.VarChar(64)
+  /// Bir KPI ga bir nechta formula (turli rol va shart).
+  kpi_group_id   Int?
+  /// Bo'sh bo'lsa har oyda ishlaydi. Belgilansa faqat shu oy.
+  year           Int?
+  month          Int?
   target_item_id Int?
   priority       Int      @default(100)
   is_active      Boolean  @default(true)
@@ -91,6 +96,8 @@ model PayrollFormula {
 
   @@index([tenant_id, is_active])
   @@index([tenant_id, role])
+  @@index([tenant_id, kpi_group_id])
+  @@index([tenant_id, year, month])
   @@map("payroll_formulas")
 }
 
@@ -298,6 +305,26 @@ model PayrollPayout {
   @@index([tenant_id, cash_desk_id, status])
   @@index([tenant_id, paid_at])
   @@map("payroll_payouts")
+}
+
+/// Oy kesimidagi oylik setkasi. Keyingi oy o'z nusxasiga ega bo'lmasa, oxirgi oldingi oydan oladi.
+model PayrollGridMonth {
+  id           Int      @id @default(autoincrement())
+  tenant_id    Int
+  year         Int
+  month        Int
+  /// role | user
+  scope        String   @db.VarChar(8)
+  role         String   @default("") @db.VarChar(64)
+  user_id      Int      @default(0)
+  base_amount  Decimal? @db.Decimal(15, 2)
+  item_amounts Json     @default("{}")
+  created_at   DateTime @default(now())
+  updated_at   DateTime @updatedAt
+
+  @@unique([tenant_id, year, month, scope, role, user_id], map: "payroll_grid_months_uq")
+  @@index([tenant_id, year, month])
+  @@map("payroll_grid_months")
 }
 
 model PayrollCompareBatch {
