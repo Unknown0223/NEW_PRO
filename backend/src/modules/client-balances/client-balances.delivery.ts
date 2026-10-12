@@ -52,6 +52,15 @@ export async function loadDeliveryDebtByClient(
           AND pa.order_id IN (SELECT id FROM cand)
         GROUP BY pa.order_id
       ),
+      order_refunds AS (
+        SELECT sr.order_id, SUM(sr.refund_amount)::decimal(15,2) AS refunded
+        FROM sales_returns sr
+        WHERE sr.tenant_id = ${tenantId}
+          AND sr.status = 'posted'
+          AND sr.order_id IN (SELECT id FROM cand)
+          AND COALESCE(sr.refund_amount, 0) > 0
+        GROUP BY sr.order_id
+      ),
       delivered AS (
         SELECT sl.order_id, MIN(sl.created_at) AS delivered_at
         FROM order_status_logs sl
@@ -64,9 +73,10 @@ export async function loadDeliveryDebtByClient(
           c.client_id,
           ${sqlOrderMerchandiseNetReceivable("c")} AS merchandise_net,
           COALESCE(d.delivered_at, c.updated_at) AS delivered_at,
-          COALESCE(a.allocated, 0)::decimal(15,2) AS allocated
+          (COALESCE(a.allocated, 0) + COALESCE(rf.refunded, 0))::decimal(15,2) AS allocated
         FROM cand c
         LEFT JOIN alloc a ON a.order_id = c.id
+        LEFT JOIN order_refunds rf ON rf.order_id = c.id
         LEFT JOIN delivered d ON d.order_id = c.id
       ),
       agg AS (
@@ -157,6 +167,15 @@ export async function loadUnpaidDeliveredOrderDebtRows(
           AND pa.order_id IN (SELECT id FROM cand)
         GROUP BY pa.order_id
       ),
+      order_refunds AS (
+        SELECT sr.order_id, SUM(sr.refund_amount)::decimal(15,2) AS refunded
+        FROM sales_returns sr
+        WHERE sr.tenant_id = ${tenantId}
+          AND sr.status = 'posted'
+          AND sr.order_id IN (SELECT id FROM cand)
+          AND COALESCE(sr.refund_amount, 0) > 0
+        GROUP BY sr.order_id
+      ),
       delivered AS (
         SELECT sl.order_id, MIN(sl.created_at) AS delivered_at
         FROM order_status_logs sl
@@ -168,11 +187,12 @@ export async function loadUnpaidDeliveredOrderDebtRows(
         c.id AS order_id,
         c.number AS order_number,
         c.client_id,
-        GREATEST(${sqlOrderMerchandiseNetReceivable("c")} - COALESCE(a.sum_amt, 0), 0)::decimal(15,2) AS unpaid,
+        GREATEST(${sqlOrderMerchandiseNetReceivable("c")} - COALESCE(a.sum_amt, 0) - COALESCE(rf.refunded, 0), 0)::decimal(15,2) AS unpaid,
         COALESCE(d.delivered_at, c.updated_at) AS delivered_at,
         c.payment_method_ref
       FROM cand c
       LEFT JOIN alloc a ON a.order_id = c.id
+      LEFT JOIN order_refunds rf ON rf.order_id = c.id
       LEFT JOIN delivered d ON d.order_id = c.id
     `;
     for (const r of rows) {

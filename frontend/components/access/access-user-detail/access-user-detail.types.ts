@@ -132,18 +132,68 @@ export type SupervisorPickRow = {
   branch: string | null;
 };
 
-export const STAFF_ROLE_ORDER = ["admin", "supervisor", "agent", "expeditor", "manager"];
+export const STAFF_ROLE_ORDER = [
+  "admin",
+  "director",
+  "sales_director",
+  "commercial_director",
+  "regional_manager",
+  "manager",
+  "accountant",
+  "supervisor",
+  "operator",
+  "agent",
+  "expeditor",
+  "collector",
+  "auditor",
+  "skladchik",
+  "warehouse_manager",
+  "cashier",
+  "storekeeper",
+  "gruzchik",
+  "logist",
+  "merchandiser",
+  "driver",
+  "dispatcher",
+  "partner"
+];
+
+const STAFF_ROLE_GROUP_LABELS: Record<string, string> = {
+  admin: "Администраторы",
+  director: "Директора",
+  sales_director: "Директора по продажам",
+  commercial_director: "Коммерческие директора",
+  regional_manager: "Региональные менеджеры",
+  manager: "Менеджеры",
+  accountant: "Бухгалтеры",
+  supervisor: "Супервайзеры",
+  operator: "Операторы",
+  agent: "Агенты",
+  expeditor: "Экспедиторы",
+  collector: "Инкассаторы",
+  auditor: "Аудиторы",
+  skladchik: "Складчики",
+  warehouse_manager: "Заведующие складом",
+  cashier: "Кассиры",
+  storekeeper: "Кладовщики",
+  gruzchik: "Грузчики",
+  logist: "Логисты",
+  merchandiser: "Мерчендайзеры",
+  driver: "Водители",
+  dispatcher: "Диспетчеры",
+  partner: "Партнёры"
+};
 
 export function staffRoleGroupLabel(role: string): string {
   const r = role.toLowerCase().trim();
-  const map: Record<string, string> = {
-    admin: "Администраторы",
-    supervisor: "Супервайзеры",
-    agent: "Агенты",
-    expeditor: "Экспедиторы",
-    manager: "Менеджеры"
-  };
-  return map[r] ?? role;
+  return STAFF_ROLE_GROUP_LABELS[r] ?? role;
+}
+
+export function staffRoleFilterOptions(): { id: string; title: string }[] {
+  return [
+    { id: "", title: "Все роли" },
+    ...STAFF_ROLE_ORDER.map((id) => ({ id, title: staffRoleGroupLabel(id) }))
+  ];
 }
 
 export function uniqRoleKeys(roles: string[]): string[] {

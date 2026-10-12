@@ -128,7 +128,12 @@ export const routeRegistrars: RouteRegistrar[] = [
   registerWorkSlotRoutes,
   registerPlansRoutes,
   registerPayrollRoutes,
-  registerLocalAssistantRoutes,
+  fp(
+    async (app) => {
+      registerLocalAssistantRoutes(app);
+    },
+    { name: "register-local-assistant-routes", fastify: "4.x" }
+  ),
   registerSystemMigrationRoutes
 ];
 

@@ -38,7 +38,7 @@ type FilterOptions = {
 };
 
 type AgentOrdersReport = {
-  status_cards: Array<{ status: string; amount: string; qty: number; akb: number }>;
+  status_cards: Array<{ status: string; amount: string; qty: number; volume?: string; akb: number }>;
   agent_rows: Array<{
     agent_id: number | null;
     agent_name: string;
@@ -217,7 +217,13 @@ export default function ReportAgentOrdersPage() {
       return_processing: "В процессе возврата",
       returned: "Возврат"
     };
-    return (reportQ.data?.status_cards ?? []).map((c) => ({ ...c, label: map[c.status] ?? c.status }));
+    const rows = (reportQ.data?.status_cards ?? []).map((c) => ({ ...c, label: map[c.status] ?? c.status }));
+    return rows.filter((c) => {
+      if (c.status === "all") return true;
+      const amount = Number.parseFloat(String(c.amount).replace(",", "."));
+      const volume = Number.parseFloat(String(c.volume ?? "0").replace(",", "."));
+      return (Number.isFinite(amount) && amount !== 0) || c.qty !== 0 || c.akb !== 0 || (Number.isFinite(volume) && volume !== 0);
+    });
   }, [reportQ.data?.status_cards]);
 
   if (!hydrated || !tenantSlug) return <p className="text-sm text-muted-foreground">Загрузка...</p>;
@@ -434,14 +440,14 @@ export default function ReportAgentOrdersPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-8">
+      <div className="flex flex-wrap gap-1.5">
         {cards.map((c) => (
-          <div key={c.status} className="overflow-hidden rounded-md border border-border/70 shadow-sm">
+          <div key={c.status} className="w-[148px] shrink-0 overflow-hidden rounded-md border border-border/70 shadow-sm">
             <div className={cn("px-2.5 py-1.5 text-[11px] font-medium", kpiCardTone(c.status).head)}>{c.label}</div>
             <div className={cn("space-y-0.5 px-2.5 py-1.5", kpiCardTone(c.status).body)}>
               <p className="text-[22px] font-semibold leading-tight tabular-nums">{money(c.amount)}</p>
               <p className="text-[11px] text-muted-foreground">Кол-во: {c.qty}</p>
-              <p className="text-[11px] text-muted-foreground">Объем: 0</p>
+              <p className="text-[11px] text-muted-foreground">Объем: {money(c.volume ?? "0")}</p>
               <p className="text-[11px] text-muted-foreground">АКБ: {c.akb}</p>
             </div>
           </div>
@@ -453,7 +459,7 @@ export default function ReportAgentOrdersPage() {
         loading={reportQ.isLoading}
         metricMode={agentMetricMode}
         onMetricModeChange={setAgentMetricMode}
-        headers={["Агент", "Код агента", "Общие заказы", "Новый", "Ожидаемая дата отгрузки", "Отгружен", "Доставлен", "Отменен", "Возвращенные", "В процессе возврата"]}
+        headers={["Агент", "Код агента", "Общие заказы", "Новый", "Подтвержден к отгрузке", "Отгружен", "Доставлен", "Отменен", "Возвращенные", "В процессе возврата"]}
         rows={(reportQ.data?.agent_rows ?? []).map((r) => [
           r.agent_name,
           r.agent_code || "—",

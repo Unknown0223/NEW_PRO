@@ -30,6 +30,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { Eye, FileSpreadsheet, FileText, LayoutGrid, RefreshCw, Search } from "lucide-react";
 import { apiFetch, useTenant } from "@/lib/api-client";
 import { api } from "@/lib/api";
@@ -52,6 +53,7 @@ interface Transfer {
   started_at?: string | null;
   received_at?: string | null;
   created_at: string;
+  kind?: string;
   comment: string | null;
   created_by_user_id: number | null;
   created_by_name: string | null;
@@ -98,6 +100,7 @@ interface TransferDetail {
 
 const statusLabels: Record<string, string> = {
   draft: "Черновик",
+  pending_confirm: "Ожидание подтверждения",
   in_transit: "В пути",
   received: "Принято",
   cancelled: "Отменено",
@@ -105,6 +108,7 @@ const statusLabels: Record<string, string> = {
 
 const statusColors: Record<string, string> = {
   draft: "bg-yellow-100 text-yellow-800",
+  pending_confirm: "bg-amber-100 text-amber-900",
   in_transit: "bg-blue-100 text-blue-800",
   received: "bg-green-100 text-green-800",
   cancelled: "bg-red-100 text-red-800",
@@ -171,7 +175,23 @@ function parseFilenameFromDisposition(cd: string | undefined): string | null {
 
 export default function TransfersPage() {
   const tenant = useTenant();
-  const canExport = usePermissions().has("warehouse.peremeshchenie.export");
+  const branchScope = useSearchParams().get("scope") === "branch";
+  const perms = usePermissions();
+  const canExport = perms.has("warehouse.peremeshchenie.export");
+  const canCreate = branchScope
+    ? perms.has("warehouse.peremeshchenie_filial.create")
+    : perms.has("warehouse.peremeshchenie.create");
+  const canConduct = branchScope
+    ? perms.has("warehouse.peremeshchenie_filial.transfer")
+    : perms.has("warehouse.peremeshchenie.transfer");
+  const canSetWaiting = branchScope
+    ? perms.has("warehouse.peremeshchenie_filial.status")
+    : canConduct;
+  function rowStatusLabel(status: string): string {
+    if (branchScope && status === "draft") return "Новый";
+    if (branchScope && status === "received") return "Подтверждено";
+    return statusLabels[status] || status;
+  }
   const [loading, setLoading] = useState(true);
   const [warehouses, setWarehouses] = useState<WarehouseOption[]>([]);
   const [rawTransfers, setRawTransfers] = useState<Transfer[]>([]);
@@ -267,6 +287,7 @@ export default function TransfersPage() {
         ...(statusFilter !== "all" ? { status: statusFilter } : {}),
         ...(sourceWarehouseId !== "all" ? { sourceWarehouseId } : {}),
         ...(destinationWarehouseId !== "all" ? { destinationWarehouseId } : {}),
+        ...(branchScope ? { kind: "branch" } : { kind: "warehouse" }),
       });
       const data = await apiFetch<{ data?: Transfer[]; total?: number }>(
         `/api/${tenant}/transfers?${params}`
@@ -278,7 +299,7 @@ export default function TransfersPage() {
     } finally {
       setLoading(false);
     }
-  }, [tenant, page, tablePrefs.pageSize, statusFilter, sourceWarehouseId, destinationWarehouseId]);
+  }, [tenant, page, tablePrefs.pageSize, statusFilter, sourceWarehouseId, destinationWarehouseId, branchScope]);
 
   useEffect(() => {
     if (!tenant) return;
@@ -475,12 +496,30 @@ export default function TransfersPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <div>
-          <h1 className="text-2xl font-bold">Перемещение товара</h1>
-          <p className="text-muted-foreground">Журнал перемещений между складами.</p>
+          <h1 className="text-2xl font-bold">
+            {branchScope ? "Перемещение между филиалами" : "Перемещение товара"}
+          </h1>
+          <p className="text-sm text-muted-foreground">
+            {branchScope
+              ? "Новый не двигает остаток. На баланс склада филиала товар попадает только после «Подтвердить»."
+              : "Журнал перемещений между складами."}
+          </p>
+          {branchScope ? (
+            <div className="mt-3 flex flex-wrap gap-2 text-xs">
+              <span className="rounded-full bg-yellow-100 px-2.5 py-1 font-medium text-yellow-900">1. Новый</span>
+              <span className="rounded-full bg-amber-100 px-2.5 py-1 font-medium text-amber-950">2. Ожидание подтверждения</span>
+              <span className="rounded-full bg-green-100 px-2.5 py-1 font-medium text-green-900">3. Подтверждено — остаток на складе</span>
+            </div>
+          ) : null}
         </div>
-        <Link href="/stock/transfers/amaliyot" className={cn(buttonVariants({ variant: "default" }))}>
+        {canCreate ? (
+        <Link
+          href={branchScope ? "/stock/transfers/amaliyot?scope=branch" : "/stock/transfers/amaliyot"}
+          className={cn(buttonVariants({ variant: "default" }))}
+        >
           Оформить
         </Link>
+        ) : null}
       </div>
 
       <Card>
@@ -532,14 +571,18 @@ export default function TransfersPage() {
                 setDraftStatusFilter(v);
               }}
             >
-              <SelectTrigger className="w-40">
+              <SelectTrigger className={branchScope ? "w-64" : "w-40"}>
                 <SelectValue placeholder="Статус" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Все</SelectItem>
-                <SelectItem value="draft">Черновик</SelectItem>
-                <SelectItem value="in_transit">В пути</SelectItem>
-                <SelectItem value="received">Принят</SelectItem>
+                <SelectItem value="draft">{branchScope ? "Новый" : "Черновик"}</SelectItem>
+                {branchScope ? (
+                  <SelectItem value="pending_confirm">Ожидание подтверждения</SelectItem>
+                ) : (
+                  <SelectItem value="in_transit">В пути</SelectItem>
+                )}
+                <SelectItem value="received">{branchScope ? "Подтверждено" : "Принят"}</SelectItem>
                 <SelectItem value="cancelled">Отменен</SelectItem>
               </SelectContent>
             </Select>
@@ -979,7 +1022,7 @@ export default function TransfersPage() {
                             </span>
                           ) : null}
                           {colId === "status" ? (
-                            <Badge className={statusColors[t.status]}>{statusLabels[t.status] || t.status}</Badge>
+                            <Badge className={statusColors[t.status]}>{rowStatusLabel(t.status)}</Badge>
                           ) : null}
                           {colId === "actions" ? (
                             <div className="flex gap-2 justify-end flex-wrap">
@@ -993,7 +1036,7 @@ export default function TransfersPage() {
                                 <Eye className="size-3.5 opacity-80" />
                                 Просмотр
                               </Button>
-                              {t.status === "draft" && (
+                              {canSetWaiting && t.status === "draft" && (
                                 <Button
                                   variant="default"
                                   size="sm"
@@ -1006,10 +1049,10 @@ export default function TransfersPage() {
                                     })
                                   }
                                 >
-                                  Начать
+                                  {branchScope ? "На подтверждение" : "Начать"}
                                 </Button>
                               )}
-                              {t.status === "in_transit" && (
+                              {canConduct && (t.status === "in_transit" || t.status === "pending_confirm") && (
                                 <Button
                                   variant="secondary"
                                   size="sm"
@@ -1024,10 +1067,10 @@ export default function TransfersPage() {
                                     })
                                   }
                                 >
-                                  Принять
+                                  {branchScope ? "Подтвердить" : "Принять"}
                                 </Button>
                               )}
-                              {(t.status === "draft" || t.status === "in_transit") && (
+                              {(canSetWaiting || canConduct) && (t.status === "draft" || t.status === "in_transit" || t.status === "pending_confirm") && (
                                 <Button
                                   variant="destructive"
                                   size="sm"

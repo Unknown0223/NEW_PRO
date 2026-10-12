@@ -31,9 +31,14 @@ export async function getClientSales2FilterOptions(tenantId: number, actor?: Rep
       : {};
   const profilePriceTypeEntries = priceTypeEntriesFromUnknown(refs.price_type_entries).filter((x) => x.active !== false);
 
-  const [agents, categories, products, groups, segments] = await Promise.all([
+  const [agents, supervisors, categories, products, groups, segments] = await Promise.all([
     prisma.user.findMany({
       where: staffWhereForFilterOptions(tenantId, scope, "agent"),
+      select: { id: true, name: true, code: true },
+      orderBy: { name: "asc" }
+    }),
+    prisma.user.findMany({
+      where: staffWhereForFilterOptions(tenantId, scope, "supervisor"),
       select: { id: true, name: true, code: true },
       orderBy: { name: "asc" }
     }),
@@ -121,6 +126,7 @@ export async function getClientSales2FilterOptions(tenantId: number, actor?: Rep
       { id: "return_processing", label: "В процессе возврата" }
     ],
     agents: agents.map((a) => ({ id: a.id, name: a.name, code: a.code ?? "" })),
+    supervisors: supervisors.map((a) => ({ id: a.id, name: a.name, code: a.code ?? "" })),
     categories,
     products: products.map((p) => ({ id: p.id, name: p.name, sku: p.sku })),
     groups,

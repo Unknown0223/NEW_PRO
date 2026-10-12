@@ -10,6 +10,8 @@ export type CreateTransferInput = {
   destination_warehouse_id: number;
   comment?: string | null;
   planned_date?: string | null;
+  /** `branch` — faqat turli filial omborlari. */
+  kind?: "warehouse" | "branch" | null;
   lines: CreateTransferLineInput[];
 };
 
@@ -25,6 +27,7 @@ export type GetTransfersOptions = {
   status?: string;
   source_warehouse_id?: number;
   destination_warehouse_id?: number;
+  kind?: "warehouse" | "branch";
   page?: number;
   limit?: number;
 };
@@ -33,6 +36,7 @@ export type TransferListRow = {
   id: number;
   number: string;
   status: string;
+  kind: string;
   source_warehouse_id: number;
   source_warehouse_name: string;
   destination_warehouse_id: number;

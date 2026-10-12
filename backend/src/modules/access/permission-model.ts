@@ -184,6 +184,7 @@ export const PERMISSION_SECTIONS: PermissionSectionDef[] = [
   { module: "warehouse", section: "bloki", labelRu: "Блок склада", actions: [...CRUD, "export"] },
   { module: "warehouse", section: "postuplenie", labelRu: "Поступление товаров", actions: ["view", "create", "update", "delete", "import", "status", "export", "history"] },
   { module: "warehouse", section: "peremeshchenie", labelRu: "Перемещение товара", actions: ["view", "create", "update", "transfer", "export"] },
+  { module: "warehouse", section: "peremeshchenie_filial", labelRu: "Перемещение между филиалами", actions: ["view", "create", "status", "transfer"] },
   { module: "warehouse", section: "korrektirovka", labelRu: "Корректировка склада (инвентаризация)", actions: ["view", "create", "update", "export"] },
   { module: "warehouse", section: "ostatki", labelRu: "Остатки товаров", actions: VIEW_COPY, treeSectionRu: REPORTS_TREE_RU },
   { module: "warehouse", section: "rekomendovannyy_zapas", labelRu: "Рекомендованный запас", actions: VIEW_EXPORT, treeSectionRu: REPORTS_TREE_RU },

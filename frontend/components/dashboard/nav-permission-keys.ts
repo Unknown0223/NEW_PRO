@@ -33,6 +33,7 @@ export const NAV_PERM = {
   stockByDate: ["warehouse.ostatki_na_datu.view"],
   stockReceipts: ["warehouse.postuplenie.view", "warehouse.postuplenie_sklada.view"],
   stockTransfers: ["warehouse.peremeshchenie.view", "warehouse.transfer"],
+  stockTransfersBranch: ["warehouse.peremeshchenie_filial.view"],
   stockCorrection: ["warehouse.korrektirovka.view"],
   stockMaterial: ["warehouse.materialnyy_otchet.view"],
 

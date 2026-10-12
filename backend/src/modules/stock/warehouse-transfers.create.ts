@@ -3,6 +3,7 @@ import { prisma } from "../../config/database";
 import { invalidateStock } from "../../lib/redis-cache";
 import { appendTenantAuditEvent, AuditEntityType } from "../../lib/tenant-audit";
 import type { CreateTransferInput } from "./warehouse-transfers.types";
+import { mapWarehouseIdToBranchName } from "../tenant-settings/tenant-settings.refs";
 import {
   assertSourceStockForLines,
   assertWarehouseForTenant,
@@ -25,6 +26,15 @@ export async function createTransfer(
     destination_warehouse_id: input.destination_warehouse_id,
   });
 
+  const kind = input.kind === "branch" ? "branch" : "warehouse";
+  if (kind === "branch") {
+    const branchByWarehouse = await mapWarehouseIdToBranchName(tenantId);
+    const fromBranch = branchByWarehouse.get(input.source_warehouse_id);
+    const toBranch = branchByWarehouse.get(input.destination_warehouse_id);
+    if (!fromBranch || !toBranch) throw new Error("WAREHOUSE_NO_BRANCH");
+    if (fromBranch === toBranch) throw new Error("SAME_BRANCH");
+  }
+
   await assertSourceStockForLines(tenantId, input.source_warehouse_id, input.lines);
 
   const tmp = `TMP-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
@@ -34,14 +44,15 @@ export async function createTransfer(
   >`
     INSERT INTO warehouse_transfers (
       tenant_id, number, source_warehouse_id, destination_warehouse_id,
-      status, comment, planned_date, created_by_user_id
+      status, comment, planned_date, created_by_user_id, kind
     ) VALUES (
       ${tenantId}, ${tmp},
       ${input.source_warehouse_id}, ${input.destination_warehouse_id},
       'draft',
       ${input.comment?.trim() ?? null},
       ${input.planned_date ? new Date(input.planned_date) : null},
-      ${actorUserId ?? null}
+      ${actorUserId ?? null},
+      ${kind}
     )
     RETURNING id
   `;

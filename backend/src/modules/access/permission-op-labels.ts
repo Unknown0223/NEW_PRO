@@ -136,6 +136,10 @@ export const PERMISSION_OP_LABEL_RU: Record<string, string> = {
   "warehouse.peremeshchenie.create": "Создать перемещение",
   "warehouse.peremeshchenie.update": "Изменить перемещение",
   "warehouse.peremeshchenie.transfer": "Провести перемещение",
+  "warehouse.peremeshchenie_filial.view": "Список перемещений между филиалами",
+  "warehouse.peremeshchenie_filial.create": "Создать перемещение между филиалами",
+  "warehouse.peremeshchenie_filial.status": "Статус: Новый → Ожидание подтверждения",
+  "warehouse.peremeshchenie_filial.transfer": "Подтвердить и принять на склад филиала",
   "warehouse.korrektirovka.view": "Список корректировка и инвентаризация",
   "warehouse.korrektirovka.create": "Создать корректировку / инвентаризацию",
   "warehouse.korrektirovka.update": "Изменить корректировку / инвентаризацию",
@@ -391,6 +395,5 @@ export const PERMISSION_OP_LABEL_RU: Record<string, string> = {
   "work_slots.raboche_mesto.export": "Выгрузка рабочих мест в Excel",
   "diagnostics.error_logs.view": "Журнал ошибок",
   "diagnostics.error_logs.export": "Выгрузка журнала ошибок в Excel",
-  "activity.history.view": "Активность и история",
-  "activity.history.export": "Выгрузка активности в Excel"
+  "activity.history.view": "Активность и история", "activity.history.export": "Выгрузка активности в Excel"
 };

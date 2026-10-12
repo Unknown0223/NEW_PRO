@@ -30,6 +30,7 @@ export type BranchPatch = {
   territories?: string[];
   cities?: string[];
   cash_desk_ids?: number[];
+  warehouse_ids?: number[];
   territory?: string | null;
   city?: string | null;
   cashbox?: string | null;
@@ -141,6 +142,7 @@ const branchSchema: z.ZodType<BranchPatch> = z.object({
   territories: z.array(z.string().trim().min(1).max(500)).max(200).optional(),
   cities: z.array(z.string().trim().min(1).max(500)).max(500).optional(),
   cash_desk_ids: z.array(z.number().int().positive()).max(50).optional(),
+  warehouse_ids: z.array(z.number().int().positive()).max(100).optional(),
   territory: z.string().max(500).nullable().optional(),
   city: z.string().max(500).nullable().optional(),
   cashbox: z.string().max(500).nullable().optional(),

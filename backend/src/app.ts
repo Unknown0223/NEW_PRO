@@ -31,7 +31,8 @@ export function buildApp() {
     disableRequestLogging: true,
     requestIdHeader: "x-request-id",
     /** Standart JSON body; foto marshrutlari alohida kattaroq limit oladi. */
-    bodyLimit: GLOBAL_HTTP_BODY_LIMIT_BYTES
+    bodyLimit: GLOBAL_HTTP_BODY_LIMIT_BYTES,
+    pluginTimeout: 120_000
   });
 
   app.register(cors, { origin: buildCorsOrigin(), credentials: true });

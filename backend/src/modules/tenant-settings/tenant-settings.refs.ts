@@ -257,6 +257,17 @@ function parseBranch(item: unknown): BranchDto | null {
     const n = Number.parseInt(rawDesk.trim(), 10);
     if (n > 0) cash_desk_id = n;
   }
+  const warehouseFromArray: number[] = [];
+  if (Array.isArray(row.warehouse_ids)) {
+    for (const x of row.warehouse_ids) {
+      if (typeof x === "number" && Number.isInteger(x) && x > 0) warehouseFromArray.push(x);
+      else if (typeof x === "string" && /^\d+$/.test(x.trim())) {
+        const n = Number.parseInt(x.trim(), 10);
+        if (n > 0) warehouseFromArray.push(n);
+      }
+    }
+  }
+  const warehouse_ids = dedupePositiveIntsOrdered(warehouseFromArray);
   const cash_desk_ids = dedupePositiveIntsOrdered([
     ...(cash_desk_id != null && cash_desk_id > 0 ? [cash_desk_id] : []),
     ...deskFromArray
@@ -286,6 +297,7 @@ function parseBranch(item: unknown): BranchDto | null {
     ...(territories.length ? { territories } : {}),
     ...(cities.length ? { cities } : {}),
     ...(cash_desk_ids.length ? { cash_desk_ids } : {}),
+    ...(warehouse_ids.length ? { warehouse_ids } : {}),
     territory: territories[0] ?? null,
     city: cities[0] ?? null,
     cashbox: cashbox || null,
@@ -346,6 +358,22 @@ export async function mapCashDeskIdToBranchName(tenantId: number): Promise<Map<n
   for (const b of branches) {
     for (const cid of branchCashDeskIds(b)) {
       if (cid > 0 && !m.has(cid)) m.set(cid, b.name);
+    }
+  }
+  return m;
+}
+
+/** Ombor → filial nomi (profil JSON `warehouse_ids`). */
+export async function mapWarehouseIdToBranchName(tenantId: number): Promise<Map<number, string>> {
+  const row = await prisma.tenant.findUnique({
+    where: { id: tenantId },
+    select: { settings: true }
+  });
+  const branches = branchesFromUnknown((asRecord(row?.settings) as any).references?.branches);
+  const m = new Map<number, string>();
+  for (const b of branches) {
+    for (const wid of b.warehouse_ids ?? []) {
+      if (wid > 0 && !m.has(wid)) m.set(wid, b.name);
     }
   }
   return m;

@@ -514,7 +514,10 @@ export default function ReportProductSalesPage() {
         anchorRef={dateAnchorRef}
         dateFrom={draft.from}
         dateTo={draft.to}
-        onApply={({ dateFrom, dateTo }) => setDraft((d) => ({ ...d, from: dateFrom, to: dateTo, page: 1 }))}
+        onApply={({ dateFrom, dateTo }) => {
+          setDraft((d) => ({ ...d, from: dateFrom, to: dateTo, page: 1 }));
+          setApplied((a) => ({ ...a, from: dateFrom, to: dateTo, page: 1 }));
+        }}
       />
 
       {showFilters ? (

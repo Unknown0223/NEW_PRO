@@ -58,6 +58,7 @@ type Branch = {
   territories?: string[];
   cities?: string[];
   cash_desk_ids?: number[];
+  warehouse_ids?: number[];
   territory?: string | null;
   city?: string | null;
   cashbox?: string | null;
@@ -164,6 +165,8 @@ export default function BranchesSettingsPage() {
   const [selectedTerritories, setSelectedTerritories] = useState<string[]>([]);
   const [selectedCities, setSelectedCities] = useState<string[]>([]);
   const [selectedCashDeskIds, setSelectedCashDeskIds] = useState<number[]>([]);
+  const [selectedWarehouseIds, setSelectedWarehouseIds] = useState<number[]>([]);
+  const [whPanelSearch, setWhPanelSearch] = useState("");
   const [cashbox, setCashbox] = useState("");
   const [msg, setMsg] = useState<string | null>(null);
   const [serverFieldErrs, setServerFieldErrs] = useState<Record<string, string>>({});
@@ -262,6 +265,22 @@ export default function BranchesSettingsPage() {
     return cityOptions.map((v) => ({ id: v, title: v }));
   }, [cityOptions]);
 
+  const warehousesQ = useQuery({
+    queryKey: ["warehouses", tenantSlug, "branches-picker"],
+    enabled: Boolean(tenantSlug),
+    staleTime: STALE.reference,
+    queryFn: async () => {
+      const { data } = await api.get<{ data: { id: number; name: string }[] }>(
+        `/api/${tenantSlug}/warehouses?limit=500`
+      );
+      return data.data ?? [];
+    }
+  });
+
+  const warehousePanelItems = useMemo((): SearchableMultiSelectItem<number>[] => {
+    return (warehousesQ.data ?? []).map((w) => ({ id: w.id, title: w.name }));
+  }, [warehousesQ.data]);
+
   const cashPanelItems = useMemo((): SearchableMultiSelectItem<number>[] => {
     return (cashDesksQ.data ?? [])
       .filter((d) => d.is_active !== false)
@@ -322,6 +341,8 @@ export default function BranchesSettingsPage() {
     setSelectedTerritories([]);
     setSelectedCities([]);
     setSelectedCashDeskIds([]);
+    setSelectedWarehouseIds([]);
+    setWhPanelSearch("");
     setCashbox("");
     setTerrPanelSearch("");
     setCityPanelSearch("");
@@ -355,6 +376,9 @@ export default function BranchesSettingsPage() {
           ? [row.cash_desk_id]
           : [];
     setSelectedCashDeskIds(Array.from(new Set(deskIds)));
+    setSelectedWarehouseIds(
+      Array.from(new Set((row.warehouse_ids ?? []).filter((n) => Number.isInteger(n) && n > 0)))
+    );
     setCashbox(row.cashbox ?? "");
     setTerrPanelSearch("");
     setCityPanelSearch("");
@@ -375,6 +399,9 @@ export default function BranchesSettingsPage() {
     const deskIds = Array.from(
       new Set(selectedCashDeskIds.filter((id) => Number.isInteger(id) && id > 0))
     );
+    const warehouseIds = Array.from(
+      new Set(selectedWarehouseIds.filter((id) => Number.isInteger(id) && id > 0))
+    );
     const prev = editId ? rows.find((x) => x.id === editId) : undefined;
     const next: Branch = {
       id: editId ?? newId(),
@@ -392,6 +419,7 @@ export default function BranchesSettingsPage() {
       ...(deskIds.length
         ? { cash_desk_ids: deskIds, cash_desk_id: deskIds[0] }
         : { cash_desk_id: null, cash_desk_ids: undefined }),
+      ...(warehouseIds.length ? { warehouse_ids: warehouseIds } : { warehouse_ids: undefined }),
       cashbox: cashbox.trim() || null,
       user_links: prev?.user_links
     };
@@ -733,6 +761,41 @@ export default function BranchesSettingsPage() {
                   создайте кассу
                 </Link>
                 .
+              </p>
+            </div>
+            <div className="grid gap-1.5">
+              <Label>Склады филиала</Label>
+              <SearchableMultiSelectPanel<number>
+                label="Склады"
+                hideOuterLabel
+                hidePopoverHeader
+                triggerPlaceholder="Склады не выбраны"
+                triggerClassName={BRANCH_FILTER_TRIGGER}
+                items={warehousePanelItems}
+                selected={new Set(selectedWarehouseIds)}
+                onSelectedChange={(next) => {
+                  const resolved =
+                    typeof next === "function" ? next(new Set(selectedWarehouseIds)) : next;
+                  setSelectedWarehouseIds(Array.from(resolved));
+                }}
+                searchable
+                search={whPanelSearch}
+                onSearchChange={setWhPanelSearch}
+                filterItemsBySearch
+                searchPlaceholder="Поиск"
+                loading={warehousesQ.isLoading}
+                closeToken={branchFilterCloseTok}
+                minPopoverWidth={280}
+                maxListHeightClass="max-h-44"
+                emptyMessage="Складов нет"
+                selectAllLabel="Выбрать все видимые"
+                clearVisibleLabel="Снять видимые"
+                formatTriggerSummary={(sel, items) =>
+                  summaryMultiFilterCash("Склады не выбраны", sel, items)
+                }
+              />
+              <p className="text-xs text-muted-foreground">
+                Эти склады участвуют в перемещении между филиалами.
               </p>
             </div>
             <div className="grid gap-1.5">

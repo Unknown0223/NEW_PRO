@@ -28,11 +28,52 @@ function dayBounds(fromIso: string, toIso: string) {
   return { from, to };
 }
 
+const MAX_LEG_M = 20_000;
+
 function pathLengthM(coords: Array<{ lat: number; lng: number }>): number {
   let sum = 0;
   for (let i = 1; i < coords.length; i++) {
-    sum += haversineM(coords[i - 1]!.lat, coords[i - 1]!.lng, coords[i]!.lat, coords[i]!.lng);
+    const leg = haversineM(coords[i - 1]!.lat, coords[i - 1]!.lng, coords[i]!.lat, coords[i]!.lng);
+    if (leg <= MAX_LEG_M) sum += leg;
   }
+  return sum;
+}
+
+function dayKey(d: Date): string {
+  return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+}
+
+/** Birinchi–oxirgi ping oralig‘i butun oy emas, har kun alohida. */
+function pingSpanSec(pings: Array<{ recorded_at: Date }>): number {
+  const byDay = new Map<string, { min: number; max: number }>();
+  for (const p of pings) {
+    const t = p.recorded_at.getTime();
+    const k = dayKey(p.recorded_at);
+    const cur = byDay.get(k);
+    if (!cur) byDay.set(k, { min: t, max: t });
+    else {
+      if (t < cur.min) cur.min = t;
+      if (t > cur.max) cur.max = t;
+    }
+  }
+  let sum = 0;
+  for (const v of byDay.values()) sum += Math.max(0, (v.max - v.min) / 1000);
+  return sum;
+}
+
+function pingPathM(pings: Array<{ recorded_at: Date; latitude: unknown; longitude: unknown }>): number {
+  const byDay = new Map<string, Array<{ lat: number; lng: number }>>();
+  for (const p of pings) {
+    const lat = num(p.latitude);
+    const lng = num(p.longitude);
+    if (lat == null || lng == null) continue;
+    const k = dayKey(p.recorded_at);
+    const list = byDay.get(k) ?? [];
+    list.push({ lat, lng });
+    byDay.set(k, list);
+  }
+  let sum = 0;
+  for (const coords of byDay.values()) sum += pathLengthM(coords);
   return sum;
 }
 
@@ -111,7 +152,7 @@ export async function getGpsDeliveryRoutesReport(
     };
   }
 
-  const [visits, pings] = await Promise.all([
+  const [visits, pings, deliveries] = await Promise.all([
     prisma.agentVisit.findMany({
       where: {
         tenant_id: tenantId,
@@ -142,6 +183,20 @@ export async function getGpsDeliveryRoutesReport(
       },
       orderBy: { recorded_at: "asc" },
       take: 80_000
+    }),
+    prisma.order.findMany({
+      where: {
+        tenant_id: tenantId,
+        expeditor_user_id: { in: ids },
+        order_type: "order",
+        status: { in: ["delivering", "delivered"] },
+        updated_at: { gte: from, lte: to }
+      },
+      select: {
+        expeditor_user_id: true,
+        client_id: true,
+        client: { select: { latitude: true, longitude: true } }
+      }
     })
   ]);
 
@@ -151,6 +206,18 @@ export async function getGpsDeliveryRoutesReport(
     list.push(v);
     visitsBy.set(v.agent_id, list);
   }
+  const stopsBy = new Map<number, Array<{ lat: number; lng: number }>>();
+  for (const o of deliveries) {
+    const eid = o.expeditor_user_id;
+    if (eid == null) continue;
+    const lat = num(o.client?.latitude);
+    const lng = num(o.client?.longitude);
+    if (lat == null || lng == null) continue;
+    const list = stopsBy.get(eid) ?? [];
+    if (!list.some((p) => haversineM(p.lat, p.lng, lat, lng) < 30)) list.push({ lat, lng });
+    stopsBy.set(eid, list);
+  }
+
   const pingsBy = new Map<number, typeof pings>();
   for (const p of pings) {
     const list = pingsBy.get(p.agent_id) ?? [];
@@ -196,21 +263,20 @@ export async function getGpsDeliveryRoutesReport(
       }
     }
 
-    const pingCoords = ep
-      .map((p) => {
-        const lat = num(p.latitude);
-        const lng = num(p.longitude);
-        return lat != null && lng != null ? { lat, lng } : null;
-      })
-      .filter((x): x is { lat: number; lng: number } => x != null);
+    let deliveryStops = 0;
+    for (const s of stopsBy.get(e.id) ?? []) {
+      if (!visitCoords.some((p) => haversineM(p.lat, p.lng, s.lat, s.lng) < 30)) {
+        visitCoords.push(s);
+        deliveryStops += 1;
+      }
+    }
 
-    const calculated_route_m = pathLengthM(pingCoords.length > 1 ? pingCoords : visitCoords);
+    const calculated_route_m = ep.length > 1 ? pingPathM(ep) : pathLengthM(visitCoords);
     const expected_route_m = pathLengthM(visitCoords);
 
     let actual_time_sec = actualFromVisits;
     if (ep.length >= 2) {
-      const span =
-        (ep[ep.length - 1]!.recorded_at.getTime() - ep[0]!.recorded_at.getTime()) / 1000;
+      const span = pingSpanSec(ep);
       if (span > actual_time_sec) actual_time_sec = span;
     }
 
@@ -232,7 +298,7 @@ export async function getGpsDeliveryRoutesReport(
       calculated_route_m: Math.round(calculated_route_m * 10) / 10,
       expected_route_m: Math.round(expected_route_m * 10) / 10,
       expected_time_sec: Math.round(expected_time_sec * 10) / 10,
-      visits_count: ev.length,
+      visits_count: ev.length + deliveryStops,
       at_point: atPoint,
       outside_point: outside
     };

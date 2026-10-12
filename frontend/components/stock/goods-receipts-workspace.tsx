@@ -9,7 +9,7 @@ import { buttonVariants } from "@/components/ui/button-variants";
 import { Card, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { DateRangePopover, formatDateRangeButton } from "@/components/ui/date-range-popover";
-import { ExcelDropTarget } from "@/components/ui/excel-file-drop-zone";
+import { GoodsReceiptImportDialog } from "@/components/stock/goods-receipt-import-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -21,7 +21,6 @@ import {
 import { useUserTablePrefs } from "@/hooks/use-user-table-prefs";
 import { cn } from "@/lib/utils";
 import { formatGroupedDecimal } from "@/lib/format-numbers";
-import { pickFirstExcelFile } from "@/lib/excel-file-pick";
 import { api } from "@/lib/api";
 import { useDebouncedSearchCommit } from "@/lib/use-debounced-search-commit";
 import { downloadXlsxSheet } from "@/lib/download-xlsx";
@@ -183,10 +182,9 @@ type Props = { tenantSlug: string };
 
 export function GoodsReceiptsWorkspace({ tenantSlug }: Props) {
   const { has } = usePermissions();
-  const canWrite =
-    has("warehouse.postuplenie.create") ||
-    has("warehouse.postuplenie.update") ||
-    has("warehouse.postuplenie.status");
+  const canEdit = has("warehouse.postuplenie.create") || has("warehouse.postuplenie.update");
+  const canConfirm = has("warehouse.postuplenie.status");
+  const canWrite = canEdit || canConfirm;
   const canExport = has("warehouse.postuplenie.export");
   const qc = useQueryClient();
 
@@ -202,9 +200,7 @@ export function GoodsReceiptsWorkspace({ tenantSlug }: Props) {
     setApplied((prev) => (prev.q === q ? prev : { ...prev, q }));
     setPage(1);
   });
-  const [uploading, setUploading] = useState(false);
-  const [uploadReport, setUploadReport] = useState<{ applied: number; errors: string[] } | null>(null);
-  const importFileRef = useRef<HTMLInputElement | null>(null);
+  const [importOpen, setImportOpen] = useState(false);
   const [applied, setApplied] = useState({
     warehouseId: "",
     supplierId: "",
@@ -426,31 +422,6 @@ export function GoodsReceiptsWorkspace({ tenantSlug }: Props) {
 
   const colCount = Math.max(1, visible.length);
 
-  async function importFromExcel(file: File) {
-    if (!tenantSlug) return;
-    setUploading(true);
-    setUploadReport(null);
-    try {
-      const fd = new FormData();
-      fd.append("file", file);
-      const { data } = await api.post<{ applied: number; errors: string[] }>(
-        `/api/${tenantSlug}/stock/import`,
-        fd
-      );
-      setUploadReport(data);
-      if (data.errors.length > 0) {
-        setNotice({ kind: "error", text: `Импорт: есть ошибки (${data.errors.length}).` });
-      } else {
-        setNotice({ kind: "success", text: `Импорт завершён: применено ${data.applied} строк.` });
-      }
-      await qc.invalidateQueries({ queryKey: ["goods-receipts", tenantSlug] });
-      await qc.invalidateQueries({ queryKey: ["stock", tenantSlug] });
-      await listQ.refetch();
-    } finally {
-      setUploading(false);
-    }
-  }
-
   async function changeStatus(id: number, status: "draft" | "editing" | "posted" | "cancelled") {
     setStatusBusyId(id);
     try {
@@ -472,18 +443,10 @@ export function GoodsReceiptsWorkspace({ tenantSlug }: Props) {
         actions={
           canWrite ? (
             <div className="flex flex-wrap items-center gap-2">
-              <ExcelDropTarget disabled={uploading} onFile={(f) => void importFromExcel(f)}>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => importFileRef.current?.click()}
-                  disabled={uploading}
-                >
-                  <Upload className="mr-1 size-3.5" />
-                  {uploading ? "Импорт…" : "Импорт из Excel"}
-                </Button>
-              </ExcelDropTarget>
+              <Button type="button" variant="outline" size="sm" onClick={() => setImportOpen(true)}>
+                <Upload className="mr-1 size-3.5" />
+                Импорт из Excel
+              </Button>
               <Link
                 href="/stock/receipts/new"
                 className={cn(buttonVariants({ size: "sm" }), "bg-teal-600 text-white hover:bg-teal-700")}
@@ -496,17 +459,6 @@ export function GoodsReceiptsWorkspace({ tenantSlug }: Props) {
                   Excel
                 </Button>
               ) : null}
-              <input
-                ref={importFileRef}
-                type="file"
-                accept=".xlsx,.xlsm"
-                className="hidden"
-                onChange={(e) => {
-                  const f = pickFirstExcelFile(e.target.files);
-                  e.target.value = "";
-                  if (f) void importFromExcel(f);
-                }}
-              />
             </div>
           ) : null
         }
@@ -736,7 +688,9 @@ export function GoodsReceiptsWorkspace({ tenantSlug }: Props) {
                 ) : rows.length === 0 ? (
                   <tr>
                     <td colSpan={colCount} className="p-8 text-center text-muted-foreground">
-                      Пусто
+                      {listQ.isError
+                        ? "Не удалось загрузить список. Обновите страницу."
+                        : "Пусто"}
                     </td>
                   </tr>
                 ) : (
@@ -747,7 +701,7 @@ export function GoodsReceiptsWorkspace({ tenantSlug }: Props) {
                           key={colId}
                           className={cn("px-3 py-2", NUMERIC.has(colId) && "text-right")}
                         >
-                          {colId === "status" && canWrite ? (
+                          {colId === "status" && canConfirm ? (
                             <div className="flex items-center gap-1">
                               <select
                                 className="h-8 min-w-[8rem] rounded-md border border-input bg-background px-2 text-xs"
@@ -768,7 +722,7 @@ export function GoodsReceiptsWorkspace({ tenantSlug }: Props) {
                                   </option>
                                 ))}
                               </select>
-                              {(row.status === "draft" || row.status === "editing") && canWrite ? (
+                              {(row.status === "draft" || row.status === "editing") && canEdit ? (
                                 <Link
                                   href={`/stock/receipts/new?source_receipt_id=${row.id}`}
                                   className={cn(
@@ -822,11 +776,12 @@ export function GoodsReceiptsWorkspace({ tenantSlug }: Props) {
           </Button>
         </div>
       </div>
-      {uploadReport ? (
-        <div className="rounded-md border border-border/70 bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
-          Импорт завершён: применено {uploadReport.applied} строк, ошибок: {uploadReport.errors.length}
-        </div>
-      ) : null}
+      <GoodsReceiptImportDialog
+        open={importOpen}
+        onOpenChange={setImportOpen}
+        tenantSlug={tenantSlug}
+        warehouses={warehousesQ.data ?? []}
+      />
       <DateRangePopover
         open={draftRangeOpen}
         onOpenChange={setDraftRangeOpen}

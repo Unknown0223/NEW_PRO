@@ -470,7 +470,10 @@ export default function ReportExpeditorReturnsPage() {
         anchorRef={dateAnchorRef}
         dateFrom={draft.from}
         dateTo={draft.to}
-        onApply={({ dateFrom, dateTo }) => setDraft((d) => ({ ...d, from: dateFrom, to: dateTo, page: 1 }))}
+        onApply={({ dateFrom, dateTo }) => {
+          setDraft((d) => ({ ...d, from: dateFrom, to: dateTo, page: 1 }));
+          setApplied((a) => ({ ...a, from: dateFrom, to: dateTo, page: 1 }));
+        }}
       />
 
       <Card>
@@ -717,8 +720,13 @@ export default function ReportExpeditorReturnsPage() {
             <>
               <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
                 <span>
-                  Показано {(applied.page - 1) * applied.limit + 1}–
-                  {Math.min(applied.page * applied.limit, ordersData?.total ?? 0)} / {ordersData?.total ?? 0}
+                  Показано {(() => {
+                    const total = ordersData?.total ?? 0;
+                    if (total <= 0) return "0";
+                    const from = (applied.page - 1) * applied.limit + 1;
+                    const to = Math.min(applied.page * applied.limit, total);
+                    return `${from}–${to}`;
+                  })()} / {ordersData?.total ?? 0}
                 </span>
                 <div className="flex items-center gap-1">
                   <Button

@@ -179,6 +179,7 @@ const PRESET_BUILDERS: Record<string, () => string[]> = {
       modViewOnly("warehouse"),
       secOnly("warehouse", "postuplenie", ["create", "update", "import", "status", "history"]),
       secOnly("warehouse", "peremeshchenie", ["create", "update", "transfer", "history"]),
+      secOnly("warehouse", "peremeshchenie_filial", ["view", "create", "status", "transfer"]),
       secOnly("warehouse", "bloki", ["create", "update"]),
       secOnly("staff", "skladchik", ["view"]),
       modViewOnly("invoices")
@@ -189,6 +190,7 @@ const PRESET_BUILDERS: Record<string, () => string[]> = {
       modViewOnly("warehouse"),
       secOnly("warehouse", "postuplenie", ["create", "update", "import", "status", "history"]),
       secOnly("warehouse", "peremeshchenie", ["create", "update", "transfer", "history"]),
+      secOnly("warehouse", "peremeshchenie_filial", ["view", "create", "status", "transfer"]),
       secOnly("warehouse", "bloki", ["create", "update"]),
       secOnly("staff", "skladchik", ["view"]),
       modViewOnly("invoices")

@@ -27,7 +27,7 @@ import { usePermissions } from "@/lib/use-permissions";
 import { cn } from "@/lib/utils";
 import { formatNumberGrouped } from "@/lib/format-numbers";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 type Warehouse = { id: number; name: string };
@@ -105,14 +105,17 @@ function parseDec(s: string): number {
 
 export function TransferAmaliyotWorkspace() {
   const router = useRouter();
+  const branchScope = useSearchParams().get("scope") === "branch";
   const tenant = useTenant();
   const hydrated = useAuthStoreHydrated();
   const tenantSlug = useAuthStore((s) => s.tenantSlug);
   const { has } = usePermissions();
-  const canWrite =
-    has("warehouse.peremeshchenie.create") ||
-    has("warehouse.peremeshchenie.transfer") ||
-    has("warehouse.peremeshchenie.update");
+  const canWrite = branchScope
+    ? has("warehouse.peremeshchenie_filial.create")
+    : has("warehouse.peremeshchenie.create") ||
+      has("warehouse.peremeshchenie.transfer") ||
+      has("warehouse.peremeshchenie.update");
+  const [branchByWarehouse, setBranchByWarehouse] = useState<Map<number, string>>(new Map());
 
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
   const [, setAgents] = useState<AgentPick[]>([]);
@@ -203,7 +206,22 @@ export function TransferAmaliyotWorkspace() {
         const res = await apiFetch<{ data?: Warehouse[] }>(
           `/api/${tenant}/warehouses${qs ? `?${qs}` : ""}`
         );
-        if (!cancelled) setWarehouses(res.data ?? []);
+        const list = res.data ?? [];
+        let branchMap = new Map<number, string>();
+        if (branchScope) {
+          const profile = await apiFetch<{ references?: { branches?: { name?: string; warehouse_ids?: number[] }[] } }>(
+            `/api/${tenant}/settings/profile`
+          );
+          for (const b of profile.references?.branches ?? []) {
+            const name = (b.name ?? "").trim();
+            if (!name) continue;
+            for (const id of b.warehouse_ids ?? []) branchMap.set(id, name);
+          }
+        }
+        if (!cancelled) {
+          setBranchByWarehouse(branchMap);
+          setWarehouses(list);
+        }
       } catch (e) {
         if (!cancelled) {
           setWhError(getUserFacingError(e, "Не удалось загрузить склады"));
@@ -216,7 +234,7 @@ export function TransferAmaliyotWorkspace() {
     return () => {
       cancelled = true;
     };
-  }, [hydrated, tenant, agentFilterId]);
+  }, [hydrated, tenant, agentFilterId, branchScope]);
 
   useEffect(() => {
     if (!hydrated || !tenant) return;
@@ -437,10 +455,11 @@ export function TransferAmaliyotWorkspace() {
           destination_warehouse_id: dst,
           comment: comment.trim() || null,
           planned_date: plannedDate.trim() || null,
+          kind: branchScope ? "branch" : "warehouse",
           lines: payloadLines,
         }),
       });
-      router.push("/stock/transfers");
+      router.push(branchScope ? "/stock/transfers?scope=branch" : "/stock/transfers");
     } catch (err) {
       setFormError(getUserFacingError(err, "Ошибка сохранения"));
     } finally {
@@ -456,7 +475,7 @@ export function TransferAmaliyotWorkspace() {
     return (
       <div className="space-y-2 p-4">
         <p className="text-sm text-muted-foreground">Недостаточно прав.</p>
-        <Link href="/stock/transfers" className="text-sm text-primary underline">
+        <Link href={branchScope ? "/stock/transfers?scope=branch" : "/stock/transfers"} className="text-sm text-primary underline">
           Вернуться к списку
         </Link>
       </div>
@@ -467,13 +486,24 @@ export function TransferAmaliyotWorkspace() {
     <div className="w-full space-y-4 pb-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="min-w-0">
-          <h1 className="text-2xl font-bold tracking-tight">Оформление перемещения</h1>
+          <h1 className="text-2xl font-bold tracking-tight">
+            {branchScope ? "Перемещение между филиалами" : "Оформление перемещения"}
+          </h1>
           <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-            Перемещение товаров между складами. Количество не может превышать доступный остаток.
+            {branchScope
+              ? "Сначала документ «Новый», затем «Ожидание подтверждения». Остаток принимающего склада меняется только после подтверждения."
+              : "Перемещение товаров между складами. Количество не может превышать доступный остаток."}
           </p>
+          {branchScope ? (
+            <div className="mt-3 flex flex-wrap gap-2 text-xs">
+              <span className="rounded-full bg-yellow-100 px-2.5 py-1 font-medium text-yellow-900">Новый</span>
+              <span className="rounded-full bg-amber-100 px-2.5 py-1 font-medium text-amber-950">Ожидание</span>
+              <span className="rounded-full bg-green-100 px-2.5 py-1 font-medium text-green-900">На складе после подтверждения</span>
+            </div>
+          ) : null}
         </div>
         <Link
-          href="/stock/transfers"
+          href={branchScope ? "/stock/transfers?scope=branch" : "/stock/transfers"}
           className={cn(buttonVariants({ variant: "outline" }), "shrink-0 self-start sm:self-center")}
         >
           К журналу
@@ -491,6 +521,14 @@ export function TransferAmaliyotWorkspace() {
                 )}
               </div>
               {whError && <p className="mt-2 text-sm text-destructive">{whError}</p>}
+              {branchScope && !loadWh && warehouses.length === 0 ? (
+                <p className="mt-2 text-sm text-amber-800">Складов нет. Сначала создайте склад в разделе «Склад».</p>
+              ) : null}
+              {branchScope && !loadWh && warehouses.length > 0 && branchByWarehouse.size === 0 ? (
+                <p className="mt-2 text-sm text-amber-800">
+                  Привяжите склады к филиалам: Настройки → Филиалы → «Склады филиала». Без этого документ не сохранится.
+                </p>
+              ) : null}
               <div className="mt-3 grid gap-3 sm:grid-cols-2">
                 <div className="space-y-1.5">
                   <Label className="text-xs text-muted-foreground">Со склада</Label>
@@ -508,7 +546,9 @@ export function TransferAmaliyotWorkspace() {
                     <SelectContent>
                       {warehouses.map((w) => (
                         <SelectItem key={w.id} value={String(w.id)}>
-                          {w.name}
+                          {branchScope && branchByWarehouse.get(w.id)
+                            ? `${w.name} · ${branchByWarehouse.get(w.id)}`
+                            : w.name}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -523,7 +563,9 @@ export function TransferAmaliyotWorkspace() {
                     <SelectContent>
                       {destOptions.map((w) => (
                         <SelectItem key={w.id} value={String(w.id)}>
-                          {w.name}
+                          {branchScope && branchByWarehouse.get(w.id)
+                            ? `${w.name} · ${branchByWarehouse.get(w.id)}`
+                            : w.name}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -858,7 +900,7 @@ export function TransferAmaliyotWorkspace() {
 
                 <div className="flex flex-col gap-2 border-t border-border/60 pt-3 sm:flex-row sm:flex-wrap sm:justify-end">
                   <Link
-                    href="/stock/transfers"
+                    href={branchScope ? "/stock/transfers?scope=branch" : "/stock/transfers"}
                     className={cn(
                       buttonVariants({ variant: "outline" }),
                       "h-9 w-full justify-center sm:w-auto"

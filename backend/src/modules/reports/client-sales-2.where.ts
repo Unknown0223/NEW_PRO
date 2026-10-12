@@ -52,8 +52,18 @@ export function buildOrderWhereSql(tenantId: number, f: ClientSales2Filters, act
   else if (f.order_type) parts.push(Prisma.sql`o.order_type = ${f.order_type}`);
   else parts.push(Prisma.sql`o.order_type = 'order'`);
 
-  if (f.agent_ids && f.agent_ids.length > 0) parts.push(Prisma.sql`o.agent_id IN (${Prisma.join(f.agent_ids)})`);
-  else if (f.agent_id) parts.push(Prisma.sql`o.agent_id = ${f.agent_id}`);
+  if (f.agent_ids && f.agent_ids.length > 0) parts.push(Prisma.sql`COALESCE(o.agent_id, c.agent_id) IN (${Prisma.join(f.agent_ids)})`);
+  else if (f.agent_id) parts.push(Prisma.sql`COALESCE(o.agent_id, c.agent_id) = ${f.agent_id}`);
+  if (f.supervisor_ids && f.supervisor_ids.length > 0) {
+    parts.push(
+      Prisma.sql`EXISTS (
+        SELECT 1 FROM users ag
+        WHERE ag.id = COALESCE(o.agent_id, c.agent_id)
+          AND ag.tenant_id = ${tenantId}
+          AND ag.supervisor_user_id IN (${Prisma.join(f.supervisor_ids)})
+      )`
+    );
+  }
 
   if (f.price_types && f.price_types.length > 0) {
     parts.push(
@@ -175,6 +185,16 @@ export function buildClientScopeSql(tenantId: number, f: ClientSales2Filters, ac
 
   if (f.agent_ids && f.agent_ids.length > 0) parts.push(Prisma.sql`c.agent_id IN (${Prisma.join(f.agent_ids)})`);
   else if (f.agent_id) parts.push(Prisma.sql`c.agent_id = ${f.agent_id}`);
+  if (f.supervisor_ids && f.supervisor_ids.length > 0) {
+    parts.push(
+      Prisma.sql`EXISTS (
+        SELECT 1 FROM users ag
+        WHERE ag.id = c.agent_id
+          AND ag.tenant_id = ${tenantId}
+          AND ag.supervisor_user_id IN (${Prisma.join(f.supervisor_ids)})
+      )`
+    );
+  }
 
   if (f.price_types && f.price_types.length > 0) {
     parts.push(

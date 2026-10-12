@@ -94,7 +94,7 @@ const AGENT_COLUMNS: ColumnDefItem[] = [
   { id: "agent", label: "Агент" },
   { id: "akb", label: "АКБ" },
   { id: "okb", label: "ОКБ" },
-  { id: "akb_percent", label: "% от АКБ" },
+  { id: "akb_percent", label: "% АКБ от ОКБ" },
   { id: "qty", label: "Кол-во" },
   { id: "volume", label: "Объем" },
   { id: "amount", label: "Сумма" }
@@ -409,7 +409,7 @@ export default function ReportClientSales2Page() {
       await downloadXlsxSheet(
         "prodazhi-po-klientam-2-po-agentam.xlsx",
         "По агентам",
-        ["Агент", "АКБ", "ОКБ", "% от АКБ", "Кол-во", "Объем", "Сумма"],
+        ["Агент", "АКБ", "ОКБ", "% АКБ от ОКБ", "Кол-во", "Объем", "Сумма"],
         reportQ.data.agents_summary.map((r) => [
           r.agent_code ? `${r.agent_name} (${r.agent_code})` : r.agent_name,
           r.akb,
@@ -430,7 +430,7 @@ export default function ReportClientSales2Page() {
       <h1 className="text-lg font-semibold">Продажи по клиентам 2</h1>
 
       <div className="space-y-2 rounded border bg-card p-3">
-        <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex flex-wrap items-center justify-end gap-3">
           <div className="flex flex-wrap items-center gap-3 text-xs">
             <span className="text-muted-foreground">Дата применяется по</span>
             {[
@@ -454,12 +454,12 @@ export default function ReportClientSales2Page() {
             ref={dateAnchorRef}
             type="button"
             className={cn(
-              "inline-flex h-9 items-center gap-2 rounded-md border border-input bg-background px-3 text-xs",
+              "inline-flex h-8 shrink-0 items-center gap-1.5 rounded-md border border-input bg-background px-2.5 text-xs",
               dateOpen && "border-primary/60 bg-primary/5"
             )}
             onClick={() => setDateOpen((o) => !o)}
           >
-            <CalendarDays className="h-4 w-4" />
+            <CalendarDays className="h-3.5 w-3.5" />
             <span>{formatDateRangeButton(draft.from, draft.to)}</span>
           </button>
           <DateRangePopover

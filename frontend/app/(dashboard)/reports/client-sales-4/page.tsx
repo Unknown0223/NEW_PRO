@@ -360,6 +360,7 @@ export default function ReportClientSales4Page() {
         layout="salesdoc"
         onSaveDateRange={({ from, to }) => {
           setDraft((d) => ({ ...d, from, to, page: 1 }));
+          setApplied((a) => ({ ...a, from, to, page: 1 }));
         }}
       />
 

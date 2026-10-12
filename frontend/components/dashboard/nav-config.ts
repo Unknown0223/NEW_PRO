@@ -1,4 +1,5 @@
 import { NAV_PERM } from "@/components/dashboard/nav-permission-keys";
+import { REPORT_MENU_STUBS } from "@/lib/report-menu-stubs";
 
 export type NavItem = {
   href: string;
@@ -64,6 +65,11 @@ export const dashboardStockNav: { sectionTitle: string; items: NavItem[] } = {
     { href: "/stock/receipts", label: "Поступление", showIfAnyPermission: [...NAV_PERM.stockReceipts] },
     { href: "/stock/receipts-report", label: "Отчёт по приходам", showIfAnyPermission: [...NAV_PERM.stockReceipts] },
     { href: "/stock/transfers", label: "Перемещение товара", showIfAnyPermission: [...NAV_PERM.stockTransfers] },
+    {
+      href: "/stock/transfers?scope=branch",
+      label: "Перемещение между филиалами",
+      showIfAnyPermission: [...NAV_PERM.stockTransfersBranch]
+    },
     {
       href: "/stock/correction",
       label: "Корректировка склада",
@@ -403,6 +409,11 @@ export const dashboardReportsNav: { sectionTitle: string; items: NavItem[] } = {
     { href: "/reports/agent-orders", label: "Заказы по агентам", showIfAnyPermission: [...NAV_PERM.reportAgentOrders] },
     { href: "/reports/gps", label: "Отчёт по GPS", showIfAnyPermission: [...NAV_PERM.reportGps] },
     {
+      href: "/reports/client-sales",
+      label: "Продажи по клиентам",
+      showIfAnyPermission: [...NAV_PERM.reportClientSales2]
+    },
+    {
       href: "/reports/client-sales-2",
       label: "Продажи по клиентам 2",
       showIfAnyPermission: [...NAV_PERM.reportClientSales2]
@@ -435,7 +446,12 @@ export const dashboardReportsNav: { sectionTitle: string; items: NavItem[] } = {
     ...(pivotEngineNavEnabled
       ? []
       : []),
-    { href: "/reports/settings", label: "Настройки отчетов", showIfAnyPermission: [...NAV_PERM.reports] }
+    { href: "/reports/settings", label: "Настройки отчетов", showIfAnyPermission: [...NAV_PERM.reports] },
+    ...REPORT_MENU_STUBS.map((item) => ({
+      href: `/reports/soon/${item.slug}`,
+      label: item.label,
+      showIfAnyPermission: [...NAV_PERM.reports]
+    }))
   ]
 };
 
