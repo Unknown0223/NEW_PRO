@@ -114,7 +114,13 @@ export function DailyKpiDayTable({
     setVisible(loadVisible());
   }, []);
 
-  const groups = data.kpi_groups;
+  const groups = useMemo(
+    () =>
+      data.kpi_groups.filter((g) =>
+        data.agents.some((a) => a.cells[String(g.kpi_group_id)]?.linked !== false && (a.cells[String(g.kpi_group_id)]?.day_plan ?? 0) > 0)
+      ),
+    [data.kpi_groups, data.agents]
+  );
   const [sort, setSort] = useState<DailyKpiDaySort>({ key: "name", dir: "asc" });
 
   const activeMetrics = useMemo(
@@ -196,7 +202,12 @@ export function DailyKpiDayTable({
         const line: (string | number)[] = [a.name, a.code ?? "", a.branch ?? ""];
         for (const g of groups) {
           const c = a.cells[String(g.kpi_group_id)];
+          const linked = c?.linked !== false && (c?.day_plan ?? 0) > 0;
           for (const m of metrics) {
+            if (!linked) {
+              line.push("");
+              continue;
+            }
             const raw = cellValue(c, m.key);
             if (m.key === "execution_pct") {
               line.push(raw == null ? "" : Math.round(raw * 10) / 10);
@@ -429,10 +440,12 @@ export function DailyKpiDayTable({
                   </td>
                   {groups.map((g) => {
                     const c = a.cells[String(g.kpi_group_id)];
+                    const linked = c?.linked !== false && (c?.day_plan ?? 0) > 0;
                     return activeMetrics.map((m, idx) => {
                       const raw = cellValue(c, m.key);
-                      const display =
-                        m.key === "execution_pct"
+                      const display = !linked
+                        ? "—"
+                        : m.key === "execution_pct"
                           ? fmtPct(typeof raw === "number" ? raw : null)
                           : fmtMoney(typeof raw === "number" ? raw : 0);
                       return (

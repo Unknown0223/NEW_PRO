@@ -372,7 +372,7 @@ export function DailyKpiMonthTable({
               type="search"
               value={filters.search}
               onChange={(e) => setFilter({ search: e.target.value })}
-              placeholder="Поиск: агент, код…"
+              placeholder="Поиск: агент, СВР, филиал…"
               className="h-8 w-[170px] rounded-lg border border-slate-200 bg-white pl-7 pr-2 text-xs text-slate-700 outline-none focus:border-teal-500"
             />
           </label>

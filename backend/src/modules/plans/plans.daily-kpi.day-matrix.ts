@@ -31,6 +31,8 @@ export type DailyKpiCell = {
   returns: number;
   fact: number;
   execution_pct: number | null;
+  /** Agentga shu KPI guruhi reja orqali bog‘langan. */
+  linked: boolean;
 };
 
 export type DailyKpiDayMatrixResult = {
@@ -257,6 +259,7 @@ export async function getDailyKpiDayMatrix(
     for (const r of salesRows) {
       const d = String(r.day).slice(0, 10);
       const key = `${r.agent_id}:${r.kpi_group_id}`;
+      if ((planByAgentGroup.get(key) ?? 0) <= 0) continue;
       let map = salesByAgentGroupDay.get(key);
       if (!map) {
         map = new Map();
@@ -265,7 +268,9 @@ export async function getDailyKpiDayMatrix(
       map.set(d, num(r.sales));
     }
     for (const r of returnRows) {
-      dayReturns.set(`${r.agent_id}:${r.kpi_group_id}`, num(r.returns));
+      const key = `${r.agent_id}:${r.kpi_group_id}`;
+      if ((planByAgentGroup.get(key) ?? 0) <= 0) continue;
+      dayReturns.set(key, num(r.returns));
     }
 
     // Guruhda SKU yo‘q / bog‘lanmagan: agent kunlik savdosini plan ulushi bo‘yicha taqsimlash
@@ -338,6 +343,7 @@ export async function getDailyKpiDayMatrix(
       for (const g of kpi_groups) {
         const key = `${agent.id}:${g.kpi_group_id}`;
         const monthPlan = planByAgentGroup.get(key) ?? 0;
+        const linked = monthPlan > 0;
         const salesMap: Map<string, number> = salesByAgentGroupDay.get(key) ?? new Map();
         // O‘tgan kunlar — o‘sha kungi reja, bugun/kelajak — qolganning teng ulushi.
         const route = buildKpiDailyRoutePlan({
@@ -352,14 +358,15 @@ export async function getDailyKpiDayMatrix(
         for (const d of route.days) if (inRange(d.date)) dayPlan += d.plan_sum;
         let sales = 0;
         for (const [d, v] of salesMap) if (inRange(d)) sales += v;
-        const returns = dayReturns.get(key) ?? 0;
-        const fact = Math.max(0, sales - returns);
+        const returns = linked ? (dayReturns.get(key) ?? 0) : 0;
+        const fact = linked ? Math.max(0, sales - returns) : 0;
         cells[String(g.kpi_group_id)] = {
-          day_plan: dayPlan,
-          sales,
+          day_plan: linked ? dayPlan : 0,
+          sales: linked ? sales : 0,
           returns,
           fact,
-          execution_pct: executionPctFromPlanFact(dayPlan, fact)
+          execution_pct: linked ? executionPctFromPlanFact(dayPlan, fact) : null,
+          linked
         };
       }
       return {

@@ -103,9 +103,11 @@ function uniqSorted(values: string[], emptyLabel: string): string[] {
 }
 
 export function dailyKpiFilterOptions(agents: DailyKpiAgentSummary[]) {
+  const branches = uniqSorted(agents.map(agentBranch), DAILY_KPI_NO_BRANCH);
+  const supervisors = uniqSorted(agents.map(agentSupervisor), DAILY_KPI_NO_SUPERVISOR);
   return {
-    branches: uniqSorted(agents.map(agentBranch), DAILY_KPI_NO_BRANCH),
-    supervisors: uniqSorted(agents.map(agentSupervisor), DAILY_KPI_NO_SUPERVISOR),
+    branches: branches.includes(DAILY_KPI_NO_BRANCH) ? branches : [...branches, DAILY_KPI_NO_BRANCH],
+    supervisors: supervisors.includes(DAILY_KPI_NO_SUPERVISOR) ? supervisors : [...supervisors, DAILY_KPI_NO_SUPERVISOR],
     statuses: STATUS_ORDER.filter((s) => agents.some((a) => a.status === s))
   };
 }
@@ -121,7 +123,16 @@ export function filterDailyKpiAgents(
     if (f.status && a.status !== f.status) return false;
     if (q) {
       const hay = `${a.name} ${a.code ?? ""} ${agentBranch(a)} ${agentSupervisor(a)}`.toLowerCase();
-      if (!hay.includes(q)) return false;
+      const direct = hay.includes(q);
+      const svrHit = agents.some(
+        (x) => agentSupervisor(x) !== DAILY_KPI_NO_SUPERVISOR && agentSupervisor(x).toLowerCase().includes(q)
+      );
+      const branchHit = agents.some(
+        (x) => agentBranch(x) !== DAILY_KPI_NO_BRANCH && agentBranch(x).toLowerCase().includes(q)
+      );
+      const keepEmptySvr = svrHit && agentSupervisor(a) === DAILY_KPI_NO_SUPERVISOR;
+      const keepEmptyBranch = branchHit && agentBranch(a) === DAILY_KPI_NO_BRANCH;
+      if (!direct && !keepEmptySvr && !keepEmptyBranch) return false;
     }
     return true;
   });

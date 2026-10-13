@@ -52,7 +52,13 @@ function monthPeriodLabel(month: number, year: number): string {
   return `${name} ${year}`;
 }
 
-export function DailyKpiWorkspace({ tenantSlug }: { tenantSlug: string }) {
+export function DailyKpiWorkspace({
+  tenantSlug,
+  section = "month"
+}: {
+  tenantSlug: string;
+  section?: "month" | "groups";
+}) {
   const searchParams = useSearchParams();
   const todayYmd = useMemo(() => workRegionTodayYmd(), []);
 
@@ -153,10 +159,34 @@ export function DailyKpiWorkspace({ tenantSlug }: { tenantSlug: string }) {
       <div className="space-y-3 rounded-lg border border-slate-200 bg-white px-5 py-3 shadow-sm">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <h1 className="text-lg font-semibold text-slate-800">Дневные KPI планы</h1>
+            <h1 className="text-lg font-semibold text-slate-800">
+              {section === "groups" ? "KPI по группам" : "Дневные KPI планы"}
+            </h1>
             <p className="mt-0.5 text-xs text-slate-500">
-              Месячный обзор по агентам и детальная таблица по выбранному дню (KPI группы)
+              {section === "groups"
+                ? "Агенты и KPI-группы за выбранный период"
+                : "Месячный обзор по агентам, филиалам и супервайзерам"}
             </p>
+            <div className="mt-2 flex gap-2 text-xs">
+              <Link
+                href="/plans/daily"
+                className={cn(
+                  "rounded-md px-2 py-1",
+                  section === "month" ? "bg-teal-700 text-white" : "border border-slate-200 text-slate-600"
+                )}
+              >
+                Агенты
+              </Link>
+              <Link
+                href="/plans/daily/groups"
+                className={cn(
+                  "rounded-md px-2 py-1",
+                  section === "groups" ? "bg-teal-700 text-white" : "border border-slate-200 text-slate-600"
+                )}
+              >
+                KPI группы
+              </Link>
+            </div>
           </div>
           {links ? (
             <div className="flex flex-wrap gap-2">
@@ -272,7 +302,7 @@ export function DailyKpiWorkspace({ tenantSlug }: { tenantSlug: string }) {
         </div>
       ) : (
         <>
-          {overview ? (
+          {section === "month" && overview ? (
             <>
               <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
                 <StatCard
@@ -315,13 +345,13 @@ export function DailyKpiWorkspace({ tenantSlug }: { tenantSlug: string }) {
                 onPickDay={(ymd) => setDay(ymd)}
               />
             </>
-          ) : overviewQ.isLoading ? (
+          ) : section === "month" && overviewQ.isLoading ? (
             <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-8 text-sm text-slate-500">
               <Loader2 className="h-4 w-4 animate-spin" /> Месячная таблица…
             </div>
           ) : null}
 
-          {matrix ? (
+          {section === "groups" && matrix ? (
             <>
               <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
                 <StatCard
@@ -349,13 +379,38 @@ export function DailyKpiWorkspace({ tenantSlug }: { tenantSlug: string }) {
                   hint={`${matrix.totals.agents} агент(ов)`}
                 />
               </div>
+              <div className="flex flex-wrap gap-2 rounded-lg border bg-card p-2 text-xs">
+                <input
+                  value={monthFilters.search}
+                  onChange={(e) => setMonthFilters({ ...monthFilters, search: e.target.value })}
+                  placeholder="Поиск: агент, СВР, филиал…"
+                  className="h-8 w-56 rounded-md border px-2"
+                />
+                <select className="h-8 rounded-md border px-2" value={monthFilters.branch} onChange={(e) => setMonthFilters({ ...monthFilters, branch: e.target.value })}>
+                  <option value="">Все филиалы</option>
+                  {filterOptions.branches.map((b) => <option key={b} value={b}>{b}</option>)}
+                </select>
+                <select className="h-8 rounded-md border px-2" value={monthFilters.supervisor} onChange={(e) => setMonthFilters({ ...monthFilters, supervisor: e.target.value })}>
+                  <option value="">Все супервайзеры</option>
+                  {filterOptions.supervisors.map((b) => <option key={b} value={b}>{b}</option>)}
+                </select>
+                <select className="h-8 rounded-md border px-2" value={monthFilters.status} onChange={(e) => setMonthFilters({ ...monthFilters, status: e.target.value })}>
+                  <option value="">Все статусы</option>
+                  {filterOptions.statuses.map((b) => <option key={b} value={b}>{b}</option>)}
+                </select>
+              </div>
               <DailyKpiDayTable
-                data={matrix}
+                data={{
+                  ...matrix,
+                  agents: filtersActive
+                    ? matrix.agents.filter((a) => filteredAgents.some((x) => x.agent_id === a.agent_id))
+                    : matrix.agents
+                }}
                 dayLabel={formatPeriodLabel(matrix.day_from ?? matrix.day, matrix.day_to ?? matrix.day)}
                 toolbar={<DailyKpiPeriodBar period={period} anchorDay={day} onChange={setPeriod} />}
               />
             </>
-          ) : matrixQ.isLoading ? (
+          ) : section === "groups" && matrixQ.isLoading ? (
             <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-8 text-sm text-slate-500">
               <Loader2 className="h-4 w-4 animate-spin" /> Таблица дня…
             </div>

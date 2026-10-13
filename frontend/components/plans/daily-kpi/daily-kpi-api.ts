@@ -6,6 +6,7 @@ export type DailyKpiCell = {
   returns: number;
   fact: number;
   execution_pct: number | null;
+  linked?: boolean;
 };
 
 export type DailyKpiDayMatrix = {

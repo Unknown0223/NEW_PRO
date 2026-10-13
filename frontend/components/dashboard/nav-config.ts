@@ -437,6 +437,11 @@ export const dashboardReportsNav: { sectionTitle: string; items: NavItem[] } = {
       showIfAnyPermission: [...NAV_PERM.dailyKpi]
     },
     {
+      href: "/plans/daily/groups",
+      label: "KPI по группам",
+      showIfAnyPermission: [...NAV_PERM.dailyKpi]
+    },
+    {
       href: "/reports/builder",
       label: pivotEngineNavEnabled
         ? "Конструктор сводной таблицы"
