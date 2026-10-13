@@ -9,6 +9,7 @@ import { workRegionDayRange, workRegionTodayKey } from "../mobile/mobile-agent-s
 import { executionPctFromPlanFact, WORKING_KPI_PLAN_STATUSES } from "./plans.monitoring-aggregates";
 import type { DailyKpiDayMatrixQuery } from "./plans.daily-kpi.schema";
 import {
+  activeSlotBranchByUser,
   fallbackWorkdaysState,
   monthBounds,
   routeAsOfKey,
@@ -193,6 +194,13 @@ export async function getDailyKpiDayMatrix(
 
   const agentIds = [...agentMeta.keys()];
   const groupIds = [...groupMeta.keys()];
+  const slotBranch = await activeSlotBranchByUser(
+    tenantId,
+    [...agentMeta.values()].map((a) => ({ id: a.id, code: a.code }))
+  );
+  for (const [id, meta] of agentMeta) {
+    if (!meta.branch?.trim() && slotBranch.has(id)) meta.branch = slotBranch.get(id)!;
+  }
 
   let workdaysState;
   try {

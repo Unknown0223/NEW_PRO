@@ -12,6 +12,7 @@ import {
 import { executionPctFromPlanFact, WORKING_KPI_PLAN_STATUSES } from "./plans.monitoring-aggregates";
 import type { DailyKpiOverviewQuery } from "./plans.daily-kpi.schema";
 import {
+  activeSlotBranchByUser,
   fallbackWorkdaysState,
   monthBounds,
   routeAsOfKey,
@@ -238,6 +239,13 @@ export async function getDailyKpiOverview(
         trade_direction_id: t.user.trade_direction_id
       });
     }
+  }
+  const slotBranch = await activeSlotBranchByUser(
+    tenantId,
+    [...agentMeta.values()].map((a) => ({ id: a.id, code: a.code }))
+  );
+  for (const [id, meta] of agentMeta) {
+    if (!meta.branch && slotBranch.has(id)) meta.branch = slotBranch.get(id)!;
   }
 
   // Prefixed so empty-branch agents from setup («Без филиала») appear in filter.
