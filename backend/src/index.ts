@@ -21,6 +21,7 @@ import {
 import { disableAuditRetentionCron, enableAuditRetentionCron } from "./lib/audit-retention-cron";
 import { disablePayrollCron, enablePayrollCron } from "./lib/payroll-cron";
 import { startPayrollOrderHook } from "./modules/payroll/payroll.auto-hooks";
+import { startFinishedReturnOrderBackfill } from "./modules/returns/returns-finished-order-backfill";
 import { startTgApp, stopTgApp } from "./modules/tg-app/tg-runner";
 
 async function main() {
@@ -32,6 +33,7 @@ async function main() {
   const listenHost = env.NODE_ENV === "production" ? "0.0.0.0" : "127.0.0.1";
   await app.listen({ port: env.PORT, host: listenHost });
   app.log.info({ port: env.PORT, host: listenHost }, "Server listening");
+  startFinishedReturnOrderBackfill();
 
   enableAutoClose();
   app.log.info("Auto-status cron worker enabled.");

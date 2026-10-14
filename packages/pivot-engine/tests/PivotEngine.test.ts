@@ -155,6 +155,35 @@ describe("PivotEngine", () => {
     expect(row?.subtotal?.cells.length).toBeGreaterThan(0);
   });
 
+  it("subtotalScope columns — qator oraliq jami yo'q, ustun guruhi jami bor", () => {
+    const config: PivotConfig = {
+      ...DEFAULT_PIVOT_CONFIG,
+      rows: ["region", "product"],
+      columns: ["product", "month"],
+      values: [{ fieldId: "amount", aggregation: "SUM" }],
+      options: { ...DEFAULT_PIVOT_CONFIG.options, showSubtotals: true, subtotalScope: "columns" }
+    };
+    const result = engine.compute(ROWS, FIELDS, config);
+    expect(result.rows[0]?.subtotal).toBeUndefined();
+    const toshkent = result.rows.find((row) => row.key.includes("Toshkent"));
+    const subtotalCell = toshkent?.cells.find((cell) => cell.columnKey === "A__amount");
+    expect(subtotalCell?.rawValue).toBe(1_800_000);
+  });
+
+  it("subtotalScope rows — ustun oraliq jami yo'q", () => {
+    const config: PivotConfig = {
+      ...DEFAULT_PIVOT_CONFIG,
+      rows: ["region", "product"],
+      columns: ["product", "month"],
+      values: [{ fieldId: "amount", aggregation: "SUM" }],
+      options: { ...DEFAULT_PIVOT_CONFIG.options, showSubtotals: true, subtotalScope: "rows" }
+    };
+    const result = engine.compute(ROWS, FIELDS, config);
+    expect(result.rows[0]?.subtotal).toBeDefined();
+    const keys = result.rows[0]?.cells.map((cell) => cell.columnKey) ?? [];
+    expect(keys.some((key) => key === "A__amount")).toBe(false);
+  });
+
   it("showColumnTotals — ustun jami qatori", () => {
     const config: PivotConfig = {
       ...DEFAULT_PIVOT_CONFIG,

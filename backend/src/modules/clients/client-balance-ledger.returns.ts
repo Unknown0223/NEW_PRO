@@ -92,7 +92,7 @@ export function salesReturnRefundLedgerCountSql(args: {
 
 /**
  * Zakaz-hujjat sifatidagi vozvrat (`return` / `return_by_order` / `partial_return`)
- * holati `returned` bo‘lsa — qarzdan ayiriladi.
+ * holati `delivered` yoki `returned` bo‘lsa — qarzdan ayiriladi.
  * Posted sales_return yoki shu zakazga bog‘langan refund to‘lov allaqachon
  * ledjerga kirgan bo‘lsa, ikkinchi marta ayirilmaydi.
  */
@@ -107,7 +107,7 @@ export function finishedReturnOrderWhereSql(args: {
     o.tenant_id = ${tenantId}
     AND o.client_id = ${clientId}
     AND o.order_type IN ('return', 'return_by_order', 'partial_return')
-    AND o.status = 'returned'
+    AND o.status IN ('delivered', 'returned')
     AND COALESCE(o.total_sum, 0) > 0
     AND NOT EXISTS (
       SELECT 1 FROM sales_returns sr

@@ -1099,7 +1099,11 @@ export function VirtualPivotReportBuilder() {
     setSubtotals(
       !config.options.showSubtotals
         ? "none"
-        : "both"
+        : config.options.subtotalScope === "rows"
+          ? "rows"
+          : config.options.subtotalScope === "columns"
+            ? "columns"
+            : "both"
     );
     setSchema(layout);
     setOptionsOpen(true);
@@ -1114,7 +1118,8 @@ export function VirtualPivotReportBuilder() {
         ...config.options,
         showGrandTotal: grandTotals === "both" || grandTotals === "rows",
         showColumnTotals: grandTotals === "both" || grandTotals === "columns",
-        showSubtotals: subtotals === "both" || subtotals === "rows" || subtotals === "columns",
+        showSubtotals: subtotals !== "none",
+        subtotalScope: subtotals === "none" ? "both" : subtotals,
         layoutForm: nextLayout,
         compactMode: nextLayout === "compact"
       }
@@ -1129,7 +1134,8 @@ export function VirtualPivotReportBuilder() {
           ...next.options,
           showGrandTotal: grandTotals === "both" || grandTotals === "rows",
           showColumnTotals: grandTotals === "both" || grandTotals === "columns",
-          showSubtotals: subtotals === "both" || subtotals === "rows" || subtotals === "columns"
+          showSubtotals: subtotals !== "none",
+          subtotalScope: subtotals === "none" ? "both" : subtotals
         }
       };
     }

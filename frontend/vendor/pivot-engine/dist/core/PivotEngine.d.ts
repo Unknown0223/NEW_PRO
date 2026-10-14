@@ -28,6 +28,8 @@ export declare class PivotEngine {
     /** Cube miss bo'lsa fallback (masalan, maxRows kesilgan holat). */
     private extractNumericValuesFromSubset;
     private rowMatchesColKey;
+    private wantRowSubtotals;
+    private withColumnSubtotals;
     private extractNumericValues;
     private buildFlatRow;
     private buildChildRows;

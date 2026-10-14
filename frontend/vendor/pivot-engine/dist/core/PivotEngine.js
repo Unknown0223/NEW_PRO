@@ -154,7 +154,7 @@ export class PivotEngine {
             });
         }
         this.incrementalContext = { configHash, filteredData: workingData, dataHash };
-        let colSpecs = this.buildColSpecs(workingData, config, enrichedFields);
+        let colSpecs = this.withColumnSubtotals(this.buildColSpecs(workingData, config, enrichedFields), config);
         colSpecs = this.sortEngine.sortColSpecs(colSpecs, config.options.sortBy, config);
         const headers = this.buildHeaders(colSpecs, config, enrichedFields);
         const onRows = valuesOnRows(config.options);
@@ -180,7 +180,7 @@ export class PivotEngine {
                 const cells = onRows && measureChildren
                     ? this.buildEmptyLabelCells(colSpecs, config, rowLabel)
                     : this.buildCellsForData(groupData, colSpecs, config, enrichedFields, groupKey);
-                const subtotal = config.options.showSubtotals && config.rows.length > 1
+                const subtotal = this.wantRowSubtotals(config)
                     ? this.buildSubtotalRow(groupData, colSpecs, config, enrichedFields, rowLabel, groupKey)
                     : undefined;
                 const children = config.options.drillDown && config.rows.length > 1
@@ -490,7 +490,9 @@ export class PivotEngine {
                 isEmpty: true
             };
         }
-        const cubeValues = this.cube.getValues(rowGroupKey, colCubeKey, valueDef.fieldId);
+        const cubeValues = spec.columnSubtotal
+            ? []
+            : this.cube.getValues(rowGroupKey, colCubeKey, valueDef.fieldId);
         const rawValues = cubeValues.length > 0
             ? cubeValues
             : this.extractNumericValuesFromSubset(data, spec, config, valueDef.fieldId);
@@ -530,13 +532,71 @@ export class PivotEngine {
             const colKey = valuesOnRows(config.options)
                 ? spec.colKey
                 : (spec.colKey.split("__")[0] ?? spec.colKey);
-            subset = data.filter((row) => this.rowMatchesColKey(row, config.columns, colKey));
+            subset = data.filter((row) => this.rowMatchesColKey(row, config.columns, colKey, Boolean(spec.columnSubtotal)));
         }
         return this.extractNumericValues(subset, fieldId);
     }
-    rowMatchesColKey(row, colFields, colKey) {
+    rowMatchesColKey(row, colFields, colKey, partial = false) {
         const parts = splitGroupKey(colKey);
-        return colFields.every((field, i) => String(row[field] ?? "N/A") === parts[i]);
+        const fields = partial ? colFields.slice(0, parts.length) : colFields;
+        return fields.every((field, i) => String(row[field] ?? "N/A") === (parts[i] ?? "N/A"));
+    }
+    wantRowSubtotals(config) {
+        if (!config.options.showSubtotals || config.rows.length < 2)
+            return false;
+        const scope = config.options.subtotalScope ?? "both";
+        return scope === "both" || scope === "rows";
+    }
+    withColumnSubtotals(specs, config) {
+        const scope = config.options.subtotalScope ?? "both";
+        const on = config.options.showSubtotals &&
+            (scope === "both" || scope === "columns") &&
+            config.columns.length > 1 &&
+            specs.length > 0;
+        if (!on)
+            return specs;
+        const onRows = valuesOnRows(config.options);
+        const label = getPivotStrings().engine.subtotal;
+        const out = [];
+        let i = 0;
+        while (i < specs.length) {
+            const parent = specs[i].colParts[0] ?? "";
+            let j = i;
+            while (j < specs.length && (specs[j].colParts[0] ?? "") === parent)
+                j++;
+            const group = specs.slice(i, j);
+            out.push(...group);
+            if (onRows) {
+                const parts = [...group[0].colParts];
+                for (let d = 1; d < config.columns.length; d++)
+                    parts[d] = label;
+                out.push({
+                    colKey: parent,
+                    colParts: parts.slice(0, config.columns.length),
+                    columnSubtotal: true
+                });
+            }
+            else {
+                const seen = new Set();
+                for (const spec of group) {
+                    const fieldId = spec.colKey.split("__").slice(1).join("__");
+                    if (!fieldId || seen.has(fieldId))
+                        continue;
+                    seen.add(fieldId);
+                    const parts = [parent];
+                    for (let d = 1; d < config.columns.length; d++)
+                        parts.push(label);
+                    const valueLabel = spec.colParts[spec.colParts.length - 1] ?? fieldId;
+                    out.push({
+                        colKey: `${parent}__${fieldId}`,
+                        colParts: [...parts, valueLabel],
+                        columnSubtotal: true
+                    });
+                }
+            }
+            i = j;
+        }
+        return out;
     }
     extractNumericValues(data, fieldId) {
         const out = [];
@@ -594,12 +654,16 @@ export class PivotEngine {
             const children = !isLeaf
                 ? this.buildChildRows(groupData, config, fields, colSpecs, depth + 1, rowGroupKey)
                 : measureChildren;
+            const subtotal = this.wantRowSubtotals(config) && !isLeaf
+                ? this.buildSubtotalRow(groupData, colSpecs, config, fields, rowLabel, rowGroupKey)
+                : undefined;
             result.push({
                 key: rowGroupKey,
                 depth,
                 cells,
                 parentKey: parentRowGroupKey,
                 children,
+                subtotal,
                 isExpanded: Boolean(children?.length)
             });
         }
