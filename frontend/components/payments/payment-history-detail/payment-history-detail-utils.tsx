@@ -90,7 +90,10 @@ function confirmationLabel(p: PaymentDetailRow): string | undefined {
   return undefined;
 }
 
-export function buildPaymentHistoryRows(data: PaymentDetailPayload): PaymentHistoryRow[] {
+export function buildPaymentHistoryRows(
+  data: PaymentDetailPayload,
+  methodLabel?: (code: string | null | undefined) => string
+): PaymentHistoryRow[] {
   const p = data.payment;
   const dt = (iso: string | null | undefined) =>
     iso ? (
@@ -135,7 +138,10 @@ export function buildPaymentHistoryRows(data: PaymentDetailPayload): PaymentHist
       v1: formatPaymentMoney(p.client_balance),
       shaded: true
     },
-    { label: "Способ оплаты", v1: p.payment_type },
+    {
+      label: "Способ оплаты",
+      v1: methodLabel ? methodLabel(p.payment_type) : p.payment_type
+    },
     {
       label: "Канал перечисления",
       v1: p.transfer_channel ? (

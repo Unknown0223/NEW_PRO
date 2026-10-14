@@ -190,11 +190,24 @@ describe("PivotEngine", () => {
       rows: ["region"],
       columns: ["month"],
       values: [{ fieldId: "amount", aggregation: "SUM" }],
-      options: { ...DEFAULT_PIVOT_CONFIG.options, showColumnTotals: true }
+      options: { ...DEFAULT_PIVOT_CONFIG.options, showColumnTotals: true, showGrandTotal: false }
     };
     const result = engine.compute(ROWS, FIELDS, config);
     expect(result.columnTotals).toBeDefined();
     expect(result.columnTotals?.cells[0]?.formatted).toContain("Итог по столбцам");
+  });
+
+  it("umumiy итог yonida ustun jami qatori takrorlanmaydi", () => {
+    const config: PivotConfig = {
+      ...DEFAULT_PIVOT_CONFIG,
+      rows: ["region"],
+      columns: ["month"],
+      values: [{ fieldId: "amount", aggregation: "SUM" }],
+      options: { ...DEFAULT_PIVOT_CONFIG.options, showColumnTotals: true, showGrandTotal: true }
+    };
+    const result = engine.compute(ROWS, FIELDS, config);
+    expect(result.grandTotal).toBeDefined();
+    expect(result.columnTotals).toBeUndefined();
   });
 
   it("calculatedMeasures — formula maydoni", () => {

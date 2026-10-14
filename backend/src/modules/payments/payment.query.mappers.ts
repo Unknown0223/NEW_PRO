@@ -236,13 +236,25 @@ export function buildPaymentListWhere(
   const df = parseUtcDayStart(q.date_from);
   const dt = parseUtcDayEnd(q.date_to);
   if (df || dt) {
-    const field = q.date_field === "paid_at" ? "paid_at" : q.date_field === "confirmed_at" ? "confirmed_at" : "created_at";
-    andParts.push({
-      [field]: {
-        ...(df ? { gte: df } : {}),
-        ...(dt ? { lte: dt } : {})
-      }
-    } as Prisma.PaymentWhereInput);
+    const range = {
+      ...(df ? { gte: df } : {}),
+      ...(dt ? { lte: dt } : {})
+    };
+    // Vedomost COALESCE(paid_at, created_at) bo'yicha filtrlaydi. Ro'yxat faqat
+    // created_at ga qarab ikkinchi to'lovni (boshqa kunda kiritilgan, lekin shu
+    // sanada to'langan) tashlab yubormasligi kerak.
+    if (q.date_field === "confirmed_at") {
+      andParts.push({ confirmed_at: range });
+    } else if (q.date_field === "paid_at") {
+      andParts.push({
+        OR: [{ paid_at: range }, { paid_at: null, created_at: range }]
+      });
+    } else {
+      // created_at (standart): yaratilgan yoki to'langan sana davrga tushsa — qator chiqadi.
+      andParts.push({
+        OR: [{ created_at: range }, { paid_at: range }]
+      });
+    }
   }
 
   if (q.amount_min != null || q.amount_max != null) {

@@ -299,7 +299,9 @@ export class PivotEngine {
     rows = this.sortEngine.sortRows(rows, config.options.sortBy, config);
 
     const columnTotals =
-      config.options.showColumnTotals && config.columns.length > 0
+      config.options.showColumnTotals &&
+      !config.options.showGrandTotal &&
+      config.columns.length > 0
         ? this.buildColumnTotals(workingData, colSpecs, config, enrichedFields)
         : undefined;
 
