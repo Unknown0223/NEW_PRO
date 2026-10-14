@@ -4,6 +4,8 @@ import { resolvePaymentMethodRefToLabel, type PaymentMethodEntryDto } from "../t
 import type { ClientLedgerRow, UnionRaw } from "./client-balance-ledger.types";
 import { mapUnionToLedgerRow } from "./client-balance-ledger.helpers";
 import {
+  finishedReturnOrderCountSql,
+  finishedReturnOrderLedgerUnionSql,
   salesReturnRefundLedgerCountSql,
   salesReturnRefundLedgerUnionSql
 } from "./client-balance-ledger.returns";
@@ -64,6 +66,14 @@ export async function fetchClientBalanceLedgerTable(
     dateClause: returnDateClause,
     agentClause: returnAgentClause
   });
+  const finishedReturnArgs = {
+    tenantId,
+    clientId,
+    dateClause: orderDateClause,
+    agentClause: orderAgentClause
+  };
+  const finishedReturnCount = finishedReturnOrderCountSql(finishedReturnArgs);
+  const finishedReturnUnion = finishedReturnOrderLedgerUnionSql(finishedReturnArgs);
 
   const [countRow] = await prisma.$queryRaw<Array<{ cnt: bigint }>>`
     SELECT COUNT(*)::bigint AS cnt FROM (
@@ -89,6 +99,8 @@ export async function fetchClientBalanceLedgerTable(
         ${payAgentClause}
       UNION ALL
       ${returnCount}
+      UNION ALL
+      ${finishedReturnCount}
     ) u
     ${kindWhere}
   `;
@@ -183,6 +195,10 @@ export async function fetchClientBalanceLedgerTable(
         UNION ALL
 
         ${returnUnion}
+
+        UNION ALL
+
+        ${finishedReturnUnion}
       ) u
       ${kindWhere}
     )

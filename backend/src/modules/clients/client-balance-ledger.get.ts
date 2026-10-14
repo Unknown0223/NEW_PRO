@@ -28,7 +28,9 @@ import { buildLedgerAgentCards } from "./client-balance-ledger.agents";
 import { fetchClientBalanceLedgerTable } from "./client-balance-ledger.get-table";
 import {
   buildSalesReturnAgentClause,
-  buildSalesReturnDateClause
+  buildSalesReturnDateClause,
+  finishedReturnOrderCreditUnionSql,
+  finishedReturnOrderWhereSql
 } from "./client-balance-ledger.returns";
 
 export async function getClientBalanceLedger(
@@ -192,9 +194,24 @@ export async function getClientBalanceLedger(
       ${returnAgentClause}
       ${kind === "debt" ? Prisma.sql`AND FALSE` : Prisma.empty}
   `;
+  const finishedReturnCreditRows = await prisma.$queryRaw<Array<{ payment_type: string; net: Prisma.Decimal }>>`
+    SELECT 'balance'::text AS payment_type,
+      COALESCE(SUM(o.total_sum), 0)::decimal(15,2) AS net
+    FROM orders o
+    WHERE ${finishedReturnOrderWhereSql({
+      tenantId,
+      clientId,
+      dateClause: orderDateClause,
+      agentClause: orderAgentClause
+    })}
+      ${kind === "debt" ? Prisma.sql`AND FALSE` : Prisma.empty}
+  `;
   const summary_payment_by_type = paymentAmountsForSpravochnik(
     sprLabels,
-    buildNetNormFromRows([...payNetRowsFiltered, ...orphanReturnRefundRows], paymentMethodEntries)
+    buildNetNormFromRows(
+      [...payNetRowsFiltered, ...orphanReturnRefundRows, ...finishedReturnCreditRows],
+      paymentMethodEntries
+    )
   );
 
   const agentTotalsSqlBody = (orderAgent: Prisma.Sql, payAgent: Prisma.Sql, retAgent: Prisma.Sql) => Prisma.sql`
@@ -274,6 +291,15 @@ export async function getClientBalanceLedger(
         )
         ${returnDateClause}
         ${retAgent}
+
+      UNION ALL
+
+      ${finishedReturnOrderCreditUnionSql({
+        tenantId,
+        clientId,
+        dateClause: orderDateClause,
+        agentClause: orderAgent
+      })}
     ) u
     ${kindWhere}
     GROUP BY u.ledger_agent_id
