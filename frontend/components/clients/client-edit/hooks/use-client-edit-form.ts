@@ -651,6 +651,8 @@ export function useClientEditForm({
           await api.put(`/api/${tenantSlug}/clients/${createdId}/profile-photo`, { image_url: draftPhoto });
           dropClientProfilePhotoCache(tenantSlug, createdId);
         }
+        const { data: createdDetail } = await api.patch<ClientDetailApi>(
+          `/api/${tenantSlug}/clients/${createdId}`,
           body
         );
         const slot1 = createdDetail.agent_assignments?.find((a) => a.slot === 1);
