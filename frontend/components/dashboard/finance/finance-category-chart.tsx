@@ -54,8 +54,8 @@ export function FinanceCategoryChart({ data }: { data: FinanceDashboardSnapshot 
   return (
     <section className="finance-motion-slide h-full rounded-2xl bg-card p-5 shadow-sm ring-1 ring-slate-200/70">
       <FinanceSectionHeader
-        title="По категориям"
-        subtitle="Топ категорий с прокручиваемой легендой"
+        title="Продажи по категориям товаров"
+        subtitle="Сумма позиций заказов за выбранный период"
       />
       <div className="grid min-h-[320px] grid-cols-1 items-center gap-6 lg:grid-cols-[minmax(240px,320px),minmax(0,1fr)]">
         <div

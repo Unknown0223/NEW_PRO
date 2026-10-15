@@ -52,8 +52,8 @@ export function FinanceKpiSection({ data }: { data: FinanceDashboardSnapshot }) 
   return (
     <section className="finance-motion-fade flex h-full flex-col rounded-2xl bg-card p-5 shadow-sm ring-1 ring-slate-200/70">
       <FinanceSectionHeader
-        title="Продажа"
-        subtitle="Агрегация по каналам оплаты"
+        title="Оплаты по способам"
+        subtitle="Сколько денег пришло каждым способом за выбранный период"
       />
       <div className="grid flex-1 auto-rows-fr grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-5">
         {rows.length === 0 ? (

@@ -217,11 +217,11 @@ export function DashboardFinance() {
               </section>
 
               <FinanceDataTable
-                title="По категориям"
+                title="Продажи по категориям товаров"
                 subtitle={
                   applied.payment_types.length > 0
-                    ? "Суммы по выбранным способам оплаты"
-                    : "Сортировка, поиск и экспорт"
+                    ? "Суммы заказов по выбранным способам оплаты"
+                    : "Сумма и доля каждой категории за период"
                 }
                 data={data.category_analytics}
                 columns={categoryCols}
@@ -232,8 +232,8 @@ export function DashboardFinance() {
               />
 
               <FinanceDataTable
-                title="Долги по территориям"
-                subtitle="Агрегация задолженности по территориям"
+                title="Долг по территориям"
+                subtitle="Неоплаченный остаток доставленных заказов по региону клиента"
                 data={data.territory_debts}
                 columns={territoryCols}
                 totals={territoryTotals}
