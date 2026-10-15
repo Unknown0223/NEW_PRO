@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ChevronDown, ChevronRight } from "lucide-react";
 
@@ -30,6 +30,12 @@ type TreeNode = ProductCategoryRow & { children: TreeNode[] };
 export const UNCATEGORIZED_KEY = "__uncategorized__" as const;
 
 const checkboxCls = "mt-0.5 h-4 w-4 shrink-0 rounded border border-input accent-primary";
+
+function sameIdList(a: number[], b: number[]): boolean {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i += 1) if (a[i] !== b[i]) return false;
+  return true;
+}
 
 function TreeCheckbox({
   checked,
@@ -207,6 +213,9 @@ type CategoryProductsPanelProps = {
   visibleProductIds?: Set<number>;
   /** Kategoriya tanlangan, SKU ro‘yxati bo‘sh — barcha tovarlar shu qoidaga kiradi */
   includeAllFromCategory?: boolean;
+  /** KPI: «Выбрать все» qatori yo‘q — kategoriya checkbox o‘zi tanlaydi */
+  hideSelectAll?: boolean;
+  onIdsChange?: (ids: number[]) => void;
 };
 
 function CategoryProductsPanel({
@@ -221,7 +230,9 @@ function CategoryProductsPanel({
   search = "",
   querySuffix = "tree",
   visibleProductIds,
-  includeAllFromCategory = false
+  includeAllFromCategory = false,
+  hideSelectAll = false,
+  onIdsChange
 }: CategoryProductsPanelProps) {
   const searchTrim = search.trim();
   const q = useQuery({
@@ -258,6 +269,11 @@ function CategoryProductsPanel({
     onToggleCategoryIds(ids, checked);
   };
 
+  useEffect(() => {
+    if (!q.isSuccess) return;
+    onIdsChange?.(ids);
+  }, [q.isSuccess, ids, onIdsChange]);
+
   if (q.isLoading) {
     return (
       <div className={cn("py-2 text-sm text-muted-foreground", depth > 0 && "pl-6")}>Загрузка…</div>
@@ -278,7 +294,7 @@ function CategoryProductsPanel({
 
   return (
     <div className={cn("space-y-1 border-l border-border/60 py-1", depth > 0 && "ml-3 pl-3")}>
-      {!readOnlyList ? (
+      {!readOnlyList && !hideSelectAll ? (
       <div className="flex items-center gap-2 py-1">
         <SelectAllCheckbox
           inputId={`br-cat-all-${querySuffix}-${String(categoryKey)}`}
@@ -341,6 +357,7 @@ type CategoryNodeProps = {
   flatCategories?: ProductCategoryRow[];
   coveredCategoryIds?: Set<number>;
   wholeCategoryNoSkuFilter?: boolean;
+  onReportIds?: (nodeId: number, ids: number[]) => void;
 };
 
 function CategoryNode({
@@ -363,7 +380,8 @@ function CategoryNode({
   categoryCheckSelectsProducts = false,
   flatCategories = [],
   coveredCategoryIds,
-  wholeCategoryNoSkuFilter = false
+  wholeCategoryNoSkuFilter = false,
+  onReportIds
 }: CategoryNodeProps) {
   const isOpen = expanded.has(node.id);
   const categoryPickEnabled = Boolean(onToggleCategoryScope && categoryScopeSelected);
@@ -382,8 +400,29 @@ function CategoryNode({
     staleTime: STALE.list
   });
   const subtreeIds = subtreeIdsQ.data ?? [];
-  const subtreeAllSelected = subtreeIds.length > 0 && subtreeIds.every((id) => selected.has(id));
-  const subtreeSomeSelected = subtreeIds.some((id) => selected.has(id)) && !subtreeAllSelected;
+  const [directIds, setDirectIds] = useState<number[]>([]);
+  const [nestedIds, setNestedIds] = useState<Record<number, number[]>>({});
+  const onDirectIds = useCallback((next: number[]) => {
+    setDirectIds((prev) => (sameIdList(prev, next) ? prev : next));
+  }, []);
+  const onChildReport = useCallback((childId: number, next: number[]) => {
+    setNestedIds((prev) => {
+      const cur = prev[childId];
+      if (cur && sameIdList(cur, next)) return prev;
+      return { ...prev, [childId]: next };
+    });
+  }, []);
+  const visibleIds = useMemo(() => {
+    const into = new Set<number>(subtreeIds);
+    for (const id of directIds) into.add(id);
+    for (const list of Object.values(nestedIds)) for (const id of list) into.add(id);
+    return [...into];
+  }, [subtreeIds, directIds, nestedIds]);
+  useEffect(() => {
+    onReportIds?.(node.id, visibleIds);
+  }, [node.id, visibleIds, onReportIds]);
+  const subtreeAllSelected = visibleIds.length > 0 && visibleIds.every((id) => selected.has(id));
+  const subtreeSomeSelected = visibleIds.some((id) => selected.has(id)) && !subtreeAllSelected;
 
   return (
     <div className={cn(depth > 0 && "ml-2 border-l border-border/40 pl-2")}>
@@ -393,8 +432,8 @@ function CategoryNode({
             inputId={`br-cat-scope-${querySuffix}-${node.id}`}
             allSelected={subtreeAllSelected}
             someSelected={subtreeSomeSelected}
-            disabled={disabled || selectionDisabled || subtreeIdsQ.isLoading || subtreeIds.length === 0}
-            onChange={(checked) => onToggleCategoryIds(subtreeIds, checked)}
+            disabled={disabled || selectionDisabled || visibleIds.length === 0}
+            onChange={(checked) => onToggleCategoryIds(visibleIds, checked)}
           />
         ) : categoryPickEnabled ? (
           <TreeCheckbox
@@ -449,6 +488,7 @@ function CategoryNode({
                   flatCategories={flatCategories}
                   coveredCategoryIds={coveredCategoryIds}
                   wholeCategoryNoSkuFilter={wholeCategoryNoSkuFilter}
+                  onReportIds={categoryCheckSelectsProducts ? onChildReport : undefined}
                 />
               ))}
             </div>
@@ -467,6 +507,8 @@ function CategoryNode({
               querySuffix={querySuffix}
               visibleProductIds={visibleProductIds}
               includeAllFromCategory={includeAllFromCategory}
+              hideSelectAll={categoryCheckSelectsProducts}
+              onIdsChange={categoryCheckSelectsProducts ? onDirectIds : undefined}
             />
           </div>
         </div>

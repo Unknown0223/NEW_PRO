@@ -1706,6 +1706,7 @@ class DebtorClient {
     this.currentDebt = 0,
     this.openingDebt = 0,
     this.debtCollectionOnly = false,
+    this.photoUrl,
   });
 
   factory DebtorClient.fromJson(Map<String, dynamic> j) => DebtorClient(
@@ -1719,6 +1720,7 @@ class DebtorClient {
         currentDebt: (j['current_debt'] as num?)?.toDouble() ?? 0,
         openingDebt: (j['opening_debt'] as num?)?.toDouble() ?? 0,
         debtCollectionOnly: j['debt_collection_only'] == true,
+        photoUrl: j['photo_url']?.toString(),
       );
 }
 

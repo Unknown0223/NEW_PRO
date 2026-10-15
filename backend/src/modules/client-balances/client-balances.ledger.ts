@@ -107,3 +107,84 @@ export async function loadLastDeliveryByClient(
   }
   return out;
 }
+
+/**
+ * Mijoz kartasidagi «Общий» saldo: yetkazilgan zakazlar minus to‘lovlar
+ * (taqsimot emas, kartadagi qatorlar yig‘indisi).
+ */
+export async function loadLedgerCardNetByClient(
+  tenantId: number,
+  clientIds: number[]
+): Promise<Map<number, Prisma.Decimal>> {
+  const out = new Map<number, Prisma.Decimal>();
+  if (clientIds.length === 0) return out;
+  const wanted = new Set(clientIds);
+  const rows = await prisma.$queryRaw<Array<{ client_id: number; net: Prisma.Decimal }>>`
+    SELECT client_id, SUM(pay - debt)::decimal(15,2) AS net
+    FROM (
+      SELECT o.client_id,
+        o.total_sum AS debt,
+        0::decimal(15,2) AS pay
+      FROM orders o
+      WHERE o.tenant_id = ${tenantId}
+        AND o.order_type = 'order'
+        AND o.status = 'delivered'
+      UNION ALL
+      SELECT p.client_id,
+        CASE WHEN p.entry_kind = 'client_expense' THEN p.amount ELSE 0::decimal(15,2) END AS debt,
+        CASE WHEN p.entry_kind IN ('payment', 'refund') THEN p.amount ELSE 0::decimal(15,2) END AS pay
+      FROM client_payments p
+      WHERE p.tenant_id = ${tenantId}
+        AND p.deleted_at IS NULL
+      UNION ALL
+      SELECT o.client_id,
+        0::decimal(15,2) AS debt,
+        o.total_sum AS pay
+      FROM orders o
+      WHERE o.tenant_id = ${tenantId}
+        AND o.order_type IN ('return', 'return_by_order', 'partial_return')
+        AND o.status IN ('delivered', 'returned')
+        AND COALESCE(o.total_sum, 0) > 0
+        AND NOT EXISTS (
+          SELECT 1 FROM sales_returns sr
+          WHERE sr.tenant_id = o.tenant_id
+            AND sr.status = 'posted'
+            AND COALESCE(sr.refund_amount, 0) > 0
+            AND (sr.mirror_order_id = o.id OR sr.order_id = o.id)
+        )
+        AND NOT EXISTS (
+          SELECT 1 FROM client_payments p
+          WHERE p.tenant_id = o.tenant_id
+            AND p.deleted_at IS NULL
+            AND p.entry_kind = 'refund'
+            AND p.order_id = o.id
+        )
+      UNION ALL
+      SELECT sr.client_id,
+        0::decimal(15,2) AS debt,
+        sr.refund_amount AS pay
+      FROM sales_returns sr
+      WHERE sr.tenant_id = ${tenantId}
+        AND sr.client_id IS NOT NULL
+        AND sr.status = 'posted'
+        AND COALESCE(sr.refund_amount, 0) > 0
+        AND NOT EXISTS (
+          SELECT 1 FROM client_payments p
+          WHERE p.tenant_id = sr.tenant_id
+            AND p.client_id = sr.client_id
+            AND p.deleted_at IS NULL
+            AND p.entry_kind = 'refund'
+            AND (
+              p.note = ('Возврат · ' || sr.number)
+              OR p.note = ('Vazvrat: ' || sr.number)
+            )
+        )
+    ) u
+    GROUP BY client_id
+  `;
+  for (const r of rows) {
+    const cid = sqlIntIdToNumber(r.client_id);
+    if (Number.isFinite(cid) && wanted.has(cid)) out.set(cid, r.net ?? new Prisma.Decimal(0));
+  }
+  return out;
+}

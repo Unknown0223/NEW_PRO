@@ -141,6 +141,7 @@ class _ExpeditorDebtorClientPageState
         (client['total_balance'] as num?)?.toDouble() ??
         (_seed['balance'] as num?)?.toDouble() ??
         0;
+    final photo = firstClientPhotoUrl(client);
 
     return Padding(
       padding: const EdgeInsets.all(12),
@@ -156,7 +157,6 @@ class _ExpeditorDebtorClientPageState
                   Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Container(
                       ClientPhotoThumb(source: photo, size: 46, radius: 12),
                       Expanded(
                         child: Column(

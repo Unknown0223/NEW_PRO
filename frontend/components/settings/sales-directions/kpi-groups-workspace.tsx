@@ -496,7 +496,9 @@ function KpiFormDialog({
     setAgSel(new Set(d.agent_user_ids));
   }, [open, mode, d]);
 
-  const agents = agentsQ.data ?? [];
+  const agents = (agentsQ.data ?? []).filter(
+    (a) => a.role !== "expeditor" || agSel.has(a.id)
+  );
   const filteredAgents = agents.filter((a) => {
     if (roleFilter.size > 0 && !roleFilter.has(a.role)) return false;
     const q = agSearch.trim().toLowerCase();

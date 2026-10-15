@@ -8,7 +8,7 @@ import {
   compareNumForSort,
   readSortDir
 } from "./client-balances.payments.util";
-import { loadLastPaymentByClient } from "./client-balances.ledger";
+import { loadLastPaymentByClient, loadLedgerCardNetByClient } from "./client-balances.ledger";
 import { loadUnpaidDeliveredOrderDebtRows } from "./client-balances.delivery";
 import { mapDeliveryOrderRow } from "./client-balances.mappers";
 import type { ClientBalancesReportContext } from "./client-balances.report.context";
@@ -45,11 +45,13 @@ export async function listClientBalancesReportDelivery(
   const pageSlice = orderRows.slice((page - 1) * limit, page * limit);
   const sliceClientIds = [...new Set(pageSlice.map((r) => r.client_id))];
 
-  let sumUnpaid = new Prisma.Decimal(0);
-  for (const r of orderRows) {
-    sumUnpaid = sumUnpaid.add(r.unpaid);
+  const deliveryClientIds = [...new Set(orderRows.map((r) => r.client_id))];
+  const cardNetByClient = await loadLedgerCardNetByClient(tenantId, deliveryClientIds);
+  let cardNetSum = new Prisma.Decimal(0);
+  for (const id of deliveryClientIds) {
+    cardNetSum = cardNetSum.add(cardNetByClient.get(id) ?? new Prisma.Decimal(0));
   }
-  const totalBalanceStr = sumUnpaid.neg().toString();
+  const totalBalanceStr = cardNetSum.toString();
 
   const [clients, lastPays] = await Promise.all([
     (async () => {
@@ -86,7 +88,9 @@ export async function listClientBalancesReportDelivery(
   for (const od of pageSlice) {
     const c = clientById.get(od.client_id);
     if (!c) continue;
-    data.push(mapDeliveryOrderRow(c, od, sprDelivery, pmEntriesDelivery, lastPays.get(od.client_id)));
+    const row = mapDeliveryOrderRow(c, od, sprDelivery, pmEntriesDelivery, lastPays.get(od.client_id));
+    row.balance = (cardNetByClient.get(od.client_id) ?? new Prisma.Decimal(0)).toString();
+    data.push(row);
   }
 
   return {

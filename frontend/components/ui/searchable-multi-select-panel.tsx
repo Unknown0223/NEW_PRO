@@ -462,12 +462,12 @@ export function SearchableMultiSelectPanel<T extends string | number = number>({
             if (!disabled) setOpenTracked((v) => !v);
           }}
         >
-          {selected.size > 0 && label ? (
+          {hideOuterLabel && selected.size > 0 && label ? (
             <span className="pointer-events-none absolute left-2 top-0 -translate-y-1/2 bg-inherit px-1 text-[11px] font-medium leading-none text-muted-foreground">
               {label}
             </span>
           ) : null}
-          <span className={cn("min-w-0 flex-1 truncate", selected.size === 0 ? "text-muted-foreground" : "pt-1")}>
+          <span className={cn("min-w-0 flex-1 truncate", selected.size === 0 ? "text-muted-foreground" : hideOuterLabel && "pt-1")}>
             {selected.size === 0 ? triggerPlaceholder || label : triggerSummary}
           </span>
           <ChevronDown
@@ -534,12 +534,12 @@ export function SearchableMultiSelectPanel<T extends string | number = number>({
           if (!disabled) setOpenTracked((v) => !v);
         }}
       >
-        {selected.size > 0 && label ? (
+        {hideOuterLabel && selected.size > 0 && label ? (
           <span className="pointer-events-none absolute left-2 top-0 z-[1] -translate-y-1/2 bg-inherit px-1 text-[11px] font-medium leading-none text-muted-foreground">
             {label}
           </span>
         ) : null}
-        <span className={cn("min-w-0 flex-1 truncate", selected.size === 0 ? "text-muted-foreground" : "pt-1")}>
+        <span className={cn("min-w-0 flex-1 truncate", selected.size === 0 ? "text-muted-foreground" : hideOuterLabel && "pt-1")}>
           {selected.size === 0 ? triggerPlaceholder || label : triggerSummary}
         </span>
         <ChevronDown

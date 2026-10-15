@@ -54,7 +54,7 @@ export function defaultMobileConfigForRole(role: string): AgentMobileConfigV1 {
       orders: {
         allow_partial_return_edit: true,
         allow_reload_from_vehicle: true,
-        allow_return_from_shelf: false,
+        allow_return_from_shelf: true,
         return_reason_required: false
       }
     };

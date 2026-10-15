@@ -665,10 +665,6 @@ class _OutletTile extends ConsumerWidget {
     final balanceAmount = clientAgentLedgerBalance(agentBalances, clientId);
     final balance = balanceAmount != null ? formatClientBalanceAmount(balanceAmount) : '';
     final hasDebt = balanceAmount != null && isClientDebtBalance(balanceAmount);
-
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Material(
     final photo = firstClientPhotoUrl(client);
 
     return Padding(
@@ -683,8 +679,14 @@ class _OutletTile extends ConsumerWidget {
             padding: const EdgeInsets.all(12),
             child: Row(
               children: [
-                photo != null
-                    ? ClientPhotoThumb(source: photo, size: 40, radius: 10)
+                if (photo != null) ...[
+                  ClientPhotoThumb(source: photo, size: 40, radius: 10),
+                  const SizedBox(width: 10),
+                ],
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
                       Text(title, maxLines: 1, overflow: TextOverflow.ellipsis,
                           style: AppTypography.bodyMedium.copyWith(fontWeight: FontWeight.w700),),
                       if (subtitle.isNotEmpty)

@@ -1308,26 +1308,29 @@ export function ClientBalancesWorkspace() {
         />
 
         {summaryBalance != null ? (
-          <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-7">
-            <CbSummaryCard
-              title={
-                view === "clients_legacy"
-                  ? "Долг старого агента"
-                  : view === "clients_consignment"
-                    ? "Долг по консигнации"
-                    : "Общий"
-              }
-              amount={parseAmount(summaryBalance)}
-              iconIndex={0}
-            />
-            {paymentByType.map((row, i) => (
+          <div className="flex flex-wrap gap-3">
+            <div className="w-[220px] shrink-0">
               <CbSummaryCard
-                key={`${row.label}-${i}`}
-                title={row.label}
-                amount={parseAmount(row.amount)}
-                iconIndex={i + 1}
+                title={
+                  view === "clients_legacy"
+                    ? "Долг старого агента"
+                    : view === "clients_consignment"
+                      ? "Долг по консигнации"
+                      : "Общий"
+                }
+                amount={parseAmount(summaryBalance)}
+                iconIndex={0}
               />
-            ))}
+            </div>
+            {paymentByType.map((row, i) => {
+              const amount = parseAmount(row.amount);
+              if (!Number.isFinite(amount) || Math.abs(amount) < 0.0001) return null;
+              return (
+                <div key={`${row.label}-${i}`} className="w-[220px] shrink-0">
+                  <CbSummaryCard title={row.label} amount={amount} iconIndex={i + 1} />
+                </div>
+              );
+            })}
           </div>
         ) : null}
 

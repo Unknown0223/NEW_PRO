@@ -15,6 +15,7 @@ import {
   type ClientBalanceListQuery,
   type ClientBalancePaymentTypeSummary
 } from "./client-balances.service";
+import { loadLedgerCardNetByClient } from "./client-balances.ledger";
 
 const LARGE_CLIENT_IDS_CHUNK = 10000;
 const BALANCE_PERF_LOG = process.env.BALANCE_PERF_LOG === "1";
@@ -219,6 +220,9 @@ export async function listConsignmentBalancesReport(
   perf("debt-map-loaded", { debtClients: debtMap.size });
 
   const eligible = ids.filter((id) => debtMap.has(id));
+  const cardNetByClient = await loadLedgerCardNetByClient(tenantId, eligible);
+  let cardNetSum = new Prisma.Decimal(0);
+  for (const id of eligible) cardNetSum = cardNetSum.add(cardNetByClient.get(id) ?? new Prisma.Decimal(0));
 
   eligible.sort((a, b) => {
     const da = debtMap.get(a)?.unpaid ?? new Prisma.Decimal(0);
@@ -307,6 +311,7 @@ export async function listConsignmentBalancesReport(
     }
 
     const unpaid = d.unpaid;
+    const cardNet = cardNetByClient.get(c.id) ?? unpaid.neg();
     return {
       client_id: c.id,
       client_code: c.client_code,
@@ -323,12 +328,12 @@ export async function listConsignmentBalancesReport(
       overdue_days: overdueDays,
       total_debt: d.gross.toString(),
       total_paid: d.allocated.toString(),
-      balance: unpaid.neg().toString(),
+      balance: cardNet.toString(),
       payment_amounts: paymentAmountsNetMinusUnpaid(
         sprLabels,
         pagePayNorm.get(c.id),
         unpaidByClientMethod.get(c.id),
-        unpaid.neg()
+        cardNet
       )
     };
   });
@@ -339,7 +344,7 @@ export async function listConsignmentBalancesReport(
     page,
     limit,
     summary: {
-      total_debt: totalDebtNeg,
+      total_debt: cardNetSum.toString(),
       cash_debt: cashDebtStr,
       payment_by_type: paymentByTypeSummary
     }
