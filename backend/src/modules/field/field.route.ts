@@ -22,6 +22,7 @@ import {
   upsertAgentRouteDay
 } from "./field.service";
 import { createClientRefusal } from "../refusals/refusals.service";
+import { assertFieldVisitPolicy, fieldVisitPolicyError } from "../mobile/mobile-field-visit.guard";
 
 const locationPingPostRoles = [...MOBILE_FIELD_ROLE_NAMES, ...ADMIN_AND_OPERATOR_LIKE_ROLES] as const;
 
@@ -131,7 +132,13 @@ export async function registerFieldRoutes(app: FastifyInstance) {
     // Agent/ekspeditor o‘z vizitini yozadi: Dostup «bound agents» bo‘sh bo‘lsa ham
     // AGENT_OUT_OF_SCOPE bo‘lmasin (dastavchik «Начать визит»).
     if (!selfFieldCheckin && !(await assertAgentInScope(request, reply, agentId))) return;
+    const reasonRef = body.refusal_reason_ref?.trim();
     try {
+      if (selfFieldCheckin && body.client_id != null) {
+        await assertFieldVisitPolicy(tenantId, agentId, viewer.role, {
+          clientId: body.client_id, latitude: body.latitude ?? null, longitude: body.longitude ?? null, refusal: Boolean(reasonRef)
+        });
+      }
       const data = await recordAgentVisitCheckin(tenantId, agentId, {
         client_id: body.client_id ?? null,
         latitude: body.latitude ?? null,
@@ -139,7 +146,6 @@ export async function registerFieldRoutes(app: FastifyInstance) {
         notes: body.notes ?? null
       });
       let refusal = null;
-      const reasonRef = body.refusal_reason_ref?.trim();
       if (reasonRef && body.client_id != null) {
         refusal = await createClientRefusal(tenantId, agentId, {
           client_id: body.client_id,
@@ -153,6 +159,8 @@ export async function registerFieldRoutes(app: FastifyInstance) {
       if (msg === "AgentNotFound") return sendApiError(reply, request, 400, "AgentNotFound");
       if (msg === "ClientNotFound") return sendApiError(reply, request, 404, "ClientNotFound");
       if (msg === "ReasonRequired") return sendApiError(reply, request, 400, "ReasonRequired");
+      const visitErr = fieldVisitPolicyError(msg);
+      if (visitErr) return sendApiError(reply, request, visitErr.status, visitErr.code, visitErr.text);
       throw e;
     }
   });

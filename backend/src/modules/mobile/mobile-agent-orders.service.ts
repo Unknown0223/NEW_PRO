@@ -1,6 +1,8 @@
 import { Prisma } from "@prisma/client";
 import type { z } from "zod";
 import { prisma } from "../../config/database";
+import { profilePhotoMobileUrl } from "../clients/client-profile-photo.pure";
+import { profilePhotoUrlsByClient, tenantSlug } from "../clients/client-profile-photo.service";
 import type { mobileCreateOrderBodySchema } from "../../contracts/mobile.schemas";
 import {
   loadDeliveryDebtByClient,
@@ -738,6 +740,10 @@ export async function listMobileAgentDebtors(tenantId: number, userId: number, l
       LIMIT ${outLimit}
     `;
 
+    const photos = await profilePhotoUrlsByClient(
+      tenantId,
+      rows.map((r) => r.client_id)
+    );
     return rows.map((r) => ({
       id: r.client_id,
       name: r.name ?? "",
@@ -748,11 +754,15 @@ export async function listMobileAgentDebtors(tenantId: number, userId: number, l
       legacy_debt: Number(r.unpaid),
       current_debt: 0,
       opening_debt: 0,
-      debt_collection_only: true
+      debt_collection_only: true,
+      photo_url: photos.get(r.client_id) ?? null
     }));
   }
 
-  const clientWhere = await agentScopedClientWhereForUser(tenantId, userId);
+  const [clientWhere, slug] = await Promise.all([
+    agentScopedClientWhereForUser(tenantId, userId),
+    tenantSlug(tenantId)
+  ]);
   // take+orderBy name bilan oldin qirqib yuborilmasin — 200+ mijozda qarzdorlar yo‘qoladi.
   const clients = await prisma.client.findMany({
     where: { ...clientWhere, is_active: true },

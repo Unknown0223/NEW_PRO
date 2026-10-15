@@ -359,7 +359,29 @@ class GpsTracker extends StateNotifier<GpsState> {
 /// GPS tracker provider — reads config from session
 final gpsTrackerProvider = StateNotifierProvider<GpsTracker, GpsState>((ref) {
   final slug = ref.watch(sessionProvider.select((s) => s.tenantSlug ?? ''));
-  final gps = ref.watch(sessionProvider.select((s) => s.mobileConfig?.gps ?? const GpsConfig()));
+  final gpsKey = ref.watch(
+    sessionProvider.select((s) {
+      final gps = s.mobileConfig?.gps ?? const GpsConfig();
+      return (
+        gps.trackingEnabled,
+        gps.alwaysOn,
+        gps.requiredForOrder,
+        gps.trackingIntervalSec,
+        gps.minBatteryPct,
+        gps.minDistanceM,
+        gps.maxAccuracyM,
+      );
+    }),
+  );
+  final gps = GpsConfig(
+    trackingEnabled: gpsKey.$1,
+    alwaysOn: gpsKey.$2,
+    requiredForOrder: gpsKey.$3,
+    trackingIntervalSec: gpsKey.$4,
+    minBatteryPct: gpsKey.$5,
+    minDistanceM: gpsKey.$6,
+    maxAccuracyM: gpsKey.$7,
+  );
 
   return GpsTracker(
     fieldApi: ref.read(fieldApiProvider),

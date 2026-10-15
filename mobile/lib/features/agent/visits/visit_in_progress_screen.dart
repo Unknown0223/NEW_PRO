@@ -168,7 +168,10 @@ class _VisitInProgressScreenState extends ConsumerState<VisitInProgressScreen> {
       if (slug.isNotEmpty && _visit?.clientId != null) {
         try {
           final photos = await ref.read(mobileApiProvider).getClientPhotoReports(slug, _visit!.clientId!);
-          if (!hasPhotoReportToday(photos)) {
+          if (!hasPhotoReportToday(
+            photos,
+            ownerUserId: ref.read(sessionProvider).user?.id,
+          )) {
             if (mounted) {
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(
@@ -180,7 +183,15 @@ class _VisitInProgressScreenState extends ConsumerState<VisitInProgressScreen> {
             return;
           }
         } catch (_) {
-          // Network xato — offline da davom etiladi.
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Фотоотчёт не проверен — проверьте интернет'),
+                backgroundColor: AppColors.warning,
+              ),
+            );
+          }
+          return;
         }
       }
     }

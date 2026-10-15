@@ -2,6 +2,7 @@
  * Mobil ekspeditor — yetkazishlar, zakaz holati, mijoz koordinatasi.
  */
 import { prisma } from "../../config/database";
+import { profilePhotoUrlsByClient } from "../clients/client-profile-photo.service";
 import { updateClientFields } from "../clients/clients.service";
 import { updateOrderStatus } from "../orders/domain/order.lifecycle";
 import { getAllowedNextStatuses, normalizeOrderType } from "../orders/order-status";
@@ -10,6 +11,7 @@ import { extractMobileConfigFromEntitlementsUnknown } from "../staff/agent-mobil
 import { resolveMobileConfigForUser } from "../staff/agent-mobile-config.defaults";
 import type { AgentMobileConfigV1 } from "../staff/agent-mobile-config.types";
 import { loadActiveWorkSlotsByUserIds } from "../work-slots/work-slots.query";
+import { assertMobilePhotoReportForClient } from "./mobile-agent-sync.config.service";
 
 export async function loadExpeditorMobileConfig(
   tenantId: number,
@@ -83,7 +85,8 @@ export async function listMobileExpeditorDeliveries(
       order_type: "order"
     },
     "expeditor",
-    expeditorUserId
+    expeditorUserId,
+    { skipAgentScope: true }
   );
 
   const allowedDirs = cfg.expeditor?.allowed_trade_direction_ids;
@@ -107,6 +110,11 @@ export async function listMobileExpeditorDeliveries(
     }
   }
 
+  const photos = await profilePhotoUrlsByClient(
+    tenantId,
+    data.map((o) => o.client_id)
+  );
+
   return {
     ...result,
     data: data.map((o) => ({
@@ -120,7 +128,8 @@ export async function listMobileExpeditorDeliveries(
       total_sum: o.total_sum,
       debt: o.debt,
       delivered_at: o.delivered_at,
-      expected_ship_date: o.expected_ship_date
+      expected_ship_date: o.expected_ship_date,
+      photo_url: photos.get(o.client_id) ?? null
     }))
   };
 }
@@ -249,12 +258,20 @@ export async function patchMobileExpeditorOrderStatus(
   nextStatus: string,
   reason?: string | null
 ) {
-  await assertExpeditorOwnsOrder(tenantId, expeditorUserId, orderId);
+  const order = await assertExpeditorOwnsOrder(tenantId, expeditorUserId, orderId);
+  const cfg = await loadExpeditorMobileConfig(tenantId, expeditorUserId);
+  const trimmedReason = reason != null && String(reason).trim() ? String(reason).trim().slice(0, 500) : null;
+  const status = nextStatus.trim();
+  if (status === "returned" && cfg.orders?.return_reason_required === true && !trimmedReason) {
+    throw new Error("REASON_REQUIRED");
+  }
+  if (status === "delivered" || status === "returned") {
+    await assertMobilePhotoReportForClient(tenantId, expeditorUserId, order.client_id, cfg);
+  }
   const row = await updateOrderStatus(tenantId, orderId, nextStatus, expeditorUserId, "expeditor");
 
   // Vazvrat sababini jurnalga yozamiz (audit + keyinroq ko'rsatish uchun).
-  const trimmedReason = reason != null && String(reason).trim() ? String(reason).trim().slice(0, 500) : null;
-  if (nextStatus.trim() === "returned" && trimmedReason) {
+  if (status === "returned" && trimmedReason) {
     await prisma.orderChangeLog.create({
       data: {
         order_id: orderId,
@@ -268,62 +285,6 @@ export async function patchMobileExpeditorOrderStatus(
 }
 
 /** Qisman / to'liq qaytarish — holat `returned`. */
-export async function createMobileExpeditorPartialReturn(
-  tenantId: number,
-  expeditorUserId: number,
-  orderId: number,
-  input: {
-    reason: string;
-    note?: string | null;
-    items?: Array<{ order_item_id: number; qty: number }>;
-  }
-) {
-  const cfg = await loadExpeditorMobileConfig(tenantId, expeditorUserId);
-  if (cfg.orders?.allow_partial_return_edit === false) throw new Error("RETURN_DISABLED");
-
-  const order = await assertExpeditorOwnsOrder(tenantId, expeditorUserId, orderId);
-  if (order.status !== "delivered") throw new Error("BAD_STATUS");
-
-  const reason = input.reason.trim();
-  if (!reason) throw new Error("BAD_REASON");
-
-  let itemsNote = "";
-  if (input.items?.length) {
-    const orderItems = await prisma.orderItem.findMany({
-      where: { order_id: orderId, order: { tenant_id: tenantId } },
-      select: {
-        id: true,
-        qty: true,
-        product: { select: { sku: true, name: true } }
-      }
-    });
-    const byId = new Map(orderItems.map((i) => [i.id, i]));
-    const lines: string[] = [];
-    for (const row of input.items) {
-      const line = byId.get(row.order_item_id);
-      if (!line) throw new Error("BAD_RETURN_ITEM");
-      const maxQty = Number(line.qty);
-      if (!Number.isFinite(row.qty) || row.qty <= 0 || row.qty > maxQty) {
-        throw new Error("BAD_RETURN_QTY");
-      }
-      lines.push(`${line.product.sku} ${line.product.name}: ${row.qty}/${maxQty}`);
-    }
-    itemsNote = lines.join("; ");
-  }
-
-  const noteParts = [`qaytarish: ${reason}`];
-  if (itemsNote) noteParts.push(`qatorlar: ${itemsNote}`);
-  if (input.note?.trim()) noteParts.push(input.note.trim());
-  const noteLine = `[${noteParts.join(" | ")}]`;
-  const nextComment = order.comment?.trim() ? `${order.comment.trim()}\n${noteLine}` : noteLine;
-  await prisma.order.update({
-    where: { id: orderId },
-    data: { comment: nextComment }
-  });
-
-  return updateOrderStatus(tenantId, orderId, "returned", expeditorUserId, "expeditor");
-}
-
 /** Avtomobildan qayta yuklash — `delivered` → `delivering`. */
 export async function createMobileExpeditorReloadFromVehicle(
   tenantId: number,

@@ -8,6 +8,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/time/work_region_time.dart';
 import '../../../core/ui/agent_ui_extended.dart';
+import '../../../core/ui/client_photo_thumb.dart';
 import '../../../core/format/money_display.dart';
 import '../../agent/orders/order_create_models.dart' show formatMoneyUz;
 import '../config/expeditor_config_enforcement.dart';

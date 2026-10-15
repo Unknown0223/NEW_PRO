@@ -41,7 +41,9 @@ class ExpeditorOrderPicker extends ConsumerWidget {
           }
           if (onlyWithDebt) {
             filtered = filtered.where((o) {
-              final debt = double.tryParse(o['debt']?.toString() ?? '') ?? 0;
+              final raw = o['debt'];
+              if (raw == null) return true;
+              final debt = double.tryParse(raw.toString()) ?? 0;
               return debt > 0;
             }).toList();
           }

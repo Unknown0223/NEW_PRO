@@ -8,6 +8,7 @@ import '../../../core/auth/session.dart';
 import '../../../core/face/face_verification_flow.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
+import '../../../core/ui/agent_ui.dart';
 import '../../../core/ui/agent_ui_extended.dart';
 import '../../agent/orders/order_create_models.dart' show formatMoneySpaced;
 import '../config/expeditor_config_enforcement.dart';
@@ -46,9 +47,7 @@ class _ExpeditorPaymentsPageState extends ConsumerState<ExpeditorPaymentsPage> {
     final amount = parseGroupedNumber(_amountCtrl.text);
     final pt = _selectedPaymentType;
     if (amount <= 0 || pt == null || pt.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Укажите сумму и способ оплаты')),
-      );
+      showAgentToast(context, 'Укажите сумму и способ оплаты');
       return;
     }
     setState(() => _submitting = true);
@@ -81,19 +80,16 @@ class _ExpeditorPaymentsPageState extends ConsumerState<ExpeditorPaymentsPage> {
       ref.invalidate(expeditorPaymentContextProvider(orderId));
       ref.invalidate(expeditorOrderDetailProvider(orderId));
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Заявка на оплату отправлена. Ожидайте подтверждения кассы.'),
-            backgroundColor: AppColors.warning,
-          ),
+        showAgentToast(
+          context,
+          'Заявка на оплату отправлена. Ожидайте подтверждения кассы.',
+          accentColor: AppColors.warning,
         );
         if (context.canPop()) context.pop();
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('$e'), backgroundColor: AppColors.error),
-        );
+        showAgentToast(context, '$e', accentColor: AppColors.error);
       }
     } finally {
       if (mounted) setState(() => _submitting = false);
@@ -188,6 +184,14 @@ class _ExpeditorPaymentsPageState extends ConsumerState<ExpeditorPaymentsPage> {
                 ),
                 const SizedBox(height: 16),
                 const Text('Способ оплаты', style: AppTypography.labelLarge),
+                if (methods.isEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 8),
+                    child: Text(
+                      'Нет доступных методов оплаты. Добавьте их в справочнике компании.',
+                      style: AppTypography.bodyMedium.copyWith(color: AppColors.warning),
+                    ),
+                  ),
                 ...methods.map((m) {
                   final map = Map<String, dynamic>.from(m);
                   final pt = map['payment_type']?.toString() ?? '';

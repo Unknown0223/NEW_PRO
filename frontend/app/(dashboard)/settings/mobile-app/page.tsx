@@ -37,6 +37,7 @@ type MobileAppReleasePolicy = {
   store_url_android: string | null;
   store_url_ios: string | null;
   release_notes: string | null;
+  target_roles?: Array<"agent" | "expeditor" | "supervisor"> | null;
 };
 
 type OutdatedUser = {
@@ -48,6 +49,7 @@ type OutdatedUser = {
   device_name: string | null;
   last_sync_at: string | null;
   is_outdated?: boolean;
+  update_targeted?: boolean;
 };
 
 type ApkStatus = {
@@ -101,6 +103,14 @@ function formatSync(iso: string | null | undefined): string {
   }
 }
 
+const RELEASE_ROLE_OPTIONS = [
+  { id: "agent", label: "Агент" },
+  { id: "expeditor", label: "Доставщик" },
+  { id: "supervisor", label: "Супервайзер" }
+] as const;
+
+const ALL_RELEASE_ROLES = RELEASE_ROLE_OPTIONS.map((role) => role.id);
+
 function FieldHint({ children }: { children: React.ReactNode }) {
   return <p className="text-xs leading-relaxed text-muted-foreground">{children}</p>;
 }
@@ -152,6 +162,7 @@ export default function MobileAppSettingsPage() {
   const [storeAndroid, setStoreAndroid] = useState("");
   const [storeIos, setStoreIos] = useState("");
   const [releaseNotes, setReleaseNotes] = useState("");
+  const [targetRoles, setTargetRoles] = useState<string[]>([...ALL_RELEASE_ROLES]);
   const [msg, setMsg] = useState<string | null>(null);
   const [msgTone, setMsgTone] = useState<"ok" | "err">("ok");
   const [uploading, setUploading] = useState(false);
@@ -189,6 +200,7 @@ export default function MobileAppSettingsPage() {
         data.policy.store_url_android,
         data.policy.store_url_ios,
         data.policy.release_notes,
+        (data.policy.target_roles ?? ALL_RELEASE_ROLES).join(","),
         data.apk?.download_url
       ].join("|")
     : "";
@@ -203,6 +215,7 @@ export default function MobileAppSettingsPage() {
     setStoreAndroid(p.store_url_android ?? "");
     setStoreIos(p.store_url_ios ?? "");
     setReleaseNotes(p.release_notes ?? "");
+    setTargetRoles(p.target_roles == null ? [...ALL_RELEASE_ROLES] : [...p.target_roles]);
     // Faqat siyosat o‘zgaganda forma yangilanadi — poll hodimlar jadvalini buzmasin.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [policyKey]);
@@ -230,7 +243,8 @@ export default function MobileAppSettingsPage() {
           download_url: downloadUrl.trim() || null,
           store_url_android: storeAndroid.trim() || null,
           store_url_ios: storeIos.trim() || null,
-          release_notes: releaseNotes.trim() || null
+          release_notes: releaseNotes.trim() || null,
+          target_roles: RELEASE_ROLE_OPTIONS.map((role) => role.id).filter((id) => targetRoles.includes(id))
         }
       );
       return body.policy;
@@ -562,6 +576,44 @@ export default function MobileAppSettingsPage() {
                 </div>
               </div>
 
+              <div className="space-y-2">
+                <p className="text-sm font-medium">Кому показать обновление</p>
+                <div className="grid gap-2 sm:grid-cols-3">
+                  {RELEASE_ROLE_OPTIONS.map((role) => {
+                    const checked = targetRoles.includes(role.id);
+                    return (
+                      <label
+                        key={role.id}
+                        className={cn(
+                          "flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2.5 text-sm",
+                          checked
+                            ? "border-emerald-500/30 bg-emerald-500/[0.06]"
+                            : "border-border/70 bg-muted/15"
+                        )}
+                      >
+                        <input
+                          type="checkbox"
+                          className="h-4 w-4 accent-primary"
+                          checked={checked}
+                          onChange={(e) => {
+                            setTargetRoles((prev) =>
+                              e.target.checked
+                                ? [...prev, role.id]
+                                : prev.filter((id) => id !== role.id)
+                            );
+                          }}
+                        />
+                        <span className="font-medium">{role.label}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+                <FieldHint>
+                  Номер версии не меняется. Окно обновления увидят только отмеченные роли. Остальные остаются на своей
+                  версии без обновления.
+                </FieldHint>
+              </div>
+
               <label
                 htmlFor="force_update"
                 className={cn(
@@ -744,6 +796,7 @@ export default function MobileAppSettingsPage() {
                   <tbody>
                     {mobileUsers.map((u) => {
                       const outdated = u.is_outdated === true;
+                      const skipped = u.update_targeted === false;
                       return (
                         <tr
                           key={u.id}
@@ -766,7 +819,9 @@ export default function MobileAppSettingsPage() {
                             )}
                           </td>
                           <td className="px-4 py-2.5">
-                            {outdated ? (
+                            {skipped ? (
+                              <Badge variant="secondary">не в рассылке</Badge>
+                            ) : outdated ? (
                               <Badge variant="warning">нужно обновить</Badge>
                             ) : (
                               <Badge variant="success">актуальная</Badge>

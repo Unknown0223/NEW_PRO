@@ -33,7 +33,7 @@ class MobileApi {
   }
 
   /// Login oldidan versiya siyosati (public endpoint).
-  Future<AppUpdateInfo?> fetchAppRelease(String slug, String version) async {
+  Future<AppUpdateInfo?> fetchAppRelease(String slug, String version, {String? role}) async {
     try {
       final r = await _dio.get(
         '/api/mobile/app-release',
@@ -41,6 +41,7 @@ class MobileApi {
           'slug': slug,
           'version': version,
           'platform': 'android',
+          if (role != null && role.isNotEmpty) 'role': role,
         },
       );
       final data = r.data;
@@ -520,12 +521,14 @@ class ClientPhotoReport {
   final String imageUrl;
   final String? caption;
   final int? orderId;
+  final int? createdByUserId;
   final String createdAt;
   const ClientPhotoReport({
     required this.id,
     required this.imageUrl,
     this.caption,
     this.orderId,
+    this.createdByUserId,
     required this.createdAt,
   });
   factory ClientPhotoReport.fromJson(Map<String, dynamic> j) => ClientPhotoReport(
@@ -533,6 +536,7 @@ class ClientPhotoReport {
         imageUrl: j['image_url']?.toString() ?? '',
         caption: j['caption']?.toString(),
         orderId: (j['order_id'] as num?)?.toInt(),
+        createdByUserId: (j['created_by_user_id'] as num?)?.toInt(),
         createdAt: j['created_at']?.toString() ?? '',
       );
 }
@@ -1689,6 +1693,7 @@ class DebtorClient {
   final double currentDebt;
   final double openingDebt;
   final bool debtCollectionOnly;
+  final String? photoUrl;
 
   DebtorClient({
     required this.id,

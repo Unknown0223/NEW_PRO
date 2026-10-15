@@ -10,6 +10,7 @@ import '../../../core/config/mobile_config.dart';
 import '../../../core/config/tenant_refs_provider.dart';
 import '../../../core/gps/gps_tracker.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/ui/client_photo_thumb.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../agent/clients/client_dynamic_form.dart';
 import '../../auth/auth_provider.dart';

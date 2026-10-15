@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../l10n/app_strings_ru.dart';
@@ -1127,7 +1129,10 @@ Future<T?> showAgentSheet<T>(BuildContext context, {required Widget child, doubl
   );
 }
 
-/// Toast — ekran **tepasida** (pastki tugmalar / Итого panelini yopmaydi).
+OverlayEntry? _agentToastEntry;
+Timer? _agentToastTimer;
+
+/// Toast — ekranning tepasi, status qatori ostida.
 void showAgentToast(
   BuildContext context,
   String message, {
@@ -1135,31 +1140,42 @@ void showAgentToast(
   Color accentColor = AppColors.warning,
 }) {
   final text = UserFacingError.stripTechnical(message);
-  final messenger = ScaffoldMessenger.of(context);
-  final mq = MediaQuery.of(context);
-  final top = mq.padding.top;
-  // Floating SnackBar default pastga yopishadi — margin bilan tepaga ko‘taramiz.
-  final bottomMargin = (mq.size.height - top - 112).clamp(80.0, mq.size.height);
-  messenger.hideCurrentSnackBar();
-  messenger.showSnackBar(
-    SnackBar(
-      elevation: 0,
-      backgroundColor: Colors.transparent,
-      padding: EdgeInsets.zero,
-      margin: EdgeInsets.fromLTRB(12, 0, 12, bottomMargin),
-      behavior: SnackBarBehavior.floating,
-      dismissDirection: DismissDirection.up,
-      duration: const Duration(seconds: 5),
-      content: _AgentSnackContent(
-        message: text,
-        accentColor: accentColor,
-        onDismiss: () {
-          messenger.hideCurrentSnackBar();
-          onDismiss?.call();
-        },
-      ),
-    ),
+  final overlay = Overlay.maybeOf(context, rootOverlay: true);
+  if (overlay == null) return;
+  ScaffoldMessenger.maybeOf(context)?.hideCurrentSnackBar();
+  _agentToastTimer?.cancel();
+  _agentToastEntry?.remove();
+  _agentToastEntry = null;
+
+  late final OverlayEntry entry;
+  var closed = false;
+  void close() {
+    if (closed) return;
+    closed = true;
+    _agentToastTimer?.cancel();
+    if (entry.mounted) entry.remove();
+    if (identical(_agentToastEntry, entry)) _agentToastEntry = null;
+    onDismiss?.call();
+  }
+
+  entry = OverlayEntry(
+    builder: (ctx) {
+      final top = MediaQuery.paddingOf(ctx).top + 8;
+      return Positioned(
+        top: top,
+        left: 12,
+        right: 12,
+        child: _AgentSnackContent(
+          message: text,
+          accentColor: accentColor,
+          onDismiss: close,
+        ),
+      );
+    },
   );
+  _agentToastEntry = entry;
+  overlay.insert(entry);
+  _agentToastTimer = Timer(const Duration(seconds: 5), close);
 }
 
 /// Login / sessiya xatolari — ekran **pastida** (rasmdagi qorong‘i bar + chap qizil chiziq).

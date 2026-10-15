@@ -9,6 +9,7 @@ import '../theme/app_colors.dart';
 import '../theme/app_typography.dart';
 import 'agent_template_form.dart';
 import 'agent_ui.dart';
+import 'client_photo_thumb.dart';
 
 import '../api/api_exceptions.dart';
 import '../errors/user_facing_error.dart';
@@ -1087,6 +1088,7 @@ class AgentOrderCard extends StatelessWidget {
 
 class AgentDebtorCard extends StatelessWidget {
   final String name;
+  final String? photoUrl;
   final String balance;
   final double? balanceAmount;
   final String? overdue;
@@ -1101,6 +1103,7 @@ class AgentDebtorCard extends StatelessWidget {
   const AgentDebtorCard({
     super.key,
     required this.name,
+    this.photoUrl,
     required this.balance,
     this.balanceAmount,
     this.overdue,
@@ -1127,12 +1130,7 @@ class AgentDebtorCard extends StatelessWidget {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Container(
-              width: 44,
-              height: 44,
-              decoration: BoxDecoration(color: AppColors.surfaceVariant, borderRadius: BorderRadius.circular(12)),
-              child: const Icon(Icons.storefront_outlined, color: AppColors.textSecondary),
-            ),
+            ClientPhotoThumb(source: photoUrl, size: 44, radius: 12),
             const SizedBox(width: 12),
             Expanded(
               child: Column(

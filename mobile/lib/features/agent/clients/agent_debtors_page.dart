@@ -84,6 +84,7 @@ class AgentDebtorsPage extends ConsumerWidget {
                   final fromOps = c.balance.abs() - c.openingDebt;
                   return AgentDebtorCard(
                     name: c.name,
+                    photoUrl: c.photoUrl,
                     balance: _formatBalance(c.balance),
                     balanceAmount: c.balance,
                     overdue: _formatOverdue(c.overdueAt),

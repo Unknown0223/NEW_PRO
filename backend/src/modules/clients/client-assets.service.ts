@@ -307,6 +307,7 @@ export type ClientPhotoReportSummary = {
   id: number;
   caption: string | null;
   order_id: number | null;
+  created_by_user_id?: number | null;
   created_at: string;
   content_purged?: boolean;
 };
@@ -354,11 +355,19 @@ export async function listClientPhotoReports(
           id: true,
           caption: true,
           order_id: true,
+          created_by_user_id: true,
           created_at: true,
           image_url: true,
           content_purged_at: true
         }
-      : { id: true, caption: true, order_id: true, created_at: true, content_purged_at: true }
+      : {
+          id: true,
+          caption: true,
+          order_id: true,
+          created_by_user_id: true,
+          created_at: true,
+          content_purged_at: true
+        }
   });
   return rows.map((r) => {
     const purged = r.content_purged_at != null;
@@ -366,6 +375,7 @@ export async function listClientPhotoReports(
       id: r.id,
       caption: r.caption,
       order_id: r.order_id,
+      created_by_user_id: r.created_by_user_id,
       created_at: r.created_at.toISOString(),
       content_purged: purged
     };

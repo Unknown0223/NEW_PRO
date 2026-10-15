@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/api/supervisor_api.dart';
 import '../../../core/auth/session.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/ui/client_photo_thumb.dart';
 import '../../../core/theme/app_typography.dart';
 import '../config/supervisor_config_enforcement.dart';
 import '../shared/supervisor_ui.dart';
@@ -119,6 +120,11 @@ class _SupervisorClientsPageState extends ConsumerState<SupervisorClientsPage> {
                     return SvCard(
                       padding: EdgeInsets.zero,
                       child: ListTile(
+                        leading: ClientPhotoThumb(
+                          source: c['photo_url']?.toString(),
+                          size: 44,
+                          radius: 10,
+                        ),
                         title: Text(name, style: const TextStyle(fontWeight: FontWeight.w700)),
                         subtitle: Text(
                           [

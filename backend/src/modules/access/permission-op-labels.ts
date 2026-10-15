@@ -45,7 +45,7 @@ export const PERMISSION_OP_LABEL_RU: Record<string, string> = {
 
   "clients.klient.view": "Список клиентов и профиль клиента",
   "clients.klient.create": "Добавление клиента",
-  "clients.klient.update": "Изменение карточки клиента",
+  "clients.klient.update": "Изменение карточки клиента", "clients.profil.update": "Фото профиля клиента",
   "clients.klient.import": "Импорт клиентов из Excel (добавление и обновление)",
   "clients.klient.copy": "Экспорт клиентов в Excel",
   "clients.klient.activate": "Активация клиента",

@@ -591,7 +591,10 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
     try {
       final photos = await ref.read(mobileApiProvider).getClientPhotoReports(slug, _selectedClientId);
       if (mounted) {
-        setState(() => _hasUnlinkedPhotoToday = hasUnlinkedPhotoReportToday(photos));
+        setState(() => _hasUnlinkedPhotoToday = hasUnlinkedPhotoReportToday(
+              photos,
+              ownerUserId: ref.read(sessionProvider).user?.id,
+            ));
         _photoStatusFetchedAt = now;
       }
     } catch (_) {}
@@ -1324,7 +1327,10 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
     if (ref.read(sessionProvider).mobileConfig?.photo.requiredForOrder == true) {
       try {
         final photos = await ref.read(mobileApiProvider).getClientPhotoReports(slug, _selectedClientId);
-        if (!hasUnlinkedPhotoReportToday(photos)) {
+        if (!hasUnlinkedPhotoReportToday(
+          photos,
+          ownerUserId: ref.read(sessionProvider).user?.id,
+        )) {
           if (mounted) {
             _toast('Необходимо добавить фотоотчет');
             setState(() => _submitting = false);

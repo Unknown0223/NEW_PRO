@@ -2,6 +2,8 @@
  * Ekspeditor yetkazish oqimi — bosh sahifa, vizitlar, qarzdorlar.
  */
 import { prisma } from "../../config/database";
+import { profilePhotoMobileUrl } from "../clients/client-profile-photo.pure";
+import { tenantSlug } from "../clients/client-profile-photo.service";
 import { Prisma } from "@prisma/client";
 import { loadDeliveryDebtByClient, mergeLedgerWithUnpaidDelivered } from "../client-balances/client-balances.delivery";
 import { loadExpeditorMobileConfig } from "./mobile.expeditor.service";
@@ -168,6 +170,27 @@ function todayStartUtc(): Date {
   return new Date(new Date().toISOString().slice(0, 10) + "T00:00:00.000Z");
 }
 
+function reportPhotoUrl(raw: string | null | undefined): string | null {
+  const photoRaw = raw?.trim() ?? "";
+  if (!photoRaw || photoRaw.startsWith("data:") || photoRaw.length > 2048) return null;
+  return photoRaw;
+}
+
+function visitClientPhoto(
+  client: {
+    id: number;
+    profile_photo_url?: string | null;
+    updated_at?: Date | null;
+    client_photo_reports?: { image_url: string | null }[];
+  },
+  slug: string
+): string | null {
+  return (
+    profilePhotoMobileUrl(client.profile_photo_url, slug, client.id, client.updated_at) ??
+    reportPhotoUrl(client.client_photo_reports?.[0]?.image_url)
+  );
+}
+
 /** Vizitlar: active | completed | routes | unfinished */
 export async function listMobileExpeditorVisits(
   tenantId: number,
@@ -236,6 +259,8 @@ export async function listMobileExpeditorVisits(
           latitude: true,
           longitude: true,
           client_balances: { take: 1, select: { balance: true } },
+          updated_at: true,
+          profile_photo_url: true,
           client_photo_reports: {
             where: { deleted_at: null },
             orderBy: { created_at: "desc" as const },
@@ -248,6 +273,8 @@ export async function listMobileExpeditorVisits(
     orderBy: [{ status: "asc" }, { id: "asc" }]
   });
 
+  const slug = await tenantSlug(tenantId);
+
   if (tab === "routes") {
     const byClient = new Map<number, (typeof orders)[0]>();
     for (const o of orders) {
@@ -255,9 +282,7 @@ export async function listMobileExpeditorVisits(
     }
     const routeList = [...byClient.values()];
     return routeList.map((o, idx) => {
-      const photoRaw = o.client.client_photo_reports?.[0]?.image_url?.trim() ?? "";
-      const photoUrl =
-        photoRaw && !photoRaw.startsWith("data:") && photoRaw.length <= 2048 ? photoRaw : null;
+      const photoUrl = visitClientPhoto(o.client, slug);
       return {
         seq: idx + 1,
         order_id: o.id,
@@ -278,9 +303,7 @@ export async function listMobileExpeditorVisits(
   }
 
   return orders.map((o) => {
-    const photoRaw = o.client.client_photo_reports?.[0]?.image_url?.trim() ?? "";
-    const photoUrl =
-      photoRaw && !photoRaw.startsWith("data:") && photoRaw.length <= 2048 ? photoRaw : null;
+    const photoUrl = visitClientPhoto(o.client, slug);
     return {
       order_id: o.id,
       order_number: o.number,
@@ -327,6 +350,8 @@ export async function listMobileExpeditorDebtors(tenantId: number, expeditorUser
       address: true,
       city: true,
       region: true,
+      updated_at: true,
+      profile_photo_url: true,
       client_balances: { take: 1, select: { balance: true } }
     }
   });
@@ -340,6 +365,7 @@ export async function listMobileExpeditorDebtors(tenantId: number, expeditorUser
     loadOpeningDebtByClient(tenantId, ids)
   ]);
 
+  const slug = await tenantSlug(tenantId);
   const { pickMobileDebtorsByBalance } = await import("./mobile-debtors-rank");
   return pickMobileDebtorsByBalance(
     clients.map((c) => {
@@ -356,7 +382,8 @@ export async function listMobileExpeditorDebtors(tenantId: number, expeditorUser
         address: [c.city, c.region, c.address].filter(Boolean).join(", ") || null,
         balance: Number(merged),
         overdue_at: delivery?.firstDel?.toISOString() ?? null,
-        opening_debt: openingDebt
+        opening_debt: openingDebt,
+        photo_url: profilePhotoMobileUrl(c.profile_photo_url, slug, c.id, c.updated_at)
       };
     }),
     outLimit

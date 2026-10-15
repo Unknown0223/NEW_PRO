@@ -7,9 +7,12 @@ import '../../../core/auth/biometric_transaction_confirm.dart';
 import '../../../core/auth/session.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
+import '../../../core/ui/agent_ui.dart';
 import '../config/expeditor_config_enforcement.dart';
 import '../expeditor_providers.dart';
 import '../shared/expeditor_order_picker.dart';
+import 'expeditor_return_kind_picker.dart';
+import 'expeditor_return_reason_picker.dart';
 import '../shell/expeditor_drawer.dart';
 
 class ExpeditorReturnsPage extends ConsumerStatefulWidget {
@@ -21,6 +24,7 @@ class ExpeditorReturnsPage extends ConsumerStatefulWidget {
 
 class _ExpeditorReturnsPageState extends ConsumerState<ExpeditorReturnsPage> {
   String _returnReason = '';
+  ExpeditorReturnKind? _kind;
   final _noteCtrl = TextEditingController();
   final Map<int, TextEditingController> _qtyCtrls = {};
   bool _submitting = false;
@@ -51,14 +55,18 @@ class _ExpeditorReturnsPageState extends ConsumerState<ExpeditorReturnsPage> {
     }
   }
 
-  List<Map<String, dynamic>> _collectReturnItems(List<Map<String, dynamic>> items) {
+  List<Map<String, dynamic>> _collectReturnItems(
+    List<Map<String, dynamic>> items, {
+    required bool full,
+  }) {
     final out = <Map<String, dynamic>>[];
     for (final it in items) {
       final id = it['id'] as int?;
       if (id == null) continue;
-      final ctrl = _qtyCtrls[id];
-      if (ctrl == null) continue;
-      final qty = double.tryParse(ctrl.text.replaceAll(',', '.')) ?? 0;
+      final maxQty = (it['qty'] as num?)?.toDouble() ?? 0;
+      final qty = full
+          ? maxQty
+          : (double.tryParse(_qtyCtrls[id]?.text.replaceAll(',', '.') ?? '') ?? 0);
       if (qty <= 0) continue;
       out.add({'order_item_id': id, 'qty': qty});
     }
@@ -67,7 +75,7 @@ class _ExpeditorReturnsPageState extends ConsumerState<ExpeditorReturnsPage> {
 
   Future<void> _submitReturn(int orderId, String slug, List<Map<String, dynamic>> items) async {
     if (_returnReason.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Выберите причину')));
+      showAgentToast(context, 'Выберите причину');
       return;
     }
     setState(() => _submitting = true);
@@ -82,7 +90,13 @@ class _ExpeditorReturnsPageState extends ConsumerState<ExpeditorReturnsPage> {
         reason: 'Подтвердите возврат',
       );
       if (!confirmed) return;
-      final lines = _collectReturnItems(items);
+      final lines = _collectReturnItems(items, full: _kind == ExpeditorReturnKind.full);
+      if (lines.isEmpty) {
+        if (mounted) {
+          showAgentToast(context, 'Укажите количество возврата');
+        }
+        return;
+      }
       await ref.read(expeditorApiProvider).partialReturn(
             slug,
             orderId,
@@ -92,17 +106,12 @@ class _ExpeditorReturnsPageState extends ConsumerState<ExpeditorReturnsPage> {
           );
       ref.invalidate(expeditorOrderDetailProvider(orderId));
       ref.invalidate(deliveriesProvider(null));
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Возврат зарегистрирован'), backgroundColor: AppColors.warning),
-        );
-        if (context.canPop()) context.pop();
-      }
+      ref.invalidate(expeditorDashboardProvider);
+      if (!mounted) return;
+      context.go('/home');
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('$e'), backgroundColor: AppColors.error),
-        );
+        showAgentToast(context, '$e', accentColor: AppColors.error);
       }
     } finally {
       if (mounted) setState(() => _submitting = false);
@@ -130,16 +139,12 @@ class _ExpeditorReturnsPageState extends ConsumerState<ExpeditorReturnsPage> {
       ref.invalidate(expeditorOrderDetailProvider(orderId));
       ref.invalidate(deliveriesProvider(null));
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Догруз зарегистрирован')),
-        );
+        showAgentToast(context, 'Догруз зарегистрирован', accentColor: AppColors.success);
         if (context.canPop()) context.pop();
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('$e'), backgroundColor: AppColors.error),
-        );
+        showAgentToast(context, '$e', accentColor: AppColors.error);
       }
     } finally {
       if (mounted) setState(() => _submitting = false);
@@ -181,34 +186,21 @@ class _ExpeditorReturnsPageState extends ConsumerState<ExpeditorReturnsPage> {
           final items = rawItems.map((e) => Map<String, dynamic>.from(e)).toList();
           _ensureQtyControllers(items);
 
+          final full = _kind == ExpeditorReturnKind.full;
+          final partial = _kind == ExpeditorReturnKind.partial;
+          final shelf = _kind == ExpeditorReturnKind.shelf;
           return SingleChildScrollView(
             padding: const EdgeInsets.all(16),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: AppColors.warning.withValues(alpha: 0.08),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _CapabilityRow('Частичный возврат', policy.allowPartialReturn),
-                      _CapabilityRow('Догруз из машины', policy.allowReloadFromVehicle),
-                      if (policy.allowReturnFromShelf)
-                        const Padding(
-                          padding: EdgeInsets.only(top: 6),
-                          child: Text(
-                            'Возврат с полки — через веб-панель, раздел «Возврат с полки»',
-                            style: TextStyle(fontSize: 11),
-                          ),
-                        ),
-                    ],
-                  ),
+                ExpeditorReturnKindPicker(
+                  value: _kind,
+                  partialEnabled: policy.allowPartialReturn,
+                  shelfEnabled: policy.allowReturnFromShelf,
+                  onChanged: (kind) => setState(() => _kind = kind),
                 ),
-                if (policy.allowPartialReturn && items.isNotEmpty) ...[
+                if (partial && items.isNotEmpty) ...[
                   const SizedBox(height: 16),
                   const Text('Товары к возврату', style: AppTypography.titleMedium),
                   const SizedBox(height: 8),
@@ -242,40 +234,62 @@ class _ExpeditorReturnsPageState extends ConsumerState<ExpeditorReturnsPage> {
                     );
                   }),
                 ],
-                const SizedBox(height: 12),
-                TextField(
-                  controller: _noteCtrl,
-                  decoration: const InputDecoration(
-                    labelText: 'Комментарий (необязательно)',
-                    border: OutlineInputBorder(),
+                if (full)
+                  const Padding(
+                    padding: EdgeInsets.only(top: 12),
+                    child: Text(
+                      'Вернутся все товары этого заказа.',
+                      style: TextStyle(fontWeight: FontWeight.w700, color: AppColors.textSecondary),
+                    ),
                   ),
-                  maxLines: 2,
-                ),
-                if (policy.allowPartialReturn) ...[
-                  const SizedBox(height: 20),
-                  const Text('Причина возврата', style: AppTypography.titleMedium),
-                  const SizedBox(height: 8),
-                  DropdownButtonFormField<String>(
-                    initialValue: _returnReason.isEmpty ? null : _returnReason,
-                    decoration: const InputDecoration(hintText: 'Выберите причину', border: OutlineInputBorder()),
-                    items: const [
-                      DropdownMenuItem(value: 'defective', child: Text('Бракованный товар')),
-                      DropdownMenuItem(value: 'wrong', child: Text('Неверный товар')),
-                      DropdownMenuItem(value: 'excess', child: Text('Излишек')),
-                      DropdownMenuItem(value: 'other', child: Text('Другое')),
-                    ],
-                    onChanged: _submitting ? null : (v) => setState(() => _returnReason = v ?? ''),
+                if (full || partial) ...[
+                  const SizedBox(height: 16),
+                  ExpeditorReturnReasonPicker(
+                    value: _returnReason,
+                    enabled: !_submitting,
+                    onChanged: (v) => setState(() => _returnReason = v),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: _noteCtrl,
+                    decoration: const InputDecoration(
+                      labelText: 'Комментарий (необязательно)',
+                      border: OutlineInputBorder(),
+                    ),
+                    maxLines: 2,
                   ),
                   const SizedBox(height: 16),
                   ElevatedButton.icon(
-                    onPressed: _submitting ? null : () => _submitReturn(orderId, slug, items),
+                    onPressed: _submitting
+                        ? null
+                        : () {
+                            if ((order['status']?.toString() ?? '') == 'returned') {
+                              context.go('/home');
+                              return;
+                            }
+                            _submitReturn(orderId, slug, items);
+                          },
                     icon: const Icon(Icons.replay),
-                    label: const Text('ОТПРАВИТЬ ВОЗВРАТ'),
+                    label: Text(full ? 'ОТПРАВИТЬ ПОЛНЫЙ ВОЗВРАТ' : 'ОТПРАВИТЬ ЧАСТИЧНЫЙ ВОЗВРАТ'),
                     style: ElevatedButton.styleFrom(backgroundColor: AppColors.warning),
                   ),
                 ],
+                if (shelf && policy.allowReturnFromShelf) ...[
+                  const SizedBox(height: 16),
+                  ElevatedButton.icon(
+                    onPressed: () => context.push('/exp-return-by-order/$orderId'),
+                    icon: const Icon(Icons.inventory_2_outlined),
+                    label: const Text('ОТКРЫТЬ ВОЗВРАТ С ПОЛКИ'),
+                    style: ElevatedButton.styleFrom(backgroundColor: AppColors.expeditorAccent),
+                  ),
+                ],
                 if (policy.allowReloadFromVehicle) ...[
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 20),
+                  const Text(
+                    'Догруз — это не возврат. Заказ снова станет «доставляется», товар остаётся в машине.',
+                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.textSecondary),
+                  ),
+                  const SizedBox(height: 8),
                   OutlinedButton.icon(
                     onPressed: _submitting ? null : () => _submitReload(orderId, slug),
                     icon: const Icon(Icons.local_shipping),
@@ -293,22 +307,3 @@ class _ExpeditorReturnsPageState extends ConsumerState<ExpeditorReturnsPage> {
   }
 }
 
-class _CapabilityRow extends StatelessWidget {
-  final String label;
-  final bool enabled;
-  const _CapabilityRow(this.label, this.enabled);
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 2),
-      child: Row(
-        children: [
-          Icon(enabled ? Icons.check_circle : Icons.cancel, size: 16, color: enabled ? AppColors.success : AppColors.error),
-          const SizedBox(width: 6),
-          Text(label, style: AppTypography.bodySmall),
-        ],
-      ),
-    );
-  }
-}

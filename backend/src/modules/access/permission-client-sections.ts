@@ -19,6 +19,7 @@ const VISIT_PLANNER_SECTIONS: [section: string, labelRu: string][] = [
  */
 export const CLIENT_PERMISSION_SECTIONS: PermissionSectionDef[] = [
   { module: "clients", section: "klient", labelRu: "Клиенты", actions: ["view", "create", "update", "import", "copy", "activate", "deactivate", "history"] },
+  { module: "clients", section: "profil", labelRu: "Фото профиля клиента", actions: ["update"], treeSectionRu: "Клиенты" },
   ...CLIENT_GROUP_SECTIONS.map(
     ([section, labelRu]): PermissionSectionDef => ({ module: "clients", section, labelRu, actions: ["update"], treeSectionRu: CLIENT_GROUP_TREE_RU })
   ),

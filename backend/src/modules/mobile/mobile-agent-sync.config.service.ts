@@ -1,5 +1,6 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "../../config/database";
+import { profilePhotoMobileUrl } from "../clients/client-profile-photo.pure";
 import { MOBILE_FIELD_ROLES } from "../../lib/constants";
 import { resolveSyncClientVisitPlan } from "./mobile-agent-sync.client-weekdays";
 import {
@@ -26,6 +27,7 @@ import {
   utcOffsetHoursForTimezone
 } from "../tenant-settings/tenant-timezone";
 import { loadActiveWorkSlotsByUserIds } from "../work-slots/work-slots.query";
+import { photoReportIsRequired } from "./mobile-field-visit.pure";
 import { resolveAppUpdateForTenant } from "./app-release.service";
 import { getMobileAgentAssignedCities } from "./mobile-agent-cities";
 import {
@@ -152,10 +154,7 @@ export async function assertMobilePhotoReportForClient(
   clientId: number,
   cfg: AgentMobileConfigV1 | null
 ): Promise<void> {
-  const required =
-    cfg?.photo?.required_for_order === true ||
-    cfg?.expeditor?.require_photo_report_before_visit === true;
-  if (!required) return;
+  if (!photoReportIsRequired(cfg)) return;
   const { start, end } = localTodayRange();
   const hit = await prisma.clientPhotoReport.findFirst({
     where: {
@@ -227,6 +226,7 @@ export type CompactClientRow = {
   balance?: number | null;
   credit_limit?: Prisma.Decimal | null;
   client_balances?: { balance: Prisma.Decimal }[];
+  profile_photo_url?: string | null;
   client_photo_reports?: { image_url: string | null }[];
   agent_assignments?: {
     visit_weekdays: unknown;
@@ -238,13 +238,16 @@ export type CompactClientRow = {
 
 export function compactClient(
   c: CompactClientRow,
-  opts?: { agentId?: number; workSlotId?: number | null }
+  opts?: { agentId?: number; workSlotId?: number | null; tenantSlug?: string | null }
 ) {
   const ledger = c.client_balances?.[0]?.balance;
   const plan = resolveSyncClientVisitPlan(c.agent_assignments, c.visit_weekdays, opts);
   const visitDate = plan.visitDate ?? c.visit_date ?? null;
   const weekdays = plan.weekdays;
-  const photoUrl = compactSyncPhotoUrl(c.client_photo_reports?.[0]?.image_url);
+  const profileUrl = opts?.tenantSlug
+    ? profilePhotoMobileUrl(c.profile_photo_url, opts.tenantSlug, c.id, c.updated_at)
+    : null;
+  const photoUrl = profileUrl ?? compactSyncPhotoUrl(c.client_photo_reports?.[0]?.image_url);
   return {
     id: c.id,
     name: c.name,
@@ -296,6 +299,7 @@ export const clientSyncSelectBase = {
   client_code: true,
   sales_channel: true,
   updated_at: true,
+  profile_photo_url: true,
   legal_name: true,
   client_type_code: true,
   region: true,
@@ -536,7 +540,8 @@ export async function getMobileAgentConfigPayload(
 
   const appUpdate = await resolveAppUpdateForTenant(tenantId, clientVersion, "android", {
     tenantSlug: tenantRow?.slug,
-    origin: opts?.origin
+    origin: opts?.origin,
+    role: u.role
   });
 
   const workTimezone = loadTimezoneFromSettingsJson(st);

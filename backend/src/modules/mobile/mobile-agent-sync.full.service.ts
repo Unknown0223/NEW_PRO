@@ -1,5 +1,6 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "../../config/database";
+import { tenantSlug } from "../clients/client-profile-photo.service";
 import { ORDER_STATUSES_EXCLUDED_FROM_CREDIT_EXPOSURE } from "../orders/order-status";
 import { loadActiveWorkSlotsByUserIds } from "../work-slots/work-slots.query";
 import {
@@ -62,7 +63,10 @@ export async function fetchSyncClients(
 ): Promise<ReturnType<typeof compactClient>[]> {
   const out: ReturnType<typeof compactClient>[] = [];
   let skip = 0;
-  const slotMap = await loadActiveWorkSlotsByUserIds([agentId]);
+  const [slotMap, slug] = await Promise.all([
+    loadActiveWorkSlotsByUserIds([agentId]),
+    tenantSlug(tenantId)
+  ]);
   const workSlotId = slotMap.get(agentId)?.slot_id ?? null;
 
   while (out.length < MOBILE_SYNC_CLIENT_MAX) {
@@ -96,7 +100,7 @@ export async function fetchSyncClients(
             ...(r as unknown as CompactClientRow),
             ...(photo ? { client_photo_reports: [{ image_url: photo }] } : { client_photo_reports: [] })
           },
-          { agentId, workSlotId }
+          { agentId, workSlotId, tenantSlug: slug }
         );
       })
     );

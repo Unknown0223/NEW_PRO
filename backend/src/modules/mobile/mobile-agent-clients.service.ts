@@ -1,5 +1,6 @@
 import type { z } from "zod";
 import { prisma } from "../../config/database";
+import { tenantSlug } from "../clients/client-profile-photo.service";
 import type {
   mobileCreateClientBodySchema,
   mobilePatchClientBodySchema
@@ -191,7 +192,8 @@ export async function createMobileAgentClient(
     where: { id, tenant_id: tenantId },
     select: clientSyncSelectForAgent(userId, workSlotId)
   });
-  const compact = compactClient(row as unknown as CompactClientRow, { agentId: userId, workSlotId });
+  const slug = await tenantSlug(tenantId);
+  const compact = compactClient(row as unknown as CompactClientRow, { agentId: userId, workSlotId, tenantSlug: slug });
   if (input.visit_weekdays?.length) {
     await appendClientToExistingAgentRouteDays(
       tenantId,
@@ -296,7 +298,8 @@ export async function patchMobileAgentClient(
     where: { id: clientId, tenant_id: tenantId },
     select: clientSyncSelectForAgent(userId, workSlotId)
   });
-  return compactClient(row as unknown as CompactClientRow, { agentId: userId, workSlotId });
+  const slug = await tenantSlug(tenantId);
+  return compactClient(row as unknown as CompactClientRow, { agentId: userId, workSlotId, tenantSlug: slug });
 }
 
 /** GPS — faqat ushbu supervayzerga bog‘langan agentlar. */

@@ -237,6 +237,7 @@ export const mobileAppReleasePatchSchema = z
     download_url: z.string().max(4000).nullable().optional(),
     store_url_android: z.string().max(4000).nullable().optional(),
     store_url_ios: z.string().max(4000).nullable().optional(),
-    release_notes: z.string().max(8000).nullable().optional()
+    release_notes: z.string().max(8000).nullable().optional(),
+    target_roles: z.array(z.enum(["agent", "expeditor", "supervisor"])).max(3).optional()
   })
   .strict();

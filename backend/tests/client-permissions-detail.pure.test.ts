@@ -146,6 +146,12 @@ describe("Клиенты — route guard", () => {
     expect(matchRule("POST", "/api/:slug/clients/:id/equipment")?.anyOf).toEqual(["clients.oborudovanie.create"]);
     expect(matchRule("GET", "/api/:slug/equipment")?.anyOf).toEqual(["clients.oborudovanie.view"]);
     expect(matchRule("DELETE", "/api/:slug/clients/:id/photo-reports/:id")?.anyOf).toEqual(["clients.foto.void"]);
+    expect(matchRule("PUT", "/api/:slug/clients/:id/profile-photo")?.anyOf).toEqual(["clients.profil.update"]);
+    expect(matchRule("DELETE", "/api/:slug/clients/:id/profile-photo")?.anyOf).toEqual(["clients.profil.update"]);
+    expect(matchRule("GET", "/api/:slug/clients/:id/profile-photo")?.anyOf).toEqual([
+      "clients.klient.view",
+      "clients.foto.view"
+    ]);
     expect(matchRule("GET", "/api/:slug/clients/:id/audit")?.anyOf).toEqual(["clients.klient.history"]);
   });
 

@@ -10,6 +10,7 @@ import {
 } from "@/components/clients/client-profile-ledger-filters-context";
 import { ClientProfileEquipmentTab } from "@/components/clients/client-profile-equipment-tab";
 import { ClientTelegramPanel } from "@/components/clients/client-telegram-panel";
+import { ClientProfilePhotoView } from "@/components/clients/client-profile-photo-card";
 import { ClientProfilePhotoReportsTab } from "@/components/clients/client-profile-photo-reports-tab";
 import type { ClientMapPoint } from "@/components/clients/clients-leaflet-map";
 import { PageHeader } from "@/components/dashboard/page-header";
@@ -216,6 +217,7 @@ function statusBadgeClass(status: string): string {
 
 type RequisitesAsideProps = {
   client: ClientDetailApiRow;
+  tenantSlug: string;
   clientId: number;
   territoryWithZone: string;
   addressMerged: string;
@@ -233,6 +235,7 @@ type RequisitesAsideProps = {
 
 function ClientProfileRequisitesAside({
   client: c,
+  tenantSlug,
   clientId,
   territoryWithZone,
   addressMerged,
@@ -271,7 +274,8 @@ function ClientProfileRequisitesAside({
   const updated = new Date(c.updated_at).toLocaleString("ru-RU", { dateStyle: "short", timeStyle: "short" });
 
   return (
-    <aside className="min-w-0 self-start lg:sticky lg:top-4 lg:col-span-1">
+    <aside className="flex min-w-0 flex-col gap-3 self-start lg:sticky lg:top-4 lg:col-span-1">
+      <ClientProfilePhotoView tenantSlug={tenantSlug} clientId={clientId} />
       <div className="overflow-hidden rounded-lg border border-border/70 bg-card shadow-sm ring-1 ring-black/[0.04] dark:ring-white/[0.06]">
         <div className="flex items-center justify-between gap-2 border-b border-border/60 bg-muted/30 px-2 py-1.5">
           <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Реквизиты</span>
@@ -751,7 +755,6 @@ function ClientProfileHubInner({ tenantSlug, clientId }: Props) {
           </div>
         }
       />
-
         <div className={cn("grid gap-5", hubTab === "service" ? "grid-cols-1" : "lg:grid-cols-3")}>
           <div className={cn(hubTab === "service" ? "" : "space-y-4 lg:col-span-2")}>
             {hubTab !== "service" ? (
@@ -1370,6 +1373,7 @@ function ClientProfileHubInner({ tenantSlug, clientId }: Props) {
             client={c}
             clientId={clientId}
             territoryWithZone={territoryWithZone}
+            tenantSlug={tenantSlug}
             addressMerged={addressMerged}
             refDisplayMaps={refDisplayMaps}
             lastAuditPatch={lastAuditPatch}

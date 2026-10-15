@@ -134,7 +134,8 @@ export async function listOrdersPaged(
   tenantId: number,
   q: ListOrdersQuery,
   viewerRole: string,
-  viewerUserId?: number | null
+  viewerUserId?: number | null,
+  opts?: { skipAgentScope?: boolean }
 ): Promise<{
   data: OrderListRow[];
   total: number;
@@ -151,7 +152,8 @@ export async function listOrdersPaged(
       stableJsonStringify({
         q,
         viewerRole,
-        viewerUserId: viewerUserId ?? null
+        viewerUserId: viewerUserId ?? null,
+        skipAgentScope: opts?.skipAgentScope === true
       })
     );
     const cached = await getAppCache<{
@@ -176,9 +178,11 @@ export async function listOrdersPaged(
     userId: viewerUserId ?? null,
     role: viewerRole
   });
-  const agentScopeWhere = buildOrderAgentScopeWhere(scopedActor);
-  if (agentScopeWhere) {
-    andClauses.push(agentScopeWhere);
+  if (!opts?.skipAgentScope) {
+    const agentScopeWhere = buildOrderAgentScopeWhere(scopedActor);
+    if (agentScopeWhere) {
+      andClauses.push(agentScopeWhere);
+    }
   }
 
   const statusParts = (q.status ?? "").split(",").map((s) => s.trim()).filter(Boolean);
@@ -698,7 +702,8 @@ export async function listOrdersPaged(
       stableJsonStringify({
         q,
         viewerRole,
-        viewerUserId: viewerUserId ?? null
+        viewerUserId: viewerUserId ?? null,
+        skipAgentScope: opts?.skipAgentScope === true
       })
     );
     void setAppCache(cacheKey, result, ORDERS_LIST_CACHE_TTL_SECONDS);

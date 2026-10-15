@@ -208,7 +208,8 @@ export async function login(app: FastifyInstance, input: LoginInput) {
     const { resolveAppUpdateForTenant } = await import("../mobile/app-release.service");
     app_update = await resolveAppUpdateForTenant(tenantId, apkVersion, "android", {
       origin: input.request_origin,
-      tenantSlug: tenant.slug
+      tenantSlug: tenant.slug,
+      role: user.role
     });
   }
 

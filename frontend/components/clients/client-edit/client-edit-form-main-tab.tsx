@@ -10,6 +10,7 @@ import { cn } from "@/lib/utils";
 import { emptyAgentSlot, toggleWeekday, VISIT_DAYS } from "./client-edit-form.utils";
 import { Caption, FieldHint, SpravochnikAdminLink, agentAssignmentsFieldHint } from "./client-edit-form-ui";
 import { YandexCoordinatePicker } from "./yandex-coordinate-picker";
+import { ClientProfilePhotoField } from "@/components/clients/client-profile-photo-card";
 import type { ClientEditFormVm } from "./hooks/use-client-edit-form";
 
 export function ClientEditFormMainTab({ vm }: { vm: ClientEditFormVm }) {
@@ -67,6 +68,14 @@ export function ClientEditFormMainTab({ vm }: { vm: ClientEditFormVm }) {
   return (
         <div className="grid gap-6 xl:grid-cols-[minmax(0,1.15fr)_minmax(0,0.95fr)] xl:gap-8">
           <div className="flex flex-col gap-6">
+            {vm.canProfilePhoto && vm.tenantSlug ? (
+              <ClientProfilePhotoField
+                tenantSlug={vm.tenantSlug}
+                clientId={vm.isCreateMode ? undefined : vm.effectiveClientId}
+                draft={vm.profilePhotoDraft}
+                onDraft={vm.setProfilePhotoDraft}
+              />
+            ) : null}
             <section className="rounded-lg border bg-card p-4 shadow-sm sm:p-5">
               <Caption variant="write">Ввод с клавиатуры</Caption>
               <p className="mt-1 text-xs text-muted-foreground">

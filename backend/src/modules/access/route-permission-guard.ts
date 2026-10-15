@@ -222,6 +222,8 @@ const ROUTE_PERMISSION_RULES: RoutePermissionRule[] = [
   r(["POST"], /\/clients\/:id\/telegram\//, "clients.klient.update"),
   r(["POST"], /\/clients$/, "clients.klient.create"),
   r(["PUT", "PATCH"], /\/clients\/:id$/, "clients.klient.update"),
+  r(["PUT", "DELETE"], /\/clients\/:id\/profile-photo$/, "clients.profil.update"),
+  r(READ, /\/clients\/:id\/profile-photo$/, "clients.klient.view", "clients.foto.view"),
   r(WRITE, /\/clients\/:id\/photo-reports\/[^/]+\/restore/, "clients.foto.restore"),
   r(["DELETE"], /\/clients\/:id\/photo-reports/, "clients.foto.void"),
   r(["POST"], /\/clients\/:id\/photo-reports/, "clients.foto.create"),

@@ -1,5 +1,6 @@
 import type { z } from "zod";
 import { prisma } from "../../config/database";
+import { tenantSlug } from "../clients/client-profile-photo.service";
 import type {
   mobileCreateSupervisorClientBodySchema,
   mobilePatchClientBodySchema
@@ -107,7 +108,10 @@ export async function listMobileSupervisorClients(
   supervisorUserId: number,
   opts?: { q?: string; limit?: number }
 ) {
-  const agentIds = await linkedAgentIds(tenantId, supervisorUserId);
+  const [agentIds, slug] = await Promise.all([
+    linkedAgentIds(tenantId, supervisorUserId),
+    tenantSlug(tenantId)
+  ]);
   if (agentIds.length === 0) return [] as ReturnType<typeof compactClient>[];
 
   const q = opts?.q?.trim() ?? "";
@@ -133,7 +137,7 @@ export async function listMobileSupervisorClients(
   });
 
   return rows.map((r) => {
-    const compact = compactClient(r as unknown as CompactClientRow);
+    const compact = compactClient(r as unknown as CompactClientRow, { tenantSlug: slug });
     const linked = (r.agent_assignments ?? [])
       .map((a) => a.agent)
       .filter((a): a is NonNullable<typeof a> => a != null && agentIds.includes(a.id));
@@ -151,14 +155,17 @@ export async function getMobileSupervisorClient(
   supervisorUserId: number,
   clientId: number
 ) {
-  const agentIds = await linkedAgentIds(tenantId, supervisorUserId);
+  const [agentIds, slug] = await Promise.all([
+    linkedAgentIds(tenantId, supervisorUserId),
+    tenantSlug(tenantId)
+  ]);
   if (agentIds.length === 0) throw new Error("NOT_FOUND");
   const row = await prisma.client.findFirst({
     where: { id: clientId, ...supervisorScopedClientWhere(tenantId, agentIds) },
     select: supervisorClientSelect
   });
   if (!row) throw new Error("NOT_FOUND");
-  const compact = compactClient(row as unknown as CompactClientRow);
+  const compact = compactClient(row as unknown as CompactClientRow, { tenantSlug: slug });
   const linked = (row.agent_assignments ?? [])
     .map((a) => a.agent)
     .filter((a): a is NonNullable<typeof a> => a != null && agentIds.includes(a.id));

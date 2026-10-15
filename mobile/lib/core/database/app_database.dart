@@ -491,6 +491,17 @@ class AppDatabase {
     }
   }
 
+  static bool _keepLocalClientPhoto(String path) {
+    if (path.startsWith('http://') ||
+        path.startsWith('https://') ||
+        path.startsWith('/api/') ||
+        path.startsWith('/uploads') ||
+        path.startsWith('data:')) {
+      return false;
+    }
+    return true;
+  }
+
   static Future<void> _preserveClientPhotoUrls(
     DatabaseExecutor db,
     List<Map<String, dynamic>> clients,
@@ -524,7 +535,7 @@ class AppDatabase {
       if (incoming != null && incoming.isNotEmpty) continue;
       final id = c['id'];
       final keep = id is int ? existing[id] : null;
-      if (keep != null) c['photo_url'] = keep;
+      if (keep != null && _keepLocalClientPhoto(keep)) c['photo_url'] = keep;
     }
   }
 

@@ -11,6 +11,7 @@ import '../config/expeditor_config_enforcement.dart';
 import '../expeditor_providers.dart';
 import '../payments/expeditor_notifications.dart';
 import '../shell/expeditor_drawer.dart';
+import 'expeditor_home_report_table.dart';
 import 'expeditor_home_sheets.dart';
 import 'expeditor_sync_sheet.dart';
 
@@ -113,8 +114,9 @@ class ExpeditorHomePage extends ConsumerWidget {
                                         style: AppTypography.headlineMedium,),
                                     const Text('УСПЕВАЕМОСТЬ',
                                         style: TextStyle(
-                                            fontSize: 9,
-                                            color: AppColors.textMuted,),),
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.w700,
+                                            color: AppColors.textSecondary,),),
                                   ],
                                 ),
                               ],
@@ -141,8 +143,9 @@ class ExpeditorHomePage extends ConsumerWidget {
                         ),
                         const SizedBox(height: 12),
                         Text(
-                            'Последняя синхр-ция: ${_fmtSync(d['last_sync_at']?.toString())}',
-                            style: AppTypography.caption,),
+                            'Синхронизация: ${_fmtSync(d['last_sync_at']?.toString())}',
+                            style: AppTypography.bodySmall
+                                .copyWith(color: AppColors.textSecondary),),
                         const SizedBox(height: 8),
                         SizedBox(
                           width: double.infinity,
@@ -164,12 +167,12 @@ class ExpeditorHomePage extends ConsumerWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text('Оплаты',
-                            style: TextStyle(fontWeight: FontWeight.w700),),
+                        const Text('Оплаты', style: AppTypography.titleMedium),
                         const SizedBox(height: 6),
                         Text(
                           paymentsSummary,
-                          style: AppTypography.bodySmall,
+                          style: AppTypography.bodyMedium
+                              .copyWith(color: AppColors.textSecondary),
                         ),
                         const SizedBox(height: 10),
                         if (policy.paymentsEnabled)
@@ -199,9 +202,9 @@ class ExpeditorHomePage extends ConsumerWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         const Text('Отчет по отгрузкам',
-                            style: AppTypography.titleMedium,),
-                        const SizedBox(height: 8),
-                        _ReportTable(
+                            style: AppTypography.headlineSmall,),
+                        const SizedBox(height: 10),
+                        ExpeditorHomeReportTable(
                             rows: rows
                                 .map((e) => Map<String, dynamic>.from(e))
                                 .toList(),),
@@ -223,9 +226,12 @@ class ExpeditorHomePage extends ConsumerWidget {
                                 child: const Row(
                                   mainAxisAlignment: MainAxisAlignment.center,
                                   children: [
-                                    Text('По клиентам'),
+                                    Text('По клиентам',
+                                        style: TextStyle(
+                                            fontSize: 15,
+                                            fontWeight: FontWeight.w700,),),
                                     SizedBox(width: 4),
-                                    Icon(Icons.chevron_right, size: 18),
+                                    Icon(Icons.chevron_right, size: 20),
                                   ],
                                 ),
                               ),
@@ -246,9 +252,12 @@ class ExpeditorHomePage extends ConsumerWidget {
                                 child: const Row(
                                   mainAxisAlignment: MainAxisAlignment.center,
                                   children: [
-                                    Text('По продуктам'),
+                                    Text('По продуктам',
+                                        style: TextStyle(
+                                            fontSize: 15,
+                                            fontWeight: FontWeight.w700,),),
                                     SizedBox(width: 4),
-                                    Icon(Icons.chevron_right, size: 18),
+                                    Icon(Icons.chevron_right, size: 20),
                                   ],
                                 ),
                               ),
@@ -292,9 +301,14 @@ class _MiniStat extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(label, style: const TextStyle(fontSize: 10)),
+                  Text(label,
+                      style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.textSecondary,),),
                   Text(value,
-                      style: const TextStyle(fontWeight: FontWeight.w700),),
+                      style: const TextStyle(
+                          fontSize: 18, fontWeight: FontWeight.w800,),),
                 ],
               ),
             ),
@@ -303,77 +317,3 @@ class _MiniStat extends StatelessWidget {
       );
 }
 
-class _ReportTable extends StatelessWidget {
-  final List<Map<String, dynamic>> rows;
-  const _ReportTable({required this.rows});
-
-  Color _color(String type) {
-    switch (type) {
-      case 'delivered':
-        return AppColors.success;
-      case 'return':
-      case 'shelf_return':
-        return AppColors.error;
-      case 'exchange_return':
-        return AppColors.warning;
-      default:
-        return AppColors.textPrimary;
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Table(
-      columnWidths: const {
-        0: FlexColumnWidth(2),
-        1: FlexColumnWidth(1),
-        2: FlexColumnWidth(1.2),
-      },
-      children: [
-        const TableRow(
-          children: [
-            Padding(
-                padding: EdgeInsets.symmetric(vertical: 4),
-                child: Text('Тип',
-                    style:
-                        TextStyle(fontWeight: FontWeight.w600, fontSize: 11),),),
-            Padding(
-                padding: EdgeInsets.symmetric(vertical: 4),
-                child: Text('Кол-во',
-                    style:
-                        TextStyle(fontWeight: FontWeight.w600, fontSize: 11),),),
-            Padding(
-                padding: EdgeInsets.symmetric(vertical: 4),
-                child: Text('Сумма',
-                    style:
-                        TextStyle(fontWeight: FontWeight.w600, fontSize: 11),),),
-          ],
-        ),
-        ...rows.map((r) {
-          final type = r['type']?.toString() ?? '';
-          final c = _color(type);
-          return TableRow(
-            children: [
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 3),
-                child: Text(r['label']?.toString() ?? type,
-                    style: TextStyle(fontSize: 11, color: c),),
-              ),
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 3),
-                child: Text('${r['qty'] ?? 0}',
-                    style: TextStyle(fontSize: 11, color: c),),
-              ),
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 3),
-                child: Text(
-                    formatMoneySpaced(((r['sum'] as num?) ?? 0).toDouble()),
-                    style: TextStyle(fontSize: 11, color: c),),
-              ),
-            ],
-          );
-        }),
-      ],
-    );
-  }
-}

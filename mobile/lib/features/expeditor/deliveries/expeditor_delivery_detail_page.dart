@@ -10,9 +10,11 @@ import '../../../core/auth/biometric_transaction_confirm.dart';
 import '../../../core/auth/session.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
+import '../../../core/ui/agent_ui.dart';
 import '../expeditor_status_labels.dart';
 import '../config/expeditor_config_enforcement.dart';
 import '../expeditor_providers.dart';
+import '../visits/expeditor_visit_gates.dart';
 
 class ExpeditorDeliveryDetailPage extends ConsumerStatefulWidget {
   final int orderId;
@@ -35,6 +37,26 @@ class _ExpeditorDeliveryDetailPageState extends ConsumerState<ExpeditorDeliveryD
   }
 
   Future<void> _setStatus(String status, ExpeditorConfigPolicy policy) async {
+    if (status == 'delivered' || status == 'returned') {
+      final order = ref.read(expeditorOrderDetailProvider(widget.orderId)).valueOrNull;
+      final client = Map<String, dynamic>.from(order?['client'] as Map? ?? {});
+      final clientId = (client['id'] as num?)?.toInt() ?? 0;
+      if (clientId > 0) {
+        final gate = await ensureExpeditorVisitAllowed(
+          context: context,
+          ref: ref,
+          clientId: clientId,
+          clientLat: (client['latitude'] as num?)?.toDouble(),
+          clientLng: (client['longitude'] as num?)?.toDouble(),
+        );
+        if (!gate.ok || !mounted) {
+          if (mounted && gate.message != null) {
+            showAgentToast(context, gate.message!, accentColor: AppColors.error);
+          }
+          return;
+        }
+      }
+    }
     if (status == 'delivered') {
       final okBio = await _confirmSensitiveIfNeeded(policy, 'Подтвердите доставку');
       if (!okBio) return;
@@ -55,11 +77,11 @@ class _ExpeditorDeliveryDetailPageState extends ConsumerState<ExpeditorDeliveryD
       ref.invalidate(expeditorOrderDetailProvider(widget.orderId));
       ref.invalidate(deliveriesProvider(null));
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Статус: ${expeditorStatusLabel(status)}')));
+        showAgentToast(context, 'Статус: ${expeditorStatusLabel(status)}', accentColor: AppColors.success);
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e'), backgroundColor: AppColors.error));
+        showAgentToast(context, '$e', accentColor: AppColors.error);
       }
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -92,13 +114,11 @@ class _ExpeditorDeliveryDetailPageState extends ConsumerState<ExpeditorDeliveryD
           );
       ref.invalidate(expeditorOrderDetailProvider(widget.orderId));
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Координаты обновлены'), backgroundColor: AppColors.success),
-        );
+        showAgentToast(context, 'Координаты обновлены', accentColor: AppColors.success);
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e'), backgroundColor: AppColors.error));
+        showAgentToast(context, '$e', accentColor: AppColors.error);
       }
     } finally {
       if (mounted) setState(() => _busy = false);

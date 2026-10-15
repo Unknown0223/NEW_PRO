@@ -202,6 +202,7 @@ class _ExpeditorPhotoSectionState extends ConsumerState<ExpeditorPhotoSection> {
                     return SizedBox(
                       width: 150,
                       child: _PhotoTile(
+                        key: ValueKey(p.id),
                         clientId: widget.clientId,
                         photo: p,
                         onView: () => _view(p),
@@ -259,6 +260,7 @@ class _PhotoTile extends ConsumerStatefulWidget {
   final VoidCallback onDelete;
 
   const _PhotoTile({
+    super.key,
     required this.clientId,
     required this.photo,
     required this.onView,
@@ -321,7 +323,8 @@ class _PhotoTileState extends ConsumerState<_PhotoTile> {
   @override
   Widget build(BuildContext context) {
     final hasImage = (_imageUrl ?? '').trim().isNotEmpty;
-    return Card(
+    return RepaintBoundary(
+      child: Card(
       margin: EdgeInsets.zero,
       clipBehavior: Clip.antiAlias,
       child: Stack(
@@ -368,6 +371,7 @@ class _PhotoTileState extends ConsumerState<_PhotoTile> {
             ),
           ),
         ],
+      ),
       ),
     );
   }

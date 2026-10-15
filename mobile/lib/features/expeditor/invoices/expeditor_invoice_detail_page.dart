@@ -7,6 +7,7 @@ import '../../../core/auth/biometric_transaction_confirm.dart';
 import '../../../core/auth/session.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
+import '../../../core/ui/agent_ui.dart';
 import '../../agent/shell/agent_app_bar.dart';
 import '../config/expeditor_config_enforcement.dart';
 import '../expeditor_providers.dart';
@@ -43,13 +44,11 @@ class _ExpeditorInvoiceDetailPageState
       ref.invalidate(expeditorShipmentDocsProvider('shipping'));
       ref.invalidate(expeditorDashboardProvider);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Подтверждено')),);
+        showAgentToast(context, 'Подтверждено', accentColor: AppColors.success);
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('$e'), backgroundColor: AppColors.error),);
+        showAgentToast(context, '$e', accentColor: AppColors.error);
       }
     } finally {
       if (mounted) setState(() => _busy = false);

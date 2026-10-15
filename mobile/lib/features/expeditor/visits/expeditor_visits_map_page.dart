@@ -8,6 +8,7 @@ import '../../../core/map/route_map_stop.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/ui/agent_ui.dart';
+import '../../../core/ui/client_photo_thumb.dart';
 import '../../../core/ui/agent_ui_extended.dart';
 import '../../../core/utils/client_navigation.dart';
 
@@ -114,9 +115,7 @@ class _ExpeditorVisitsMapPageState
             longitude: stop.longitude,
           );
           if (!ok && mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Не удалось открыть навигацию')),
-            );
+            showAgentToast(context, 'Не удалось открыть навигацию', accentColor: AppColors.error);
           }
         },
       ),
@@ -291,15 +290,10 @@ class _StopDetailSheet extends StatelessWidget {
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Container(
-                  width: 44,
-                  height: 44,
-                  decoration: BoxDecoration(
-                    color: AppColors.surfaceVariant,
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: const Icon(Icons.storefront_outlined,
-                      color: AppColors.textSecondary, size: 22,),
+                ClientPhotoThumb(
+                  source: row?['photo_url']?.toString(),
+                  size: 44,
+                  radius: 10,
                 ),
                 const SizedBox(width: 12),
                 Expanded(

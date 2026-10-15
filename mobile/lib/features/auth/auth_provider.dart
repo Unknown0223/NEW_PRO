@@ -834,7 +834,11 @@ class AuthNotifier extends StateNotifier<AuthState> {
     }
     try {
       final version = await MobileDeviceInfo.apkVersion;
-      final info = await _mobileApi.fetchAppRelease(slug, version);
+      final info = await _mobileApi.fetchAppRelease(
+        slug,
+        version,
+        role: _session.state.user?.role,
+      );
       if (info == null || !info.hasAction) {
         unawaited(
           MobileLocalNotificationService.instance.notifyAppUpdateUpToDate(version),
@@ -866,7 +870,11 @@ class AuthNotifier extends StateNotifier<AuthState> {
     if (slug.isEmpty) return;
     try {
       final version = await MobileDeviceInfo.apkVersion;
-      final info = await _mobileApi.fetchAppRelease(slug, version);
+      final info = await _mobileApi.fetchAppRelease(
+        slug,
+        version,
+        role: _session.state.user?.role,
+      );
       if (info == null || !info.hasAction) {
         if (notifyUpToDate) {
           unawaited(

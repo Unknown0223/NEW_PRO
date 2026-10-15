@@ -79,6 +79,7 @@ const PRESET_BUILDERS: Record<string, () => string[]> = {
       orderStatus(...ALL_ORDER_STATUS_SLUGS),
       secOnly("invoices", "vozvratnye", ["view"]),
       secOnly("clients", "klient", ["view", "create", "update"]),
+      secOnly("clients", "profil", ["update"]),
       clientGroupOps(),
       secOnly("clients", "karta", ["view"]),
       secOnly("clients", "foto", ["view"]),
@@ -219,6 +220,7 @@ const PRESET_BUILDERS: Record<string, () => string[]> = {
       modViewOnly("clients"),
       /** Mobil SVR yangi TT: agentga biriktirib yaratish */
       secOnly("clients", "klient", ["activate", "create"]),
+      secOnly("clients", "profil", ["update"]),
       secOnly("clients", "foto", ["view"]),
       secOnly("staff", "agent", ["view", "activate", "assign"]),
       secOnly("staff", "supervayzer", ["view"]),

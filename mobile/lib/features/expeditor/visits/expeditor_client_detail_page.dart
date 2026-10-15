@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -7,13 +5,13 @@ import 'package:go_router/go_router.dart';
 import '../../../core/api/api_exceptions.dart';
 import '../../../core/api/expeditor_api.dart';
 import '../../../core/api/field_api.dart';
-import '../../../core/api/mobile_api.dart';
 import '../../../core/auth/biometric_transaction_confirm.dart';
 import '../../../core/auth/session.dart';
 import '../../../core/gps/gps_tracker.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/ui/agent_ui.dart';
+import '../../../core/ui/client_photo_thumb.dart';
 import '../../../core/utils/external_actions.dart';
 import '../../../core/format/money_display.dart';
 import '../../agent/orders/order_create_models.dart' show formatMoneySpaced;
@@ -21,8 +19,9 @@ import '../config/expeditor_config_enforcement.dart';
 import '../expeditor_providers.dart';
 import '../expeditor_status_labels.dart';
 import '../payments/expeditor_payment_sheet.dart';
-import 'expeditor_photo_flow.dart';
 import 'expeditor_photo_section.dart';
+import 'expeditor_visit_gates.dart';
+import 'expeditor_visit_order_facts.dart';
 
 /// Ekspeditor mijoz kartasi (Маршруты → mijoz) + vizit sessiyasi.
 class ExpeditorClientDetailPage extends ConsumerStatefulWidget {
@@ -44,8 +43,6 @@ class _ExpeditorClientDetailPageState
   bool _visitStarted = false;
   int _photoRefreshTick = 0;
   DateTime? _sessionStart;
-  Duration _elapsed = Duration.zero;
-  Timer? _timer;
 
   Map<String, dynamic> get _d => widget.data ?? const {};
 
@@ -61,12 +58,6 @@ class _ExpeditorClientDetailPageState
   int? get _orderId => _d['order_id'] as int?;
   double get _orderSum => (_d['total_sum'] as num?)?.toDouble() ?? 0;
   bool get _readOnly => _d['readonly'] == true;
-
-  @override
-  void dispose() {
-    _timer?.cancel();
-    super.dispose();
-  }
 
   Future<void> _call() async {
     if (!hasDialablePhone(_phone)) {
@@ -91,70 +82,36 @@ class _ExpeditorClientDetailPageState
     _toast('Координаты клиента не указаны');
   }
 
-  /// Konfiguratsiya talab qilsa — vizit boshlashdan oldin bugungi fotohisobot
-  /// majburiy. Bo'lmasa foto olishni taklif qiladi.
-  Future<bool> _ensurePhotoBeforeVisit() async {
-    final slug = ref.read(sessionProvider).tenantSlug ?? '';
-    if (slug.isEmpty) return true;
-    try {
-      final photos = await ref
-          .read(mobileApiProvider)
-          .getClientPhotoReports(slug, widget.clientId);
-      final now = DateTime.now();
-      final hasToday = photos.any((p) {
-        final dt = DateTime.tryParse(p.createdAt)?.toLocal();
-        return dt != null &&
-            dt.year == now.year &&
-            dt.month == now.month &&
-            dt.day == now.day;
-      });
-      if (hasToday) return true;
-    } catch (_) {}
-    final ok = await _confirmDialog(
-      icon: Icons.photo_camera_outlined,
-      iconColor: AppColors.expeditorAccent,
-      title: 'Нужен фотоотчёт',
-      message:
-          'Перед началом визита необходимо добавить фотоотчёт. Сделать фото сейчас?',
-      confirmText: 'Сделать фото',
-      confirmColor: AppColors.expeditorAccent,
-    );
-    if (ok != true) return false;
-    final res = await captureAndUploadExpeditorPhoto(
-      context: context,
-      ref: ref,
-      slug: slug,
-      clientId: widget.clientId,
-    );
-    if (res == null) return false;
-    if (mounted) setState(() => _photoRefreshTick++);
-    return true;
-  }
-
   Future<void> _startVisit() async {
+    if (_starting || _visitStarted) return;
     final slug = ref.read(sessionProvider).tenantSlug ?? '';
     if (slug.isEmpty) return;
-
-    final policy = ExpeditorConfigPolicy.fromMobileConfig(
-        ref.read(sessionProvider).mobileConfig,);
-    if (policy.requirePhotoReportBeforeVisit) {
-      final ok = await _ensurePhotoBeforeVisit();
-      if (!ok || !mounted) return;
-    }
-
     setState(() => _starting = true);
-    double? lat = _lat;
-    double? lng = _lng;
     try {
-      final pos =
-          await ref.read(gpsTrackerProvider.notifier).getQuickPosition();
-      if (pos != null) {
-        lat = pos.latitude;
-        lng = pos.longitude;
+      final gate = await ensureExpeditorVisitAllowed(
+        context: context,
+        ref: ref,
+        clientId: widget.clientId,
+        clientLat: _lat,
+        clientLng: _lng,
+      );
+      if (!mounted) return;
+      if (!gate.ok) {
+        if (gate.message != null) _toast(gate.message!);
+        return;
       }
-    } catch (_) {}
+      if (gate.photoTaken) _photoRefreshTick++;
 
-    try {
+      double? lat = gate.replacePosition ? gate.latitude : _lat;
+      double? lng = gate.replacePosition ? gate.longitude : _lng;
+      if (!gate.replacePosition) {
+        final cached = ref.read(gpsTrackerProvider).lastPosition;
+        if (cached != null) {
+          lat = cached.latitude;
+          lng = cached.longitude;
+        }
+      }
+
       await ref.read(fieldApiProvider).createVisit(
             slug,
             clientId: widget.clientId,
@@ -174,15 +131,9 @@ class _ExpeditorClientDetailPageState
   }
 
   void _beginSession() {
-    _sessionStart = DateTime.now();
-    _timer?.cancel();
-    _timer = Timer.periodic(const Duration(seconds: 1), (_) {
-      if (!mounted || _sessionStart == null) return;
-      setState(() => _elapsed = DateTime.now().difference(_sessionStart!));
-    });
     setState(() {
+      _sessionStart = DateTime.now();
       _visitStarted = true;
-      _elapsed = Duration.zero;
     });
   }
 
@@ -197,7 +148,6 @@ class _ExpeditorClientDetailPageState
       confirmColor: AppColors.error,
     );
     if (ok != true) return;
-    _timer?.cancel();
     if (!mounted) return;
     _toast('Визит завершён', color: AppColors.success);
     if (context.canPop()) context.pop();
@@ -214,7 +164,6 @@ class _ExpeditorClientDetailPageState
       confirmColor: AppColors.expeditorAccent,
     );
     if (ok != true) return;
-    _timer?.cancel();
     if (!mounted) return;
     _toast('Визит отменён');
     if (context.canPop()) context.pop();
@@ -307,13 +256,6 @@ class _ExpeditorClientDetailPageState
   void _toast(String msg, {Color color = AppColors.warning}) {
     if (!mounted) return;
     showAgentToast(context, msg, accentColor: color);
-  }
-
-  String _fmtDur(Duration d) {
-    final m = d.inMinutes.remainder(60).toString().padLeft(2, '0');
-    final s = d.inSeconds.remainder(60).toString().padLeft(2, '0');
-    final h = d.inHours;
-    return h > 0 ? '${h.toString().padLeft(2, '0')}:$m:$s' : '$m:$s';
   }
 
   @override
@@ -410,6 +352,11 @@ class _ExpeditorClientDetailPageState
             ),
           ),
           Expanded(child: _ordersBody()),
+          if (!_readOnly && _orderId != null)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+              child: _statusActions(),
+            ),
         ],
       ),
       bottomNavigationBar: _readOnly ? null : _bottomBar(),
@@ -420,8 +367,12 @@ class _ExpeditorClientDetailPageState
     return ListView(
       padding: const EdgeInsets.fromLTRB(12, 4, 12, 12),
       children: [
-        ExpeditorPhotoSection(
-            key: ValueKey(_photoRefreshTick), clientId: widget.clientId,),
+        RepaintBoundary(
+          child: ExpeditorPhotoSection(
+            key: ValueKey(_photoRefreshTick),
+            clientId: widget.clientId,
+          ),
+        ),
         const SizedBox(height: 16),
         const Text('Заказы',
             style: TextStyle(
@@ -495,13 +446,10 @@ class _ExpeditorClientDetailPageState
               _orderRow(
                   'Сумма:', '${formatMoneySpaced(_orderSum)} сум',
                   valueColor: AppColors.expeditorAccent,),
+              if (_orderId != null) ExpeditorVisitOrderFacts(orderId: _orderId!),
             ],
           ),
         ),
-        if (!_readOnly) ...[
-          const SizedBox(height: 10),
-          _statusActions(),
-        ],
         ],
       ],
     );
@@ -740,6 +688,17 @@ class _ExpeditorClientDetailPageState
     if (slug.isEmpty) return;
 
     if (status == 'delivered' || status == 'returned') {
+      final gate = await ensureExpeditorVisitAllowed(
+        context: context,
+        ref: ref,
+        clientId: widget.clientId,
+        clientLat: _lat,
+        clientLng: _lng,
+      );
+      if (!gate.ok || !mounted) {
+        if (mounted && gate.message != null) _toast(gate.message!);
+        return;
+      }
       final policy = ExpeditorConfigPolicy.fromMobileConfig(
           ref.read(sessionProvider).mobileConfig,);
       final reason = status == 'delivered'
@@ -764,7 +723,12 @@ class _ExpeditorClientDetailPageState
       ref.invalidate(expeditorVisitsProvider('active'));
       ref.invalidate(expeditorVisitsProvider('completed'));
       ref.invalidate(expeditorDashboardProvider);
-      if (mounted) _toast('Статус: $label', color: AppColors.success);
+      if (!mounted) return;
+      if (status == 'returned') {
+        context.go('/home');
+        return;
+      }
+      _toast('Статус: $label', color: AppColors.success);
     } on ApiException catch (e) {
       if (mounted) _toast('Ошибка: ${e.message}', color: AppColors.error);
     } catch (e) {
@@ -842,19 +806,9 @@ class _ExpeditorClientDetailPageState
                     color: AppColors.surfaceVariant,
                     borderRadius: BorderRadius.circular(10),
                   ),
-                  child: Text.rich(TextSpan(
-                    text: 'Время сеанса: ',
-                    style: AppTypography.bodyMedium
-                        .copyWith(color: AppColors.textSecondary),
-                    children: [
-                      TextSpan(
-                        text: _fmtDur(_elapsed),
-                        style: const TextStyle(
-                            fontWeight: FontWeight.w800,
-                            color: AppColors.textHeadline,),
-                      ),
-                    ],
-                  ),),
+                  child: _sessionStart == null
+                      ? const SizedBox.shrink()
+                      : ExpeditorSessionClock(startedAt: _sessionStart!),
                 ),
               ),
               const SizedBox(width: 10),

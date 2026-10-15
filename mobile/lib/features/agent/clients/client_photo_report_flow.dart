@@ -132,8 +132,13 @@ bool _isPhotoToday(ClientPhotoReport p) {
   return wr.year == now.year && wr.month == now.month && wr.day == now.day;
 }
 
-bool hasPhotoReportToday(List<ClientPhotoReport> photos) {
-  return photos.any(_isPhotoToday);
+bool _ownedBy(ClientPhotoReport photo, int? ownerUserId) {
+  if (ownerUserId == null) return true;
+  return photo.createdByUserId == ownerUserId;
+}
+
+bool hasPhotoReportToday(List<ClientPhotoReport> photos, {int? ownerUserId}) {
+  return photos.any((photo) => _isPhotoToday(photo) && _ownedBy(photo, ownerUserId));
 }
 
 List<ClientPhotoReport> photoReportsForToday(List<ClientPhotoReport> photos) {
@@ -141,8 +146,10 @@ List<ClientPhotoReport> photoReportsForToday(List<ClientPhotoReport> photos) {
 }
 
 /// Buyurtma uchun — bugun olingan va hali boshqa zakazga bog‘lanmagan foto.
-bool hasUnlinkedPhotoReportToday(List<ClientPhotoReport> photos) {
-  return photos.any((p) => p.orderId == null && _isPhotoToday(p));
+bool hasUnlinkedPhotoReportToday(List<ClientPhotoReport> photos, {int? ownerUserId}) {
+  return photos.any(
+    (p) => p.orderId == null && _isPhotoToday(p) && _ownedBy(p, ownerUserId),
+  );
 }
 
 ClientPhotoReport? latestPhotoReportToday(List<ClientPhotoReport> photos) {

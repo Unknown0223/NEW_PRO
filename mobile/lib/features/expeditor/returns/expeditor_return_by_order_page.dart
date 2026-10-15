@@ -15,6 +15,7 @@ import '../config/expeditor_config_enforcement.dart';
 import '../expeditor_providers.dart';
 import '../shell/expeditor_drawer.dart';
 import 'expeditor_bonus_calc_sheet.dart';
+import 'expeditor_return_reason_picker.dart';
 
 /// Qaytarish usuli:
 /// - [byProducts] — savdo va bonus dona alohida belgilanadi (qo'lda);
@@ -1751,24 +1752,9 @@ class _ExpeditorReturnByOrderPageState
                     ),
                   ],
                   const SizedBox(height: 14),
-                  DropdownButtonFormField<String>(
-                    initialValue: reason.isEmpty ? null : reason,
-                    isExpanded: true,
-                    decoration: const InputDecoration(
-                      labelText: 'Причина возврата',
-                      border: OutlineInputBorder(),
-                    ),
-                    items: const [
-                      DropdownMenuItem(
-                          value: 'defective',
-                          child: Text('Бракованный товар'),),
-                      DropdownMenuItem(
-                          value: 'wrong', child: Text('Неверный товар'),),
-                      DropdownMenuItem(
-                          value: 'excess', child: Text('Излишек'),),
-                      DropdownMenuItem(value: 'other', child: Text('Другое')),
-                    ],
-                    onChanged: (v) => setSheet(() => reason = v ?? ''),
+                  ExpeditorReturnReasonPicker(
+                    value: reason,
+                    onChanged: (v) => setSheet(() => reason = v),
                   ),
                   const SizedBox(height: 12),
                   TextField(
@@ -1979,7 +1965,7 @@ class _ExpeditorReturnByOrderPageState
         parts.join('\n'),
         color: discDebt > 0.0001 ? AppColors.warning : AppColors.success,
       );
-      if (context.canPop()) context.pop();
+      context.go('/home');
     } on ApiException catch (e) {
       if (mounted) _toast('Ошибка: ${e.message}', color: AppColors.error);
     } catch (e) {

@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/ui/agent_ui_extended.dart';
+import '../../../core/ui/client_photo_thumb.dart';
 import '../../agent/orders/order_create_models.dart' show formatMoneySpaced;
 import '../expeditor_providers.dart';
 import '../shell/expeditor_drawer.dart';
@@ -111,15 +112,10 @@ class _UnfinishedCard extends StatelessWidget {
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Container(
-                    width: 44,
-                    height: 44,
-                    decoration: BoxDecoration(
-                      color: AppColors.surfaceVariant,
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: const Icon(Icons.storefront_outlined,
-                        color: AppColors.textSecondary, size: 22,),
+                  ClientPhotoThumb(
+                    source: row['photo_url']?.toString(),
+                    size: 44,
+                    radius: 10,
                   ),
                   const SizedBox(width: 12),
                   Expanded(

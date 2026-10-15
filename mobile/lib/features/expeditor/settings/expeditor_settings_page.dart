@@ -156,11 +156,9 @@ class ExpeditorSettingsPage extends ConsumerWidget {
   }
 
   Future<void> _refreshConfig(BuildContext context, WidgetRef ref) async {
-    final messenger = ScaffoldMessenger.of(context);
     await ref.read(authStateProvider.notifier).refreshMobileConfig();
-    messenger.showSnackBar(
-      const SnackBar(content: Text('Настройки обновлены')),
-    );
+    if (!context.mounted) return;
+    showAgentToast(context, 'Настройки обновлены', accentColor: AppColors.success);
   }
 
   Future<void> _pickLocale(

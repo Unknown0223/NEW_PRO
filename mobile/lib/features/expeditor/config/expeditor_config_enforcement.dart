@@ -4,14 +4,21 @@ class ExpeditorConfigPolicy {
   final ExpeditorConfig? config;
   final OrdersConfig? orders;
   final ClientConfig? client;
+  final bool photoRequiredForOrder;
 
-  const ExpeditorConfigPolicy({this.config, this.orders, this.client});
+  const ExpeditorConfigPolicy({
+    this.config,
+    this.orders,
+    this.client,
+    this.photoRequiredForOrder = false,
+  });
 
   factory ExpeditorConfigPolicy.fromMobileConfig(MobileConfig? mc) =>
       ExpeditorConfigPolicy(
         config: mc?.expeditor,
         orders: mc?.orders,
         client: mc?.client,
+        photoRequiredForOrder: mc?.photo.requiredForOrder ?? false,
       );
 
   bool get acceptPaymentForOrder => config?.acceptPaymentForOrder ?? true;
@@ -29,6 +36,9 @@ class ExpeditorConfigPolicy {
   bool get fingerprintRequired => config?.fingerprintRequiredForShipmentConfirm ?? false;
   bool get requirePhotoReportBeforeVisit =>
       config?.requirePhotoReportBeforeVisit ?? false;
+
+  /// Ish joyidagi «фото при заказе» ham, alohida «фото перед визитом» ham.
+  bool get photoRequired => requirePhotoReportBeforeVisit || photoRequiredForOrder;
   String get currencySymbol => config?.currencySymbol ?? 'сум';
 
   bool get returnsEnabled => allowPartialReturn || allowReloadFromVehicle;

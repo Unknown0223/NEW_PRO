@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/ui/agent_ui.dart';
+import '../../../core/ui/client_photo_thumb.dart';
 import '../../../core/ui/agent_ui_extended.dart';
 import '../../agent/orders/order_create_models.dart' show formatMoneySpaced;
 import '../expeditor_providers.dart';
@@ -118,6 +119,13 @@ class _DeliveryByClientsView extends ConsumerWidget {
               0;
           final delivered = r['status']?.toString() == 'delivered';
           final g = groups.putIfAbsent(name, () => _ClientAgg());
+          final photo = r['photo_url']?.toString().trim();
+          if ((g.photoUrl == null || g.photoUrl!.isEmpty) &&
+              photo != null &&
+              photo.isNotEmpty &&
+              photo != 'null') {
+            g.photoUrl = photo;
+          }
           g.count += 1;
           g.amount += amount;
           if (delivered) g.delivered += 1;
@@ -134,16 +142,7 @@ class _DeliveryByClientsView extends ConsumerWidget {
               padding: const EdgeInsets.all(14),
               child: Row(
                 children: [
-                  Container(
-                    width: 40,
-                    height: 40,
-                    decoration: BoxDecoration(
-                      color: AppColors.surfaceVariant,
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: const Icon(Icons.storefront_outlined,
-                        color: AppColors.textSecondary, size: 20,),
-                  ),
+                  ClientPhotoThumb(source: e.value.photoUrl, size: 40, radius: 10),
                   const SizedBox(width: 12),
                   Expanded(
                     child: Column(
@@ -183,6 +182,7 @@ class _ClientAgg {
   int count = 0;
   int delivered = 0;
   double amount = 0;
+  String? photoUrl;
 }
 
 class _DeliveryByProductsView extends ConsumerWidget {

@@ -2,6 +2,12 @@ import { prisma } from "../../config/database";
 import { MOBILE_FIELD_ROLE_NAMES } from "../auth/app-access.service";
 import { asRecord } from "../tenant-settings/tenant-settings.shared";
 import {
+  applyReleaseRoleGate,
+  normalizeTargetRoles,
+  roleReceivesAppUpdate,
+  type MobileReleaseRole
+} from "./app-release.roles";
+import {
   buildMobileApkDownloadUrl,
   ensureMobileApkLocal,
   mobileApkExists
@@ -15,6 +21,8 @@ export type MobileAppReleasePolicy = {
   store_url_android: string | null;
   store_url_ios: string | null;
   release_notes: string | null;
+  /** `null` — hamma mobil rol. Bo‘sh massiv — hech kim. Versiya raqamiga tegmaydi. */
+  target_roles?: MobileReleaseRole[] | null;
 };
 
 export type AppUpdateBlock = {
@@ -44,6 +52,8 @@ export type OutdatedMobileUserRow = {
 
 export type MobileAppUserRow = OutdatedMobileUserRow & {
   is_outdated: boolean;
+  /** false — bu rol joriy yangilanish ro‘yxatida emas (versiya o‘zgarmagan). */
+  update_targeted: boolean;
 };
 
 const DEFAULT_POLICY: MobileAppReleasePolicy = {
@@ -53,7 +63,8 @@ const DEFAULT_POLICY: MobileAppReleasePolicy = {
   download_url: null,
   store_url_android: null,
   store_url_ios: null,
-  release_notes: null
+  release_notes: null,
+  target_roles: null
 };
 
 export function normalizeVersion(v: string | null | undefined): string | null {
@@ -100,7 +111,10 @@ export function normalizeMobileAppReleasePolicy(raw: unknown): MobileAppReleaseP
         ? r.store_url_ios.trim().slice(0, 4000)
         : null,
     release_notes:
-      typeof r.release_notes === "string" ? r.release_notes.trim().slice(0, 8000) || null : null
+      typeof r.release_notes === "string" ? r.release_notes.trim().slice(0, 8000) || null : null,
+    target_roles: Object.prototype.hasOwnProperty.call(r, "target_roles")
+      ? normalizeTargetRoles(r.target_roles)
+      : null
   };
 }
 
@@ -146,7 +160,9 @@ export async function patchMobileAppReleasePolicy(
     release_notes:
       patch.release_notes !== undefined
         ? patch.release_notes?.trim().slice(0, 8000) || null
-        : prev.release_notes
+        : prev.release_notes,
+    target_roles:
+      patch.target_roles !== undefined ? normalizeTargetRoles(patch.target_roles) : prev.target_roles ?? null
   };
 
   await prisma.tenant.update({
@@ -294,11 +310,11 @@ export async function resolveAppUpdateForTenant(
   tenantId: number,
   currentVersion: string | null | undefined,
   platform: "android" | "ios" = "android",
-  opts?: { origin?: string | null; tenantSlug?: string }
+  opts?: { origin?: string | null; tenantSlug?: string; role?: string | null }
 ): Promise<AppUpdateBlock | null> {
   const policy = await getMobileAppReleasePolicy(tenantId);
   const cur = normalizeVersion(currentVersion) ?? "0.0.0";
-  let block = resolveAppUpdateBlock(cur, policy, platform);
+  let block = applyReleaseRoleGate(resolveAppUpdateBlock(cur, policy, platform), policy.target_roles, opts?.role);
   if (!block.required && !block.optional) return null;
 
   const slug =
@@ -349,16 +365,20 @@ export async function listMobileAppUsers(tenantId: number): Promise<MobileAppUse
     orderBy: [{ role: "asc" }, { name: "asc" }]
   });
 
-  return users.map((u) => ({
-    id: u.id,
-    name: u.name,
-    login: u.login,
-    role: u.role,
-    apk_version: u.apk_version,
-    device_name: u.device_name,
-    last_sync_at: u.last_sync_at?.toISOString() ?? null,
-    is_outdated: isApkOutdated(u.apk_version, policy)
-  }));
+  return users.map((u) => {
+    const updateTargeted = roleReceivesAppUpdate(policy.target_roles, u.role);
+    return {
+      id: u.id,
+      name: u.name,
+      login: u.login,
+      role: u.role,
+      apk_version: u.apk_version,
+      device_name: u.device_name,
+      last_sync_at: u.last_sync_at?.toISOString() ?? null,
+      update_targeted: updateTargeted,
+      is_outdated: updateTargeted && isApkOutdated(u.apk_version, policy)
+    };
+  });
 }
 
 export async function listOutdatedMobileUsers(tenantId: number): Promise<OutdatedMobileUserRow[]> {

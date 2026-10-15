@@ -13,6 +13,7 @@ import '../../../core/prefs/agent_local_prefs_provider.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/ui/agent_ui.dart';
+import '../../../core/ui/client_photo_thumb.dart';
 import '../../../core/ui/agent_ui_extended.dart';
 import '../../../core/utils/client_navigation.dart';
 import '../../../core/utils/external_actions.dart';
@@ -668,6 +669,11 @@ class _OutletTile extends ConsumerWidget {
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
       child: Material(
+    final photo = firstClientPhotoUrl(client);
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Material(
         color: AppColors.surfaceMuted,
         borderRadius: BorderRadius.circular(12),
         child: InkWell(
@@ -677,12 +683,8 @@ class _OutletTile extends ConsumerWidget {
             padding: const EdgeInsets.all(12),
             child: Row(
               children: [
-                Icon(Icons.storefront_outlined, color: visited ? AppColors.success : AppColors.textMuted),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
+                photo != null
+                    ? ClientPhotoThumb(source: photo, size: 40, radius: 10)
                       Text(title, maxLines: 1, overflow: TextOverflow.ellipsis,
                           style: AppTypography.bodyMedium.copyWith(fontWeight: FontWeight.w700),),
                       if (subtitle.isNotEmpty)

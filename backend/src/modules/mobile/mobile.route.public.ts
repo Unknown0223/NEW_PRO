@@ -35,7 +35,8 @@ export async function registerMobilePublicRoutes(app: FastifyInstance) {
       .object({
         slug: slugQuery,
         version: z.string().min(1).max(64),
-        platform: z.enum(["android", "ios"]).optional()
+        platform: z.enum(["android", "ios"]).optional(),
+        role: z.enum(["agent", "expeditor", "supervisor"]).optional()
       })
       .safeParse(request.query);
     if (!parsed.success) {
@@ -47,9 +48,14 @@ export async function registerMobilePublicRoutes(app: FastifyInstance) {
     }
     const { getMobileAppReleasePolicy, resolveAppUpdateBlock, enrichAppUpdateBlockUrl, resolveRequestOrigin } =
       await import("./app-release.service");
+    const { applyReleaseRoleGate } = await import("./app-release.roles");
     const policy = await getMobileAppReleasePolicy(row.id);
     const platform = parsed.data.platform ?? "android";
-    let update = resolveAppUpdateBlock(parsed.data.version, policy, platform);
+    let update = applyReleaseRoleGate(
+      resolveAppUpdateBlock(parsed.data.version, policy, platform),
+      policy.target_roles,
+      parsed.data.role
+    );
     update = await enrichAppUpdateBlockUrl(
       update,
       policy,

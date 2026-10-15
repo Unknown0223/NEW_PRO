@@ -12,6 +12,8 @@ import { isAxiosError } from "axios";
 import { invalidateClientAuditQueries } from "@/lib/client-audit-history";
 import { STALE } from "@/lib/query-stale";
 import { useFormIntentTracking } from "@/lib/activity-tracker";
+import { usePermissions } from "@/lib/use-permissions";
+import { dropClientProfilePhotoCache } from "@/components/clients/client-profile-photo-card";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
@@ -70,6 +72,10 @@ export function useClientEditForm({
     entityId: isCreateMode ? undefined : effectiveClientId,
     label: isCreateMode ? "Создание клиента" : "Редактирование клиента"
   });
+  const [localError, setLocalError] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const profilePhotoDraftRef = useRef(profilePhotoDraft);
+  profilePhotoDraftRef.current = profilePhotoDraft;
   const [localError, setLocalError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [tab, setTab] = useState<"main" | "extra">("main");
@@ -640,8 +646,11 @@ export function useClientEditForm({
         };
         const created = await api.post<{ id: number }>(`/api/${tenantSlug}/clients`, createBody);
         const createdId = created.data.id;
-        const { data: createdDetail } = await api.patch<ClientDetailApi>(
-          `/api/${tenantSlug}/clients/${createdId}`,
+        const draftPhoto = profilePhotoDraftRef.current;
+        if (draftPhoto && tenantSlug) {
+          await api.put(`/api/${tenantSlug}/clients/${createdId}/profile-photo`, { image_url: draftPhoto });
+          dropClientProfilePhotoCache(tenantSlug, createdId);
+        }
           body
         );
         const slot1 = createdDetail.agent_assignments?.find((a) => a.slot === 1);
@@ -835,7 +844,11 @@ export function useClientEditForm({
   return {
     isCreateMode,
     effectiveClientId,
-    clientQ,
+    tenantSlug,
+    isCreateMode,
+    canProfilePhoto,
+    profilePhotoDraft,
+    setProfilePhotoDraft,
     mutation,
     localError,
     fieldErrors,

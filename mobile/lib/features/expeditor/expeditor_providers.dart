@@ -59,7 +59,7 @@ Future<List<Map<String, dynamic>>> _loadDeliveries(
 }
 
 final expeditorHomeStatsProvider = FutureProvider<Map<String, int>>((ref) async {
-  final slug = ref.watch(sessionProvider).tenantSlug ?? '';
+  final slug = ref.watch(sessionProvider.select((s) => s.tenantSlug ?? ''));
   if (slug.isEmpty) return {'orders': 0, 'pending': 0, 'delivering': 0};
   final deliveries = await _loadDeliveries(ref, slug);
   final delivering = deliveries.where((o) => o['status'] == 'delivering').length;
@@ -72,7 +72,7 @@ final expeditorHomeStatsProvider = FutureProvider<Map<String, int>>((ref) async 
 
 final deliveriesProvider = FutureProvider.family<List<Map<String, dynamic>>, String?>(
   (ref, statusFilter) async {
-    final slug = ref.watch(sessionProvider).tenantSlug ?? '';
+    final slug = ref.watch(sessionProvider.select((s) => s.tenantSlug ?? ''));
     if (slug.isEmpty) return [];
     return _loadDeliveries(ref, slug, statusFilter: statusFilter);
   },
@@ -80,7 +80,7 @@ final deliveriesProvider = FutureProvider.family<List<Map<String, dynamic>>, Str
 
 final expeditorOrderDetailProvider = FutureProvider.family<Map<String, dynamic>, int>(
   (ref, orderId) async {
-    final slug = ref.watch(sessionProvider).tenantSlug ?? '';
+    final slug = ref.watch(sessionProvider.select((s) => s.tenantSlug ?? ''));
     if (slug.isEmpty) throw Exception('Компания не выбрана');
     final online = await ref.read(connectivityProvider).isOnline();
     if (online) {
@@ -111,14 +111,14 @@ final expeditorDashboardProvider = FutureProvider<Map<String, dynamic>>((ref) as
 
 final expeditorVisitsProvider = FutureProvider.family<List<Map<String, dynamic>>, String>(
   (ref, tab) async {
-    final slug = ref.watch(sessionProvider).tenantSlug ?? '';
+    final slug = ref.watch(sessionProvider.select((s) => s.tenantSlug ?? ''));
     if (slug.isEmpty) return [];
     return ref.read(expeditorApiProvider).listVisits(slug, tab: tab);
   },
 );
 
 final expeditorDebtorsProvider = FutureProvider<List<Map<String, dynamic>>>((ref) async {
-  final slug = ref.watch(sessionProvider).tenantSlug ?? '';
+  final slug = ref.watch(sessionProvider.select((s) => s.tenantSlug ?? ''));
   if (slug.isEmpty) return [];
   return ref.read(expeditorApiProvider).listDebtors(slug);
 });
@@ -126,14 +126,14 @@ final expeditorDebtorsProvider = FutureProvider<List<Map<String, dynamic>>>((ref
 /// Kassir qaytargan (taymerli) to'lovlar — to'g'rilash uchun.
 final expeditorReturnedPaymentsProvider =
     FutureProvider<List<Map<String, dynamic>>>((ref) async {
-  final slug = ref.watch(sessionProvider).tenantSlug ?? '';
+  final slug = ref.watch(sessionProvider.select((s) => s.tenantSlug ?? ''));
   if (slug.isEmpty) return [];
   return ref.read(expeditorApiProvider).listReturnedPayments(slug);
 });
 
 final expeditorClientBalanceDetailProvider =
     FutureProvider.family<Map<String, dynamic>, int>((ref, clientId) async {
-  final slug = ref.watch(sessionProvider).tenantSlug ?? '';
+  final slug = ref.watch(sessionProvider.select((s) => s.tenantSlug ?? ''));
   if (slug.isEmpty) return {'total_balance': 0, 'owners': []};
   return ref.read(expeditorApiProvider).getClientBalanceDetail(slug, clientId);
 });
@@ -141,7 +141,7 @@ final expeditorClientBalanceDetailProvider =
 /// Mijoz kartasi (Должники → mijoz): sarlavha + to'lov tarixi + qaytarilgan zakazlar.
 final expeditorClientDetailProvider =
     FutureProvider.family<Map<String, dynamic>, int>((ref, clientId) async {
-  final slug = ref.watch(sessionProvider).tenantSlug ?? '';
+  final slug = ref.watch(sessionProvider.select((s) => s.tenantSlug ?? ''));
   if (slug.isEmpty) {
     return {'client': <String, dynamic>{}, 'payments': [], 'returns': []};
   }
@@ -154,7 +154,7 @@ typedef ClientHistoryQuery = ({int clientId, String? from, String? to});
 final expeditorClientOrdersProvider =
     FutureProvider.family<List<Map<String, dynamic>>, ClientHistoryQuery>(
         (ref, q) async {
-  final slug = ref.watch(sessionProvider).tenantSlug ?? '';
+  final slug = ref.watch(sessionProvider.select((s) => s.tenantSlug ?? ''));
   if (slug.isEmpty) return [];
   return ref.read(expeditorApiProvider).getClientOrders(
         slug,
@@ -168,7 +168,7 @@ final expeditorClientOrdersProvider =
 final expeditorClientLedgerProvider =
     FutureProvider.family<Map<String, dynamic>, ClientHistoryQuery>(
         (ref, q) async {
-  final slug = ref.watch(sessionProvider).tenantSlug ?? '';
+  final slug = ref.watch(sessionProvider.select((s) => s.tenantSlug ?? ''));
   if (slug.isEmpty) return {'account_balance': 0, 'rows': [], 'total': 0};
   return ref.read(expeditorApiProvider).getClientLedger(
         slug,
@@ -180,7 +180,7 @@ final expeditorClientLedgerProvider =
 
 final expeditorPaymentsSummaryProvider = FutureProvider.family<Map<String, dynamic>, String>(
   (ref, groupBy) async {
-    final slug = ref.watch(sessionProvider).tenantSlug ?? '';
+    final slug = ref.watch(sessionProvider.select((s) => s.tenantSlug ?? ''));
     if (slug.isEmpty) return {'mode': groupBy, 'data': []};
     return ref.read(expeditorApiProvider).listPaymentsSummary(slug, groupBy: groupBy);
   },
@@ -188,7 +188,7 @@ final expeditorPaymentsSummaryProvider = FutureProvider.family<Map<String, dynam
 
 final expeditorShipmentDocsProvider = FutureProvider.family<List<Map<String, dynamic>>, String>(
   (ref, docType) async {
-    final slug = ref.watch(sessionProvider).tenantSlug ?? '';
+    final slug = ref.watch(sessionProvider.select((s) => s.tenantSlug ?? ''));
     if (slug.isEmpty) return [];
     return ref.read(expeditorApiProvider).listShipmentDocuments(slug, type: docType);
   },
@@ -196,21 +196,21 @@ final expeditorShipmentDocsProvider = FutureProvider.family<List<Map<String, dyn
 
 final expeditorShipmentDetailProvider = FutureProvider.family<Map<String, dynamic>, String>(
   (ref, docId) async {
-    final slug = ref.watch(sessionProvider).tenantSlug ?? '';
+    final slug = ref.watch(sessionProvider.select((s) => s.tenantSlug ?? ''));
     if (slug.isEmpty) throw Exception('Компания не выбрана');
     return ref.read(expeditorApiProvider).getShipmentDocument(slug, docId);
   },
 );
 
 final expeditorWarehousesProvider = FutureProvider<List<Map<String, dynamic>>>((ref) async {
-  final slug = ref.watch(sessionProvider).tenantSlug ?? '';
+  final slug = ref.watch(sessionProvider.select((s) => s.tenantSlug ?? ''));
   if (slug.isEmpty) return [];
   return ref.read(expeditorApiProvider).listWarehouses(slug);
 });
 
 /// Mashinadagi qoldiq — skladdan olingan, hali yetkazilmagan mahsulotlar.
 final expeditorVehicleStockProvider = FutureProvider<Map<String, dynamic>>((ref) async {
-  final slug = ref.watch(sessionProvider).tenantSlug ?? '';
+  final slug = ref.watch(sessionProvider.select((s) => s.tenantSlug ?? ''));
   if (slug.isEmpty) return {'products': <Map<String, dynamic>>[], 'totals': <String, dynamic>{}};
   return ref.read(expeditorApiProvider).getVehicleStock(slug);
 });
@@ -218,7 +218,7 @@ final expeditorVehicleStockProvider = FutureProvider<Map<String, dynamic>>((ref)
 /// «Возврат с полки по заказу» — tanlanadigan zakazlar (balans/davr filtri).
 final expeditorReturnByOrderOrdersProvider =
     FutureProvider<Map<String, dynamic>>((ref) async {
-  final slug = ref.watch(sessionProvider).tenantSlug ?? '';
+  final slug = ref.watch(sessionProvider.select((s) => s.tenantSlug ?? ''));
   if (slug.isEmpty) return {'orders': [], 'filter_mode': null};
   return ref.read(expeditorApiProvider).listReturnByOrderOrders(slug);
 });
@@ -226,7 +226,7 @@ final expeditorReturnByOrderOrdersProvider =
 /// Ekspeditor topshiradigan qaytarish hujjatlari + zavsklad qabul holati.
 final expeditorMyReturnsProvider =
     FutureProvider<List<Map<String, dynamic>>>((ref) async {
-  final slug = ref.watch(sessionProvider).tenantSlug ?? '';
+  final slug = ref.watch(sessionProvider.select((s) => s.tenantSlug ?? ''));
   if (slug.isEmpty) return [];
   return ref.read(expeditorApiProvider).listMyReturns(slug);
 });
@@ -234,14 +234,14 @@ final expeditorMyReturnsProvider =
 /// Bitta zakaz tarkibi — qaytarish uchun mahsulotlar.
 final expeditorReturnCompositionProvider =
     FutureProvider.family<Map<String, dynamic>, int>((ref, orderId) async {
-  final slug = ref.watch(sessionProvider).tenantSlug ?? '';
+  final slug = ref.watch(sessionProvider.select((s) => s.tenantSlug ?? ''));
   if (slug.isEmpty) throw Exception('Компания не выбрана');
   return ref.read(expeditorApiProvider).getReturnByOrderComposition(slug, orderId);
 });
 
 final expeditorPaymentContextProvider = FutureProvider.family<Map<String, dynamic>, int>(
   (ref, orderId) async {
-    final slug = ref.watch(sessionProvider).tenantSlug ?? '';
+    final slug = ref.watch(sessionProvider.select((s) => s.tenantSlug ?? ''));
     if (slug.isEmpty) throw Exception('Компания не выбрана');
     final online = await ref.read(connectivityProvider).isOnline();
     if (online) {
