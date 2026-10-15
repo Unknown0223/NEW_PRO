@@ -72,8 +72,8 @@ export function useClientEditForm({
     entityId: isCreateMode ? undefined : effectiveClientId,
     label: isCreateMode ? "Создание клиента" : "Редактирование клиента"
   });
-  const [localError, setLocalError] = useState<string | null>(null);
-  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const canProfilePhoto = usePermissions().has("clients.profil.update");
+  const [profilePhotoDraft, setProfilePhotoDraft] = useState<string | null>(null);
   const profilePhotoDraftRef = useRef(profilePhotoDraft);
   profilePhotoDraftRef.current = profilePhotoDraft;
   const [localError, setLocalError] = useState<string | null>(null);
@@ -844,10 +844,10 @@ export function useClientEditForm({
   };
 
   return {
-    isCreateMode,
-    effectiveClientId,
     tenantSlug,
     isCreateMode,
+    effectiveClientId,
+    clientQ,
     canProfilePhoto,
     profilePhotoDraft,
     setProfilePhotoDraft,
