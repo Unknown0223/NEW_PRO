@@ -1,6 +1,8 @@
 "use client";
 
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatNumberGrouped } from "@/lib/format-numbers";
 import { Download, RotateCcw } from "lucide-react";
@@ -68,29 +70,38 @@ function DeliveredTable({ header, rows }: { header: string; rows: ExpeditorGroup
     (acc, r) => {
       acc.orders += r.delivered_orders;
       acc.sum += Number(r.delivered_sum) || 0;
+      acc.returned += Number(r.returned_sum) || 0;
+      acc.paid += Number(r.payments_collected) || 0;
+      acc.debt += Number(r.debt) || 0;
       return acc;
     },
-    { orders: 0, sum: 0 }
+    { orders: 0, sum: 0, returned: 0, paid: 0, debt: 0 }
   );
   return (
     <div className="overflow-auto rounded border">
-      <table className="w-full min-w-[480px] border-collapse text-xs">
+      <table className="w-full min-w-[760px] border-collapse text-xs">
         <thead className="app-table-thead">
           <tr>
             <th className="px-3 py-2 text-left font-medium">{header}</th>
             <th className="px-3 py-2 text-right font-medium">Доставлено (шт)</th>
             <th className="px-3 py-2 text-right font-medium">Доставлено (сумма)</th>
+            <th className="px-3 py-2 text-right font-medium">Возврат (сумма)</th>
+            <th className="px-3 py-2 text-right font-medium">Собрано оплат</th>
+            <th className="px-3 py-2 text-right font-medium">Долг</th>
           </tr>
         </thead>
         <tbody>
           {rows.map((r) => (
-            <tr key={`${r.name}-${r.code ?? ""}`} className="border-t border-border/60">
+            <tr key={`${r.name}-${r.code ?? ""}`} className="border-t border-border/60 hover:bg-muted/20">
               <td className="px-3 py-2">
                 <div className="font-medium">{r.name}</div>
                 {r.code ? <div className="text-[11px] text-muted-foreground">{r.code}</div> : null}
               </td>
               <td className="px-3 py-2 text-right tabular-nums">{r.delivered_orders}</td>
               <td className="px-3 py-2 text-right tabular-nums">{money(r.delivered_sum)}</td>
+              <td className="px-3 py-2 text-right tabular-nums text-orange-600">{money(r.returned_sum)}</td>
+              <td className="px-3 py-2 text-right tabular-nums text-violet-600">{money(r.payments_collected)}</td>
+              <td className="px-3 py-2 text-right tabular-nums">{money(r.debt)}</td>
             </tr>
           ))}
         </tbody>
@@ -99,6 +110,9 @@ function DeliveredTable({ header, rows }: { header: string; rows: ExpeditorGroup
             <td className="px-3 py-2">Итого</td>
             <td className="px-3 py-2 text-right tabular-nums">{totals.orders}</td>
             <td className="px-3 py-2 text-right tabular-nums">{money(totals.sum)}</td>
+            <td className="px-3 py-2 text-right tabular-nums">{money(totals.returned)}</td>
+            <td className="px-3 py-2 text-right tabular-nums">{money(totals.paid)}</td>
+            <td className="px-3 py-2 text-right tabular-nums">{money(totals.debt)}</td>
           </tr>
         </tfoot>
       </table>
@@ -151,53 +165,73 @@ export function ExpeditorDimBoard({
   loading?: boolean;
   onRefresh?: () => void;
 }) {
+  const [dim, setDim] = useState<ExpeditorDim>("expeditor");
+  const current = DIMS.find((d) => d.id === dim) ?? DIMS[3];
+  const rows = groups[current.id] ?? [];
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between gap-2">
-        <h2 className="text-base font-semibold">Доставлено</h2>
-        {onRefresh ? (
-          <Button type="button" variant="outline" size="icon" className="h-8 w-8" onClick={onRefresh}>
-            <RotateCcw className="h-3.5 w-3.5" />
-          </Button>
-        ) : null}
-      </div>
-      {loading ? <p className="text-sm text-muted-foreground">Загрузка…</p> : null}
-      <div className="grid gap-4 xl:grid-cols-2">
-        {DIMS.map((d) => {
-          const rows = groups[d.id] ?? [];
-          return (
-            <Card key={d.id}>
-              <CardHeader className="flex flex-row items-center justify-between py-3">
-                <CardTitle className="text-base">{d.label}</CardTitle>
-                <Button
+      <Card>
+        <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2 py-3">
+          <CardTitle className="text-base">{current.label}</CardTitle>
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex rounded-lg border border-border bg-muted/30 p-0.5">
+              {DIMS.map((d) => (
+                <button
+                  key={d.id}
                   type="button"
-                  variant="outline"
-                  size="sm"
-                  className="h-8 gap-1 text-xs"
-                  disabled={rows.length === 0}
-                  onClick={() =>
-                    downloadCsv(
-                      d.label,
-                      [d.header, "Доставлено шт", "Доставлено сумма"],
-                      rows.map((r) => [r.name, String(r.delivered_orders), String(Math.round(Number(r.delivered_sum) || 0))])
-                    )
-                  }
+                  className={cn(
+                    "h-8 rounded-md px-2.5 text-xs font-medium transition-colors",
+                    d.id === current.id
+                      ? "bg-background text-foreground shadow-sm"
+                      : "text-muted-foreground hover:text-foreground"
+                  )}
+                  onClick={() => setDim(d.id)}
                 >
-                  <Download className="h-3.5 w-3.5" />
-                  Excel
-                </Button>
-              </CardHeader>
-              <CardContent className="pt-0">
-                {rows.length === 0 ? (
-                  <p className="py-6 text-center text-sm text-muted-foreground">Нет доставленных за период</p>
-                ) : (
-                  <DeliveredTable header={d.header} rows={rows} />
-                )}
-              </CardContent>
-            </Card>
-          );
-        })}
-      </div>
+                  {d.label}
+                </button>
+              ))}
+            </div>
+          {onRefresh ? (
+            <Button type="button" variant="outline" size="icon" className="h-8 w-8" onClick={onRefresh}>
+              <RotateCcw className="h-3.5 w-3.5" />
+            </Button>
+          ) : null}
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="h-8 gap-1 text-xs"
+            disabled={rows.length === 0}
+            onClick={() =>
+              downloadCsv(
+                current.label,
+                [current.header, "Доставлено шт", "Доставлено сумма", "Возврат сумма", "Собрано оплат", "Долг"],
+                rows.map((r) => [
+                  r.name,
+                  String(r.delivered_orders),
+                  String(Math.round(Number(r.delivered_sum) || 0)),
+                  String(Math.round(Number(r.returned_sum) || 0)),
+                  String(Math.round(Number(r.payments_collected) || 0)),
+                  String(Math.round(Number(r.debt) || 0))
+                ])
+              )
+            }
+          >
+            <Download className="h-3.5 w-3.5" />
+            Excel
+          </Button>
+          </div>
+        </CardHeader>
+        <CardContent className="overflow-x-auto pt-0">
+          {loading ? (
+            <p className="text-sm text-muted-foreground">Загрузка…</p>
+          ) : rows.length === 0 ? (
+            <p className="py-6 text-center text-sm text-muted-foreground">Нет данных за период</p>
+          ) : (
+            <DeliveredTable header={current.header} rows={rows} />
+          )}
+        </CardContent>
+      </Card>
 
       <h2 className="text-base font-semibold">Дольше 1 дня, не доставлено</h2>
       <p className="text-xs text-muted-foreground">Сумма и срок в днях с момента создания. Минимум — больше 1 дня.</p>
