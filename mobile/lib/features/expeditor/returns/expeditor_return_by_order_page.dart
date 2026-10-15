@@ -13,7 +13,6 @@ import '../../../core/ui/agent_ui_extended.dart';
 import '../../agent/orders/order_create_models.dart' show formatMoneySpaced;
 import '../config/expeditor_config_enforcement.dart';
 import '../expeditor_providers.dart';
-import '../shell/expeditor_drawer.dart';
 import 'expeditor_bonus_calc_sheet.dart';
 import 'expeditor_return_reason_picker.dart';
 
@@ -89,13 +88,41 @@ class _ExpeditorReturnByOrderPageState
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.background,
-      drawer: const ExpeditorDrawer(),
       appBar: AppBar(
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          tooltip: 'Назад',
+          onPressed: () {
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              context.go('/home');
+            }
+          },
+        ),
         title: Text(_orderId == null
             ? 'Возврат с полки по заказу'
             : 'Возврат · заказ',),
       ),
       body: _orderId == null ? _orderPicker() : _composition(_orderId!),
+      bottomNavigationBar: BottomNavigationBar(
+        currentIndex: 0,
+        selectedItemColor: const Color(0xFF64748B),
+        unselectedItemColor: const Color(0xFF64748B),
+        type: BottomNavigationBarType.fixed,
+        selectedFontSize: 11,
+        unselectedFontSize: 11,
+        onTap: (i) {
+          const paths = ['/home', '/visits', '/debtors', '/invoices'];
+          context.go(paths[i]);
+        },
+        items: const [
+          BottomNavigationBarItem(icon: Icon(Icons.home_outlined), label: 'Главная'),
+          BottomNavigationBarItem(icon: Icon(Icons.location_on_outlined), label: 'Визиты'),
+          BottomNavigationBarItem(icon: Icon(Icons.person_outline), label: 'Должники'),
+          BottomNavigationBarItem(icon: Icon(Icons.receipt_long_outlined), label: 'Накладные'),
+        ],
+      ),
     );
   }
 
@@ -1992,22 +2019,30 @@ class _ExpeditorReturnByOrderPageState
               style: AppTypography.bodyMedium
                   .copyWith(color: AppColors.textSecondary),
             ),
-            if (allowBack) ...[
-              const SizedBox(height: 16),
-              OutlinedButton(
-                onPressed: () => setState(() {
-                  _orderId = null;
-                  _paid.clear();
-                  _bonus.clear();
-                  _bonusCashQty.clear();
-                  _bonusCashEnabled = false;
-                  _returnQty.clear();
-                  _swap.clear();
-                  _method = _ReturnMethod.byProducts;
-                }),
-                child: const Text('К списку заказов'),
-              ),
-            ],
+            const SizedBox(height: 16),
+            OutlinedButton(
+              onPressed: () {
+                if (allowBack) {
+                  setState(() {
+                    _orderId = null;
+                    _paid.clear();
+                    _bonus.clear();
+                    _bonusCashQty.clear();
+                    _bonusCashEnabled = false;
+                    _returnQty.clear();
+                    _swap.clear();
+                    _method = _ReturnMethod.byProducts;
+                  });
+                  return;
+                }
+                if (context.canPop()) {
+                  context.pop();
+                } else {
+                  context.go('/home');
+                }
+              },
+              child: Text(allowBack ? 'К списку заказов' : 'Назад'),
+            ),
           ],
         ),
       ),
