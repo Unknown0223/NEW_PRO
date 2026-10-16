@@ -21,6 +21,7 @@ import {
   applyGrantDelegationDetailCache
 } from "@/components/access/access-workspace.shared";
 import { displayAccessDescriptionShort, splitPermissionPath } from "@/lib/access-display";
+import { accessRoleDisplayName } from "@/lib/access-role-label";
 import {
   buildOpAttachTree,
   collectOpAttachExpandableIds,
@@ -780,7 +781,7 @@ export function useAccessUserDetailPanel({
         })
         .map((r) => ({
           key: r.key,
-          label: r.name?.trim() || r.key,
+          label: accessRoleDisplayName(r.key, r.name),
           sub: String(r.operations_count)
         }));
     }
@@ -864,7 +865,7 @@ export function useAccessUserDetailPanel({
   const extraRoleLabelByKey = useMemo(() => {
     const m = new Map<string, string>();
     for (const r of roleDefaultsQ.data ?? []) {
-      m.set(r.key, r.name?.trim() || r.key);
+      m.set(r.key, accessRoleDisplayName(r.key, r.name));
     }
     return m;
   }, [roleDefaultsQ.data]);

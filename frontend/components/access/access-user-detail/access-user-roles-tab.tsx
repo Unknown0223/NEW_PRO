@@ -7,7 +7,7 @@ import { Layers, Plus, ShieldCheck, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAppConfirm } from "@/components/ui/app-confirm-dialog";
 import { api } from "@/lib/api";
-import { accessRoleLabel } from "@/lib/access-role-label";
+import { accessRoleDisplayName, accessRoleLabel } from "@/lib/access-role-label";
 import { formatOpsCount } from "@/lib/access-history-summary";
 import { treeKeys } from "@/lib/access-operations-tree";
 import { useAccessToast } from "@/components/access/permission-tree/access-save-bar";
@@ -39,7 +39,7 @@ export function AccessUserRolesTab({ vm, readOnly }: { vm: AccessUserDetailVm; r
   const role = vm.user?.role ?? "";
 
   const remove = async (key: string) => {
-    const name = byKey.get(key)?.name || key;
+    const name = accessRoleDisplayName(key, byKey.get(key)?.name);
     const ok = await confirm({
       title: "Открепить роль",
       message: `Открепить группу операций «${name}» от пользователя?`,
@@ -101,6 +101,7 @@ export function AccessUserRolesTab({ vm, readOnly }: { vm: AccessUserDetailVm; r
           <ul className="divide-y divide-border/70 overflow-hidden rounded-lg border border-border/70">
             {extra.map((key) => {
               const r = byKey.get(key);
+              const title = accessRoleDisplayName(key, r?.name);
               return (
                 <li key={key} className="flex items-center gap-3 px-3 py-2.5">
                   {!readOnly ? (
@@ -109,13 +110,13 @@ export function AccessUserRolesTab({ vm, readOnly }: { vm: AccessUserDetailVm; r
                       className="h-4 w-4 shrink-0 accent-teal-700"
                       checked
                       disabled={busyKey != null}
-                      aria-label={`Открепить роль ${r?.name || key}`}
+                      aria-label={`Открепить роль ${title}`}
                       onChange={() => void remove(key)}
                     />
                   ) : null}
                   <Layers className="h-4 w-4 shrink-0 text-teal-700 dark:text-teal-300" aria-hidden />
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-[13px] font-medium">{r?.name || key}</p>
+                    <p className="truncate text-[13px] font-medium">{title}</p>
                     {r ? <p className="text-[11px] text-muted-foreground">{formatOpsCount(r.operations_count)}</p> : null}
                   </div>
                   {!readOnly ? (
@@ -124,7 +125,7 @@ export function AccessUserRolesTab({ vm, readOnly }: { vm: AccessUserDetailVm; r
                       disabled={busyKey != null}
                       onClick={() => void remove(key)}
                       className="rounded p-1 text-muted-foreground hover:bg-rose-100 hover:text-rose-700 disabled:opacity-40 dark:hover:bg-rose-950"
-                      aria-label={`Открепить роль ${r?.name || key}`}
+                      aria-label={`Открепить роль ${title}`}
                     >
                       <X className="h-3.5 w-3.5" aria-hidden />
                     </button>

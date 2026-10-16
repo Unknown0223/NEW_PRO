@@ -16,6 +16,7 @@ import { firstValidationUserHint, getZodFlattenFromApiErrorBody } from "@/lib/ap
 import { getUserFacingError, withApiSupportLine } from "@/lib/error-utils";
 import { invalidateMePermissionsQueries } from "@/lib/me-permissions";
 import { isExcludedFromAccessWebUsersList, isWebPanelDeniedRole } from "@/lib/access-web-users";
+import { accessRoleDisplayName } from "@/lib/access-role-label";
 import { splitPermissionPath } from "@/lib/access-display";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -480,7 +481,7 @@ export function AccessRoleDefaultsWorkspace({
                   data-active={selectedRoleId === r.id}
                   className="access-item-card w-full px-3 py-3 text-left text-sm hover:bg-muted/40"
                 >
-                  <div className="font-medium">{r.name || r.key}</div>
+                  <div className="font-medium">{accessRoleDisplayName(r.key, r.name)}</div>
                   <div className="mt-0.5 flex items-center gap-1.5 text-xs text-muted-foreground">
                     <Link2 className="size-3.5 shrink-0 opacity-80" aria-hidden />
                     <span>{r.operations_count} операций</span>
@@ -514,7 +515,7 @@ export function AccessRoleDefaultsWorkspace({
             <div className="shrink-0 rounded-md border border-border/60 bg-card p-2 shadow-sm">
               <div className="mb-1.5 flex flex-wrap items-start justify-between gap-2">
                 <p className="max-w-2xl text-[11px] leading-snug text-muted-foreground">
-                  Показаны операции, входящие в роль «{selectedRole.name || selectedRole.key}». Добавление — через
+                  Показаны операции, входящие в роль «{accessRoleDisplayName(selectedRole.key, selectedRole.name)}». Добавление — через
                   «Добавить операции»; снятие — «Открепить» или массово внизу. Изменения сохраняются для всех
                   пользователей с этой ролью.
                 </p>
@@ -632,7 +633,7 @@ export function AccessRoleDefaultsWorkspace({
               open={addOpen}
               onOpenChange={setAddOpen}
               tenantSlug={tenantSlug}
-              roleName={selectedRole.name || selectedRole.key}
+              roleName={accessRoleDisplayName(selectedRole.key, selectedRole.name)}
               catalog={catalogQ.data?.flat ?? []}
               grantedKeys={localPermissions}
               saving={saveMut.isPending}

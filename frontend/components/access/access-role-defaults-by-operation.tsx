@@ -4,6 +4,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { ChevronDown, ChevronRight, ChevronsDownUp, ChevronsUpDown, Link2, Search, Unlink } from "lucide-react";
 import { useMemo, useState } from "react";
 import { api } from "@/lib/api";
+import { accessRoleDisplayName } from "@/lib/access-role-label";
 import { getUserFacingError } from "@/lib/error-utils";
 import { invalidateMePermissionsQueries } from "@/lib/me-permissions";
 import { Button } from "@/components/ui/button";
@@ -62,7 +63,7 @@ export function AccessRoleDefaultsByOperation({
   const filteredRoles = useMemo(() => {
     const q = roleSearch.trim().toLowerCase();
     if (!q) return roles;
-    return roles.filter((r) => `${r.name} ${r.key}`.toLowerCase().includes(q));
+    return roles.filter((r) => `${accessRoleDisplayName(r.key, r.name)} ${r.name} ${r.key}`.toLowerCase().includes(q));
   }, [roles, roleSearch]);
 
   const isOn = (key: string) => ops.has(key);
@@ -218,7 +219,7 @@ export function AccessRoleDefaultsByOperation({
                           return n;
                         })
                       }
-                      aria-label={r.name || r.key}
+                      aria-label={accessRoleDisplayName(r.key, r.name)}
                     />
                     <button
                       type="button"
@@ -233,7 +234,7 @@ export function AccessRoleDefaultsByOperation({
                       }
                     >
                       {open ? <ChevronDown className="h-3.5 w-3.5 shrink-0" /> : <ChevronRight className="h-3.5 w-3.5 shrink-0" />}
-                      <span className="min-w-0 flex-1 truncate font-medium">{r.name || r.key}</span>
+                      <span className="min-w-0 flex-1 truncate font-medium">{accessRoleDisplayName(r.key, r.name)}</span>
                     </button>
                     <span className="hidden text-[10px] text-muted-foreground sm:inline">
                       {allGrant ? "Выдавать" : "Просмотр"}
