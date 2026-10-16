@@ -1,23 +1,23 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Building2, CreditCard, MapPin, Pencil, Plus, Route, Search, Users, Warehouse, Wallet, type LucideIcon } from "lucide-react";
+import { Building2, CreditCard, MapPin, Pencil, Plus, Route, Search, Users, Warehouse, Wallet, X, type LucideIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
+import { AccessUnsavedBar, useAccessToast } from "@/components/access/permission-tree/access-save-bar";
+import { countIdDelta, sameIdSet, TerritoryScopeTree } from "./access-user-scope-territory";
+import { cn } from "@/lib/utils";
 import { api } from "@/lib/api";
 import { accessRoleLabel } from "@/lib/access-role-label";
 import type { AccessUserDetailVm } from "./hooks/use-access-user-detail-panel";
 import {
   userMessageAfterAccessPatchFailure,
-  type AccessTerritoriesCatalog,
-  type AccessTerritoryTreeNode,
   type DetailModalKind,
   type DimRow,
   type TerritoryApiRow
 } from "./access-user-detail.types";
-import { TerritoryReferenceTreeRows } from "./access-user-detail-territory-ui";
 import type { AccessUserDetailTab } from "./access-user-detail-header";
 
 type ScopeTab = Extract<AccessUserDetailTab, "territories" | "branches" | "cash_desks" | "payment_methods" | "warehouses" | "trade_directions" | "staff">;
@@ -71,137 +71,14 @@ function useScopeLabels(tenantSlug: string, tab: ScopeTab) {
   return tab === "territories" ? territoriesQ : dimQ;
 }
 
-function subtreeSelected(node: AccessTerritoryTreeNode, sel: Set<string>): boolean {
-  if (sel.has(String(node.id))) return true;
-  return (node.children ?? []).some((c) => subtreeSelected(c, sel));
-}
-
-function filterSelectedTree(nodes: AccessTerritoryTreeNode[], sel: Set<string>): AccessTerritoryTreeNode[] {
-  return nodes.flatMap((n) => {
-    if (!subtreeSelected(n, sel)) return [];
-    return [{ ...n, children: filterSelectedTree(n.children ?? [], sel) }];
-  });
-}
-
-function filterNamedTree(nodes: AccessTerritoryTreeNode[], q: string): AccessTerritoryTreeNode[] {
-  if (!q) return nodes;
-  return nodes.flatMap((n) => {
-    const children = filterNamedTree(n.children ?? [], q);
-    const hit = n.name.toLocaleLowerCase("ru").includes(q) || (n.code ?? "").toLocaleLowerCase("ru").includes(q);
-    if (!hit && children.length === 0) return [];
-    return [{ ...n, children: hit ? n.children ?? [] : children }];
-  });
-}
-
-function expandIdsFor(nodes: AccessTerritoryTreeNode[], sel: Set<string>, out = new Set<number>()): Set<number> {
-  for (const n of nodes) {
-    const kids = n.children ?? [];
-    if (kids.some((c) => subtreeSelected(c, sel))) out.add(n.id);
-    expandIdsFor(kids, sel, out);
-  }
-  return out;
-}
-
-/** Территории: зона → область → город, belgi butun pastki shoxni oladi. */
-function TerritoryScopeTree({ vm, readOnly, hint }: { vm: AccessUserDetailVm; readOnly: boolean; hint: string }) {
-  const catalogQ = useQuery({
-    queryKey: ["access-territories", vm.tenantSlug],
-    queryFn: async (): Promise<AccessTerritoriesCatalog> => {
-      const { data } = await api.get<{ data?: TerritoryApiRow[]; tree?: AccessTerritoryTreeNode[] }>(
-        `/api/${vm.tenantSlug}/access/territories`
-      );
-      return { flat: data.data ?? [], tree: data.tree ?? [] };
-    },
-    staleTime: 30_000
-  });
-  const attached = useMemo(
-    () => new Set((vm.detailQ.data?.scope?.territories ?? []).map(String)),
-    [vm.detailQ.data?.scope?.territories]
-  );
-  const [sel, setSel] = useState<Set<string>>(attached);
-  const [search, setSearch] = useState("");
-  const [onlySelected, setOnlySelected] = useState(true);
-  const [expanded, setExpanded] = useState<Set<number>>(() => new Set());
-  const saveTimer = useRef<number | null>(null);
-  const expandedForUser = useRef<number | null>(null);
-
-  useEffect(() => {
-    setSel(attached);
-  }, [attached]);
-
-  useEffect(() => {
-    const tree = catalogQ.data?.tree;
-    if (!tree?.length || vm.userId <= 0 || !vm.detailQ.data) return;
-    if (expandedForUser.current === vm.userId) return;
-    expandedForUser.current = vm.userId;
-    setExpanded(expandIdsFor(tree, attached));
-  }, [catalogQ.data?.tree, attached, vm.userId, vm.detailQ.data]);
-
-  const tree = useMemo(() => {
-    const base = catalogQ.data?.tree ?? [];
-    const picked = onlySelected ? filterSelectedTree(base, sel) : base;
-    return filterNamedTree(picked, search.trim().toLocaleLowerCase("ru"));
-  }, [catalogQ.data?.tree, onlySelected, sel, search]);
-
-  const setAndSave: Dispatch<SetStateAction<Set<string>>> = (next) => {
-    setSel((prev) => {
-      const value = typeof next === "function" ? next(prev) : next;
-      if (saveTimer.current) window.clearTimeout(saveTimer.current);
-      saveTimer.current = window.setTimeout(() => {
-        const ids = [...value].map(Number).filter((n) => Number.isInteger(n) && n > 0);
-        void vm.patchMut.mutateAsync({ territory_ids: ids }).catch((err) => {
-          setSel(attached);
-          vm.setBulkFeedback({
-            tone: "err",
-            text: userMessageAfterAccessPatchFailure(err, "Не удалось сохранить территории")
-          });
-        });
-      }, 400);
-      return value;
-    });
-  };
-
-  const empty = (catalogQ.data?.tree.length ?? 0) === 0;
-  return (
-    <div className="flex min-h-0 flex-1 flex-col gap-2">
-      <div className="flex shrink-0 flex-wrap items-center gap-2">
-        <div className="relative min-w-[12rem] flex-1">
-          <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" aria-hidden />
-          <Input className="h-8 pl-8 text-xs" placeholder="Поиск" value={search} onChange={(e) => setSearch(e.target.value)} aria-label="Поиск территории" />
-        </div>
-        <label className="flex items-center gap-2 text-xs">
-          <input type="checkbox" className="h-4 w-4 accent-teal-700" checked={onlySelected} onChange={(e) => setOnlySelected(e.target.checked)} />
-          Только прикреплённые
-        </label>
-      </div>
-      <p className="shrink-0 text-xs text-muted-foreground">
-        {hint} Зона отмечает область и город. Прикреплено: <b className="tabular-nums text-foreground">{sel.size}</b>
-      </p>
-      <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain rounded-lg border border-border/60 p-2">
-        {catalogQ.isLoading ? (
-          <Skeleton className="h-24 w-full" />
-        ) : catalogQ.isError ? (
-          <p className="py-10 text-center text-sm text-destructive">Не удалось загрузить территории.</p>
-        ) : empty ? (
-          <p className="py-10 text-center text-sm text-muted-foreground">Нет территорий. Добавьте дерево в Настройки → Территория.</p>
-        ) : tree.length === 0 ? (
-          <p className="py-10 text-center text-sm text-muted-foreground">
-            {onlySelected ? "Территории не прикреплены." : "Ничего не найдено"}
-          </p>
-        ) : (
-          <TerritoryReferenceTreeRows
-            nodes={tree}
-            depth={0}
-            treeExpanded={expanded}
-            setTreeExpanded={setExpanded}
-            modalSel={sel}
-            setModalSel={setAndSave}
-            territoryDisabled={readOnly || vm.patchMut.isPending}
-          />
-        )}
-      </div>
-    </div>
-  );
+function scopeSaveBody(tab: Exclude<ScopeTab, "territories">, ids: string[]): Record<string, unknown> {
+  const nums = ids.map(Number).filter((n) => Number.isInteger(n) && n > 0);
+  if (tab === "staff") return { supervisee_user_ids: nums };
+  if (tab === "cash_desks") return { cash_desk_ids: nums };
+  if (tab === "warehouses") return { warehouse_ids: nums };
+  if (tab === "branches") return { branch_codes: ids.map((x) => x.trim()).filter(Boolean) };
+  if (tab === "payment_methods") return { payment_methods: ids.map((x) => x.trim()).filter(Boolean) };
+  return { trade_direction_ids: nums };
 }
 
 /** Hudud tablari: biriktirilgan obyektlar nomi bilan + tanlash oynasini ochish. */
@@ -245,8 +122,42 @@ export function AccessUserScopeSummary({ vm, tab, readOnly }: { vm: AccessUserDe
   const q = search.trim().toLocaleLowerCase("ru");
   const shown = q ? items.filter((i) => i.label.toLocaleLowerCase("ru").includes(q) || i.sub?.toLocaleLowerCase("ru").includes(q)) : items;
   const loadingNames = tab !== "staff" && items.length > 0 && labelsQ.isLoading;
+  const serverIds = useMemo(() => items.map((i) => i.id), [items]);
+  const serverKey = serverIds.join("\n");
+  const serverSet = useMemo(() => new Set(serverIds), [serverIds]);
+  const [draft, setDraft] = useState<Set<string> | null>(null);
+  const toast = useAccessToast();
+  useEffect(() => {
+    setDraft(null);
+  }, [serverKey]);
+  const kept = draft ?? serverSet;
+  const listDirty = draft != null && !sameIdSet(draft, serverSet);
+  const listDelta = countIdDelta(serverSet, kept);
 
   if (tab === "territories") return <TerritoryScopeTree vm={vm} readOnly={readOnly} hint={meta.hint} />;
+
+  const setChecked = (id: string, on: boolean) => {
+    setDraft((prev) => {
+      const next = new Set(prev ?? serverIds);
+      if (on) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+  };
+  const saveList = async () => {
+    try {
+      await vm.patchMut.mutateAsync(scopeSaveBody(tab, [...kept]));
+      toast.show({ tone: "ok", text: "Сохранено" });
+    } catch (err) {
+      toast.show({
+        tone: "err",
+        text: "Не удалось сохранить",
+        detail: userMessageAfterAccessPatchFailure(err, "Попробуйте ещё раз.")
+      });
+    }
+  };
+  const shownIds = shown.map((i) => i.id);
+  const allShownOn = shownIds.length > 0 && shownIds.every((id) => kept.has(id));
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-2">
@@ -256,18 +167,25 @@ export function AccessUserScopeSummary({ vm, tab, readOnly }: { vm: AccessUserDe
           <Input className="h-8 pl-8 text-xs" placeholder="Поиск" value={search} onChange={(e) => setSearch(e.target.value)} aria-label="Поиск" />
         </div>
         {!readOnly ? (
-          <Button type="button" size="sm" className="h-8 gap-1 bg-teal-700 text-xs text-white hover:bg-teal-800" onClick={() => vm.openModal(meta.modal)}>
+          <Button
+            type="button"
+            size="sm"
+            className="h-8 gap-1 bg-teal-700 text-xs text-white hover:bg-teal-800"
+            disabled={listDirty}
+            title={listDirty ? "Сначала сохраните или отмените изменения" : undefined}
+            onClick={() => vm.openModal(meta.modal)}
+          >
             {items.length > 0 ? <Pencil className="h-3.5 w-3.5" aria-hidden /> : <Plus className="h-3.5 w-3.5" aria-hidden />}
             {items.length > 0 ? "Изменить" : "Прикрепить"}
           </Button>
         ) : null}
       </div>
       <p className="shrink-0 text-xs text-muted-foreground">
-        {meta.hint}
+        {meta.hint} Снимите галочку или нажмите «Убрать», затем «Сохранить».
         {items.length > 0 ? (
           <>
             {" "}
-            Прикреплено: <b className="tabular-nums text-foreground">{items.length}</b>
+            Прикреплено: <b className="tabular-nums text-foreground">{kept.size}</b>
           </>
         ) : null}
       </p>
@@ -288,19 +206,84 @@ export function AccessUserScopeSummary({ vm, tab, readOnly }: { vm: AccessUserDe
         ) : shown.length === 0 ? (
           <p className="px-4 py-10 text-center text-sm text-muted-foreground">Ничего не найдено</p>
         ) : (
-          <ul className="grid gap-1.5 sm:grid-cols-2 xl:grid-cols-3">
-            {shown.map((i) => (
-              <li key={i.id} className="flex min-w-0 items-center gap-2 rounded-lg border border-border/70 px-3 py-2 text-[13px]">
-                <Icon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />
-                <span className="min-w-0 flex-1 truncate" title={i.label}>
-                  {i.label}
-                </span>
-                {i.sub ? <span className="shrink-0 rounded bg-muted px-1.5 text-[10.5px] text-muted-foreground">{i.sub}</span> : null}
+          <ul className="divide-y divide-border/70 overflow-hidden rounded-lg border border-border/70">
+            {!readOnly && shownIds.length > 1 ? (
+              <li className="flex items-center gap-3 bg-muted/40 px-3 py-2 text-xs">
+                <input
+                  type="checkbox"
+                  className="h-4 w-4 accent-teal-700"
+                  checked={allShownOn}
+                  disabled={vm.patchMut.isPending}
+                  aria-label="Отметить все видимые"
+                  onChange={(e) => {
+                    const on = e.target.checked;
+                    setDraft((prev) => {
+                      const next = new Set(prev ?? serverIds);
+                      for (const id of shownIds) {
+                        if (on) next.add(id);
+                        else next.delete(id);
+                      }
+                      return next;
+                    });
+                  }}
+                />
+                <span className="font-medium text-muted-foreground">Все видимые</span>
               </li>
-            ))}
+            ) : null}
+            {shown.map((i) => {
+              const on = kept.has(i.id);
+              return (
+                <li
+                  key={i.id}
+                  className={cn(
+                    "flex min-w-0 items-center gap-3 px-3 py-2.5 text-sm",
+                    on ? "bg-card" : "bg-rose-50/80 text-muted-foreground dark:bg-rose-950/30"
+                  )}
+                >
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4 shrink-0 accent-teal-700"
+                    checked={on}
+                    disabled={readOnly || vm.patchMut.isPending}
+                    aria-label={on ? `Оставить ${i.label}` : `Вернуть ${i.label}`}
+                    onChange={(e) => setChecked(i.id, e.target.checked)}
+                  />
+                  <Icon className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+                  <span className={cn("min-w-0 flex-1 truncate", !on && "line-through")} title={i.label}>
+                    {i.label}
+                  </span>
+                  {i.sub ? (
+                    <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-[11px] text-muted-foreground">{i.sub}</span>
+                  ) : null}
+                  {!on ? <span className="shrink-0 text-[11px] text-rose-700">будет убрано</span> : null}
+                  {!readOnly && on ? (
+                    <button
+                      type="button"
+                      className="inline-flex h-7 shrink-0 items-center gap-1 rounded-md px-2 text-xs text-rose-700 hover:bg-rose-100 disabled:opacity-40 dark:hover:bg-rose-950"
+                      disabled={vm.patchMut.isPending}
+                      aria-label={`Убрать ${i.label}`}
+                      onClick={() => setChecked(i.id, false)}
+                    >
+                      <X className="h-3.5 w-3.5" aria-hidden />
+                      Убрать
+                    </button>
+                  ) : null}
+                </li>
+              );
+            })}
           </ul>
         )}
       </div>
+      {listDirty && !readOnly ? (
+        <AccessUnsavedBar
+          added={listDelta.added}
+          removed={listDelta.removed}
+          pending={vm.patchMut.isPending}
+          onCancel={() => setDraft(null)}
+          onSave={() => void saveList()}
+        />
+      ) : null}
+      {toast.node}
     </div>
   );
 }

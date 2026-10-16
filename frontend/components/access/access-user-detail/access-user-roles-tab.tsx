@@ -98,11 +98,21 @@ export function AccessUserRolesTab({ vm, readOnly }: { vm: AccessUserDetailVm; r
             <p className="text-sm text-muted-foreground">Дополнительные роли не прикреплены</p>
           </div>
         ) : (
-          <ul className="grid gap-1.5 sm:grid-cols-2">
+          <ul className="divide-y divide-border/70 overflow-hidden rounded-lg border border-border/70">
             {extra.map((key) => {
               const r = byKey.get(key);
               return (
-                <li key={key} className="flex items-center gap-2 rounded-lg border border-border/70 px-3 py-2">
+                <li key={key} className="flex items-center gap-3 px-3 py-2.5">
+                  {!readOnly ? (
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4 shrink-0 accent-teal-700"
+                      checked
+                      disabled={busyKey != null}
+                      aria-label={`Открепить роль ${r?.name || key}`}
+                      onChange={() => void remove(key)}
+                    />
+                  ) : null}
                   <Layers className="h-4 w-4 shrink-0 text-teal-700 dark:text-teal-300" aria-hidden />
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-[13px] font-medium">{r?.name || key}</p>
