@@ -177,7 +177,7 @@ export async function listClientBalancesReportFiltered(
         ),
         lastPays.get(c.id),
         lastOrds.get(c.id),
-        pageBalAsOf?.get(c.id) ?? null,
+        pageBalAsOf?.get(c.id) ?? netOf(c.id),
         null,
         null,
         debtSplits.get(c.id) ?? null

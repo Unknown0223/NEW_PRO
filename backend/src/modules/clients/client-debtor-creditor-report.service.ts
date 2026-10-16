@@ -1,6 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "../../config/database";
 import { ORDER_STATUSES_OUTSTANDING_RECEIVABLE } from "../orders/order-status";
+import { PAYMENT_COUNTS_FOR_RECEIVABLE_NET } from "../client-balances/client-balances.constants";
 
 export type DebtorCreditorMonthCell = {
   debit: string;
@@ -64,6 +65,7 @@ export async function getClientDebtorCreditorMonthly(
     WHERE p.tenant_id = ${tenantId}
       AND p.client_id = ${clientId}
       AND p.deleted_at IS NULL
+      ${PAYMENT_COUNTS_FOR_RECEIVABLE_NET}
     GROUP BY 1
   `;
 

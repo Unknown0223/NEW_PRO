@@ -12,6 +12,7 @@ import {
   mergeLedgerWithUnpaidDelivered
 } from "../client-balances/client-balances.service";
 import { ORDER_STATUSES_OUTSTANDING_RECEIVABLE } from "../orders/order-status";
+import { PAYMENT_COUNTS_FOR_RECEIVABLE_NET } from "../client-balances/client-balances.constants";
 
 import type { AgentBalanceCard } from "./client-balance-ledger.types";
 import { normPayTypeKey, paymentAmountsForSpravochnik } from "./client-balance-ledger.helpers";
@@ -67,6 +68,7 @@ export async function buildLedgerAgentCards(
     WHERE p.tenant_id = ${tenantId}
       AND p.client_id = ${clientId}
       AND p.deleted_at IS NULL
+      ${PAYMENT_COUNTS_FOR_RECEIVABLE_NET}
     GROUP BY COALESCE(p.ledger_agent_id, ord.agent_id, c.agent_id), p.payment_type
   `;
 
@@ -110,6 +112,7 @@ export async function buildLedgerAgentCards(
       WHERE p.client_id = ${clientId}
         AND p.tenant_id = ${tenantId}
         AND p.deleted_at IS NULL
+        ${PAYMENT_COUNTS_FOR_RECEIVABLE_NET}
     )
     SELECT agent_id,
       MAX(NULLIF(TRIM(agent_name), '')) AS agent_name,

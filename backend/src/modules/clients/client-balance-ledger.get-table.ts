@@ -1,5 +1,6 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "../../config/database";
+import { PAYMENT_COUNTS_FOR_RECEIVABLE_NET } from "../client-balances/client-balances.constants";
 import { resolvePaymentMethodRefToLabel, type PaymentMethodEntryDto } from "../tenant-settings/finance-refs";
 import type { ClientLedgerRow, UnionRaw } from "./client-balance-ledger.types";
 import { mapUnionToLedgerRow } from "./client-balance-ledger.helpers";
@@ -94,6 +95,7 @@ export async function fetchClientBalanceLedgerTable(
       WHERE p.tenant_id = ${tenantId}
         AND p.client_id = ${clientId}
         AND p.deleted_at IS NULL
+        ${PAYMENT_COUNTS_FOR_RECEIVABLE_NET}
         ${payDateClause}
         ${paySearchClause}
         ${payAgentClause}
@@ -188,6 +190,7 @@ export async function fetchClientBalanceLedgerTable(
         WHERE p.tenant_id = ${tenantId}
           AND p.client_id = ${clientId}
           AND p.deleted_at IS NULL
+          ${PAYMENT_COUNTS_FOR_RECEIVABLE_NET}
           ${payDateClause}
           ${paySearchClause}
           ${payAgentClause}

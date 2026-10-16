@@ -12,6 +12,7 @@ import {
   mergeLedgerWithUnpaidDelivered
 } from "../client-balances/client-balances.service";
 import { ORDER_STATUSES_OUTSTANDING_RECEIVABLE } from "../orders/order-status";
+import { PAYMENT_COUNTS_FOR_RECEIVABLE_NET } from "../client-balances/client-balances.constants";
 
 import type { AgentBalanceCard, ClientBalanceLedgerResponse, ClientLedgerQuery, UnionRaw } from "./client-balance-ledger.types";
 import {
@@ -163,6 +164,7 @@ export async function getClientBalanceLedger(
     WHERE p.tenant_id = ${tenantId}
       AND p.client_id = ${clientId}
       AND p.deleted_at IS NULL
+      ${PAYMENT_COUNTS_FOR_RECEIVABLE_NET}
       ${payDateClause}
       ${paySearchClause}
       ${payAgentClause}
@@ -259,6 +261,7 @@ export async function getClientBalanceLedger(
       WHERE p.tenant_id = ${tenantId}
         AND p.client_id = ${clientId}
         AND p.deleted_at IS NULL
+        ${PAYMENT_COUNTS_FOR_RECEIVABLE_NET}
         ${payDateClause}
         ${paySearchClause}
         ${payAgent}
