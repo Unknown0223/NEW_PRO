@@ -114,11 +114,19 @@ export async function loadLastDeliveryByClient(
  */
 export async function loadLedgerCardNetByClient(
   tenantId: number,
-  clientIds: number[]
+  clientIds: number[],
+  asOfEnd: Date | null = null
 ): Promise<Map<number, Prisma.Decimal>> {
   const out = new Map<number, Prisma.Decimal>();
   if (clientIds.length === 0) return out;
   const wanted = new Set(clientIds);
+  const asOfOrder = asOfEnd ? Prisma.sql`AND o.created_at <= ${asOfEnd}` : Prisma.empty;
+  const asOfPay = asOfEnd
+    ? Prisma.sql`AND COALESCE(p.paid_at, p.created_at) <= ${asOfEnd}`
+    : Prisma.empty;
+  const asOfReturn = asOfEnd
+    ? Prisma.sql`AND COALESCE(sr.accepted_at, sr.created_at) <= ${asOfEnd}`
+    : Prisma.empty;
   const rows = await prisma.$queryRaw<Array<{ client_id: number; net: Prisma.Decimal }>>`
     SELECT client_id, SUM(pay - debt)::decimal(15,2) AS net
     FROM (
@@ -129,6 +137,7 @@ export async function loadLedgerCardNetByClient(
       WHERE o.tenant_id = ${tenantId}
         AND o.order_type = 'order'
         AND o.status = 'delivered'
+        ${asOfOrder}
       UNION ALL
       SELECT p.client_id,
         CASE WHEN p.entry_kind = 'client_expense' THEN p.amount ELSE 0::decimal(15,2) END AS debt,
@@ -137,6 +146,7 @@ export async function loadLedgerCardNetByClient(
       WHERE p.tenant_id = ${tenantId}
         AND p.deleted_at IS NULL
         ${PAYMENT_COUNTS_FOR_RECEIVABLE_NET}
+        ${asOfPay}
       UNION ALL
       SELECT o.client_id,
         0::decimal(15,2) AS debt,
@@ -145,6 +155,7 @@ export async function loadLedgerCardNetByClient(
       WHERE o.tenant_id = ${tenantId}
         AND o.order_type IN ('return', 'return_by_order', 'partial_return')
         AND o.status IN ('delivered', 'returned')
+        ${asOfOrder}
         AND COALESCE(o.total_sum, 0) > 0
         AND NOT EXISTS (
           SELECT 1 FROM sales_returns sr
@@ -168,6 +179,7 @@ export async function loadLedgerCardNetByClient(
       WHERE sr.tenant_id = ${tenantId}
         AND sr.client_id IS NOT NULL
         AND sr.status = 'posted'
+        ${asOfReturn}
         AND COALESCE(sr.refund_amount, 0) > 0
         AND NOT EXISTS (
           SELECT 1 FROM client_payments p

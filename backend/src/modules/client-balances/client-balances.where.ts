@@ -194,12 +194,18 @@ export async function buildClientWhere(
 
   const cFrom = q.consignment_due_from?.trim() ? parseIsoDateStartUtc(q.consignment_due_from) : null;
   const cTo = q.consignment_due_to?.trim() ? parseIsoDateEndUtc(q.consignment_due_to) : null;
-  if (cFrom && cTo) {
-    andParts.push({ license_until: { gte: cFrom, lte: cTo } });
-  } else if (cFrom) {
-    andParts.push({ license_until: { gte: cFrom } });
-  } else if (cTo) {
-    andParts.push({ license_until: { lte: cTo } });
+  if (cFrom || cTo) {
+    andParts.push({
+      orders: {
+        some: {
+          order_type: "order",
+          consignment_due_date: {
+            ...(cFrom ? { gte: cFrom } : {}),
+            ...(cTo ? { lte: cTo } : {})
+          }
+        }
+      }
+    });
   }
 
   if (!opts?.skipTerritoryFilters) {

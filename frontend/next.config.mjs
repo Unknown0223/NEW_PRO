@@ -25,10 +25,6 @@ const withBundleAnalyzer = process.env.ANALYZE === "true"
   : (config) => config;
 
 const nextConfig = {
-  eslint: {
-    /** Docker/Railway prod build — mavjud lint xatolari deployni bloklamasin */
-    ignoreDuringBuilds: true
-  },
   typescript: {
     /** Prod deploy: typecheck alohida CI da */
     ignoreBuildErrors: true

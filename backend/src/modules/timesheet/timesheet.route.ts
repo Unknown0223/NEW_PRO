@@ -5,6 +5,7 @@ import { actorUserIdOrNull } from "../../lib/request-actor";
 import { ensureTenantContext } from "../../lib/tenant-context";
 import { ADMIN_AND_OPERATOR_LIKE_ROLES, TENANT_ADMIN_ROLE } from "../../lib/tenant-user-roles";
 import { jwtAccessVerify, requireRoles } from "../auth/auth.prehandlers";
+import { accessStaffDirectoryWhere } from "../staff/staff.route.shared";
 import { listTimesheetFilters, listTimesheetMatrix, patchAttendanceCell, patchAttendanceCells } from "./timesheet.service";
 import { registerTimesheetNormRoutes, timesheetActorLabel } from "./timesheet.route.norm";
 
@@ -74,7 +75,8 @@ export async function registerTimesheetRoutes(app: FastifyInstance) {
     { preHandler: [jwtAccessVerify, requireRoles(...readRoles)] },
     async (request, reply) => {
       if (!ensureTenantContext(request, reply)) return;
-      const data = await listTimesheetFilters(request.tenant!.id);
+      const staffScope = await accessStaffDirectoryWhere(request, request.tenant!.id);
+      const data = await listTimesheetFilters(request.tenant!.id, staffScope);
       return reply.send({ data });
     }
   );
@@ -95,14 +97,19 @@ export async function registerTimesheetRoutes(app: FastifyInstance) {
         const branches = parseCsvOrList(q.branches) ?? parseCsvOrList(q.branch);
         const directionRaw = String(q.direction_id ?? q.direction ?? "").trim();
         const direction_id = directionRaw ? Number.parseInt(directionRaw, 10) : undefined;
-        const data = await listTimesheetMatrix(request.tenant!.id, {
-          month,
-          roles,
-          branches,
-          branch: branches?.length === 1 ? branches[0] : undefined,
-          direction_id: Number.isFinite(direction_id) ? direction_id : undefined,
-          user_id
-        });
+        const staffScope = await accessStaffDirectoryWhere(request, request.tenant!.id);
+        const data = await listTimesheetMatrix(
+          request.tenant!.id,
+          {
+            month,
+            roles,
+            branches,
+            branch: branches?.length === 1 ? branches[0] : undefined,
+            direction_id: Number.isFinite(direction_id) ? direction_id : undefined,
+            user_id
+          },
+          staffScope
+        );
         return reply.send({ data });
       } catch (e) {
         const msg = e instanceof Error ? e.message : "";
@@ -122,12 +129,13 @@ export async function registerTimesheetRoutes(app: FastifyInstance) {
       if (!parsed.success)
         return sendApiError(reply, request, 400, "ValidationError", undefined, zodValidationExtras(parsed.error));
       try {
+        const staffScope = await accessStaffDirectoryWhere(request, request.tenant!.id);
         const data = await patchAttendanceCells(
           request.tenant!.id,
           actorUserIdOrNull(request),
           parsed.data.entries,
           await timesheetActorLabel(request),
-          { actorIsAdmin: actorIsAdmin(request) }
+          { actorIsAdmin: actorIsAdmin(request), staffScope }
         );
         return reply.send(data);
       } catch (e) {
@@ -160,7 +168,10 @@ export async function registerTimesheetRoutes(app: FastifyInstance) {
             comment: parsed.data.comment,
             changedBy: await timesheetActorLabel(request)
           },
-          { actorIsAdmin: actorIsAdmin(request) }
+          {
+            actorIsAdmin: actorIsAdmin(request),
+            staffScope: await accessStaffDirectoryWhere(request, request.tenant!.id)
+          }
         );
         return reply.send(data);
       } catch (e) {

@@ -1,9 +1,8 @@
+@import "tailwindcss";
+@config "../tailwind.config.ts";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 @import "./theme-palettes.css";
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
 
 @layer utilities {
   @keyframes orders-expand-row {

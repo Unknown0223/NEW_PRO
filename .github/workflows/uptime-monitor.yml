@@ -14,9 +14,9 @@ jobs:
           HEALTH_URL: ${{ vars.PRODUCTION_HEALTH_URL }}
         run: |
           if [ -z "$HEALTH_URL" ] || [ "$HEALTH_URL" = "https://api.example.com/health" ]; then
-            echo "PRODUCTION_HEALTH_URL berilmagan — monitor o'tkazib yuborildi (soxta manzilga urilmaydi)."
+            echo "PRODUCTION_HEALTH_URL berilmagan yoki example.com — monitor to'xtatildi."
             echo "GitHub → Settings → Variables → PRODUCTION_HEALTH_URL ni haqiqiy /health ga qo'ying."
-            exit 0
+            exit 1
           fi
           echo "Checking $HEALTH_URL"
           code=$(curl -s -o /tmp/health.json -w "%{http_code}" "$HEALTH_URL" --max-time 30)

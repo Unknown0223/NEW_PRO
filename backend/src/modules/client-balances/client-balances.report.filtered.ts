@@ -33,7 +33,6 @@ import {
   readSortDir
 } from "./client-balances.payments.util";
 import {
-  loadBalancesAsOf,
   loadLastDeliveryByClient,
   loadLastPaymentByClient,
   loadLedgerCardNetByClient
@@ -63,10 +62,9 @@ export async function listClientBalancesReportFiltered(
     });
     const baseIds = allMinimal.map((c) => c.id);
     perf("clients-balance-filter.base-loaded", { baseIds: baseIds.length, filter: bfEarly });
-    const [deliveryMap, balAsOfAll, cardNetByClient] = await Promise.all([
+    const [deliveryMap, cardNetByClient] = await Promise.all([
       loadDeliveryDebtByClient(tenantId, baseIds, odFrom, odTo),
-      asOfEnd && baseIds.length > 0 ? loadBalancesAsOf(tenantId, baseIds, asOfEnd) : Promise.resolve(null),
-      loadLedgerCardNetByClient(tenantId, baseIds)
+      loadLedgerCardNetByClient(tenantId, baseIds, asOfEnd)
     ]);
     perf("clients-balance-filter.derived-loaded", { deliveryMap: deliveryMap.size });
 
@@ -137,7 +135,7 @@ export async function listClientBalancesReportFiltered(
     const sliceRows = orderedEligible.slice((page - 1) * limit, page * limit);
     const sliceIds = sliceRows.map((r) => r.id);
 
-    const [clients, pagePayNorm, lastPays, lastOrds, pageBalAsOf, debtSplits] = await Promise.all([
+    const [clients, pagePayNorm, lastPays, lastOrds, debtSplits] = await Promise.all([
       (async () => {
         if (sliceIds.length === 0) return [];
         return prisma.client.findMany({
@@ -159,7 +157,6 @@ export async function listClientBalancesReportFiltered(
       loadPaymentNetNormByClient(tenantId, sliceIds, asOfEnd, pmEntries),
       loadLastPaymentByClient(tenantId, sliceIds, asOfEnd),
       loadLastDeliveryByClient(tenantId, sliceIds),
-      asOfEnd && sliceIds.length > 0 ? loadBalancesAsOf(tenantId, sliceIds, asOfEnd) : Promise.resolve(null),
       sliceIds.length > 0 ? loadDebtSplitByClient(tenantId, sliceIds) : Promise.resolve(new Map())
     ]);
     const orderMap = new Map(clients.map((c) => [c.id, c]));
@@ -177,7 +174,7 @@ export async function listClientBalancesReportFiltered(
         ),
         lastPays.get(c.id),
         lastOrds.get(c.id),
-        pageBalAsOf?.get(c.id) ?? netOf(c.id),
+        netOf(c.id),
         null,
         null,
         debtSplits.get(c.id) ?? null

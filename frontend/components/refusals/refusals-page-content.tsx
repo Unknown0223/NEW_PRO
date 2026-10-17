@@ -10,12 +10,8 @@ import { buttonVariants } from "@/components/ui/button-variants";
 import { DateRangePopover, formatDateRangeButton } from "@/components/ui/date-range-popover";
 import { api } from "@/lib/api";
 import { downloadStyledXlsxSheet } from "@/lib/download-xlsx-styled";
-import {
-  formatRefusalDate,
-  todayYmd,
-  type RefusalFiltersState,
-  type RefusalsListResponse
-} from "@/lib/refusals-types";
+import { formatRefusalDate, type RefusalFiltersState, type RefusalsListResponse } from "@/lib/refusals-types";
+import { buildRefusalListParams, defaultRefusalFilters } from "@/components/refusals/refusals-list-params";
 import { STALE } from "@/lib/query-stale";
 import { usePermissions } from "@/lib/use-permissions";
 import { useAuthStore, useAuthStoreHydrated } from "@/lib/auth-store";
@@ -34,55 +30,13 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 const PER_PAGE_OPTIONS = [10, 20, 50, 100];
 
-function defaultFilters(): RefusalFiltersState {
-  const t = todayYmd();
-  return {
-    dateFrom: t,
-    dateTo: t,
-    agent: "",
-    reason: "",
-    clientCategory: "",
-    zone: "",
-    region: "",
-    city: ""
-  };
-}
-
-function buildListParams(
-  applied: RefusalFiltersState,
-  page: number,
-  perPage: number,
-  sortKey: string,
-  sortDir: "asc" | "desc",
-  search: string,
-  opts?: { forExport?: boolean }
-): URLSearchParams {
-  const qs = new URLSearchParams({
-    page: String(page),
-    limit: opts?.forExport ? "5000" : String(perPage),
-    sort_by: sortKey,
-    sort_dir: sortDir
-  });
-  if (opts?.forExport) qs.set("export_limit", "5000");
-  if (applied.dateFrom) qs.set("date_from", applied.dateFrom);
-  if (applied.dateTo) qs.set("date_to", applied.dateTo);
-  if (applied.agent) qs.set("agent_id", applied.agent);
-  if (applied.reason) qs.set("refusal_reason_ref", applied.reason);
-  if (applied.clientCategory) qs.set("client_category", applied.clientCategory);
-  if (applied.zone) qs.set("zone", applied.zone);
-  if (applied.region) qs.set("region", applied.region);
-  if (applied.city) qs.set("city", applied.city);
-  if (search.trim()) qs.set("search", search.trim());
-  return qs;
-}
-
 export function RefusalsPageContent() {
   const tenantSlug = useAuthStore((s) => s.tenantSlug);
   const hydrated = useAuthStoreHydrated();
   const canExportExcel = usePermissions().has("orders.otkazy.export");
 
-  const [filters, setFilters] = useState<RefusalFiltersState>(defaultFilters);
-  const [appliedFilters, setAppliedFilters] = useState<RefusalFiltersState>(defaultFilters);
+  const [filters, setFilters] = useState<RefusalFiltersState>(defaultRefusalFilters);
+  const [appliedFilters, setAppliedFilters] = useState<RefusalFiltersState>(defaultRefusalFilters);
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const [perPage, setPerPage] = useState(20);
@@ -110,7 +64,7 @@ export function RefusalsPageContent() {
     enabled: Boolean(tenantSlug) && hydrated,
     staleTime: STALE.list,
     queryFn: async () => {
-      const qs = buildListParams(appliedFilters, page, perPage, sortKey, sortDir, search);
+      const qs = buildRefusalListParams(appliedFilters, page, perPage, sortKey, sortDir, search);
       const { data } = await api.get<RefusalsListResponse>(`/api/${tenantSlug}/refusals?${qs}`);
       return data;
     }
@@ -154,7 +108,7 @@ export function RefusalsPageContent() {
     setExporting(true);
     setExportError(null);
     try {
-      const qs = buildListParams(appliedFilters, 1, perPage, sortKey, sortDir, search, {
+      const qs = buildRefusalListParams(appliedFilters, 1, perPage, sortKey, sortDir, search, {
         forExport: true
       });
       const { data } = await api.get<RefusalsListResponse>(`/api/${tenantSlug}/refusals?${qs}`);

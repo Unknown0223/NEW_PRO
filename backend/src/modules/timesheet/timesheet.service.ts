@@ -188,7 +188,10 @@ function isoDateForDay(month: string, day: number): string {
   return `${month}-${String(day).padStart(2, "0")}`;
 }
 
-export async function listTimesheetFilters(tenantId: number): Promise<{
+export async function listTimesheetFilters(
+  tenantId: number,
+  staffScope?: Prisma.UserWhereInput | null
+): Promise<{
   roles: string[];
   branches: string[];
   directions: Array<{ id: number; name: string }>;
@@ -199,7 +202,8 @@ export async function listTimesheetFilters(tenantId: number): Promise<{
       where: {
         tenant_id: tenantId,
         is_active: true,
-        NOT: { role: { equals: "admin", mode: "insensitive" } }
+        NOT: { role: { equals: "admin", mode: "insensitive" } },
+        ...(staffScope ? { AND: [staffScope] } : {})
       },
       select: {
         id: true,
@@ -242,8 +246,10 @@ export async function listTimesheetFilters(tenantId: number): Promise<{
       if (b.branch_code?.trim()) branchSet.add(b.branch_code.trim());
     }
   }
-  for (const b of branchLinks) {
-    if (b.branch_code?.trim()) branchSet.add(b.branch_code.trim());
+  if (!staffScope) {
+    for (const b of branchLinks) {
+      if (b.branch_code?.trim()) branchSet.add(b.branch_code.trim());
+    }
   }
 
   return {
@@ -263,7 +269,11 @@ export async function listTimesheetFilters(tenantId: number): Promise<{
   };
 }
 
-export async function listTimesheetMatrix(tenantId: number, input: TimesheetFilterInput): Promise<{
+export async function listTimesheetMatrix(
+  tenantId: number,
+  input: TimesheetFilterInput,
+  staffScope?: Prisma.UserWhereInput | null
+): Promise<{
   month: string;
   days: number[];
   rows: TimesheetRowDto[];
@@ -321,6 +331,7 @@ export async function listTimesheetMatrix(tenantId: number, input: TimesheetFilt
     { id: { in: eligibleIds } },
     { NOT: { role: { equals: "admin", mode: "insensitive" } } }
   ];
+  if (staffScope) and.push(staffScope);
   if (roleFilter?.length === 1) and.push({ role: roleFilter[0] });
   else if (roleFilter && roleFilter.length > 1) and.push({ role: { in: roleFilter } });
   if (typeof input.user_id === "number") and.push({ id: input.user_id });
@@ -497,7 +508,7 @@ export async function patchAttendanceCells(
   actorUserId: number | null,
   entries: AttendanceCellInput[],
   changedBy?: string,
-  opts?: { actorIsAdmin?: boolean }
+  opts?: { actorIsAdmin?: boolean; staffScope?: Prisma.UserWhereInput | null }
 ): Promise<{ ok: true; applied: number; changed: number }> {
   if (entries.length === 0) return { ok: true, applied: 0, changed: 0 };
 
@@ -516,7 +527,11 @@ export async function patchAttendanceCells(
 
   const userIds = [...new Set(entries.map((e) => e.userId))];
   const users = await prisma.user.findMany({
-    where: { id: { in: userIds }, tenant_id: tenantId },
+    where: {
+      id: { in: userIds },
+      tenant_id: tenantId,
+      ...(opts?.staffScope ? { AND: [opts.staffScope] } : {})
+    },
     select: { id: true, name: true }
   });
   const userById = new Map(users.map((u) => [u.id, u]));
@@ -636,7 +651,7 @@ export async function patchAttendanceCell(
   tenantId: number,
   actorUserId: number | null,
   input: AttendanceCellInput & { changedBy?: string },
-  opts?: { actorIsAdmin?: boolean }
+  opts?: { actorIsAdmin?: boolean; staffScope?: Prisma.UserWhereInput | null }
 ): Promise<{ ok: true }> {
   await patchAttendanceCells(
     tenantId,

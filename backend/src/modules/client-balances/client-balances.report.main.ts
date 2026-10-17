@@ -404,7 +404,9 @@ export async function listClientBalancesReportMain(
   }
 
   const cardNetByClient =
-    q.view === "clients" && ids.length > 0 ? await loadLedgerCardNetByClient(tenantId, ids) : null;
+    q.view === "clients" && ids.length > 0
+      ? await loadLedgerCardNetByClient(tenantId, ids, asOfEnd)
+      : null;
   let clientsSummaryBalance = totalBalanceStr;
   if (cardNetByClient) {
     let sum = new Prisma.Decimal(0);
