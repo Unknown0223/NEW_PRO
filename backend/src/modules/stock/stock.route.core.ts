@@ -5,7 +5,7 @@ import { actorUserIdOrNull } from "../../lib/request-actor";
 import { sendApiError, zodValidationExtras } from "../../lib/api-error";
 import { ensureTenantContext } from "../../lib/tenant-context";
 import { jwtAccessVerify, requireRoles } from "../auth/auth.prehandlers";
-import { requireRolesOrSkladchikEntitlement } from "../staff/skladchik-access.prehandler";
+import { requireRolesOrSkladchikEntitlement, STOCK_BALANCES_VIEW_PERMISSIONS } from "../staff/skladchik-access.prehandler";
 import { applyStockReceipt, listStockForTenant } from "./stock.service";
 import { receiptBody } from "./stock.route.schemas";
 
@@ -13,7 +13,16 @@ import { receiptBody } from "./stock.route.schemas";
 export async function registerStockCoreRoutes(app: FastifyInstance) {
   app.get(
     "/api/:slug/stock",
-    { preHandler: [jwtAccessVerify, requireRolesOrSkladchikEntitlement(catalogRoles, "stock_balance_list")] },
+    {
+      preHandler: [
+        jwtAccessVerify,
+        requireRolesOrSkladchikEntitlement(
+          catalogRoles,
+          "stock_balance_list",
+          STOCK_BALANCES_VIEW_PERMISSIONS
+        )
+      ]
+    },
     async (request, reply) => {
       if (!ensureTenantContext(request, reply)) return;
       const q = request.query as { warehouse_id?: string; product_ids?: string };

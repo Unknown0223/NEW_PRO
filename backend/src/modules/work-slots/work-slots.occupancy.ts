@@ -91,3 +91,64 @@ export async function listDepartedSlotUserIdsInMonth(
   const activeNow = new Set(stillActive.map((l) => l.user_id));
   return [...departed].filter((id) => !activeNow.has(id));
 }
+
+/**
+ * Табельga tushadigan userlar (shu oy):
+ * - oyda slotga birikkan (faol yoki chiqqan), yoki
+ * - oyda akkaunt faolligi (vizit / refresh session).
+ * `departedIds` — hozir faol sloti yo‘q (qizil + qotirilgan).
+ */
+export async function listTimesheetEligibleUserIdsInMonth(
+  tenantId: number,
+  monthStart: Date,
+  monthEnd: Date
+): Promise<{ eligibleIds: number[]; departedIds: number[]; activeSlotIds: number[] }> {
+  const [slotLinks, visits, sessions] = await Promise.all([
+    prisma.slotUserLink.findMany({
+      where: {
+        tenant_id: tenantId,
+        started_at: { lt: monthEnd },
+        OR: [{ ended_at: null }, { ended_at: { gte: monthStart } }]
+      },
+      select: { user_id: true, ended_at: true }
+    }),
+    prisma.agentVisit.findMany({
+      where: {
+        tenant_id: tenantId,
+        checked_in_at: { gte: monthStart, lt: monthEnd }
+      },
+      select: { agent_id: true },
+      distinct: ["agent_id"]
+    }),
+    prisma.refreshToken.findMany({
+      where: {
+        tenant_id: tenantId,
+        created_at: { gte: monthStart, lt: monthEnd }
+      },
+      select: { user_id: true },
+      distinct: ["user_id"]
+    })
+  ]);
+
+  const eligible = new Set<number>();
+  for (const l of slotLinks) eligible.add(l.user_id);
+  for (const v of visits) eligible.add(v.agent_id);
+  for (const s of sessions) eligible.add(s.user_id);
+
+  const activeSlotRows =
+    eligible.size === 0
+      ? []
+      : await prisma.slotUserLink.findMany({
+          where: {
+            tenant_id: tenantId,
+            ended_at: null,
+            user_id: { in: [...eligible] }
+          },
+          select: { user_id: true }
+        });
+  const activeSlotIds = [...new Set(activeSlotRows.map((r) => r.user_id))];
+  const activeNow = new Set(activeSlotIds);
+
+  const departedIds = [...eligible].filter((id) => !activeNow.has(id));
+  return { eligibleIds: [...eligible], departedIds, activeSlotIds };
+}

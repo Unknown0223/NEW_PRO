@@ -23,7 +23,7 @@ import {
   prepareRow,
   prismaKnownCode
 } from "./system-migration.extended.import-shared";
-import { readZipJson, remapId } from "./system-migration.parse";
+import { readZipJson, remapId, remapIntArray } from "./system-migration.parse";
 
 export { fkSkipWarningUz } from "./system-migration.extended.import-fk";
 
@@ -53,6 +53,28 @@ function remapDocumentEditGrantDocumentId(
     else if (kind === "stock_take") mapped = remapId(maps.stockTake, oldId);
   }
   if (mapped != null) data.document_id = mapped;
+}
+
+/** Inbox match_candidates JSON ichidagi client/warehouse ID remap. */
+function remapBankTransferMatchCandidates(
+  data: Record<string, unknown>,
+  maps: MigrationIdMaps
+): void {
+  const raw = data.match_candidates;
+  if (!Array.isArray(raw)) return;
+  data.match_candidates = raw.map((item) => {
+    if (item == null || typeof item !== "object") return item;
+    const row = { ...(item as Record<string, unknown>) };
+    if (row.client_id != null) {
+      const c = remapId(maps.client, row.client_id);
+      row.client_id = c ?? null;
+    }
+    if (row.warehouse_id != null) {
+      const w = remapId(maps.warehouse, row.warehouse_id);
+      row.warehouse_id = w ?? null;
+    }
+    return row;
+  });
 }
 
 async function resolveExistingId(
@@ -111,6 +133,9 @@ async function importTableSpec(
     const data = prepareRow(row, spec, maps, tenantId, strictFk);
     if (spec.file === "document_edit_grants") {
       remapDocumentEditGrantDocumentId(data, maps);
+    }
+    if (spec.file === "bank_transfer_inbox") {
+      remapBankTransferMatchCandidates(data, maps);
     }
     rowIdx += 1;
     const sp = `mig_${spec.file.replace(/[^a-zA-Z0-9_]/g, "_").slice(0, 24)}_${rowIdx}`;
@@ -243,7 +268,7 @@ async function importTableSpec(
         prismaKnownCode(e) === "P2022" ||
         pgErrorCode(e) === "42P01"
       ) {
-        warnings.push(`${spec.file}: jadval/ustun yo‘q — o‘tkazib yuborildi.`);
+        warnings.push(`${spec.file}: нет таблицы/столбца — пропущено.`);
         return imported;
       }
       if (isPrismaMissingArgError(e)) {
@@ -257,11 +282,58 @@ async function importTableSpec(
 
   if (skippedDup > 0) {
     warnings.push(
-      `${spec.file}: ${skippedDup} qator dublikat kalit bilan o‘tkazib yuborildi.`
+      `${spec.file}: пропущено строк с дублирующимся ключом: ${skippedDup}.`
     );
   }
 
+  if (spec.file === "work_slots" && imported > 0) {
+    await secondPassWorkSlotArrayFks(tx, zip, maps);
+  }
+
   return imported;
+}
+
+/** Slot→slot va multi-binding Int[] — barcha work_slot map tayyor bo‘lgach. */
+async function secondPassWorkSlotArrayFks(
+  tx: Tx,
+  zip: JSZip,
+  maps: MigrationIdMaps
+): Promise<void> {
+  const rows = await readZipJson<Record<string, unknown>>(zip, "data/work_slots.json");
+  for (const row of rows) {
+    const newId = maps.workSlot.get(Number(row.id));
+    if (newId == null) continue;
+    await tx.workSlot.update({
+      where: { id: newId },
+      data: {
+        warehouse_ids: remapIntArray(maps.warehouse, row.warehouse_ids),
+        cash_desk_ids: remapIntArray(maps.cashDesk, row.cash_desk_ids),
+        supervisee_agent_slot_ids: remapIntArray(maps.workSlot, row.supervisee_agent_slot_ids)
+      }
+    });
+  }
+}
+
+/** Buyurtma ↔ ombor bloki — bloklar importidan keyin. */
+export async function secondPassOrderWarehouseBlocks(
+  tx: Tx,
+  zip: JSZip,
+  maps: MigrationIdMaps
+): Promise<number> {
+  const rows = await readZipJson<Record<string, unknown>>(zip, "data/orders.json");
+  let n = 0;
+  for (const row of rows) {
+    const newId = maps.order.get(Number(row.id));
+    if (newId == null) continue;
+    const blockId = remapId(maps.warehouseBlock, row.warehouse_block_id);
+    if (blockId == null) continue;
+    await tx.order.update({
+      where: { id: newId },
+      data: { warehouse_block_id: blockId }
+    });
+    n += 1;
+  }
+  return n;
 }
 
 export async function importExtendedPhases(
@@ -303,6 +375,13 @@ export async function importExtendedPhases(
         skipDuplicateKeys,
         conflictPolicy
       );
+    }
+  }
+
+  if (phaseIndexes.some((i) => i >= 3) && maps.order.size > 0 && maps.warehouseBlock.size > 0) {
+    const patched = await secondPassOrderWarehouseBlocks(tx, zip, maps);
+    if (patched > 0) {
+      warnings.push(`Заказы: переназначено warehouse_block_id: ${patched}.`);
     }
   }
 

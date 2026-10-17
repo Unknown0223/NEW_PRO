@@ -4,12 +4,16 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/api/api_exceptions.dart';
 import '../../../core/api/expeditor_api.dart';
+import '../../../core/auth/biometric_transaction_confirm.dart';
 import '../../../core/auth/session.dart';
+import '../../../core/errors/error_reporter.dart';
+import '../../../core/face/face_verification_flow.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/ui/agent_ui.dart';
 import '../../../core/ui/agent_ui_extended.dart';
 import '../../agent/orders/order_create_models.dart' show formatMoneySpaced;
+import '../config/expeditor_config_enforcement.dart';
 import '../expeditor_providers.dart';
 
 /// Pastdan tepaga suriladigan to'lov oynasi (Добавить оплату uslubida).
@@ -90,6 +94,29 @@ class _ExpeditorPaymentSheetState extends ConsumerState<ExpeditorPaymentSheet> {
       _submitting = true;
       _error = null;
     });
+    final policy = ExpeditorConfigPolicy.fromMobileConfig(
+      ref.read(sessionProvider).mobileConfig,
+    );
+    final confirmed = await BiometricTransactionConfirm.confirm(
+      ref,
+      context: context,
+      required: policy.fingerprintRequired,
+      reason: 'Подтвердите оплату',
+    );
+    if (!confirmed) {
+      if (mounted) setState(() => _submitting = false);
+      return;
+    }
+    if (!await FaceVerificationFlow.ensure(
+      context,
+      ref,
+      verifyContext: 'payment_accept',
+      orderId: widget.orderId,
+      title: 'Подтверждение лица при оплате',
+    )) {
+      if (mounted) setState(() => _submitting = false);
+      return;
+    }
     final note = [
       if (_consignment) '[Консигнация]',
       _comment.text.trim(),
@@ -109,13 +136,30 @@ class _ExpeditorPaymentSheetState extends ConsumerState<ExpeditorPaymentSheet> {
       ref.invalidate(expeditorReturnedPaymentsProvider);
       if (mounted) Navigator.pop(context, true);
     } on ApiException catch (e) {
+      ErrorReporter.instance?.reportCaught(
+        e,
+        module: ErrorModules.payments,
+        code: 'ExpeditorPaymentFailed',
+        message: 'Оплата (экспедитор): создание платежа не удалось',
+        path: '/mobile/expeditor/payments',
+        payload: {'order_id': widget.orderId},
+      );
       if (mounted) {
         setState(() {
           _submitting = false;
           _error = e.message;
         });
       }
-    } catch (e) {
+    } catch (e, st) {
+      ErrorReporter.instance?.reportCaught(
+        e,
+        stack: st,
+        module: ErrorModules.payments,
+        code: 'ExpeditorPaymentUnexpected',
+        message: 'Оплата (экспедитор): неожиданная ошибка',
+        path: '/mobile/expeditor/payments',
+        payload: {'order_id': widget.orderId},
+      );
       if (mounted) {
         setState(() {
           _submitting = false;

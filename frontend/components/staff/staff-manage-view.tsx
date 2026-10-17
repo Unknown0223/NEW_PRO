@@ -94,7 +94,7 @@ const expeditorColumns = [
   "Доступ к приложение"
 ];
 
-const supervisorColumns = ["Ф.И.О", "Логин", "Телефон", "Агентлар", "Holat"];
+const supervisorColumns = ["Ф.И.О", "Логин", "Телефон", "Агенты", "Статус"];
 
 export function StaffManageView({ kind, tenantSlug }: Props) {
   const [search, setSearch] = useState("");
@@ -159,7 +159,7 @@ export function StaffManageView({ kind, tenantSlug }: Props) {
     <div className="space-y-0">
       <div className="orders-hub-section orders-hub-section--toolbar table-toolbar flex flex-wrap items-end gap-2 px-3 py-2">
         <Input
-          placeholder="Qidiruv..."
+          placeholder="Поиск..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           className="h-9 max-w-xs bg-background text-foreground"
@@ -236,7 +236,7 @@ export function StaffManageView({ kind, tenantSlug }: Props) {
                     <td className="px-2 py-2 font-mono">{r.login}</td>
                     <td className="px-2 py-2">{r.phone ?? "—"}</td>
                     <td className="px-2 py-2">{r.supervisee_count}</td>
-                    <td className="px-2 py-2">{r.is_active ? "Faol" : "Nofaol"}</td>
+                    <td className="px-2 py-2">{r.is_active ? "Активен" : "Неактивен"}</td>
                   </>
                 ) : (
                   <>

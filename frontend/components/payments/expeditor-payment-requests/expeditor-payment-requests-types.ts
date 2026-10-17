@@ -1,6 +1,7 @@
 export type SourceTab = "expeditor" | "collector" | "van" | "bank";
 export type DealType = "regular" | "consignment" | "both";
-export type StatusFilter = "pending_confirmation" | "confirmed" | "rejected" | "";
+/** Pipe-joined workflow statuses; empty = all (not archive). */
+export type StatusFilter = string;
 
 export type EprFilterState = {
   tab: SourceTab;

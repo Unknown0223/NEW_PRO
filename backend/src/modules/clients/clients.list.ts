@@ -40,7 +40,7 @@ export async function bulkSetClientsActive(
 
   const existing = await prisma.client.findMany({
     where: { tenant_id: tenantId, merged_into_client_id: null, id: { in: ids } },
-    select: { id: true }
+    select: { id: true, name: true, is_active: true, agent_id: true }
   });
   const ok = existing.map((e) => e.id);
   if (ok.length === 0) {
@@ -54,6 +54,21 @@ export async function bulkSetClientsActive(
 
   await appendClientAuditLogsBatch(tenantId, ok, actorUserId, "client.bulk_set_active", { is_active });
   await Promise.all(ok.map((id) => invalidateClientDetailCache(tenantId, id)));
+
+  if (is_active === true) {
+    const { notifyAgentsClientActivated } = await import("../notifications/notifications.service");
+    const newlyActive = existing.filter((e) => e.is_active !== true);
+    await Promise.all(
+      newlyActive.map((e) =>
+        notifyAgentsClientActivated({
+          tenant_id: tenantId,
+          client_id: e.id,
+          client_name: e.name,
+          actor_user_id: actorUserId
+        })
+      )
+    );
+  }
 
   return { updated: ok.length };
 }
@@ -72,19 +87,31 @@ function mapBulkPatchInput(patch: PatchClientBody) {
 function bulkClientPatchErrorMessage(code: string): string {
   switch (code) {
     case "NOT_FOUND":
-      return "Klient topilmadi";
+      return "Клиент не найден";
     case "DUPLICATE_PHONE":
-      return "Bu telefon mavjud.";
+      return "Этот телефон уже используется.";
     case "DUPLICATE_NAME":
-      return "Shu nomga o‘xshash klient mavjud.";
+      return "Клиент с похожим названием уже существует.";
+    case "DUPLICATE_CLIENT_CODE":
+      return "Этот код клиента уже занят.";
+    case "DUPLICATE_INN":
+      return "Этот ИНН уже занят.";
+    case "DUPLICATE_PINFL":
+      return "Этот ПИНФЛ уже занят.";
+    case "DUPLICATE_INACTIVE":
+      return "Такой клиент уже существует, но он неактивен.";
     case "DUPLICATE_AGENT_DIRECTION":
-      return "Bir klientga bir xil agentni bir necha yo‘nalishga bog‘lab bo‘lmaydi. Har bir yo‘nalishda faqat bitta agent.";
+      return "Нельзя привязать одного и того же агента к клиенту по нескольким направлениям. В каждом направлении — только один агент.";
     case "AGENT_NOT_FOUND":
-      return "Tanlangan agent topilmadi yoki nofaol. Faol agentni qayta tanlang.";
+      return "Выбранный агент не найден или неактивен. Выберите активного агента.";
     case "AGENT_NOT_ON_SLOT":
-      return "Agent ish joyiga biriktirilmagan — yangi mijoz bog‘lash taqiqlangan (faqat qarz yig‘ish).";
+      return "Агент не назначен на рабочее место — привязка новых клиентов запрещена (только сбор долга).";
+    case "EXPEDITOR_NOT_ON_SLOT":
+      return "Экспедитор не назначен на рабочее место — привязка новых клиентов запрещена.";
+    case "ASSIGNMENT_PERSON_HAS_DEBT":
+      return "Есть задолженность: нельзя снять или заменить агента или экспедитора. Разрешено только при остатке 0 (переплата тоже считается нулём).";
     case "EXPEDITOR_NOT_FOUND":
-      return "Tanlangan dastavchik topilmadi yoki nofaol. Faol dastavchikni qayta tanlang.";
+      return "Выбранный экспедитор не найден или неактивен. Выберите активного экспедитора.";
     case "VALIDATION":
       return "ValidationError";
     default:
@@ -119,7 +146,15 @@ export async function bulkPatchClients(
       updated += 1;
     } catch (e) {
       const msg = e instanceof Error ? e.message : "UNKNOWN";
-      failed.push({ id, error: bulkClientPatchErrorMessage(msg) });
+      if (msg === "ASSIGNMENT_PERSON_HAS_DEBT") {
+        const ex = e as Error & { debtMessage?: string };
+        failed.push({
+          id,
+          error: ex.debtMessage?.trim() || bulkClientPatchErrorMessage(msg)
+        });
+      } else {
+        failed.push({ id, error: bulkClientPatchErrorMessage(msg) });
+      }
     }
   }
 
@@ -160,7 +195,15 @@ export async function bulkPatchClientItems(
       updated += 1;
     } catch (e) {
       const msg = e instanceof Error ? e.message : "UNKNOWN";
-      failed.push({ id: item.client_id, error: bulkClientPatchErrorMessage(msg) });
+      if (msg === "ASSIGNMENT_PERSON_HAS_DEBT") {
+        const ex = e as Error & { debtMessage?: string };
+        failed.push({
+          id: item.client_id,
+          error: ex.debtMessage?.trim() || bulkClientPatchErrorMessage(msg)
+        });
+      } else {
+        failed.push({ id: item.client_id, error: bulkClientPatchErrorMessage(msg) });
+      }
     }
   }
 

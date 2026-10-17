@@ -1,4 +1,6 @@
 import ExcelJS from "exceljs";
+import JSZip from "jszip";
+import { excelColumnWidthToPx } from "../order-nakladnoy-page-pack";
 import type {
   NakladnoyPreviewCell,
   NakladnoyPreviewPage,
@@ -7,8 +9,11 @@ import type {
 import { previewCellText } from "./nakladnoy-preview-format";
 
 const MAX_ROWS = 400;
+const MAX_ROWS_PAGED = 8000;
 const MAX_COLS = 24;
 const MAX_COLS_WIDE = 50;
+/** «Накладные 2.1.x» varaqlari — bir sahifaga sig‘sa ham qog‘oz bo‘yicha chiziladi. */
+const CONSIGNMENT_SHEET_RE = /^1\.217\./;
 
 function fillArgb(fill: ExcelJS.Fill | undefined): string | undefined {
   if (!fill || fill.type !== "pattern") return undefined;
@@ -90,7 +95,64 @@ function splitGridByExpeditorBlocks(
   return pages.length > 0 ? pages : [{ sheetName, kind: "grid", grid: { colCount, rows } }];
 }
 
-function sheetToGrid(sheet: ExcelJS.Worksheet): { colCount: number; rows: NakladnoyPreviewCell[][] } {
+function cellHasBorder(cell: ExcelJS.Cell): boolean {
+  const b = cell.border;
+  if (!b) return false;
+  return Boolean(b.top?.style || b.bottom?.style || b.left?.style || b.right?.style);
+}
+
+/** ExcelJS `rowBreaks` ni o‘qimaydi — XML dan to‘g‘ridan-to‘g‘ri olamiz (varaq nomi → 1-based qatorlar). */
+async function readRowBreaksBySheetName(buffer: Buffer): Promise<Map<string, number[]>> {
+  const out = new Map<string, number[]>();
+  try {
+    const zip = await JSZip.loadAsync(buffer);
+    const wbXml = await zip.file("xl/workbook.xml")?.async("string");
+    const relsXml = await zip.file("xl/_rels/workbook.xml.rels")?.async("string");
+    if (!wbXml || !relsXml) return out;
+    const targets = new Map<string, string>();
+    for (const m of relsXml.matchAll(/<Relationship\b[^>]*>/g)) {
+      const id = /\bId="([^"]+)"/.exec(m[0])?.[1];
+      const target = /\bTarget="([^"]+)"/.exec(m[0])?.[1];
+      if (id && target) targets.set(id, target.replace(/^\/?xl\//, "").replace(/^\//, ""));
+    }
+    for (const m of wbXml.matchAll(/<sheet\b[^>]*>/g)) {
+      const name = /\bname="([^"]+)"/.exec(m[0])?.[1];
+      const rid = /\br:id="([^"]+)"/.exec(m[0])?.[1];
+      const target = rid ? targets.get(rid) : undefined;
+      if (!name || !target) continue;
+      const xml = await zip.file(`xl/${target}`)?.async("string");
+      const block = xml ? /<rowBreaks\b[^>]*>([\s\S]*?)<\/rowBreaks>/.exec(xml) : null;
+      if (!block) continue;
+      const rows = [...block[1]!.matchAll(/<brk\b[^>]*\bid="(\d+)"/g)]
+        .map((b) => Number(b[1]))
+        .filter((n) => Number.isFinite(n) && n > 0)
+        .sort((a, b) => a - b);
+      if (rows.length > 0) out.set(decodeXmlAttr(name), rows);
+    }
+  } catch {
+    return out;
+  }
+  return out;
+}
+
+function decodeXmlAttr(s: string): string {
+  return s
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&amp;/g, "&");
+}
+
+function sheetToGrid(
+  sheet: ExcelJS.Worksheet,
+  paged = false
+): {
+  colCount: number;
+  rows: NakladnoyPreviewCell[][];
+  colWidthsPx?: number[];
+  rowHeightsPt?: number[];
+} {
   const merges: Array<{ top: number; left: number; bottom: number; right: number }> = [];
   const mergeModels = (sheet as ExcelJS.Worksheet & { model?: { merges?: string[] } }).model?.merges;
   if (mergeModels) {
@@ -115,7 +177,7 @@ function sheetToGrid(sheet: ExcelJS.Worksheet): { colCount: number; rows: Naklad
   }
 
   const dim = sheet.dimensions;
-  const rowEnd = Math.min(dim?.bottom ?? sheet.rowCount, MAX_ROWS);
+  const rowEnd = Math.min(dim?.bottom ?? sheet.rowCount, paged ? MAX_ROWS_PAGED : MAX_ROWS);
   const sheetWide =
     (sheet.name || "").toLowerCase().includes("загруз") ||
     (dim?.right ?? sheet.columnCount) > MAX_COLS;
@@ -155,16 +217,27 @@ function sheetToGrid(sheet: ExcelJS.Worksheet): { colCount: number; rows: Naklad
         bg: fillArgb(cell.fill),
         align,
         ...(span && span.colSpan > 1 ? { colSpan: span.colSpan } : {}),
-        ...(span && span.rowSpan > 1 ? { rowSpan: span.rowSpan } : {})
+        ...(span && span.rowSpan > 1 ? { rowSpan: span.rowSpan } : {}),
+        ...(paged && !cellHasBorder(cell) ? { noBorder: true } : {}),
+        ...(paged && cell.alignment?.wrapText ? { wrap: true } : {}),
+        ...(paged && cell.font?.size ? { fs: cell.font.size } : {})
       });
     }
     if (any) lastNonEmpty = rows.length;
     rows.push(rowCells);
   }
 
+  const kept = rows.slice(0, lastNonEmpty + 1);
+  if (!paged) return { colCount: colEnd, rows: kept };
+
+  const defaultHeight = sheet.properties.defaultRowHeight || 15;
   return {
     colCount: colEnd,
-    rows: rows.slice(0, lastNonEmpty + 1)
+    rows: kept,
+    colWidthsPx: Array.from({ length: colEnd }, (_, i) =>
+      excelColumnWidthToPx(sheet.getColumn(i + 1).width ?? 8.43)
+    ),
+    rowHeightsPt: kept.map((_, i) => sheet.getRow(i + 1).height ?? defaultHeight)
   };
 }
 
@@ -176,9 +249,26 @@ export async function workbookBufferToNakladnoyPreview(
   await wb.xlsx.load(buffer as never);
 
   const pages: NakladnoyPreviewPage[] = [];
+  const breaksBySheet = await readRowBreaksBySheetName(buffer);
 
   for (const sheet of wb.worksheets) {
     if (!sheet || sheet.state === "hidden") continue;
+    const breaks = breaksBySheet.get(sheet.name) ?? (CONSIGNMENT_SHEET_RE.test(sheet.name) ? [] : null);
+    if (breaks) {
+      const { colCount, rows, colWidthsPx, rowHeightsPt } = sheetToGrid(sheet, true);
+      pages.push({
+        sheetName: sheet.name,
+        kind: "grid",
+        grid: {
+          colCount,
+          rows,
+          pageBreakAfterRows: breaks.map((r) => r - 1).filter((i) => i >= 0 && i < rows.length - 1),
+          colWidthsPx,
+          rowHeightsPt
+        }
+      });
+      continue;
+    }
     const { colCount, rows } = sheetToGrid(sheet);
     const split = splitGridByExpeditorBlocks(sheet.name, colCount, rows);
     pages.push(...split);

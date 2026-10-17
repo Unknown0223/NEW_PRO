@@ -6,7 +6,7 @@ export const BALANCE_DETAIL_COLUMNS: BalanceDetailColumnDef[] = [
   { key: "opName", label: "Название типа операции", visible: true, width: "w-[170px]", tabs: ["detailed"] },
   { key: "orderType", label: "Тип заказа", visible: true, width: "w-[90px]", tabs: ["detailed"] },
   { key: "consignment_d", label: "Консигнация", visible: true, width: "w-[100px]", tabs: ["detailed"] },
-  { key: "debt", label: "Долг", visible: true, sortField: "debt", align: "right", width: "w-[110px]", tabs: ["overall", "detailed"] },
+  { key: "debt", label: "Долг", visible: true, sortField: "debt", align: "right", width: "w-[120px]", tabs: ["overall", "detailed"] },
   { key: "payment", label: "Оплата", visible: true, sortField: "payment", align: "right", width: "w-[90px]", tabs: ["overall", "detailed"] },
   { key: "balanceAfter", label: "Баланс (после)", visible: true, align: "right", width: "w-[130px]", tabs: ["detailed"] },
   { key: "method", label: "Способ оплаты", visible: true, width: "w-[130px]", tabs: ["overall", "detailed"] },

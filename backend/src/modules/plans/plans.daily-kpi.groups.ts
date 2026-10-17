@@ -79,35 +79,41 @@ export async function buildDailyKpiGroupSummaries(opts: {
   const todayFactByGroup = new Map<number, number>();
   if (groupIds.length > 0 && agentIds.length > 0) {
     const [monthGroupFacts, todayGroupFacts] = await Promise.all([
-      prisma.$queryRaw<Array<{ kpi_group_id: number; sales: Prisma.Decimal }>>`
-        SELECT kgp.kpi_group_id, COALESCE(SUM(oi.total), 0)::numeric(18,2) AS sales
+      prisma.$queryRaw<Array<{ agent_id: number; kpi_group_id: number; sales: Prisma.Decimal }>>`
+        SELECT o.agent_id, kgp.kpi_group_id, COALESCE(SUM(oi.total), 0)::numeric(18,2) AS sales
         FROM orders o
         JOIN order_items oi ON oi.order_id = o.id AND oi.is_bonus = false
         JOIN kpi_group_products kgp ON kgp.product_id = oi.product_id
         WHERE o.tenant_id = ${tenantId}
           AND o.agent_id IN (${Prisma.join(agentIds)})
-          AND o.order_type = 'order'
+          AND o.order_type = 'order' AND o.status <> 'cancelled'
           AND o.created_at >= ${monthStart}
           AND o.created_at < ${monthEnd}
           AND kgp.kpi_group_id IN (${Prisma.join(groupIds)})
-        GROUP BY kgp.kpi_group_id
+        GROUP BY o.agent_id, kgp.kpi_group_id
       `,
-      prisma.$queryRaw<Array<{ kpi_group_id: number; sales: Prisma.Decimal }>>`
-        SELECT kgp.kpi_group_id, COALESCE(SUM(oi.total), 0)::numeric(18,2) AS sales
+      prisma.$queryRaw<Array<{ agent_id: number; kpi_group_id: number; sales: Prisma.Decimal }>>`
+        SELECT o.agent_id, kgp.kpi_group_id, COALESCE(SUM(oi.total), 0)::numeric(18,2) AS sales
         FROM orders o
         JOIN order_items oi ON oi.order_id = o.id AND oi.is_bonus = false
         JOIN kpi_group_products kgp ON kgp.product_id = oi.product_id
         WHERE o.tenant_id = ${tenantId}
           AND o.agent_id IN (${Prisma.join(agentIds)})
-          AND o.order_type = 'order'
+          AND o.order_type = 'order' AND o.status <> 'cancelled'
           AND o.created_at >= ${todayStart}
           AND o.created_at <= ${todayEnd}
           AND kgp.kpi_group_id IN (${Prisma.join(groupIds)})
-        GROUP BY kgp.kpi_group_id
+        GROUP BY o.agent_id, kgp.kpi_group_id
       `
     ]);
-    for (const r of monthGroupFacts) monthFactByGroup.set(r.kpi_group_id, num(r.sales));
-    for (const r of todayGroupFacts) todayFactByGroup.set(r.kpi_group_id, num(r.sales));
+    for (const r of monthGroupFacts) {
+      if (!groupPlan.get(r.kpi_group_id)?.agents.has(r.agent_id)) continue;
+      monthFactByGroup.set(r.kpi_group_id, (monthFactByGroup.get(r.kpi_group_id) ?? 0) + num(r.sales));
+    }
+    for (const r of todayGroupFacts) {
+      if (!groupPlan.get(r.kpi_group_id)?.agents.has(r.agent_id)) continue;
+      todayFactByGroup.set(r.kpi_group_id, (todayFactByGroup.get(r.kpi_group_id) ?? 0) + num(r.sales));
+    }
   }
 
   const remDaysAvg =

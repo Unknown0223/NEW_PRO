@@ -67,7 +67,7 @@ export async function registerAccessRouteMe(app: FastifyInstance) {
     const u = getAccessUser(request);
     const userId = Number(u.sub);
     if (!Number.isInteger(userId) || userId < 1)
-      return sendApiError(reply, request, 401, "InvalidAccessUser", "Invalid user id in access token");
+      return sendApiError(reply, request, 401, "InvalidAccessUser", "Некорректный ID пользователя в токене доступа");
     const keys = await resolveUserPermissionKeys(tenantId, userId, u.role);
     return reply.send({ data: { keys: [...keys] } });
   });

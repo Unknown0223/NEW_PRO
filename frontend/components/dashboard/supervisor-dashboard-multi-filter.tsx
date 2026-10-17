@@ -55,12 +55,10 @@ export const SupervisorDashboardMultiFilter = memo(function SupervisorDashboardM
 
   const formatTriggerSummary = useMemo(
     () => (sel: Set<string>, it: SearchableMultiSelectItem<string>[]) => {
-      if (sel.size === 0) return placeholder;
-      if (sel.size === 1) {
-        const id = [...sel][0]!;
-        return it.find((x) => x.id === id)?.title ?? id;
-      }
-      return `Выбрано: ${sel.size}`;
+      if (sel.size === 0) return "";
+      const firstId = [...sel][0]!;
+      const title = it.find((x) => x.id === firstId)?.title ?? firstId;
+      return sel.size > 1 ? `${title} (+${sel.size - 1})` : title;
     },
     [placeholder]
   );

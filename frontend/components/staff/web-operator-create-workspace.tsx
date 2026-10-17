@@ -2,15 +2,14 @@
 
 import type { AxiosError } from "axios";
 import { useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { api } from "@/lib/api";
 import { firstMessagePerField, getZodFlattenFromApiErrorBody } from "@/lib/api-validation-details";
 import { withApiSupportLine } from "@/lib/error-utils";
-import { STALE } from "@/lib/query-stale";
 import { cn } from "@/lib/utils";
-import { FilterSelect, filterSelectClassName } from "@/components/ui/filter-select";
+import { filterSelectClassName } from "@/components/ui/filter-select";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PageHeader } from "@/components/dashboard/page-header";
@@ -19,15 +18,12 @@ import { buttonVariants } from "@/components/ui/button-variants";
 import { messageFromStaffCreateError } from "@/lib/staff-api-errors";
 import { WEB_PANEL_ACCESS_ROLE_OPTIONS } from "@/lib/distribution-roles";
 import { WorkplaceMovedNotice } from "@/components/staff/workplace-moved-notice";
-const POSITION_PRESETS_SETTINGS_HREF = "/settings/web-staff-position-presets";
 
 function FieldHint({ name, errors }: { name: string; errors: Record<string, string> }) {
   const t = errors[name];
   if (!t) return null;
   return <p className="text-xs text-destructive">{t}</p>;
 }
-
-type FilterOptions = { branches: string[]; positions: string[]; position_presets: string[] };
 
 type Props = {
   tenantSlug: string;
@@ -55,32 +51,15 @@ export function WebOperatorCreateWorkspace({
     password: "",
     phone: "",
     email: "",
-    code: "",
     pinfl: "",
-    position: "",
-    max_sessions: "1",
-    app_access: false,
     can_authorize: true,
     web_access_role: "operator" as (typeof WEB_PANEL_ACCESS_ROLE_OPTIONS)[number]["value"]
   });
   const [localError, setLocalError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
-  const filterOptsQ = useQuery({
-    queryKey: ["operators", tenantSlug, "filter-options"],
-    enabled: Boolean(tenantSlug),
-    staleTime: STALE.reference,
-    queryFn: async () => {
-      const { data } = await api.get<{ data: FilterOptions }>(
-        `/api/${tenantSlug}/operators/meta/filter-options`
-      );
-      return data.data;
-    }
-  });
-
   const createMut = useMutation({
     mutationFn: async () => {
-      const max_sessions = Number.parseInt(form.max_sessions, 10);
       const body: Record<string, unknown> = {
         first_name: form.first_name.trim(),
         last_name: form.last_name.trim() || null,
@@ -89,11 +68,7 @@ export function WebOperatorCreateWorkspace({
         password: form.password,
         phone: form.phone.trim() || null,
         email: form.email.trim() || null,
-        code: form.code.trim() || null,
         pinfl: form.pinfl.trim() || null,
-        position: form.position.trim() || null,
-        max_sessions: Number.isFinite(max_sessions) ? max_sessions : 1,
-        app_access: form.app_access,
         can_authorize: form.can_authorize,
         is_active: true
       };
@@ -124,8 +99,6 @@ export function WebOperatorCreateWorkspace({
       }
     }
   });
-
-  const positions = filterOptsQ.data?.positions ?? [];
 
   const submitCreate = () => {
     setLocalError(null);
@@ -204,55 +177,9 @@ export function WebOperatorCreateWorkspace({
             <FieldHint name="email" errors={fieldErrors} />
           </label>
           <label className="grid gap-1">
-            <span className="text-xs text-muted-foreground">Код</span>
-            <Input value={form.code} onChange={(e) => setForm((f) => ({ ...f, code: e.target.value }))} />
-            <FieldHint name="code" errors={fieldErrors} />
-          </label>
-          <label className="grid gap-1">
             <span className="text-xs text-muted-foreground">ПИНФЛ</span>
             <Input value={form.pinfl} onChange={(e) => setForm((f) => ({ ...f, pinfl: e.target.value }))} />
             <FieldHint name="pinfl" errors={fieldErrors} />
-          </label>
-          <label className="grid gap-1">
-            <span className="text-xs text-muted-foreground">Должность</span>
-            <FilterSelect
-              className={cn(filterSelectClassName, "h-10 w-full max-w-none")}
-              emptyLabel="— Не выбрано —"
-              aria-label="Должность"
-              value={form.position}
-              onChange={(e) => setForm((f) => ({ ...f, position: e.target.value }))}
-            >
-              {positions.map((p) => (
-                <option key={p} value={p}>
-                  {p}
-                </option>
-              ))}
-            </FilterSelect>
-            <span className="text-[11px] leading-snug text-muted-foreground">
-              Шаблоны:{" "}
-              <Link href={POSITION_PRESETS_SETTINGS_HREF} className="text-primary underline underline-offset-2">
-                настройки
-              </Link>
-              .
-            </span>
-            <FieldHint name="position" errors={fieldErrors} />
-          </label>
-          <label className="grid gap-1">
-            <span className="text-xs text-muted-foreground">Параллельные веб-сессии (макс.)</span>
-            <Input
-              inputMode="numeric"
-              value={form.max_sessions}
-              onChange={(e) => setForm((f) => ({ ...f, max_sessions: e.target.value.replace(/\D/g, "") }))}
-            />
-            <FieldHint name="max_sessions" errors={fieldErrors} />
-          </label>
-          <label className="flex items-center gap-2 text-xs">
-            <input
-              type="checkbox"
-              checked={form.app_access}
-              onChange={(e) => setForm((f) => ({ ...f, app_access: e.target.checked }))}
-            />
-            Доступ к мобильному приложению
           </label>
           <label className="flex items-center gap-2 text-xs">
             <input
@@ -297,7 +224,7 @@ export function WebOperatorCreateWorkspace({
     <PageShell>
       <PageHeader
         title="Новый веб-сотрудник"
-        description="Логин и пароль должны быть уникальными. Должность выбирается из списка."
+        description="Логин и пароль должны быть уникальными."
         actions={
           <div className="flex flex-wrap items-center justify-end gap-2">
             <Link
@@ -318,13 +245,13 @@ export function WebOperatorCreateWorkspace({
         }
       />
 
-      <div className="mx-auto max-w-2xl space-y-6 pb-24">
+      <div className="w-full space-y-6 pb-24">
         {errorAlert}
         {formCard}
       </div>
 
       <div className="fixed bottom-0 left-0 right-0 z-40 border-t border-border bg-background/95 px-4 py-3 backdrop-blur supports-[backdrop-filter]:bg-background/80">
-        <div className="mx-auto flex max-w-2xl flex-wrap items-center justify-end gap-2">
+        <div className="flex w-full flex-wrap items-center justify-end gap-2">
           <Button type="button" variant="outline" onClick={() => router.push("/settings/spravochnik/operators")}>
             Отмена
           </Button>

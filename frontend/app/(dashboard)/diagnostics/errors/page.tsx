@@ -12,7 +12,7 @@ export default function DiagnosticsErrorsPage() {
     return <p className="text-sm text-muted-foreground">Загрузка...</p>;
   }
   if (role !== "admin") {
-    return <p className="text-sm text-destructive">Bu bo&apos;lim faqat administrator uchun.</p>;
+    return <p className="text-sm text-destructive">Раздел доступен только администратору.</p>;
   }
   return <ErrorLogsWorkspace tenantSlug={tenantSlug} />;
 }

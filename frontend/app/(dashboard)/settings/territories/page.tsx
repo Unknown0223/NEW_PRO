@@ -3,6 +3,7 @@
 import { PageHeader } from "@/components/dashboard/page-header";
 import { PageShell } from "@/components/dashboard/page-shell";
 import { Button } from "@/components/ui/button";
+import { useAppConfirm } from "@/components/ui/app-confirm-dialog";
 import { buttonVariants } from "@/components/ui/button-variants";
 import { SettingsWorkspace } from "@/components/settings/settings-workspace";
 import {
@@ -148,6 +149,7 @@ function TerritoryTreeRow({
   const isOpen = expanded.has(node.id);
   const hasChildren = node.children.length > 0;
   const sortedChildren = sortForest(node.children);
+  const { confirm, dialog: confirmDialog } = useAppConfirm();
 
   return (
     <div className="select-none">
@@ -165,7 +167,7 @@ function TerritoryTreeRow({
             className="flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
             onClick={() => (hasChildren ? toggle(node.id) : undefined)}
             disabled={!hasChildren}
-            aria-label={isOpen ? "Yig‘ish" : "Yoyish"}
+            aria-label={isOpen ? "Свернуть" : "Развернуть"}
           >
             {hasChildren ? (
               isOpen ? (
@@ -194,7 +196,7 @@ function TerritoryTreeRow({
                   size="icon-sm"
                   variant="ghost"
                   className="text-teal-600 hover:text-teal-700 dark:text-teal-400"
-                  title="Qo‘shish (ichki)"
+                  title="Добавить (вложенный)"
                   disabled={busy}
                   onClick={() => onAddChild(node.id)}
                 >
@@ -204,7 +206,7 @@ function TerritoryTreeRow({
                   type="button"
                   size="icon-sm"
                   variant="ghost"
-                  title="O‘zgartirish"
+                  title="Изменить"
                   disabled={busy}
                   onClick={() => startEdit(node)}
                 >
@@ -214,7 +216,7 @@ function TerritoryTreeRow({
                   type="button"
                   size="icon-sm"
                   variant="ghost"
-                  title="Ko‘chirish"
+                  title="Переместить"
                   disabled={busy}
                   onClick={() => onMove(node.id)}
                 >
@@ -224,7 +226,7 @@ function TerritoryTreeRow({
                   type="button"
                   size="icon-sm"
                   variant="ghost"
-                  title="Eksport (JSON)"
+                  title="Экспорт (JSON)"
                   disabled={busy}
                   onClick={() => onExport(node)}
                 >
@@ -235,12 +237,19 @@ function TerritoryTreeRow({
                   size="icon-sm"
                   variant="ghost"
                   className="text-destructive hover:text-destructive"
-                  title="O‘chirish"
+                  title="Удалить"
                   disabled={busy}
                   onClick={() => {
-                    if (window.confirm(`“${node.name || "Tugun"}” va ichidagi barchasi o‘chirilsinmi?`)) {
-                      onDelete(node.id);
-                    }
+                    void (async () => {
+                      const ok = await confirm({
+                        title: "Удалить",
+                        message: `Удалить «${node.name || "Узел"}» и всё вложенное?`,
+                        confirmLabel: "Да",
+                        cancelLabel: "Нет",
+                        destructive: true
+                      });
+                      if (ok) onDelete(node.id);
+                    })();
                   }}
                 >
                   <Trash2 className="size-4" />
@@ -273,6 +282,7 @@ function TerritoryTreeRow({
           ))}
         </div>
       ) : null}
+      {confirmDialog}
     </div>
   );
 }
@@ -292,7 +302,7 @@ export default function TerritoriesSettingsPage() {
   const qc = useQueryClient();
 
   const [activeTab, setActiveTab] = useState<"tree" | "manage">("tree");
-  const [levels, setLevels] = useState<string[]>(["Zona", "Oblast", "Gorod"]);
+  const [levels, setLevels] = useState<string[]>(["Зона", "Область", "Город"]);
   const [nodes, setNodes] = useState<TerritoryNode[]>([]);
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
   const [msg, setMsg] = useState<string | null>(null);
@@ -380,11 +390,11 @@ export default function TerritoriesSettingsPage() {
 
   const saveMut = useMutation({
     mutationFn: async () => {
-      if (!tenantSlug) throw new Error("Tenant yo'q");
+      if (!tenantSlug) throw new Error("Компания не выбрана");
       const sorted = sortForest(nodes);
       if (sorted.length === 0) {
         throw new Error(
-          "Bo‘sh daraxt saqlanmaydi — territoriya o‘chib ketmasin. Avval «Test ma’lumot» yoki Excel import qiling."
+          "Пустое дерево не сохраняется, чтобы не потерять территории. Сначала загрузите «Тестовые данные» или выполните импорт из Excel."
         );
       }
       await api.patch(`/api/${tenantSlug}/settings/profile`, {
@@ -402,7 +412,7 @@ export default function TerritoriesSettingsPage() {
     onSuccess: async () => {
       treeDirtyRef.current = false;
       setServerFieldErrs({});
-      setMsg("Saqlandi.");
+      setMsg("Сохранено.");
       await qc.invalidateQueries({ queryKey: ["settings", "profile", tenantSlug] });
       /** Доступ → Прикрепить территории shu keshdan o‘qiydi */
       await qc.invalidateQueries({ queryKey: ["access-territories", tenantSlug] });
@@ -416,14 +426,14 @@ export default function TerritoriesSettingsPage() {
           const top = flat.formErrors.map((s) => s.trim()).find(Boolean);
           const hint = firstValidationUserHint(flat);
           const line = top ?? hint ?? Object.values(per).find((m) => m.trim() !== "");
-          setMsg(line ? withApiSupportLine(line, e) : getUserFacingError(e, "Saqlashda xato yoki ruxsat yo'q."));
+          setMsg(line ? withApiSupportLine(line, e) : getUserFacingError(e, "Ошибка сохранения или нет доступа."));
           return;
         }
         setServerFieldErrs({});
       } else {
         setServerFieldErrs({});
       }
-      setMsg(getUserFacingError(e, "Saqlashda xato yoki ruxsat yo'q."));
+      setMsg(getUserFacingError(e, "Ошибка сохранения или нет доступа."));
     }
   });
 
@@ -453,7 +463,7 @@ export default function TerritoriesSettingsPage() {
   if (!hydrated) {
     return (
       <PageShell>
-        <p className="text-sm text-muted-foreground">Sessiya...</p>
+        <p className="text-sm text-muted-foreground">Сессия...</p>
       </PageShell>
     );
   }
@@ -463,7 +473,7 @@ export default function TerritoriesSettingsPage() {
       <PageShell>
         <p className="text-sm text-destructive">
           <Link href="/login" className="underline">
-            Kirish
+            Войти
           </Link>
         </p>
       </PageShell>
@@ -473,35 +483,35 @@ export default function TerritoriesSettingsPage() {
   return (
     <PageShell>
       <PageHeader
-        title="Territoriya"
-        description="Daraxt: ildizdan qo‘shish, tugun ustida qo‘shish / tahrir / ko‘chirish — barchasi shu sahifada."
+        title="Территория"
+        description="Дерево: добавление с корня, а над узлом — добавление / редактирование / перемещение, всё на этой странице."
         actions={
           <div className="flex flex-wrap gap-2">
             <Button
               type="button"
               size="sm"
               variant="outline"
-              title="Serverdan qayta yuklash (import skriptidan keyin)"
+              title="Перезагрузить с сервера (после скрипта импорта)"
               disabled={!tenantSlug || profileQ.isFetching}
               onClick={() => void profileQ.refetch()}
             >
               <RefreshCw className={cn("mr-1 size-3.5", profileQ.isFetching && "animate-spin")} />
-              Yangilash
+              Обновить
             </Button>
             <Button
               type="button"
               size="sm"
               variant={autoSync ? "default" : "outline"}
               onClick={() => setAutoSync((v) => !v)}
-              title="Har 20 soniyada serverdan avtomatik yangilash"
+              title="Автоматически обновлять с сервера каждые 20 секунд"
             >
-              {autoSync ? "Auto-sync: ON" : "Auto-sync: OFF"}
+              {autoSync ? "Автосинхронизация: вкл." : "Автосинхронизация: выкл."}
             </Button>
             <Button type="button" size="sm" disabled={!isAdmin || saveMut.isPending} onClick={() => saveMut.mutate()}>
-              {saveMut.isPending ? "Saqlanmoqda..." : "Saqlash"}
+              {saveMut.isPending ? "Сохранение..." : "Сохранить"}
             </Button>
             <Link href="/settings" className={cn(buttonVariants({ variant: "outline", size: "sm" }))}>
-              Katalog
+              Каталог
             </Link>
           </div>
         }
@@ -544,10 +554,10 @@ export default function TerritoriesSettingsPage() {
                     type="button"
                     size="icon-sm"
                     className="bg-teal-600 text-white hover:bg-teal-700 dark:bg-teal-600 dark:hover:bg-teal-500"
-                    title="Добавить (ildiz)"
+                    title="Добавить (корень)"
                     disabled={saveMut.isPending}
                     onClick={() => {
-                      const n = emptyNode("Yangi territoriya");
+                      const n = emptyNode("Новая территория");
                       setNodesTracked((prev) => sortForest(addRoot(prev, n)));
                       setExpanded((e) => new Set(e).add(n.id));
                     }}
@@ -556,13 +566,13 @@ export default function TerritoriesSettingsPage() {
                   </Button>
                 ) : null}
                 <span className="text-xs text-muted-foreground">
-                  Ildiz qo‘shish (+). Tugun ustiga keling — ichki qo‘shish, tahrir, ko‘chirish.
+                  Добавить корень (+). Наведите на узел — добавление вложенного, редактирование, перемещение.
                 </span>
               </div>
 
               {nodes.length === 0 ? (
                 <p className="py-6 text-center text-sm text-muted-foreground">
-                  Hozircha bo‘sh. Yuqoridagi + yoki «Управление территории» dan test ma’lumot yuklang.
+                  Пока пусто. Нажмите + выше или загрузите тестовые данные во вкладке «Управление территории».
                 </p>
               ) : (
                 <div className="space-y-0">
@@ -579,7 +589,7 @@ export default function TerritoriesSettingsPage() {
                       busy={saveMut.isPending}
                       startEdit={openEditModal}
                       onAddChild={(parentId) => {
-                        const child = emptyNode("Yangi");
+                        const child = emptyNode("Новый");
                         setNodesTracked((prev) => sortForest(addChild(prev, parentId, child)));
                         setExpanded((e) => new Set(e).add(parentId).add(child.id));
                       }}
@@ -589,7 +599,7 @@ export default function TerritoriesSettingsPage() {
                       }}
                       onExport={(sub) => {
                         void navigator.clipboard.writeText(JSON.stringify(sub, null, 2));
-                        setMsg("Tugun JSON buferga nusxalandi.");
+                        setMsg("JSON узла скопирован в буфер обмена.");
                       }}
                       onDelete={(id) => setNodesTracked((prev) => sortForest(removeNode(prev, id)))}
                     />
@@ -601,19 +611,19 @@ export default function TerritoriesSettingsPage() {
             <div className="grid gap-4">
               <div className="rounded-lg border p-3">
                 <div className="mb-2 flex items-center justify-between gap-2">
-                  <Label>Daraja nomlari (Зона → Область → Город …)</Label>
+                  <Label>Названия уровней (Зона → Область → Город …)</Label>
                   <Button
                     type="button"
                     size="sm"
                     variant="outline"
                     disabled={!isAdmin || saveMut.isPending}
-                    onClick={() => setLevels((p) => [...p, "Yangi daraja"])}
+                    onClick={() => setLevels((p) => [...p, "Новый уровень"])}
                   >
-                    + Daraja
+                    + Уровень
                   </Button>
                 </div>
                 <p className="mb-3 text-xs text-muted-foreground">
-                  Bu yerda faqat darajalar ro‘yxati. Daraxt tuzilmasini «Территория» tabida to‘g‘ridan-to‘g‘ri tahrirlaysiz.
+                  Здесь только список уровней. Структуру дерева редактируйте напрямую во вкладке «Территория».
                 </p>
                 <div className="grid max-w-xl gap-2">
                   {levels.map((lvl, idx) => (
@@ -636,7 +646,7 @@ export default function TerritoriesSettingsPage() {
                         size="icon-sm"
                         variant="ghost"
                         className="shrink-0 text-destructive hover:bg-destructive/10 hover:text-destructive"
-                        title="Darajani olib tashlash"
+                        title="Удалить уровень"
                         disabled={!isAdmin || saveMut.isPending || levels.length <= 1}
                         onClick={() => setLevels((p) => p.filter((_, i) => i !== idx))}
                       >
@@ -662,20 +672,20 @@ export default function TerritoriesSettingsPage() {
                     const s = sampleForest();
                     setNodesTracked(() => sortForest(s));
                     setExpanded(new Set(s.map((x) => x.id)));
-                    setMsg("Namuna (Lalaku zona/viloyatlar, import:once bilan bir xil) yuklandi. Saqlashni bosing.");
+                    setMsg("Образец загружен (зоны/области Lalaku, как в import:once). Нажмите «Сохранить».");
                   }}
                 >
-                  Test ma’lumot (namuna daraxt)
+                  Тестовые данные (образец дерева)
                 </Button>
                 <Button type="button" disabled={!isAdmin || saveMut.isPending} onClick={() => saveMut.mutate()}>
-                  {saveMut.isPending ? "Saqlanmoqda..." : "Saqlash"}
+                  {saveMut.isPending ? "Сохранение..." : "Сохранить"}
                 </Button>
               </div>
             </div>
           )}
 
           {msg ? <p className="mt-3 text-sm text-muted-foreground">{msg}</p> : null}
-          {!isAdmin ? <p className="mt-2 text-xs text-muted-foreground">Tahrirlash faqat admin uchun.</p> : null}
+          {!isAdmin ? <p className="mt-2 text-xs text-muted-foreground">Редактирование только для администратора.</p> : null}
         </section>
       </SettingsWorkspace>
 
@@ -689,7 +699,7 @@ export default function TerritoriesSettingsPage() {
         <DialogContent className="sm:max-w-[520px]" showCloseButton>
           <DialogHeader>
             <DialogTitle>Редактировать</DialogTitle>
-            <DialogDescription>Nomi, kod, sortirovka, izoh va holat.</DialogDescription>
+            <DialogDescription>Название, код, сортировка, комментарий и статус.</DialogDescription>
           </DialogHeader>
           <div className="grid gap-3">
             <div className="grid gap-1.5">
@@ -718,7 +728,7 @@ export default function TerritoriesSettingsPage() {
                 value={editSort}
                 inputMode="numeric"
                 onChange={(e) => setEditSort(e.target.value.replace(/[^0-9]/g, ""))}
-                placeholder="Faqat son"
+                placeholder="Только число"
               />
             </div>
             <div className="grid gap-1.5">
@@ -750,8 +760,8 @@ export default function TerritoriesSettingsPage() {
       >
         <DialogContent className="max-h-[min(90vh,520px)] sm:max-w-md" showCloseButton>
           <DialogHeader>
-            <DialogTitle>Ko‘chirish</DialogTitle>
-            <DialogDescription>Yangi ota tugunni tanlang (ildiz yoki boshqa filial).</DialogDescription>
+            <DialogTitle>Переместить</DialogTitle>
+            <DialogDescription>Выберите новый родительский узел (корень или другую ветку).</DialogDescription>
           </DialogHeader>
           <div className="max-h-72 space-y-1 overflow-y-auto pr-1">
             {moveOptions.map((opt) => (

@@ -83,7 +83,13 @@ export function mapLedgerRow(r: ClientLedgerRow, tab: "overall" | "detailed"): B
     typeLabel: r.type_label,
     docNumber: r.order_number ?? String(r.payment_id ?? r.order_id ?? ""),
     operationName: r.operation_type_code,
-    orderType: r.order_kind_label ?? (r.row_kind === "payment" ? "Оплата" : "Заказ"),
+    orderType:
+      r.order_kind_label ??
+      (r.entry_kind === "refund" || (r.type_label ?? "").startsWith("Возврат")
+        ? "Возврат"
+        : r.row_kind === "payment"
+          ? "Оплата"
+          : "Заказ"),
     consignment: r.is_consignment === true,
     debt,
     payment,

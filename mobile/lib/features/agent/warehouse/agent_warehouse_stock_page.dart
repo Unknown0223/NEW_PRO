@@ -91,6 +91,7 @@ class _AgentWarehouseStockPageState extends ConsumerState<AgentWarehouseStockPag
       backgroundColor: AppColors.background,
       appBar: AgentAppBar(
         title: 'Остатки на складе',
+        useShellDrawer: true,
         showBack: true,
         actions: [
           AgentIconButton(icon: Icons.search, onPressed: _openSearch),
@@ -106,7 +107,7 @@ class _AgentWarehouseStockPageState extends ConsumerState<AgentWarehouseStockPag
               children: [
                 Text(e.toString(), textAlign: TextAlign.center, style: const TextStyle(color: AppColors.error)),
                 const SizedBox(height: 16),
-                FilledButton(onPressed: () => _refreshStock(force: true), child: const Text('Qayta urinish')),
+                FilledButton(onPressed: () => _refreshStock(force: true), child: const Text('Повторить')),
               ],
             ),
           ),
@@ -116,7 +117,7 @@ class _AgentWarehouseStockPageState extends ConsumerState<AgentWarehouseStockPag
                   .where((w) => w['id'] == view.warehouseId)
                   .map((w) => w['name']?.toString())
                   .firstOrNull ??
-              'Ombor';
+              'Склад';
 
           return Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,

@@ -1,32 +1,44 @@
 import { getSnapshotCache, setSnapshotCache, stableJsonStringify } from "./dashboard.cache";
 import type { SalesDashboardFilters, SalesDashboardSnapshot } from "./dashboard.sales.types";
 import {
+  expandSalesPaymentFilters,
   resolveSalesTerritoryTerms,
   salesOrderScopeSql,
   salesProductJoinFilter
 } from "./dashboard.sales.scope";
 import type { SalesSnapshotQueryCtx } from "./dashboard.sales.snapshot.types";
 import { fetchSalesSnapshotCoverageBlock } from "./dashboard.sales.snapshot.coverage";
+import { fetchSalesSnapshotDebtBlock } from "./dashboard.sales.snapshot.debt";
 import { fetchSalesSnapshotOrdersBlock } from "./dashboard.sales.snapshot.orders";
 import { fetchSalesSnapshotProductBlock } from "./dashboard.sales.snapshot.products";
+import { fetchSalesSnapshotRiskBlock } from "./dashboard.sales.snapshot.risk";
+import { fetchSalesCategoryMatrix } from "./dashboard.sales.snapshot.matrix";
 
 async function buildSalesCtx(tenantId: number, filters: SalesDashboardFilters): Promise<SalesSnapshotQueryCtx> {
   const from = new Date(`${filters.from}T00:00:00.000Z`);
   const to = new Date(`${filters.to}T23:59:59.999Z`);
-  const territoryTerms = await resolveSalesTerritoryTerms(tenantId, filters.territory_ids);
+  const expanded = await expandSalesPaymentFilters(tenantId, filters);
+  const territoryTerms = await resolveSalesTerritoryTerms(tenantId, expanded.territory_ids);
   return {
     tenantId,
-    filters,
+    filters: expanded,
     territoryTerms,
-    salesScope: salesOrderScopeSql(tenantId, from, to, filters, territoryTerms, { forSales: true }),
-    allScope: salesOrderScopeSql(tenantId, from, to, filters, territoryTerms, { forSales: false }),
-    productFilter: salesProductJoinFilter("p", filters)
+    salesScope: salesOrderScopeSql(tenantId, from, to, expanded, territoryTerms, { forSales: true }),
+    allScope: salesOrderScopeSql(tenantId, from, to, expanded, territoryTerms, { forSales: false }),
+    productFilter: salesProductJoinFilter("p", expanded)
   };
 }
 
 export type SalesDashboardSummaryPayload = Pick<
   SalesDashboardSnapshot,
-  "filters" | "total_sales_summary" | "payment_method_analytics" | "akb_okb_block" | "orders_refusals"
+  | "filters"
+  | "total_sales_summary"
+  | "payment_method_analytics"
+  | "price_type_analytics"
+  | "debt_aging"
+  | "akb_okb_block"
+  | "risk_zone"
+  | "orders_refusals"
 >;
 
 export type SalesDashboardAnalyticsPayload = Pick<
@@ -39,7 +51,10 @@ export type SalesDashboardAnalyticsPayload = Pick<
   | "refusal_reason_analytics"
 >;
 
-export type SalesDashboardBreakdownPayload = Pick<SalesDashboardSnapshot, "filters" | "territory_analytics" | "agent_analytics"> & {
+export type SalesDashboardBreakdownPayload = Pick<
+  SalesDashboardSnapshot,
+  "filters" | "territory_analytics" | "agent_analytics" | "category_matrix"
+> & {
   agent_total: number;
   page: number;
   limit: number;
@@ -49,7 +64,7 @@ export async function getSalesDashboardSummary(
   tenantId: number,
   filters: SalesDashboardFilters
 ): Promise<SalesDashboardSummaryPayload> {
-  const snapshotKey = `tenant:${tenantId}:dashboard:sales:summary:${stableJsonStringify(filters)}`;
+  const snapshotKey = `tenant:${tenantId}:dashboard:sales:summary:v6:${stableJsonStringify(filters)}`;
   const cached = await getSnapshotCache<SalesDashboardSummaryPayload>(snapshotKey);
   if (cached) return cached;
 
@@ -57,12 +72,17 @@ export async function getSalesDashboardSummary(
   const productBlock = await fetchSalesSnapshotProductBlock(ctx);
   const ordersBlock = await fetchSalesSnapshotOrdersBlock(ctx);
   const coverageBlock = await fetchSalesSnapshotCoverageBlock(ctx, ordersBlock.akb);
+  const debt_aging = await fetchSalesSnapshotDebtBlock(ctx);
+  const risk_zone = await fetchSalesSnapshotRiskBlock(ctx);
 
   const result: SalesDashboardSummaryPayload = {
     filters,
     total_sales_summary: productBlock.total_sales_summary,
     payment_method_analytics: productBlock.payment_method_analytics,
+    price_type_analytics: productBlock.price_type_analytics,
+    debt_aging,
     akb_okb_block: coverageBlock.akb_okb_block,
+    risk_zone,
     orders_refusals: ordersBlock.orders_refusals
   };
   await setSnapshotCache(snapshotKey, result);
@@ -73,7 +93,7 @@ export async function getSalesDashboardAnalytics(
   tenantId: number,
   filters: SalesDashboardFilters
 ): Promise<SalesDashboardAnalyticsPayload> {
-  const snapshotKey = `tenant:${tenantId}:dashboard:sales:analytics:${stableJsonStringify(filters)}`;
+  const snapshotKey = `tenant:${tenantId}:dashboard:sales:analytics:v3:${stableJsonStringify(filters)}`;
   const cached = await getSnapshotCache<SalesDashboardAnalyticsPayload>(snapshotKey);
   if (cached) return cached;
 
@@ -100,13 +120,16 @@ export async function getSalesDashboardBreakdown(
 ): Promise<SalesDashboardBreakdownPayload> {
   const page = Math.max(1, opts.page ?? 1);
   const limit = Math.min(200, Math.max(1, opts.limit ?? 50));
-  const snapshotKey = `tenant:${tenantId}:dashboard:sales:breakdown:${stableJsonStringify({ filters, page, limit })}`;
+  const snapshotKey = `tenant:${tenantId}:dashboard:sales:breakdown:v2:${stableJsonStringify({ filters, page, limit })}`;
   const cached = await getSnapshotCache<SalesDashboardBreakdownPayload>(snapshotKey);
   if (cached) return cached;
 
   const ctx = await buildSalesCtx(tenantId, filters);
   const ordersBlock = await fetchSalesSnapshotOrdersBlock(ctx);
-  const coverageBlock = await fetchSalesSnapshotCoverageBlock(ctx, ordersBlock.akb);
+  const [coverageBlock, category_matrix] = await Promise.all([
+    fetchSalesSnapshotCoverageBlock(ctx, ordersBlock.akb),
+    fetchSalesCategoryMatrix(ctx)
+  ]);
   const offset = (page - 1) * limit;
   const agent_analytics = coverageBlock.agent_analytics.slice(offset, offset + limit);
 
@@ -114,6 +137,7 @@ export async function getSalesDashboardBreakdown(
     filters,
     territory_analytics: coverageBlock.territory_analytics,
     agent_analytics,
+    category_matrix,
     agent_total: coverageBlock.agent_analytics.length,
     page,
     limit

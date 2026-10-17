@@ -1,7 +1,7 @@
 "use client";
 
 import { SupervisorDashboardMultiFilter } from "@/components/dashboard/supervisor-dashboard-multi-filter";
-import { pickSingleFilterValue, singleFilterSelection } from "./orders-list-filter-ui";
+import { csvFilterSelection, joinCsvFilter } from "./orders-list-filter-ui";
 
 type Item = { id: string; title: string; searchText?: string | null };
 
@@ -16,7 +16,7 @@ type Props = {
   minPopoverWidth?: number;
 };
 
-/** Supervisor ko‘rinishi: qidiruv + checkbox; URL — bitta qiymat. */
+/** Qidiruv + checkbox; bir nechta qiymat vergul bilan. */
 export function OrdersListSingleMultiFilter({
   placeholder,
   searchPlaceholder,
@@ -33,8 +33,8 @@ export function OrdersListSingleMultiFilter({
       searchPlaceholder={searchPlaceholder ?? placeholder}
       triggerClassName={triggerClassName}
       items={items}
-      selectedValues={singleFilterSelection(value)}
-      onChange={(next) => onChange(pickSingleFilterValue(next, value))}
+      selectedValues={csvFilterSelection(value)}
+      onChange={(next) => onChange(joinCsvFilter(next))}
       disabled={disabled}
       minPopoverWidth={minPopoverWidth}
       hidePopoverHeader

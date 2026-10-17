@@ -18,13 +18,13 @@ export function VisitPlannerMapTools({
 }: Props) {
   return (
     <div className="vp-tools">
-      <button type="button" className="vp-tool" title="Yaqinlashtirish" onClick={() => controlsRef.current?.zoomIn()}>
+      <button type="button" className="vp-tool" title="Приблизить" onClick={() => controlsRef.current?.zoomIn()}>
         +
       </button>
-      <button type="button" className="vp-tool" title="Uzoqlashtirish" onClick={() => controlsRef.current?.zoomOut()}>
+      <button type="button" className="vp-tool" title="Отдалить" onClick={() => controlsRef.current?.zoomOut()}>
         −
       </button>
-      <button type="button" className="vp-tool" title="Barchasini ko‘rsatish" onClick={() => controlsRef.current?.fitAll()}>
+      <button type="button" className="vp-tool" title="Показать всё" onClick={() => controlsRef.current?.fitAll()}>
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden>
           <path
             d="M8 3H5a2 2 0 0 0-2 2v3M16 3h3a2 2 0 0 1 2 2v3M8 21H5a2 2 0 0 1-2-2v-3M16 21h3a2 2 0 0 0 2-2v-3"
@@ -38,7 +38,7 @@ export function VisitPlannerMapTools({
         <button
           type="button"
           className={`vp-tool${lassoActive ? " vp-active" : ""}`}
-          title="Probel bosib chizing"
+          title="Удерживайте пробел и рисуйте"
           onClick={onLassoToggle}
         >
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden>

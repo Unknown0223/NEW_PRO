@@ -101,6 +101,16 @@ void main() {
     expect(sunday.map((c) => c['id']).toList(), [1]);
   });
 
+  test('applyOutletFilters — reja yo‘q bo‘lsa kun tabida ham katalog', () {
+    final clients = [
+      {'id': 1, 'name': 'A'},
+      {'id': 2, 'name': 'B'},
+    ];
+    expect(tenantHasAnyVisitSchedule(clients), isFalse);
+    final tue = applyOutletFilters(clients, weekdayTab: 2, includeUnscheduled: true);
+    expect(tue.map((c) => c['id']).toList(), [1, 2]);
+  });
+
   test('clientMatchesWeekdayTab includeUnscheduled fallback', () {
     expect(
       clientMatchesWeekdayTab({'id': 1}, 2, includeUnscheduled: true),
@@ -110,5 +120,20 @@ void main() {
       clientMatchesWeekdayTab({'id': 1}, 2, includeUnscheduled: false),
       isFalse,
     );
+  });
+
+  test('weekdayTabAfterCreatedClient — bugungi reja yo‘q bo‘lsa Все', () {
+    expect(weekdayTabAfterCreatedClient([], 3), 0);
+    expect(weekdayTabAfterCreatedClient([1, 5], 3), 0);
+    expect(weekdayTabAfterCreatedClient([3, 5], 3), 3);
+  });
+
+  test('applyOutletFilters — yangi klient Все tabida darhol ko‘rinadi', () {
+    final clients = [
+      {'id': 10, 'name': 'Yangi', 'visit_weekdays': []},
+      {'id': 11, 'name': 'Reja', 'visit_weekdays': [1]},
+    ];
+    final all = applyOutletFilters(clients, weekdayTab: 0);
+    expect(all.map((c) => c['id']).toList(), [10, 11]);
   });
 }

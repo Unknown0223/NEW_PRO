@@ -48,6 +48,8 @@ export type BranchDto = {
   cities?: string[];
   /** Bir nechta kassa ID */
   cash_desk_ids?: number[];
+  /** Filial omborlari (`warehouses.id`) — ko‘chirish «между филиалами». */
+  warehouse_ids?: number[];
   /** Orqaga moslik: birinchi territoriya */
   territory?: string | null;
   /** Orqaga moslik: birinchi shahar */

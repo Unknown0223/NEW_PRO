@@ -68,7 +68,7 @@ export function PriceMatrixPageView(props: PriceMatrixPageState) {
     <PageShell>
       <PageHeader
         title="Установка новых цен"
-        description="Chapdan kategoriyalarni belgilang, narx turini tanlang. Shablon — barcha tanlangan mahsulotlar."
+        description="Отметьте категории слева и выберите тип цены. Шаблон включает все выбранные товары."
         actions={
           <Link href="/settings/prices" className={cn(buttonVariants({ variant: "outline", size: "sm" }))}>
             ← Цена
@@ -115,7 +115,7 @@ export function PriceMatrixPageView(props: PriceMatrixPageState) {
                     onApplyBulk={applyBulk}
                     disabled={!isAdmin}
                     bulkDisabled={!toolbarEnabled}
-                    scopeHint="Foiz, summa, shablon va import — barcha belgilangan kategoriyalar va tanlangan narx turi bo‘yicha."
+                    scopeHint="Процент, сумма, шаблон и импорт применяются ко всем отмеченным категориям и выбранному типу цены."
                     canDownloadTemplate={
                       Boolean(priceType) && categoryIdsArr.length > 0 && matrixRows.length > 0
                     }
@@ -156,11 +156,10 @@ export function PriceMatrixPageView(props: PriceMatrixPageState) {
               <p className="text-sm text-muted-foreground">
                 {changeCount > 0 ? (
                   <>
-                    <span className="font-medium text-foreground">{changeCount}</span> ta pozitsiya
-                    o‘zgartirildi
+                    Изменено позиций: <span className="font-medium text-foreground">{changeCount}</span>
                   </>
                 ) : (
-                  "O‘zgarishlar yo‘q — narxni jadvalda tahrirlang yoki import qiling."
+                  "Изменений нет — отредактируйте цены в таблице или выполните импорт."
                 )}
               </p>
               <div className="flex flex-wrap items-center gap-2">

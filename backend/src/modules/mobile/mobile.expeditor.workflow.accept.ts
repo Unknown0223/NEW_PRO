@@ -2,6 +2,8 @@
  * Ekspeditor to'lov qabul qilish oqimi — qarzdorlar kartasi, to'lovlar, ledger.
  */
 import { prisma } from "../../config/database";
+import { profilePhotoMobileUrl } from "../clients/client-profile-photo.pure";
+import { tenantSlug } from "../clients/client-profile-photo.service";
 import { Prisma } from "@prisma/client";
 import { loadDeliveryDebtByClient, mergeLedgerWithUnpaidDelivered } from "../client-balances/client-balances.delivery";
 import { getClientBalanceLedger } from "../clients/client-balance-ledger.get";

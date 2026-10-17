@@ -196,6 +196,11 @@ bool clientMatchesWeekdayTab(
   return wd.contains(tabIndex);
 }
 
+/// Yangi klient saqlangach: bugungi kunda reja bo‘lmasa «Все» (0) — darhol ro‘yxatda ko‘rinsin.
+int weekdayTabAfterCreatedClient(List<int> visitWeekdays, int todayWeekday) {
+  return visitWeekdays.contains(todayWeekday) ? todayWeekday : 0;
+}
+
 Set<int> routeClientIdsFromRoute(Map<String, dynamic>? route) {
   final stops = route?['stops'] as List? ?? [];
   final ids = <int>{};

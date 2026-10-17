@@ -1,5 +1,5 @@
 export type KpiProductPreview = { id: number; name: string; sku: string };
-export type KpiAgentPreview = { id: number; fio: string; code: string | null };
+export type KpiAgentPreview = { id: number; fio: string; code: string | null; role: string };
 
 export type KpiGroupListRow = {
   id: number;

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import {
   Calendar,
   ChevronLeft,
@@ -23,7 +23,17 @@ import {
 } from "./daily-kpi-api";
 import { DailyKpiDayTable } from "./daily-kpi-day-table";
 import { DailyKpiMonthTable } from "./daily-kpi-month-table";
-import { fmtMoney, fmtPct, formatDayLabel } from "./daily-kpi-format";
+import { fmtMoney, fmtPct } from "./daily-kpi-format";
+import { DailyKpiPeriodBar } from "./daily-kpi-period-bar";
+import { formatPeriodLabel, periodForAnchor, type DailyKpiPeriod } from "./daily-kpi-period";
+import {
+  dailyKpiFilterOptions,
+  dailyKpiTotals,
+  EMPTY_DAILY_KPI_FILTERS,
+  filterDailyKpiAgents,
+  type DailyKpiMonthFilters,
+  type DailyKpiViewMode
+} from "./daily-kpi-month-view";
 
 function shiftDay(ymd: string, delta: number): string {
   const [y, m, d] = ymd.split("-").map((x) => Number.parseInt(x, 10));
@@ -42,7 +52,13 @@ function monthPeriodLabel(month: number, year: number): string {
   return `${name} ${year}`;
 }
 
-export function DailyKpiWorkspace({ tenantSlug }: { tenantSlug: string }) {
+export function DailyKpiWorkspace({
+  tenantSlug,
+  section = "month"
+}: {
+  tenantSlug: string;
+  section?: "month" | "groups";
+}) {
   const searchParams = useSearchParams();
   const todayYmd = useMemo(() => workRegionTodayYmd(), []);
 
@@ -83,9 +99,16 @@ export function DailyKpiWorkspace({ tenantSlug }: { tenantSlug: string }) {
     staleTime: 20_000
   });
 
+  const [period, setPeriod] = useState<DailyKpiPeriod>(() => ({ preset: "day", from: day, to: day }));
+  useEffect(() => {
+    setPeriod((prev) => periodForAnchor(prev, day));
+  }, [day]);
+
   const matrixQ = useQuery({
-    queryKey: dailyKpiDayKeys.matrix(tenantSlug, day, directionId),
-    queryFn: () => fetchDailyKpiDayMatrix(tenantSlug, { day, directionId }),
+    queryKey: dailyKpiDayKeys.matrix(tenantSlug, period.from, period.to, directionId),
+    queryFn: () =>
+      fetchDailyKpiDayMatrix(tenantSlug, { day: period.from, dayTo: period.to, directionId }),
+    placeholderData: keepPreviousData,
     staleTime: 20_000
   });
 
@@ -104,6 +127,17 @@ export function DailyKpiWorkspace({ tenantSlug }: { tenantSlug: string }) {
   const error = overviewQ.error ?? matrixQ.error;
   const overview = overviewQ.data;
   const matrix = matrixQ.data;
+
+  const [viewMode, setViewMode] = useState<DailyKpiViewMode>("agents");
+  const [monthFilters, setMonthFilters] = useState<DailyKpiMonthFilters>(EMPTY_DAILY_KPI_FILTERS);
+  const allAgents = useMemo(() => overview?.agents ?? [], [overview]);
+  const filterOptions = useMemo(() => dailyKpiFilterOptions(allAgents), [allAgents]);
+  const filteredAgents = useMemo(
+    () => filterDailyKpiAgents(allAgents, monthFilters),
+    [allAgents, monthFilters]
+  );
+  const monthTotals = useMemo(() => dailyKpiTotals(filteredAgents), [filteredAgents]);
+  const filtersActive = filteredAgents.length !== allAgents.length;
 
   const refetchAll = () => {
     void overviewQ.refetch();
@@ -125,10 +159,34 @@ export function DailyKpiWorkspace({ tenantSlug }: { tenantSlug: string }) {
       <div className="space-y-3 rounded-lg border border-slate-200 bg-white px-5 py-3 shadow-sm">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <h1 className="text-lg font-semibold text-slate-800">Дневные KPI планы</h1>
+            <h1 className="text-lg font-semibold text-slate-800">
+              {section === "groups" ? "KPI по группам" : "Дневные KPI планы"}
+            </h1>
             <p className="mt-0.5 text-xs text-slate-500">
-              Месячный обзор по агентам и детальная таблица по выбранному дню (KPI группы)
+              {section === "groups"
+                ? "Агенты и KPI-группы за выбранный период"
+                : "Месячный обзор по агентам, филиалам и супервайзерам"}
             </p>
+            <div className="mt-2 flex gap-2 text-xs">
+              <Link
+                href="/plans/daily"
+                className={cn(
+                  "rounded-md px-2 py-1",
+                  section === "month" ? "bg-teal-700 text-white" : "border border-slate-200 text-slate-600"
+                )}
+              >
+                Агенты
+              </Link>
+              <Link
+                href="/plans/daily/groups"
+                className={cn(
+                  "rounded-md px-2 py-1",
+                  section === "groups" ? "bg-teal-700 text-white" : "border border-slate-200 text-slate-600"
+                )}
+              >
+                KPI группы
+              </Link>
+            </div>
           </div>
           {links ? (
             <div className="flex flex-wrap gap-2">
@@ -244,49 +302,66 @@ export function DailyKpiWorkspace({ tenantSlug }: { tenantSlug: string }) {
         </div>
       ) : (
         <>
-          {overview ? (
+          {section === "month" && overview ? (
             <>
               <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
                 <StatCard
                   label="План месяца"
-                  value={fmtMoney(overview.totals.month_plan_sum)}
+                  value={fmtMoney(monthTotals.month_plan_sum)}
                   hint={monthPeriodLabel(monthNum, yearNum)}
                 />
                 <StatCard
                   label="Факт месяца"
-                  value={fmtMoney(overview.totals.month_fact_sum)}
-                  hint={`Исполнение ${fmtPct(overview.totals.month_execution_pct)}`}
+                  value={fmtMoney(monthTotals.month_fact_sum)}
+                  hint={`Исполнение ${fmtPct(monthTotals.month_execution_pct)}`}
                 />
                 <StatCard
                   label="План сегодня"
-                  value={fmtMoney(overview.totals.today_plan_sum)}
-                  hint={`Факт ${fmtMoney(overview.totals.today_fact_sum)}`}
+                  value={fmtMoney(monthTotals.today_plan_sum)}
+                  hint={`Факт ${fmtMoney(monthTotals.today_fact_sum)} · ${fmtPct(monthTotals.today_execution_pct)}`}
                 />
                 <StatCard
                   label="Агенты"
-                  value={String(overview.totals.agents)}
-                  hint={`${overview.totals.agents_with_plans} с планом`}
+                  value={String(monthTotals.agents)}
+                  hint={
+                    filtersActive
+                      ? `${monthTotals.agents_with_plans} с планом · из ${allAgents.length}`
+                      : `${monthTotals.agents_with_plans} с планом`
+                  }
                 />
               </div>
               <DailyKpiMonthTable
-                data={overview}
+                agents={filteredAgents}
+                totalAgents={allAgents.length}
+                totals={monthTotals}
                 periodLabel={monthPeriodLabel(monthNum, yearNum)}
+                monthNum={monthNum}
+                todayYmd={overview.period.today}
+                mode={viewMode}
+                onModeChange={setViewMode}
+                filters={monthFilters}
+                onFiltersChange={setMonthFilters}
+                options={filterOptions}
                 onPickDay={(ymd) => setDay(ymd)}
               />
             </>
-          ) : overviewQ.isLoading ? (
+          ) : section === "month" && overviewQ.isLoading ? (
             <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-8 text-sm text-slate-500">
               <Loader2 className="h-4 w-4 animate-spin" /> Месячная таблица…
             </div>
           ) : null}
 
-          {matrix ? (
+          {section === "groups" && matrix ? (
             <>
               <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
                 <StatCard
-                  label="План дня"
+                  label={(matrix.days_count ?? 1) > 1 ? "План периода" : "План дня"}
                   value={fmtMoney(matrix.totals.day_plan_sum)}
-                  hint={formatDayLabel(matrix.day)}
+                  hint={
+                    (matrix.days_count ?? 1) > 1
+                      ? `${formatPeriodLabel(matrix.day_from ?? matrix.day, matrix.day_to ?? matrix.day)} · раб. ${matrix.working_days_count ?? 0}`
+                      : formatPeriodLabel(matrix.day, matrix.day)
+                  }
                 />
                 <StatCard
                   label="Продажа"
@@ -304,9 +379,38 @@ export function DailyKpiWorkspace({ tenantSlug }: { tenantSlug: string }) {
                   hint={`${matrix.totals.agents} агент(ов)`}
                 />
               </div>
-              <DailyKpiDayTable data={matrix} dayLabel={formatDayLabel(matrix.day)} />
+              <div className="flex flex-wrap gap-2 rounded-lg border bg-card p-2 text-xs">
+                <input
+                  value={monthFilters.search}
+                  onChange={(e) => setMonthFilters({ ...monthFilters, search: e.target.value })}
+                  placeholder="Поиск: агент, СВР, филиал…"
+                  className="h-8 w-56 rounded-md border px-2"
+                />
+                <select className="h-8 rounded-md border px-2" value={monthFilters.branch} onChange={(e) => setMonthFilters({ ...monthFilters, branch: e.target.value })}>
+                  <option value="">Все филиалы</option>
+                  {filterOptions.branches.map((b) => <option key={b} value={b}>{b}</option>)}
+                </select>
+                <select className="h-8 rounded-md border px-2" value={monthFilters.supervisor} onChange={(e) => setMonthFilters({ ...monthFilters, supervisor: e.target.value })}>
+                  <option value="">Все супервайзеры</option>
+                  {filterOptions.supervisors.map((b) => <option key={b} value={b}>{b}</option>)}
+                </select>
+                <select className="h-8 rounded-md border px-2" value={monthFilters.status} onChange={(e) => setMonthFilters({ ...monthFilters, status: e.target.value })}>
+                  <option value="">Все статусы</option>
+                  {filterOptions.statuses.map((b) => <option key={b} value={b}>{b}</option>)}
+                </select>
+              </div>
+              <DailyKpiDayTable
+                data={{
+                  ...matrix,
+                  agents: filtersActive
+                    ? matrix.agents.filter((a) => filteredAgents.some((x) => x.agent_id === a.agent_id))
+                    : matrix.agents
+                }}
+                dayLabel={formatPeriodLabel(matrix.day_from ?? matrix.day, matrix.day_to ?? matrix.day)}
+                toolbar={<DailyKpiPeriodBar period={period} anchorDay={day} onChange={setPeriod} />}
+              />
             </>
-          ) : matrixQ.isLoading ? (
+          ) : section === "groups" && matrixQ.isLoading ? (
             <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-8 text-sm text-slate-500">
               <Loader2 className="h-4 w-4 animate-spin" /> Таблица дня…
             </div>

@@ -1,0 +1,60 @@
+/// Hisob sxemasi: kimga (rol/filial/yo'nalish/lavozim) va qaysi oydan qanday qoidalar bilan oylik hisoblanadi.
+
+model PayrollScheme {
+  id                  Int                 @id @default(autoincrement())
+  tenant_id           Int
+  name                String              @db.VarChar(160)
+  /// Bo'sh bo'lmasligi kerak; bo'sh filtrlar (filial/yo'nalish/lavozim) — hammasi.
+  roles               String[]            @default([])
+  branches            String[]            @default([])
+  trade_direction_ids Int[]               @default([])
+  positions           String[]            @default([])
+  /// YYYYMM — shu oydan amal qiladi; valid_to (YYYYMM, ichida) — versiya tugashi.
+  valid_from          Int
+  valid_to            Int?
+  is_active           Boolean             @default(true)
+  currency            String              @default("UZS") @db.VarChar(8)
+  note                String?             @db.VarChar(500)
+  created_by          Int?
+  created_at          DateTime            @default(now())
+  updated_at          DateTime            @updatedAt
+  rules               PayrollSchemeRule[]
+
+  @@index([tenant_id, is_active])
+  @@map("payroll_schemes")
+}
+
+model PayrollSchemeRule {
+  id        Int           @id @default(autoincrement())
+  scheme_id Int
+  /// Barqaror kalit (xodim farqlari shu kalit bilan bog'lanadi).
+  code      String        @db.VarChar(32)
+  name      String        @db.VarChar(160)
+  /// base | fixed | kpi | rate | formula | manual
+  kind      String        @db.VarChar(16)
+  item_id   Int?
+  sort      Int           @default(100)
+  /// Tur bo'yicha parametrlar, shartlar (when) va variantlar (cases).
+  params    Json          @default("{}")
+  scheme    PayrollScheme @relation(fields: [scheme_id], references: [id], onDelete: Cascade)
+
+  @@unique([scheme_id, code])
+  @@map("payroll_scheme_rules")
+}
+
+model PayrollSchemeOverride {
+  id         Int      @id @default(autoincrement())
+  tenant_id  Int
+  user_id    Int
+  rule_code  String   @db.VarChar(32)
+  amount     Decimal  @db.Decimal(15, 2)
+  valid_from Int
+  valid_to   Int?
+  note       String?  @db.VarChar(500)
+  created_by Int?
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  @@index([tenant_id, user_id])
+  @@map("payroll_scheme_overrides")
+}

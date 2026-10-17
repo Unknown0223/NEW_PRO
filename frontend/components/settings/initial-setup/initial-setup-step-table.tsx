@@ -85,8 +85,8 @@ function RelationSelect({
       disabled={!enabled}
       onChange={(e) => onChange(e.target.value)}
     >
-      <option value="">{options.length ? `— ${placeholder} —` : "Avval bog‘liq ma’lumot qo‘shing"}</option>
-      {hasValue && !known ? <option value={value}>{value} (joriy)</option> : null}
+      <option value="">{options.length ? `— ${placeholder} —` : "Сначала добавьте связанные данные"}</option>
+      {hasValue && !known ? <option value={value}>{value} (текущее)</option> : null}
       {options.map((o) => (
         <option key={o.value} value={o.value}>
           {o.label}
@@ -172,7 +172,7 @@ function RelationHintsBar({
   return (
     <div className="rounded-xl border border-emerald-100 bg-emerald-50/50 px-3 py-2.5">
       <p className="text-[11px] font-semibold uppercase tracking-wide text-emerald-800/80">
-        Bog‘liq ma’lumotlar (tanlash)
+        Связанные данные (выбор)
       </p>
       <div className="mt-1.5 flex flex-wrap gap-2">
         {items.map((it) => (
@@ -191,7 +191,7 @@ function RelationHintsBar({
           >
             <span className="font-medium">{it.label}</span>
             <span className="tabular-nums text-muted-foreground">{it.count}</span>
-            {it.count === 0 ? <span className="text-amber-700">— avval qo‘shing</span> : null}
+            {it.count === 0 ? <span className="text-amber-700">— сначала добавьте</span> : null}
           </span>
         ))}
       </div>
@@ -239,7 +239,7 @@ export function InitialSetupStepTable({
     setMsg(message);
     if (errors?.length) {
       setErrorDialog({
-        title: "Import — xatolar",
+        title: "Импорт — ошибки",
         summary: message,
         errors
       });
@@ -483,10 +483,10 @@ export function InitialSetupStepTable({
   if (!config) {
     return (
       <p className="text-xs text-muted-foreground">
-        Vizual jadval mavjud emas.{" "}
+        Визуальная таблица недоступна.{" "}
         {step.settingsHref ? (
           <Link href={step.settingsHref} className="text-primary underline-offset-4 hover:underline">
-            Asosiy sozlamalar
+            Основные настройки
           </Link>
         ) : null}
       </p>
@@ -540,11 +540,11 @@ export function InitialSetupStepTable({
 
   async function apply() {
     if (!preview?.rows.length) {
-      setMsg("Ma’lumot yo‘q — Excel yuklang yoki qator qo‘shing");
+      setMsg("Нет данных — загрузите Excel или добавьте строку");
       return;
     }
     if (!canApply) {
-      setMsg(depsBlockedMsg ?? "Avval oldingi qadamlarni bajaring");
+      setMsg(depsBlockedMsg ?? "Сначала выполните предыдущие шаги");
       return;
     }
 
@@ -559,7 +559,7 @@ export function InitialSetupStepTable({
       const lines = normalized.rows
         .filter((r) => r.errors.length)
         .flatMap((r) => r.errors.map((e) => `Строка ${r.rowIndex}: ${e}`));
-      showFailure(`Xatolarni tuzating: ${n} qator (dublikat / majburiy maydon)`, lines);
+      showFailure(`Исправьте ошибки: строк — ${n} (дубликат / обязательное поле)`, lines);
       return;
     }
 
@@ -582,7 +582,7 @@ export function InitialSetupStepTable({
       if (isImportFailedError(e)) {
         showFailure(e.message, e.errors);
       } else {
-        showFailure(getUserFacingError(e, "Saqlash xatosi"));
+        showFailure(getUserFacingError(e, "Ошибка сохранения"));
       }
     } finally {
       setBusy(false);
@@ -726,7 +726,7 @@ export function InitialSetupStepTable({
     <div className={cn("mt-3 space-y-3", compact && "text-xs")}>
       {loading ? (
         <p className="flex items-center gap-2 text-xs text-muted-foreground">
-          <Loader2 className="size-3.5 animate-spin" /> Tizimdan yuklanmoqda…
+          <Loader2 className="size-3.5 animate-spin" /> Загрузка из системы…
         </p>
       ) : null}
 
@@ -738,12 +738,12 @@ export function InitialSetupStepTable({
 
       {readOnly ? (
         <p className="rounded-lg border border-dashed bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
-          Tizimdagi ma’lumot (o‘qish). Tahrirlash — asosiy sozlamalar sahifasida.
+          Данные из системы (только просмотр). Редактирование — на странице основных настроек.
           {step.settingsHref ? (
             <>
               {" "}
               <Link href={step.settingsHref} className="font-medium text-primary underline-offset-4 hover:underline">
-                Ochish →
+                Открыть →
               </Link>
             </>
           ) : null}
@@ -762,7 +762,7 @@ export function InitialSetupStepTable({
             </span>
             {errorCount > 0 ? (
               <span className="inline-flex items-center gap-1 rounded-full bg-destructive/10 px-2 py-0.5 font-medium text-destructive">
-                <AlertCircle className="size-3" /> {errorCount} xato
+                <AlertCircle className="size-3" /> Ошибок: {errorCount}
               </span>
             ) : null}
           </div>
@@ -772,7 +772,7 @@ export function InitialSetupStepTable({
                 .filter((r) => r.errors.length)
                 .map((r) => (
                   <p key={r.rowIndex} className="text-[11px] text-destructive">
-                    Qator {r.rowIndex}: {r.errors.join("; ")}
+                    Строка {r.rowIndex}: {r.errors.join("; ")}
                   </p>
                 ))}
             </div>
@@ -795,12 +795,12 @@ export function InitialSetupStepTable({
       ) : (
         <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50/80 px-4 py-8 text-center">
           <p className="text-sm font-medium text-slate-700">
-            {readOnly ? "Tizimda hali ma’lumot yo‘q" : "Ma’lumot qo‘shing"}
+            {readOnly ? "В системе пока нет данных" : "Добавьте данные"}
           </p>
           <p className="mt-1 text-xs text-muted-foreground">
             {readOnly
-              ? "Asosiy sozlamalarda yarating yoki Excel shablondan yuklang"
-              : "«Qator» tugmasi yoki Excel shablon orqali to‘ldiring"}
+              ? "Создайте в основных настройках или загрузите из шаблона Excel"
+              : "Заполните с помощью кнопки «Добавить строку» или шаблона Excel"}
           </p>
         </div>
       )}
@@ -823,7 +823,7 @@ export function InitialSetupStepTable({
         {!readOnly ? (
           <>
             <p className="mr-auto w-full text-[11px] text-muted-foreground sm:w-auto">
-              Virtual holat — tahrirlang, dublikatlar qizil. Keyin tasdiqlang.
+              Черновик — отредактируйте, дубликаты выделены красным. Затем подтвердите.
             </p>
             <Button
               type="button"
@@ -834,7 +834,7 @@ export function InitialSetupStepTable({
               onClick={addRow}
             >
               <Plus className="size-4" />
-              Qator qo‘shish
+              Добавить строку
             </Button>
             <Button
               type="button"
@@ -843,15 +843,15 @@ export function InitialSetupStepTable({
               disabled={!canApply || busy || hasErrors || !preview?.rows.length}
               title={
                 !canApply
-                  ? (depsBlockedMsg ?? "Avval oldingi qadamlarni bajaring")
+                  ? (depsBlockedMsg ?? "Сначала выполните предыдущие шаги")
                   : hasErrors
-                    ? "Jadvaldagi xatolarni tuzating"
+                    ? "Исправьте ошибки в таблице"
                     : undefined
               }
               onClick={() => void apply()}
             >
               {busy ? <Loader2 className="mr-1.5 size-4 animate-spin" /> : null}
-              Qo‘llash (tizimga)
+              Применить (в систему)
             </Button>
           </>
         ) : step.settingsHref ? (
@@ -859,7 +859,7 @@ export function InitialSetupStepTable({
             href={step.settingsHref}
             className={cn(buttonVariants({ variant: "outline", size: "sm" }), "h-9 rounded-lg text-sm")}
           >
-            Asosiy sozlamalarda tahrirlash
+            Редактировать в основных настройках
           </Link>
         ) : null}
       </div>
@@ -869,7 +869,7 @@ export function InitialSetupStepTable({
         onOpenChange={(open) => {
           if (!open) setErrorDialog(null);
         }}
-        title={errorDialog?.title ?? "Import — xatolar"}
+        title={errorDialog?.title ?? "Импорт — ошибки"}
         summary={errorDialog?.summary}
         errors={errorDialog?.errors ?? []}
       />

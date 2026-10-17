@@ -95,7 +95,9 @@ export function PlanningWorkspace({ tenantSlug }: { tenantSlug: string }) {
   const confirmMut = useMutation({
     mutationFn: () => confirmPlanningPlans(tenantSlug, month, year, directionId!),
     onSuccess: (res) => {
-      setBanner(`Отправлено на согласование: ${res.plans_updated} план(ов), ${res.targets_updated} цел(ей).`);
+      setBanner(
+        `Отправлено на согласование: ${res.plans_updated} план(ов). План уже учитывается в дашборде KPI. Для финального статуса нажмите «Одобрить».`
+      );
       void qc.invalidateQueries({ queryKey: planningKeys.center(tenantSlug, month, year, directionId) });
     },
     onError: (e) => setBanner(getUserFacingError(e))
@@ -301,6 +303,21 @@ export function PlanningWorkspace({ tenantSlug }: { tenantSlug: string }) {
       {banner && (
         <p className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">{banner}</p>
       )}
+
+      {hasPendingPlans ? (
+        <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950">
+          Планы в статусе «На согласовании». Они уже входят в KPI дашборда / мобильный «Reja» / дневные KPI.
+          {canApprove
+            ? " Нажмите «Одобрить», чтобы зафиксировать статус «Одобрено»."
+            : " Нужно право «Одобрить план» (plans.ustanovka_planov.approve), чтобы завершить согласование."}
+        </p>
+      ) : null}
+
+      {data && !hasPendingPlans && !hasApprovedPlans && (data.plans?.length ?? 0) > 0 ? (
+        <p className="rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-sm text-sky-950">
+          Планы в черновике. После заполнения нажмите «Подтвердить» — иначе суммы не попадут в дашборд и мобильные KPI.
+        </p>
+      ) : null}
 
       {data && directionId != null && (
         <>

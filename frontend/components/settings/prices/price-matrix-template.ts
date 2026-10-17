@@ -62,7 +62,7 @@ export async function downloadPriceMatrixTemplate(
   const ws = XLSX.utils.aoa_to_sheet(aoa);
   ws["!cols"] = (showCategory ? [16, 40, 22, 14] : [16, 42, 14]).map((wch) => ({ wch }));
   const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, "Narx");
+  XLSX.utils.book_append_sheet(wb, ws, "Цены");
   const out = filename.toLowerCase().endsWith(".xlsx") ? filename : `${filename}.xlsx`;
   XLSX.writeFile(wb, out, { bookType: "xlsx", compression: true });
 }

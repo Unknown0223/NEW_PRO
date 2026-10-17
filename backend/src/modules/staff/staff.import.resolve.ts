@@ -56,7 +56,8 @@ export async function resolveWarehouseIdsByNames(
 export async function resolveWorkSlotIdByCode(
   tenantId: number,
   slotCode: string,
-  _kind: StaffImportKind
+  _kind: StaffImportKind,
+  opts?: { slotType?: string | null }
 ): Promise<number | null> {
   const code = slotCode.trim().toUpperCase();
   if (!code) return null;
@@ -64,11 +65,33 @@ export async function resolveWorkSlotIdByCode(
     where: {
       tenant_id: tenantId,
       slot_code: { equals: code, mode: "insensitive" },
-      is_active: true
+      is_active: true,
+      deleted_at: null,
+      ...(opts?.slotType ? { slot_type: opts.slotType } : {})
     },
     select: { id: true }
   });
   return slot?.id ?? null;
+}
+
+export async function isWorkSlotInactive(
+  tenantId: number,
+  slotCode: string,
+  slotType?: string | null
+): Promise<boolean> {
+  const code = slotCode.trim().toUpperCase();
+  if (!code) return false;
+  const slot = await prisma.workSlot.findFirst({
+    where: {
+      tenant_id: tenantId,
+      slot_code: { equals: code, mode: "insensitive" },
+      is_active: false,
+      deleted_at: null,
+      ...(slotType ? { slot_type: slotType } : {})
+    },
+    select: { id: true }
+  });
+  return slot != null;
 }
 
 export function splitListCell(raw: string): string[] {
@@ -128,12 +151,15 @@ export function parseOperatorWebKind(raw: string): StaffKind {
     director: "director",
     директор: "director",
     sales_director: "sales_director",
+    директор_по_продажам: "sales_director",
     менеджер: "manager",
     manager: "manager",
     regional_manager: "regional_manager",
+    региональный_менеджер: "regional_manager",
     accountant: "accountant",
     бухгалтер: "accountant",
-    warehouse_manager: "warehouse_manager"
+    warehouse_manager: "warehouse_manager",
+    менеджер_склада: "warehouse_manager"
   };
   const mapped = map[s] ?? (s as StaffKind);
   if ((OPERATOR_LIKE_WEB_ROLES as readonly string[]).includes(mapped)) return mapped;

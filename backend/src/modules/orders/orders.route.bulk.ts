@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import {
+  bulkOrderBonusRefreshBodySchema,
   bulkOrderConsignmentBodySchema,
   bulkOrderDetailsBodySchema,
   bulkOrderExpeditorBodySchema,
@@ -36,7 +37,9 @@ import {
 import { parseSelectedMastersFromQuery, resolveConstraintScope } from "../linkage/linkage.service";
 import { getExchangeSourceAvailability } from "./exchange-source-limits.service";
 import { getOrderCreateCatalogBundle, getOrderCreateContextBundle } from "./order-create-context.service";
+import { resolveOrderStatusRbac } from "./order-status-rbac";
 import {
+  bulkRefreshOrderBonuses,
   bulkUpdateOrderConsignment,
   bulkUpdateOrderExpeditor,
   bulkUpdateOrderStatus,
@@ -99,7 +102,8 @@ export async function registerOrderBulkRoutes(app: FastifyInstance) {
           parsed.data.status,
           actorUserId,
           actor.role,
-          parsed.data.occurred_at
+          parsed.data.occurred_at,
+          await resolveOrderStatusRbac(request)
         );
         return reply.send(result);
       } catch (e) {
@@ -169,6 +173,34 @@ export async function registerOrderBulkRoutes(app: FastifyInstance) {
   );
 
   app.post(
+    "/api/:slug/orders/bulk/bonus-refresh",
+    { preHandler: [jwtAccessVerify, requireRoles(...catalogRoles)], ...writeApiRateLimitRouteOpts },
+    async (request, reply) => {
+      if (!ensureTenantContext(request, reply)) return;
+      const parsed = bulkOrderBonusRefreshBodySchema.safeParse(request.body);
+      if (!parsed.success) {
+        return sendApiError(reply, request, 400, "ValidationError", undefined, zodValidationExtras(parsed.error));
+      }
+      const actor = getAccessUser(request);
+      const actorSub = Number.parseInt(actor.sub, 10);
+      const actorUserId = Number.isFinite(actorSub) && actorSub > 0 ? actorSub : null;
+      try {
+        await assertDocsWritableByIds(request, "orders", parsed.data.order_ids);
+        const result = await bulkRefreshOrderBonuses(
+          request.tenant!.id,
+          parsed.data.order_ids,
+          actorUserId,
+          actor.role
+        );
+        return reply.send(result);
+      } catch (e) {
+        if (isDocumentEditPeriodLockedError(e)) return sendDocumentEditPeriodLocked(reply, request);
+        throw e;
+      }
+    }
+  );
+
+  app.post(
     "/api/:slug/orders/bulk/nakladnoy",
     { preHandler: [jwtAccessVerify, requireRolesOrSkladchikAnyEntitlement(catalogRoles, SKLADCHIK_ORDER_FLOW_ANY)], ...writeApiRateLimitRouteOpts },
     async (request, reply) => {
@@ -220,8 +252,17 @@ export async function registerOrderBulkRoutes(app: FastifyInstance) {
         if (msg === "INVALID_WAREHOUSE_LAYOUT" || msg === "WAREHOUSE_LAYOUT_XLSX_ONLY") {
           return sendApiError(reply, request, 400, "InvalidWarehouseLayout");
         }
-        if (msg.startsWith("WAREHOUSE_TEMPLATE_ASSET_MISSING:")) {
-          return sendApiError(reply, request, 500, "WarehouseTemplateMissing");
+        if (
+          msg.startsWith("WAREHOUSE_TEMPLATE_ASSET_MISSING:") ||
+          msg.startsWith("EXPEDITOR_LOADING_TEMPLATE_ASSET_MISSING:")
+        ) {
+          return sendApiError(
+            reply,
+            request,
+            500,
+            "NakladnoyTemplateMissing",
+            "Шаблон Excel для этой накладной не найден на сервере."
+          );
         }
         throw e;
       }
@@ -280,6 +321,18 @@ export async function registerOrderBulkRoutes(app: FastifyInstance) {
         ) {
           return sendApiError(reply, request, 400, "InvalidNakladnoyPreview");
         }
+        if (
+          msg.startsWith("WAREHOUSE_TEMPLATE_ASSET_MISSING:") ||
+          msg.startsWith("EXPEDITOR_LOADING_TEMPLATE_ASSET_MISSING:")
+        ) {
+          return sendApiError(
+            reply,
+            request,
+            500,
+            "NakladnoyTemplateMissing",
+            "Шаблон Excel для этой накладной не найден на сервере."
+          );
+        }
         throw e;
       }
     }
@@ -325,7 +378,13 @@ export async function registerOrderBulkRoutes(app: FastifyInstance) {
           return sendApiError(reply, request, 400, "InvalidExpeditorLoadingLayout");
         }
         if (msg.startsWith("EXPEDITOR_LOADING_TEMPLATE_ASSET_MISSING:")) {
-          return sendApiError(reply, request, 500, "ExpeditorLoadingTemplateMissing");
+          return sendApiError(
+            reply,
+            request,
+            500,
+            "NakladnoyTemplateMissing",
+            "Шаблон Excel для этой накладной не найден на сервере."
+          );
         }
         throw e;
       }

@@ -7,10 +7,12 @@ import {
   mergeDirectoryAllowedIds,
   resolveActorWarehouseDirectoryIds
 } from "../access/access-directory-scope";
+import { ensureAnyPermission } from "../access/ensure-any-permission";
 import { getAccessUser, jwtAccessVerify, requireRoles } from "../auth/auth.prehandlers";
 import {
   requireRolesOrSkladchikAnyEntitlement,
-  SKLADCHIK_ALL_ENTITLEMENT_KEYS
+  SKLADCHIK_ALL_ENTITLEMENT_KEYS,
+  WAREHOUSE_DIRECTORY_VIEW_PERMISSIONS
 } from "../staff/skladchik-access.prehandler";
 import { parseSelectedMastersFromQuery, resolveConstraintScope } from "../linkage/linkage.service";
 import { catalogRoles } from "./reference.route.shared";
@@ -37,10 +39,24 @@ async function warehouseDirectoryIdsForRequest(
   });
 }
 
+/** Faqat `is_active` (ro'yxatdagi tugma) — «Деактивировать» / «Восстановить»; tahrir formasi — «Изменить». */
+function warehousePatchPermissions(body: Record<string, unknown>): string[] {
+  const onlyActive = Object.keys(body).every((k) => k === "is_active");
+  if (onlyActive && body.is_active === false) return ["warehouse.sklady.deactivate"];
+  if (onlyActive && body.is_active === true) return ["warehouse.sklady.activate"];
+  return ["warehouse.sklady.update"];
+}
+
+const warehouseDirectoryPre = requireRolesOrSkladchikAnyEntitlement(
+  catalogRoles,
+  SKLADCHIK_ALL_ENTITLEMENT_KEYS,
+  WAREHOUSE_DIRECTORY_VIEW_PERMISSIONS
+);
+
 export async function registerReferenceWarehouseRoutes(app: FastifyInstance) {
   app.get(
     "/api/:slug/warehouses",
-    { preHandler: [jwtAccessVerify, requireRolesOrSkladchikAnyEntitlement(catalogRoles, SKLADCHIK_ALL_ENTITLEMENT_KEYS)] },
+    { preHandler: [jwtAccessVerify, warehouseDirectoryPre] },
     async (request, reply) => {
       if (!ensureTenantContext(request, reply)) return;
       const tenantId = request.tenant!.id;
@@ -62,7 +78,7 @@ export async function registerReferenceWarehouseRoutes(app: FastifyInstance) {
 
   app.get(
     "/api/:slug/warehouses/table",
-    { preHandler: [jwtAccessVerify, requireRolesOrSkladchikAnyEntitlement(catalogRoles, SKLADCHIK_ALL_ENTITLEMENT_KEYS)] },
+    { preHandler: [jwtAccessVerify, warehouseDirectoryPre] },
     async (request, reply) => {
       if (!ensureTenantContext(request, reply)) return;
       const tenantId = request.tenant!.id;
@@ -88,7 +104,7 @@ export async function registerReferenceWarehouseRoutes(app: FastifyInstance) {
 
   app.get(
     "/api/:slug/warehouses/pickers",
-    { preHandler: [jwtAccessVerify, requireRolesOrSkladchikAnyEntitlement(catalogRoles, SKLADCHIK_ALL_ENTITLEMENT_KEYS)] },
+    { preHandler: [jwtAccessVerify, warehouseDirectoryPre] },
     async (request, reply) => {
       if (!ensureTenantContext(request, reply)) return;
       const viewer = getAccessUser(request);
@@ -102,7 +118,7 @@ export async function registerReferenceWarehouseRoutes(app: FastifyInstance) {
 
   app.get(
     "/api/:slug/warehouses/:warehouseId",
-    { preHandler: [jwtAccessVerify, requireRolesOrSkladchikAnyEntitlement(catalogRoles, SKLADCHIK_ALL_ENTITLEMENT_KEYS)] },
+    { preHandler: [jwtAccessVerify, warehouseDirectoryPre] },
     async (request, reply) => {
       if (!ensureTenantContext(request, reply)) return;
       const tenantId = request.tenant!.id;
@@ -175,6 +191,7 @@ export async function registerReferenceWarehouseRoutes(app: FastifyInstance) {
           zodValidationExtras(parsed.error)
         );
       }
+      if (!(await ensureAnyPermission(request, reply, warehousePatchPermissions(parsed.data)))) return;
       try {
         const row = await updateWarehouseRow(
           request.tenant!.id,

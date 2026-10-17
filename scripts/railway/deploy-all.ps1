@@ -2,14 +2,15 @@
 # Ishlatish: repo ildizidan  .\deploy-all.cmd
 param(
   [string]$ProjectName = "artistic-endurance",
-  [string]$ApiUrl = "https://backend-production-3cf2.up.railway.app",
-  [string]$FrontendUrl = "https://sales-arena.up.railway.app",
+  [string]$ApiUrl = "http://157.180.116.50:4000",
+  [string]$FrontendUrl = "http://157.180.116.50:3000",
   [string]$AdminPassword = "secret123",
   [string]$TenantSlug = "test1",
   [switch]$SkipBootstrap,
   [switch]$SkipMobile,
   [switch]$SkipWeb,
-  [switch]$WipeDatabase
+  [switch]$WipeDatabase,
+  [switch]$ForceUpdate
 )
 
 $ErrorActionPreference = "Stop"
@@ -109,7 +110,11 @@ if (-not $SkipMobile) {
   # --- 3. APK serverga yuklash ---
   Write-Host ""
   Write-Host "[3/3] APK serverga yuklanmoqda..." -ForegroundColor Yellow
-  & $UploadScript -Api $ApiUrl -Slug $TenantSlug -AdminPassword $AdminPassword -ApkPath $latestApk -LatestVersion $appVer
+  if ($ForceUpdate) {
+    & $UploadScript -Api $ApiUrl -Slug $TenantSlug -AdminPassword $AdminPassword -ApkPath $latestApk -LatestVersion $appVer -ForceUpdate
+  } else {
+    & $UploadScript -Api $ApiUrl -Slug $TenantSlug -AdminPassword $AdminPassword -ApkPath $latestApk -LatestVersion $appVer -NoForce
+  }
 } else {
   Write-Host "[2/3] Mobil o'tkazib yuborildi (-SkipMobile)" -ForegroundColor DarkYellow
   Write-Host "[3/3] APK yuklash o'tkazib yuborildi" -ForegroundColor DarkYellow

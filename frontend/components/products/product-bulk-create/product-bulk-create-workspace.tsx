@@ -162,7 +162,7 @@ export function ProductBulkCreateWorkspace({ tenantSlug, backHref, onDone }: Pro
 
   const saveMut = useMutation({
     mutationFn: async () => {
-      if (!tenantSlug) throw new Error("Tenant topilmadi");
+      if (!tenantSlug) throw new Error("Организация не найдена");
       const items = buildBulkItems(rows);
       if (items.length === 0) throw new Error("Заполните хотя бы одну строку");
       const { data } = await api.post<{ created: number; errors: string[] }>(

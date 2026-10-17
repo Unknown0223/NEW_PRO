@@ -41,8 +41,8 @@ type Props = {
 
 function statusLabel(status: PriceMatrixImportPreviewRow["status"]): string {
   if (status === "ok") return "OK";
-  if (status === "warning") return "O‘tkaziladi";
-  return "Xato";
+  if (status === "warning") return "Пропускается";
+  return "Ошибка";
 }
 
 function displayPrice(raw: string): string {
@@ -57,7 +57,7 @@ function revalidateRow(row: PriceMatrixImportPreviewRow): PriceMatrixImportPrevi
   if (row.product_id == null) return row;
   const priceDisplay = sanitizePriceInput(row.priceDisplay);
   if (priceDisplay.trim() === "") {
-    return { ...row, priceDisplay: "", status: "warning", message: "Narx bo‘sh — o‘tkazib yuboriladi" };
+    return { ...row, priceDisplay: "", status: "warning", message: "Цена пуста — строка будет пропущена" };
   }
   const parsed = parsePriceDraft(priceDisplay);
   if (!parsed.ok) {
@@ -65,7 +65,7 @@ function revalidateRow(row: PriceMatrixImportPreviewRow): PriceMatrixImportPrevi
       ...row,
       priceDisplay,
       status: "error",
-      message: parsed.reason === "too_large" ? "Narx juda katta" : "Narx noto‘g‘ri"
+      message: parsed.reason === "too_large" ? "Цена слишком большая" : "Некорректная цена"
     };
   }
   return { ...row, priceDisplay: String(parsed.value), status: "ok", message: "" };
@@ -104,7 +104,7 @@ export function PriceMatrixImportPreviewDialog({
   async function handleConfirm() {
     const items = importRowsToPatchItems(rows);
     if (items.length === 0) {
-      setError("Saqlash uchun kamida bitta to‘g‘ri qator kerak.");
+      setError("Для сохранения нужна хотя бы одна корректная строка.");
       return;
     }
     setSaving(true);
@@ -123,7 +123,7 @@ export function PriceMatrixImportPreviewDialog({
       onSaved();
       onOpenChange(false);
     } catch (e: unknown) {
-      setError(getUserFacingError(e, isAxiosError(e) ? "Saqlashda xato." : "Saqlashda xato."));
+      setError(getUserFacingError(e, isAxiosError(e) ? "Ошибка при сохранении." : "Ошибка при сохранении."));
     } finally {
       setSaving(false);
     }
@@ -133,25 +133,25 @@ export function PriceMatrixImportPreviewDialog({
     <Dialog open={open} onOpenChange={(v) => !saving && onOpenChange(v)}>
       <DialogContent className="flex max-h-[min(92vh,880px)] w-[min(96vw,56rem)] max-w-[min(96vw,56rem)] flex-col gap-0 overflow-hidden p-0 sm:max-w-[min(96vw,56rem)]">
         <DialogHeader className="shrink-0 space-y-2 border-b px-6 py-4">
-          <DialogTitle className="text-lg">Excel import — ko‘rib chiqish</DialogTitle>
+          <DialogTitle className="text-lg">Импорт Excel — просмотр</DialogTitle>
           <DialogDescription className="text-sm leading-relaxed">
             <span className="font-medium text-foreground">{priceType}</span>
             {categoryIds && categoryIds.length > 0
-              ? ` · ${categoryIds.length} ta kategoriya`
+              ? ` · категорий: ${categoryIds.length}`
               : categoryId != null
-                ? ` · kategoriya ID ${categoryId}`
+                ? ` · ID категории ${categoryId}`
                 : ""}
-            . Tasdiqlashdan keyin narxlar tizimga yoziladi.
+            . После подтверждения цены будут записаны в систему.
           </DialogDescription>
           <div className="flex flex-wrap gap-2 pt-1">
             <span className="inline-flex rounded-md bg-emerald-100 px-2.5 py-1 text-xs font-medium text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300">
               OK: {okCount}
             </span>
             <span className="inline-flex rounded-md bg-amber-100 px-2.5 py-1 text-xs font-medium text-amber-800 dark:bg-amber-950/50 dark:text-amber-300">
-              O‘tkaziladi: {warnCount}
+              Пропускается: {warnCount}
             </span>
             <span className="inline-flex rounded-md bg-red-100 px-2.5 py-1 text-xs font-medium text-red-800 dark:bg-red-950/50 dark:text-red-300">
-              Xato: {errCount}
+              Ошибок: {errCount}
             </span>
           </div>
         </DialogHeader>
@@ -165,14 +165,14 @@ export function PriceMatrixImportPreviewDialog({
                   <th className="min-w-[7rem] px-3 py-2.5 font-medium">SKU</th>
                   <th className="min-w-[14rem] px-3 py-2.5 font-medium">Название</th>
                   <th className="min-w-[9rem] px-3 py-2.5 text-right font-medium">Сумма ({currency})</th>
-                  <th className="min-w-[7rem] px-3 py-2.5 font-medium">Holat</th>
+                  <th className="min-w-[7rem] px-3 py-2.5 font-medium">Статус</th>
                 </tr>
               </thead>
               <tbody>
                 {rows.length === 0 ? (
                   <tr>
                     <td colSpan={5} className="px-4 py-8 text-center text-muted-foreground">
-                      Faylda ma’lumot topilmadi.
+                      В файле не найдено данных.
                     </td>
                   </tr>
                 ) : (
@@ -240,7 +240,7 @@ export function PriceMatrixImportPreviewDialog({
             className="h-10 border-red-300 bg-red-50 text-red-800 hover:bg-red-100 dark:border-red-800 dark:bg-red-950/40 dark:text-red-200 dark:hover:bg-red-950/60"
             onClick={() => onOpenChange(false)}
           >
-            Bekor qilish
+            Отмена
           </Button>
           <div className="flex w-full flex-wrap justify-end gap-2 sm:w-auto">
             <Button
@@ -250,7 +250,7 @@ export function PriceMatrixImportPreviewDialog({
               onClick={() => setIsEditing((v) => !v)}
             >
               <Pencil className="mr-1.5 size-4" aria-hidden />
-              {isEditing ? "Ko‘rinish" : "Tahrirlash"}
+              {isEditing ? "Просмотр" : "Редактировать"}
             </Button>
             <Button
               type="button"
@@ -259,7 +259,7 @@ export function PriceMatrixImportPreviewDialog({
               onClick={() => void handleConfirm()}
             >
               {saving ? <Loader2 className="mr-1.5 size-4 animate-spin" /> : null}
-              Tasdiqlash
+              Подтвердить
             </Button>
           </div>
         </DialogFooter>

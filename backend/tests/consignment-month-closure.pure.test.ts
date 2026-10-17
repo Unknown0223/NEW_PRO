@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   daysInMonth,
+  parseConsignmentCloseSchedule,
   parseConsignmentMonthCloseDay,
   utcConsignmentPeriodCloseAt
 } from "../src/modules/consignment/consignment-settings";
@@ -10,6 +11,15 @@ describe("consignment month closure settings", () => {
   it("defaults close day to 25", () => {
     expect(parseConsignmentMonthCloseDay({})).toBe(25);
     expect(parseConsignmentMonthCloseDay({ consignment: { month_close_day: 28 } })).toBe(28);
+  });
+
+  it("parses full tenant close schedule", () => {
+    expect(parseConsignmentCloseSchedule({})).toEqual({ day: 25, hour: 0, minute: 0 });
+    expect(
+      parseConsignmentCloseSchedule({
+        consignment: { month_close_day: 20, month_close_hour: 18, month_close_minute: 30 }
+      })
+    ).toEqual({ day: 20, hour: 18, minute: 30 });
   });
 
   it("clamps close day to month length", () => {

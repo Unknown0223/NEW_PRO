@@ -24,8 +24,8 @@ describe("OrderCreateAgentLockHint", () => {
         selectedAgentId={9}
       />
     );
-    expect(screen.getByText(/Shartnoma qulfi/i)).toBeTruthy();
-    expect(screen.getByText(/mos kelmaydi/i)).toBeTruthy();
+    expect(screen.getByText(/Блокировка по договору/i)).toBeTruthy();
+    expect(screen.getByText(/не совпадает/i)).toBeTruthy();
   });
 
   it("returns null when no slot-1 assignment", () => {

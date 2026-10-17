@@ -125,7 +125,7 @@ class SupervisorMenuPage extends ConsumerWidget {
       final text = [
         name,
         server,
-        'Роль: supervisor',
+        'Роль: супервайзер',
         'Sales Arena',
       ].join('\n');
       await shareSupervisorText(context, text, successLabel: l10n.copied);
@@ -160,19 +160,6 @@ class SupervisorMenuPage extends ConsumerWidget {
             ],
           ),
           const SizedBox(height: 16),
-          SvCard(
-            padding: EdgeInsets.zero,
-            child: Column(
-              children: [
-                tile(
-                  icon: Icons.person_add_alt_1_outlined,
-                  title: 'Добавить аккаунт',
-                  soon: true,
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 10),
           Builder(
             builder: (_) {
               final policy = SupervisorConfigPolicy(session.mobileConfig);
@@ -184,11 +171,10 @@ class SupervisorMenuPage extends ConsumerWidget {
                       icon: Icons.add_business_outlined,
                       title: 'Добавить торговую точку',
                       subtitle: policy.canCreateClient
-                          ? null
+                          ? 'С выбором агента из вашей команды'
                           : 'Запрещено в конфигурации',
-                      soon: policy.canCreateClient,
                       onTap: policy.canCreateClient
-                          ? null
+                          ? () => context.push('/sv-clients/new')
                           : () {
                               ScaffoldMessenger.of(context).showSnackBar(
                                 const SnackBar(
@@ -201,9 +187,26 @@ class SupervisorMenuPage extends ConsumerWidget {
                     ),
                     const Divider(height: 1),
                     tile(
+                      icon: Icons.store_mall_directory_outlined,
+                      title: 'База клиентов',
+                      subtitle: policy.canEditClient
+                          ? 'Только клиенты ваших агентов'
+                          : 'Редактирование отключено',
+                      onTap: () => context.push('/sv-clients'),
+                    ),
+                    const Divider(height: 1),
+                    tile(
+                      icon: Icons.notifications_outlined,
+                      title: 'Уведомления',
+                      subtitle: 'Изменения координат от других SVR',
+                      onTap: () => context.push('/sv-notifications'),
+                    ),
+                    const Divider(height: 1),
+                    tile(
                       icon: Icons.task_alt_outlined,
                       title: 'Задачи',
-                      soon: true,
+                      subtitle: 'Поручения агентам и мои задачи',
+                      onTap: () => context.push('/tasks'),
                     ),
                     const Divider(height: 1),
                     tile(

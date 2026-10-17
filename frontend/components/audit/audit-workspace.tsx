@@ -17,7 +17,8 @@ const KIND_LABEL: Record<TabelAuditRecord["kind"], string> = {
   status: "Статус посещаемости",
   schedule: "График роли",
   exception: "Исключение",
-  override: "Индивидуальный график"
+  override: "Индивидуальный график",
+  settings: "Норматив агентов"
 };
 
 type ModuleFilter = "all" | TabelAuditModule;

@@ -49,7 +49,7 @@ export async function listOrderDebtsReport(
       page: 1,
       limit: 1
     };
-    const clientWhere = buildClientWhere(tenantId, forClients, { skipBalanceFilter: true });
+    const clientWhere = await buildClientWhere(tenantId, forClients, { skipBalanceFilter: true });
     const idRows = await prisma.client.findMany({ where: clientWhere, select: { id: true } });
     let ids = idRows.map((r) => r.id);
     if (q.explicit_client_ids && q.explicit_client_ids.length > 0) {

@@ -103,19 +103,25 @@ export function BalanceDetailLedgerTable({
         return consignmentLabel(row.consignment);
       case "debt":
         return row.debt !== 0 ? (
-          <span className={tab === "overall" ? "font-medium text-red-600" : ""}>{fmtMoney(Math.abs(row.debt))}</span>
+          <span className={cn("whitespace-nowrap", tab === "overall" && "font-medium text-red-600")}>
+            {fmtMoney(Math.abs(row.debt))}
+          </span>
         ) : (
           "—"
         );
       case "payment":
         return row.payment !== 0 ? (
-          <span className={tab === "overall" ? "font-medium text-[#1aa096]" : ""}>{fmtMoney(row.payment)}</span>
+          <span className={cn("whitespace-nowrap", tab === "overall" && "font-medium text-[#1aa096]")}>
+            {fmtMoney(row.payment)}
+          </span>
         ) : (
           "—"
         );
       case "balanceAfter":
         return row.balanceAfter != null ? (
-          <span className={row.balanceAfter < 0 ? "text-red-600" : "text-[#1aa096]"}>{fmtMoney(row.balanceAfter)}</span>
+          <span className={cn("whitespace-nowrap", row.balanceAfter < 0 ? "text-red-600" : "text-[#1aa096]")}>
+            {fmtMoney(row.balanceAfter)}
+          </span>
         ) : (
           "—"
         );

@@ -34,6 +34,7 @@ COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 COPY prisma ./prisma
 COPY shared ./shared
+COPY assets ./assets
 
 RUN mkdir -p uploads tmp && chown -R node:node /app
 

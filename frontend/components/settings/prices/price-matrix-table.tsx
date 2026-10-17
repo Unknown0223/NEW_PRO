@@ -52,19 +52,19 @@ export function PriceMatrixTable({
           ) : needsFilters ? (
             <tr>
               <td colSpan={colSpan} className="px-3 py-6 text-center text-muted-foreground">
-                Narx turini tanlang.
+                Выберите тип цены.
               </td>
             </tr>
           ) : needsCategories ? (
             <tr>
               <td colSpan={colSpan} className="px-3 py-6 text-center text-muted-foreground">
-                Kamida bitta kategoriya tanlang.
+                Выберите хотя бы одну категорию.
               </td>
             </tr>
           ) : rows.length === 0 ? (
             <tr>
               <td colSpan={colSpan} className="px-3 py-6 text-center text-muted-foreground">
-                Tanlangan kategoriyalarda mahsulot yo‘q.
+                В выбранных категориях нет товаров.
               </td>
             </tr>
           ) : (

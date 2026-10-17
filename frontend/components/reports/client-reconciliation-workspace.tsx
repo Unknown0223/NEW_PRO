@@ -9,6 +9,7 @@ import { filterPanelSelectClassName } from "@/components/ui/filter-select";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { api } from "@/lib/api";
+import { usePermissions } from "@/lib/use-permissions";
 import { getUserFacingError } from "@/lib/error-utils";
 import { useAuthStore, useAuthStoreHydrated } from "@/lib/auth-store";
 import { formatNumberGrouped } from "@/lib/format-numbers";
@@ -107,6 +108,7 @@ function chronoLabel(t: ReconciliationJson["chronological"][number]["line_type"]
 }
 
 export function ClientReconciliationWorkspace() {
+  const canExport = usePermissions().has("cash.otchety.export");
   const tenantSlug = useAuthStore((s) => s.tenantSlug);
   const hydrated = useAuthStoreHydrated();
   const router = useRouter();
@@ -424,16 +426,18 @@ export function ClientReconciliationWorkspace() {
                   <FileText className="size-4" />
                   PDF
                 </Button>
-                <Button
-                  type="button"
-                  size="sm"
-                  className="h-9 gap-1.5 bg-green-600 text-white hover:bg-green-700"
-                  disabled={xlsxLoading}
-                  onClick={() => void downloadXlsx()}
-                >
-                  <FileSpreadsheet className="size-4" />
-                  Excel
-                </Button>
+                {canExport ? (
+                  <Button
+                    type="button"
+                    size="sm"
+                    className="h-9 gap-1.5 bg-green-600 text-white hover:bg-green-700"
+                    disabled={xlsxLoading}
+                    onClick={() => void downloadXlsx()}
+                  >
+                    <FileSpreadsheet className="size-4" />
+                    Excel
+                  </Button>
+                ) : null}
                 <Button
                   type="button"
                   variant="ghost"
@@ -543,7 +547,7 @@ export function ClientReconciliationWorkspace() {
               </TabsContent>
               <TabsContent value="mov" className="mt-3">
                 <SimpleTable
-                  headers={["Дата", "Delta", "Примечание"]}
+                  headers={["Дата", "Изменение", "Примечание"]}
                   rows={payload.balance_movements.map((m) => [fmtDt(m.created_at), m.delta, m.note ?? "—"])}
                 />
               </TabsContent>

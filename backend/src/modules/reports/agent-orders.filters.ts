@@ -10,6 +10,11 @@ import {
   resolvePaymentMethodRefToLabel
 } from "../tenant-settings/finance-refs";
 import { buildScopedAgentWhereForActor } from "../access/access-agent-scope";
+import {
+  filterTerritoryRowsByTerms,
+  pruneTerritoryNodesByTerms,
+  resolveFilterOptionsScope
+} from "../access/access-filter-options-scope";
 import type { AgentOrdersFilters, TerritoryNode } from "./agent-orders.types";
 import { buildTerritoryIndexFromNodes, parseTerritoryNodes } from "./agent-orders.helpers";
 
@@ -17,6 +22,7 @@ export async function getAgentOrdersFilterOptions(
   tenantId: number,
   actor?: { userId: number | null; role: string }
 ) {
+  const scope = await resolveFilterOptionsScope(tenantId, actor);
   const tenant = await prisma.tenant.findUnique({
     where: { id: tenantId },
     select: { settings: true }
@@ -63,7 +69,7 @@ export async function getAgentOrdersFilterOptions(
     })
   ]);
 
-  const [clientCats, paymentMethodRefs, territories, orderTypeRows] = await Promise.all([
+  const [clientCats, paymentMethodRefs, territoriesRaw, orderTypeRows] = await Promise.all([
     prisma.$queryRaw<Array<{ v: string }>>`
       SELECT DISTINCT c.category AS v
       FROM clients c
@@ -91,10 +97,14 @@ export async function getAgentOrdersFilterOptions(
     `
   ]);
 
+  const territories = filterTerritoryRowsByTerms(territoriesRaw, scope.territoryTerms);
   const t1 = [...new Set(territories.map((x) => (x.t1 ?? "").trim()).filter(Boolean))].sort();
   const t2 = [...new Set(territories.map((x) => (x.t2 ?? "").trim()).filter(Boolean))].sort();
   const t3 = [...new Set(territories.map((x) => (x.t3 ?? "").trim()).filter(Boolean))].sort();
-  const territoryNodes = parseTerritoryNodes(refs.territory_nodes);
+  const territoryNodes = pruneTerritoryNodesByTerms(
+    parseTerritoryNodes(refs.territory_nodes),
+    scope.territoryTerms
+  );
   const territoryFromSettings = buildTerritoryIndexFromNodes(territoryNodes);
   const territory2By1FromData = new Map<string, Set<string>>();
   const territory3By2FromData = new Map<string, Set<string>>();

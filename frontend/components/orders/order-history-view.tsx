@@ -51,7 +51,7 @@ export function OrderHistoryView({ tenantSlug, orderId }: Props) {
   }, [q.data]);
 
   if (!tenantSlug) {
-    return <p className="text-sm text-destructive">Tenant aniqlanmadi.</p>;
+    return <p className="text-sm text-destructive">Организация не определена.</p>;
   }
 
   if (q.isLoading) {
@@ -72,7 +72,7 @@ export function OrderHistoryView({ tenantSlug, orderId }: Props) {
   }
 
   return (
-    <div className="mx-auto max-w-[1600px]">
+    <div className="w-full">
       <OrderHistoryPageHeader orderId={orderId} backHref={`/orders/${orderId}`} />
 
       <div className="space-y-5">

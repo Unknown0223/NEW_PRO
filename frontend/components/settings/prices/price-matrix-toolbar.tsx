@@ -63,7 +63,7 @@ export function PriceMatrixToolbar({
             disabled={disabled || bulkDisabled}
             onClick={onApplyBulk}
           >
-            Qo‘llash
+            Применить
           </Button>
         </div>
         </div>
@@ -79,7 +79,7 @@ export function PriceMatrixToolbar({
           onClick={() => void onDownloadTemplate?.()}
         >
           <Download className="size-4" aria-hidden />
-          {templateLoading ? "…" : "Shablon (.xlsx)"}
+          {templateLoading ? "…" : "Шаблон (.xlsx)"}
         </Button>
         <ExcelDropTarget
           disabled={!canImportExcel || disabled}
@@ -94,7 +94,7 @@ export function PriceMatrixToolbar({
             onClick={() => fileRef.current?.click()}
           >
             <FileSpreadsheet className="size-4 text-emerald-600" aria-hidden />
-            Excel import
+            Импорт Excel
           </Button>
         </ExcelDropTarget>
         <input

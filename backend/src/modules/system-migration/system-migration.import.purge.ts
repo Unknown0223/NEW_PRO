@@ -59,6 +59,10 @@ export async function purgeTenantBonusKpiForReplace(tenantId: number): Promise<v
       await tx.bonusRuleClause.deleteMany({
         where: { bonus_rule: { tenant_id: tenantId } }
       });
+      await tx.bonusStrategyMember.deleteMany({
+        where: { strategy: { tenant_id: tenantId } }
+      });
+      await tx.bonusStrategy.deleteMany({ where: { tenant_id: tenantId } });
       await tx.bonusRule.deleteMany({ where: { tenant_id: tenantId } });
     },
     { timeout: 120_000 }

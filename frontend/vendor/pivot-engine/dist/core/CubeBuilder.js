@@ -75,6 +75,13 @@ export class CubeBuilder {
     asNumber(value) {
         if (typeof value === "number" && Number.isFinite(value))
             return value;
+        if (typeof value === "string") {
+            const trimmed = value.trim();
+            if (!trimmed)
+                return null;
+            const n = Number(trimmed);
+            return Number.isFinite(n) ? n : null;
+        }
         return null;
     }
 }

@@ -12,6 +12,8 @@ import {
 } from "@/lib/client-filter-select-value";
 import {
   loadClientBalancesFilterVisibility,
+  loadClientBalancesRememberFilters,
+  saveClientBalancesRememberFilters,
   type ClientBalancesFilterVisibility
 } from "@/lib/client-balances-filters-visibility";
 import { RotateCcw, SlidersHorizontal } from "lucide-react";
@@ -93,6 +95,11 @@ export function ClientBalancesFiltersPanel({
     loadClientBalancesFilterVisibility()
   );
   const [visDialogOpen, setVisDialogOpen] = useState(false);
+  const [rememberFilters, setRememberFilters] = useState(false);
+
+  useEffect(() => {
+    setRememberFilters(loadClientBalancesRememberFilters());
+  }, []);
 
   useEffect(() => {
     setFilterVis(loadClientBalancesFilterVisibility());
@@ -346,6 +353,11 @@ export function ClientBalancesFiltersPanel({
         onOpenChange={setVisDialogOpen}
         value={filterVis}
         onChange={setFilterVis}
+        rememberFilters={rememberFilters}
+        onRememberFiltersChange={(on) => {
+          setRememberFilters(on);
+          saveClientBalancesRememberFilters(on);
+        }}
       />
     </>
   );

@@ -15,10 +15,21 @@ const optionalPositiveId = z.preprocess(
   z.coerce.number().int().positive().optional()
 );
 
-export const dailyKpiDayMatrixQuerySchema = z.object({
-  day: z.preprocess(emptyToUndef, ymd),
-  direction_id: optionalPositiveId
-});
+/** `day`…`day_to` — faqat bitta kalendar oy ichida (oy chegarasidan chiqish taqiqlangan). */
+export const dailyKpiDayMatrixQuerySchema = z
+  .object({
+    day: z.preprocess(emptyToUndef, ymd),
+    day_to: z.preprocess(emptyToUndef, ymd.optional()),
+    direction_id: optionalPositiveId
+  })
+  .superRefine((v, ctx) => {
+    if (!v.day_to) return;
+    if (v.day_to.slice(0, 7) !== v.day.slice(0, 7)) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["day_to"], message: "RANGE_CROSS_MONTH" });
+    } else if (v.day_to < v.day) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["day_to"], message: "RANGE_ORDER" });
+    }
+  });
 
 export type DailyKpiDayMatrixQuery = z.infer<typeof dailyKpiDayMatrixQuerySchema>;
 

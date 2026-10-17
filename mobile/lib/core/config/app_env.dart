@@ -37,6 +37,6 @@ bool isLocalApiEnv() {
 /// Login ekranida ko'rsatish: lokal yoki production server.
 String apiEnvDisplayLabel() {
   final api = resolveApiBaseUrl();
-  if (isLocalApiEnv()) return 'Lokal server · $api';
-  return 'Production server · $api';
+  if (isLocalApiEnv()) return 'Локальный сервер · $api';
+  return 'Рабочий сервер · $api';
 }

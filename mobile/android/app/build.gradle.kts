@@ -109,6 +109,13 @@ android {
         }
         release {
             signingConfig = signingConfigs.getByName("ota")
+            // R8: flutter_local_notifications Gson TypeToken
+            isMinifyEnabled = true
+            isShrinkResources = false
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro",
+            )
         }
     }
 

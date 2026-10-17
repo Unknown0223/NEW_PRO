@@ -33,55 +33,55 @@ export function buildReturnFilterLog(
 ): string[] {
   const { settings } = window;
   const mode = returnFilterModeFromSettings(window);
-  const unitLabel = settings.period_unit === "month" ? "oy" : "kun";
+  const unitLabel = settings.period_unit === "month" ? "мес." : "дн.";
   const log: string[] = [];
 
-  log.push(`Rejim: ${modeLabel(mode)}`);
+  log.push(`Режим: ${modeLabel(mode)}`);
   if (stats.client_balance != null) {
-    log.push(`Ko‘rinadigan balans (Финансы): ${stats.client_balance}`);
+    log.push(`Видимый баланс (Финансы): ${stats.client_balance}`);
   }
   if (stats.ledger_net_balance != null) {
-    log.push(`Ledger yig‘indisi (zakaz+to‘lov): ${stats.ledger_net_balance}`);
+    log.push(`Итог по леджеру (заказы + оплаты): ${stats.ledger_net_balance}`);
   }
   if (stats.unpaid_delivered_total != null && stats.unpaid_delivered_total !== "0") {
-    log.push(`Yetkazilgan, to‘lanmagan zakazlar: ${stats.unpaid_delivered_total}`);
+    log.push(`Доставленные неоплаченные заказы: ${stats.unpaid_delivered_total}`);
   }
   if (stats.ledger_balance != null) {
-    log.push(`L/s jurnal (faqat to‘lov/rasxod): ${stats.ledger_balance}`);
+    log.push(`Журнал л/с (только оплаты/расходы): ${stats.ledger_balance}`);
   }
 
   if (settings.period_enabled) {
     log.push(
-      `Davr: oxirgi ${settings.period_value} ${unitLabel} (${formatIsoDate(window.period_from?.toISOString() ?? null)} dan)`
+      `Период: последние ${settings.period_value} ${unitLabel} (с ${formatIsoDate(window.period_from?.toISOString() ?? null)})`
     );
     if (stats.delivered_in_period != null) {
-      log.push(`Davr ichida yetkazilgan zakazlar: ${stats.delivered_in_period}`);
+      log.push(`Доставлено заказов за период: ${stats.delivered_in_period}`);
     }
   } else {
-    log.push("Davr filtri: o‘chiq");
+    log.push("Фильтр по периоду: выключен");
   }
 
   if (settings.balance_zero_enabled) {
     if (window.balance_zero_at) {
       log.push(
-        `Balans 0 nuqtasi topildi (zakaz+to‘lov ledger): ${formatIsoDate(window.balance_zero_at.toISOString())}`
+        `Найдена точка нулевого баланса (леджер заказов и оплат): ${formatIsoDate(window.balance_zero_at.toISOString())}`
       );
     } else if (mode === "period_and_balance_zero") {
-      log.push("Balans 0: tanlangan davr ichida topilmadi");
+      log.push("Баланс 0: в выбранном периоде не найден");
     } else {
-      log.push("Balans 0: hech qachon topilmadi — cheklovsiz (faqat balans 0 rejimi)");
+      log.push("Баланс 0: не найден ни разу — без ограничений (режим «только баланс 0»)");
     }
   } else {
-    log.push("Balans 0 filtri: o‘chiq");
+    log.push("Фильтр «Баланс 0»: выключен");
   }
 
   if (window.empty) {
-    log.push("Natija: zakazlar ko‘rsatilmaydi (ikkala cheklov birga bajarilmadi)");
+    log.push("Результат: заказы не показываются (оба условия одновременно не выполнены)");
   } else if (window.min_order_created_at) {
-    log.push(`Zakazlar sanasi ≥ ${formatIsoDate(window.min_order_created_at.toISOString())}`);
-    log.push(`Filtrdan o‘tgan yetkazilgan zakazlar: ${stats.delivered_after_filter}`);
+    log.push(`Дата заказов ≥ ${formatIsoDate(window.min_order_created_at.toISOString())}`);
+    log.push(`Доставленных заказов после фильтра: ${stats.delivered_after_filter}`);
   } else {
-    log.push(`Filtrdan o‘tgan yetkazilgan zakazlar: ${stats.delivered_after_filter}`);
+    log.push(`Доставленных заказов после фильтра: ${stats.delivered_after_filter}`);
   }
 
   return log;
@@ -90,13 +90,13 @@ export function buildReturnFilterLog(
 function modeLabel(mode: ReturnFilterMode): string {
   switch (mode) {
     case "period_only":
-      return "faqat davr";
+      return "только период";
     case "balance_zero_only":
-      return "faqat balans 0";
+      return "только баланс 0";
     case "period_and_balance_zero":
-      return "davr + balans 0";
+      return "период + баланс 0";
     default:
-      return "filtr yo‘q";
+      return "без фильтра";
   }
 }
 
@@ -106,28 +106,28 @@ export function buildReturnFilterExplanation(
 ): string {
   const mode = returnFilterModeFromSettings(window);
   const { settings } = window;
-  const unitLabel = settings.period_unit === "month" ? "oy" : "kun";
+  const unitLabel = settings.period_unit === "month" ? "мес." : "дн.";
 
   if (mode === "period_only") {
-    return `Oxirgi ${settings.period_value} ${unitLabel} ichidagi yetkazilgan zakazlar (${stats.delivered_after_filter} ta). Balans 0 hisobga olinmaydi.`;
+    return `Доставленные заказы за последние ${settings.period_value} ${unitLabel} (${stats.delivered_after_filter} шт.). Баланс 0 не учитывается.`;
   }
 
   if (mode === "balance_zero_only") {
     if (window.balance_zero_at) {
-      return `Oxirgi balans 0 (${formatIsoDate(window.balance_zero_at.toISOString())}) dan keyingi zakazlar (${stats.delivered_after_filter} ta).`;
+      return `Заказы после последнего нулевого баланса (${formatIsoDate(window.balance_zero_at.toISOString())}) (${stats.delivered_after_filter} шт.).`;
     }
-    return `Balans 0 hech qachon topilmadi — barcha yetkazilgan zakazlar (${stats.delivered_after_filter} ta).`;
+    return `Баланс 0 не найден ни разу — все доставленные заказы (${stats.delivered_after_filter} шт.).`;
   }
 
   if (mode === "period_and_balance_zero") {
     if (window.empty) {
       const inPeriod = stats.delivered_in_period ?? 0;
-      return `Oxirgi ${settings.period_value} ${unitLabel} ichida to‘liq yopilgan (balans 0) nuqta topilmadi — faqat qarzli zakazlar bor. Davrda ${inPeriod} ta yetkazilgan zakaz mavjud. To‘liq to‘lov qiling yoki Balans 0 filtrini o‘chiring.`;
+      return `За последние ${settings.period_value} ${unitLabel} не найдена точка полного закрытия (баланс 0) — есть только заказы с долгом. Доставленных заказов за период: ${inPeriod}. Внесите полную оплату или отключите фильтр «Баланс 0».`;
     }
-    return `Oxirgi ${settings.period_value} ${unitLabel} ichidagi balans 0 (${formatIsoDate(window.balance_zero_at?.toISOString() ?? null)}) dan keyingi zakazlar (${stats.delivered_after_filter} ta).`;
+    return `Заказы после нулевого баланса (${formatIsoDate(window.balance_zero_at?.toISOString() ?? null)}) за последние ${settings.period_value} ${unitLabel} (${stats.delivered_after_filter} шт.).`;
   }
 
-  return `Filtr o‘chiq — barcha yetkazilgan zakazlar (${stats.delivered_after_filter} ta). Ehtiyotkorlik bilan ishlating.`;
+  return `Фильтр выключен — все доставленные заказы (${stats.delivered_after_filter} шт.). Используйте с осторожностью.`;
 }
 
 export function returnFilterMetaEnriched(

@@ -51,7 +51,7 @@ export function ViewModeToggle({ value, onChange, className, labels }: ViewModeT
     <div
       className={cn("inline-flex rounded-lg border border-slate-200 bg-white p-0.5", className)}
       role="group"
-      aria-label="Ko‘rinish"
+      aria-label="Вид"
     >
       <button
         type="button"
@@ -63,7 +63,7 @@ export function ViewModeToggle({ value, onChange, className, labels }: ViewModeT
         aria-pressed={value === "table"}
       >
         <List className="size-3.5" />
-        {labels?.table ?? "Jadval"}
+        {labels?.table ?? "Таблица"}
       </button>
       <button
         type="button"
@@ -75,7 +75,7 @@ export function ViewModeToggle({ value, onChange, className, labels }: ViewModeT
         aria-pressed={value === "grid"}
       >
         <LayoutGrid className="size-3.5" />
-        {labels?.grid ?? "Grid"}
+        {labels?.grid ?? "Плитка"}
       </button>
     </div>
   );

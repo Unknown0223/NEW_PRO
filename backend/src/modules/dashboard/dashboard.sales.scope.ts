@@ -32,9 +32,15 @@ import {
 
 import type { SalesDashboardFilters } from "./dashboard.sales.types";
 import { normalizeFromYmd, normalizeToYmd } from "./dashboard.finance";
+import { expandPaymentMethodFilterValues } from "../tenant-settings/finance-refs";
+import {
+  loadPaymentMethodEntriesForResolve,
+  loadPriceTypeEntriesForResolve
+} from "../tenant-settings/tenant-settings.service";
 
 export function normalizeSalesDateType(input?: string): SalesDashboardFilters["date_type"] {
-  return input === "shipment_date" ? "shipment_date" : "order_date";
+  if (input === "shipment_date" || input === "delivery_date") return input;
+  return "order_date";
 }
 
 export function csvToTextArray(input?: string): string[] {
@@ -70,10 +76,30 @@ export function parseSalesDashboardFilters(q: Record<string, string | undefined>
   };
 }
 
+export async function expandSalesPaymentFilters(
+  tenantId: number,
+  f: SalesDashboardFilters
+): Promise<SalesDashboardFilters> {
+  if (f.payment_types.length === 0) return f;
+  const [pm, pt] = await Promise.all([
+    loadPaymentMethodEntriesForResolve(tenantId),
+    loadPriceTypeEntriesForResolve(tenantId)
+  ]);
+  return {
+    ...f,
+    payment_types: expandPaymentMethodFilterValues(f.payment_types, pm, pt)
+  };
+}
+
 export function salesDateExprByType(dateType: SalesDashboardFilters["date_type"]): Prisma.Sql {
+  if (dateType === "delivery_date") {
+    return Prisma.raw(
+      "(SELECT MIN(sl.created_at) FROM order_status_logs sl WHERE sl.order_id = o.id AND sl.to_status = 'delivered')"
+    );
+  }
   if (dateType === "shipment_date") {
     return Prisma.raw(
-      "COALESCE((SELECT MIN(sl.created_at) FROM order_status_logs sl WHERE sl.order_id = o.id AND sl.to_status IN ('delivering', 'delivered')), o.updated_at)"
+      "(SELECT MIN(sl.created_at) FROM order_status_logs sl WHERE sl.order_id = o.id AND sl.to_status = 'delivering')"
     );
   }
   return Prisma.raw("o.created_at");
@@ -136,6 +162,28 @@ export function salesOrderScopeSql(
   } else if (opts?.forSales !== false) {
     parts.push(Prisma.sql`o.status NOT IN ('cancelled', 'returned')`);
   }
+  return salesScopeWithCommonFilters(parts, f, territoryTerms);
+}
+
+/** Debitor qarz (joriy holat): sana oralig‘i va status filtrisiz, faqat `delivered` savdo zakazlari. */
+export function salesReceivableScopeSql(
+  tenantId: number,
+  f: SalesDashboardFilters,
+  territoryTerms: string[]
+): Prisma.Sql {
+  const parts: Prisma.Sql[] = [
+    Prisma.sql`o.tenant_id = ${tenantId}`,
+    Prisma.sql`o.order_type = 'order'`,
+    Prisma.sql`o.status IN (${Prisma.join([...ORDER_STATUSES_OUTSTANDING_RECEIVABLE])})`
+  ];
+  return salesScopeWithCommonFilters(parts, f, territoryTerms);
+}
+
+function salesScopeWithCommonFilters(
+  parts: Prisma.Sql[],
+  f: SalesDashboardFilters,
+  territoryTerms: string[]
+): Prisma.Sql {
   if (f.payment_types.length > 0) {
     parts.push(Prisma.sql`COALESCE(o.payment_method_ref, '') IN (${Prisma.join(f.payment_types)})`);
   }
@@ -166,6 +214,70 @@ export function salesOrderScopeSql(
   const base = Prisma.join(parts, " AND ");
   const territoryClause = buildSalesTerritoryAliasClause("c", territoryTerms);
   const productClause = salesProductExistsClause(f);
+  return Prisma.sql`${base} ${territoryClause} ${productClause}`;
+}
+
+/** Haqiqiy kirim: `client_payments`, sana — `paid_at` (yo‘q bo‘lsa `created_at`). */
+export function salesClientPaymentWhere(
+  tenantId: number,
+  from: Date,
+  to: Date,
+  f: SalesDashboardFilters,
+  territoryTerms: string[]
+): Prisma.Sql {
+  const parts: Prisma.Sql[] = [
+    Prisma.sql`p.tenant_id = ${tenantId}`,
+    Prisma.sql`p.entry_kind = 'payment'`,
+    Prisma.sql`p.deleted_at IS NULL`,
+    Prisma.sql`COALESCE(p.paid_at, p.created_at) >= ${from}`,
+    Prisma.sql`COALESCE(p.paid_at, p.created_at) <= ${to}`
+  ];
+  if (f.payment_types.length > 0) {
+    parts.push(
+      Prisma.sql`btrim(COALESCE(p.payment_type, '')) IN (${Prisma.join(f.payment_types.map((x) => Prisma.sql`${x}`))})`
+    );
+  }
+  if (f.supervisor_ids.length > 0) {
+    parts.push(Prisma.sql`u.supervisor_user_id IN (${Prisma.join(f.supervisor_ids)})`);
+  }
+  if (f.agent_ids.length > 0) {
+    parts.push(Prisma.sql`COALESCE(p.ledger_agent_id, c.agent_id) IN (${Prisma.join(f.agent_ids)})`);
+  }
+  if (f.trade_directions.length > 0) {
+    parts.push(Prisma.sql`COALESCE(u.trade_direction, '') IN (${Prisma.join(f.trade_directions)})`);
+  }
+  if (f.territory_1_list.length > 0) {
+    parts.push(
+      Prisma.sql`btrim(COALESCE(c.zone, '')) IN (${Prisma.join(f.territory_1_list.map((x) => Prisma.sql`${x}`))})`
+    );
+  }
+  if (f.territory_2_list.length > 0) {
+    parts.push(
+      Prisma.sql`btrim(COALESCE(c.region, '')) IN (${Prisma.join(f.territory_2_list.map((x) => Prisma.sql`${x}`))})`
+    );
+  }
+  if (f.territory_3_list.length > 0) {
+    parts.push(
+      Prisma.sql`btrim(COALESCE(c.city, '')) IN (${Prisma.join(f.territory_3_list.map((x) => Prisma.sql`${x}`))})`
+    );
+  }
+  const base = Prisma.join(parts, " AND ");
+  const territoryClause = buildSalesTerritoryAliasClause("c", territoryTerms);
+  const productParts: Prisma.Sql[] = [];
+  if (f.category_ids.length > 0) productParts.push(Prisma.sql`px.category_id IN (${Prisma.join(f.category_ids)})`);
+  if (f.group_ids.length > 0) productParts.push(Prisma.sql`px.product_group_id IN (${Prisma.join(f.group_ids)})`);
+  if (f.brand_ids.length > 0) productParts.push(Prisma.sql`px.brand_id IN (${Prisma.join(f.brand_ids)})`);
+  if (f.manufacturer_ids.length > 0) {
+    productParts.push(Prisma.sql`px.manufacturer_id IN (${Prisma.join(f.manufacturer_ids)})`);
+  }
+  const productClause =
+    productParts.length === 0
+      ? Prisma.empty
+      : Prisma.sql`AND p.order_id IS NOT NULL AND EXISTS (
+          SELECT 1 FROM order_items oix
+          JOIN products px ON px.id = oix.product_id
+          WHERE oix.order_id = p.order_id AND ${Prisma.join(productParts, " AND ")}
+        )`;
   return Prisma.sql`${base} ${territoryClause} ${productClause}`;
 }
 

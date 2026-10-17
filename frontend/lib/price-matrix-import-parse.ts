@@ -80,7 +80,7 @@ export function parsePriceMatrixXlsxRows(
         product_id: null,
         priceDisplay: "",
         status: "error",
-        message: "Birinchi qatorda SKU (kod) ustuni kerak"
+        message: "В первой строке нужен столбец SKU (код)"
       }
     ];
   }
@@ -109,7 +109,7 @@ export function parsePriceMatrixXlsxRows(
         product_id: null,
         priceDisplay,
         status: "error",
-        message: "SKU bo‘sh"
+        message: "SKU не указан"
       });
       continue;
     }
@@ -123,7 +123,7 @@ export function parsePriceMatrixXlsxRows(
         product_id: null,
         priceDisplay,
         status: "error",
-        message: "SKU ushbu kategoriyada topilmadi"
+        message: "SKU не найден в этой категории"
       });
       continue;
     }
@@ -136,7 +136,7 @@ export function parsePriceMatrixXlsxRows(
         product_id: ref.product_id,
         priceDisplay: "",
         status: "warning",
-        message: "Narx bo‘sh — o‘tkazib yuboriladi"
+        message: "Цена не указана — строка будет пропущена"
       });
       continue;
     }
@@ -150,7 +150,7 @@ export function parsePriceMatrixXlsxRows(
         product_id: ref.product_id,
         priceDisplay,
         status: "error",
-        message: parsed.reason === "too_large" ? "Narx juda katta" : "Narx noto‘g‘ri"
+        message: parsed.reason === "too_large" ? "Слишком большая цена" : "Некорректная цена"
       });
       continue;
     }

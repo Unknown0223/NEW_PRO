@@ -2,11 +2,10 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "../../config/database";
 import { ORDER_STATUSES_OUTSTANDING_RECEIVABLE } from "../orders/order-status";
 import {
+  buildSummaryOverpaymentsByType,
   buildClientWhere,
   buildOrderCreatedLocalDateClause,
-  buildSummaryNetMinusUnpaid,
   loadPaymentNetNormByClient,
-  loadPaymentNetTotalsByTypeGlobally,
   loadTenantPaymentRefs,
   loadUnpaidOrderBalanceRawByPaymentRef,
   parseIsoDateEndUtc,
@@ -16,6 +15,7 @@ import {
   type ClientBalanceListQuery,
   type ClientBalancePaymentTypeSummary
 } from "./client-balances.service";
+import { loadLedgerCardNetByClient } from "./client-balances.ledger";
 
 const LARGE_CLIENT_IDS_CHUNK = 10000;
 const BALANCE_PERF_LOG = process.env.BALANCE_PERF_LOG === "1";
@@ -204,7 +204,7 @@ export async function listConsignmentBalancesReport(
     allow_large_export: q.allow_large_export
   };
 
-  const where = buildClientWhere(tenantId, qConsign, { skipBalanceFilter: true });
+  const where = await buildClientWhere(tenantId, qConsign, { skipBalanceFilter: true });
 
   const allClients = await prisma.client.findMany({
     where,
@@ -220,6 +220,9 @@ export async function listConsignmentBalancesReport(
   perf("debt-map-loaded", { debtClients: debtMap.size });
 
   const eligible = ids.filter((id) => debtMap.has(id));
+  const cardNetByClient = await loadLedgerCardNetByClient(tenantId, eligible);
+  let cardNetSum = new Prisma.Decimal(0);
+  for (const id of eligible) cardNetSum = cardNetSum.add(cardNetByClient.get(id) ?? new Prisma.Decimal(0));
 
   eligible.sort((a, b) => {
     const da = debtMap.get(a)?.unpaid ?? new Prisma.Decimal(0);
@@ -240,11 +243,10 @@ export async function listConsignmentBalancesReport(
   const asOfEnd = asOfRaw ? parseIsoDateEndUtc(asOfRaw) : null;
 
   const { labels: sprLabels, entries: pmEntries } = await loadTenantPaymentRefs(tenantId);
-  const [rawUnpaid, netGlobal, pagePayNorm] = await Promise.all([
+  const [rawUnpaid, pagePayNorm] = await Promise.all([
     loadUnpaidOrderBalanceRawByPaymentRef(tenantId, eligible, odFrom, odTo, {
       consignmentOnly: true
     }),
-    loadPaymentNetTotalsByTypeGlobally(tenantId, eligible, asOfEnd, pmEntries),
     loadPaymentNetNormByClient(tenantId, sliceIds, asOfEnd, pmEntries)
   ]);
   perf("payment-sources-loaded", {
@@ -273,15 +275,20 @@ export async function listConsignmentBalancesReport(
         });
   perf("page-clients-loaded", { clients: clients.length });
 
-  const { byClient: unpaidByClientMethod, globalUnpaidNorm } = processUnpaidPayRefRows(
+  const { byClient: unpaidByClientMethod } = processUnpaidPayRefRows(
     rawUnpaid,
     pmEntries,
     sprLabels
   );
-  const paymentByTypeSummary = buildSummaryNetMinusUnpaid(sprLabels, netGlobal, globalUnpaidNorm);
-  const naqdKpi =
-    paymentByTypeSummary.find((x) => /^\s*naqd\s*$/i.test(x.label.trim())) ?? paymentByTypeSummary[0];
-  const cashDebtStr = naqdKpi?.amount ?? totalDebtNeg;
+  // Konsignatsiya — qarz (Общий); tip ustunlari faqat peredoplata uchun (bu yerda 0).
+  const paymentByTypeSummary = buildSummaryOverpaymentsByType(
+    sprLabels,
+    eligible.map((id) => {
+      const unpaid = debtMap.get(id)?.unpaid ?? new Prisma.Decimal(0);
+      return { balance: unpaid.neg() };
+    })
+  );
+  const cashDebtStr = totalDebtNeg;
 
   const orderMap = new Map(clients.map((c) => [c.id, c]));
   const orderedClients = sliceIds.map((id) => orderMap.get(id)!).filter(Boolean);
@@ -304,6 +311,7 @@ export async function listConsignmentBalancesReport(
     }
 
     const unpaid = d.unpaid;
+    const cardNet = cardNetByClient.get(c.id) ?? unpaid.neg();
     return {
       client_id: c.id,
       client_code: c.client_code,
@@ -320,11 +328,12 @@ export async function listConsignmentBalancesReport(
       overdue_days: overdueDays,
       total_debt: d.gross.toString(),
       total_paid: d.allocated.toString(),
-      balance: unpaid.neg().toString(),
+      balance: cardNet.toString(),
       payment_amounts: paymentAmountsNetMinusUnpaid(
         sprLabels,
         pagePayNorm.get(c.id),
-        unpaidByClientMethod.get(c.id)
+        unpaidByClientMethod.get(c.id),
+        cardNet
       )
     };
   });
@@ -335,7 +344,7 @@ export async function listConsignmentBalancesReport(
     page,
     limit,
     summary: {
-      total_debt: totalDebtNeg,
+      total_debt: cardNetSum.toString(),
       cash_debt: cashDebtStr,
       payment_by_type: paymentByTypeSummary
     }

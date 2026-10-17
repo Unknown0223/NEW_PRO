@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { maxSessionsValueSchema } from "../../lib/max-sessions";
 import type { ListStaffFilters } from "./staff.service";
 
 export const agentEntitlementsPayloadSchema = z
@@ -52,7 +53,8 @@ export const createBodySchema = z.object({
   app_access: z.boolean().optional(),
   territory: z.string().nullable().optional(),
   is_active: z.boolean().optional(),
-  max_sessions: z.number().int().min(1).max(99).optional(),
+  filter_visible: z.boolean().optional(),
+  max_sessions: maxSessionsValueSchema.optional(),
   kpi_color: z.string().max(16).nullable().optional(),
   work_slot_id: z.number().int().positive().nullable().optional()
 });
@@ -88,8 +90,9 @@ export const patchStaffMutableBody = z.object({
   app_access: z.boolean().optional(),
   territory: z.string().nullable().optional(),
   is_active: z.boolean().optional(),
+  filter_visible: z.boolean().optional(),
   password: z.string().min(6).optional(),
-  max_sessions: z.number().int().min(1).max(99).optional(),
+  max_sessions: maxSessionsValueSchema.optional(),
   kpi_color: z.string().max(16).nullable().optional()
 });
 
@@ -197,13 +200,28 @@ export const bulkAgentsBody = z.union([
     app_access: z.boolean()
   }),
   z.object({
+    action: z.literal("set_is_active"),
+    agent_ids: bulkAgentIds,
+    is_active: z.boolean()
+  }),
+  z.object({
+    action: z.literal("set_filter_visible"),
+    agent_ids: bulkAgentIds,
+    filter_visible: z.boolean()
+  }),
+  z.object({
+    action: z.literal("set_agent_type"),
+    agent_ids: bulkAgentIds,
+    agent_type: z.string().trim().max(120).nullable()
+  }),
+  z.object({
     action: z.literal("revoke_sessions"),
     agent_ids: bulkAgentIds
   }),
   z.object({
     action: z.literal("set_max_sessions"),
     agent_ids: bulkAgentIds,
-    max_sessions: z.number().int().min(1).max(99)
+    max_sessions: maxSessionsValueSchema
   }),
   z.object({
     action: z.literal("adjust_max_sessions"),

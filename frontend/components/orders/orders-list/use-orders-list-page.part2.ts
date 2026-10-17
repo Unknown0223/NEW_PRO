@@ -9,6 +9,7 @@ import { useCallback, useEffect, useMemo, useRef } from "react";
 import {
   buildPaymentPrefillFromSelection,
   formatConsignmentBulkFeedback,
+  formatExpeditorBulkFeedback,
   ordersMutationFeedback,
   rowStatusPatchError,
   type BulkConsignmentResponse,
@@ -17,6 +18,7 @@ import {
 } from "./types";
 import type { OrdersListPagePart1 } from "./use-orders-list-page.part1";
 import { orderListDisplayTotalSum } from "@/lib/orders-list-columns";
+import { invalidateLiveDashboardQueries } from "@/lib/dashboard-shared-query-keys";
 
 export function useOrdersListPagePart2(p1: OrdersListPagePart1) {
   const {
@@ -30,6 +32,7 @@ export function useOrdersListPagePart2(p1: OrdersListPagePart1) {
     setNakladnoyFeedback,
     setBulkExpFeedback,
     setBulkConsignmentFeedback,
+    setBulkBonusRefreshFeedback,
     setBulkExpeditorChoice,
     statusRowError,
     setStatusRowError,
@@ -119,6 +122,7 @@ export function useOrdersListPagePart2(p1: OrdersListPagePart1) {
     },
     onSettled: (_data, _err, { id }) => {
       void qc.invalidateQueries({ queryKey: ["order", tenantSlug, id] });
+      invalidateLiveDashboardQueries(qc, tenantSlug);
     }
   });
 
@@ -143,10 +147,10 @@ export function useOrdersListPagePart2(p1: OrdersListPagePart1) {
       });
     },
     onSuccess: (_data, vars) => {
-      setNakladnoyFeedback(vars.format === "pdf" ? "PDF fayl yuklab olindi." : "Excel fayl yuklab olindi.");
+      setNakladnoyFeedback(vars.format === "pdf" ? "Файл PDF скачан." : "Файл Excel скачан.");
     },
     onError: (err: unknown) => {
-      setNakladnoyFeedback(ordersMutationFeedback(err, "Nakladnoyni yuklab bo‘lmadi."));
+      setNakladnoyFeedback(ordersMutationFeedback(err, "Не удалось скачать накладную."));
     }
   });
 
@@ -174,26 +178,66 @@ export function useOrdersListPagePart2(p1: OrdersListPagePart1) {
     }
   });
 
-  const bulkExpeditorMut = useMutation({
-    mutationFn: async (payload: { order_ids: number[]; expeditor_user_id: number | null }) => {
-      const { data } = await api.post<BulkExpeditorResponse>(
-        `/api/${tenantSlug}/orders/bulk/expeditor`,
-        payload
-      );
+  const bulkBonusRefreshMut = useMutation({
+    mutationFn: async (payload: { order_ids: number[] }) => {
+      const { data } = await api.post<{
+        updated: number[];
+        failed: { id: number; error: string }[];
+        skipped: { id: number; reason: string }[];
+      }>(`/api/${tenantSlug}/orders/bulk/bonus-refresh`, payload);
       return data;
     },
     onSuccess: (res) => {
       void qc.invalidateQueries({ queryKey: ["orders", tenantSlug] });
-      const n = res.failed.length;
-      setBulkExpFeedback(
-        n === 0
-          ? `${res.updated.length} ta zakaz yangilandi.`
-          : `${res.updated.length} ta OK, ${n} ta xato.`
+      void qc.invalidateQueries({ queryKey: ["order", tenantSlug] });
+      const ok = res.updated.length;
+      const fail = res.failed.length;
+      const skip = res.skipped.length;
+      const parts: string[] = [];
+      if (ok > 0) parts.push(`Бонус обновлён в заказах: ${ok}`);
+      if (skip > 0) parts.push(`Пропущено: ${skip} (только «Новый»)`);
+      if (fail > 0) parts.push(`Ошибок: ${fail}`);
+      setBulkBonusRefreshFeedback(
+        parts.length > 0 ? `${parts.join(". ")}.` : "Нет заказов для обновления."
       );
+    },
+    onError: (err: unknown) => {
+      setBulkBonusRefreshFeedback(ordersMutationFeedback(err, "Не удалось обновить бонус."));
+    }
+  });
+
+  const bulkExpeditorMut = useMutation({
+    mutationFn: async (payload: {
+      order_ids: number[];
+      expeditor_user_id: number | null;
+      /** Faqat UI: jadvalda darhol ko‘rsatish uchun (serverga yuborilmaydi). */
+      expeditor_label?: string | null;
+    }) => {
+      const { data } = await api.post<BulkExpeditorResponse>(
+        `/api/${tenantSlug}/orders/bulk/expeditor`,
+        { order_ids: payload.order_ids, expeditor_user_id: payload.expeditor_user_id }
+      );
+      return data;
+    },
+    onSuccess: (res, vars) => {
+      const label = vars.expeditor_user_id == null ? null : (vars.expeditor_label ?? null);
+      for (const id of res.updated) {
+        patchOrderInOrdersListCaches(qc, tenantSlug, id, (r) => ({
+          ...r,
+          expeditor_id: vars.expeditor_user_id,
+          expeditors: label,
+          expeditor_display: label
+        }));
+      }
+      void qc.invalidateQueries({ queryKey: ["orders", tenantSlug] });
+      for (const id of res.updated) {
+        void qc.invalidateQueries({ queryKey: ["order", tenantSlug, id] });
+      }
+      setBulkExpFeedback(formatExpeditorBulkFeedback(res, vars.expeditor_user_id == null).message);
       setBulkExpeditorChoice("");
     },
     onError: (err: unknown) => {
-      setBulkExpFeedback(ordersMutationFeedback(err, "Ekspeditorni yangilab bo‘lmadi."));
+      setBulkExpFeedback(ordersMutationFeedback(err, "Не удалось привязать доставщика."));
     }
   });
 
@@ -247,21 +291,26 @@ export function useOrdersListPagePart2(p1: OrdersListPagePart1) {
         patchOrderInOrdersListCaches(qc, tenantSlug, id, (r) => ({ ...r, status: vars.status }));
       }
       void qc.invalidateQueries({ queryKey: ["orders", tenantSlug] });
+      invalidateLiveDashboardQueries(qc, tenantSlug);
       setSelectedOrderIds(new Set());
       setBulkTargetStatus("");
       if (res.failed.length > 0) {
         setBulkFeedback(
-          `Yangilandi: ${res.updated.length}. O‘tmadi: ${res.failed.length} (ID: ${res.failed
+          `Обновлено: ${res.updated.length}. Не прошло: ${res.failed.length} (ID: ${res.failed
             .slice(0, 8)
             .map((f) => f.id)
-            .join(", ")}${res.failed.length > 8 ? "…" : ""})`
+            .join(", ")}${res.failed.length > 8 ? "…" : ""})${
+            res.failed.some((f) => f.error === "FORBIDDEN_STATUS_PERMISSION")
+              ? ". Часть переходов не разрешена (Доступ → Заявки → Статус)."
+              : ""
+          }`
         );
       } else {
         setBulkFeedback(null);
       }
     },
     onError: (err: unknown) => {
-      setBulkFeedback(ordersMutationFeedback(err, "Guruh holatini o‘zgartirib bo‘lmadi."));
+      setBulkFeedback(ordersMutationFeedback(err, "Не удалось изменить статус группы заказов."));
     }
   });
 
@@ -296,10 +345,12 @@ export function useOrdersListPagePart2(p1: OrdersListPagePart1) {
     setBulkFeedback(null);
     setNakladnoyFeedback(null);
     setBulkConsignmentFeedback(null);
+    setBulkBonusRefreshFeedback(null);
   }, [
     allOnPageSelected,
     rows,
     setBulkConsignmentFeedback,
+    setBulkBonusRefreshFeedback,
     setBulkFeedback,
     setNakladnoyFeedback,
     setSelectedOrderIds
@@ -312,11 +363,12 @@ export function useOrdersListPagePart2(p1: OrdersListPagePart1) {
     setBulkExpeditorChoice("");
     setBulkExpFeedback(null);
     setBulkConsignmentFeedback(null);
+    setBulkBonusRefreshFeedback(null);
     p1.setDownloadsOpen(false);
     p1.setNakladnoySettingsOpen(false);
     p1.setTotalsPanelOpen(false);
     setNakladnoyFeedback(null);
-  }, [p1, setBulkConsignmentFeedback, setBulkExpFeedback, setBulkExpeditorChoice, setBulkFeedback, setBulkTargetStatus, setNakladnoyFeedback, setSelectedOrderIds]);
+  }, [p1, setBulkBonusRefreshFeedback, setBulkConsignmentFeedback, setBulkExpFeedback, setBulkExpeditorChoice, setBulkFeedback, setBulkTargetStatus, setNakladnoyFeedback, setSelectedOrderIds]);
 
   return {
     selectedRows,
@@ -327,6 +379,7 @@ export function useOrdersListPagePart2(p1: OrdersListPagePart1) {
     nakladnoyMut,
     bulkExpeditorMut,
     bulkConsignmentMut,
+    bulkBonusRefreshMut,
     bulkStatusMut,
     allOnPageSelected,
     toggleOrderSelect,

@@ -35,7 +35,7 @@ import {
   revokeStaffSessions,
   type StaffKind
 } from "./staff.service";
-import { catalogRoles, adminRoles } from "./staff.route.shared";
+import { catalogRoles, adminRoles, accessStaffDirectoryWhere } from "./staff.route.shared";
 import {
   agentEntitlementsPayloadSchema,
   agentEntitlementsSchema,
@@ -67,8 +67,11 @@ import {
   createWebStaffPositionPresetBody,
   patchWebStaffPositionPresetBody
 } from "./staff.route.schemas";
+import { registerKomandaBulkRoute } from "./staff.route.komanda-bulk";
 
 export async function registerStaffSupervisorRoutes(app: FastifyInstance) {
+  registerKomandaBulkRoute(app, "supervisor");
+
   app.get(
     "/api/:slug/supervisors/filter-options",
     { preHandler: [jwtAccessVerify, requireRoles(...DIRECTORY_READ_ROLES)] },
@@ -86,7 +89,8 @@ export async function registerStaffSupervisorRoutes(app: FastifyInstance) {
       if (!ensureTenantContext(request, reply)) return;
       const q = request.query as Record<string, string | undefined>;
       const filters = parseSupervisorListFilters(q);
-      const data = await listStaff(request.tenant!.id, "supervisor", filters);
+      const accessScope = await accessStaffDirectoryWhere(request, request.tenant!.id);
+      const data = await listStaff(request.tenant!.id, "supervisor", filters, accessScope);
       return reply.send({ data });
     }
   );
@@ -100,7 +104,12 @@ export async function registerStaffSupervisorRoutes(app: FastifyInstance) {
       if (Number.isNaN(id)) {
         return sendApiError(reply, request, 400, "InvalidId");
       }
-      const row = await getStaffRow(request.tenant!.id, "supervisor", id);
+      const row = await getStaffRow(
+        request.tenant!.id,
+        "supervisor",
+        id,
+        await accessStaffDirectoryWhere(request, request.tenant!.id)
+      );
       if (!row) {
         return sendApiError(reply, request, 404, "NotFound");
       }
@@ -128,6 +137,15 @@ export async function registerStaffSupervisorRoutes(app: FastifyInstance) {
         const msg = e instanceof Error ? e.message : "";
         if (msg === "NOT_FOUND") return sendApiError(reply, request, 404, "NotFound");
         if (msg === "BAD_WAREHOUSE") return sendApiError(reply, request, 400, "BadWarehouse");
+        if (msg === "WORKPLACE_ON_SLOT") {
+          return sendApiError(
+            reply,
+            request,
+            409,
+            "WorkplaceOnSlot",
+            "Настройки места меняются в «Рабочее место», не в карточке сотрудника"
+          );
+        }
         if (msg === "BAD_RETURN_WAREHOUSE") return sendApiError(reply, request, 400, "BadReturnWarehouse");
         if (msg === "BAD_TRADE_DIRECTION") return sendApiError(reply, request, 400, "BadTradeDirection");
         if (msg === "BAD_PASSWORD") return sendApiError(reply, request, 400, "BadPassword");
@@ -234,6 +252,15 @@ export async function registerStaffSupervisorRoutes(app: FastifyInstance) {
         if (msg === "BAD_FIRST_NAME") return sendApiError(reply, request, 400, "BadFirstName");
         if (msg === "LOGIN_EXISTS") return sendApiError(reply, request, 409, "LoginExists");
         if (msg === "BAD_WAREHOUSE") return sendApiError(reply, request, 400, "BadWarehouse");
+        if (msg === "WORKPLACE_ON_SLOT") {
+          return sendApiError(
+            reply,
+            request,
+            409,
+            "WorkplaceOnSlot",
+            "Настройки места меняются в «Рабочее место», не в карточке сотрудника"
+          );
+        }
         if (msg === "BAD_RETURN_WAREHOUSE") return sendApiError(reply, request, 400, "BadReturnWarehouse");
         if (msg === "BAD_TRADE_DIRECTION") return sendApiError(reply, request, 400, "BadTradeDirection");
         throw e;

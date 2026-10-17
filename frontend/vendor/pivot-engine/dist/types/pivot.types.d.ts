@@ -107,6 +107,11 @@ export type PivotLayoutForm = "compact" | "classic" | "flat";
 export type PivotValuesPosition = "rows" | "columns";
 export interface PivotOptions {
     showSubtotals: boolean;
+    /**
+     * Oraliq jami o‘qi. `showSubtotals: false` bo‘lsa e’tiborsiz.
+     * `rows` — faqat qator guruhlari, `columns` — faqat ustun guruhlari.
+     */
+    subtotalScope?: "both" | "rows" | "columns";
     showGrandTotal: boolean;
     showColumnTotals: boolean;
     /** @deprecated Prefer `layoutForm`. `true` ≈ compact. */

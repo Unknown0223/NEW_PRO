@@ -13,6 +13,7 @@ import { useSalesPaymentDisplay } from "@/components/dashboard/sales/use-sales-p
 import { useAuthStore, useAuthStoreHydrated, useEffectiveRole } from "@/lib/auth-store";
 import { createTerritoryLabelResolver } from "@/lib/territory-filter-labels";
 import { useDashboardMeta } from "@/lib/use-dashboard-meta";
+import { usePermissions } from "@/lib/use-permissions";
 import { useDashboardSectionVisible } from "@/hooks/use-dashboard-section-visible";
 import { useEffect, useMemo, useState } from "react";
 
@@ -21,6 +22,7 @@ export function DashboardSales() {
   const tenantSlug = useAuthStore((s) => s.tenantSlug);
   const role = useEffectiveRole();
   const hydrated = useAuthStoreHydrated();
+  const canExport = usePermissions().has("dashboard.prodazhi.export");
   const selfSupervisorId = useMemo(
     () => (role === "supervisor" ? decodeAccessTokenSub(accessToken) : null),
     [role, accessToken]
@@ -29,7 +31,7 @@ export function DashboardSales() {
 
   const [draft, setDraft] = useState<SalesFilterDraft>(() => defaultSalesDraft());
   const [applied, setApplied] = useState<SalesFilterDraft>(() => defaultSalesDraft());
-  const [quickRange, setQuickRange] = useState<QuickRangeKey>("last30");
+  const [quickRange, setQuickRange] = useState<QuickRangeKey>("custom");
 
   const analyticsSection = useDashboardSectionVisible({
     enabled: Boolean(tenantSlug) && hydrated
@@ -93,7 +95,7 @@ export function DashboardSales() {
     const fresh = defaultSalesDraft(selfSupervisorIdStr);
     setDraft(fresh);
     setApplied(fresh);
-    setQuickRange("last30");
+    setQuickRange("custom");
   };
 
   const exportPrefix = useMemo(() => salesExportPrefix(applied), [applied]);
@@ -108,7 +110,7 @@ export function DashboardSales() {
     [data, exportPrefix, resolvePayment, resolveTerritoryDisplay]
   );
 
-  const exportBtn = (
+  const exportBtn = !canExport ? null : (
     <button
       type="button"
       className="inline-flex h-12 shrink-0 items-center rounded-xl border border-border bg-card px-3 text-xs font-semibold text-slate-700 hover:bg-muted disabled:opacity-50"
@@ -126,7 +128,7 @@ export function DashboardSales() {
       ) : !tenantSlug ? (
         <p className="text-sm text-destructive">Сессия не найдена. Войдите заново.</p>
       ) : (
-        <div className="mx-auto max-w-[1680px] space-y-4">
+        <div className="w-full space-y-4">
           <SalesFiltersBar
             draft={draft}
             setDraft={setDraft}

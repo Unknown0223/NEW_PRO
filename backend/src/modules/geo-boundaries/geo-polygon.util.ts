@@ -4,7 +4,7 @@ import type { MultiPolygon, Ring } from "polygon-clipping";
 
 export function validatePolygonPoints(polygon: unknown): GeoBoundaryPoint[] {
   if (!Array.isArray(polygon) || polygon.length < 3) {
-    throw new Error("Polygon requires at least 3 points");
+    throw new Error("Полигон должен содержать минимум 3 точки");
   }
   const pts: GeoBoundaryPoint[] = [];
   for (const p of polygon) {
@@ -14,7 +14,7 @@ export function validatePolygonPoints(polygon: unknown): GeoBoundaryPoint[] {
     const lat = Number((p as GeoBoundaryPoint).lat);
     const lng = Number((p as GeoBoundaryPoint).lng);
     if (!Number.isFinite(lat) || !Number.isFinite(lng) || lat < -90 || lat > 90 || lng < -180 || lng > 180) {
-      throw new Error("Coordinates out of range");
+      throw new Error("Координаты вне допустимого диапазона");
     }
     pts.push({ lat, lng });
   }

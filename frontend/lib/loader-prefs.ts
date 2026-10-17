@@ -222,8 +222,8 @@ export function loaderEmbeddedPaddingClass(mode: LoaderHeightMode): string {
 }
 
 export const loaderHeightModeLabels: Record<LoaderHeightMode, string> = {
-  compact: "Компакт (yuqoriroq)",
-  normal: "O‘rtacha",
-  tall: "Katta maydon",
-  fullscreen: "Butun ekran (100dvh)"
+  compact: "Компактный (выше)",
+  normal: "Средний",
+  tall: "Большая область",
+  fullscreen: "Весь экран (100dvh)"
 };

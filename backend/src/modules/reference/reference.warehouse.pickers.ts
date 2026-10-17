@@ -1,19 +1,24 @@
 import type { Prisma } from "@prisma/client";
 import { prisma } from "../../config/database";
 import { OPERATOR_LIKE_WEB_ROLES } from "../../lib/tenant-user-roles";
-import { buildScopedAgentDirectoryWhereForActor } from "../access/access-agent-scope";
+import {
+  buildScopedStaffDirectoryWhere,
+  enrichScopedReportActor
+} from "../access/access-agent-scope";
 import { warehouseDetailSelect } from "./reference.warehouse.constants";
 
 export async function listWarehousePickers(
   tenantId: number,
   actor?: { userId: number | null; role: string }
 ) {
-  const agentScope = await buildScopedAgentDirectoryWhereForActor(tenantId, actor);
+  const actorScope = actor ? await enrichScopedReportActor(tenantId, actor) : undefined;
+  const staffScope = buildScopedStaffDirectoryWhere(actorScope);
+  const staffAnd = staffScope ? { AND: [staffScope] } : {};
   const agentWhere: Prisma.UserWhereInput = {
     tenant_id: tenantId,
     is_active: true,
     role: "agent",
-    ...(agentScope ? { AND: [agentScope] } : {})
+    ...staffAnd
   };
   const [agents, operators, supervisors, expeditors] = await Promise.all([
     prisma.user.findMany({
@@ -22,17 +27,22 @@ export async function listWarehousePickers(
       orderBy: [{ name: "asc" }, { login: "asc" }]
     }),
     prisma.user.findMany({
-      where: { tenant_id: tenantId, is_active: true, role: { in: [...OPERATOR_LIKE_WEB_ROLES] } },
+      where: {
+        tenant_id: tenantId,
+        is_active: true,
+        role: { in: [...OPERATOR_LIKE_WEB_ROLES] },
+        ...staffAnd
+      },
       select: { id: true, name: true, login: true },
       orderBy: [{ name: "asc" }, { login: "asc" }]
     }),
     prisma.user.findMany({
-      where: { tenant_id: tenantId, is_active: true, role: "supervisor" },
+      where: { tenant_id: tenantId, is_active: true, role: "supervisor", ...staffAnd },
       select: { id: true, name: true, login: true },
       orderBy: [{ name: "asc" }, { login: "asc" }]
     }),
     prisma.user.findMany({
-      where: { tenant_id: tenantId, is_active: true, role: "expeditor" },
+      where: { tenant_id: tenantId, is_active: true, role: "expeditor", ...staffAnd },
       select: { id: true, name: true, login: true },
       orderBy: [{ name: "asc" }, { login: "asc" }]
     })

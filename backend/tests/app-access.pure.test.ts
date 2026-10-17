@@ -28,8 +28,8 @@ describe("app-access kill-switch helpers", () => {
     expect(() => assertAppAccessAllowed("operator", false)).not.toThrow();
   });
 
-  it("denial message is bilingual RU/UZ", () => {
+  it("denial message is Russian-only", () => {
     expect(APP_ACCESS_DENIED_MESSAGE).toMatch(/Доступ к приложению/);
-    expect(APP_ACCESS_DENIED_MESSAGE).toMatch(/Ilova kirish/);
+    expect(APP_ACCESS_DENIED_MESSAGE).not.toMatch(/Ilova kirish/);
   });
 });

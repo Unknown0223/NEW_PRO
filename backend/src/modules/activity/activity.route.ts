@@ -94,10 +94,9 @@ export async function registerActivityRoutes(app: FastifyInstance) {
           return sendApiError(reply, request, 401, "InvalidAccessUser");
         }
         const keys = await resolveUserPermissionKeys(user.tenantId, userId, user.role);
-        if (!keys.has(descriptor.permissionHistory) && !keys.has(descriptor.permissionView)) {
-          return sendApiError(reply, request, 403, "ForbiddenPermission", undefined, {
-            permissions: [descriptor.permissionHistory, descriptor.permissionView]
-          });
+        const allowedBy = [descriptor.permissionHistory, descriptor.permissionView, ...descriptor.extraPermissions];
+        if (!allowedBy.some((k) => keys.has(k))) {
+          return sendApiError(reply, request, 403, "ForbiddenPermission", undefined, { permissions: allowedBy });
         }
       }
 

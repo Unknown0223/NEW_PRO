@@ -12,6 +12,7 @@ import { WorkSlotFormDrawer } from "./work-slot-form-drawer";
 import { apiFetch } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
 import type { WorkSlotType } from "@/lib/work-slots-types";
+import { slotCodeMatchesType, slotCodeTypeMismatchMessage } from "@/lib/work-slots-types";
 import { SLOT_ACTIVE_STATUS_ITEMS, SLOT_TYPE_OPTIONS } from "./work-slots-utils";
 
 type TradeDirectionOpt = { id: number; name: string; code?: string | null };
@@ -22,6 +23,10 @@ type Props = {
   tenant: string;
   branchOptions: string[];
   tradeDirections: TradeDirectionOpt[];
+  /** Sahifadagi rol filtri — dialog shu rol bilan ochiladi */
+  defaultSlotType?: WorkSlotType;
+  /** Sahifadagi filial filtri — oldindan belgilash */
+  defaultBranchCodes?: string[];
   onCreated: () => void;
 };
 
@@ -31,24 +36,26 @@ export function CreateSlotDialog({
   tenant,
   branchOptions,
   tradeDirections,
+  defaultSlotType = "agent",
+  defaultBranchCodes = [],
   onCreated
 }: Props) {
   const [slotCode, setSlotCode] = useState("");
   const [label, setLabel] = useState("");
-  const [branchCode, setBranchCode] = useState("");
+  const [branchCodeList, setBranchCodeList] = useState<string[]>([]);
   const [directionId, setDirectionId] = useState("");
-  const [slotType, setSlotType] = useState<WorkSlotType>("agent");
+  const [slotType, setSlotType] = useState<WorkSlotType>(defaultSlotType);
   const [isActive, setIsActive] = useState(true);
   const [saving, setSaving] = useState(false);
   const [codeLoading, setCodeLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchSuggestedCode = useCallback(async () => {
+  const fetchSuggestedCode = useCallback(async (type: WorkSlotType, branches: string[]) => {
     if (!tenant) return;
     setCodeLoading(true);
     try {
-      const p = new URLSearchParams({ slot_type: slotType });
-      if (branchCode.trim()) p.set("branch_code", branchCode.trim());
+      const p = new URLSearchParams({ slot_type: type });
+      if (branches[0]?.trim()) p.set("branch_code", branches[0]!.trim());
       const res = await apiFetch<{ data: { slot_code: string } }>(
         `/api/${tenant}/work-slots/suggest-code?${p.toString()}`
       );
@@ -58,28 +65,38 @@ export function CreateSlotDialog({
     } finally {
       setCodeLoading(false);
     }
-  }, [tenant, slotType, branchCode]);
+  }, [tenant]);
 
-  const reset = () => {
+  const resetToDefaults = useCallback(() => {
+    const branches = defaultBranchCodes.map((b) => b.trim()).filter(Boolean);
     setSlotCode("");
     setLabel("");
-    setBranchCode("");
+    setBranchCodeList(branches);
     setDirectionId("");
-    setSlotType("agent");
+    setSlotType(defaultSlotType);
     setIsActive(true);
     setError(null);
-  };
+    return { type: defaultSlotType, branches };
+  }, [defaultSlotType, defaultBranchCodes]);
 
   useEffect(() => {
     if (!open || !tenant) return;
-    void fetchSuggestedCode();
-  }, [open, tenant, fetchSuggestedCode]);
+    const { type, branches } = resetToDefaults();
+    void fetchSuggestedCode(type, branches);
+  }, [open, tenant, resetToDefaults, fetchSuggestedCode]);
+
+  const onRoleChange = (nextType: WorkSlotType) => {
+    setSlotType(nextType);
+    setError(null);
+    void fetchSuggestedCode(nextType, branchCodeList);
+  };
 
   const validate = (): string | null => {
     const code = slotCode.trim();
     if (!code) return "Smart-код обязателен";
     if (!/^[A-Za-z0-9-]{1,32}$/.test(code)) return "Код: буквы, цифры или дефис (1–32)";
     if (!slotType) return "Выберите роль";
+    if (!slotCodeMatchesType(code, slotType)) return slotCodeTypeMismatchMessage(code, slotType);
     return null;
   };
 
@@ -99,13 +116,14 @@ export function CreateSlotDialog({
         body: JSON.stringify({
           slot_code: slotCode.trim(),
           label: label.trim() || null,
-          branch_code: branchCode.trim() || null,
+          branch_code: branchCodeList[0]?.trim() || null,
+          branch_codes: branchCodeList,
           direction_id: Number.isFinite(dirParsed) && dirParsed != null && dirParsed > 0 ? dirParsed : null,
           slot_type: slotType,
           is_active: isActive
         })
       });
-      reset();
+      resetToDefaults();
       onOpenChange(false);
       onCreated();
     } catch (e) {
@@ -121,7 +139,7 @@ export function CreateSlotDialog({
       title="Новое рабочее место"
       subtitle="Заполните код, роль, филиал и направление — территорию, склад и кассу можно задать после назначения сотрудника"
       onClose={() => {
-        reset();
+        resetToDefaults();
         onOpenChange(false);
       }}
       onSubmit={() => void submit()}
@@ -153,7 +171,7 @@ export function CreateSlotDialog({
                   type="button"
                   title="Подставить предложенный код"
                   disabled={codeLoading}
-                  onClick={() => void fetchSuggestedCode()}
+                  onClick={() => void fetchSuggestedCode(slotType, branchCodeList)}
                   className="grid h-[42px] w-[42px] shrink-0 place-items-center rounded-lg border border-border bg-card text-slate-600 transition hover:bg-muted disabled:opacity-50"
                 >
                   <RefreshCw className={cn("size-4", codeLoading && "animate-spin")} aria-hidden />
@@ -180,7 +198,7 @@ export function CreateSlotDialog({
                 selectedValues={[slotType]}
                 onChange={(next) => {
                   const v = next[0];
-                  if (v) setSlotType(v as WorkSlotType);
+                  if (v) onRoleChange(v as WorkSlotType);
                 }}
               />
             </AgentFormField>
@@ -202,18 +220,15 @@ export function CreateSlotDialog({
             <AgentFormField label="Филиал">
               <WorkSlotsMultiSelect
                 variant="form"
-                multiple={false}
-                placeholder={branchOptions.length ? "Филиал" : "Нет филиалов в справочнике"}
-                items={[
-                  { id: "__none__", title: "—" },
-                  ...branchOptions.map((b) => ({ id: b, title: b }))
-                ]}
-                selectedValues={branchCode ? [branchCode] : []}
+                placeholder={branchOptions.length ? "Филиалы" : "Нет филиалов в справочнике"}
+                items={branchOptions.map((b) => ({ id: b, title: b }))}
+                selectedValues={branchCodeList}
                 onChange={(next) => {
-                  const v = next[0] ?? "";
-                  setBranchCode(v === "__none__" ? "" : v);
+                  setBranchCodeList(next);
+                  void fetchSuggestedCode(slotType, next);
                 }}
               />
+              <p className="mt-1 text-xs text-muted-foreground">Можно выбрать несколько филиалов</p>
             </AgentFormField>
             <AgentFormField label="Направление торговли">
               <WorkSlotsMultiSelect

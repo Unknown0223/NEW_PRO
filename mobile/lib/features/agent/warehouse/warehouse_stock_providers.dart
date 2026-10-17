@@ -53,7 +53,7 @@ WarehouseStockView _parseWarehouseStockView(Map<String, dynamic> raw, int? whOve
 
   for (final cat in categoriesRaw) {
     if (cat is! Map) continue;
-    final name = cat['name']?.toString() ?? 'Boshqa';
+    final name = cat['name']?.toString() ?? 'Прочее';
     final itemsRaw = cat['items'] as List? ?? [];
     final lines = <WarehouseStockLine>[];
     for (final item in itemsRaw) {
@@ -96,7 +96,7 @@ class WarehouseStockNotifier extends AsyncNotifier<WarehouseStockView> {
   Future<WarehouseStockView> _fetch() async {
     final slug = ref.read(sessionProvider).tenantSlug ?? '';
     if (slug.isEmpty) {
-      throw StateError('Tenant slug yo‘q');
+      throw StateError('Компания не выбрана');
     }
     final whOverride = ref.read(warehouseStockWarehouseIdProvider);
     final raw = await ref.read(ordersApiProvider).getWarehouseStockView(

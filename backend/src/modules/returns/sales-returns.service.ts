@@ -179,6 +179,8 @@ export type CreateSalesReturnInput = {
   refund_amount?: number | null;
   note?: string | null;
   refusal_reason_ref?: string | null;
+  /** Ixtiyoriy; bo‘sh → avto R-… */
+  number?: string | null;
   lines: { product_id: number; qty: number }[];
 };
 
@@ -234,7 +236,11 @@ export async function createSalesReturn(
     if (!Number.isFinite(line.qty) || line.qty <= 0) throw new Error("BAD_QTY");
   }
 
-  const number = `R-${tenantId}-${randomUUID().replace(/-/g, "").slice(0, 12).toUpperCase()}`;
+  const customNumber =
+    input.number != null ? String(input.number).trim().replace(/\u00a0/g, " ") : "";
+  const number = customNumber
+    ? customNumber.slice(0, 48)
+    : `R-${tenantId}-${randomUUID().replace(/-/g, "").slice(0, 12).toUpperCase()}`;
   const uid =
     actorUserId != null && Number.isFinite(actorUserId) && actorUserId > 0 ? actorUserId : null;
 

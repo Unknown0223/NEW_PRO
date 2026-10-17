@@ -1,8 +1,7 @@
 "use client";
 
-import { GROUP_PROCESSING_IDS_STORAGE_KEY } from "@/components/clients/group-processing/group-processing-actions";
+import { GROUP_PROCESSING_IDS_STORAGE_KEY, goToClientsKeepingSelection } from "@/components/clients/group-processing/group-processing-actions";
 import { Button } from "@/components/ui/button";
-import { buttonVariants } from "@/components/ui/button-variants";
 import { api } from "@/lib/api";
 import { useAuthStore } from "@/lib/auth-store";
 import { patchClientsBulkItems, type ClientBulkItem } from "@/lib/client-bulk-patch";
@@ -11,7 +10,6 @@ import { getUserFacingError } from "@/lib/error-utils";
 import { STALE } from "@/lib/query-stale";
 import { cn } from "@/lib/utils";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
@@ -200,7 +198,7 @@ export function GroupProcessingDebtWorkspace() {
 
   const saveMut = useMutation({
     mutationFn: async () => {
-      if (!tenantSlug) throw new Error("No tenant");
+      if (!tenantSlug) throw new Error("Организация не выбрана");
       let skipped = 0;
       const failed: string[] = [];
       const items: ClientBulkItem[] = [];
@@ -226,7 +224,7 @@ export function GroupProcessingDebtWorkspace() {
     onSuccess: (res) => {
       void qc.invalidateQueries({ queryKey: ["clients"] });
       if (res.ok > 0 && res.failed.length === 0) {
-        router.push("/clients");
+        goToClientsKeepingSelection(router.push, tenantSlug, seedIds);
         return;
       }
       setOrigByClient((prev) => {
@@ -265,9 +263,14 @@ export function GroupProcessingDebtWorkspace() {
           {statusMsg ? <p className="mt-1 text-sm text-emerald-700">{statusMsg}</p> : null}
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <Link href="/clients" className={cn(buttonVariants({ variant: "outline", size: "sm" }))}>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => goToClientsKeepingSelection(router.push, tenantSlug, seedIds)}
+          >
             Вернуться обратно
-          </Link>
+          </Button>
           <Button
             type="button"
             size="sm"
@@ -286,7 +289,7 @@ export function GroupProcessingDebtWorkspace() {
         ) : !rows.length ? (
           <div className="space-y-2 p-6 text-sm text-muted-foreground">
             <p>Нет клиентов. Сначала выберите клиентов в списке.</p>
-            <Button type="button" variant="outline" size="sm" onClick={() => router.push("/clients")}>
+            <Button type="button" variant="outline" size="sm" onClick={() => goToClientsKeepingSelection(router.push, tenantSlug, seedIds)}>
               К списку клиентов
             </Button>
           </div>

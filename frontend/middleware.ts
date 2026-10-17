@@ -15,6 +15,37 @@ function isPublicPath(pathname: string): boolean {
   return pathname === "/login" || pathname.startsWith("/login/");
 }
 
+/** Olib tashlangan eski sahifalar — saqlangan havolalar yangi joyga tushsin. */
+const LEGACY_EXACT_REDIRECTS: Record<string, string> = {
+  "/reports/builder/legacy": "/reports/builder/pivot",
+  "/reports/builder/wdr": "/reports/builder/pivot",
+  "/reports/builder/dev": "/reports/builder/pivot",
+  "/settings/bonus-rules/strategy": "/settings/bonus-strategies",
+  "/settings/discount-rules/strategy": "/settings/bonus-strategies",
+  "/settings/suppliers": "/suppliers",
+  "/settings/inventory/van-selling": "/settings",
+  "/settings/spravochnik/collectors/new": "/settings/spravochnik/collectors",
+  "/settings/spravochnik/operators/new": "/settings/spravochnik/operators",
+  "/settings/spravochnik/skladchik/new": "/settings/spravochnik/skladchik",
+  "/stock/adjustment": "/stock/correction",
+  "/stock/transfers/new": "/stock/transfers/amaliyot",
+  "/territories": "/settings/territories",
+  "/routes": "/clients/visit-planner",
+  "/routes/track": "/reports/gps/map",
+  "/products/new": "/settings/products/add"
+};
+
+function resolveLegacyPath(pathname: string): string | null {
+  const path = pathname.length > 1 ? pathname.replace(/\/$/, "") : pathname;
+  const exact = LEGACY_EXACT_REDIRECTS[path];
+  if (exact) return exact;
+  /** Mahsulotlar katalogi — «Настройки → Продукт» (референс UI) */
+  if (path === "/products") return "/settings/products";
+  if (/^\/products\/(bulk|excel|add)(\/|$)/.test(path)) return path.replace(/^\/products/, "/settings/products");
+  if (path.startsWith("/products/")) return "/settings/products";
+  return null;
+}
+
 export function middleware(request: NextRequest) {
   const hasFlag = request.cookies.get(AUTH_COOKIE_NAME)?.value === "1";
   const { pathname } = request.nextUrl;
@@ -29,25 +60,10 @@ export function middleware(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  /** Mahsulotlar katalogi — «Настройки → Продукт» (референс UI) */
-  if (pathname === "/products" || pathname === "/products/") {
+  const legacyTarget = resolveLegacyPath(pathname);
+  if (legacyTarget) {
     const url = request.nextUrl.clone();
-    url.pathname = "/settings/products";
-    return NextResponse.redirect(url);
-  }
-  if (pathname === "/products/bulk" || pathname.startsWith("/products/bulk/")) {
-    const url = request.nextUrl.clone();
-    url.pathname = pathname.replace(/^\/products/, "/settings/products");
-    return NextResponse.redirect(url);
-  }
-  if (pathname === "/products/excel" || pathname.startsWith("/products/excel/")) {
-    const url = request.nextUrl.clone();
-    url.pathname = pathname.replace(/^\/products/, "/settings/products");
-    return NextResponse.redirect(url);
-  }
-  if (pathname === "/products/add" || pathname.startsWith("/products/add/")) {
-    const url = request.nextUrl.clone();
-    url.pathname = pathname.replace(/^\/products/, "/settings/products");
+    url.pathname = legacyTarget;
     return NextResponse.redirect(url);
   }
 

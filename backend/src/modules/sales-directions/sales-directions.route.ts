@@ -9,12 +9,14 @@ import {
   resolveActorTradeDirectionDirectoryIds
 } from "../access/access-directory-scope";
 import { getAccessUser, jwtAccessVerify, requireRoles } from "../auth/auth.prehandlers";
+import { KpiProductConflictError } from "./sales-directions.kpi-conflict";
 import {
   createKpiGroup,
   createSalesChannelRef,
   createTradeDirection,
   getKpiGroupDetail,
   listKpiGroups,
+  listKpiMemberOptions,
   listSalesChannelRefs,
   listTradeDirections,
   patchKpiGroup,
@@ -30,6 +32,9 @@ const boolQuery = z
   .transform((v) => (v === "true" ? true : v === "false" ? false : undefined));
 
 function mapSalesDirError(err: unknown, reply: FastifyReply, request: FastifyRequest) {
+  if (err instanceof KpiProductConflictError) {
+    return sendApiError(reply, request, 409, "KpiProductConflict", err.detail);
+  }
   const msg = err instanceof Error ? err.message : String(err);
   if (msg === "NOT_FOUND") return sendApiError(reply, request, 404, "NotFound");
   if (msg === "DUPLICATE_CODE") return sendApiError(reply, request, 409, "DuplicateCode");
@@ -213,6 +218,16 @@ export async function registerSalesDirectionRoutes(app: FastifyInstance) {
       } catch (e) {
         return mapSalesDirError(e, reply, request);
       }
+    }
+  );
+
+  app.get(
+    "/api/:slug/kpi-groups/members",
+    { preHandler: [jwtAccessVerify, requireRoles(...catalogRoles)] },
+    async (request, reply) => {
+      if (!ensureTenantContext(request, reply)) return;
+      const data = await listKpiMemberOptions(request.tenant!.id);
+      return reply.send({ data });
     }
   );
 

@@ -107,7 +107,7 @@ export async function registerClientBalanceRoutes(app: FastifyInstance) {
           return sendApiError(reply, request, 404, "NotFound");
         }
         if (e instanceof Error && e.message === "CLIENT_OUT_OF_SCOPE") {
-          return sendApiError(reply, request, 403, "Forbidden", "Client outside agent scope");
+          return sendApiError(reply, request, 403, "Forbidden", "Клиент вне зоны доступа агента");
         }
         throw e;
       }
@@ -132,7 +132,7 @@ export async function registerClientBalanceRoutes(app: FastifyInstance) {
           return sendApiError(reply, request, 404, "NotFound");
         }
         if (e instanceof Error && e.message === "CLIENT_OUT_OF_SCOPE") {
-          return sendApiError(reply, request, 403, "Forbidden", "Client outside agent scope");
+          return sendApiError(reply, request, 403, "Forbidden", "Клиент вне зоны доступа агента");
         }
         throw e;
       }
@@ -175,7 +175,7 @@ export async function registerClientBalanceRoutes(app: FastifyInstance) {
           return sendApiError(reply, request, 404, "NotFound");
         }
         if (e instanceof Error && e.message === "CLIENT_OUT_OF_SCOPE") {
-          return sendApiError(reply, request, 403, "Forbidden", "Client outside agent scope");
+          return sendApiError(reply, request, 403, "Forbidden", "Клиент вне зоны доступа агента");
         }
         throw e;
       }

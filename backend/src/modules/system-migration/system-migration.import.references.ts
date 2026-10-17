@@ -58,7 +58,7 @@ export async function importReferenceTables(
     ]);
 
   if (!warehouses.length && !users.length && !clients.length) {
-    warnings.push("data/warehouses|users|clients.json yo‘q — operatsion import o‘tkazib yuboriladi.");
+    warnings.push("Нет data/warehouses|users|clients.json — операционный импорт будет пропущен.");
     return { maps, counts, warnings };
   }
 
@@ -225,21 +225,53 @@ export async function importReferenceTables(
     }
     counts.users = users.length;
 
-    if (conflictPolicy === "replace") {
-      for (const row of users) {
-        const oldId = Number(row.id);
-        const newId = maps.user.get(oldId);
-        if (!newId) continue;
-        const supervisor = remapId(maps.user, row.supervisor_user_id);
-        const tradeDirection = remapId(maps.tradeDirection, row.trade_direction_id);
-        const userPatch: Prisma.UserUncheckedUpdateInput = {};
-        if (supervisor != null) userPatch.supervisor_user_id = supervisor;
-        if (tradeDirection != null) userPatch.trade_direction_id = tradeDirection;
-        if (Object.keys(userPatch).length) {
-          await tx.user.update({ where: { id: newId }, data: userPatch });
-        }
+    // Supervisor / trade_direction — user map to‘liq bo‘lgach (keep va replace).
+    for (const row of users) {
+      const oldId = Number(row.id);
+      const newId = maps.user.get(oldId);
+      if (!newId) continue;
+      const supervisor = remapId(maps.user, row.supervisor_user_id);
+      const tradeDirection = remapId(maps.tradeDirection, row.trade_direction_id);
+      const userPatch: Prisma.UserUncheckedUpdateInput = {};
+      if (supervisor != null) userPatch.supervisor_user_id = supervisor;
+      if (tradeDirection != null) userPatch.trade_direction_id = tradeDirection;
+      if (Object.keys(userPatch).length) {
+        await tx.user.update({ where: { id: newId }, data: userPatch });
       }
     }
+
+    for (const row of cashDesks) {
+      const oldId = Number(row.id);
+      const data = hydrateDecimals(
+        hydrateDates(stripIdTenant(row), ["created_at", "updated_at"]),
+        ["latitude", "longitude"]
+      );
+      const code = asTrimmedString(data.code);
+      const name = asTrimmedString(data.name);
+      const existing =
+        (code
+          ? await tx.cashDesk.findFirst({ where: { tenant_id: tenantId, code } })
+          : null) ??
+        (name ? await tx.cashDesk.findFirst({ where: { tenant_id: tenantId, name } }) : null);
+      if (existing) {
+        if (conflictPolicy === "replace") {
+          await tx.cashDesk.update({
+            where: { id: existing.id },
+            data: omitKeys(data, ["tenant_id"]) as Prisma.CashDeskUncheckedUpdateInput
+          });
+        }
+        maps.cashDesk.set(oldId, existing.id);
+      } else {
+        const created = await tx.cashDesk.create({
+          data: {
+            ...(data as Prisma.CashDeskUncheckedCreateInput),
+            tenant_id: tenantId
+          }
+        });
+        maps.cashDesk.set(oldId, created.id);
+      }
+    }
+    counts.cash_desks = cashDesks.length;
 
     for (const row of clients) {
       const oldId = Number(row.id);
@@ -254,6 +286,8 @@ export async function importReferenceTables(
         ["credit_limit", "latitude", "longitude"]
       );
       const agentId = remapId(maps.user, data.agent_id);
+      const warehouseId = remapId(maps.warehouse, data.warehouse_id) ?? null;
+      const cashDeskId = remapId(maps.cashDesk, data.cash_desk_id) ?? null;
       const clientCode = asTrimmedString(data.client_code);
       const phoneNorm = asTrimmedString(data.phone_normalized);
       // replace (to‘liq restore): telefon bo‘yicha birlashtirmaymiz — bitta raqamda
@@ -274,6 +308,8 @@ export async function importReferenceTables(
             data: {
               ...(omitKeys(data, ["tenant_id"]) as Prisma.ClientUncheckedUpdateInput),
               agent_id: agentId ?? null,
+              warehouse_id: warehouseId,
+              cash_desk_id: cashDeskId,
               merged_into_client_id: null
             }
           });
@@ -285,6 +321,8 @@ export async function importReferenceTables(
             ...(data as Prisma.ClientUncheckedCreateInput),
             tenant_id: tenantId,
             agent_id: agentId ?? null,
+            warehouse_id: warehouseId,
+            cash_desk_id: cashDeskId,
             merged_into_client_id: null
           }
         });
@@ -335,7 +373,7 @@ export async function importReferenceTables(
           });
         } else if (existingByName && !existing) {
           warnings.push(
-            `product name skip: «${productName}» already exists as SKU ${existingByName.sku} (incoming SKU ${sku || "—"})`
+            `Товар пропущен: «${productName}» уже существует с SKU ${existingByName.sku} (входящий SKU ${sku || "—"})`
           );
         }
         maps.product.set(oldId, resolved.id);
@@ -352,45 +390,12 @@ export async function importReferenceTables(
     }
     counts.products = products.length;
 
-    for (const row of cashDesks) {
-      const oldId = Number(row.id);
-      const data = hydrateDecimals(
-        hydrateDates(stripIdTenant(row), ["created_at", "updated_at"]),
-        ["latitude", "longitude"]
-      );
-      const code = asTrimmedString(data.code);
-      const name = asTrimmedString(data.name);
-      const existing =
-        (code
-          ? await tx.cashDesk.findFirst({ where: { tenant_id: tenantId, code } })
-          : null) ??
-        (name ? await tx.cashDesk.findFirst({ where: { tenant_id: tenantId, name } }) : null);
-      if (existing) {
-        if (conflictPolicy === "replace") {
-          await tx.cashDesk.update({
-            where: { id: existing.id },
-            data: omitKeys(data, ["tenant_id"]) as Prisma.CashDeskUncheckedUpdateInput
-          });
-        }
-        maps.cashDesk.set(oldId, existing.id);
-      } else {
-        const created = await tx.cashDesk.create({
-          data: {
-            ...(data as Prisma.CashDeskUncheckedCreateInput),
-            tenant_id: tenantId
-          }
-        });
-        maps.cashDesk.set(oldId, created.id);
-      }
-    }
-    counts.cash_desks = cashDesks.length;
-
     for (const row of stocks) {
       const data = hydrateDecimals(stripIdTenant(row), ["qty", "reserved_qty"]);
       const warehouseId = remapId(maps.warehouse, data.warehouse_id);
       const productId = remapId(maps.product, data.product_id);
       if (warehouseId == null || productId == null) {
-        warnings.push(`Stock qatori o‘tkazib yuborildi (warehouse/product map yo‘q).`);
+        warnings.push(`Строка остатков пропущена (нет соответствия склада/товара).`);
         continue;
       }
       if (conflictPolicy === "keep") {

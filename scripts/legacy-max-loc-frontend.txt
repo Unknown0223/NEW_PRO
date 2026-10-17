@@ -101,16 +101,12 @@ frontend/components/settings/generic-ref-settings.tsx
 frontend/components/clients/client-import-mapping-dialog.tsx
 frontend/app/(dashboard)/routes/track/page.tsx
 frontend/components/ui/searchable-multi-select-panel.tsx
-frontend/components/settings/sales-directions/trade-directions-workspace.tsx
 frontend/components/client-balances/client-balances-bulk-payment-dialog.tsx
 frontend/components/staff/web-operator-create-workspace.tsx
 frontend/components/opening-balances/add-opening-balance-dialog.tsx
 frontend/components/settings/client-ref-settings-page.tsx
 frontend/components/work-slots/work-slots-bulk-dialog.tsx
 frontend/app/(dashboard)/clients/map/page.tsx
-frontend/components/settings/finance-price-types-settings.tsx
-frontend/components/settings/sales-directions/sales-channels-workspace.tsx
-frontend/components/stock/stock-by-date-workspace.tsx
 frontend/components/work-slots/work-slots-location-fields.tsx
 frontend/components/clients/visit-planner/client-visit-planner-workspace.tsx
 frontend/components/clients/map-workspace/client-map-bulk-workspace.tsx
@@ -131,6 +127,4 @@ frontend/components/orders/orders-list/types.ts
 frontend/components/orders/orders-list/use-orders-list-page.part1.ts
 frontend/components/orders/order-history/build-order-history-data.ts
 frontend/components/clients/clients-template-filters-panel.tsx
-frontend/app/(dashboard)/invoices/returns/page.tsx
 frontend/components/clients/map-workspace/client-map-bulk-sidebar.tsx
-frontend/components/refusals/refusals-page-content.tsx

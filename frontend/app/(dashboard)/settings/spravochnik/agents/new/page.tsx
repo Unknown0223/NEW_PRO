@@ -35,7 +35,7 @@ export default function NewAgentPage() {
     <PageShell>
       <div className="mb-4">
         <Link href="/settings/spravochnik/agents" className="text-sm text-primary underline">
-          ← Agentlar ro‘yxati
+          ← Список агентов
         </Link>
       </div>
       <StaffCreateForm

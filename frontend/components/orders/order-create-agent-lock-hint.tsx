@@ -39,32 +39,32 @@ export function OrderCreateAgentLockHint({
       )}
     >
       <p className="flex flex-wrap items-center gap-2 font-medium">
-        Agent biriktirish
+        Привязка агента
         <LockStatusBadge lockType={lockType} />
       </p>
       <div className="mt-1 text-xs text-muted-foreground">
         {lockType === "contract" ? (
           <>
-            Shartnoma qulfi: tizim faqat{" "}
-            <strong>{slot1.agent_name ?? `agent #${lockedAgentId}`}</strong>
-            {slot1.agent_code ? ` (${slot1.agent_code})` : ""} uchun zakaz yaratishga ruxsat beradi.
+            Блокировка по договору: система разрешает создавать заказы только для агента{" "}
+            <strong>{slot1.agent_name ?? `агент #${lockedAgentId}`}</strong>
+            {slot1.agent_code ? ` (${slot1.agent_code})` : ""}.
             {mismatch ? (
               <span className="mt-1 block text-destructive">
-                Tanlangan agent mos kelmaydi — saqlashda xato (409) qaytadi.
+                Выбранный агент не совпадает — при сохранении будет ошибка (409).
               </span>
             ) : null}
           </>
         ) : lockType === "manual" ? (
           <>
-            Qo‘lda qulflangan. Boshqa agent tanlansa ogohlantirish chiqadi.
+            Заблокировано вручную. При выборе другого агента появится предупреждение.
             {slot1.lock_reason ? <span className="block text-muted-foreground">{slot1.lock_reason}</span> : null}
           </>
         ) : null}
         {slot1.work_slot_code ? (
-          <span className="mt-1 block font-mono text-muted-foreground">Joy: {slot1.work_slot_code}</span>
+          <span className="mt-1 block font-mono text-muted-foreground">Место: {slot1.work_slot_code}</span>
         ) : null}
         <Link href="/work-slots" className="mt-1 inline-block text-primary underline">
-          Ishchi o‘rinlari
+          Рабочие места
         </Link>
       </div>
       </div>

@@ -61,11 +61,15 @@ export async function exportPivotToPdf(
   onProgress?.({ phase: "preparing", processedRows: 0, totalRows });
   await yieldToMain();
 
-  const [{ default: jsPDF }, autoTableModule] = await Promise.all([
+  const [jspdfMod, autoTableModule] = await Promise.all([
     import("jspdf"),
     import("jspdf-autotable")
   ]);
 
+  const jsPDF =
+    jspdfMod.jsPDF ??
+    (typeof jspdfMod.default === "function" ? jspdfMod.default : undefined);
+  if (!jsPDF) throw new Error("jspdf constructor topilmadi");
   const autoTable = autoTableModule.default;
   const { head, body } = pivotDataToPdfTable(data, options);
   onProgress?.({ phase: "preparing", processedRows: totalRows, totalRows });

@@ -310,6 +310,63 @@ export async function copyPivotSelection(
   return copyTextToClipboard(tsv);
 }
 
+/** To‘liq jadval (ekran sxemasi): sarlavha + barcha ko‘rinadigan qatorlar. */
+export function flatPivotToTsv(
+  flatRows: LocalFlatPivotRowItem[],
+  columnKeys: string[],
+  headerLabels: string[],
+  opts: {
+    useRowDimColumns: boolean;
+    rowFieldCount: number;
+    config?: PivotConfig;
+  }
+): string {
+  const dataKeys = columnKeys.filter((k) => !k.startsWith("__empty_"));
+  const headers =
+    headerLabels.length >= dataKeys.length
+      ? headerLabels.slice(0, dataKeys.length)
+      : [
+          ...headerLabels,
+          ...Array.from({ length: Math.max(0, dataKeys.length - headerLabels.length) }, () => "")
+        ];
+  const lines: string[] = [headers.map(escapeTsvCell).join("\t")];
+  for (let r = 0; r < flatRows.length; r++) {
+    const item = flatRows[r]!;
+    const cells: string[] = [];
+    for (const key of dataKeys) {
+      cells.push(escapeTsvCell(getFlatRowCellText(item, key, opts)));
+    }
+    lines.push(cells.join("\t"));
+  }
+  return lines.join("\n");
+}
+
+export async function copyPivotTableOrSelection(
+  flatRows: LocalFlatPivotRowItem[],
+  columnKeys: string[],
+  sel: RangeSelection | null,
+  opts: {
+    useRowDimColumns: boolean;
+    rowFieldCount: number;
+    config?: PivotConfig;
+    /** To‘liq nusxa uchun ustun sarlavhalari (ekran bilan bir xil). */
+    headerLabels?: string[];
+  }
+): Promise<"selection" | "all" | false> {
+  if (columnKeys.length === 0 || flatRows.length === 0) return false;
+  if (sel) {
+    const ok = await copyPivotSelection(flatRows, columnKeys, sel, opts);
+    return ok ? "selection" : false;
+  }
+  const dataKeys = columnKeys.filter((k) => !k.startsWith("__empty_"));
+  const headers = opts.headerLabels?.length
+    ? opts.headerLabels
+    : dataKeys.map((k) => k);
+  const tsv = flatPivotToTsv(flatRows, columnKeys, headers, opts);
+  const ok = await copyTextToClipboard(tsv);
+  return ok ? "all" : false;
+}
+
 /** Parse numeric cell text (currency / spaced digits / locale commas). */
 export function parseCellNumber(text: string): number | null {
   if (!text) return null;

@@ -45,24 +45,28 @@ YandexMapRuntimeData computeYandexMapRuntimeData({
   }
   routingPoints.addAll(visits);
 
+  // MultiRoute sekin — yo‘l chizig‘i uchun siyrak nuqtalar; markerlar to‘liq.
+  final forRoad = sampleRoutePointsForRouting(routingPoints);
+
   final stopsJson = jsonEncode(stops.map((s) => encodeYandexMapStop(s)).toList());
   final routeJson = jsonEncode([
-    for (var i = 0; i < routingPoints.length; i++)
+    for (var i = 0; i < forRoad.length; i++)
       encodeYandexMapStop(
-        routingPoints[i],
+        forRoad[i],
         isStart: i == 0,
-        isEnd: i == routingPoints.length - 1 && routingPoints.length > 1,
+        isEnd: i == forRoad.length - 1 && forRoad.length > 1,
       ),
   ]);
-  final drawLine = drawRoutePolyline && routingPoints.length > 1;
-  final routeCount = routingPoints.length;
+  final drawLine = drawRoutePolyline && forRoad.length > 1;
+  final routeCount = forRoad.length;
+  final stopCount = stops.length;
   return YandexMapRuntimeData(
     stopsJson: stopsJson,
     routeJson: routeJson,
     drawLine: drawLine,
     needRouter: drawLine,
-    markerBatch: stops.length > 200 ? 60 : stops.length,
-    maxRoutePoints: routeCount > 120 ? 120 : routeCount,
+    markerBatch: stopCount > 100 ? 40 : (stopCount > 50 ? 48 : stopCount),
+    maxRoutePoints: routeCount,
   );
 }
 
@@ -97,7 +101,8 @@ String buildYandexWebMapHtml({
   final markerBatch = runtime.markerBatch;
   final needRouter = runtime.needRouter;
   final useApiKeyJs = useKey ? 'true' : 'false';
-  const routeStep = 9;
+  // MultiRoute bo‘laklari: 8 via orasida — kamroq parallel so‘rov, tezroq.
+  const routeStep = 8;
 
   return '''
 <!DOCTYPE html>
@@ -116,7 +121,7 @@ String buildYandexWebMapHtml({
 </head>
 <body>
   <div id="map"></div>
-  <div id="err">Yandex xarita yuklanmadi. Internetni tekshiring.</div>
+  <div id="err">Не удалось загрузить карту Yandex. Проверьте интернет.</div>
   <script>
     var STOPS = $stopsJson;
     var ROUTE = $routeJson;
@@ -129,6 +134,41 @@ String buildYandexWebMapHtml({
     var clusterer = null;
     var routeLines = [];
     var endpointMarkers = [];
+    var userLocationPm = null;
+    var ICON_PENDING = null;
+    var ICON_VISITED = null;
+    var routeBuildToken = 0;
+
+    function userLocationSvg() {
+      var svg = '<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 48 48">' +
+        '<circle cx="24" cy="24" r="18" fill="#3b82f6" fill-opacity="0.18"/>' +
+        '<circle cx="24" cy="24" r="10" fill="#2563eb" stroke="#ffffff" stroke-width="3"/>' +
+        '<circle cx="24" cy="24" r="4" fill="#ffffff"/>' +
+        '</svg>';
+      return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
+    }
+
+    window.setUserLocation = function(lat, lon, pan) {
+      if (!map || lat == null || lon == null) return;
+      if (userLocationPm) {
+        userLocationPm.geometry.setCoordinates([lat, lon]);
+      } else {
+        userLocationPm = new ymaps.Placemark([lat, lon], {
+          hintContent: 'Вы здесь',
+          balloonContent: '<b>Вы здесь</b>'
+        }, {
+          iconLayout: 'default#image',
+          iconImageHref: userLocationSvg(),
+          iconImageSize: [48, 48],
+          iconImageOffset: [-24, -24],
+          zIndex: 1000
+        });
+        map.geoObjects.add(userLocationPm);
+      }
+      if (pan) {
+        map.setCenter([lat, lon], Math.max(map.getZoom(), 15), { duration: 280 });
+      }
+    };
 
     function showErr(reason) {
       document.getElementById('map').style.display = 'none';
@@ -142,6 +182,10 @@ String buildYandexWebMapHtml({
         ROUTE.forEach(function(r) {
           if (!pts.some(function(p) { return p.lat === r.lat && p.lon === r.lon; })) pts.push(r);
         });
+      }
+      if (userLocationPm) {
+        var c = userLocationPm.geometry.getCoordinates();
+        pts.push({ lat: c[0], lon: c[1] });
       }
       return pts;
     }
@@ -161,7 +205,6 @@ String buildYandexWebMapHtml({
       ], { checkZoomRange: true, zoomMargin: [56, 56, 140, 56] });
     }
 
-    /** Shablon: dumaloq teal marker + oq do'kon (Указать на карте). */
     function clientMarkerPalette(s) {
       if (s.visited) {
         return { fill: '#22c55e', dark: '#15803d', door: '#15803d' };
@@ -196,19 +239,29 @@ String buildYandexWebMapHtml({
       return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
     }
 
+    function cachedIconHref(visited) {
+      if (visited) {
+        if (!ICON_VISITED) ICON_VISITED = clientMarkerSvg(clientMarkerPalette({ visited: true }));
+        return ICON_VISITED;
+      }
+      if (!ICON_PENDING) ICON_PENDING = clientMarkerSvg(clientMarkerPalette({ visited: false }));
+      return ICON_PENDING;
+    }
+
     function clientMarkerOptions(s) {
       return {
         iconLayout: 'default#image',
-        iconImageHref: clientMarkerSvg(clientMarkerPalette(s)),
+        iconImageHref: cachedIconHref(!!s.visited),
         iconImageSize: [52, 64],
         iconImageOffset: [-26, -64]
       };
     }
 
     function clearRouteGraphics() {
-      routeLines.forEach(function(r) { map.geoObjects.remove(r); });
+      routeBuildToken++;
+      routeLines.forEach(function(r) { try { map.geoObjects.remove(r); } catch (e) {} });
       routeLines = [];
-      endpointMarkers.forEach(function(m) { map.geoObjects.remove(m); });
+      endpointMarkers.forEach(function(m) { try { map.geoObjects.remove(m); } catch (e) {} });
       endpointMarkers = [];
     }
 
@@ -220,8 +273,8 @@ String buildYandexWebMapHtml({
       var coords = pts.map(function(s) { return [s.lat, s.lon]; });
       var backbone = new ymaps.Polyline(coords, {}, {
         strokeColor: '#94a3b8',
-        strokeWidth: 3,
-        strokeOpacity: 0.55,
+        strokeWidth: 4,
+        strokeOpacity: 0.5,
         strokeStyle: 'dash'
       });
       map.geoObjects.add(backbone);
@@ -249,10 +302,10 @@ String buildYandexWebMapHtml({
       buildRoadRoute(pts, backbone);
     }
 
-    /** Ketma-ket nuqtalar bo'yicha yo'l tarmog'idan marshrut (MultiRouter). */
     function buildRoadRoute(pts, backbone) {
       if (!map || pts.length < 2 || !hasMultiRouter()) return;
       var STEP = $routeStep;
+      var token = routeBuildToken;
       var pending = 0;
       var succeeded = 0;
 
@@ -260,14 +313,14 @@ String buildYandexWebMapHtml({
         if (!backbone) return;
         var idx = routeLines.indexOf(backbone);
         if (idx >= 0) {
-          map.geoObjects.remove(backbone);
+          try { map.geoObjects.remove(backbone); } catch (e) {}
           routeLines.splice(idx, 1);
         }
         backbone = null;
       }
 
       function addMultiRouteSlice(slice) {
-        if (slice.length < 2) return;
+        if (slice.length < 2 || token !== routeBuildToken) return;
         var refPoints = slice.map(function(s) { return [s.lat, s.lon]; });
         pending++;
         try {
@@ -282,9 +335,12 @@ String buildYandexWebMapHtml({
             routeActiveStrokeColor: '#07958f',
             routeActiveStrokeWidth: 6,
             routeActiveStrokeStyle: 'solid',
+            routeStrokeStyle: 'solid',
+            routeStrokeWidth: 4,
             opacity: 0.95
           });
           mr.model.events.add('requestsuccess', function() {
+            if (token !== routeBuildToken) return;
             succeeded++;
             pending--;
             if (succeeded > 0) removeBackbone();
@@ -299,14 +355,27 @@ String buildYandexWebMapHtml({
         }
       }
 
+      // Ketma-ket bo‘laklar — parallel MultiRoute ortiqcha yuklamaslik.
+      var slices = [];
       if (pts.length <= STEP + 1) {
-        addMultiRouteSlice(pts);
+        slices.push(pts);
       } else {
         for (var start = 0; start < pts.length - 1; start += STEP) {
           var end = Math.min(start + STEP + 1, pts.length);
-          addMultiRouteSlice(pts.slice(start, end));
+          slices.push(pts.slice(start, end));
         }
       }
+
+      var si = 0;
+      function nextSlice() {
+        if (token !== routeBuildToken) return;
+        if (si >= slices.length) return;
+        addMultiRouteSlice(slices[si++]);
+        if (si < slices.length) {
+          setTimeout(nextSlice, 90);
+        }
+      }
+      nextSlice();
     }
 
     function addRouteEndpointMarkers(pts) {
@@ -314,19 +383,19 @@ String buildYandexWebMapHtml({
       var start = pts[0];
       var finish = pts[pts.length - 1];
       var startPm = new ymaps.Placemark([start.lat, start.lon], {
-        hintContent: start.isStart ? 'Boshlanish' : (start.name || 'Boshlanish'),
+        hintContent: start.isStart ? 'Старт' : (start.name || 'Старт'),
         iconCaption: 'A',
-        balloonContent: '<b>Boshlanish</b><br/>' + (start.name || '')
-      }, { preset: 'islands#darkGreenCircleDotIconWithCaption' });
+        balloonContent: '<b>Старт</b><br/>' + (start.name || '')
+      }, { preset: 'islands#darkGreenCircleDotIconWithCaption', zIndex: 700 });
       map.geoObjects.add(startPm);
       endpointMarkers.push(startPm);
 
       if (pts.length > 1) {
         var endPm = new ymaps.Placemark([finish.lat, finish.lon], {
-          hintContent: finish.isEnd ? 'Yakun' : (finish.name || 'Yakun'),
+          hintContent: finish.isEnd ? 'Финиш' : (finish.name || 'Финиш'),
           iconCaption: 'B',
-          balloonContent: '<b>Yakun</b><br/>' + (finish.name || '')
-        }, { preset: 'islands#redCircleDotIconWithCaption' });
+          balloonContent: '<b>Финиш</b><br/>' + (finish.name || '')
+        }, { preset: 'islands#redCircleDotIconWithCaption', zIndex: 700 });
         map.geoObjects.add(endPm);
         endpointMarkers.push(endPm);
       }
@@ -339,10 +408,15 @@ String buildYandexWebMapHtml({
           balloonContent: '<div style="font-family:system-ui,sans-serif;padding:4px 0"><b>' + s.name + '</b></div>'
         };
         if (s.order) {
+          props.iconCaption = String(s.order);
           props.balloonContent = '<div style="font-family:system-ui,sans-serif;padding:4px 0">' +
-            '<b>' + s.name + '</b><br/><span style="color:#64748b">№ ' + s.order + ' marshrutda</span></div>';
+            '<b>' + s.name + '</b><br/><span style="color:#64748b">№ ' + s.order + ' в маршруте</span></div>';
         }
-        var pm = new ymaps.Placemark([s.lat, s.lon], props, clientMarkerOptions(s));
+        var opts = clientMarkerOptions(s);
+        if (s.order) {
+          opts = Object.assign({}, opts, { iconCaptionMaxWidth: 40 });
+        }
+        var pm = new ymaps.Placemark([s.lat, s.lon], props, opts);
         pm.events.add('click', function() {
           if (window.StopTap) {
             StopTap.postMessage(JSON.stringify({ clientId: s.id, name: s.name }));
@@ -361,7 +435,8 @@ String buildYandexWebMapHtml({
       }
       clusterer.add(buildMarkersSlice(start, end));
       if (end < STOPS.length) {
-        setTimeout(function() { addMarkersBatched(end); }, 0);
+        var schedule = window.requestAnimationFrame || function(cb) { setTimeout(cb, 16); };
+        schedule(function() { addMarkersBatched(end); });
       } else {
         fitBounds();
       }
@@ -376,25 +451,24 @@ String buildYandexWebMapHtml({
         }, { suppressMapOpenBlock: true });
 
         clusterer = new ymaps.Clusterer({
-          preset: 'islands#tealClusterIcons',
+          preset: 'islands#invertedTealClusterIcons',
           groupByCoordinates: false,
-          clusterDisableClickZoom: false
+          clusterDisableClickZoom: false,
+          gridSize: 64
         });
         map.geoObjects.add(clusterer);
+        addMarkersBatched(0);
+        if (DRAW_LINE) setTimeout(addRouteLine, 40);
         if (window.MapReady) MapReady.postMessage('ok');
-        setTimeout(function() {
-          addMarkersBatched(0);
-          setTimeout(addRouteLine, 200);
-        }, 50);
       } catch (e) {
-        showErr('init_error');
+        showErr('script_error');
       }
     }
 
     function bootYmaps() {
       if (typeof ymaps === 'undefined') return false;
       try {
-        if (USE_API_KEY && ymaps.env && ymaps.env.apikeyValid === false) {
+        if (USE_API_KEY && ymaps.meta && ymaps.meta.key && ymaps.meta.key === false) {
           showErr('invalid_key');
           return true;
         }
@@ -414,10 +488,11 @@ String buildYandexWebMapHtml({
       if (!map || !clusterer) return;
       clusterer.removeAll();
       clearRouteGraphics();
-      setTimeout(function() {
+      var schedule = window.requestAnimationFrame || function(cb) { setTimeout(cb, 0); };
+      schedule(function() {
         addMarkersBatched(0);
-        if (DRAW_LINE) setTimeout(addRouteLine, 120);
-      }, 0);
+        if (DRAW_LINE) setTimeout(addRouteLine, 60);
+      });
     };
 
     (function startBoot() {
@@ -434,7 +509,7 @@ String buildYandexWebMapHtml({
       tick();
       setTimeout(function() {
         if (!map) showErr('timeout');
-      }, 60000);
+      }, 45000);
     })();
 
     window.zoomIn = function() {

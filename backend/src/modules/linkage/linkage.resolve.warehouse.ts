@@ -13,13 +13,28 @@ export async function resolveByWarehouse(
   expeditor_ids: Set<number>;
   product_ids: Set<number>;
 }> {
-  const [warehouse, links, clientByOrders, agentsByOrders, productByStock] = await Promise.all([
+  const [warehouse, links, slotOccupants, clientByOrders, agentsByOrders, productByStock] = await Promise.all([
     prisma.warehouse.findFirst({
       where: { id: selectedWarehouseId, tenant_id: tenantId },
       select: { id: true }
     }),
     prisma.warehouseUserLink.findMany({
       where: { warehouse_id: selectedWarehouseId },
+      select: { user_id: true, user: { select: { role: true, id: true } } }
+    }),
+    prisma.slotUserLink.findMany({
+      where: {
+        tenant_id: tenantId,
+        ended_at: null,
+        slot: {
+          tenant_id: tenantId,
+          deleted_at: null,
+          OR: [
+            { warehouse_id: selectedWarehouseId },
+            { warehouse_ids: { has: selectedWarehouseId } }
+          ]
+        }
+      },
       select: { user_id: true, user: { select: { role: true, id: true } } }
     }),
     prisma.order.findMany({
@@ -48,15 +63,19 @@ export async function resolveByWarehouse(
       product_ids: new Set<number>()
     };
   }
-  const userIds = links.map((r) => r.user_id);
-  const agentIds = links.filter((r) => r.user.role === "agent").map((r) => r.user.id);
+  const userIds = [...new Set([...links.map((r) => r.user_id), ...slotOccupants.map((r) => r.user_id)])];
+  const agentIds = [
+    ...links.filter((r) => r.user.role === "agent").map((r) => r.user.id),
+    ...slotOccupants.filter((r) => r.user.role === "agent").map((r) => r.user.id)
+  ];
   for (const r of agentsByOrders) {
     if (r.agent_id != null) agentIds.push(r.agent_id);
   }
   const uniqueAgentIds = [...new Set(agentIds)];
-  const expeditor_ids = new Set<number>(
-    links.filter((r) => r.user.role === "expeditor").map((r) => r.user.id)
-  );
+  const expeditor_ids = new Set<number>([
+    ...links.filter((r) => r.user.role === "expeditor").map((r) => r.user.id),
+    ...slotOccupants.filter((r) => r.user.role === "expeditor").map((r) => r.user.id)
+  ]);
 
   const [cashLinks, clientsPrimary, clientsSlots, expFromSlots, expFromOrders] = await Promise.all([
     userIds.length

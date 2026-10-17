@@ -2,6 +2,7 @@ import { Decimal } from "@prisma/client/runtime/library";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "../../config/database";
 import { getCashDeskAvailableCash } from "./supplier-payment-cash.service";
+import { lockCashDeskRow } from "../cash-desks/cash-desk-ledger";
 import type { ListSupplierPaymentsOpts } from "./supplier-accounting.types";
 import {
   buildSupplierPaymentOrderBy,
@@ -90,6 +91,7 @@ export async function createSupplierPayment(
   const amountDec = new Decimal(input.amount);
 
   const row = await prisma.$transaction(async (tx) => {
+    if (!(await lockCashDeskRow(tx, tenantId, input.cash_desk_id))) throw new Error("BAD_CASH_DESK");
     const available = await getCashDeskAvailableCash(tx, tenantId, input.cash_desk_id);
     if (available.lt(amountDec)) throw new Error("INSUFFICIENT_CASH");
 

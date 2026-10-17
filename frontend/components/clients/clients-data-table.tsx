@@ -388,7 +388,7 @@ export function ClientsDataTable({
                   className="h-4 w-4 cursor-pointer rounded border-border text-emerald-600 focus:ring-emerald-500"
                   checked={allOnPage}
                   onChange={(e) => onTogglePage?.(e.target.checked)}
-                  aria-label="Sahifani tanlash"
+                  aria-label="Выбрать страницу"
                 />
               </th>
             ) : null}
@@ -405,7 +405,7 @@ export function ClientsDataTable({
                         sortField === sortKey ? "text-gray-900" : "text-gray-600"
                       )}
                       onClick={() => onSortByColumn!(c.id)}
-                      title="Tartiblash"
+                      title="Сортировать"
                     >
                       <span>{c.label}</span>
                       {sortField === sortKey ? (
@@ -474,8 +474,8 @@ export function ClientsDataTable({
                           variant="outline"
                           className="text-amber-400 opacity-0 transition-opacity hover:bg-amber-50 hover:text-amber-600 group-hover:opacity-100"
                           onClick={() => onEdit(row)}
-                          title="Tahrirlash"
-                          aria-label="Tahrirlash"
+                          title="Редактировать"
+                          aria-label="Редактировать"
                         >
                           <Pencil className="size-3.5" aria-hidden />
                         </Button>
@@ -485,8 +485,8 @@ export function ClientsDataTable({
                             buttonVariants({ variant: "ghost", size: "icon-sm" }),
                             "text-emerald-600 opacity-0 transition-opacity hover:bg-emerald-50 hover:text-emerald-700 group-hover:opacity-100"
                           )}
-                          title="Kartochka"
-                          aria-label="Kartochka"
+                          title="Карточка"
+                          aria-label="Карточка"
                         >
                           <UserRound className="size-3.5" aria-hidden />
                         </Link>

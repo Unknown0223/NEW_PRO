@@ -344,7 +344,7 @@ export default function MapView({
         });
       })
       .catch(() => {
-        if (!cancelled) setLoadError("Yandex Maps yuklanmadi");
+        if (!cancelled) setLoadError("Не удалось загрузить Яндекс Карты");
       });
     return () => {
       cancelled = true;
@@ -404,7 +404,7 @@ export default function MapView({
                 <div style="font-family:system-ui,sans-serif;min-width:180px">
                   <div style="font-weight:700;font-size:13px">${escapeHtml(a.name)}</div>
                   <div style="font-size:11px;color:#5b6f6a;margin-top:4px">${escapeHtml(a.region)}</div>
-                  <div style="font-size:11px;margin-top:6px;color:${a.online ? "#16a34a" : "#94a3b8"}">${a.online ? "Online" : "Offline"}</div>
+                  <div style="font-size:11px;margin-top:6px;color:${a.online ? "#16a34a" : "#94a3b8"}">${a.online ? "Онлайн" : "Офлайн"}</div>
                   <button type="button" data-agent-id="${escapeHtml(a.id)}" style="margin-top:8px;padding:6px 10px;border-radius:8px;border:none;background:#0f9e8e;color:#fff;font-weight:700;font-size:11px;cursor:pointer">Открыть маршрут</button>
                 </div>`,
               iconContent: a.online ? "●" : "○",

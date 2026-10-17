@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { STALE } from "@/lib/query-stale";
+import { usePermissions } from "@/lib/use-permissions";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { DateRangePopover, formatDateRangeButton } from "@/components/ui/date-range-popover";
@@ -65,6 +66,7 @@ function fmt(v: string) {
 }
 
 export function MaterialReportWorkspace({ tenantSlug }: { tenantSlug: string }) {
+  const canExport = usePermissions().has("warehouse.materialnyy_otchet.export");
   const [dateFrom, setDateFrom] = useState(todayYmd());
   const [dateTo, setDateTo] = useState(todayYmd());
   const [warehouseId, setWarehouseId] = useState("");
@@ -303,16 +305,18 @@ export function MaterialReportWorkspace({ tenantSlug }: { tenantSlug: string }) 
             </select>
             <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => void listQ.refetch()}><RefreshCw className={listQ.isFetching ? "animate-spin" : ""} /></Button>
             <div className="relative ml-auto" ref={excelMenuRef}>
-              <Button
-                variant="outline"
-                className="h-8 text-xs"
-                onClick={() => setExcelMenuOpen((v) => !v)}
-              >
-                <Download className="mr-1.5 size-3.5" />
-                Excel
-                <ChevronDown className="ml-1.5 size-3.5" />
-              </Button>
-              {excelMenuOpen ? (
+              {canExport ? (
+                <Button
+                  variant="outline"
+                  className="h-8 text-xs"
+                  onClick={() => setExcelMenuOpen((v) => !v)}
+                >
+                  <Download className="mr-1.5 size-3.5" />
+                  Excel
+                  <ChevronDown className="ml-1.5 size-3.5" />
+                </Button>
+              ) : null}
+              {canExport && excelMenuOpen ? (
                 <div className="absolute left-0 top-9 z-20 min-w-[10.5rem] rounded-md border bg-popover p-1 shadow-md">
                   <button
                     type="button"

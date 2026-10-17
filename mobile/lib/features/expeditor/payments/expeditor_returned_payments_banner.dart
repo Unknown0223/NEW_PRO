@@ -92,7 +92,7 @@ class _ExpeditorReturnedPaymentsBannerState
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  'To\'lovni to\'g\'rilash kerak',
+                  'Оплату нужно исправить',
                   style: AppTypography.titleMedium.copyWith(
                     color: AppColors.warning,
                     fontWeight: FontWeight.w700,
@@ -103,7 +103,7 @@ class _ExpeditorReturnedPaymentsBannerState
           ),
           const SizedBox(height: 4),
           Text(
-            'Kassa to\'lovni qaytardi. Taymer tugaguncha to\'g\'rilab qayta yuboring, aks holda qaytarish bekor qilinadi.',
+            'Касса вернула оплату. Исправьте и отправьте повторно до истечения таймера, иначе возврат будет отменён.',
             style: AppTypography.bodySmall.copyWith(color: AppColors.textSecondary),
           ),
           const SizedBox(height: 8),
@@ -159,7 +159,7 @@ class _ExpeditorReturnedPaymentsBannerState
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        '${formatMoneySpaced(amount)} so\'m'
+                        '${formatMoneySpaced(amount)} сум'
                         '${orderNumber != null ? ' • #$orderNumber' : ''}',
                         style: AppTypography.bodySmall
                             .copyWith(color: AppColors.textSecondary),
@@ -167,7 +167,7 @@ class _ExpeditorReturnedPaymentsBannerState
                       if (reason != null && reason.isNotEmpty) ...[
                         const SizedBox(height: 2),
                         Text(
-                          'Sabab: $reason',
+                          'Причина: $reason',
                           style: AppTypography.bodySmall
                               .copyWith(color: AppColors.textSecondary),
                           maxLines: 2,
@@ -212,7 +212,7 @@ class _ExpeditorReturnedPaymentsBannerState
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      'To\'g\'rilash',
+                      'Исправить',
                       style: AppTypography.labelMedium
                           .copyWith(color: AppColors.expeditorAccent),
                     ),

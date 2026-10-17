@@ -468,7 +468,7 @@ class _CalcList extends StatelessWidget {
                               ),
                             ),
                             Text(
-                              g.score != null ? 'score ${g.score}' : 'score —',
+                              g.score != null ? 'балл ${g.score}' : 'балл —',
                               style: AppTypography.captionSmall.copyWith(
                                 fontSize: 11,
                                 fontWeight: FontWeight.w700,

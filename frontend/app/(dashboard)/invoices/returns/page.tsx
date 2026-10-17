@@ -19,46 +19,26 @@ import {
 import { cn } from "@/lib/utils";
 import { useAuthStore, useAuthStoreHydrated, useEffectiveRole } from "@/lib/auth-store";
 import { isAdminOrOperatorLikeRole } from "@/lib/distribution-roles";
+import { usePermissions } from "@/lib/use-permissions";
 import { api } from "@/lib/api";
+import { useDebouncedSearchCommit } from "@/lib/use-debounced-search-commit";
 import {
   DailyReturnWaybillModal,
   type DailyWaybillRef
 } from "@/components/orders/daily-return-waybill-modal";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo, useRef, useState } from "react";
-
-type Row = {
-  id: string;
-  courier_id: number;
-  courier_name: string | null;
-  creation_channel: "web" | "mobile";
-  date: string;
-  created_at: string;
-  warehouse_name: string;
-  warehouse_count: number;
-  return_count: number;
-  item_count: number;
-  total_qty: number;
-  refund_total: string;
-  status: "pending" | "posted" | "cancelled";
-  pending_count: number;
-  accepted_at: string | null;
-};
-
-const STATUS_LABELS: Record<string, string> = {
-  pending: "Ожидает приёмки",
-  posted: "Принят",
-  cancelled: "Отклонён"
-};
-
-function fmtQty(n: number): string {
-  return Number.isInteger(n) ? String(n) : n.toFixed(3).replace(/\.?0+$/, "");
-}
+import {
+  formatReturnInvoiceQty,
+  RETURN_INVOICE_STATUS_LABELS,
+  type ReturnInvoiceRow
+} from "./return-invoices.model";
 
 export default function ReturnInvoicesPage() {
   const tenantSlug = useAuthStore((s) => s.tenantSlug);
   const role = useEffectiveRole();
-  const canAccept = isAdminOrOperatorLikeRole(role);
+  const { has } = usePermissions();
+  const canAccept = isAdminOrOperatorLikeRole(role) && has("invoices.vozvratnye.approve");
   const hydrated = useAuthStoreHydrated();
 
   const [openWaybill, setOpenWaybill] = useState<{ ref: DailyWaybillRef; confirm: boolean } | null>(
@@ -69,6 +49,7 @@ export default function ReturnInvoicesPage() {
   const [expeditorDraft, setExpeditorDraft] = useState("all");
   const [statusDraft, setStatusDraft] = useState<"all" | "pending" | "posted" | "cancelled">("all");
   const [searchDraft, setSearchDraft] = useState("");
+  useDebouncedSearchCommit(searchDraft, setSearch);
   const [warehouse, setWarehouse] = useState("all");
   const [expeditor, setExpeditor] = useState("all");
   const [status, setStatus] = useState<"all" | "pending" | "posted" | "cancelled">("all");
@@ -108,7 +89,7 @@ export default function ReturnInvoicesPage() {
       if (status !== "all") params.set("status", status);
       if (dateFrom) params.set("date_from", dateFrom);
       if (dateTo) params.set("date_to", dateTo);
-      const { data } = await api.get<{ data: Row[] }>(
+      const { data } = await api.get<{ data: ReturnInvoiceRow[] }>(
         `/api/${tenantSlug}/returns/daily-waybills?${params.toString()}`
       );
       return data.data ?? [];
@@ -130,7 +111,7 @@ export default function ReturnInvoicesPage() {
     if (search.trim()) {
       const needle = search.toLowerCase();
       out = out.filter((r) =>
-        [r.courier_name ?? "", r.warehouse_name, r.date, STATUS_LABELS[r.status] ?? r.status]
+        [r.courier_name ?? "", r.warehouse_name, r.date, RETURN_INVOICE_STATUS_LABELS[r.status] ?? r.status]
           .join(" ")
           .toLowerCase()
           .includes(needle)
@@ -331,10 +312,10 @@ export default function ReturnInvoicesPage() {
                       <td className="px-3 py-2">{r.warehouse_name || "—"}</td>
                       <td className="px-3 py-2 text-right tabular-nums">{r.return_count}</td>
                       <td className="px-3 py-2 text-right tabular-nums">{r.item_count}</td>
-                      <td className="px-3 py-2 text-right font-semibold tabular-nums">{fmtQty(r.total_qty)}</td>
+                      <td className="px-3 py-2 text-right font-semibold tabular-nums">{formatReturnInvoiceQty(r.total_qty)}</td>
                       <td className="px-3 py-2">
                         <span className={`rounded px-2 py-1 text-xs ${statusBadgeClass(r.status)}`}>
-                          {STATUS_LABELS[r.status] ?? r.status}
+                          {RETURN_INVOICE_STATUS_LABELS[r.status] ?? r.status}
                         </span>
                       </td>
                       <td className="px-3 py-2 text-xs">

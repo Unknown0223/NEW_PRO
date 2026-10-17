@@ -4,8 +4,8 @@ export const ORDER_CREATED_UTC_OFFSET_HOURS = 5; // Asia/Tashkent (UTC+5)
 export const LARGE_CLIENT_IDS_CHUNK = 10000;
 export const BALANCE_PERF_LOG = process.env.BALANCE_PERF_LOG === "1";
 
-/** Kassir / tizim tasdiqlamagan kirimlar qarzni yopgan hisoblanmaydi (`workflow_status`). */
-export const PAYMENT_COUNTS_FOR_RECEIVABLE_NET = Prisma.sql`AND COALESCE(p.workflow_status, 'confirmed') <> 'pending_confirmation'`;
+/** Tasdiqlanmagan, rad etilgan va o‘chirilgan kirim qarzni yopmaydi. */
+export const PAYMENT_COUNTS_FOR_RECEIVABLE_NET = Prisma.sql`AND COALESCE(p.workflow_status, 'confirmed') NOT IN ('pending_confirmation', 'rejected', 'deleted')`;
 
 /** Skidka to‘lovi — «Балансы клиентов» jadvalida alohida ustun. */
 export const DISCOUNT_SETTLEMENT_PAYMENT_LABEL = "Оплата скидки";

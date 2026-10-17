@@ -2,6 +2,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "../../config/database";
 import type { ReportActor } from "./client-sales-4-report.service";
 import {
+  expandSupervisorPaymentFilters,
   orderScopeSql,
   planScopeSql,
   visitScopeSql,
@@ -201,7 +202,7 @@ export async function fetchVisitTotalsForSingleDay(
   actor?: ReportActor
 ): Promise<DayMetricRow[]> {
   const { dayStart, dayEnd, weekday } = utcDayBounds(dayYmd);
-  const dashF = toDashboardFilters(dayYmd, vf, actor);
+  const dashF = await expandSupervisorPaymentFilters(tenantId, toDashboardFilters(dayYmd, vf, actor));
   const orderScope = orderScopeSql(tenantId, dayStart, dayEnd, dashF);
   const visitScope = visitScopeSql(tenantId, dayStart, dayEnd, dashF);
   const planScope = planScopeSql(tenantId, dayStart, dayEnd, weekday, dashF);

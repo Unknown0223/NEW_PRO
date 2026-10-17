@@ -74,7 +74,7 @@ export function blockCount(line: NakladnoyLine): number | string {
 
 export function sanitizeSheetName(raw: string): string {
   const s = raw.replace(/[:\\/?*[\]]/g, " ").trim().slice(0, 31);
-  return s || "Zakaz";
+  return s || "Заказ";
 }
 
 export function applyBorderRange(
@@ -127,15 +127,37 @@ export function buildMergedLoadingPayload(
   const minT = Math.min(...times);
   const maxT = Math.max(...times);
   const dateTo = maxT > minT ? new Date(maxT) : null;
+  const shipTimes = orders
+    .map((o) => o.shipDate?.getTime())
+    .filter((t): t is number => typeof t === "number" && Number.isFinite(t));
 
   return {
     ...first,
     number: sheetNumberLabel,
     createdAt: new Date(minT),
     dateTo,
+    shipDate: shipTimes.length > 0 ? new Date(Math.max(...shipTimes)) : null,
     agentLine: uniqJoin(orders.map((o) => o.agentLine)),
+    invoiceAgentLine: uniqJoin(orders.map((o) => o.invoiceAgentLine)),
+    agentName: (() => {
+      const v = uniqJoin(orders.map((o) => o.agentName ?? ""));
+      return v === "—" ? null : v;
+    })(),
+    agentPhone: (() => {
+      const v = uniqJoin(orders.map((o) => o.agentPhone ?? ""));
+      return v === "—" ? null : v;
+    })(),
     expeditorLine: uniqJoin(orders.map((o) => o.expeditorLine)),
+    expeditorName: (() => {
+      const v = uniqJoin(orders.map((o) => o.expeditorName ?? ""));
+      return v === "—" ? null : v;
+    })(),
+    expeditorPhone: (() => {
+      const v = uniqJoin(orders.map((o) => o.expeditorPhone ?? ""));
+      return v === "—" ? null : v;
+    })(),
     territory: uniqJoin(orders.map((o) => o.territory)),
+    invoiceTerritory: uniqJoin(orders.map((o) => o.invoiceTerritory || o.territory)),
     warehouseName: (() => {
       const names = orders
         .map((o) => o.warehouseName)
@@ -198,20 +220,4 @@ export function expandLoadingSheetPayloads(
     if (group.length === 1) return group[0]!;
     return buildMergedLoadingPayload(group, sheetNameForGroup(options.groupBy, group));
   });
-}
-
-/** «Накладные 2.1.0»: zakazlarni birlashtirmasdan, varaq(lar)da ustma-ust. */
-export function expandConsignmentSheetGroups(
-  orders: NakladnoyOrderPayload[],
-  options: NakladnoyBuildOptions
-): NakladnoyOrderPayload[][] {
-  if (orders.length === 0) return [];
-  if (!options.separateSheets) return [orders];
-  const buckets = new Map<string, NakladnoyOrderPayload[]>();
-  for (const o of orders) {
-    const k = groupKeyForOrder(o, options.groupBy);
-    if (!buckets.has(k)) buckets.set(k, []);
-    buckets.get(k)!.push(o);
-  }
-  return [...buckets.values()];
 }

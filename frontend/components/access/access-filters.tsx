@@ -5,6 +5,7 @@ import { SearchableMultiSelectPanel, type SearchableMultiSelectItem } from "@/co
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Search } from "lucide-react";
+import { staffRoleFilterOptions } from "@/components/access/access-user-detail/access-user-detail.types";
 
 interface AccessFiltersProps {
   searchQuery: string;
@@ -16,15 +17,7 @@ interface AccessFiltersProps {
   onClearFilters: () => void;
 }
 
-const ROLE_OPTIONS: SearchableMultiSelectItem<string>[] = [
-  { id: "", title: "Все роли" },
-  { id: "admin", title: "Администраторы" },
-  { id: "supervisor", title: "Супервайзеры" },
-  { id: "agent", title: "Агенты" },
-  { id: "expeditor", title: "Экспедиторы" },
-  { id: "operator", title: "Операторы" },
-  { id: "manager", title: "Менеджеры" }
-];
+const ROLE_OPTIONS: SearchableMultiSelectItem<string>[] = staffRoleFilterOptions();
 
 const STATUS_OPTIONS: SearchableMultiSelectItem<string>[] = [
   { id: "", title: "Все" },

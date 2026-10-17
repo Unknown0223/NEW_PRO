@@ -73,12 +73,12 @@ export function useVisitPlannerGeoState(tenantSlug: string | null, clientsWithGp
 
   const startDraw = useCallback(() => {
     if (!geoRefId) {
-      setGeoFeedback("Avval filial, zona yoki territoriyani tanlang.");
+      setGeoFeedback("Сначала выберите филиал, зону или территорию.");
       return;
     }
     setDrawPoints([]);
     setDrawActive(true);
-    setGeoFeedback("Xaritada chegarani chizing (kamida 3 nuqta).");
+    setGeoFeedback("Нарисуйте границу на карте (минимум 3 точки).");
   }, [geoRefId]);
 
   const cancelDraw = useCallback(() => {
@@ -102,12 +102,12 @@ export function useVisitPlannerGeoState(tenantSlug: string | null, clientsWithGp
       });
       setDrawActive(false);
       setDrawPoints([]);
-      const clipNote = res.clipped ? " Kesilgan qism saqlandi (mavjud chegara saqlanadi)." : "";
+      const clipNote = res.clipped ? " Сохранена обрезанная часть (существующая граница не изменена)." : "";
       setGeoFeedback(
-        `Hudud saqlandi. ${res.clients_assigned} ta klient bog‘landi.${clipNote}`
+        `Территория сохранена. Привязано клиентов: ${res.clients_assigned}.${clipNote}`
       );
     } catch (e) {
-      setGeoFeedback(getUserFacingError(e, "Saqlab bo‘lmadi."));
+      setGeoFeedback(getUserFacingError(e, "Не удалось сохранить."));
     }
   }, [tenantSlug, geoRefId, selectedCatalogItem, drawPoints, geoKind, upsertMut]);
 
@@ -115,9 +115,9 @@ export function useVisitPlannerGeoState(tenantSlug: string | null, clientsWithGp
     if (!selectedBoundary) return;
     try {
       await deleteMut.mutateAsync(selectedBoundary.id);
-      setGeoFeedback("Hudud o‘chirildi.");
+      setGeoFeedback("Территория удалена.");
     } catch (e) {
-      setGeoFeedback(e instanceof Error ? e.message : "O‘chirib bo‘lmadi.");
+      setGeoFeedback(e instanceof Error ? e.message : "Не удалось удалить.");
     }
   }, [selectedBoundary, deleteMut]);
 
@@ -125,9 +125,9 @@ export function useVisitPlannerGeoState(tenantSlug: string | null, clientsWithGp
     if (!selectedBoundary) return;
     try {
       const res = await assignMut.mutateAsync(selectedBoundary.id);
-      setGeoFeedback(`${res.updated} ta klient qayta bog‘landi.`);
+      setGeoFeedback(`Перепривязано клиентов: ${res.updated}.`);
     } catch (e) {
-      setGeoFeedback(e instanceof Error ? e.message : "Bog‘lab bo‘lmadi.");
+      setGeoFeedback(e instanceof Error ? e.message : "Не удалось привязать.");
     }
   }, [selectedBoundary, assignMut]);
 

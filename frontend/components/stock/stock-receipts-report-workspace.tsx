@@ -10,7 +10,9 @@ import { FilterSearchableSelect } from "@/components/ui/filter-searchable-select
 import { Input } from "@/components/ui/input";
 import { useUserTablePrefs } from "@/hooks/use-user-table-prefs";
 import { api } from "@/lib/api";
+import { useDebouncedSearchCommit } from "@/lib/use-debounced-search-commit";
 import { STALE } from "@/lib/query-stale";
+import { usePermissions } from "@/lib/use-permissions";
 import { cn } from "@/lib/utils";
 import { useQuery } from "@tanstack/react-query";
 import { ArrowDown, ArrowUp, ArrowUpDown, CalendarDays, Download, LayoutGrid, ListFilter, RefreshCw, Search } from "lucide-react";
@@ -102,6 +104,7 @@ export function StockReceiptsReportWorkspace({
   tenantSlug: string;
   daily?: boolean;
 }) {
+  const canExport = usePermissions().has("warehouse.postuplenie.export");
   const [draftFrom, setDraftFrom] = useState(monthStartYmd);
   const [draftTo, setDraftTo] = useState(localYmd(new Date()));
   const [draftWarehouse, setDraftWarehouse] = useState("");
@@ -110,6 +113,10 @@ export function StockReceiptsReportWorkspace({
   const [draftProduct, setDraftProduct] = useState("");
   const [draftQtyMode, setDraftQtyMode] = useState<"all" | "positive" | "zero">("all");
   const [searchDraft, setSearchDraft] = useState("");
+  useDebouncedSearchCommit(searchDraft, (q) => {
+    setApplied((prev) => (prev.q === q ? prev : { ...prev, q }));
+    setPage(1);
+  });
   const [applied, setApplied] = useState({
     dateFrom: monthStartYmd(),
     dateTo: localYmd(new Date()),
@@ -389,7 +396,7 @@ export function StockReceiptsReportWorkspace({
         title={isDaily ? "Отчет по поступлениям (детальный)" : "Отчет о поступлении товара на склад"}
         description={
           isDaily
-            ? "Timeline matrix: продукты по строкам и документы прихода по датам в динамических столбцах."
+            ? "Матрица по датам: продукты по строкам и документы прихода по датам в динамических столбцах."
             : "Аналитика прихода на склад: поставщики, последние закупки и сумма закупа по товарам."
         }
       />
@@ -515,7 +522,7 @@ export function StockReceiptsReportWorkspace({
                     onKeyDown={(e) => e.key === "Enter" && applyFilters()}
                   />
                 </div>
-                {!isDaily ? (
+                {!isDaily && canExport ? (
                   <Button type="button" variant="outline" size="sm" className="h-9" disabled={exporting} onClick={() => void downloadExcel()}>
                     <Download className="mr-1 size-3.5" />
                     {exporting ? "…" : "Excel"}

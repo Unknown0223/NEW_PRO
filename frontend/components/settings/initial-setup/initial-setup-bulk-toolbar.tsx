@@ -38,7 +38,7 @@ function BulkRelationSelect({
       value={value}
       onChange={(e) => onChange(e.target.value)}
     >
-      <option value="">{options.length ? `— ${placeholder} —` : "Ma’lumot yo‘q"}</option>
+      <option value="">{options.length ? `— ${placeholder} —` : "Нет данных"}</option>
       {options.map((o) => (
         <option key={o.value} value={o.value}>
           {o.label}

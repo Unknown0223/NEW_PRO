@@ -79,7 +79,7 @@ export async function getUserAccessMatrix(tenantId: number, userId: number, user
       action: p.action ?? null,
       description: resolveMatrixDescription(p.key, p.description),
       /** RU label — как в GET .../permissions/catalog (`catalogParentPathLabel`), не сырой `module / section`. */
-      parent_path: catalogParentPathLabel(p.module, p.section),
+      parent_path: catalogParentPathLabel(p.module, p.section, p.key),
       from_role: roleKeys.has(p.key),
       user_effect: ue === "allow" || ue === "deny" ? ue : "none",
       effective: effectiveSet.has(p.key),
@@ -96,7 +96,7 @@ export async function getUserAccessMatrix(tenantId: number, userId: number, user
       section: null,
       action: key.split(".").pop() ?? null,
       description: resolveMatrixDescription(key, null),
-      parent_path: catalogParentPathLabel(mod, null),
+      parent_path: catalogParentPathLabel(mod, null, key),
       from_role: roleKeys.has(key),
       user_effect: userEffectByKey.get(key) === "allow" || userEffectByKey.get(key) === "deny" ? userEffectByKey.get(key)! : "none",
       effective: effectiveSet.has(key),

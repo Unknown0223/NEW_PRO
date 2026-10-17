@@ -23,6 +23,11 @@ import {
   patchMobileExpeditorOrderStatus
 } from "./mobile.expeditor.service";
 import { mobileSyncPreHandler } from "./mobile.route.shared";
+import {
+  assertFaceGateForAction,
+  isFaceGateError,
+  loadMobileConfigForFaceGate
+} from "./mobile-face.guard";
 
 export async function registerMobileExpeditorOrderRoutes(app: FastifyInstance) {
 
@@ -49,6 +54,10 @@ export async function registerMobileExpeditorOrderRoutes(app: FastifyInstance) {
       const userId = Number.parseInt(viewer.sub, 10);
       try {
         await assertDocWritableById(request, "orders", idParsed.data.id);
+        if (statusParsed.data.status === "delivered" && Number.isFinite(userId) && userId > 0) {
+          const mc = await loadMobileConfigForFaceGate(request.tenant!.id, userId);
+          await assertFaceGateForAction(request.tenant!.id, userId, "delivery_confirm", mc);
+        }
         const row = await patchMobileExpeditorOrderStatus(
           request.tenant!.id,
           userId,
@@ -58,6 +67,9 @@ export async function registerMobileExpeditorOrderRoutes(app: FastifyInstance) {
         );
         return reply.send(row);
       } catch (e) {
+        if (isFaceGateError(e)) {
+          return sendApiError(reply, request, 403, e.code, e.message);
+        }
         if (isDocumentEditPeriodLockedError(e)) return sendDocumentEditPeriodLocked(reply, request);
         if (e instanceof Error && e.message === "NOT_FOUND") {
           return sendApiError(reply, request, 404, "NotFound");
@@ -67,6 +79,12 @@ export async function registerMobileExpeditorOrderRoutes(app: FastifyInstance) {
         }
         if (e instanceof Error && e.message === "INVALID_TRANSITION") {
           return sendApiError(reply, request, 400, "InvalidTransition");
+        }
+        if (e instanceof Error && e.message === "PHOTO_REPORT_REQUIRED") {
+          return sendApiError(reply, request, 400, "PhotoReportRequired", "Нужен сегодняшний фотоотчёт по этому клиенту");
+        }
+        if (e instanceof Error && e.message === "REASON_REQUIRED") {
+          return sendApiError(reply, request, 400, "ReasonRequired", "Укажите причину возврата");
         }
         throw e;
       }
@@ -164,6 +182,8 @@ export async function registerMobileExpeditorOrderRoutes(app: FastifyInstance) {
       }
       const userId = Number.parseInt(viewer.sub, 10);
       try {
+        const mc = await loadMobileConfigForFaceGate(request.tenant!.id, userId);
+        await assertFaceGateForAction(request.tenant!.id, userId, "payment_accept", mc);
         const row = await createMobileExpeditorOrderPayment(
           request.tenant!.id,
           userId,
@@ -172,6 +192,9 @@ export async function registerMobileExpeditorOrderRoutes(app: FastifyInstance) {
         );
         return reply.send(row);
       } catch (e) {
+        if (isFaceGateError(e)) {
+          return sendApiError(reply, request, 403, e.code, e.message);
+        }
         if (isDocumentEditPeriodLockedError(e)) return sendDocumentEditPeriodLocked(reply, request);
         if (e instanceof Error && e.message === "NOT_FOUND") {
           return sendApiError(reply, request, 404, "NotFound");
@@ -225,7 +248,50 @@ export async function registerMobileExpeditorOrderRoutes(app: FastifyInstance) {
         if (e instanceof Error && e.message === "RETURN_DISABLED") {
           return sendApiError(reply, request, 403, "ReturnDisabled");
         }
-        if (e instanceof Error && (e.message === "BAD_STATUS" || e.message === "BAD_REASON")) {
+        if (e instanceof Error && e.message === "PHOTO_REPORT_REQUIRED") {
+          return sendApiError(reply, request, 400, "PhotoReportRequired", "Нужен сегодняшний фотоотчёт по этому клиенту");
+        }
+        if (e instanceof Error && e.message === "BAD_STATUS") {
+          return sendApiError(
+            reply,
+            request,
+            400,
+            "BadStatus",
+            "Возврат можно оформить, когда заказ доставляется или уже доставлен"
+          );
+        }
+        if (e instanceof Error && e.message === "ORDER_NOT_DELIVERED") {
+          return sendApiError(
+            reply,
+            request,
+            400,
+            "OrderNotDelivered",
+            "Частичный возврат доступен после того, как заказ отмечен доставленным"
+          );
+        }
+        if (
+          e instanceof Error &&
+          [
+            "BAD_REASON",
+            "BAD_RETURN_ITEM",
+            "BAD_RETURN_QTY",
+            "BAD_ORDER",
+            "BAD_CLIENT",
+            "BAD_PRODUCT",
+            "EMPTY_LINES",
+            "RETURN_FILTER_EMPTY",
+            "RETURN_ORDER_OUT_OF_FILTER",
+            "ORDER_FULLY_RETURNED",
+            "RETURN_QTY_EXCEEDS_ORDERED",
+            "REFUND_EXCEEDS_ORDER_REMAINING",
+            "MIXED_LINE_MODES",
+            "MIXED_LINE_FIELDS",
+            "EMPTY_LINE",
+            "BONUS_CASH_EXCEEDS",
+            "NOTHING_TO_RETURN",
+            "RETURN_NOT_INTERCHANGEABLE"
+          ].includes(e.message)
+        ) {
           return sendApiError(reply, request, 400, "ValidationError", e.message);
         }
         if (e instanceof Error && e.message === "INVALID_TRANSITION") {
@@ -275,7 +341,13 @@ export async function registerMobileExpeditorOrderRoutes(app: FastifyInstance) {
           return sendApiError(reply, request, 403, "ReloadDisabled");
         }
         if (e instanceof Error && e.message === "BAD_STATUS") {
-          return sendApiError(reply, request, 400, "ValidationError", e.message);
+          return sendApiError(
+            reply,
+            request,
+            400,
+            "BadStatus",
+            "Догруз доступен только для уже доставленного заказа"
+          );
         }
         if (e instanceof Error && e.message === "INVALID_TRANSITION") {
           return sendApiError(reply, request, 400, "InvalidTransition");

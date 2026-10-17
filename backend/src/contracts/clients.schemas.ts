@@ -1,8 +1,12 @@
 import { z } from "zod";
 
-/** UI ba’zan id ni string qilib yuboradi — numberga aylantiramiz. */
+/**
+ * UI ba’zan id ni string qilib yuboradi — numberga aylantiramiz.
+ * Yuborilmagan maydon `undefined` qoladi: merge rejimida «o'zgarmasin» degani (`null` — tozalash).
+ */
 const optionalPositiveIntId = z.preprocess((v) => {
-  if (v === null || v === undefined || v === "") return null;
+  if (v === undefined) return undefined;
+  if (v === null || v === "") return null;
   if (typeof v === "number") return Number.isFinite(v) ? Math.trunc(v) : v;
   if (typeof v === "string" && v.trim() !== "") {
     const n = Number.parseInt(v.trim(), 10);
@@ -82,6 +86,8 @@ export const patchClientBodySchema = z
     cash_desk_id: z.number().int().positive().nullable().optional(),
     agent_id: z.number().int().positive().nullable().optional(),
     agent_assignments: z.array(clientAgentAssignmentSlotSchema).max(100).optional(),
+    /** true — faqat yuborilgan slot maydonlari o'zgaradi, qolgan slotlar/maydonlar saqlanadi. */
+    agent_assignments_merge: z.boolean().optional(),
     contact_persons: z.array(clientContactSlotSchema).max(10).optional(),
     is_active: z.boolean().optional(),
     price_type: z.string().max(128).nullable().optional(),

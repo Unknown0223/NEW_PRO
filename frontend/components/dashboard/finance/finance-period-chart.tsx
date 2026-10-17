@@ -161,18 +161,18 @@ export function FinancePeriodChart({ data }: { data: FinanceDashboardSnapshot })
   }, [data.debt_and_payment_by_period, data.filters.from, data.filters.to, granularity]);
 
   const sideItems = [
-    { label: "UZS", value: periodBalance.uzs, wide: true },
-    { label: "Pereches", value: periodBalance.transfer, wide: false },
-    { label: "Tenge", value: periodBalance.tenge, wide: false },
-    { label: "Terminal", value: periodBalance.terminal, wide: false },
-    { label: "Naqd", value: periodBalance.cash, wide: false }
-  ];
+    { label: "Оплаты минус долг", value: periodBalance.uzs, wide: true },
+    { label: "Перечисление", value: periodBalance.transfer, wide: false },
+    { label: "Тенге", value: periodBalance.tenge, wide: false },
+    { label: "Терминал", value: periodBalance.terminal, wide: false },
+    { label: "Наличные", value: periodBalance.cash, wide: false }
+  ].filter((item) => item.wide || Math.abs(Number(item.value)) >= 0.0001);
 
   return (
     <section className="finance-motion-fade rounded-2xl bg-card p-5 shadow-sm ring-1 ring-slate-200/70">
       <FinanceSectionHeader
-        title="Долги и оплаты по периодам"
-        subtitle="Динамика оплат и задолженности за выбранный период"
+        title="Долг и оплаты по дням"
+        subtitle="Зелёная линия — оплаты, красная — новый долг по доставленным заказам"
       />
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_330px] 2xl:grid-cols-[minmax(0,1fr)_380px]">
         {points.length === 0 ? (

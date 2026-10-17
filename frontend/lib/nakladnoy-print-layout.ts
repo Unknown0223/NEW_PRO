@@ -73,7 +73,7 @@ export function resolveNakladnoyPrintLayout(
     return {
       id: "invoice-21",
       label: "Накладные 2.1.x",
-      orientation: "landscape",
+      orientation: "portrait",
       tableFontPx: cols > 14 ? 6 : 7,
       fitTableToPage: true,
       pageBreakPerSheet: preview.pages.length > 1

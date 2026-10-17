@@ -27,11 +27,11 @@ export async function createProductsBulk(
       const skuKey = normalizeProductDupKey(items[i].sku);
       const nameKey = normalizeProductDupKey(items[i].name);
       if (seenSku.has(skuKey)) {
-        errors.push(`${i + 1}-qator: dublikat SKU «${items[i].sku}»`);
+        errors.push(`Строка ${i + 1}: дубликат SKU «${items[i].sku}»`);
         continue;
       }
       if (seenName.has(nameKey)) {
-        errors.push(`${i + 1}-qator: dublikat nom «${items[i].name}»`);
+        errors.push(`Строка ${i + 1}: дубликат названия «${items[i].name}»`);
         continue;
       }
       seenSku.add(skuKey);
@@ -40,7 +40,7 @@ export async function createProductsBulk(
       created += 1;
     } catch (e) {
       errors.push(
-        `${i + 1}-qator: ${e instanceof Error ? e.message : "xato"}`
+        `Строка ${i + 1}: ${e instanceof Error ? e.message : "ошибка"}`
       );
     }
   }
@@ -67,7 +67,7 @@ export async function importProductsFromXlsx(
   await workbook.xlsx.load(nodeBuf as never);
   const sheet = workbook.worksheets[0];
   if (!sheet) {
-    return { created: 0, updated: 0, errors: ["Varaq topilmadi"] };
+    return { created: 0, updated: 0, errors: ["Лист не найден"] };
   }
 
   const headerRow = sheet.getRow(1);
@@ -83,7 +83,7 @@ export async function importProductsFromXlsx(
     return {
       created: 0,
       updated: 0,
-      errors: ["Birinchi qatorda majburiy ustunlar: SKU (yoki kod) va name (yoki nomi)"]
+      errors: ["В первой строке обязательны столбцы: SKU (или код) и name (или название)"]
     };
   }
 
@@ -99,17 +99,17 @@ export async function importProductsFromXlsx(
     const name = String(row.getCell(colIndexByKey.name).text ?? "").trim();
     if (!sku && !name) continue;
     if (!sku || !name) {
-      errors.push(`Qator ${r}: SKU va nom bo‘sh bo‘lmasligi kerak`);
+      errors.push(`Строка ${r}: SKU и название не должны быть пустыми`);
       continue;
     }
     const skuKey = normalizeProductDupKey(sku);
     const nameKey = normalizeProductDupKey(name);
     if (seenSku.has(skuKey)) {
-      errors.push(`Qator ${r}: dublikat SKU faylda «${sku}»`);
+      errors.push(`Строка ${r}: дубликат SKU в файле «${sku}»`);
       continue;
     }
     if (seenName.has(nameKey)) {
-      errors.push(`Qator ${r}: dublikat nom faylda «${name}»`);
+      errors.push(`Строка ${r}: дубликат названия в файле «${name}»`);
       continue;
     }
     seenSku.add(skuKey);
@@ -145,7 +145,7 @@ export async function importProductsFromXlsx(
         created += 1;
       }
     } catch (e) {
-      errors.push(`Qator ${r}: ${e instanceof Error ? e.message : "xato"}`);
+      errors.push(`Строка ${r}: ${e instanceof Error ? e.message : "ошибка"}`);
     }
   }
 

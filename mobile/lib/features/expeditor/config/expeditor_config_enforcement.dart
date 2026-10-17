@@ -4,14 +4,21 @@ class ExpeditorConfigPolicy {
   final ExpeditorConfig? config;
   final OrdersConfig? orders;
   final ClientConfig? client;
+  final bool photoRequiredForOrder;
 
-  const ExpeditorConfigPolicy({this.config, this.orders, this.client});
+  const ExpeditorConfigPolicy({
+    this.config,
+    this.orders,
+    this.client,
+    this.photoRequiredForOrder = false,
+  });
 
   factory ExpeditorConfigPolicy.fromMobileConfig(MobileConfig? mc) =>
       ExpeditorConfigPolicy(
         config: mc?.expeditor,
         orders: mc?.orders,
         client: mc?.client,
+        photoRequiredForOrder: mc?.photo.requiredForOrder ?? false,
       );
 
   bool get acceptPaymentForOrder => config?.acceptPaymentForOrder ?? true;
@@ -29,19 +36,22 @@ class ExpeditorConfigPolicy {
   bool get fingerprintRequired => config?.fingerprintRequiredForShipmentConfirm ?? false;
   bool get requirePhotoReportBeforeVisit =>
       config?.requirePhotoReportBeforeVisit ?? false;
-  String get currencySymbol => config?.currencySymbol ?? "so'm";
+
+  /// Ish joyidagi «фото при заказе» ham, alohida «фото перед визитом» ham.
+  bool get photoRequired => requirePhotoReportBeforeVisit || photoRequiredForOrder;
+  String get currencySymbol => config?.currencySymbol ?? 'сум';
 
   bool get returnsEnabled => allowPartialReturn || allowReloadFromVehicle;
 
   String blockPaymentMessage() {
     if (!acceptPaymentForOrder) {
-      return 'Buyurtma uchun to\'lov qabul qilish admin panelda o\'chirilgan';
+      return 'Приём оплаты по заказу отключён в админ-панели';
     }
     if (!paymentsEnabled) {
-      return 'Yetkazishda to\'lov qabul qilish admin panelda o\'chirilgan';
+      return 'Приём оплаты при доставке отключён в админ-панели';
     }
     if (!acceptPaymentOnDelivery) {
-      return 'Faqat qarzdor mijozlardan to\'lov qabul qilish ruxsat etilgan';
+      return 'Разрешён приём оплаты только от клиентов-должников';
     }
     return '';
   }

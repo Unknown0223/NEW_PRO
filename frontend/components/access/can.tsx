@@ -20,8 +20,8 @@ type CanProps = {
 /**
  * Ruxsatga qarab UI elementini ko'rsatadi/yashiradi.
  *
- *   <Can permission="orders.zakaz.create"><Button>Создать</Button></Can>
- *   <Can anyOf={["clients.klient.update","clients.klient.delete"]}>…</Can>
+ *   <Can permission="orders.sozdanie.create"><Button>Создать</Button></Can>
+ *   <Can anyOf={["clients.klient.update","clients.klient.deactivate"]}>…</Can>
  *
  * `isLoading` faqat birinchi yuklash — fon refetch children ni yechib tashlamaydi.
  */

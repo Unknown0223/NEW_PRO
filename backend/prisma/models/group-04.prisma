@@ -140,8 +140,19 @@ model Order {
   exchange_meta             Json?
   /// Savdo zakazida majburiy: reja / tanlangan to‘lov usuli (spravochnik, masalan naqd)
   payment_method_ref        String?          @db.VarChar(64)
+  /// Tanlangan narx turi kaliti (`product_prices.price_type`); eski zakazlarda null — `payment_method_ref` dan aniqlanadi
+  price_type                String?          @db.VarChar(128)
   /// Skladchi yig‘gan zakazni qaysi «доставщик bloki»ga qo‘ygani (bitta blok = bitta ekspektor).
   warehouse_block_id        Int?
+  /// Snapshot: qaysi ishchi o‘rnida yaratilgan (agent_id — kim)
+  work_slot_id                Int?
+  /// `web` — ofis paneli; `mobile` — agent/ekspeditor ilovasi
+  creation_channel           String?          @db.VarChar(16)
+  /// Mobil zakaz qaysi vizit ichida urilgan (agent «Начать визит»)
+  agent_visit_id             Int?
+  /// Vizit/zakaz GPS tekshiruvi: koordinata, masofa, radius, aniqlik, soxta GPS, oflayn
+  visit_geo                  Json?
+  agent_visit                AgentVisit?      @relation(fields: [agent_visit_id], references: [id], onDelete: SetNull)
   payments                    Payment[]
   change_logs                 OrderChangeLog[]
   items                       OrderItem[]
@@ -153,6 +164,7 @@ model Order {
   tenant                      Tenant           @relation(fields: [tenant_id], references: [id])
   warehouse                   Warehouse?       @relation(fields: [warehouse_id], references: [id])
   warehouse_block             WarehouseBlock?  @relation(fields: [warehouse_block_id], references: [id], onDelete: SetNull)
+  work_slot                   WorkSlot?        @relation(fields: [work_slot_id], references: [id], onDelete: SetNull)
   sales_returns               SalesReturn[]
   client_photo_reports        ClientPhotoReport[]
   auto_confirm_schedules      OrderAutoConfirmSchedule[]
@@ -171,7 +183,9 @@ model Order {
   @@index([tenant_id, agent_id, order_type])
   @@index([tenant_id, agent_id, status])
   @@index([tenant_id, client_id, status])
+  @@index([work_slot_id])
   @@index([warehouse_block_id])
+  @@index([agent_visit_id])
   @@index([tenant_id, is_consignment, consignment_moved_at(sort: Desc)])
   @@map("orders")
 }
@@ -216,6 +230,8 @@ model OrderChangeLog {
 model Payment {
   id                 Int       @id @default(autoincrement())
   tenant_id          Int
+  /// Tashqi / ko‘rinadigan hujjat ID (ks_1652, PAY-12…); bo‘sh → create dan keyin String(id)
+  number             String?   @db.VarChar(64)
   client_id          Int
   order_id           Int?
   amount             Decimal   @db.Decimal(15, 2)
@@ -265,8 +281,11 @@ model Payment {
   @@index([tenant_id, paid_at(sort: Desc)])
   @@index([expeditor_user_id])
   @@index([ledger_agent_id])
+  @@unique([tenant_id, number])
+  @@index([tenant_id, number])
   edit_grants          PaymentEditGrant[]
   bank_transfer_inbox  BankTransferInbox[]
+  opening_balance_entries ClientOpeningBalanceEntry[]
   @@map("client_payments")
 }
 
@@ -542,6 +561,7 @@ model KpiGroup {
   sort_order Int               @default(0)
   comment    String?
   is_active  Boolean           @default(true)
+  bonus_formula String?         @db.Text
   created_at DateTime          @default(now())
   updated_at DateTime          @updatedAt
   agents          KpiGroupAgent[]

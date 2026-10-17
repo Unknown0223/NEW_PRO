@@ -68,4 +68,39 @@ describe("agent-mobile-config.client-mobile", () => {
     expect(mapped).toEqual({ category: "A", inn: null });
     expect(mapped).not.toHaveProperty("region");
   });
+
+  it("patch mapper includes name phone zone city", () => {
+    const mapped = mobileClientPatchToUpdateFields({
+      name: "Shop",
+      phone: "+998901234567",
+      zone: "Z1",
+      city: "Tashkent",
+      region: "Toshkent"
+    });
+    expect(mapped).toEqual({
+      name: "Shop",
+      phone: "+998901234567",
+      zone: "Z1",
+      city: "Tashkent",
+      region: "Toshkent"
+    });
+  });
+
+  it("accepts visit_weekdays instead of visit_date when visit_day required", () => {
+    expect(() =>
+      assertMobileClientPolicy(
+        { fields_required: { visit_day: true } },
+        { name: "Test Shop", phone: "+998901234567", visit_weekdays: [1, 3, 5] },
+        "create"
+      )
+    ).not.toThrow();
+
+    expect(() =>
+      assertMobileClientPolicy(
+        { fields_required: { visit_day: true } },
+        { name: "Test Shop", phone: "+998901234567" },
+        "create"
+      )
+    ).toThrow("VALIDATION");
+  });
 });

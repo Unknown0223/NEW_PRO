@@ -16,6 +16,7 @@ import {
 } from "./payment-allocations.service";
 
 import { buildDiscountSettlementNote } from "./payment.discount-note";
+import { notifyClientPayment, soon } from "../tg-app/tg-notify";
 
 import type { CreatePaymentInput, PaymentListRow } from "./payment.query";
 import {
@@ -24,6 +25,26 @@ import {
   paymentListInclude,
   resolveLedgerAgentId
 } from "./payment.query";
+
+/** Bo‘sh → null (create dan keyin String(id)); aks holda trim. */
+function resolvePaymentDocNumber(raw: string | null | undefined): string | null {
+  if (raw == null) return null;
+  const s = String(raw).trim().replace(/\u00a0/g, " ");
+  if (!s) return null;
+  return s.slice(0, 64);
+}
+
+async function finalizePaymentNumber(
+  tx: Prisma.TransactionClient,
+  paymentId: number,
+  requested: string | null
+): Promise<void> {
+  const number = requested ?? String(paymentId);
+  await tx.payment.update({
+    where: { id: paymentId },
+    data: { number }
+  });
+}
 
 async function assertCashDeskAcceptsPurpose(
   tenantId: number,
@@ -71,10 +92,14 @@ export async function createClientExpense(
       where: { id: input.expeditor_user_id, tenant_id: tenantId, is_active: true }
     });
     if (!ex) throw new Error("BAD_EXPEDITOR");
+    const { assertExpeditorCanTakeNewWork } = await import("../work-slots/work-slots.expeditor-gate");
+    await assertExpeditorCanTakeNewWork(tenantId, ex.id);
     expeditorId = ex.id;
   }
 
-  const ledgerAgentId = await resolveLedgerAgentId(tenantId, input.ledger_agent_id);
+  const ledgerAgentId = await resolveLedgerAgentId(tenantId, input.ledger_agent_id, undefined, {
+    requireActive: input.ledger_agent_allow_inactive ? false : true
+  });
 
   const { assertFieldStaffBranchScopeForActor } = await import("../work-slots/work-slots.branch-scope");
   await assertFieldStaffBranchScopeForActor(tenantId, actorUserId, [
@@ -96,6 +121,7 @@ export async function createClientExpense(
   }
 
   const neg = amountDec.neg();
+  const requestedNumber = resolvePaymentDocNumber(input.number);
 
   const row = await prisma.$transaction(async (tx) => {
     const p = await tx.payment.create({
@@ -114,9 +140,12 @@ export async function createClientExpense(
         confirmed_at: eventAt,
         entry_kind: "client_expense",
         expeditor_user_id: expeditorId,
-        ledger_agent_id: ledgerAgentId
+        ledger_agent_id: ledgerAgentId,
+        number: requestedNumber
       }
     });
+
+    await finalizePaymentNumber(tx, p.id, requestedNumber);
 
     const bal = await tx.clientBalance.upsert({
       where: { tenant_id_client_id: { tenant_id: tenantId, client_id: input.client_id } },
@@ -127,7 +156,7 @@ export async function createClientExpense(
       data: {
         client_balance_id: bal.id,
         delta: neg,
-        note: `Rasxod klient #${p.id}`,
+        note: `Расход клиента #${p.id}`,
         user_id: uid
       }
     });
@@ -216,7 +245,9 @@ export async function createPayment(
     }
   }
 
-  const ledgerAgentId = await resolveLedgerAgentId(tenantId, input.ledger_agent_id);
+  const ledgerAgentId = await resolveLedgerAgentId(tenantId, input.ledger_agent_id, undefined, {
+    requireActive: input.ledger_agent_allow_inactive ? false : true
+  });
   const allocationAgentId = await resolveLedgerAgentId(tenantId, input.allocation_agent_id);
 
   let orderAgentId: number | null = null;
@@ -258,6 +289,8 @@ export async function createPayment(
         : autoDiscountNote || userNote || null
       : userNote || null;
 
+  const requestedNumber = resolvePaymentDocNumber(input.number);
+
   const row = await prisma.$transaction(async (tx) => {
     const p = await tx.payment.create({
       data: {
@@ -274,9 +307,12 @@ export async function createPayment(
         received_at: eventAt,
         confirmed_at: eventAt,
         entry_kind: isDiscountSettlement ? "discount_settlement" : "payment",
-        ledger_agent_id: ledgerAgentId
+        ledger_agent_id: ledgerAgentId,
+        number: requestedNumber
       }
     });
+
+    await finalizePaymentNumber(tx, p.id, requestedNumber);
 
     const bal = await tx.clientBalance.upsert({
       where: { tenant_id_client_id: { tenant_id: tenantId, client_id: input.client_id } },
@@ -289,7 +325,7 @@ export async function createPayment(
         delta: amountDec,
         note: isDiscountSettlement
           ? paymentNote ?? `Оплата скидки #${p.id}`
-          : `To‘lov #${p.id}${input.order_id ? ` (zakaz #${input.order_id})` : ""}`,
+          : `Оплата #${p.id}${input.order_id ? ` (заказ #${input.order_id})` : ""}`,
         user_id: uid
       }
     });
@@ -349,6 +385,7 @@ export async function createPayment(
   }
 
   void invalidateDashboard(tenantId);
+  if (!isDiscountSettlement) soon(() => notifyClientPayment(tenantId, input.client_id, input.amount, row.id));
 
   return mapPaymentToListRow(row, tenantId);
 }

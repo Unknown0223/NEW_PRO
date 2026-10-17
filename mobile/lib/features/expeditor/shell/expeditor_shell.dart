@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -33,11 +35,12 @@ class _ExpeditorShellState extends ConsumerState<ExpeditorShell> with WidgetsBin
     if (state == AppLifecycleState.resumed) {
       ref.read(authStateProvider.notifier).refreshMobileConfig();
       _startGpsIfNeeded();
-    } else if (state == AppLifecycleState.paused) {
+      // Fon / pause dan qaytganda oflayn GPS navbatini uzatish.
       try {
-        ref.read(gpsTrackerProvider.notifier).stopTracking();
+        unawaited(ref.read(gpsTrackerProvider.notifier).flushPendingLocationPings());
       } catch (_) {}
     }
+    // paused da tracking to‘xtatilmaydi — oflayn yig‘ish davom etadi (timer).
   }
 
   void _startGpsIfNeeded() {

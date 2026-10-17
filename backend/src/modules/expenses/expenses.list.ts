@@ -23,7 +23,11 @@ export async function listExpenses(
     where.deleted_at = null;
   }
 
-  if (q.status) where.status = q.status;
+  if (q.statuses != null && q.statuses.length > 0) {
+    where.status = { in: q.statuses };
+  } else if (q.status) {
+    where.status = q.status;
+  }
   if (q.expense_type) where.expense_type = q.expense_type;
   const agentScope = actor
     ? intersectRequestedAgentIds(

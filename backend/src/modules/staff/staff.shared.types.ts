@@ -96,8 +96,12 @@ export type StaffRow = {
   created_at: string;
   app_access: boolean;
   territory: string | null;
+  /** Ish o‘rnidagi barcha bog‘langan hududlar (slot territories). */
+  work_slot_territories?: string[];
   login: string;
   is_active: boolean;
+  /** Nofaol bo‘lsa ham filtr, qidiruv va dostupda ko‘rinadi */
+  filter_visible: boolean;
   max_sessions: number;
   active_session_count: number;
   kpi_color: string | null;
@@ -124,6 +128,8 @@ export type StaffRow = {
   /** Faol ishchi o‘rni (agent, inkasator, ekspeditor, omborchi) */
   work_slot_id: number | null;
   work_slot_code: string | null;
+  /** Yuz etalon rasmi bor — web avatar GET ni faqat shunda chaqirish */
+  has_face_reference: boolean;
 };
 
 export type StaffCreateResult = StaffRow & { warnings?: string[] };
@@ -132,7 +138,10 @@ export const STAFF_KINDS_WITH_WORK_SLOT = new Set<StaffKind>([
   "agent",
   "collector",
   "expeditor",
-  "skladchik"
+  "skladchik",
+  "supervisor",
+  "auditor",
+  "operator"
 ]);
 
 export type CreateStaffInput = {
@@ -192,6 +201,8 @@ export type ListStaffFilters = {
   /** `territory` maydonida qator bo‘yicha qidiruv (город) */
   territory_city?: string;
   is_active?: boolean;
+  /** Faol yoki filtrda ko‘rinishga ruxsat berilgan nofaollar */
+  for_picker?: boolean;
   /** Filtr: ushbu omborga bog‘langan skladchiklar (`warehouse_id` yoki `warehouse_user_links`) */
   warehouse_id?: number;
 };

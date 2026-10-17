@@ -1,7 +1,7 @@
-# Production Railway API ga APK yuklash + versiya siyosati
+# Production (Hetzner) API ga APK yuklash + versiya siyosati
 param(
-  [string]$Api = "https://backend-production-3cf2.up.railway.app",
-  [string]$Slug = "test1",
+  [string]$Api = "https://api.salesarena.sale",
+  [string]$Slug = "aksit",
   [string]$AdminLogin = "admin",
   [string]$AdminPassword = "secret123",
   [string]$ApkPath = "",
@@ -29,11 +29,11 @@ if (-not $ApkPath) {
   }
 }
 if (-not (Test-Path $ApkPath)) {
-  throw "APK topilmadi: $ApkPath — avval deploy-mobile-prod.cmd ishga tushiring"
+  throw "APK not found: $ApkPath - build the release APK first"
 }
 
 if (-not $LatestVersion) { $LatestVersion = Get-PubspecVersion }
-# Default: ixtiyoriy yangilash (dialog + avto-yuklash). Majburiy bloklash uchun -ForceUpdate.
+# Default: ixtiyoriy yangilash (dialog + «Обновить»). Majburiy bloklash: -ForceUpdate.
 $force = $false
 if ($ForceUpdate) { $force = $true }
 if ($NoForce) { $force = $false }
@@ -41,10 +41,17 @@ if ($NoForce) { $force = $false }
 Write-Host "=== APK yuklash (production) ===" -ForegroundColor Cyan
 Write-Host "API: $Api"
 Write-Host "APK: $ApkPath"
-Write-Host "Versiya: $LatestVersion  force=$force"
+Write-Host "Versiya: $LatestVersion  force=$force (ixtiyoriy=$([bool](-not $force)))"
 
 $loginBody = @{ slug = $Slug; login = $AdminLogin; password = $AdminPassword } | ConvertTo-Json
 $token = (Invoke-RestMethod -Uri "$Api/api/auth/login" -Method POST -Body $loginBody -ContentType "application/json").accessToken
+
+# Current policy: keep min_version for soft OTA
+$prevPolicy = $null
+try {
+  $prevPolicy = Invoke-RestMethod -Uri "$Api/api/$Slug/settings/mobile-app-release" `
+    -Method GET -Headers @{ Authorization = "Bearer $token" }
+} catch { }
 
 $boundary = [guid]::NewGuid().ToString()
 $fileBytes = [System.IO.File]::ReadAllBytes($ApkPath)
@@ -67,19 +74,41 @@ $upload = Invoke-RestMethod -Uri "$Api/api/$Slug/settings/mobile-app-release/upl
   -Body $bodyStream.ToArray()
 
 $minParts = $LatestVersion -split '\.'
-$minVer = if ($minParts.Length -ge 2) { "$($minParts[0]).$($minParts[1]).0" } else { $LatestVersion }
+$minFloor = if ($minParts.Length -ge 2) { "$($minParts[0]).$($minParts[1]).0" } else { $LatestVersion }
+$prevMin = $null
+if ($prevPolicy -and $prevPolicy.policy -and $prevPolicy.policy.min_version) {
+  $prevMin = [string]$prevPolicy.policy.min_version
+}
+# Soft: eski min saqlanadi (yoki null). Force: past versiyalarni bloklash uchun floor.
+$minVer = if ($force) { $minFloor } else { if ($prevMin) { $prevMin } else { $null } }
+
+$notes = if ($force) {
+  "Production majburiy yangilash $LatestVersion"
+} else {
+  "Production ixtiyoriy yangilash $LatestVersion - ilova ichida Obnovit yoki Pozje"
+}
+
 $policy = @{
-  min_version    = $minVer
   latest_version = $LatestVersion
   force_update   = $force
   download_url   = "$Api/api/mobile/apk-download?slug=$Slug"
-  release_notes  = "Production yangilash $LatestVersion — serverdan ilova ichida o'rnatish"
-} | ConvertTo-Json
+  release_notes  = $notes
+}
+if ($null -ne $minVer -and $minVer -ne "") {
+  $policy.min_version = $minVer
+} else {
+  $policy.min_version = $null
+}
+# PowerShell string Body can mismatch Content-Length - send UTF-8 bytes
+$policyJson = $policy | ConvertTo-Json -Compress
+$policyBytes = [System.Text.Encoding]::UTF8.GetBytes($policyJson)
 Invoke-RestMethod -Uri "$Api/api/$Slug/settings/mobile-app-release" `
   -Method PATCH `
   -Headers @{ Authorization = "Bearer $token" } `
-  -Body $policy -ContentType "application/json" | Out-Null
+  -Body $policyBytes `
+  -ContentType "application/json; charset=utf-8" | Out-Null
 
 Write-Host "Yuklandi: $($upload.bytes) bayt" -ForegroundColor Green
+Write-Host "latest=$LatestVersion min=$minVer force=$force" -ForegroundColor DarkGray
 Write-Host "download_url: $Api/api/mobile/apk-download?slug=$Slug"
-Write-Host "Veb: https://sales-arena.up.railway.app/settings/mobile-app"
+Write-Host "Veb: http://157.180.116.50:3000/settings/mobile-app"

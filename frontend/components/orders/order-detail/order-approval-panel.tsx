@@ -13,6 +13,12 @@ export type OrderApprovalView = {
   can_advance: boolean;
 };
 
+const APPROVAL_STATUS_LABEL_RU: Record<string, string> = {
+  pending: "Ожидает согласования",
+  approved: "Согласовано",
+  rejected: "Отклонено"
+};
+
 export function OrderApprovalPanel({
   tenantSlug,
   orderId,
@@ -76,13 +82,13 @@ export function OrderApprovalPanel({
 
   return (
     <section className="rounded-md border border-amber-500/40 bg-amber-500/5 px-4 py-3 text-sm">
-      <p className="font-medium">Tasdiqlash zanjiri</p>
+      <p className="font-medium">Цепочка согласования</p>
       <p className="mt-1 text-muted-foreground">
-        Holat: <strong>{view.approval_status}</strong>
+        Статус: <strong>{APPROVAL_STATUS_LABEL_RU[view.approval_status] ?? view.approval_status}</strong>
         {view.current_approver ? (
           <>
             {" "}
-            · Joriy: <strong>{view.current_approver.name}</strong> ({view.approval_step + 1}/
+            · Текущий: <strong>{view.current_approver.name}</strong> ({view.approval_step + 1}/
             {view.approval_chain.length})
           </>
         ) : null}
@@ -90,7 +96,7 @@ export function OrderApprovalPanel({
       {view.can_advance ? (
         <div className="mt-2 flex flex-wrap gap-2">
           <Button size="sm" disabled={advanceMut.isPending} onClick={() => advanceMut.mutate()}>
-            {advanceMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Tasdiqlash"}
+            {advanceMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Подтвердить"}
           </Button>
           <Button
             size="sm"
@@ -98,7 +104,7 @@ export function OrderApprovalPanel({
             disabled={rejectMut.isPending}
             onClick={() => rejectMut.mutate()}
           >
-            Rad etish
+            Отклонить
           </Button>
         </div>
       ) : null}

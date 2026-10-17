@@ -21,6 +21,7 @@ import { PaymentsTemplateFiltersPanel } from "@/components/payments/payments-tem
 import { PaymentsTemplateListToolbar } from "@/components/payments/payments-template-list-toolbar";
 import { api } from "@/lib/api";
 import { useAuthStore, useAuthStoreHydrated, useEffectiveRole } from "@/lib/auth-store";
+import { usePermissions } from "@/lib/use-permissions";
 import { decodeAccessTokenUserId } from "@/lib/me-permissions";
 import { downloadXlsxSheet } from "@/lib/download-xlsx";
 import { getUserFacingError } from "@/lib/error-utils";
@@ -50,7 +51,7 @@ type DealType = "regular" | "consignment" | "both";
 export type ClientPaymentsWorkspaceVariant = "payments" | "client_expenses";
 
 type StaffPick = { id: number; fio: string; code?: string | null };
-type PaymentStatusFilter = "" | "pending_confirmation" | "confirmed" | "deleted";
+type PaymentStatusFilter = string;
 type DateFieldFilter = "created_at" | "paid_at" | "confirmed_at";
 
 type FilterForm = {
@@ -59,6 +60,7 @@ type FilterForm = {
   date_to: string;
   date_field: DateFieldFilter;
   client_id: string;
+  /** Pipe-joined: pending_confirmation|confirmed|deleted */
   payment_status: PaymentStatusFilter;
   cash_desk_id: string;
   agent_id: string;
@@ -136,14 +138,28 @@ function buildPaymentsQuery(
   if (form.expeditor_user_id.trim()) {
     appendPositiveIntListParam(p, "expeditor_user_id", "expeditor_user_ids", form.expeditor_user_id);
   }
-  if (form.payment_type.trim()) p.set("payment_type", form.payment_type.trim());
-  if (form.trade_direction.trim()) p.set("trade_direction", form.trade_direction.trim());
+  if (form.payment_type.trim()) {
+    const types = splitMultiFilterValues(form.payment_type);
+    if (types.length === 1) p.set("payment_type", types[0]!);
+    else if (types.length > 1) p.set("payment_types", types.join(","));
+  }
+  if (form.trade_direction.trim()) {
+    const dirs = splitMultiFilterValues(form.trade_direction);
+    if (dirs.length === 1) p.set("trade_direction", dirs[0]!);
+    else if (dirs.length > 1) p.set("trade_directions", dirs.join(","));
+  }
   if (form.territory_zone.trim()) p.set("territory_zone", form.territory_zone.trim());
   if (form.territory_region.trim()) p.set("territory_region", form.territory_region.trim());
   if (form.territory_city.trim()) p.set("territory_city", form.territory_city.trim());
   if (form.territory_district.trim()) p.set("territory_district", form.territory_district.trim());
   if (form.deal_type !== "both") p.set("deal_type", form.deal_type);
-  if (form.payment_status) p.set("payment_status", form.payment_status);
+  if (form.payment_status.trim()) {
+    const statuses = splitMultiFilterValues(form.payment_status).filter((s) =>
+      ["pending_confirmation", "confirmed", "deleted", "rejected"].includes(s)
+    );
+    if (statuses.length === 1) p.set("payment_status", statuses[0]!);
+    else if (statuses.length > 1) p.set("payment_statuses", statuses.join(","));
+  }
   if (form.cash_desk_id.trim()) {
     const deskIds = splitMultiFilterValues(form.cash_desk_id)
       .map((s) => Number.parseInt(s, 10))
@@ -222,6 +238,10 @@ export function ClientPaymentsWorkspace({ variant = "payments" }: { variant?: Cl
   const hydrated = useAuthStoreHydrated();
   const effectiveRole = useEffectiveRole();
   const canVoidPayments = effectiveRole === "admin";
+  const { has } = usePermissions();
+  const canEditPayment = isExpenses || has("cash.oplaty_klientov.update");
+  const canApprovePayments = !isExpenses && has("cash.oplaty_klientov.approve");
+  const canExportPayments = !isExpenses && has("cash.oplaty_klientov.export");
   const qc = useQueryClient();
 
   const [draft, setDraft] = useState<FilterForm>(() => defaultForm());
@@ -269,7 +289,7 @@ export function ClientPaymentsWorkspace({ variant = "payments" }: { variant?: Cl
     enabled: Boolean(tenantSlug) && hydrated,
     staleTime: STALE.reference,
     queryFn: async () => {
-      const { data } = await api.get<{ data: StaffPick[] }>(`/api/${tenantSlug}/agents?is_active=true`);
+      const { data } = await api.get<{ data: StaffPick[] }>(`/api/${tenantSlug}/agents?picker=1`);
       return data.data;
     }
   });
@@ -279,7 +299,7 @@ export function ClientPaymentsWorkspace({ variant = "payments" }: { variant?: Cl
     enabled: Boolean(tenantSlug) && hydrated,
     staleTime: STALE.reference,
     queryFn: async () => {
-      const { data } = await api.get<{ data: StaffPick[] }>(`/api/${tenantSlug}/expeditors?is_active=true`);
+      const { data } = await api.get<{ data: StaffPick[] }>(`/api/${tenantSlug}/expeditors?picker=1`);
       return data.data;
     }
   });
@@ -505,12 +525,23 @@ export function ClientPaymentsWorkspace({ variant = "payments" }: { variant?: Cl
     setBulkBusy(true);
     try {
       const ids = Array.from(selected);
-      for (const id of ids) {
-        await api.delete(`/api/${tenantSlug}/payments/${id}`);
-      }
+      const { data } = await api.post<{
+        ok: number[];
+        failed: { id: number; error: string }[];
+      }>(`/api/${tenantSlug}/payments/batch-delete`, { ids });
+      const failed = data.failed ?? [];
+      const ok = data.ok ?? [];
       setSelected(new Set());
       invalidatePayments();
-      setFeedback(`В архив перенесено: ${ids.length}`);
+      if (failed.length > 0) {
+        setFeedback(
+          `В архив: ${ok.length}. Ошибок: ${failed.length}${
+            failed[0] ? ` (напр. #${failed[0].id})` : ""
+          }`
+        );
+      } else {
+        setFeedback(`В архив перенесено: ${ok.length || ids.length}`);
+      }
       setTimeout(() => setFeedback(null), 5000);
     } catch (e) {
       setFeedback(getUserFacingError(e, "Не удалось удалить выбранные оплаты."));
@@ -543,8 +574,8 @@ export function ClientPaymentsWorkspace({ variant = "payments" }: { variant?: Cl
 
   const statusOptions = useMemo(
     () => [
-      { value: "pending_confirmation", label: "CREATED" },
-      { value: "confirmed", label: "CONFIRMED" },
+      { value: "pending_confirmation", label: "Создан" },
+      { value: "confirmed", label: "Подтверждён" },
       { value: "deleted", label: "Архив" }
     ],
     []
@@ -673,7 +704,7 @@ export function ClientPaymentsWorkspace({ variant = "payments" }: { variant?: Cl
           }}
           onRefresh={() => void listQ.refetch()}
           refreshing={listQ.isFetching}
-          onExportExcel={!isExpenses ? () => downloadPaymentsExcel(rows) : undefined}
+          onExportExcel={canExportPayments ? () => downloadPaymentsExcel(rows) : undefined}
           exportDisabled={!rows.length}
           onOpenFilterVisibility={() => setFilterVisDialogOpen(true)}
           showEditGrantsLink={!isExpenses}
@@ -686,7 +717,7 @@ export function ClientPaymentsWorkspace({ variant = "payments" }: { variant?: Cl
 
         <div className="mt-3 shrink-0 overflow-hidden rounded-lg border border-border bg-card shadow-sm">
           <div
-            className="scrollbar-none overflow-auto overscroll-contain"
+            className="scrollbar-none overflow-auto overscroll-y-contain"
             style={{ maxHeight: rows.length > 0 ? PAYMENTS_TABLE_BODY_MAX_PX : undefined }}
           >
             <table className="min-w-full divide-y divide-border text-[12px]">
@@ -909,12 +940,12 @@ export function ClientPaymentsWorkspace({ variant = "payments" }: { variant?: Cl
         selectedCount={selected.size}
         title={
           primarySelectedRow
-            ? `${isExpenses ? "Расход" : "Оплата"} #${primarySelectedRow.id} · ${primarySelectedRow.client_name}`
+            ? `${isExpenses ? "Расход" : "Оплата"} #${primarySelectedRow.number?.trim() || primarySelectedRow.id} · ${primarySelectedRow.client_name}`
             : ""
         }
-        showEdit={selected.size === 1}
+        showEdit={canEditPayment && selected.size === 1}
         showDelete={canVoidPayments && selected.size > 0}
-        showBulkConfirm={!isExpenses && selected.size > 0}
+        showBulkConfirm={canApprovePayments && selected.size > 0}
         bulkConfirmDisabled={!allSelectedPending || bulkBusy}
         bulkConfirmHint={
           allSelectedPending

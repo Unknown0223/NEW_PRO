@@ -68,6 +68,7 @@ export function useOrdersListPagePart1() {
   const [bulkExpeditorChoice, setBulkExpeditorChoice] = useState<string>("");
   const [bulkExpFeedback, setBulkExpFeedback] = useState<string | null>(null);
   const [bulkConsignmentFeedback, setBulkConsignmentFeedback] = useState<string | null>(null);
+  const [bulkBonusRefreshFeedback, setBulkBonusRefreshFeedback] = useState<string | null>(null);
   const [filterVisibilityOpen, setFilterVisibilityOpen] = useState(false);
   const [filterVisibility, setFilterVisibility] = useState<OrdersFilterVisibility>(
     DEFAULT_ORDERS_FILTER_VISIBILITY
@@ -380,6 +381,7 @@ export function useOrdersListPagePart1() {
         staleTime: STALE.detail,
         queryFn: async () => {
           const { data: body } = await api.get<OrderDetailRow>(`/api/${tenantSlug}/orders/${orderId}`);
+          applyOrderDetailToListCaches(qc, tenantSlug, body);
           return body;
         }
       });
@@ -427,6 +429,8 @@ export function useOrdersListPagePart1() {
     setBulkExpFeedback,
     bulkConsignmentFeedback,
     setBulkConsignmentFeedback,
+    bulkBonusRefreshFeedback,
+    setBulkBonusRefreshFeedback,
     filterVisibilityOpen,
     setFilterVisibilityOpen,
     filterVisibility,

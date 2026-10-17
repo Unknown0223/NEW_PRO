@@ -1,12 +1,13 @@
 import { readFileSync, existsSync } from "fs";
 import { join } from "path";
 import ExcelJS from "exceljs";
+import { resolveBackendAsset } from "../../../lib/backend-assets";
 import type { ExpeditorLoadingLayoutId } from "./expeditor-loading-template-ids";
 import { getExpeditorLoadingLayoutDef } from "./expeditor-loading-template-ids";
 import { preprocessExpeditorTemplateBuffer } from "./expeditor-template-preprocess";
 import { repairWorkbookAfterExcelJsLoad } from "./warehouse-template-repair";
 
-const ASSET_DIR = join(__dirname, "../../../../assets/nakladnoy/loading");
+const ASSET_DIR = resolveBackendAsset("nakladnoy", "loading");
 
 export function expeditorLoadingAssetPath(layoutId: ExpeditorLoadingLayoutId): string {
   const def = getExpeditorLoadingLayoutDef(layoutId);

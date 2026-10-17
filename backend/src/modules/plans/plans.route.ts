@@ -2,7 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { sendApiError, zodValidationExtras } from "../../lib/api-error";
 import { ensureTenantContext } from "../../lib/tenant-context";
 import { ADMIN_AND_OPERATOR_LIKE_ROLES } from "../../lib/tenant-user-roles";
-import { jwtAccessVerify, requireRoles } from "../auth/auth.prehandlers";
+import { getAccessUser, jwtAccessVerify, requireRoles } from "../auth/auth.prehandlers";
 import { actorUserIdOrNull } from "../../lib/request-actor";
 import {
   directionQuerySchema,
@@ -39,6 +39,15 @@ import {
 import { getDailyKpiOverview } from "./plans.daily-kpi.service";
 import { getDailyKpiDayMatrix } from "./plans.daily-kpi.day-matrix";
 import { getDailyKpiAgentDetail } from "./plans.daily-kpi.detail";
+import { resolveDailyKpiAllowedAgentIds } from "./plans.daily-kpi.scope";
+
+function dailyKpiAllowedAgentIds(request: Parameters<typeof getAccessUser>[0]) {
+  const user = getAccessUser(request);
+  return resolveDailyKpiAllowedAgentIds(request.tenant!.id, {
+    userId: actorUserIdOrNull(request),
+    role: user?.role ?? ""
+  });
+}
 
 const manageRoles = [...ADMIN_AND_OPERATOR_LIKE_ROLES] as const;
 const readRoles = [
@@ -147,13 +156,15 @@ export async function registerPlansRoutes(app: FastifyInstance) {
     if (hasDay) {
       const q = dailyKpiDayMatrixQuerySchema.safeParse({
         day: dayRaw,
+        day_to: Array.isArray(query.day_to) ? query.day_to[0] : query.day_to,
         direction_id: Array.isArray(query.direction_id) ? query.direction_id[0] : query.direction_id
       });
       if (!q.success) {
         return sendApiError(reply, request, 400, "ValidationError", undefined, zodValidationExtras(q.error));
       }
       try {
-        const data = await getDailyKpiDayMatrix(request.tenant!.id, q.data);
+        const allowed = await dailyKpiAllowedAgentIds(request);
+        const data = await getDailyKpiDayMatrix(request.tenant!.id, q.data, allowed);
         return reply.send({ data });
       } catch (e) {
         return mapSetupError(reply, request, e);
@@ -165,7 +176,8 @@ export async function registerPlansRoutes(app: FastifyInstance) {
       return sendApiError(reply, request, 400, "ValidationError", undefined, zodValidationExtras(q.error));
     }
     try {
-      const data = await getDailyKpiOverview(request.tenant!.id, q.data);
+      const allowed = await dailyKpiAllowedAgentIds(request);
+      const data = await getDailyKpiOverview(request.tenant!.id, q.data, allowed);
       return reply.send({ data });
     } catch (e) {
       return mapSetupError(reply, request, e);
@@ -183,7 +195,8 @@ export async function registerPlansRoutes(app: FastifyInstance) {
       return sendApiError(reply, request, 400, "ValidationError", undefined, zodValidationExtras(q.error));
     }
     try {
-      const data = await getDailyKpiAgentDetail(request.tenant!.id, agentId, q.data);
+      const allowed = await dailyKpiAllowedAgentIds(request);
+      const data = await getDailyKpiAgentDetail(request.tenant!.id, agentId, q.data, allowed);
       return reply.send({ data });
     } catch (e) {
       return mapSetupError(reply, request, e);

@@ -16,6 +16,7 @@ export type SupervisorVisitRawRow = {
   photo_outlets: bigint;
   photo_count: bigint;
   visits_with_orders: bigint;
+  orders_count: bigint;
   sales_sum: Prisma.Decimal;
   sales_qty: Prisma.Decimal;
   cancelled_count: bigint;
@@ -93,6 +94,7 @@ export async function fetchSupervisorVisitAndSalesRaw(
       photo_outlets: bigint;
       photo_count: bigint;
       visits_with_orders: bigint;
+      orders_count: bigint;
       sales_sum: Prisma.Decimal;
       sales_qty: Prisma.Decimal;
       cancelled_count: bigint;
@@ -198,17 +200,26 @@ export async function fetchSupervisorVisitAndSalesRaw(
         ${filters.territory_2_list.length > 0 ? Prisma.sql`AND btrim(COALESCE(c.region, '')) IN (${Prisma.join(filters.territory_2_list.map((p) => Prisma.sql`${p}`))})` : Prisma.empty}
         ${filters.territory_3_list.length > 0 ? Prisma.sql`AND btrim(COALESCE(c.city, '')) IN (${Prisma.join(filters.territory_3_list.map((p) => Prisma.sql`${p}`))})` : Prisma.empty}
     ),
+    -- total_sum buyurtma sarlavhasida: order_items JOIN qilganda har qator uchun
+    -- ko‘payib ketadi. Avval buyurtma bo‘yicha yig‘amiz (order_by_pair bilan bir xil).
     sales_by_agent AS (
-      SELECT o.agent_id,
-             COUNT(DISTINCT CASE WHEN o.status = 'cancelled' THEN o.id ELSE NULL END)::bigint AS cancelled_count,
-             COALESCE(SUM(o.total_sum), 0)::numeric(15,2) AS sales_sum,
-             COALESCE(SUM(COALESCE(oi.qty, 0)), 0)::numeric(15,3) AS sales_qty
-      FROM orders o
-      JOIN users u ON u.id = o.agent_id
-      JOIN clients c ON c.id = o.client_id
-      LEFT JOIN order_items oi ON oi.order_id = o.id
-      WHERE ${orderScope}
-      GROUP BY o.agent_id
+      SELECT x.agent_id,
+             COUNT(*)::bigint AS orders_count,
+             COUNT(*) FILTER (WHERE x.status = 'cancelled')::bigint AS cancelled_count,
+             COALESCE(SUM(x.order_total), 0)::numeric(15,2) AS sales_sum,
+             COALESCE(SUM(x.line_qty), 0)::numeric(15,3) AS sales_qty
+      FROM (
+        SELECT o.agent_id, o.id AS oid, o.status,
+          MAX(o.total_sum)::numeric(15,2) AS order_total,
+          COALESCE(SUM(oi.qty), 0)::numeric(15,3) AS line_qty
+        FROM orders o
+        JOIN users u ON u.id = o.agent_id
+        JOIN clients c ON c.id = o.client_id
+        LEFT JOIN order_items oi ON oi.order_id = o.id
+        WHERE ${orderScope}
+        GROUP BY o.agent_id, o.id, o.status
+      ) x
+      GROUP BY x.agent_id
     ),
     keys AS (
       SELECT agent_id FROM planned
@@ -352,6 +363,7 @@ export async function fetchSupervisorVisitAndSalesRaw(
       COALESCE(pst.photo_outlets, 0)::bigint AS photo_outlets,
       COALESCE(pst.photo_count, 0)::bigint AS photo_count,
       COALESCE(vwo.visits_with_orders, 0)::bigint AS visits_with_orders,
+      COALESCE(sa.orders_count, 0)::bigint AS orders_count,
       COALESCE(sa.sales_sum, 0)::numeric(15,2) AS sales_sum,
       COALESCE(sa.sales_qty, 0)::numeric(15,3) AS sales_qty,
       COALESCE(sa.cancelled_count, 0)::bigint AS cancelled_count,

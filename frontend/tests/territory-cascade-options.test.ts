@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildZoneRegionCityCascadeOptions } from "@/lib/territory-client-filters";
+import { buildZoneRegionCityCascadeOptions, buildTerritoryTreeOnlyCascade } from "@/lib/territory-client-filters";
 import type { TerritoryNode } from "@/lib/territory-tree";
 import { tradeDirectionFilterLabels } from "@/lib/catalog-filter-options";
 
@@ -79,14 +79,26 @@ describe("buildZoneRegionCityCascadeOptions", () => {
     expect(cityValues).not.toContain("Namangan");
   });
 
-  it("preserves current region even if outside filtered set", () => {
+  it("tree-only cascade does not keep region outside selected zone (prune clears stale)", () => {
     const opts = buildZoneRegionCityCascadeOptions(
       { regions: ["BUXORO VILOYATI"] },
       undefined,
       tree,
       { zone: "FV", region: "BUXORO VILOYATI", city: "" }
     );
-    expect(opts.regions.some((o) => o.value === "BUXORO VILOYATI")).toBe(true);
+    expect(opts.regions.some((o) => o.value === "BUXORO VILOYATI")).toBe(false);
+    expect(opts.regions.some((o) => o.value === "ANDIJON VILOYATI")).toBe(true);
+  });
+
+  it("pipe-separated zones union regions from each zone", () => {
+    const opts = buildZoneRegionCityCascadeOptions(undefined, undefined, tree, {
+      zone: "FV|SOUTH-WEST",
+      region: "",
+      city: ""
+    });
+    const regionValues = opts.regions.map((o) => o.value);
+    expect(regionValues).toContain("ANDIJON VILOYATI");
+    expect(regionValues).toContain("BUXORO VILOYATI");
   });
 
   it("without zone, regions include full refs union", () => {
@@ -99,6 +111,23 @@ describe("buildZoneRegionCityCascadeOptions", () => {
     const regionValues = opts.regions.map((o) => o.value);
     expect(regionValues).toContain("BUXORO VILOYATI");
     expect(regionValues).toContain("ANDIJON VILOYATI");
+  });
+
+  it("oblast change filters cities under that region (staff expeditor/agent pattern)", () => {
+    const all = buildTerritoryTreeOnlyCascade(tree, { zones: [], regions: [] });
+    expect(all.cities.map((c) => c.value)).toEqual(
+      expect.arrayContaining(["Asaka", "Andijon", "Namangan", "Buxoro", "Samarqand"])
+    );
+
+    const underAndijon = buildTerritoryTreeOnlyCascade(tree, {
+      zones: [],
+      regions: ["ANDIJON VILOYATI"]
+    });
+    const cities = underAndijon.cities.map((c) => c.value);
+    expect(cities).toContain("Asaka");
+    expect(cities).toContain("Andijon");
+    expect(cities).not.toContain("Buxoro");
+    expect(cities).not.toContain("Namangan");
   });
 });
 

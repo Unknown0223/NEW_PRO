@@ -1,4 +1,5 @@
 import { prisma } from "../../config/database";
+import { toFio } from "../staff/staff.shared.helpers";
 
 export type WorkSlotActivityRow = {
   link_id: number;
@@ -74,7 +75,7 @@ export async function getWorkSlotActivityReport(
         started_at: true,
         ended_at: true,
         user_id: true,
-        user: { select: { name: true } },
+        user: { select: { name: true, first_name: true, last_name: true, middle_name: true } },
         slot: {
           select: {
             id: true,
@@ -97,7 +98,7 @@ export async function getWorkSlotActivityReport(
       slot_type: l.slot.slot_type,
       branch_code: l.slot.branch_code,
       user_id: l.user_id,
-      user_name: l.user.name,
+      user_name: toFio(l.user),
       started_at: l.started_at.toISOString(),
       ended_at: l.ended_at?.toISOString() ?? null,
       days_on_slot: daysBetween(segStart, segEnd)

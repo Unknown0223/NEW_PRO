@@ -8,6 +8,7 @@
  */
 import type { PermissionAction } from "./permission-model";
 import { extractAction } from "./permission-model";
+import { REPORT_GROUP_VIEW_PERMISSIONS } from "../reports/report-permissions";
 
 /** Oxirgi segment / butun kalitdagi verb naqshlari → amal tipi. */
 const ACTION_PATTERNS: { re: RegExp; action: PermissionAction }[] = [
@@ -32,8 +33,6 @@ const ACTION_PATTERNS: { re: RegExp; action: PermissionAction }[] = [
 const SECTION_ALIAS: Record<string, string> = {
   // orders
   "orders.zakaz": "orders.zakaz",
-  "orders.vozvrat": "orders.vozvrat",
-  "orders.obmen_i_otkaz": "orders.obmen_i_otkaz",
   "orders.status": "orders.status",
   "orders.usloviya_ogranicheniya_zakaza": "orders.usloviya_ogranicheniya",
   "orders.predlozhenie_dlya_sozdaniya_zakaza": "orders.predlozhenie",
@@ -53,6 +52,8 @@ const SECTION_ALIAS: Record<string, string> = {
   "cash.oplaty_klientov": "cash.oplaty_klientov",
   "cash.rashody_klienta": "cash.rashody_klienta",
   "cash.nachalnye_balansy_klientov": "cash.nachalnye_balansy",
+  "cash.balansy_klientov": "cash.balansy_klientov",
+  "cash.balansy": "cash.balansy_klientov",
   "cash.otchety": "cash.otchety",
   "cash": "cash.kassa",
   "cash.kurs_valyuty": "cash.kurs_valyuty",
@@ -69,10 +70,10 @@ const SECTION_ALIAS: Record<string, string> = {
   // plans
   "plans.nastroyka_utverzhdayushchih": "plans.nastroyka_utverzhdayushchih",
   "plans.ustanovka_planov": "plans.ustanovka_planov",
-  "plans.otchety": "reports.otchety",
+  "plans.otchety": "reports.prodazhi_tovarov",
   "plans.otchety.konstruktor_otchetov": "reports.konstruktor.view",
   "plans.otchety.sozdat_publichnuyu_konfiguratsiyu": "reports.konstruktor.create",
-  "plans.otchety.excel_eksport": "reports.konstruktor.copy",
+  "plans.otchety.excel_eksport": "reports.konstruktor.export",
   // staff
   "staff.agent": "staff.agent",
   "staff.ekspeditor": "staff.ekspeditor",
@@ -88,7 +89,7 @@ const SECTION_ALIAS: Record<string, string> = {
   "staff.tabel": "staff.tabel",
   "staff.zadachi": "staff.zadachi",
   // gps
-  "gps": "gps.gps"
+  "gps": "gps.agenty"
 };
 
 /** Dashboard — har bir kalit alohida view bo'lim. */
@@ -114,13 +115,17 @@ const MODULE_VIEW_COMPANIONS: Record<string, string[]> = {
   "suppliers.postavshchik.view": ["suppliers.view"],
   "cash.view": ["cash.kassa.view"],
   "cash.kassa.view": ["cash.view"],
-  "reports.view": ["reports.otchety.view", "reports.konstruktor.view"],
-  "reports.otchety.view": ["reports.view"],
+  "cash.nachalnye_balansy.view": ["cash.nachalnye_balansy_klientov.view"],
+  "cash.nachalnye_balansy_klientov.view": ["cash.nachalnye_balansy.view"],
+  "cash.balansy_klientov.view": ["cash.balansy.view"],
+  "cash.balansy.view": ["cash.balansy_klientov.view"],
+  "reports.view": [...REPORT_GROUP_VIEW_PERMISSIONS],
   "reports.konstruktor.view": ["reports.view", "pivot.otchety.view"],
   "pivot.view": ["pivot.otchety.view", "reports.konstruktor.view"],
   "pivot.otchety.view": ["pivot.view", "reports.konstruktor.view"],
-  "warehouse.view": ["warehouse.ostatki.view"],
-  "warehouse.ostatki.view": ["warehouse.view"]
+  "warehouse.view": ["warehouse.ostatki.view", "warehouse.ostatki_tovarov.view"],
+  "warehouse.ostatki.view": ["warehouse.view", "warehouse.ostatki_tovarov.view"],
+  "warehouse.ostatki_tovarov.view": ["warehouse.ostatki.view", "warehouse.view"]
 };
 
 let explicitReverseCache: Map<string, string[]> | null = null;
@@ -189,7 +194,27 @@ export const EXPLICIT_MAP: Record<string, string> = {
   ...DASHBOARD_MAP,
   "orders.zakaz.spisok_zakazov": "orders.zakaz.view",
   "orders.zakaz.prosmotr_zakaza": "orders.zakaz.view",
-  "orders.zakaz.sozdanie_zakaza": "orders.zakaz.create",
+  "orders.zakaz.sozdanie_zakaza": "orders.sozdanie.create",
+  "orders.vozvrat.sozdat_vozvrat_s_polki": "orders.vozvrat_polki.create",
+  "orders.vozvrat.vozvrat_tary": "orders.vozvrat_polki.create",
+  "orders.vozvrat.sozdat_vozvrat_s_polki_po_nomeru_zakaza": "orders.vozvrat_po_zakazu.create",
+  "orders.vozvrat.chastichnyy_vozvrat": "orders.vozvrat_po_zakazu.create",
+  "orders.vozvrat.izmenit_vozvrat_s_polki": "invoices.vozvratnye.approve",
+  "orders.vozvrat.izmenit_vozvrat_s_polki_po_nomeru_zakaza": "invoices.vozvratnye.approve",
+  "orders.obmen_i_otkaz.sozdat_obmen": "orders.obmen.create",
+  "orders.obmen_i_otkaz.izmenit_obmen": "orders.zakaz.update",
+  "orders.obmen_i_otkaz.prosmotr_otkazov": "orders.otkazy.view",
+  "orders.status.izmenit_status_na_podtverzhden_k_otgruzke": "orders.status_confirmed.status",
+  "orders.status.izmenit_status_na_otgruzhen": "orders.status_delivering.status",
+  "orders.status.izmenit_status_na_dostavlen": "orders.status_delivered.status",
+  "orders.status.izmenit_status_na_v_protsesse_vozvrata": "orders.status_returned.status",
+  "orders.status.podtverdit_vozvrat": "orders.status_returned.status",
+  "orders.status.podtverdit_chastichnyy_vozvrat": "orders.status_returned.status",
+  "orders.status.izmenit_status_na_otmenen": "orders.status_cancelled.status",
+  "orders.status.otmenit_status_ozhidanie_vozvrata": "orders.status_revert.status",
+  "orders.status.izmenit_datu_vozvrata": "orders.status_date.update",
+  "orders.status.izmenit_datu_dostavki": "orders.status_date.update",
+  "finance.obzor.view": "dashboard.finansy.view",
   "orders.drugie_operytsii.prihod_v_kassu": "orders.drugie_operacii.update",
   "orders.drugie_operytsii.izmenit_konsignatsiyu": "orders.drugie_operacii.update",
   "clients.spisok_klientov": "clients.klient.view",
@@ -197,7 +222,23 @@ export const EXPLICIT_MAP: Record<string, string> = {
   "clients.dobavlenie_klienta": "clients.klient.create",
   "clients.import_fayla_excel_klient": "clients.klient.import",
   "clients.obnovlenie_klientov_s_excel": "clients.klient.import",
-  "clients.klienty_na_karte": "clients.klient.view",
+  "clients.klienty_na_karte": "clients.karta.view",
+  "clients.izmenenie_gruppovye_obrabotki_rasp_klientov_po_kategoriyam_i_territoriyam": "clients.gr_territoriya.update",
+  "clients.izmenenie_gruppovye_obrabotki_zakaz_pri_nalichii_dolga": "clients.gr_dolg.update",
+  "clients.izmenenie_gruppovye_obrabotki_zakaz_s_konsignatsiey_pri_nalichii_dolga": "clients.gr_dolg.update",
+  "clients.izmenenie_gruppovye_obrabotki_prikrepit_tip_tseny": "clients.gr_tip_tseny.update",
+  "clients.izmenenie_gruppovye_obrabotki_kanal_sbyta": "clients.gr_kanal.update",
+  "clients.izmenenie_gruppovye_obrabotki_prikrepit_otkrepit_agentov": "clients.gr_komanda.update",
+  "clients.izmenenie_gruppovye_obrabotki_prikrepit_otkrepit_ekspeditor": "clients.gr_komanda.update",
+  "clients.otchety.otchet_ostatki": "clients.ostatki_tt.view",
+  "clients.oborudovanie.dobavit_oborudovanie": "clients.oborudovanie.create",
+  "clients.oborudovanie.izyatie": "clients.oborudovanie.delete",
+  "clients.oborudovanie.udalit_oborudovanie": "clients.oborudovanie.delete",
+  "clients.oborudovanie.istoriya_peremeshcheniy": "clients.oborudovanie.view",
+  "clients.obedinenye.dublirovanie_spisok_poiska_dublikatov": "clients.obedinenie.view",
+  "clients.obedinenye.dublirovanie_spisok_sohranyonnyh_dublikatov": "clients.obedinenie.view",
+  "clients.obedinenye.dublirovanie_obedinenye": "clients.obedinenie.update",
+  "clients.obedinenye.dublirovanie_spisok_obedinyonnyh_dublikatov": "clients.obedinenie.history",
   "suppliers.spisok_postavshchikov": "suppliers.postavshchik.view",
   "suppliers.prosmotr_detal_postavshchikov": "suppliers.postavshchik.view",
   "suppliers.sozdanie_postavshchikov": "suppliers.postavshchik.create",
@@ -205,8 +246,14 @@ export const EXPLICIT_MAP: Record<string, string> = {
   "suppliers.udalenie_postavshchikov": "suppliers.postavshchik.delete",
   "cash.spisok_kassy": "cash.kassa.view",
   "cash.zakryt_kassu": "cash.kassa.status",
-  "gps.dostup_k_gps": "gps.gps.view",
-  "gps.planiruemaya_posledovatelnost_vizita_sotrudnikov_izmenenie": "gps.gps.update",
+  // Balanslar avval «Отчеты» ostida edi — endi alohida section.
+  "cash.otchety.spisok_balansy_klientov": "cash.balansy_klientov.view",
+  "cash.otchety.detal_balans_klienta": "cash.balansy_klientov.view",
+  "cash.otchety.spisok_balansy_klientov_po_konsignatsii": "cash.balansy_klientov.view",
+  "cash.otchety.detal_balans_klienta_po_konsignatsii": "cash.balansy_klientov.view",
+  "cash.balansy.view": "cash.balansy_klientov.view",
+  "gps.dostup_k_gps": "gps.agenty.view",
+  "gps.planiruemaya_posledovatelnost_vizita_sotrudnikov_izmenenie": "gps.marshrut.update",
   "access.manage": "access.manage"
 };
 

@@ -24,9 +24,9 @@ export default function OperatorsSpravochnikPage() {
   if (role !== "admin") {
     return (
       <div className="space-y-2">
-        <p className="text-sm text-destructive">Veb xodimlarni boshqarish faqat administrator uchun.</p>
+        <p className="text-sm text-destructive">Управление веб-сотрудниками доступно только администратору.</p>
         <Link href="/settings/spravochnik" className="text-sm text-primary underline">
-          ← Spravochnik
+          ← Справочник
         </Link>
       </div>
     );
@@ -35,14 +35,14 @@ export default function OperatorsSpravochnikPage() {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h1 className="text-lg font-semibold">Veb xodimlar</h1>
+        <h1 className="text-lg font-semibold">Веб-сотрудники</h1>
         <Link href="/settings/spravochnik" className="text-sm text-primary underline">
-          ← Spravochnik
+          ← Справочник
         </Link>
       </div>
       <p className="text-sm text-muted-foreground">
-        Veb-panel orqali ishlaydigan xodimlar (hozircha tizim roli <code className="text-foreground">operator</code>
-        ); lavozim maydoni orqali «kassir», «menejer» kabi sarlavhalar beriladi.
+        Сотрудники, работающие через веб-панель (пока системная роль <code className="text-foreground">operator</code>
+        ); через поле «Должность» задаются названия вроде «кассир», «менеджер».
       </p>
       <OperatorsWorkspace tenantSlug={tenantSlug} />
     </div>

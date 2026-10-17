@@ -32,8 +32,9 @@ import {
 
 import {
   orderScopeSql,
-  planScopeSql,
   visitScopeSql,
+  planScopeSql,
+  expandSupervisorPaymentFilters,
   type SupervisorDashboardFilters,
   type SupervisorDashboardSnapshot,
   type SupervisorEfficiencyRow,
@@ -57,12 +58,13 @@ export async function getSupervisorDashboardSnapshot(
   const cached = await getSnapshotCache<SupervisorDashboardSnapshot>(snapshotKey);
   if (cached) return cached;
 
-  const dayStart = new Date(`${filters.date}T00:00:00.000Z`);
+  const expanded = await expandSupervisorPaymentFilters(tenantId, filters);
+  const dayStart = new Date(`${expanded.date}T00:00:00.000Z`);
   const dayEnd = new Date(dayStart.getTime() + 86400000);
   const weekday = ((dayStart.getUTCDay() + 6) % 7) + 1;
-  const orderScope = orderScopeSql(tenantId, dayStart, dayEnd, filters);
-  const visitScope = visitScopeSql(tenantId, dayStart, dayEnd, filters);
-  const planScope = planScopeSql(tenantId, dayStart, dayEnd, weekday, filters);
+  const orderScope = orderScopeSql(tenantId, dayStart, dayEnd, expanded);
+  const visitScope = visitScopeSql(tenantId, dayStart, dayEnd, expanded);
+  const planScope = planScopeSql(tenantId, dayStart, dayEnd, weekday, expanded);
 
 
   const { salesAgg, cashAgg, paymentBreakdownRows, mappedVisitRows, totals } =
@@ -82,8 +84,8 @@ export async function getSupervisorDashboardSnapshot(
     id: r.agent_id,
     name: r.agent_name,
     agent_code: r.agent_code,
-    order_count: r.visits_with_orders,
-    cancelled_count: 0,
+    order_count: r.order_count,
+    cancelled_count: r.cancelled_count,
     planned_visits: r.planned_visits,
     visited_total: r.visited_total,
     rejected_visits: r.visits_without_orders,
@@ -113,7 +115,8 @@ export async function getSupervisorDashboardSnapshot(
       photo_count: 0,
       total_sales_sum: "0"
     };
-    prev.order_count += row.visits_with_orders;
+    prev.order_count += row.order_count;
+    prev.cancelled_count += row.cancelled_count;
     prev.planned_visits += row.planned_visits;
     prev.visited_total += row.visited_total;
     prev.rejected_visits += row.visits_without_orders;

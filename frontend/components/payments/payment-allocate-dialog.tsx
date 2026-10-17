@@ -107,7 +107,7 @@ export function PaymentAllocateDialog({ open, onOpenChange, tenantSlug, payment,
         <DialogHeader>
           <DialogTitle>Распределение платежа по заказам</DialogTitle>
           <DialogDescription>
-            Сумма распределяется по открытым заказам клиента: сначала Naxt, затем Konsignatsiya, от самых старых долгов к
+            Сумма распределяется по открытым заказам клиента: сначала наличные, затем консигнация, от самых старых долгов к
             новым. Баланс клиента не меняется — только привязка к заказам.
           </DialogDescription>
         </DialogHeader>

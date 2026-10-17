@@ -11,4 +11,6 @@ call "%~dp0link-build-lib.cmd"
 if errorlevel 1 exit /b 1
 
 robocopy "%MOBILE_SRC%\android" "%BUILD_DIR%\android" /E /XD .gradle /NFL /NDL /NJH /NJS >nul
-endlocal
+REM Robocopy: 0–7 = muvaffaqiyat, 8+ = xato
+if errorlevel 8 exit /b 1
+exit /b 0

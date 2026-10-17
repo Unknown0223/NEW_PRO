@@ -1,6 +1,11 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "../../config/database";
 import type { SalesMonitoringFilters } from "./sales-monitoring.types";
+import { expandPaymentMethodFilterValues } from "../tenant-settings/finance-refs";
+import {
+  loadPaymentMethodEntriesForResolve,
+  loadPriceTypeEntriesForResolve
+} from "../tenant-settings/tenant-settings.service";
 
 const ORDER_STATUS_WHITELIST = new Set([
   "new",
@@ -30,6 +35,21 @@ export function csvToStringList(input?: string): string[] {
     if (t) set.add(t);
   }
   return [...set];
+}
+
+export async function expandMonitoringPaymentFilters(
+  tenantId: number,
+  f: SalesMonitoringFilters
+): Promise<SalesMonitoringFilters> {
+  if (f.payment_method_refs.length === 0) return f;
+  const [pm, pt] = await Promise.all([
+    loadPaymentMethodEntriesForResolve(tenantId),
+    loadPriceTypeEntriesForResolve(tenantId)
+  ]);
+  return {
+    ...f,
+    payment_method_refs: expandPaymentMethodFilterValues(f.payment_method_refs, pm, pt)
+  };
 }
 
 export function sanitizeOrderStatuses(raw: string[]): string[] {

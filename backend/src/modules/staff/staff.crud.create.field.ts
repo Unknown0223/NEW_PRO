@@ -1,6 +1,7 @@
 import bcrypt from "bcryptjs";
 import { Prisma } from "@prisma/client";
 import { prisma } from "../../config/database";
+import { normalizeMaxSessionsOrDefault } from "../../lib/max-sessions";
 import { appendTenantAuditEvent, AuditEntityType } from "../../lib/tenant-audit";
 import type { CreateStaffInput, StaffCreateResult, StaffKind } from "./staff.shared";
 import {
@@ -40,7 +41,7 @@ export async function createFieldStaff(
   // work_slot_id ixtiyoriy: xodimni joyga «Рабочее место» dan bog‘lash.
   // Agar create da berilsa (masalan Excel import) — pastda assign qilinadi.
 
-  const passwordHash = await bcrypt.hash(input.password, 10);
+  const passwordHash = await bcrypt.hash(input.password, 12);
   const priceTypesArr = normalizePriceTypes(input.agent_price_types ?? []);
   const legacyPrice = input.price_type?.trim() || null;
   const ent = normalizeAgentEntitlementsInput(input.agent_entitlements ?? {});
@@ -106,7 +107,7 @@ export async function createFieldStaff(
       price_type: legacyPrice,
       agent_price_types: agentPriceTypesStored,
       agent_entitlements: ent as Prisma.InputJsonValue,
-      max_sessions: input.max_sessions != null && input.max_sessions >= 1 ? input.max_sessions : 1,
+      max_sessions: normalizeMaxSessionsOrDefault(input.max_sessions),
       kpi_color: input.kpi_color?.trim().slice(0, 16) || null,
       warehouse_id: input.warehouse_id ?? null,
       return_warehouse_id: input.return_warehouse_id ?? null,
@@ -153,7 +154,7 @@ export async function createFieldStaff(
         slotId,
         created.id,
         actorUserId,
-        "Yangi xodim yaratishda biriktirish"
+        "Назначение при создании сотрудника"
       );
       const rowsAfter = await listStaff(tenantId, kind);
       const rowAfter = rowsAfter.find((x) => x.id === created.id);

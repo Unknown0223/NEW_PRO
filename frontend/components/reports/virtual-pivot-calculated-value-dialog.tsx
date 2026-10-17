@@ -7,6 +7,7 @@ import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { DemoApplyCancelBar } from "@/components/reports/demo-dialog-actions";
 import { cn } from "@/lib/utils";
+import { formulaToDisplay, formulaToEngine, PIVOT_FORMULA_KEYWORDS_RU } from "@/lib/pivot-formula-ru";
 
 export type VirtualPivotCalculatedValueDialogProps = {
   open: boolean;
@@ -167,7 +168,7 @@ export function VirtualPivotCalculatedValueDialog({
     setError(null);
     if (editing) {
       setLabel(editing.label);
-      setFormula(editing.formula);
+      setFormula(formulaToDisplay(editing.formula));
       setIndividual(editing.individual !== false);
       return;
     }
@@ -219,7 +220,7 @@ export function VirtualPivotCalculatedValueDialog({
 
   function handleApply() {
     const trimmedLabel = label.trim();
-    const trimmedFormula = formula.trim();
+    const trimmedFormula = formulaToEngine(formula.trim());
     let nextNameError: string | null = null;
     let nextFormulaError: string | null = null;
 
@@ -376,16 +377,17 @@ export function VirtualPivotCalculatedValueDialog({
               </div>
               <div className="flex flex-wrap gap-1">
                 {LOGIC.map((t) => (
-                  <KeypadBtn key={t} label={t} wide onClick={() => insertAtCursor(t)} />
-                ))}
-                {FUNCS.map((t) => (
                   <KeypadBtn
                     key={t}
-                    label={t}
+                    label={PIVOT_FORMULA_KEYWORDS_RU[t] ?? t}
                     wide
-                    onClick={() => insertAtCursor(t === "IF" ? "IF(" : `${t}(`)}
+                    onClick={() => insertAtCursor(PIVOT_FORMULA_KEYWORDS_RU[t] ?? t)}
                   />
                 ))}
+                {FUNCS.map((t) => {
+                  const ru = PIVOT_FORMULA_KEYWORDS_RU[t] ?? t;
+                  return <KeypadBtn key={t} label={ru} wide onClick={() => insertAtCursor(`${ru}(`)} />;
+                })}
               </div>
             </div>
           </div>

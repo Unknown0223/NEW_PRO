@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { CLIENT_PHOTO_MAX_BASE64_LEN } from "../lib/client-photo-limits";
+import { mobileOrderVisitSchema } from "./mobile-order-visit.schemas";
 
 const dateLikeSchema = z.string().trim().min(1).optional().nullable();
 
@@ -44,14 +45,15 @@ export const mobileEnqueueBodySchema = z
     items: z.array(enqueueItemSchema).min(1),
     offline_created_at: dateLikeSchema,
     price_type: z.string().trim().min(1).max(128).optional(),
-    comment: z.string().max(4000).optional().nullable()
+    comment: z.string().max(4000).optional().nullable(),
+    visit: mobileOrderVisitSchema.optional().nullable()
   })
   .superRefine((val, ctx) => {
     if (val.client_local_id == null && val.client_id == null) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ["client_id"],
-        message: "client_local_id or client_id is required"
+        message: "Укажите client_local_id или client_id"
       });
     }
   });
@@ -129,7 +131,7 @@ export const mobilePatchProfileBodySchema = z
     phone: z.string().trim().max(32).nullable().optional(),
     avatar_base64: z.string().max(180_000).nullable().optional()
   })
-  .refine((v) => Object.keys(v).length > 0, { message: "At least one field required" });
+  .refine((v) => Object.keys(v).length > 0, { message: "Укажите хотя бы одно поле" });
 
 /** POST `/api/:slug/mobile/clients/:id/photo-reports — agent mijoz fotosi */
 export const mobileClientPhotoBodySchema = z.object({
@@ -150,14 +152,20 @@ export const mobileCreateClientBodySchema = z.object({
   ...mobileClientOptionalFieldsSchema
 });
 
+/** POST `/api/:slug/mobile/supervisor/clients` — SVR yangi mijoz + agent biriktirish */
+export const mobileCreateSupervisorClientBodySchema = mobileCreateClientBodySchema.extend({
+  agent_id: z.number().int().positive()
+});
+
 /** PATCH `/api/:slug/mobile/clients/:id` — agent bog‘langan mijoz */
 export const mobilePatchClientBodySchema = z
   .object({
     name: z.string().trim().min(1).max(512).optional(),
     phone: z.string().trim().max(64).optional().nullable(),
+    visit_weekdays: z.array(z.number().int().min(1).max(7)).max(7).optional(),
     ...mobileClientOptionalFieldsSchema
   })
-  .refine((v) => Object.keys(v).length > 0, { message: "At least one field required" });
+  .refine((v) => Object.keys(v).length > 0, { message: "Укажите хотя бы одно поле" });
 
 const mobileBonusGiftOverrideSchema = z.object({
   bonus_rule_id: z.number().int().positive(),
@@ -212,7 +220,8 @@ export const mobileCreateOrderBodySchema = z.object({
       })
     )
     .max(50)
-    .optional()
+    .optional(),
+  visit: mobileOrderVisitSchema.optional().nullable()
 });
 
 /** POST `/api/:slug/mobile/expeditor/orders/:id/payments` */

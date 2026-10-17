@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
+import { usePermissions } from "@/lib/use-permissions";
 import { STALE } from "@/lib/query-stale";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -15,8 +16,18 @@ import { MonthYearPickerPopover } from "@/components/ui/month-year-picker-popove
 import { SearchableMultiSelectPanel } from "@/components/ui/searchable-multi-select-panel";
 import { downloadXlsxSheet } from "@/lib/download-xlsx";
 import { cn } from "@/lib/utils";
-import { CalendarDays, Download, FileSpreadsheet, Pencil, Search, Upload } from "lucide-react";
+import { ArrowLeftRight, CalendarDays, Clock, Download, FileSpreadsheet, Pencil, Percent, Search, Upload } from "lucide-react";
+import { ConsignmentLimitTransferDialog } from "@/components/staff/consignment-limits/consignment-limit-transfer-dialog";
+import { ConsignmentLimitBulkDialog } from "@/components/staff/consignment-limits/consignment-limit-bulk-dialog";
 import { formatConsignmentCloseSchedule } from "@/lib/consignment-close-schedule";
+import { ConsignmentCloseScheduleFields } from "@/components/staff/consignment-close-schedule-fields";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle
+} from "@/components/ui/dialog";
 import { formatNumberGrouped, normalizeNumericInput } from "@/lib/format-numbers";
 import { useActiveTradeDirectionsCatalog } from "@/hooks/use-active-trade-directions-catalog";
 import { ExcelDropTarget } from "@/components/ui/excel-file-drop-zone";
@@ -44,6 +55,12 @@ type ConsignmentAgentApi = {
   supervisor_name: string | null;
   outstanding_debt: string;
   remaining_limit: string | null;
+};
+
+type ConsignmentSettingsApi = {
+  month_close_day: number;
+  month_close_hour: number;
+  month_close_minute: number;
 };
 
 type SupervisorRow = { id: number; fio: string };
@@ -85,7 +102,7 @@ function formatYearMonthRu(ym: string): string {
   return `${RU_MONTHS_SHORT[mo - 1]} ${y}`;
 }
 
-const CURRENCY_LABEL = "So'm";
+const CURRENCY_LABEL = "сум";
 
 /** Лимит задан и > 0 — тогда доступна опция «без долгов прошлых месяцев» */
 function hasPositiveLimit(s: string | null | undefined): boolean {
@@ -187,6 +204,15 @@ function parseSum(nums: (string | null | undefined)[]): string {
 
 export function ConsignmentWorkspace({ tenantSlug }: { tenantSlug: string }) {
   const qc = useQueryClient();
+  const perms = usePermissions();
+  const canExport = perms.has("staff.konsignatsiya.export");
+  const canToggle = perms.has("staff.konsignatsiya.status");
+  const canLimit = perms.has("staff.konsignatsiya.update");
+  const canImport = perms.has("staff.konsignatsiya.import");
+  const canCloseSchedule = perms.has("staff.konsignatsiya_zakrytie.update");
+  const canTransferLimit = perms.has("staff.konsignatsiya_perekid.update");
+  const canBulkLimit = perms.has("staff.konsignatsiya_limity.update");
+  const canEdit = !CONSIGNMENT_CONFIG_READONLY && (canToggle || canLimit);
   const importInputRef = useRef<HTMLInputElement>(null);
   const monthPickerAnchorRef = useRef<HTMLButtonElement>(null);
   const [monthPickerOpen, setMonthPickerOpen] = useState(false);
@@ -202,6 +228,12 @@ export function ConsignmentWorkspace({ tenantSlug }: { tenantSlug: string }) {
   const [savingGroupKey, setSavingGroupKey] = useState<string | null>(null);
   const [savingAll, setSavingAll] = useState(false);
   const [importing, setImporting] = useState(false);
+  const [closeDay, setCloseDay] = useState("25");
+  const [closeHour, setCloseHour] = useState("0");
+  const [closeMinute, setCloseMinute] = useState("0");
+  const [savingClose, setSavingClose] = useState(false);
+  const [closeDialogOpen, setCloseDialogOpen] = useState(false);
+  const [limitDialog, setLimitDialog] = useState<"transfer" | "bulk" | null>(null);
   const tradeDirectionsQ = useActiveTradeDirectionsCatalog(tenantSlug, "consignment");
   const directionSelected =
     tradeDirectionId.trim() !== "" && Number.parseInt(tradeDirectionId, 10) > 0;
@@ -213,6 +245,81 @@ export function ConsignmentWorkspace({ tenantSlug }: { tenantSlug: string }) {
     setEditingGroups(new Set());
   }, [tradeDirectionId]);
 
+  const settingsQ = useQuery({
+    queryKey: ["consignment", "settings", tenantSlug],
+    enabled: Boolean(tenantSlug),
+    staleTime: STALE.list,
+    queryFn: async () => {
+      const { data } = await api.get<{ data: ConsignmentSettingsApi }>(
+        `/api/${tenantSlug}/consignment/settings`
+      );
+      return data.data;
+    }
+  });
+
+  function syncCloseDraftFromSettings(s?: ConsignmentSettingsApi | null) {
+    const src = s ?? settingsQ.data;
+    if (!src) return;
+    setCloseDay(String(src.month_close_day ?? 25));
+    setCloseHour(String(src.month_close_hour ?? 0));
+    setCloseMinute(String(src.month_close_minute ?? 0));
+  }
+
+  const savedCloseLabel = useMemo(() => {
+    const s = settingsQ.data;
+    if (!s) return null;
+    return formatConsignmentCloseSchedule(
+      s.month_close_day ?? 25,
+      s.month_close_hour ?? 0,
+      s.month_close_minute ?? 0
+    );
+  }, [settingsQ.data]);
+
+  const closeScheduleDirty = useMemo(() => {
+    const s = settingsQ.data;
+    if (!s) return false;
+    return (
+      Number.parseInt(closeDay, 10) !== (s.month_close_day ?? 25) ||
+      Number.parseInt(closeHour, 10) !== (s.month_close_hour ?? 0) ||
+      Number.parseInt(closeMinute, 10) !== (s.month_close_minute ?? 0)
+    );
+  }, [settingsQ.data, closeDay, closeHour, closeMinute]);
+
+  async function saveGlobalCloseSchedule() {
+    const day = Number.parseInt(closeDay, 10);
+    const hour = Number.parseInt(closeHour, 10);
+    const minute = Number.parseInt(closeMinute, 10);
+    if (!Number.isInteger(day) || day < 1 || day > 31) {
+      setToast("Укажите день месяца (1–31)");
+      return;
+    }
+    if (!Number.isInteger(hour) || hour < 0 || hour > 23) {
+      setToast("Укажите часы (0–23)");
+      return;
+    }
+    if (!Number.isInteger(minute) || minute < 0 || minute > 59) {
+      setToast("Укажите минуты (0–59)");
+      return;
+    }
+    setSavingClose(true);
+    try {
+      await api.patch(`/api/${tenantSlug}/consignment/settings`, {
+        month_close_day: day,
+        month_close_hour: hour,
+        month_close_minute: minute
+      });
+      await qc.invalidateQueries({ queryKey: ["consignment"] });
+      setCloseDialogOpen(false);
+      setToast(
+        `Время закрытия для всех: ${formatConsignmentCloseSchedule(day, hour, minute)}`
+      );
+    } catch (err) {
+      setToast(err instanceof Error ? err.message : "Не удалось сохранить время закрытия");
+    } finally {
+      setSavingClose(false);
+    }
+  }
+
   const supervisorsQ = useQuery({
     queryKey: ["supervisors", tenantSlug, "consignment"],
     enabled: Boolean(tenantSlug),
@@ -222,6 +329,14 @@ export function ConsignmentWorkspace({ tenantSlug }: { tenantSlug: string }) {
       return data.data;
     }
   });
+
+  const onLimitsChanged = (message: string) => {
+    setDrafts({});
+    setEditingGroups(new Set());
+    setToast(message);
+    void qc.invalidateQueries({ queryKey: ["consignment"] });
+    void qc.invalidateQueries({ queryKey: ["staff", tenantSlug, "agents"] });
+  };
 
   const supervisorPanelItems = useMemo(
     () => [
@@ -480,13 +595,11 @@ export function ConsignmentWorkspace({ tenantSlug }: { tenantSlug: string }) {
       r.consignment_updated_at
         ? new Date(r.consignment_updated_at).toLocaleString("ru-RU", { timeZone: "Asia/Tashkent" })
         : "",
-      r.consignment
-        ? formatConsignmentCloseSchedule(
+      r.consignment ? (savedCloseLabel ?? formatConsignmentCloseSchedule(
             r.consignment_close_day ?? 25,
             r.consignment_close_hour ?? 0,
             r.consignment_close_minute ?? 0
-          )
-        : "",
+          )) : "",
       formatDateRu(r.consignment_period_closed_at),
       formatDateRu(r.consignment_debt_cleared_at),
       r.consignment_ignore_previous_months_debt ? "Да" : "Нет",
@@ -604,13 +717,56 @@ export function ConsignmentWorkspace({ tenantSlug }: { tenantSlug: string }) {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          {!CONSIGNMENT_CONFIG_READONLY ? (
-            <>
           <Button
             type="button"
             variant="outline"
             size="sm"
             className="gap-1.5"
+            disabled={settingsQ.isLoading}
+            onClick={() => {
+              syncCloseDraftFromSettings();
+              setCloseDialogOpen(true);
+            }}
+            title="Время автозакрытия консигнации для всех агентов"
+          >
+            <Clock className="size-4" />
+            {savedCloseLabel ? `Закрытие: ${savedCloseLabel}` : "Время закрытия"}
+          </Button>
+          {!CONSIGNMENT_CONFIG_READONLY ? (
+            <>
+          {canTransferLimit ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="gap-1.5"
+              disabled={!directionSelected}
+              title={directionSelected ? "Передать часть лимита между агентами одного супервайзера" : "Сначала выберите направление"}
+              onClick={() => setLimitDialog("transfer")}
+            >
+              <ArrowLeftRight className="size-4" />
+              Перераспределить лимит
+            </Button>
+          ) : null}
+          {canBulkLimit ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="gap-1.5"
+              disabled={!directionSelected}
+              title={directionSelected ? "Лимиты прошлого месяца или % от плана — сразу всем агентам" : "Сначала выберите направление"}
+              onClick={() => setLimitDialog("bulk")}
+            >
+              <Percent className="size-4" />
+              Установить лимиты
+            </Button>
+          ) : null}
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className={cn("gap-1.5", !canImport && "hidden")}
             disabled={!directionSelected}
             onClick={() => void downloadImportTemplate()}
           >
@@ -625,8 +781,8 @@ export function ConsignmentWorkspace({ tenantSlug }: { tenantSlug: string }) {
               type="button"
               variant="outline"
               size="sm"
-              className="gap-1.5"
-              disabled={!directionSelected || importing}
+              className={cn("gap-1.5", !canImport && "hidden")}
+              disabled={!directionSelected || importing || !canImport}
               onClick={() => importInputRef.current?.click()}
             >
               <Upload className="size-4" />
@@ -648,7 +804,7 @@ export function ConsignmentWorkspace({ tenantSlug }: { tenantSlug: string }) {
             type="button"
             variant="outline"
             size="sm"
-            className="gap-1.5"
+            className={cn("gap-1.5", !canExport && "hidden")}
             onClick={() => void exportExcel()}
             disabled={!directionSelected || rows.length === 0}
           >
@@ -661,7 +817,7 @@ export function ConsignmentWorkspace({ tenantSlug }: { tenantSlug: string }) {
               type="button"
               variant="outline"
               size="sm"
-              className="gap-1.5"
+              className={cn("gap-1.5", !canExport && "hidden")}
               onClick={() => void exportExcel()}
               disabled={!directionSelected || rows.length === 0}
             >
@@ -683,6 +839,76 @@ export function ConsignmentWorkspace({ tenantSlug }: { tenantSlug: string }) {
           </button>
         </p>
       ) : null}
+
+      {directionSelected ? (
+        <>
+          <ConsignmentLimitTransferDialog
+            open={canTransferLimit && limitDialog === "transfer"}
+            onClose={() => setLimitDialog(null)}
+            tenantSlug={tenantSlug}
+            tradeDirectionId={tradeDirectionId}
+            supervisors={supervisorsQ.data ?? []}
+            initialSupervisor={supervisorSelected.size === 1 ? Array.from(supervisorSelected)[0]! : ""}
+            onDone={onLimitsChanged}
+          />
+          <ConsignmentLimitBulkDialog
+            open={canBulkLimit && limitDialog === "bulk"}
+            onClose={() => setLimitDialog(null)}
+            tenantSlug={tenantSlug}
+            tradeDirectionId={tradeDirectionId}
+            supervisors={supervisorsQ.data ?? []}
+            initialSupervisor={supervisorSelected.size === 1 ? Array.from(supervisorSelected)[0]! : ""}
+            pageMonth={yearMonth}
+            onDone={onLimitsChanged}
+          />
+        </>
+      ) : null}
+
+      <Dialog
+        open={closeDialogOpen}
+        onOpenChange={(open) => {
+          setCloseDialogOpen(open);
+          if (open) syncCloseDraftFromSettings();
+          else syncCloseDraftFromSettings();
+        }}
+      >
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Закрытие консигнации</DialogTitle>
+          </DialogHeader>
+          <p className="text-xs text-muted-foreground">
+            Одно время для всех агентов и рабочих мест. Индивидуальное изменение агента на автозакрытие
+            не влияет — действует эта настройка.
+          </p>
+          <ConsignmentCloseScheduleFields
+            closeDay={closeDay}
+            closeHour={closeHour}
+            closeMinute={closeMinute}
+            onCloseDayChange={setCloseDay}
+            onCloseHourChange={setCloseHour}
+            onCloseMinuteChange={setCloseMinute}
+            className="grid grid-cols-3 gap-2"
+          />
+          <DialogFooter className="flex-row justify-end gap-2 border-0 bg-transparent p-0">
+            <Button
+              type="button"
+              variant="outline"
+              disabled={savingClose}
+              onClick={() => setCloseDialogOpen(false)}
+            >
+              Отмена
+            </Button>
+            <Button
+              type="button"
+              className="bg-emerald-600 text-white hover:bg-emerald-700"
+              disabled={savingClose || !closeScheduleDirty || !canCloseSchedule}
+              onClick={() => void saveGlobalCloseSchedule()}
+            >
+              {savingClose ? "Сохранение…" : "Сохранить"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <div className="orders-hub-section orders-hub-section--filters mb-8 md:mb-10">
         <Card className="rounded-none border-0 bg-transparent shadow-none hover:shadow-none">
@@ -777,7 +1003,7 @@ export function ConsignmentWorkspace({ tenantSlug }: { tenantSlug: string }) {
                 </div>
               </div>
               <div className="flex shrink-0 flex-wrap items-end gap-3 border-border/50 pt-1 md:border-l md:pl-6 md:pt-0">
-                {!CONSIGNMENT_CONFIG_READONLY ? (
+                {canEdit ? (
                 <Button
                   type="button"
                   variant="default"
@@ -848,7 +1074,7 @@ export function ConsignmentWorkspace({ tenantSlug }: { tenantSlug: string }) {
           const ignSome = ignEligible.some((r) => rowIgnoreDebt(r));
           const ignMixed = ignSome && !ignAllOn;
           const dirty = groupHasDirty(visible);
-          const groupEditing = !CONSIGNMENT_CONFIG_READONLY && editingGroups.has(groupTitle);
+          const groupEditing = canEdit && editingGroups.has(groupTitle);
           const sumEstablished = parseSum(visible.map((r) => r.consignment_limit_amount));
           const sumCurrent = parseSum(visible.map((r) => r.remaining_limit));
           const groupClearedAt = groupDebtClearedAt(visible);
@@ -887,7 +1113,7 @@ export function ConsignmentWorkspace({ tenantSlug }: { tenantSlug: string }) {
                     />
                   </div>
                   <div className="flex shrink-0 flex-row flex-nowrap items-center gap-2">
-                    {!CONSIGNMENT_CONFIG_READONLY ? (
+                    {canEdit ? (
                       !groupEditing ? (
                         <Button
                           type="button"
@@ -946,7 +1172,7 @@ export function ConsignmentWorkspace({ tenantSlug }: { tenantSlug: string }) {
                             }}
                             checked={consAllOn}
                             onChange={() => patchAllDrafts(visible, { consignment: !consAllOn })}
-                            disabled={!groupEditing || visible.length === 0}
+                            disabled={!groupEditing || !canToggle || visible.length === 0}
                             aria-label="Включить или выключить консигнацию для всех строк группы"
                             title={
                               groupEditing
@@ -962,7 +1188,7 @@ export function ConsignmentWorkspace({ tenantSlug }: { tenantSlug: string }) {
                       <th className="min-w-[9rem] px-2 py-1.5">Дата изм.</th>
                       <th
                         className="min-w-[8rem] px-2 py-1.5 leading-tight normal-case"
-                        title="Расписание закрытия — настраивается в разделе Агенты"
+                        title="Расписание закрытия — общее для всех (блок сверху)"
                       >
                         Закрытие
                       </th>
@@ -1000,7 +1226,7 @@ export function ConsignmentWorkspace({ tenantSlug }: { tenantSlug: string }) {
                             checked={ignAllOn}
                             onChange={() => patchAllIgnoreDebtInGroup(visible, !ignAllOn)}
                             disabled={
-                              !groupEditing || visible.length === 0 || ignEligible.length === 0
+                              !groupEditing || !canLimit || visible.length === 0 || ignEligible.length === 0
                             }
                             aria-label="Включить опцию «без долгов прошлых месяцев» для всех строк группы (где задан лимит)"
                             title={
@@ -1049,7 +1275,7 @@ export function ConsignmentWorkspace({ tenantSlug }: { tenantSlug: string }) {
                               type="checkbox"
                               className="size-4 rounded border-input accent-primary disabled:opacity-40"
                               checked={disp.consignment}
-                              disabled={!groupEditing}
+                              disabled={!groupEditing || !canToggle}
                               onChange={(e) => updateDraft(r, { consignment: e.target.checked })}
                               title={
                                 groupEditing
@@ -1063,11 +1289,12 @@ export function ConsignmentWorkspace({ tenantSlug }: { tenantSlug: string }) {
                           </td>
                           <td className="px-2 py-1.5 align-middle text-xs tabular-nums text-muted-foreground">
                             {r.consignment
-                              ? formatConsignmentCloseSchedule(
-                                  r.consignment_close_day ?? 25,
-                                  r.consignment_close_hour ?? 0,
-                                  r.consignment_close_minute ?? 0
-                                )
+                              ? (savedCloseLabel ??
+                                  formatConsignmentCloseSchedule(
+                                    r.consignment_close_day ?? 25,
+                                    r.consignment_close_hour ?? 0,
+                                    r.consignment_close_minute ?? 0
+                                  ))
                               : "—"}
                           </td>
                           <td className="px-2 py-1.5 align-middle text-xs tabular-nums text-muted-foreground">
@@ -1092,7 +1319,7 @@ export function ConsignmentWorkspace({ tenantSlug }: { tenantSlug: string }) {
                               type="checkbox"
                               className="size-4 rounded border-input accent-primary disabled:opacity-40"
                               checked={disp.ignoreDebt}
-                              disabled={!groupEditing || !disp.canIgnoreDebt}
+                              disabled={!groupEditing || !canLimit || !disp.canIgnoreDebt}
                               onChange={(e) => updateDraft(r, { ignoreDebt: e.target.checked })}
                               title={
                                 !groupEditing
@@ -1109,7 +1336,7 @@ export function ConsignmentWorkspace({ tenantSlug }: { tenantSlug: string }) {
                                 className="h-7 w-full min-w-[7.5rem] text-right text-xs tabular-nums disabled:opacity-50"
                                 maxFractionDigits={2}
                                 value={disp.limitStr}
-                                disabled={!disp.consignment}
+                                disabled={!disp.consignment || !canLimit}
                                 onValueChange={(v) => updateDraft(r, { limitStr: v })}
                                 placeholder="—"
                                 title={

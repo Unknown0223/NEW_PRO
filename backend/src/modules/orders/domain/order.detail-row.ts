@@ -1,7 +1,10 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "../../../config/database";
-import { resolvePaymentMethodRefToLabel } from "../../tenant-settings/finance-refs";
-import { loadPaymentMethodEntriesForResolve } from "../../tenant-settings/tenant-settings.service";
+import { orderListPriceTypeLabel } from "../../tenant-settings/finance-refs";
+import {
+  loadPaymentMethodEntriesForResolve,
+  loadPriceTypeEntriesForResolve
+} from "../../tenant-settings/tenant-settings.service";
 import {
   allowedNextForRole,
   buildBonusGiftSwapOptions,
@@ -13,6 +16,7 @@ import { parseAppliedBonusRulesSnapshot } from "../../bonus-rules/bonus-rules.sn
 import { applyOrderLevelDiscountPctToItems } from "../order-merchandise-net";
 import { enrichItemsBonusDisplay } from "./order.detail-items-bonus";
 import type { OrderDetailLoaded, OrderDetailRow, OrderItemRow } from "./order.types";
+import { normalizeStoredCreationChannel } from "./order.creation-channel";
 
 export function toDetailRow(o: OrderDetailLoaded, viewerRole?: string): OrderDetailRow {
   const agentDisplay = o.agent ? `${o.agent.login} (${o.agent.name})` : null;
@@ -24,6 +28,13 @@ export function toDetailRow(o: OrderDetailLoaded, viewerRole?: string): OrderDet
     o.agent?.trade_direction?.trim() ||
     null;
   const cl = o.client;
+  const statusLogsChrono = [...o.status_logs].reverse();
+  const firstLogWithUser = statusLogsChrono.find((l) => l.user?.login?.trim());
+  const createdBy =
+    firstLogWithUser?.user?.login?.trim() ||
+    o.agent?.login?.trim() ||
+    o.agent?.name?.trim() ||
+    null;
   return {
     id: o.id,
     number: o.number,
@@ -48,7 +59,7 @@ export function toDetailRow(o: OrderDetailLoaded, viewerRole?: string): OrderDet
     source_order_numbers: [],
     source_order_ids: [],
     returned_at: null,
-    creation_channel: "web",
+    creation_channel: normalizeStoredCreationChannel(o.creation_channel, "web"),
     list_created_at: o.created_at.toISOString(),
     warehouse_id: o.warehouse_id,
     warehouse_name: o.warehouse?.name ?? null,
@@ -62,7 +73,7 @@ export function toDetailRow(o: OrderDetailLoaded, viewerRole?: string): OrderDet
     zone: cl.zone ?? null,
     consignment: o.agent?.consignment ?? null,
     day: null,
-    created_by: null,
+    created_by: createdBy,
     created_by_role: null,
     expected_ship_date: null,
     shipped_at: null,
@@ -203,8 +214,15 @@ export async function enrichOrderDetailRow(
   viewerRole?: string
 ): Promise<OrderDetailRow> {
   const base = toDetailRow(o, viewerRole);
-  const pmEntries = await loadPaymentMethodEntriesForResolve(tenantId);
-  const payment_method_label = resolvePaymentMethodRefToLabel(base.payment_method_ref, pmEntries);
+  const [pmEntries, ptEntries] = await Promise.all([
+    loadPaymentMethodEntriesForResolve(tenantId),
+    loadPriceTypeEntriesForResolve(tenantId)
+  ]);
+  const payment_method_label = orderListPriceTypeLabel(
+    base.payment_method_ref,
+    pmEntries,
+    ptEntries
+  );
   const sel = parseBonusGiftSelectionsJson(o.bonus_gift_selections ?? null);
   const swap = await buildBonusGiftSwapOptions(tenantId, o.applied_auto_bonus_rule_ids, sel);
   const bonus_gift_selections: Record<string, number> = {};
@@ -271,6 +289,7 @@ export async function enrichOrderDetailRow(
     discount_sum: effectiveDiscountSum.toString(),
     discount_debt_note: discountDebtNote,
     payment_method_label,
+    price_type: o.price_type?.trim() || payment_method_label,
     bonus_gift_selections,
     bonus_gift_swap_options: swap,
     shipped_at: x?.shipped_at ?? base.shipped_at,

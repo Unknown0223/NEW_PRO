@@ -61,22 +61,32 @@ export function getUserFacingError(error: unknown, fallback = "Произошл�
     const msg = data?.message?.trim() ?? "";
     if (zodHint && (!msg || msg === "Request validation failed")) base = zodHint;
     else if (msg) base = msg;
-    else if (status === 401) base = "Sessiya tugadi. Qayta kiring (Сессия истекла).";
+    else if (status === 401) base = "Сессия истекла. Войдите снова.";
     else if (
       status === 403 &&
       (data?.error === "DOCUMENT_EDIT_PERIOD_LOCKED" || data?.error === "DocumentEditPeriodLocked")
     ) {
-      base = data?.message?.trim() || "Davr yopilgan. Admin ochishi kerak.";
+      base = data?.message?.trim() || "Период закрыт. Открыть его может администратор.";
     }
     else if (status === 403 && data?.error === "APP_ACCESS_DENIED") {
       base =
         data?.message?.trim() ||
-        "Доступ к приложению отключён / Ilova kirish o‘chirilgan. Обратитесь к администратору.";
+        "Доступ к приложению отключён. Обратитесь к администратору.";
     }
     else if (status === 403 && data?.error === "USER_NOT_ON_SLOT") {
       base =
         data?.message?.trim() ||
         "Пользователь не назначен на рабочее место. Обратитесь к администратору.";
+    }
+    else if (status === 403 && data?.error === "AgentNotOnSlot") {
+      base =
+        data?.message?.trim() ||
+        "Агент не назначен на рабочее место — новые операции запрещены (только сбор долгов).";
+    }
+    else if (status === 403 && data?.error === "ExpeditorNotOnSlot") {
+      base =
+        data?.message?.trim() ||
+        "Доставщик не назначен на рабочее место — новые операции запрещены.";
     }
     else if (status === 403) base = "Недостаточно прав для этого действия.";
     else if (status === 404) base = "Данные не найдены.";
@@ -89,18 +99,31 @@ export function getUserFacingError(error: unknown, fallback = "Произошл�
     ) {
       base =
         data?.message?.trim() ||
-        "Bu nomdagi mahsulot allaqachon mavjud (SKU dan mustaqil).";
+        "Товар с таким названием уже существует (независимо от SKU).";
     }
     else if (status === 409 && data?.error === "SkuExists") {
-      base = data?.message?.trim() || "Bu SKU allaqachon mavjud.";
+      base = data?.message?.trim() || "Такой SKU уже существует.";
     }
     else if (status === 409 && data?.error === "BarcodeExists") {
-      base = data?.message?.trim() || "Bu shtrixkod allaqachon band.";
+      base = data?.message?.trim() || "Этот штрихкод уже занят.";
     }
     else if (status === 409) base = "Данные были изменены. Обновите страницу и повторите.";
     else if (status === 503) base = "Сервис временно недоступен. Попробуйте позже.";
-    else if (status && status >= 500) base = "Ошибка сервера. Можно повторить запрос.";
-    else if (typeof data?.error === "string" && data.error.trim()) base = data.error.trim();
+    else if (status && status >= 500) {
+      const msg = data?.message?.trim();
+      base =
+        msg && msg.length > 0
+          ? msg
+          : "Ошибка сервера. Можно повторить запрос.";
+    }
+    else if (typeof data?.error === "string" && data.error.trim()) {
+      // Avoid dumping raw codes like "ValidationError" when no message was set
+      if (data.error === "ValidationError") {
+        base = "Проверьте правильность введённых данных.";
+      } else {
+        base = data.error.trim();
+      }
+    }
     else if (status === 400 || status === 422) base = "Проверьте правильность введённых данных.";
     else if (status === 429) base = "Слишком много запросов. Подождите немного и повторите.";
     else if (error.message.trim()) base = error.message;

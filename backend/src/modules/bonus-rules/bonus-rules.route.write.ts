@@ -3,7 +3,7 @@ import { sendApiError, zodValidationExtras } from "../../lib/api-error";
 import { actorUserIdOrNull } from "../../lib/request-actor";
 import { ensureTenantContext } from "../../lib/tenant-context";
 import { jwtAccessVerify, requireRoles } from "../auth/auth.prehandlers";
-import { catalogRoles } from "./bonus-rules.route.shared";
+import { catalogRoles, ensureBonusRuleIdsPermission, ensureBonusRuleTypePermission } from "./bonus-rules.route.shared";
 import { createBodySchema, orderScopeBodySchema, updateBodySchema } from "./bonus-rules.route.schemas";
 import { createBonusRule, updateBonusRule, updateBonusRuleOrderScope } from "./bonus-rules.service";
 
@@ -18,6 +18,7 @@ export async function registerBonusRuleWriteRoutes(app: FastifyInstance) {
       if (!parsed.success) {
         return sendApiError(reply, request, 400, "ValidationError", undefined, zodValidationExtras(parsed.error));
       }
+      if (!(await ensureBonusRuleTypePermission(request, reply, parsed.data.type, "create"))) return;
       try {
         const row = await createBonusRule(
           request.tenant!.id,
@@ -34,7 +35,7 @@ export async function registerBonusRuleWriteRoutes(app: FastifyInstance) {
             request,
             400,
             "ClauseRewardRequired",
-            "Kamida bitta shartda bonus mahsuloti (galichka) bo‘lishi kerak."
+            "Хотя бы в одном условии должен быть отмечен бонусный товар."
           );
         }
         if (msg === "CLAUSE_BONUS_PRODUCTS_REQUIRED") {
@@ -43,7 +44,7 @@ export async function registerBonusRuleWriteRoutes(app: FastifyInstance) {
             request,
             400,
             "ClauseBonusProductsRequired",
-            "Bonus beriladigan shartda kamida bitta bonus-mahsulot tanlang."
+            "В условии с бонусом выберите хотя бы один бонусный товар."
           );
         }
         if (msg === "PRODUCT_SCOPE_REQUIRED") {
@@ -52,7 +53,7 @@ export async function registerBonusRuleWriteRoutes(app: FastifyInstance) {
             request,
             400,
             "ProductScopeRequired",
-            "Avtomatik qoida uchun assortiment yoki kategoriya tanlanishi kerak."
+            "Для автоматического правила нужно выбрать ассортимент или категорию."
           );
         }
         if (msg === "BAD_DATE") return sendApiError(reply, request, 400, "BadDate");
@@ -77,6 +78,8 @@ export async function registerBonusRuleWriteRoutes(app: FastifyInstance) {
       if (Object.keys(parsed.data).length === 0) {
         return sendApiError(reply, request, 400, "EmptyBody");
       }
+      if (!(await ensureBonusRuleIdsPermission(request, reply, request.tenant!.id, [id], "update"))) return;
+      if (parsed.data.type && !(await ensureBonusRuleTypePermission(request, reply, parsed.data.type, "update"))) return;
       try {
         const row = await updateBonusRule(
           request.tenant!.id,
@@ -95,7 +98,7 @@ export async function registerBonusRuleWriteRoutes(app: FastifyInstance) {
             request,
             400,
             "ClauseRewardRequired",
-            "Kamida bitta shartda bonus mahsuloti (galichka) bo‘lishi kerak."
+            "Хотя бы в одном условии должен быть отмечен бонусный товар."
           );
         }
         if (msg === "CLAUSE_BONUS_PRODUCTS_REQUIRED") {
@@ -104,7 +107,7 @@ export async function registerBonusRuleWriteRoutes(app: FastifyInstance) {
             request,
             400,
             "ClauseBonusProductsRequired",
-            "Bonus beriladigan shartda kamida bitta bonus-mahsulot tanlang."
+            "В условии с бонусом выберите хотя бы один бонусный товар."
           );
         }
         if (msg === "PRODUCT_SCOPE_REQUIRED") {
@@ -113,7 +116,7 @@ export async function registerBonusRuleWriteRoutes(app: FastifyInstance) {
             request,
             400,
             "ProductScopeRequired",
-            "Avtomatik qoida uchun assortiment yoki kategoriya tanlanishi kerak."
+            "Для автоматического правила нужно выбрать ассортимент или категорию."
           );
         }
         if (msg === "BAD_DATE") return sendApiError(reply, request, 400, "BadDate");
@@ -144,6 +147,7 @@ export async function registerBonusRuleWriteRoutes(app: FastifyInstance) {
       if (!parsed.success) {
         return sendApiError(reply, request, 400, "ValidationError", undefined, zodValidationExtras(parsed.error));
       }
+      if (!(await ensureBonusRuleIdsPermission(request, reply, request.tenant!.id, [id], "update"))) return;
       try {
         const row = await updateBonusRuleOrderScope(
           request.tenant!.id,

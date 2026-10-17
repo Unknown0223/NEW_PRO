@@ -27,6 +27,7 @@ function minimalOrder(client: Partial<OrderDetailLoaded["client"]>): OrderDetail
     warehouse_block_id: null,
     discount_alert: null,
     bonus_alert: null,
+    creation_channel: null,
     created_at: new Date("2026-01-15T10:00:00.000Z"),
     client: {
       name: "Client A",

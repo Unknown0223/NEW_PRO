@@ -102,6 +102,8 @@ class _AgentOrdersPageState extends ConsumerState<AgentOrdersPage> {
   @override
   Widget build(BuildContext context) {
     ref.watch(heldOrderSchedulerProvider);
+    // Countdown matni yangilansin; DB har soniyada o‘qilmasin.
+    ref.watch(heldOrderTickProvider);
     final session = ref.watch(sessionProvider);
     final canCreate = session.permissions.canCreateOrders;
     final ordersAsync = ref.watch(ordersListProvider);
@@ -122,7 +124,8 @@ class _AgentOrdersPageState extends ConsumerState<AgentOrdersPage> {
       backgroundColor: AppColors.background,
       appBar: AgentAppBar(
         title: 'Мои заказы',
-        showBack: true,
+        useShellDrawer: true,
+        showBack: false,
         belowTitle: _agentSubtitle(session).isNotEmpty
             ? Padding(
                 padding: const EdgeInsets.only(left: 4),

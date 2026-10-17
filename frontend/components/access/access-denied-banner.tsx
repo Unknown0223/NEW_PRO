@@ -21,9 +21,9 @@ type AccessDeniedBannerProps = {
   secondaryLabel?: string;
 };
 
-const DEFAULT_TITLE = "Нет доступа / Ruxsat yo‘q";
+const DEFAULT_TITLE = "Нет доступа";
 const DEFAULT_MESSAGE =
-  "Доступ к этому разделу отключён или недостаточно прав. Обратитесь к администратору. / Bu bo‘lim yopiq yoki ruxsat yetarli emas. Administratorga murojaat qiling.";
+  "Доступ к этому разделу отключён или недостаточно прав. Обратитесь к администратору.";
 
 /**
  * Deep-link / ruxsatsiz sahifa / login denial — bir xil SalesArena soft surface.
@@ -35,7 +35,7 @@ export function AccessDeniedBanner({
   compact = false,
   className,
   primaryHref = "/",
-  primaryLabel = "На главную / Bosh sahifa",
+  primaryLabel = "На главную",
   secondaryHref,
   secondaryLabel
 }: AccessDeniedBannerProps) {

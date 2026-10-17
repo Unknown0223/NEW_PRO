@@ -9,6 +9,30 @@ const webVitalsBodySchema = z.object({
   path: z.string().max(512).optional()
 });
 
+const PATH_ALLOW = new Set([
+  "/",
+  "/login",
+  "/orders",
+  "/clients",
+  "/dashboard",
+  "/payments",
+  "/stock",
+  "/reports",
+  "/settings",
+  "/access",
+  "/plans",
+  "/invoices",
+  "/products"
+]);
+
+function pathLabel(raw: string | undefined): string {
+  const t = (raw ?? "/").trim() || "/";
+  const segs = t.split("/").filter(Boolean);
+  if (segs.length === 0) return "/";
+  const first = `/${segs[0].replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 32)}`;
+  return PATH_ALLOW.has(first) ? first : "/other";
+}
+
 let webVitalsHistogram: client.Histogram<string> | null = null;
 
 function getWebVitalsHistogram(): client.Histogram<string> {
@@ -27,15 +51,21 @@ function getWebVitalsHistogram(): client.Histogram<string> {
   return webVitalsHistogram;
 }
 
-/** Frontend Web Vitals → Prometheus (auth talab qilinmaydi, rate limit global). */
+/** Frontend Web Vitals → Prometheus (auth yo‘q; marshrut darajasida rate limit). */
 export async function registerWebVitalsRoutes(app: FastifyInstance) {
-  app.post("/api/:slug/metrics/web-vitals", async (request, reply) => {
-    const parsed = webVitalsBodySchema.safeParse(request.body ?? {});
-    if (!parsed.success) {
-      return reply.status(400).send({ error: "ValidationError" });
+  app.post(
+    "/api/:slug/metrics/web-vitals",
+    {
+      config: { rateLimit: { max: 60, timeWindow: "1 minute" } }
+    },
+    async (request, reply) => {
+      const parsed = webVitalsBodySchema.safeParse(request.body ?? {});
+      if (!parsed.success) {
+        return reply.status(400).send({ error: "ValidationError" });
+      }
+      const path = pathLabel(parsed.data.path);
+      getWebVitalsHistogram().observe({ name: parsed.data.name, path }, parsed.data.value);
+      return reply.status(204).send();
     }
-    const path = parsed.data.path?.trim() || "/";
-    getWebVitalsHistogram().observe({ name: parsed.data.name, path }, parsed.data.value);
-    return reply.status(204).send();
-  });
+  );
 }

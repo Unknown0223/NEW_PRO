@@ -33,7 +33,7 @@ class _AgentTabelDetailPageState extends ConsumerState<AgentTabelDetailPage> {
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AgentAppBar(
-        title: 'Табель · Detail',
+        title: 'Табель · Детали',
         showBack: true,
         belowTitle: Align(
           alignment: Alignment.centerLeft,
@@ -153,7 +153,7 @@ class _AgentTabelDetailPageState extends ConsumerState<AgentTabelDetailPage> {
       child: Row(
         children: [
           _chip(
-            label: 'Ҳаммаси',
+            label: 'Все',
             selected: _filter == null,
             onTap: () => setState(() => _filter = null),
           ),
@@ -276,7 +276,7 @@ class _AgentTabelDetailPageState extends ConsumerState<AgentTabelDetailPage> {
               padding: EdgeInsets.symmetric(vertical: 22),
               child: Center(
                 child: Text(
-                  'Ушбу фильтр бўйича кунлар йўқ',
+                  'Нет дней по этому фильтру',
                   style: TextStyle(fontSize: 12.5, color: AppColors.textMuted),
                 ),
               ),

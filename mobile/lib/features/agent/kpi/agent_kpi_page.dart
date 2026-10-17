@@ -31,6 +31,7 @@ class AgentKpiPage extends ConsumerWidget {
       backgroundColor: AppColors.background,
       appBar: AgentAppBar(
         title: 'KPI',
+        useShellDrawer: true,
         belowTitle: dataAsync.maybeWhen(
           data: (d) => Text(
             kpiAgentSubtitle(d, fallbackName: fallbackName, fallbackCode: fallbackCode),
@@ -217,7 +218,7 @@ class _TodayHero extends StatelessWidget {
     final maxBar = week.fold<double>(0, (m, w) => w.salesSum > m ? w.salesSum : m);
     final avg = week.isEmpty ? 0.0 : week.fold<double>(0, (s, w) => s + w.salesSum) / week.length;
     final vs = vsYesterday;
-    final vsLabel = vs == null ? null : '${vs >= 0 ? '+' : ''}${vs.toStringAsFixed(0)}% vs вчера';
+    final vsLabel = vs == null ? null : '${vs >= 0 ? '+' : ''}${vs.toStringAsFixed(0)}% к вчерашнему дню';
 
     return Container(
       padding: const EdgeInsets.all(16),

@@ -13,18 +13,18 @@ export type TenantTimezoneOption = {
 
 /** Admin UI: har qanday haqiqiy IANA; ro‘yxat faqat UI uchun namunalar. */
 export const TENANT_TIMEZONE_OPTIONS: TenantTimezoneOption[] = [
-  { id: "Asia/Tashkent", label: "O‘zbekiston (UTC+5) — Toshkent", utc_offset_hours: 5 },
-  { id: "Asia/Samarkand", label: "O‘zbekiston (UTC+5) — Samarqand", utc_offset_hours: 5 },
-  { id: "Asia/Almaty", label: "Qozog‘iston (UTC+5) — Almatı", utc_offset_hours: 5 },
-  { id: "Asia/Aqtobe", label: "Qozog‘iston (UTC+5) — Aqtobe", utc_offset_hours: 5 },
-  { id: "Asia/Bishkek", label: "Qirg‘iziston (UTC+6) — Bishkek", utc_offset_hours: 6 },
-  { id: "Asia/Dushanbe", label: "Tojikiston (UTC+5) — Dushanbe", utc_offset_hours: 5 },
-  { id: "Asia/Ashgabat", label: "Turkmaniston (UTC+5) — Ashxobod", utc_offset_hours: 5 },
-  { id: "Asia/Dubai", label: "BAA (UTC+4) — Dubay", utc_offset_hours: 4 },
-  { id: "Asia/Yekaterinburg", label: "Rossiya (UTC+5) — Yekaterinburg", utc_offset_hours: 5 },
-  { id: "Asia/Novosibirsk", label: "Rossiya (UTC+7) — Novosibirsk", utc_offset_hours: 7 },
-  { id: "Europe/Moscow", label: "Rossiya (UTC+3) — Moskva", utc_offset_hours: 3 },
-  { id: "Europe/Istanbul", label: "Turkiya (UTC+3) — Istanbul", utc_offset_hours: 3 },
+  { id: "Asia/Tashkent", label: "Узбекистан (UTC+5) — Ташкент", utc_offset_hours: 5 },
+  { id: "Asia/Samarkand", label: "Узбекистан (UTC+5) — Самарканд", utc_offset_hours: 5 },
+  { id: "Asia/Almaty", label: "Казахстан (UTC+5) — Алматы", utc_offset_hours: 5 },
+  { id: "Asia/Aqtobe", label: "Казахстан (UTC+5) — Актобе", utc_offset_hours: 5 },
+  { id: "Asia/Bishkek", label: "Кыргызстан (UTC+6) — Бишкек", utc_offset_hours: 6 },
+  { id: "Asia/Dushanbe", label: "Таджикистан (UTC+5) — Душанбе", utc_offset_hours: 5 },
+  { id: "Asia/Ashgabat", label: "Туркменистан (UTC+5) — Ашхабад", utc_offset_hours: 5 },
+  { id: "Asia/Dubai", label: "ОАЭ (UTC+4) — Дубай", utc_offset_hours: 4 },
+  { id: "Asia/Yekaterinburg", label: "Россия (UTC+5) — Екатеринбург", utc_offset_hours: 5 },
+  { id: "Asia/Novosibirsk", label: "Россия (UTC+7) — Новосибирск", utc_offset_hours: 7 },
+  { id: "Europe/Moscow", label: "Россия (UTC+3) — Москва", utc_offset_hours: 3 },
+  { id: "Europe/Istanbul", label: "Турция (UTC+3) — Стамбул", utc_offset_hours: 3 },
   { id: "UTC", label: "UTC (UTC+0)", utc_offset_hours: 0 }
 ];
 

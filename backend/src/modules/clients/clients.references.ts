@@ -17,9 +17,10 @@ import {
   mergeCitySelectOpts,
   normalizeDistinct
 } from "./clients.helpers";
+import { inferCityTerritoryFromCode } from "../mobile/mobile-territory-references";
 
 export async function getClientReferences(tenantId: number): Promise<ClientReferences> {
-  const cacheKey = `tenant:${tenantId}:clients:references:v1`;
+  const cacheKey = `tenant:${tenantId}:clients:references:v2`;
   try {
     const redis = await getRedisForApp();
     const cached = await redis.get(cacheKey);
@@ -126,14 +127,23 @@ export async function getClientReferences(tenantId: number): Promise<ClientRefer
     if (inv) equipVals.add(inv);
   }
 
+  const inferredRegions: string[] = [];
+  const inferredZones: string[] = [];
+  for (const cityStored of dbCityValues) {
+    const inf = inferCityTerritoryFromCode(cityStored);
+    if (!inf) continue;
+    inferredRegions.push(inf.region);
+    inferredZones.push(inf.zone);
+  }
+
   const result: ClientReferences = {
     categories: normalizeDistinct([...setCat, ...clientRows.map((r) => r.category)]),
     client_type_codes: normalizeDistinct([...setTypes, ...clientRows.map((r) => r.client_type_code)]),
-    regions: normalizeDistinct([...settingsRegions, ...clientRows.map((r) => r.region)]),
+    regions: normalizeDistinct([...settingsRegions, ...inferredRegions, ...clientRows.map((r) => r.region)]),
     districts: normalizeDistinct([...setDistricts, ...clientRows.map((r) => r.district)]),
     cities: normalizeDistinct([...setCities, ...clientRows.map((r) => r.city)]),
     neighborhoods: normalizeDistinct([...setNeighborhoods, ...clientRows.map((r) => r.neighborhood)]),
-    zones: normalizeDistinct([...setZonesRef, ...clientRows.map((r) => r.zone)]),
+    zones: normalizeDistinct([...setZonesRef, ...inferredZones, ...clientRows.map((r) => r.zone)]),
     client_formats: normalizeDistinct([...setFormats, ...clientRows.map((r) => r.client_format)]),
     sales_channels: normalizeDistinct([
       ...setSales,
@@ -168,7 +178,11 @@ export async function getClientReferences(tenantId: number): Promise<ClientRefer
       setCities,
       clientRows.map((r) => r.city)
     ),
-    region_options: mergeCitySelectOpts(regionPairs, strArr("regions"), clientRows.map((r) => r.region)),
+    region_options: mergeCitySelectOpts(
+      regionPairs,
+      [...strArr("regions"), ...inferredRegions],
+      clientRows.map((r) => r.region)
+    ),
     city_territory_hints: cityTerritoryHints
   };
   try {

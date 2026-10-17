@@ -97,8 +97,8 @@ export function WdrReportBuilderFiltersPanel(props: WdrFiltersPanelProps) {
           </Button>
         </CardHeader>
         {!filtersCollapsed ? <CardContent className="space-y-3 pt-0">
-          <div className="flex flex-col gap-3 lg:flex-row lg:flex-wrap lg:items-center">
-            <div className="min-w-0 flex-1">
+          <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end sm:justify-end">
+            <div className="min-w-0 shrink-0">
               <span className="mb-1 block text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Дата применяется по</span>
               <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs">
                 {dateModeItems.map((dm) => (
@@ -128,7 +128,7 @@ export function WdrReportBuilderFiltersPanel(props: WdrFiltersPanelProps) {
               <span className="text-xs font-medium text-muted-foreground">Период</span>
               <span className="text-sm font-medium tabular-nums">{periodBtn}</span>
             </button>
-            <div className="flex flex-wrap items-center gap-2 lg:ml-auto">
+            <div className="flex flex-wrap items-center gap-2">
               <Button
                 type="button"
                 size="sm"

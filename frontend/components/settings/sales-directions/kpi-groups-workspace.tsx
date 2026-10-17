@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { isAxiosError } from "axios";
 import { api } from "@/lib/api";
+import { usePermissions } from "@/lib/use-permissions";
 import {
   firstMessagePerField,
   firstValidationUserHint,
@@ -22,6 +23,8 @@ import { downloadXlsxSheet } from "@/lib/download-xlsx";
 import { Pencil, RefreshCw } from "lucide-react";
 import { SearchableMultiSelectPanel } from "@/components/ui/searchable-multi-select-panel";
 import { KpiProductCategoryTreeSelect } from "@/components/settings/sales-directions/kpi-product-category-tree-select";
+import { activeEmployeeRoles } from "@/components/settings/sales-directions/kpi-group-roles";
+import { roleLabel } from "@/lib/payroll/payroll-api";
 
 type KpiListRow = {
   id: number;
@@ -31,7 +34,7 @@ type KpiListRow = {
   comment: string | null;
   is_active: boolean;
   products: { id: number; name: string; sku: string }[];
-  agents: { id: number; fio: string; code: string | null }[];
+  agents: { id: number; fio: string; code: string | null; role: string }[];
   product_total: number;
   agent_total: number;
 };
@@ -56,6 +59,11 @@ function pickZodLeaf(per: Record<string, string>, leaf: string): string | undefi
   return undefined;
 }
 
+function withSmartCode(code: string | null | undefined, name: string): string {
+  const c = (code ?? "").trim();
+  return c ? `${c} ${name}`.trim() : name;
+}
+
 function TagOverflow({
   items,
   label,
@@ -69,7 +77,7 @@ function TagOverflow({
   return (
     <div className="flex flex-wrap items-center gap-1">
       {items.map((x) => (
-        <span key={x.key} className="max-w-[140px] truncate rounded bg-muted px-1.5 py-0.5 text-[10px]" title={x.text}>
+        <span key={x.key} className="max-w-[220px] truncate rounded bg-muted px-1.5 py-0.5 text-[11px]" title={x.text}>
           {x.text}
         </span>
       ))}
@@ -83,8 +91,10 @@ function TagOverflow({
 }
 
 export function KpiGroupsWorkspace({ tenantSlug }: Props) {
+  const canExport = usePermissions().has("settings.napravlenie_torgovli.export");
   const qc = useQueryClient();
   const [tab, setTab] = useState<"active" | "inactive">("active");
+  const [roleTab, setRoleTab] = useState("agent");
   const [search, setSearch] = useState("");
   const [pageSize, setPageSize] = useState(10);
   const [page, setPage] = useState(1);
@@ -132,6 +142,20 @@ export function KpiGroupsWorkspace({ tenantSlug }: Props) {
     );
   }, [listQ.data, search]);
 
+  const membersQ = useQuery({
+    queryKey: ["kpi-member-options", tenantSlug],
+    enabled: Boolean(tenantSlug),
+    staleTime: STALE.reference,
+    queryFn: async () => {
+      const { data } = await api.get<{ data: Array<{ id: number; role: string }> }>(`/api/${tenantSlug}/kpi-groups/members`);
+      return data.data;
+    }
+  });
+  const roleOptions = useMemo(() => activeEmployeeRoles(membersQ.data ?? []), [membersQ.data]);
+  useEffect(() => {
+    if (roleOptions.length && !roleOptions.includes(roleTab)) setRoleTab(roleOptions[0]);
+  }, [roleOptions, roleTab]);
+
   const total = filteredRows.length;
   const pageCount = Math.max(1, Math.ceil(total / pageSize));
   const safePage = Math.min(page, pageCount);
@@ -176,6 +200,21 @@ export function KpiGroupsWorkspace({ tenantSlug }: Props) {
                 </Button>
               </div>
             </div>
+            <div className="flex flex-wrap gap-1 border-b border-border bg-background px-3 py-2 sm:px-4">
+              {roleOptions.map((id) => (
+                <button
+                  key={id}
+                  type="button"
+                  className={cn(
+                    "rounded-md px-3 py-1 text-xs font-medium",
+                    roleTab === id ? "bg-primary text-white" : "bg-muted text-muted-foreground hover:text-foreground"
+                  )}
+                  onClick={() => setRoleTab(id)}
+                >
+                  {roleLabel(id)} ({(membersQ.data ?? []).filter((a) => a.role === id).length})
+                </button>
+              ))}
+            </div>
 
             <div
               className="table-toolbar flex min-w-0 flex-wrap items-end gap-2 border-b border-border/80 bg-muted/30 px-3 py-2 sm:px-4"
@@ -208,9 +247,9 @@ export function KpiGroupsWorkspace({ tenantSlug }: Props) {
                 type="button"
                 variant="outline"
                 size="sm"
-                className="h-9 shrink-0 text-xs"
+                className={cn("h-9 shrink-0 text-xs", !canExport && "hidden")}
                 onClick={() => {
-                  const headers = ["Название", "Код", "Сортировка", "Продукты", "Агенты", "Комментарий"];
+                  const headers = ["Название", "Код", "Сортировка", "Продукты", "Сотрудники", "Комментарий"];
                   const rows = filteredRows.map((r) => [
                     r.name,
                     r.code ?? "",
@@ -249,7 +288,7 @@ export function KpiGroupsWorkspace({ tenantSlug }: Props) {
               <th className="px-2 py-2 text-left font-medium text-muted-foreground">Код</th>
               <th className="px-2 py-2 text-left font-medium text-muted-foreground">Сортировка</th>
               <th className="px-2 py-2 text-left font-medium text-muted-foreground">Продукт</th>
-              <th className="px-2 py-2 text-left font-medium text-muted-foreground">Агенты</th>
+              <th className="px-2 py-2 text-left font-medium text-muted-foreground">{roleLabel(roleTab)}</th>
               <th className="px-2 py-2 text-left font-medium text-muted-foreground">Комментарий</th>
               <th className="w-12 px-2 py-2" />
             </tr>
@@ -270,14 +309,14 @@ export function KpiGroupsWorkspace({ tenantSlug }: Props) {
                     total={r.product_total}
                   />
                 </td>
-                <td className="max-w-[220px] px-2 py-2">
+                <td className="min-w-[240px] px-2 py-2">
                   <TagOverflow
-                    items={r.agents.map((a) => ({
+                    items={r.agents.filter((a) => a.role === roleTab).slice(0, 6).map((a) => ({
                       key: String(a.id),
-                      text: formatPersonDisplayName(a)
+                      text: withSmartCode(a.code, formatPersonDisplayName(a))
                     }))}
-                    label="аг."
-                    total={r.agent_total}
+                    label="чел."
+                    total={r.agents.filter((a) => a.role === roleTab).length}
                   />
                 </td>
                 <td className="max-w-[120px] truncate px-2 py-2 text-muted-foreground">{r.comment ?? "—"}</td>
@@ -380,14 +419,12 @@ function KpiFormDialog({
   });
 
   const agentsQ = useQuery({
-    queryKey: ["agents-kpi-pick", tenantSlug],
+    queryKey: ["kpi-member-options", tenantSlug],
     enabled: open && Boolean(tenantSlug),
     staleTime: STALE.reference,
     queryFn: async () => {
-      const params = new URLSearchParams();
-      params.set("is_active", "true");
-      const { data } = await api.get<{ data: { id: number; fio: string; code: string | null }[] }>(
-        `/api/${tenantSlug}/agents?${params.toString()}`
+      const { data } = await api.get<{ data: Array<{ id: number; fio: string; code: string | null; role: string; role_label: string }> }>(
+        `/api/${tenantSlug}/kpi-groups/members`
       );
       return data.data;
     }
@@ -401,8 +438,9 @@ function KpiFormDialog({
   const [prodSel, setProdSel] = useState<Set<number>>(new Set());
   const [agSel, setAgSel] = useState<Set<number>>(new Set());
   const [agSearch, setAgSearch] = useState("");
+  const [roleFilter, setRoleFilter] = useState<Set<string>>(() => new Set());
   /** Accordion: bir vaqtda faqat bitta panel ochiq */
-  const [openPicker, setOpenPicker] = useState<"products" | "agents" | null>(null);
+  const [openPicker, setOpenPicker] = useState<"products" | "agents" | "roles" | null>(null);
   const [serverFieldErrs, setServerFieldErrs] = useState<Record<string, string>>({});
   const [msg, setMsg] = useState<string | null>(null);
 
@@ -419,12 +457,19 @@ function KpiFormDialog({
       return prev === "agents" ? null : prev;
     });
   };
+  const setRolesOpen = (o: boolean) => {
+    setOpenPicker((prev) => {
+      if (o) return "roles";
+      return prev === "roles" ? null : prev;
+    });
+  };
 
   useEffect(() => {
     if (!open) return;
     setServerFieldErrs({});
     setMsg(null);
     setAgSearch("");
+    setRoleFilter(new Set());
     setOpenPicker(null);
     if (mode === "add") {
       setName("");
@@ -451,11 +496,14 @@ function KpiFormDialog({
     setAgSel(new Set(d.agent_user_ids));
   }, [open, mode, d]);
 
-  const agents = agentsQ.data ?? [];
+  const agents = (agentsQ.data ?? []).filter(
+    (a) => a.role !== "expeditor" || agSel.has(a.id)
+  );
   const filteredAgents = agents.filter((a) => {
+    if (roleFilter.size > 0 && !roleFilter.has(a.role)) return false;
     const q = agSearch.trim().toLowerCase();
     if (!q) return true;
-    return `${a.fio} ${a.code ?? ""} ${a.id}`.toLowerCase().includes(q);
+    return `${a.fio} ${a.code ?? ""} ${a.role_label} ${a.id}`.toLowerCase().includes(q);
   });
 
   const submit = async () => {
@@ -500,7 +548,7 @@ function KpiFormDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[92vh] max-w-xl overflow-y-auto">
+      <DialogContent className="max-h-[92vh] max-w-3xl overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{mode === "add" ? "Добавить" : "Редактировать"}</DialogTitle>
         </DialogHeader>
@@ -526,20 +574,39 @@ function KpiFormDialog({
             {pickZodLeaf(serverFieldErrs, "product_ids") ? (
               <p className="text-xs text-destructive">{pickZodLeaf(serverFieldErrs, "product_ids")}</p>
             ) : null}
+            <SearchableMultiSelectPanel<string>
+              label="Роль"
+              triggerPlaceholder="Нажмите, чтобы выбрать"
+              searchPlaceholder="Поиск роли"
+              items={activeEmployeeRoles(agents).map((id) => ({
+                id,
+                title: roleLabel(id),
+                subtitle: `${agents.filter((a) => a.role === id).length} чел.`
+              }))}
+              selected={roleFilter}
+              onSelectedChange={setRoleFilter}
+              selectAllLabel="Выбрать все роли"
+              clearVisibleLabel="Снять роли"
+              emptyMessage="Нет ролей"
+              maxListHeightClass="max-h-40"
+              inline
+              open={openPicker === "roles"}
+              onOpenChange={setRolesOpen}
+            />
             <SearchableMultiSelectPanel
-              label="Агенты"
-              searchPlaceholder="Поиск по коду, ФИО, ID"
+              label="Сотрудники"
+              searchPlaceholder="Поиск по коду, ФИО, роли"
               search={agSearch}
               onSearchChange={setAgSearch}
               items={filteredAgents.map((a) => ({
                 id: a.id,
-                subtitle: a.code != null && String(a.code).trim() !== "" ? String(a.code) : `#${a.id}`,
-                title: formatPersonDisplayName({ fio: a.fio })
+                subtitle: a.role_label,
+                title: withSmartCode(a.code, formatPersonDisplayName({ fio: a.fio }))
               }))}
               selected={agSel}
               onSelectedChange={setAgSel}
               loading={agentsQ.isFetching}
-              emptyMessage="Нет агентов — измените поиск"
+              emptyMessage="Нет сотрудников — измените поиск или роль"
               maxListHeightClass="max-h-52"
               selectAllLabel="Выбрать все на экране"
               clearVisibleLabel="Снять на экране"

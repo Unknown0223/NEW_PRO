@@ -20,7 +20,7 @@ export function isAppAccessEnforcedRole(role: string | null | undefined): boolea
 
 /** Foydalanuvchiga ko‘rsatiladigan xabar (RU + UZ). */
 export const APP_ACCESS_DENIED_MESSAGE =
-  "Доступ к приложению отключён / Ilova kirish o‘chirilgan. Обратитесь к администратору.";
+  "Доступ к приложению отключён. Обратитесь к администратору.";
 
 export function assertAppAccessAllowed(role: string, appAccess: boolean | null | undefined): void {
   if (isAppAccessEnforcedRole(role) && appAccess === false) {

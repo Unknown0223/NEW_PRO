@@ -1,6 +1,6 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "../../config/database";
-import { clampPct, decToString } from "./dashboard.helpers";
+import { clampPct, decToString, pctAgainstSalesAndBucket, SQL_SUM_SALE_LINE_QTY, SQL_SUM_SALE_LINE_TOTAL } from "./dashboard.helpers";
 import { getSnapshotCache, setSnapshotCache, stableJsonStringify } from "./dashboard.cache";
 import type { SalesMonitoringFilters } from "./sales-monitoring.types";
 import { buildSalesMonitoringBase } from "./sales-monitoring.snapshot.base";
@@ -231,7 +231,7 @@ export async function getSalesMonitoringTables(
           JOIN products p ON p.id = oi.product_id
           WHERE ${base.skuScope}
           GROUP BY p.id
-          HAVING COALESCE(SUM(oi.total), 0) > 0
+          HAVING ${SQL_SUM_SALE_LINE_TOTAL} > 0
         ) t
       `,
       prisma.$queryRaw<
@@ -254,8 +254,8 @@ export async function getSalesMonitoringTables(
           p.id AS product_id,
           COALESCE(NULLIF(TRIM(p.sku), ''), '') AS sku,
           p.name AS name,
-          COALESCE(SUM(oi.total), 0)::numeric(15,2) AS total_sum,
-          COALESCE(SUM(oi.qty), 0)::numeric(18,3) AS qty_total,
+          ${SQL_SUM_SALE_LINE_TOTAL}::numeric(15,2) AS total_sum,
+          ${SQL_SUM_SALE_LINE_QTY}::numeric(18,3) AS qty_total,
           COALESCE(SUM(CASE WHEN o.status = 'new' THEN oi.total ELSE 0 END), 0)::numeric(15,2) AS sum_new,
           COALESCE(SUM(CASE WHEN o.status = 'confirmed' THEN oi.total ELSE 0 END), 0)::numeric(15,2) AS sum_confirmed,
           COALESCE(SUM(CASE WHEN o.status = 'picking' THEN oi.total ELSE 0 END), 0)::numeric(15,2) AS sum_picking,
@@ -270,7 +270,7 @@ export async function getSalesMonitoringTables(
         JOIN products p ON p.id = oi.product_id
         WHERE ${base.skuScope}
         GROUP BY p.id, p.sku, p.name
-        HAVING COALESCE(SUM(oi.total), 0) > 0
+        HAVING ${SQL_SUM_SALE_LINE_TOTAL} > 0
         ORDER BY total_sum DESC
         LIMIT ${limit} OFFSET ${offset}
       `
@@ -294,8 +294,8 @@ export async function getSalesMonitoringTables(
         sum_delivered: decToString(r.sum_delivered),
         sum_cancelled: decToString(r.sum_cancelled),
         sum_returned: decToString(r.sum_returned),
-        return_pct: t > 0 ? clampPct((ret / t) * 100) : null,
-        cancel_pct: t > 0 ? clampPct((can / t) * 100) : null
+        return_pct: pctAgainstSalesAndBucket(t, ret),
+        cancel_pct: pctAgainstSalesAndBucket(t, can)
       };
     });
   }

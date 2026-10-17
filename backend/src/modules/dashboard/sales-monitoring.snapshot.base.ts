@@ -4,6 +4,7 @@ import { clampPct, decToString } from "./dashboard.helpers";
 import { loadActiveBranchNames } from "../tenant-settings/tenant-settings.refs";
 import type { SalesMonitoringFilters } from "./sales-monitoring.types";
 import {
+  expandMonitoringPaymentFilters,
   monthBoundsUtc,
   monitoringAllClientsScope,
   monitoringOrdersScopeAllStatuses,
@@ -50,33 +51,34 @@ export async function buildSalesMonitoringBase(
   tenantId: number,
   filters: SalesMonitoringFilters
 ): Promise<SalesMonitoringBuildBase> {
-  const { from, to, fromYmd, toYmd } = monthBoundsUtc(filters.year, filters.month);
-  const territoryTerms = await resolveSalesTerritoryTerms(tenantId, filters.territory_ids);
-  const salesScope = monitoringSalesScope(tenantId, from, to, filters, territoryTerms);
-  const allClientScope = monitoringAllClientsScope(tenantId, filters, territoryTerms);
-  const skuScope = monitoringOrdersScopeAllStatuses(tenantId, from, to, filters, territoryTerms);
-  const prevYearBounds = monthBoundsUtc(filters.year - 1, filters.month);
+  const expanded = await expandMonitoringPaymentFilters(tenantId, filters);
+  const { from, to, fromYmd, toYmd } = monthBoundsUtc(expanded.year, expanded.month);
+  const territoryTerms = await resolveSalesTerritoryTerms(tenantId, expanded.territory_ids);
+  const salesScope = monitoringSalesScope(tenantId, from, to, expanded, territoryTerms);
+  const allClientScope = monitoringAllClientsScope(tenantId, expanded, territoryTerms);
+  const skuScope = monitoringOrdersScopeAllStatuses(tenantId, from, to, expanded, territoryTerms);
+  const prevYearBounds = monthBoundsUtc(expanded.year - 1, expanded.month);
   const prevYearSalesScope = monitoringSalesScope(
     tenantId,
     prevYearBounds.from,
     prevYearBounds.to,
-    filters,
+    expanded,
     territoryTerms
   );
 
   const branch_options = await loadActiveBranchNames(tenantId);
 
-  const returnLossScope = monitoringSalesScope(tenantId, from, to, filters, territoryTerms, {
+  const returnLossScope = monitoringSalesScope(tenantId, from, to, expanded, territoryTerms, {
     returnedOrdersOnly: true
   });
-  let prevCalMonth = filters.month - 1;
-  let prevCalYear = filters.year;
+  let prevCalMonth = expanded.month - 1;
+  let prevCalYear = expanded.year;
   if (prevCalMonth < 1) {
     prevCalMonth = 12;
     prevCalYear -= 1;
   }
   const prevCalBounds = monthBoundsUtc(prevCalYear, prevCalMonth);
-  const prevCalSalesScope = monitoringSalesScope(tenantId, prevCalBounds.from, prevCalBounds.to, filters, territoryTerms);
+  const prevCalSalesScope = monitoringSalesScope(tenantId, prevCalBounds.from, prevCalBounds.to, expanded, territoryTerms);
 
   const [baseRows] = await prisma.$queryRaw<Array<{
     s: Prisma.Decimal;

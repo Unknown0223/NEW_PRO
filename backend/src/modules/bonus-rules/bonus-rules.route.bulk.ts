@@ -4,7 +4,7 @@ import { actorUserIdOrNull } from "../../lib/request-actor";
 import { ensureTenantContext } from "../../lib/tenant-context";
 import { jwtAccessVerify, requireRoles } from "../auth/auth.prehandlers";
 import { bulkPatchBonusRules } from "./bonus-rules.crud.bulk";
-import { catalogRoles } from "./bonus-rules.route.shared";
+import { catalogRoles, ensureBonusRuleIdsPermission } from "./bonus-rules.route.shared";
 import { bulkPatchBodySchema } from "./bonus-rules.route.schemas";
 
 export async function registerBonusRuleBulkRoutes(app: FastifyInstance) {
@@ -17,6 +17,7 @@ export async function registerBonusRuleBulkRoutes(app: FastifyInstance) {
       if (!parsed.success) {
         return sendApiError(reply, request, 400, "ValidationError", undefined, zodValidationExtras(parsed.error));
       }
+      if (!(await ensureBonusRuleIdsPermission(request, reply, request.tenant!.id, parsed.data.rule_ids, "update"))) return;
       const result = await bulkPatchBonusRules(
         request.tenant!.id,
         parsed.data.rule_ids,

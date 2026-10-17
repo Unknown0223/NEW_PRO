@@ -25,7 +25,7 @@ export async function importRetailStockFromXlsx(
     Buffer.from(buf) as unknown as Parameters<ExcelJS.Workbook["xlsx"]["load"]>[0]
   );
   const sheet = workbook.worksheets[0];
-  if (!sheet) return { applied: 0, errors: ["Sheet topilmadi"] };
+  if (!sheet) return { applied: 0, errors: ["Лист не найден"] };
   const headers = new Map<string, number>();
   sheet.getRow(1).eachCell((cell, idx) => headers.set(normalizeHeader(strFromCell(cell)), idx));
   const idx = {
@@ -41,7 +41,7 @@ export async function importRetailStockFromXlsx(
     comment: headerIndexByAliases(headers, ["Комментарий", "Izoh"])
   };
   if (!idx.date || !idx.client || !idx.product || !idx.qty) {
-    return { applied: 0, errors: ["Majburiy ustunlar: Дата, Клиент, Продукт, Количество"] };
+    return { applied: 0, errors: ["Обязательные столбцы: Дата, Клиент, Продукт, Количество"] };
   }
 
   let applied = 0;
@@ -58,21 +58,21 @@ export async function importRetailStockFromXlsx(
     if (!dateRaw && !clientRaw && !productRaw && qty == null) continue;
     const date = idx.date ? parseImportDateCell(row.getCell(idx.date)) : null;
     if (!date) {
-      errors.push(`Qator ${r}: sana noto‘g‘ri`);
+      errors.push(`Строка ${r}: неверная дата`);
       continue;
     }
     if (qty == null || qty < 0) {
-      errors.push(`Qator ${r}: количество noto‘g‘ri`);
+      errors.push(`Строка ${r}: неверное количество`);
       continue;
     }
     const clientId = await resolveClientId(tenantId, clientRaw);
     if (!clientId) {
-      errors.push(`Qator ${r}: klient topilmadi (${clientRaw})`);
+      errors.push(`Строка ${r}: клиент не найден (${clientRaw})`);
       continue;
     }
     const productId = await resolveProductId(tenantId, productRaw);
     if (!productId) {
-      errors.push(`Qator ${r}: product topilmadi (${productRaw})`);
+      errors.push(`Строка ${r}: товар не найден (${productRaw})`);
       continue;
     }
     const client = await prisma.client.findFirst({
@@ -80,7 +80,7 @@ export async function importRetailStockFromXlsx(
       select: { region: true, zone: true, city: true, agent_id: true }
     });
     if (!client) {
-      errors.push(`Qator ${r}: klient topilmadi (${clientRaw})`);
+      errors.push(`Строка ${r}: клиент не найден (${clientRaw})`);
       continue;
     }
     const amount = amountCell ?? (price != null ? price * qty : null);

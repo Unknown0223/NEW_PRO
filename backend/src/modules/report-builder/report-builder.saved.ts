@@ -183,3 +183,98 @@ export async function restoreReportBuilderSaved(tenantId: number, userId: number
   });
   return true;
 }
+
+export type ReportBuilderShareCandidate = {
+  id: number;
+  name: string;
+  login: string;
+  role: string;
+};
+
+/** Veb + konstruktor ruxsati bo‘lgan foydalanuvchilar (o‘zini chiqarib). */
+export async function listReportBuilderShareCandidates(
+  tenantId: number,
+  actorUserId: number
+): Promise<ReportBuilderShareCandidate[]> {
+  const { accessWebAssignableUserWhere } = await import("../access/access-web-users.filter");
+  const { getUsersHaveReportConstructorAccess } = await import("../access/rbac.access-manage");
+
+  const users = await prisma.user.findMany({
+    where: {
+      ...accessWebAssignableUserWhere(tenantId),
+      id: { not: actorUserId }
+    },
+    select: { id: true, name: true, login: true, role: true },
+    orderBy: [{ name: "asc" }, { login: "asc" }],
+    take: 500
+  });
+
+  const allowed = await getUsersHaveReportConstructorAccess(
+    tenantId,
+    users.map((u) => ({ id: u.id, role: u.role }))
+  );
+
+  return users
+    .filter((u) => allowed.has(u.id))
+    .map((u) => ({ id: u.id, name: u.name, login: u.login, role: u.role }));
+}
+
+/**
+ * Hisobotni boshqa foydalanuvchilarga ulashish — har biriga o‘z saqlangan nusxasi yaratiladi
+ * (ularning konstruktor «Сохранённые отчёты» ro‘yxatida ko‘rinadi).
+ */
+export async function shareReportBuilderSaved(
+  tenantId: number,
+  ownerUserId: number,
+  savedId: number,
+  recipientUserIds: number[]
+): Promise<{ sharedCount: number; skipped: number }> {
+  const uniqueIds = [...new Set(recipientUserIds.map((n) => Number(n)).filter((n) => Number.isFinite(n) && n > 0))];
+  if (uniqueIds.length === 0) throw new Error("EMPTY_RECIPIENTS");
+
+  const source = await prisma.reportBuilderSavedConfig.findFirst({
+    where: { id: savedId, tenant_id: tenantId, user_id: ownerUserId, deleted_at: null },
+    select: { id: true, name: true, dataset_id: true, config: true }
+  });
+  if (!source) throw new Error("NOT_FOUND");
+
+  const owner = await prisma.user.findFirst({
+    where: { id: ownerUserId, tenant_id: tenantId },
+    select: { name: true, login: true }
+  });
+  const ownerLabel = (owner?.name || owner?.login || "коллега").trim().slice(0, 80);
+
+  const candidates = await listReportBuilderShareCandidates(tenantId, ownerUserId);
+  const allowed = new Set(candidates.map((c) => c.id));
+  const recipients = uniqueIds.filter((id) => id !== ownerUserId && allowed.has(id));
+  if (recipients.length === 0) throw new Error("NO_VALID_RECIPIENTS");
+
+  const configJson = source.config as Prisma.InputJsonValue;
+  const baseName = source.name.trim().slice(0, 160);
+  const sharedName = `${baseName} (от ${ownerLabel})`.slice(0, 200);
+
+  let sharedCount = 0;
+  for (const recipientId of recipients) {
+    await prisma.reportBuilderSavedConfig.create({
+      data: {
+        tenant_id: tenantId,
+        user_id: recipientId,
+        name: sharedName,
+        dataset_id: source.dataset_id,
+        config: configJson
+      }
+    });
+    sharedCount += 1;
+  }
+
+  await appendTenantAuditEvent({
+    tenantId,
+    actorUserId: ownerUserId,
+    entityType: "report_builder",
+    entityId: savedId,
+    action: "report_builder.share",
+    payload: { saved_id: savedId, recipient_ids: recipients, shared_count: sharedCount }
+  });
+
+  return { sharedCount, skipped: uniqueIds.length - recipients.length };
+}

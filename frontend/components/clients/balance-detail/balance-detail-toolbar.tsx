@@ -35,6 +35,8 @@ type Props = {
   refreshing?: boolean;
   exportBusy?: boolean;
   canExport?: boolean;
+  /** Excel tugmasi ko'rinadimi (ruxsat). */
+  showExport?: boolean;
 };
 
 export function BalanceDetailToolbar({
@@ -59,7 +61,8 @@ export function BalanceDetailToolbar({
   onExport,
   refreshing,
   exportBusy,
-  canExport
+  canExport,
+  showExport = true
 }: Props) {
   return (
     <div className="flex flex-wrap items-center gap-2 border-b border-[#e5e7eb] bg-white px-3 py-2">
@@ -119,15 +122,17 @@ export function BalanceDetailToolbar({
           className="h-8 w-full rounded border border-[#d0d5dd] bg-white pl-7 pr-2 text-[12px] outline-none focus:border-[#1aa096]"
         />
       </div>
-      <button
-        type="button"
-        onClick={onExport}
-        disabled={exportBusy || !canExport}
-        className="flex h-8 items-center gap-1 rounded border border-[#d0d5dd] bg-white px-2 text-[12px] text-[#555] hover:bg-[#f9fafb] disabled:opacity-50"
-      >
-        <FileSpreadsheet className="h-3.5 w-3.5" />
-        {exportBusy ? "…" : "Excel"}
-      </button>
+      {showExport ? (
+        <button
+          type="button"
+          onClick={onExport}
+          disabled={exportBusy || !canExport}
+          className="flex h-8 items-center gap-1 rounded border border-[#d0d5dd] bg-white px-2 text-[12px] text-[#555] hover:bg-[#f9fafb] disabled:opacity-50"
+        >
+          <FileSpreadsheet className="h-3.5 w-3.5" />
+          {exportBusy ? "…" : "Excel"}
+        </button>
+      ) : null}
       <button
         type="button"
         onClick={onRefresh}

@@ -33,9 +33,9 @@ export function BalanceDetailCards({ cards, selectedId, onSelect }: Props) {
           card.paymentSubLines.length > 0
             ? card.paymentSubLines
             : [
-                { label: "Naqd", amount: card.cash },
-                { label: "Perechis", amount: card.transfer },
-                { label: "Terminal", amount: card.terminal }
+                { label: "Наличные", amount: card.cash },
+                { label: "Перечисление", amount: card.transfer },
+                { label: "Терминал", amount: card.terminal }
               ];
 
         return (
@@ -78,12 +78,12 @@ export function BalanceDetailCards({ cards, selectedId, onSelect }: Props) {
                   isNegative ? "text-red-600" : "text-gray-900"
                 )}
               >
-                {fmtMoney(card.amount)} So&apos;m
+                {fmtMoney(card.amount)} сум
               </div>
             </div>
             <div className="space-y-0 px-4 py-2.5">
               {card.oldDebtIncome !== 0 ? (
-                <CardRow label="Эски карздан кирим" value={card.oldDebtIncome} />
+                <CardRow label="Поступление по старому долгу" value={card.oldDebtIncome} />
               ) : null}
               {subLines.map((line) => (
                 <CardRow key={`${card.id}-${line.label}`} label={line.label} value={line.amount} />

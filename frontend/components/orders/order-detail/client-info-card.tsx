@@ -14,7 +14,7 @@ function parseDec(s: string | null | undefined): number {
   return Number.isFinite(n) ? n : 0;
 }
 
-function moneyDisplay(value: string | null | undefined, suffix = " So'm"): string {
+function moneyDisplay(value: string | null | undefined, suffix = " сум"): string {
   if (value == null || value === "") return "—";
   const n = parseDec(value);
   const formatted = formatNumberGrouped(Math.abs(n), { maxFractionDigits: 0 });

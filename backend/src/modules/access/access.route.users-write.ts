@@ -15,7 +15,11 @@ import {
   SuperviseePatchError
 } from "./access-user-patch.apply";
 import { replaceUserScopes } from "./scope.service";
-import { adminOrAccessManager, patchAccessBodySchema } from "./access.route.shared";
+import { actorCanSeeAccessUser, adminOrAccessManager, patchAccessBodySchema } from "./access.route.shared";
+import { assertActorCanPatchUser, grantGuardErrorResponse, isAdminActor, loadActorGrantableKeys } from "./access-grant-guard";
+import { loadActorDimensionBounds, maskScopeForActor, retainHiddenScopeOnPatch } from "./access-dimension-actor";
+import { getAccessUser } from "../auth/auth.prehandlers";
+import { syncEmploymentAfterActiveChange } from "../staff/staff.employment-sync";
 
 export async function registerAccessUsersWriteRoutes(app: FastifyInstance) {
   app.get("/api/:slug/access/users/:id/detail", { preHandler: [...adminOrAccessManager] }, async (request, reply) => {
@@ -23,7 +27,10 @@ export async function registerAccessUsersWriteRoutes(app: FastifyInstance) {
     if (!ok) return;
     const tenantId = request.tenant!.id;
     const id = Number((request.params as { id: string }).id);
-    if (!Number.isInteger(id) || id < 1) return sendApiError(reply, request, 400, "InvalidId", "Invalid user id");
+    if (!Number.isInteger(id) || id < 1) return sendApiError(reply, request, 400, "InvalidId", "Некорректный ID пользователя");
+    if (!(await actorCanSeeAccessUser(request, tenantId, id))) {
+      return sendApiError(reply, request, 404, "UserNotFound");
+    }
     const user = await prisma.user.findFirst({
       where: { id, tenant_id: tenantId },
       select: {
@@ -39,11 +46,21 @@ export async function registerAccessUsersWriteRoutes(app: FastifyInstance) {
     });
     if (!user) return sendApiError(reply, request, 404, "UserNotFound");
     await repairNestedGrantDelegationKeys(tenantId, user.id);
-    const [matrix, grantDelegationOperationKeys, supervisees, branch_links, warehouse_links, cash_links, pm_links, td_links, territoryIds] = await Promise.all([
+    const actor = { userId: actorUserIdOrNull(request), role: getAccessUser(request)?.role };
+    const actorIsAdmin = isAdminActor(actor);
+    const actorGrantable = actorIsAdmin ? null : await loadActorGrantableKeys(tenantId, actor);
+    const [matrix, grantDelegationOperationKeys, extraRoleRows, supervisees, branch_links, warehouse_links, cash_links, pm_links, td_links, territoryIds] = await Promise.all([
       getUserAccessMatrix(tenantId, user.id, user.role),
       loadGrantDelegationOperationKeys(tenantId, user.id),
+      prisma.userRole.findMany({
+        where: { user_id: id, role: { tenant_id: tenantId } },
+        select: { role: { select: { key: true } } }
+      }),
       prisma.user.findMany({
-        where: { tenant_id: tenantId, supervisor_user_id: id },
+        where: {
+          tenant_id: tenantId,
+          OR: [{ supervisor_user_id: id }, { staff_links_as_staff: { some: { user_id: id } } }]
+        },
         select: { id: true, login: true, name: true, code: true, role: true, is_active: true },
         orderBy: { name: "asc" },
         take: 500
@@ -72,8 +89,15 @@ export async function registerAccessUsersWriteRoutes(app: FastifyInstance) {
         },
         matrix,
         grant_delegation_operation_keys: grantDelegationOperationKeys,
+        /** Kim tahrirlayapti: admin hammasini beradi, boshqalar faqat `actor_grantable_keys`. */
+        actor: {
+          is_admin: actorIsAdmin,
+          can_edit_user: actorIsAdmin || user.role !== "admin",
+          grantable_keys: actorGrantable ? [...actorGrantable] : null
+        },
+        extra_role_keys: extraRoleRows.map((r) => r.role.key).filter((k) => k !== user.role),
         supervisees,
-        scope: {
+        scope: maskScopeForActor(await loadActorDimensionBounds(request, tenantId), {
           branches: branch_links.map((b) => b.branch_code),
           warehouses: warehouse_links.map((w) => w.warehouse_id),
           warehouse_delegate_ids: warehouse_links.filter((w) => w.link_role === "manager").map((w) => w.warehouse_id),
@@ -81,7 +105,7 @@ export async function registerAccessUsersWriteRoutes(app: FastifyInstance) {
           payment_methods: pm_links.map((p) => p.payment_method),
           territories: territoryIds.map((t) => t.territory_id),
           trade_directions: td_links.map((d) => d.trade_direction_id)
-        }
+        })
       }
     });
   });
@@ -91,15 +115,32 @@ export async function registerAccessUsersWriteRoutes(app: FastifyInstance) {
     if (!ok) return;
     const tenantId = request.tenant!.id;
     const id = Number((request.params as { id: string }).id);
-    if (!Number.isInteger(id) || id < 1) return sendApiError(reply, request, 400, "InvalidId", "Invalid user id");
+    if (!Number.isInteger(id) || id < 1) return sendApiError(reply, request, 400, "InvalidId", "Некорректный ID пользователя");
+    if (!(await actorCanSeeAccessUser(request, tenantId, id))) {
+      return sendApiError(reply, request, 404, "UserNotFound");
+    }
     const parsed = patchAccessBodySchema.safeParse(request.body ?? {});
     if (!parsed.success)
-      return sendApiError(reply, request, 400, "ValidationError", "Invalid request body", zodValidationExtras(parsed.error));
+      return sendApiError(reply, request, 400, "ValidationError", "Некорректные данные запроса", zodValidationExtras(parsed.error));
     const body = parsed.data;
 
     const existing = await prisma.user.findFirst({ where: { id, tenant_id: tenantId }, select: { id: true, role: true, is_active: true } });
     if (!existing) return sendApiError(reply, request, 404, "UserNotFound");
     const actorId = actorUserIdOrNull(request);
+    try {
+      await assertActorCanPatchUser(tenantId, { userId: actorId, role: getAccessUser(request)?.role }, existing, body);
+    } catch (e) {
+      const res = grantGuardErrorResponse(e);
+      if (res) return sendApiError(reply, request, 403, res.code, res.message, res.keys ? { keys: res.keys } : undefined);
+      throw e;
+    }
+    const scopeBlock = await retainHiddenScopeOnPatch(
+      tenantId,
+      id,
+      body,
+      await loadActorDimensionBounds(request, tenantId)
+    );
+    if (scopeBlock) return sendApiError(reply, request, 403, "ACCESS_SCOPE_FORBIDDEN", scopeBlock);
 
     const permDefined = body.permissions !== undefined || body.denied_permissions !== undefined;
     const scopeTouched =
@@ -112,8 +153,12 @@ export async function registerAccessUsersWriteRoutes(app: FastifyInstance) {
       body.trade_direction_ids !== undefined;
     const superviseeTouched = body.supervisee_user_ids !== undefined;
 
+    const extraRoleTouched = body.extra_role_keys !== undefined;
     try {
       await applyAccessUserPatchBody(tenantId, id, body, existing);
+      if (body.is_active != null && body.is_active !== existing.is_active) {
+        await syncEmploymentAfterActiveChange(tenantId, [id], actorId);
+      }
     } catch (e) {
       if (e instanceof AccessManageRequiredError) {
         return sendApiError(
@@ -141,7 +186,7 @@ export async function registerAccessUsersWriteRoutes(app: FastifyInstance) {
 
     const actionTypes: string[] = [];
     if (body.role?.trim() || body.is_active != null) actionTypes.push("user.profile.updated");
-    if (body.remove_permission_keys?.length || permDefined || body.grant_delegation_allow?.length || body.grant_delegation_revoke?.length) actionTypes.push("permissions.updated");
+    if (body.remove_permission_keys?.length || permDefined || body.grant_delegation_allow?.length || body.grant_delegation_revoke?.length || extraRoleTouched) actionTypes.push("permissions.updated");
     if (scopeTouched) actionTypes.push("scope.updated");
     if (superviseeTouched) actionTypes.push("supervisees.updated");
     const action_type = actionTypes.length ? actionTypes.join("+") : "access.updated";
@@ -178,7 +223,13 @@ export async function registerAccessUsersWriteRoutes(app: FastifyInstance) {
     const targetId = Number((request.params as { id: string }).id);
     const sourceId = Number((request.body as { source_user_id?: number })?.source_user_id);
     if (!Number.isInteger(targetId) || !Number.isInteger(sourceId)) {
-      return sendApiError(reply, request, 400, "InvalidId", "Invalid user id");
+      return sendApiError(reply, request, 400, "InvalidId", "Некорректный ID пользователя");
+    }
+    if (
+      !(await actorCanSeeAccessUser(request, tenantId, targetId)) ||
+      !(await actorCanSeeAccessUser(request, tenantId, sourceId))
+    ) {
+      return sendApiError(reply, request, 404, "UserNotFound");
     }
     const [sourceUser, targetUser] = await Promise.all([
       prisma.user.findFirst({ where: { id: sourceId, tenant_id: tenantId } }),
@@ -186,6 +237,9 @@ export async function registerAccessUsersWriteRoutes(app: FastifyInstance) {
     ]);
     if (!sourceUser || !targetUser) return sendApiError(reply, request, 404, "UserNotFound");
     const actorId = actorUserIdOrNull(request);
+    if (!isAdminActor({ userId: actorId, role: getAccessUser(request)?.role })) {
+      return sendApiError(reply, request, 403, "ACCESS_ADMIN_ONLY", "Копировать доступ может только администратор.");
+    }
 
     await prisma.$transaction(async (tx) => {
       await tx.user.update({ where: { id: targetId }, data: { role: sourceUser.role, is_active: sourceUser.is_active } });

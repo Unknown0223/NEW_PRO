@@ -131,7 +131,7 @@ export async function upsertGeoBoundary(
   const kind = input.kind;
   const ref_id = input.ref_id.trim();
   const name = input.name.trim();
-  if (!ref_id || !name) throw new Error("ref_id and name required");
+  if (!ref_id || !name) throw new Error("Требуются ref_id и name");
 
   let polygon = validatePolygonPoints(input.polygon);
   const all = await readBoundaries(tenantId);
@@ -169,7 +169,7 @@ export async function upsertGeoBoundary(
       clipped = res.clipped;
       if (!res.valid) {
         throw new Error(
-          "Yangi chegara mavjud chegaralar ichida qolmasligi kerak — yonidan chizing."
+          "Новая граница не должна находиться внутри существующих — нарисуйте её рядом."
         );
       }
       polygon = res.polygon;
@@ -207,13 +207,13 @@ export async function upsertGeoBoundary(
     const wh = await prisma.warehouse.findFirst({
       where: { id: warehouse_id, tenant_id: tenantId, is_active: true }
     });
-    if (!wh) throw new Error("warehouse_id invalid");
+    if (!wh) throw new Error("Некорректный warehouse_id");
   }
   if (cash_desk_id != null) {
     const cd = await prisma.cashDesk.findFirst({
       where: { id: cash_desk_id, tenant_id: tenantId, is_active: true }
     });
-    if (!cd) throw new Error("cash_desk_id invalid");
+    if (!cd) throw new Error("Некорректный cash_desk_id");
   }
 
   const boundary: GeoBoundaryDto = {
@@ -379,6 +379,6 @@ export async function assignClientsToBoundary(tenantId: number, boundary: GeoBou
 export async function assignClientsInBoundaryById(tenantId: number, boundaryId: string): Promise<number> {
   const all = await readBoundaries(tenantId);
   const b = all.find((x) => x.id === boundaryId && x.deleted_at == null);
-  if (!b) throw new Error("Boundary not found");
+  if (!b) throw new Error("Граница не найдена");
   return assignClientsToBoundary(tenantId, b);
 }

@@ -12,6 +12,7 @@ import {
   mergeLedgerWithUnpaidDelivered
 } from "../client-balances/client-balances.service";
 import { ORDER_STATUSES_OUTSTANDING_RECEIVABLE } from "../orders/order-status";
+import { PAYMENT_COUNTS_FOR_RECEIVABLE_NET } from "../client-balances/client-balances.constants";
 
 import type { AgentBalanceCard } from "./client-balance-ledger.types";
 import { normPayTypeKey, paymentAmountsForSpravochnik } from "./client-balance-ledger.helpers";
@@ -22,7 +23,7 @@ export async function buildLedgerAgentCards(
   sprLabels: string[],
   paymentMethodEntries: PaymentMethodEntryDto[]
 ): Promise<{ agent_cards: AgentBalanceCard[] }> {
-  const excluded = ["cancelled", "returned"] as const;
+  const receivableStatuses = [...ORDER_STATUSES_OUTSTANDING_RECEIVABLE];
 
   /** Faqat yetkazilgan savdo zakazlari — to‘lanmagan qoldiq (taqsimlar bilan). */
   const remainingByAgent = await prisma.$queryRaw<
@@ -58,7 +59,7 @@ export async function buildLedgerAgentCards(
   >`
     SELECT COALESCE(p.ledger_agent_id, ord.agent_id, c.agent_id) AS agent_id,
       p.payment_type,
-      SUM(CASE WHEN p.entry_kind = 'payment' THEN p.amount
+      SUM(CASE WHEN p.entry_kind IN ('payment', 'refund') THEN p.amount
                WHEN p.entry_kind = 'client_expense' THEN -p.amount
                ELSE 0 END)::decimal(15,2) AS net
     FROM client_payments p
@@ -67,6 +68,7 @@ export async function buildLedgerAgentCards(
     WHERE p.tenant_id = ${tenantId}
       AND p.client_id = ${clientId}
       AND p.deleted_at IS NULL
+      ${PAYMENT_COUNTS_FOR_RECEIVABLE_NET}
     GROUP BY COALESCE(p.ledger_agent_id, ord.agent_id, c.agent_id), p.payment_type
   `;
 
@@ -95,7 +97,7 @@ export async function buildLedgerAgentCards(
       LEFT JOIN users ag ON ag.id = o.agent_id
       WHERE o.tenant_id = ${tenantId}
         AND o.client_id = ${clientId}
-        AND o.status NOT IN (${Prisma.join(excluded)})
+        AND o.status IN (${Prisma.join(receivableStatuses)})
         AND o.order_type = 'order'
       UNION ALL
       SELECT COALESCE(p.ledger_agent_id, ord.agent_id, c.agent_id) AS agent_id,
@@ -110,6 +112,7 @@ export async function buildLedgerAgentCards(
       WHERE p.client_id = ${clientId}
         AND p.tenant_id = ${tenantId}
         AND p.deleted_at IS NULL
+        ${PAYMENT_COUNTS_FOR_RECEIVABLE_NET}
     )
     SELECT agent_id,
       MAX(NULLIF(TRIM(agent_name), '')) AS agent_name,

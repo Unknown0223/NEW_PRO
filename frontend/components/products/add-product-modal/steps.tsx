@@ -54,43 +54,43 @@ export function MainInfoStep({ form, update, errors, catalogs }: StepProps) {
   return (
     <div className="space-y-6">
       <div>
-        <SectionTitle>Asosiy ma&apos;lumotlar</SectionTitle>
+        <SectionTitle>Основные данные</SectionTitle>
         <div className="grid grid-cols-1 gap-x-5 gap-y-4 sm:grid-cols-2">
-          <Field label="Nomi" required>
+          <Field label="Наименование" required>
             <TextInput
               value={form.name}
               onChange={(v) => update("name", v)}
-              placeholder="Mahsulot nomi"
+              placeholder="Наименование товара"
               error={errors.name}
             />
           </Field>
-          <Field label="Kategoriya" required>
+          <Field label="Категория" required>
             <Select
               value={form.categoryId}
               onChange={(v) => update("categoryId", v)}
               options={catalogs.categories}
-              placeholder="Kategoriya tanlang"
+              placeholder="Выберите категорию"
               error={errors.categoryId}
             />
           </Field>
-          <Field label="Mahsulot kodi (SKU)" hint={`${form.code.length} / 20`}>
+          <Field label="Код товара (SKU)" hint={`${form.code.length} / 20`}>
             <TextInput
               value={form.code}
               onChange={(v) => v.length <= 20 && update("code", v)}
-              placeholder="Masalan: PRD-0001"
+              placeholder="Например: PRD-0001"
               maxLength={20}
             />
           </Field>
-          <Field label="Barcode">
+          <Field label="Штрихкод">
             <TextInput
               value={form.barcode}
               onChange={(v) => update("barcode", v)}
-              placeholder="Skanerlang yoki kiriting"
+              placeholder="Отсканируйте или введите"
               suffix={
                 <button
                   type="button"
                   onClick={generateBarcode}
-                  title="Barcode generatsiya qilish"
+                  title="Сгенерировать штрихкод"
                   className="flex h-7 w-7 items-center justify-center rounded-lg bg-teal-50 text-teal-600 transition-colors hover:bg-teal-100"
                 >
                   <Barcode className="h-4 w-4" />
@@ -98,7 +98,7 @@ export function MainInfoStep({ form, update, errors, catalogs }: StepProps) {
               }
             />
           </Field>
-          <Field label="Birlik" required>
+          <Field label="Единица измерения" required>
             <Select
               value={form.unit}
               onChange={(v) => update("unit", v)}
@@ -107,16 +107,16 @@ export function MainInfoStep({ form, update, errors, catalogs }: StepProps) {
             />
           </Field>
           {form.unit === PRODUCT_UNIT_CUSTOM ? (
-            <Field label="Boshqa birlik" required>
+            <Field label="Другая единица" required>
               <TextInput
                 value={form.unitCustom}
                 onChange={(v) => update("unitCustom", v)}
-                placeholder="Birlik nomi"
+                placeholder="Название единицы"
                 error={errors.unitCustom}
               />
             </Field>
           ) : (
-            <Field label="Blok soni">
+            <Field label="Количество в блоке">
               <TextInput
                 type="number"
                 value={form.blockCount}
@@ -126,7 +126,7 @@ export function MainInfoStep({ form, update, errors, catalogs }: StepProps) {
             </Field>
           )}
           {form.unit === PRODUCT_UNIT_CUSTOM ? (
-            <Field label="Blok soni">
+            <Field label="Количество в блоке">
               <TextInput
                 type="number"
                 value={form.blockCount}
@@ -135,28 +135,28 @@ export function MainInfoStep({ form, update, errors, catalogs }: StepProps) {
               />
             </Field>
           ) : null}
-          <Field label="Brand">
+          <Field label="Бренд">
             <Select
               value={form.brandId}
               onChange={(v) => update("brandId", v)}
               options={catalogs.brands}
-              placeholder="Brand tanlang"
+              placeholder="Выберите бренд"
             />
           </Field>
-          <Field label="Segment">
+          <Field label="Сегмент">
             <MultiSelect
               values={form.segmentIds}
               onChange={(v) => update("segmentIds", v)}
               options={catalogs.segments}
-              placeholder="Segment tanlang"
+              placeholder="Выберите сегмент"
             />
           </Field>
-          <Field label="Savdo yo'nalishi" required className="sm:col-span-2">
+          <Field label="Направление торговли" required className="sm:col-span-2">
             <MultiSelect
               values={form.tradeDirectionIds}
               onChange={(v) => update("tradeDirectionIds", v)}
               options={catalogs.tradeDirections}
-              placeholder="Savdo yo'nalishini tanlang"
+              placeholder="Выберите направление торговли"
               error={errors.tradeDirectionIds}
             />
           </Field>
@@ -164,25 +164,25 @@ export function MainInfoStep({ form, update, errors, catalogs }: StepProps) {
       </div>
 
       <div>
-        <SectionTitle>Qo&apos;shimcha ma&apos;lumot</SectionTitle>
+        <SectionTitle>Дополнительные данные</SectionTitle>
         <div className="grid grid-cols-1 gap-x-5 gap-y-4 sm:grid-cols-2">
-          <Field label="TN VED">
-            <TextInput value={form.tnved} onChange={(v) => update("tnved", v)} placeholder="TN VED kodi" />
+          <Field label="ТН ВЭД">
+            <TextInput value={form.tnved} onChange={(v) => update("tnved", v)} placeholder="Код ТН ВЭД" />
           </Field>
-          <Field label="IKPU kod">
-            <TextInput value={form.ikpu} onChange={(v) => update("ikpu", v)} placeholder="IKPU kodi" />
+          <Field label="Код ИКПУ">
+            <TextInput value={form.ikpu} onChange={(v) => update("ikpu", v)} placeholder="Код ИКПУ" />
           </Field>
           <div className="flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50/60 px-4 py-3 sm:col-span-2">
             <div>
-              <p className="text-sm font-medium text-slate-800">Holati</p>
+              <p className="text-sm font-medium text-slate-800">Статус</p>
               <p className="text-xs text-slate-500">
-                Mahsulot {form.active ? "faol — savdoda ko'rinadi" : "nofaol — savdoda ko'rinmaydi"}
+                Товар {form.active ? "активен — виден в продажах" : "неактивен — не виден в продажах"}
               </p>
             </div>
             <Switch
               checked={form.active}
               onChange={(v) => update("active", v)}
-              label={form.active ? "Faol" : "Nofaol"}
+              label={form.active ? "Активен" : "Неактивен"}
             />
           </div>
         </div>
@@ -203,12 +203,12 @@ export function DimensionsStep({ form, update }: StepProps) {
     reader.readAsDataURL(file);
   };
 
-  const u = form.dimensionUnit === "m" ? "m" : "sm";
+  const u = form.dimensionUnit === "m" ? "м" : "см";
 
   return (
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
       <div>
-        <SectionTitle>O&apos;lchamlar</SectionTitle>
+        <SectionTitle>Размеры</SectionTitle>
 
         <div className="mb-4 inline-flex rounded-xl bg-slate-100 p-1">
           {(["m", "cm"] as const).map((un) => (
@@ -223,25 +223,25 @@ export function DimensionsStep({ form, update }: StepProps) {
                   : "text-slate-500 hover:text-slate-700"
               )}
             >
-              {un === "m" ? "Metrda" : "Santimetrda"}
+              {un === "m" ? "В метрах" : "В сантиметрах"}
             </button>
           ))}
         </div>
 
         <div className="grid grid-cols-3 gap-3">
-          <Field label={`Kenglik (${u})`}>
+          <Field label={`Ширина (${u})`}>
             <TextInput type="number" value={form.width} onChange={(v) => update("width", v)} placeholder="0" />
           </Field>
-          <Field label={`Balandlik (${u})`}>
+          <Field label={`Высота (${u})`}>
             <TextInput type="number" value={form.height} onChange={(v) => update("height", v)} placeholder="0" />
           </Field>
-          <Field label={`Uzunlik (${u})`}>
+          <Field label={`Длина (${u})`}>
             <TextInput type="number" value={form.length} onChange={(v) => update("length", v)} placeholder="0" />
           </Field>
         </div>
 
         <div className="mt-4">
-          <Field label="Og'irlik (kg)">
+          <Field label="Вес (кг)">
             <TextInput type="number" value={form.weight} onChange={(v) => update("weight", v)} placeholder="0" />
           </Field>
         </div>
@@ -251,7 +251,7 @@ export function DimensionsStep({ form, update }: StepProps) {
             <Box className="h-6 w-6" />
           </div>
           <div>
-            <p className="text-xs font-medium tracking-wide text-teal-700/70 uppercase">Hajm (real vaqtda)</p>
+            <p className="text-xs font-medium tracking-wide text-teal-700/70 uppercase">Объём (в реальном времени)</p>
             <p className="text-2xl font-semibold text-teal-700 tabular-nums">
               {volume.toFixed(3)} <span className="text-sm font-medium">m³</span>
             </p>
@@ -260,7 +260,7 @@ export function DimensionsStep({ form, update }: StepProps) {
       </div>
 
       <div>
-        <SectionTitle>Mahsulot rasmi</SectionTitle>
+        <SectionTitle>Фото товара</SectionTitle>
         <input
           ref={fileRef}
           type="file"
@@ -271,7 +271,7 @@ export function DimensionsStep({ form, update }: StepProps) {
         {form.image ? (
           <div className="relative overflow-hidden rounded-2xl border border-slate-200">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={form.image} alt="Mahsulot" className="h-64 w-full bg-slate-50 object-contain" />
+            <img src={form.image} alt="Товар" className="h-64 w-full bg-slate-50 object-contain" />
             <button
               type="button"
               onClick={() => update("image", null)}
@@ -304,8 +304,8 @@ export function DimensionsStep({ form, update }: StepProps) {
             <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-white text-slate-400 shadow-sm">
               <ImageIcon className="h-6 w-6" />
             </span>
-            <span className="text-sm font-medium text-slate-600">Rasmni shu yerga tashlang</span>
-            <span className="text-xs text-slate-400">yoki bosib kompyuterdan tanlang (PNG, JPG)</span>
+            <span className="text-sm font-medium text-slate-600">Перетащите изображение сюда</span>
+            <span className="text-xs text-slate-400">или нажмите, чтобы выбрать на компьютере (PNG, JPG)</span>
           </button>
         )}
       </div>
@@ -349,9 +349,9 @@ export function PackagingStep({ form, update }: StepProps) {
 
   return (
     <div>
-      <SectionTitle>Qadoqlashlar</SectionTitle>
+      <SectionTitle>Упаковки</SectionTitle>
 
-      <p className="mb-2 text-xs font-medium tracking-wide text-slate-400 uppercase">Shablondan tanlash</p>
+      <p className="mb-2 text-xs font-medium tracking-wide text-slate-400 uppercase">Выбрать из шаблона</p>
       <div className="mb-5 flex flex-wrap gap-2">
         {PACKAGING_TEMPLATES.map((t) => (
           <button
@@ -402,7 +402,7 @@ export function PackagingStep({ form, update }: StepProps) {
                 </span>
                 <div>
                   <p className="text-sm font-semibold text-slate-800">{p.name}</p>
-                  <p className="text-xs text-slate-500">{p.quantity ? `${p.quantity} dona` : "—"}</p>
+                  <p className="text-xs text-slate-500">{p.quantity ? `${p.quantity} шт.` : "—"}</p>
                 </div>
               </div>
               <button
@@ -414,9 +414,9 @@ export function PackagingStep({ form, update }: StepProps) {
               </button>
             </div>
             <div className="mt-3 flex flex-wrap items-center gap-1.5 text-[11px] font-medium">
-              {[`W:${p.width || "0"}`, `H:${p.height || "0"}`, `L:${p.length || "0"}`].map((d) => (
+              {[`Ш:${p.width || "0"}`, `В:${p.height || "0"}`, `Д:${p.length || "0"}`].map((d) => (
                 <span key={d} className="rounded-md bg-white px-2 py-0.5 text-slate-600 ring-1 ring-slate-200">
-                  {d} sm
+                  {d} см
                 </span>
               ))}
               <span className="ml-auto rounded-md bg-slate-800 px-2 py-0.5 text-white tabular-nums">
@@ -439,7 +439,7 @@ export function PackagingStep({ form, update }: StepProps) {
               >
                 {p.isMain ? <Check className="h-3 w-3" /> : null}
               </span>
-              Asosiy qadoq
+              Основная упаковка
             </button>
           </div>
         ))}
@@ -447,14 +447,14 @@ export function PackagingStep({ form, update }: StepProps) {
         {adding ? (
           <div className="rounded-2xl border-2 border-dashed border-teal-300 bg-teal-50/30 p-4 sm:col-span-2">
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
-              <Field label="Nomi" className="col-span-2">
+              <Field label="Название" className="col-span-2">
                 <TextInput
                   value={draft.name}
                   onChange={(v) => setDraft({ ...draft, name: v })}
-                  placeholder="Korobka"
+                  placeholder="Коробка"
                 />
               </Field>
-              <Field label="Soni">
+              <Field label="Количество">
                 <TextInput
                   type="number"
                   value={draft.quantity}
@@ -462,7 +462,7 @@ export function PackagingStep({ form, update }: StepProps) {
                   placeholder="12"
                 />
               </Field>
-              <Field label="W (sm)">
+              <Field label="Ш (см)">
                 <TextInput
                   type="number"
                   value={draft.width}
@@ -470,19 +470,19 @@ export function PackagingStep({ form, update }: StepProps) {
                   placeholder="0"
                 />
               </Field>
-              <Field label="H / L (sm)">
+              <Field label="В / Д (см)">
                 <div className="flex gap-2">
                   <TextInput
                     type="number"
                     value={draft.height}
                     onChange={(v) => setDraft({ ...draft, height: v })}
-                    placeholder="H"
+                    placeholder="В"
                   />
                   <TextInput
                     type="number"
                     value={draft.length}
                     onChange={(v) => setDraft({ ...draft, length: v })}
-                    placeholder="L"
+                    placeholder="Д"
                   />
                 </div>
               </Field>
@@ -493,7 +493,7 @@ export function PackagingStep({ form, update }: StepProps) {
                 onClick={() => setAdding(false)}
                 className="rounded-xl px-4 py-2 text-sm font-medium text-slate-500 transition-colors hover:bg-slate-100"
               >
-                Bekor qilish
+                Отмена
               </button>
               <button
                 type="button"
@@ -501,7 +501,7 @@ export function PackagingStep({ form, update }: StepProps) {
                 disabled={!draft.name.trim()}
                 className="rounded-xl bg-teal-500 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-teal-600 disabled:opacity-40"
               >
-                Qo&apos;shish
+                Добавить
               </button>
             </div>
           </div>
@@ -512,14 +512,14 @@ export function PackagingStep({ form, update }: StepProps) {
             className="flex min-h-28 flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-slate-200 text-slate-400 transition-all hover:border-teal-300 hover:bg-teal-50/40 hover:text-teal-600"
           >
             <Plus className="h-5 w-5" />
-            <span className="text-sm font-medium">Qadoqlash qo&apos;shish</span>
+            <span className="text-sm font-medium">Добавить упаковку</span>
           </button>
         )}
       </div>
 
       {form.packagings.length === 0 && !adding ? (
         <p className="mt-4 text-center text-xs text-slate-400">
-          Hozircha qadoqlash qo&apos;shilmagan. Shablondan tanlang yoki yangi qo&apos;shing.
+          Упаковки пока не добавлены. Выберите шаблон или добавьте новую.
         </p>
       ) : null}
     </div>

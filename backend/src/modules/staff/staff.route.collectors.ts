@@ -35,7 +35,7 @@ import {
   revokeStaffSessions,
   type StaffKind
 } from "./staff.service";
-import { catalogRoles, adminRoles } from "./staff.route.shared";
+import { catalogRoles, adminRoles, accessStaffDirectoryWhere } from "./staff.route.shared";
 import {
   agentEntitlementsPayloadSchema,
   agentEntitlementsSchema,
@@ -67,8 +67,11 @@ import {
   createWebStaffPositionPresetBody,
   patchWebStaffPositionPresetBody
 } from "./staff.route.schemas";
+import { registerKomandaBulkRoute } from "./staff.route.komanda-bulk";
 
 export async function registerStaffCollectorRoutes(app: FastifyInstance) {
+  registerKomandaBulkRoute(app, "collector");
+
   app.get(
     "/api/:slug/collectors/filter-options",
     { preHandler: [jwtAccessVerify, requireRoles(...DIRECTORY_READ_ROLES)] },
@@ -86,7 +89,8 @@ export async function registerStaffCollectorRoutes(app: FastifyInstance) {
       if (!ensureTenantContext(request, reply)) return;
       const q = request.query as Record<string, string | undefined>;
       const filters = parseCollectorListFilters(q);
-      const data = await listStaff(request.tenant!.id, "collector", filters);
+      const accessScope = await accessStaffDirectoryWhere(request, request.tenant!.id);
+      const data = await listStaff(request.tenant!.id, "collector", filters, accessScope);
       return reply.send({ data });
     }
   );
@@ -147,7 +151,12 @@ export async function registerStaffCollectorRoutes(app: FastifyInstance) {
       if (!ensureTenantContext(request, reply)) return;
       const id = Number.parseInt((request.params as { id: string }).id, 10);
       if (Number.isNaN(id)) return sendApiError(reply, request, 400, "InvalidId");
-      const row = await getStaffRow(request.tenant!.id, "collector", id);
+      const row = await getStaffRow(
+        request.tenant!.id,
+        "collector",
+        id,
+        await accessStaffDirectoryWhere(request, request.tenant!.id)
+      );
       if (!row) return sendApiError(reply, request, 404, "NotFound");
       return reply.send({ data: row });
     }
@@ -169,6 +178,15 @@ export async function registerStaffCollectorRoutes(app: FastifyInstance) {
         const msg = e instanceof Error ? e.message : "";
         if (msg === "NOT_FOUND") return sendApiError(reply, request, 404, "NotFound");
         if (msg === "BAD_WAREHOUSE") return sendApiError(reply, request, 400, "BadWarehouse");
+        if (msg === "WORKPLACE_ON_SLOT") {
+          return sendApiError(
+            reply,
+            request,
+            409,
+            "WorkplaceOnSlot",
+            "Настройки места меняются в «Рабочее место», не в карточке сотрудника"
+          );
+        }
         if (msg === "BAD_RETURN_WAREHOUSE") return sendApiError(reply, request, 400, "BadReturnWarehouse");
         if (msg === "WORK_SLOT_REQUIRED") {
           return sendApiError(
@@ -212,6 +230,15 @@ export async function registerStaffCollectorRoutes(app: FastifyInstance) {
         if (msg === "BAD_FIRST_NAME") return sendApiError(reply, request, 400, "BadFirstName");
         if (msg === "LOGIN_EXISTS") return sendApiError(reply, request, 409, "LoginExists");
         if (msg === "BAD_WAREHOUSE") return sendApiError(reply, request, 400, "BadWarehouse");
+        if (msg === "WORKPLACE_ON_SLOT") {
+          return sendApiError(
+            reply,
+            request,
+            409,
+            "WorkplaceOnSlot",
+            "Настройки места меняются в «Рабочее место», не в карточке сотрудника"
+          );
+        }
         if (msg === "BAD_RETURN_WAREHOUSE") return sendApiError(reply, request, 400, "BadReturnWarehouse");
         if (msg === "WORK_SLOT_REQUIRED") {
           return sendApiError(

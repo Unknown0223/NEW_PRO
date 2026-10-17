@@ -59,6 +59,7 @@ export type ClientImportEnqueueOpts = {
   importMode?: "create" | "update";
   duplicateKeyFields?: string[];
   updateApplyFields?: string[];
+  commitDecision?: "accept_valid" | "reject_all";
 };
 
 export async function enqueueClientsImportJob(
@@ -79,7 +80,8 @@ export async function enqueueClientsImportJob(
       columnMap: opts?.columnMap,
       importMode: opts?.importMode,
       duplicateKeyFields: opts?.duplicateKeyFields,
-      updateApplyFields: opts?.updateApplyFields
+      updateApplyFields: opts?.updateApplyFields,
+      commitDecision: opts?.commitDecision
     },
     { removeOnComplete: 1000, removeOnFail: 5000 }
   );

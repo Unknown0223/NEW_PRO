@@ -3,6 +3,7 @@ import { prisma } from "../../config/database";
 import type { BulkSaveTargetsBody, PatchPlanTargetBody, PlanningCenterQuery } from "./plans.setup.schema";
 import { canRoleSetPlan } from "./plans.setup.roles";
 import { dec, parseDecimalInput, type PlanningTarget } from "./plans.setup.shared";
+import { loadActiveWorkSlotsByUserIds } from "../work-slots/work-slots.query.read";
 
 function canUserSetPlanTarget(role: string): boolean {
   return canRoleSetPlan(role);
@@ -49,11 +50,13 @@ export async function ensurePlansAndTargets(
     const missing = userIds.filter((id) => !have.has(id));
     if (missing.length === 0) continue;
 
+    const slots = await loadActiveWorkSlotsByUserIds(missing);
     await prisma.salesKpiPlanTarget.createMany({
       data: missing.map((userId) => ({
         tenant_id: tenantId,
         plan_id: plan.id,
-        user_id: userId
+        user_id: userId,
+        work_slot_id: slots.get(userId)?.slot_id ?? null
       })),
       skipDuplicates: true
     });

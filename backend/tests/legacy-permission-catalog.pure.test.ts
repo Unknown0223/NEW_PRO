@@ -2,6 +2,11 @@ import { describe, expect, it } from "vitest";
 import { LEGACY_PERMISSION_METADATA } from "../src/modules/access/legacy-permission-labels";
 import { catalogParentPathLabel } from "../src/modules/access/permission-catalog-parent";
 import { DEFAULT_PERMISSION_METADATA } from "../src/modules/access/permission-catalog";
+import {
+  buildStructuredPermissionCatalog,
+  permissionDisplayDescription,
+  permissionDisplayGroup
+} from "../src/modules/access/permission-model";
 
 describe("legacy permission catalog metadata", () => {
   it("does not reuse DEFAULT keys (defaults win in sync)", () => {
@@ -39,5 +44,39 @@ describe("legacy permission catalog metadata", () => {
     expect(catalogParentPathLabel("pivot", "Конструктор отчётов")).toBe(
       "Отчёт · Конструктор отчётов"
     );
+  });
+
+  it("payroll keys are grouped under «Зарплата» regardless of key module", () => {
+    expect(catalogParentPathLabel("staff", "Расчёт зарплаты", "staff.zarplaty.view")).toBe("Зарплата · Расчёт зарплаты");
+    expect(catalogParentPathLabel("staff", "Лимиты аванса", "staff.avans_limity.update")).toBe("Зарплата · Лимиты аванса");
+    expect(catalogParentPathLabel("finance", "Утверждение авансов", "finance.avans.approve")).toBe(
+      "Зарплата · Утверждение авансов"
+    );
+    expect(catalogParentPathLabel("cash", "Выдача аванса и зарплаты (очередь)", "cash.vydacha_zarplaty.create")).toBe(
+      "Зарплата · Выдача аванса и зарплаты (очередь)"
+    );
+    expect(
+      catalogParentPathLabel("staff", "Пользователи / Зарплаты", "staff.zarplaty.spisok_zarplat")
+    ).toBe("Зарплата");
+    expect(catalogParentPathLabel("staff", "Табель", "staff.tabel.view")).toBe("Пользователи · Табель");
+    expect(catalogParentPathLabel("cash", "Приходы", "cash.prihody.view")).toBe("Касса · Приходы");
+  });
+
+  it("payroll descriptions start with «Зарплата» so the Операции tree groups them together", () => {
+    expect(permissionDisplayDescription("cash.vydacha_zarplaty.view", "Касса / Выдача аванса и зарплаты (очередь) / Просмотр")).toBe(
+      "Зарплата / Выдача аванса и зарплаты (очередь) / Просмотр"
+    );
+    expect(permissionDisplayDescription("staff.zarplaty.spisok_zarplat", "Пользователи / Зарплаты / Список")).toBe(
+      "Зарплата / Зарплаты / Список"
+    );
+    expect(permissionDisplayDescription("finance.avans.view", "Зарплата / Утверждение авансов / Просмотр")).toBe(
+      "Зарплата / Утверждение авансов / Просмотр"
+    );
+    expect(permissionDisplayDescription("staff.tabel.view", "Пользователи / Табель / Просмотр")).toBe(
+      "Пользователи / Табель / Просмотр"
+    );
+    const payroll = buildStructuredPermissionCatalog().filter((e) => permissionDisplayGroup(e.key) === "Зарплата");
+    expect(payroll.length).toBeGreaterThan(0);
+    for (const e of payroll) expect(e.description.startsWith("Зарплата / ")).toBe(true);
   });
 });

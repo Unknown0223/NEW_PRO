@@ -40,7 +40,7 @@ void main() {
     );
   });
 
-  test('resolveDailyVisitPlanIds — jadval yo‘q, reja bo‘sh', () {
+  test('resolveDailyVisitPlanIds — jadval yo‘q, katalog = reja (Визиты bilan mos)', () {
     final clients = [
       {'id': 1, 'name': 'A'},
       {'id': 2, 'name': 'B'},
@@ -51,6 +51,22 @@ void main() {
         allClients: clients,
         weekday: 3,
         todayIso: '2026-07-08',
+      ),
+      {1, 2},
+    );
+  });
+
+  test('resolveDailyVisitPlanIds — jadval bor, bugun reja yo‘q', () {
+    final clients = [
+      {'id': 1, 'visit_weekdays': [1]},
+      {'id': 2, 'visit_weekdays': [5]},
+    ];
+    expect(
+      resolveDailyVisitPlanIds(
+        route: {'stops': []},
+        allClients: clients,
+        weekday: 4,
+        todayIso: '2026-09-03',
       ),
       isEmpty,
     );
@@ -81,5 +97,22 @@ void main() {
     expect(r.visitedOnPlan, 2);
     expect(r.remainingOnPlan, 1);
     expect(r.visitedOffPlan, 1);
+  });
+
+  test('mergeVisitedActivityIds — zakaz va foto vizitsiz ham kiradi', () {
+    final merged = mergeVisitedActivityIds(
+      visitClientIds: {1},
+      orderClientIds: {2, 3},
+      photoSyncedClientIds: {3, 4},
+    );
+    expect(merged, {1, 2, 3, 4});
+    final progress = splitVisitProgress(
+      planIds: {1, 2, 5},
+      visitedIds: merged,
+    );
+    // 1,2 reja ichida; 3,4 tashqarida
+    expect(progress.visitedOnPlan, 2);
+    expect(progress.remainingOnPlan, 1);
+    expect(progress.visitedOffPlan, 2);
   });
 }

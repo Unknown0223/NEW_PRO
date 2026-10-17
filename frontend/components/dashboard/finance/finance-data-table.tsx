@@ -3,6 +3,7 @@
 import { FinanceSectionHeader } from "@/components/dashboard/finance/finance-section-header";
 import { fmtFinanceCount } from "@/components/dashboard/finance/format";
 import type { FinanceTableColumn } from "@/components/dashboard/finance/table-columns";
+import { usePermissions } from "@/lib/use-permissions";
 import { Download, Search } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
@@ -139,6 +140,7 @@ export function FinanceDataTable<T>({
   exportFileName: string;
   minWidth: number;
 }) {
+  const canExport = usePermissions().has("dashboard.finansy.export");
   const [query, setQuery] = useState("");
   const [pageSize, setPageSize] = useState(10);
   const [page, setPage] = useState(1);
@@ -177,14 +179,16 @@ export function FinanceDataTable<T>({
       <FinanceSectionHeader title={title} subtitle={subtitle} />
       <div className="mb-3 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div className="flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            className="inline-flex h-10 items-center gap-2 rounded-lg border border-border bg-card px-3 text-sm font-semibold text-slate-700 transition hover:border-teal-300 hover:text-teal-700"
-            onClick={() => exportCsv(exportFileName, columns, sorted)}
-          >
-            <Download className="h-4 w-4 text-emerald-600" />
-            Excel
-          </button>
+          {canExport ? (
+            <button
+              type="button"
+              className="inline-flex h-10 items-center gap-2 rounded-lg border border-border bg-card px-3 text-sm font-semibold text-slate-700 transition hover:border-teal-300 hover:text-teal-700"
+              onClick={() => exportCsv(exportFileName, columns, sorted)}
+            >
+              <Download className="h-4 w-4 text-emerald-600" />
+              Excel
+            </button>
+          ) : null}
           <select
             value={pageSize}
             onChange={(e) => setPageSize(Number(e.target.value))}

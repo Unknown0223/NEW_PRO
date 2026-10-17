@@ -31,7 +31,8 @@ function onlyWarehouseDelegatePatch(body: AccessPatchBodyInput): boolean {
     Boolean(body.remove_permission_keys?.length) ||
     body.merge_permissions != null ||
     Boolean(body.role?.trim()) ||
-    body.is_active != null
+    body.is_active != null ||
+    body.extra_role_keys !== undefined
   )
     return false;
   return true;
@@ -71,6 +72,7 @@ export function tryUniformMergeBulk(slice: BulkAccessPatchItem[]): { userIds: nu
   if (first.permissions === undefined && first.denied_permissions === undefined) return null;
   if (first.remove_permission_keys?.length) return null;
   if (scopeTouched(first)) return null;
+  if (first.extra_role_keys !== undefined) return null;
 
   const allow0 = stableSortedStrings(first.permissions ?? []);
   const deny0 = stableSortedStrings(first.denied_permissions ?? []);
@@ -80,6 +82,7 @@ export function tryUniformMergeBulk(slice: BulkAccessPatchItem[]): { userIds: nu
     if (it.permissions === undefined && it.denied_permissions === undefined) return null;
     if (it.remove_permission_keys?.length) return null;
     if (scopeTouched(it)) return null;
+    if (it.extra_role_keys !== undefined) return null;
     const a = stableSortedStrings(it.permissions ?? []);
     const d = stableSortedStrings(it.denied_permissions ?? []);
     if (a.length !== allow0.length || d.length !== deny0.length) return null;
@@ -97,6 +100,7 @@ export function tryUniformRemoveBulk(slice: BulkAccessPatchItem[]): { userIds: n
   if (first.permissions !== undefined || first.denied_permissions !== undefined) return null;
   if (first.merge_permissions != null) return null;
   if (scopeTouched(first)) return null;
+  if (first.extra_role_keys !== undefined) return null;
 
   const keys0 = stableSortedStrings(first.remove_permission_keys);
 
@@ -105,6 +109,7 @@ export function tryUniformRemoveBulk(slice: BulkAccessPatchItem[]): { userIds: n
     if (it.permissions !== undefined || it.denied_permissions !== undefined) return null;
     if (it.merge_permissions != null) return null;
     if (scopeTouched(it)) return null;
+    if (it.extra_role_keys !== undefined) return null;
     const k = stableSortedStrings(it.remove_permission_keys);
     if (k.length !== keys0.length) return null;
     for (let i = 0; i < k.length; i++) if (k[i] !== keys0[i]) return null;

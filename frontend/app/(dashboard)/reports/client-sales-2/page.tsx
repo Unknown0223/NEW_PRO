@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { CalendarDays, FileSpreadsheet, RotateCcw, Search } from "lucide-react";
 import { api } from "@/lib/api";
+import { usePermissions } from "@/lib/use-permissions";
 import { STALE } from "@/lib/query-stale";
 import { useAuthStore, useAuthStoreHydrated } from "@/lib/auth-store";
 import { FilterSelect } from "@/components/ui/filter-select";
@@ -11,6 +12,7 @@ import { SearchableMultiSelectPanel } from "@/components/ui/searchable-multi-sel
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { DateRangePopover, formatDateRangeButton } from "@/components/ui/date-range-popover";
+import { monthToDateRange } from "@/components/dashboard/shared/date-ranges";
 import { formatNumberGrouped } from "@/lib/format-numbers";
 import { cn } from "@/lib/utils";
 import { downloadXlsxSheet } from "@/lib/download-xlsx";
@@ -92,7 +94,7 @@ const AGENT_COLUMNS: ColumnDefItem[] = [
   { id: "agent", label: "Агент" },
   { id: "akb", label: "АКБ" },
   { id: "okb", label: "ОКБ" },
-  { id: "akb_percent", label: "% от АКБ" },
+  { id: "akb_percent", label: "% АКБ от ОКБ" },
   { id: "qty", label: "Кол-во" },
   { id: "volume", label: "Объем" },
   { id: "amount", label: "Сумма" }
@@ -107,12 +109,11 @@ function formatDate(v: string) {
 }
 
 export default function ReportClientSales2Page() {
+  const canExport = usePermissions().has("reports.prodazhi_klientov_2.export");
   const tenantSlug = useAuthStore((s) => s.tenantSlug);
   const hydrated = useAuthStoreHydrated();
 
-  const today = new Date();
-  const from0 = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().slice(0, 10);
-  const to0 = new Date(today.getFullYear(), today.getMonth() + 1, 0).toISOString().slice(0, 10);
+  const { from: from0, to: to0 } = monthToDateRange();
   const [dateOpen, setDateOpen] = useState(false);
   const dateAnchorRef = useRef<HTMLButtonElement>(null);
   const [exporting, setExporting] = useState(false);
@@ -408,7 +409,7 @@ export default function ReportClientSales2Page() {
       await downloadXlsxSheet(
         "prodazhi-po-klientam-2-po-agentam.xlsx",
         "По агентам",
-        ["Агент", "АКБ", "ОКБ", "% от АКБ", "Кол-во", "Объем", "Сумма"],
+        ["Агент", "АКБ", "ОКБ", "% АКБ от ОКБ", "Кол-во", "Объем", "Сумма"],
         reportQ.data.agents_summary.map((r) => [
           r.agent_code ? `${r.agent_name} (${r.agent_code})` : r.agent_name,
           r.akb,
@@ -429,7 +430,7 @@ export default function ReportClientSales2Page() {
       <h1 className="text-lg font-semibold">Продажи по клиентам 2</h1>
 
       <div className="space-y-2 rounded border bg-card p-3">
-        <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex flex-wrap items-center justify-end gap-3">
           <div className="flex flex-wrap items-center gap-3 text-xs">
             <span className="text-muted-foreground">Дата применяется по</span>
             {[
@@ -453,12 +454,12 @@ export default function ReportClientSales2Page() {
             ref={dateAnchorRef}
             type="button"
             className={cn(
-              "inline-flex h-9 items-center gap-2 rounded-md border border-input bg-background px-3 text-xs",
+              "inline-flex h-8 shrink-0 items-center gap-1.5 rounded-md border border-input bg-background px-2.5 text-xs",
               dateOpen && "border-primary/60 bg-primary/5"
             )}
             onClick={() => setDateOpen((o) => !o)}
           >
-            <CalendarDays className="h-4 w-4" />
+            <CalendarDays className="h-3.5 w-3.5" />
             <span>{formatDateRangeButton(draft.from, draft.to)}</span>
           </button>
           <DateRangePopover
@@ -559,7 +560,7 @@ export default function ReportClientSales2Page() {
               />
             </div>
           </div>
-          <div className="ml-auto flex shrink-0 flex-wrap items-center justify-end gap-2">
+          <div className={cn("ml-auto flex shrink-0 flex-wrap items-center justify-end gap-2", !canExport && "hidden")}>
             <Button variant="outline" size="sm" onClick={() => void downloadExcel()} disabled={exporting}>
               <FileSpreadsheet className="mr-1 h-4 w-4" />
               Excel (оба)
@@ -668,7 +669,7 @@ export default function ReportClientSales2Page() {
               />
             </div>
           </div>
-          <div className="ml-auto flex shrink-0 items-center justify-end">
+          <div className={cn("ml-auto flex shrink-0 items-center justify-end", !canExport && "hidden")}>
             <Button variant="outline" size="sm" onClick={() => void downloadAgentsExcel()} disabled={exportingAgents || !reportQ.data}>
               <FileSpreadsheet className="mr-1 h-4 w-4" />
               Excel (по агентам)

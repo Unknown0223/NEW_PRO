@@ -1,11 +1,12 @@
 import { readFileSync, existsSync } from "fs";
 import { join } from "path";
 import ExcelJS from "exceljs";
+import { resolveBackendAsset } from "../../../lib/backend-assets";
 import type { WarehouseLayoutId } from "./warehouse-template-ids";
 import { getWarehouseLayoutDef } from "./warehouse-template-ids";
 import { repairWorkbookAfterExcelJsLoad } from "./warehouse-template-repair";
 
-const ASSET_DIR = join(__dirname, "../../../../assets/nakladnoy/warehouse");
+const ASSET_DIR = resolveBackendAsset("nakladnoy", "warehouse");
 
 export function warehouseTemplateAssetPath(layoutId: WarehouseLayoutId): string {
   const def = getWarehouseLayoutDef(layoutId);

@@ -111,7 +111,19 @@ function addDataSheet(wb: ExcelJS.Workbook, sheet: ExportSheet) {
   });
 }
 
-async function collectExportSheets(tenantId: number): Promise<ExportSheet[]> {
+export type InitialSetupExportOptions = {
+  /**
+   * Tizim migratsiyasi ZIP: mijozlar/slotlar `data/*.json` da bor.
+   * Og‘ir list+debt+Excel (10k+ mijoz) parallel yuklanmasin — deployda 500/OOM/timeout.
+   */
+  liteForMigration?: boolean;
+};
+
+async function collectExportSheets(
+  tenantId: number,
+  opts?: InitialSetupExportOptions
+): Promise<ExportSheet[]> {
+  const lite = opts?.liteForMigration === true;
   const byId = new Map<string, ExportSheet>();
   const profile = await getTenantProfile(tenantId);
   const refs = profile.references ?? {};
@@ -287,45 +299,56 @@ async function collectExportSheets(tenantId: number): Promise<ExportSheet[]> {
     byId.set(sheet.sheetName, sheet);
   }
 
-  for (const sheet of await collectClientExportSheets(tenantId)) {
-    byId.set(sheet.sheetName, sheet);
-  }
+  if (!lite) {
+    for (const sheet of await collectClientExportSheets(tenantId)) {
+      byId.set(sheet.sheetName, sheet);
+    }
 
-  // Current stock → «Поступление» sheet (round-trip with import template)
-  const stockRows = await prisma.stock.findMany({
-    where: { tenant_id: tenantId, qty: { gt: 0 } },
-    orderBy: [{ warehouse_id: "asc" }, { product_id: "asc" }],
-    select: {
-      qty: true,
-      warehouse: { select: { name: true } },
-      product: {
-        select: {
-          sku: true,
-          name: true,
-          qty_per_block: true,
-          category: { select: { name: true } },
-          prices: { take: 1, orderBy: { id: "asc" }, select: { price: true } }
+    // Current stock → «Поступление» sheet (round-trip with import template)
+    const stockRows = await prisma.stock.findMany({
+      where: { tenant_id: tenantId, qty: { gt: 0 } },
+      orderBy: [{ warehouse_id: "asc" }, { product_id: "asc" }],
+      select: {
+        qty: true,
+        warehouse: { select: { name: true } },
+        product: {
+          select: {
+            sku: true,
+            name: true,
+            qty_per_block: true,
+            category: { select: { name: true } },
+            prices: { take: 1, orderBy: { id: "asc" }, select: { price: true } }
+          }
         }
       }
-    }
-  });
-  if (stockRows.length) {
-    byId.set("stock-receipts", {
-      sheetName: "stock-receipts",
-      rows: [
-        ["№", "Склад", "Код товара", "Категория", "Продукт", "Цена", "Количество прихода", "Количество в блоке"],
-        ...stockRows.map((s, i) => [
-          String(i + 1),
-          s.warehouse.name,
-          s.product.sku,
-          s.product.category?.name ?? "",
-          s.product.name,
-          s.product.prices[0]?.price != null ? String(s.product.prices[0].price) : "",
-          String(s.qty),
-          s.product.qty_per_block != null ? String(s.product.qty_per_block) : "1"
-        ])
-      ]
     });
+    if (stockRows.length) {
+      byId.set("stock-receipts", {
+        sheetName: "stock-receipts",
+        rows: [
+          [
+            "№",
+            "Склад",
+            "Код товара",
+            "Категория",
+            "Продукт",
+            "Цена",
+            "Количество прихода",
+            "Количество в блоке"
+          ],
+          ...stockRows.map((s, i) => [
+            String(i + 1),
+            s.warehouse.name,
+            s.product.sku,
+            s.product.category?.name ?? "",
+            s.product.name,
+            s.product.prices[0]?.price != null ? String(s.product.prices[0].price) : "",
+            String(s.qty),
+            s.product.qty_per_block != null ? String(s.product.qty_per_block) : "1"
+          ])
+        ]
+      });
+    }
   }
 
   const sheets: ExportSheet[] = [];
@@ -336,8 +359,11 @@ async function collectExportSheets(tenantId: number): Promise<ExportSheet[]> {
   return sheets;
 }
 
-export async function buildInitialSetupExportBuffer(tenantId: number): Promise<Buffer> {
-  const sheets = await collectExportSheets(tenantId);
+export async function buildInitialSetupExportBuffer(
+  tenantId: number,
+  opts?: InitialSetupExportOptions
+): Promise<Buffer> {
+  const sheets = await collectExportSheets(tenantId, opts);
   if (!sheets.length) {
     throw new Error("EMPTY_EXPORT");
   }

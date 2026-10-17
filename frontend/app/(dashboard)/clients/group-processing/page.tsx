@@ -1,13 +1,14 @@
 "use client";
 
-import { useRouter } from "next/navigation";
-import { useEffect } from "react";
+import { ClientGroupProcessingWorkspace } from "@/components/clients/group-processing/client-group-processing-workspace";
+import { Suspense } from "react";
 
-/** Alohida hub yo‘q — guruh ishlov klientlar ro‘yxatidan (belgilash + modal). */
-export default function ClientsGroupProcessingRedirectPage() {
-  const router = useRouter();
-  useEffect(() => {
-    router.replace("/clients");
-  }, [router]);
-  return <p className="p-4 text-sm text-muted-foreground">Klientlar ro‘yxatiga o‘tilmoqda…</p>;
+export default function ClientsGroupProcessingPage() {
+  return (
+    <div className="relative min-h-0 w-full flex-1">
+      <Suspense fallback={<p className="p-4 text-sm text-muted-foreground">Загрузка…</p>}>
+        <ClientGroupProcessingWorkspace />
+      </Suspense>
+    </div>
+  );
 }

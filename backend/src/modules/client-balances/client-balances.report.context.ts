@@ -56,13 +56,13 @@ export type ClientBalancesReportContext = {
   odFrom: string | null;
   odTo: string | null;
   skipBal: boolean;
-  where: ReturnType<typeof buildClientWhere>;
+  where: Awaited<ReturnType<typeof buildClientWhere>>;
 };
 
-export function buildClientBalancesReportContext(
+export async function buildClientBalancesReportContext(
   tenantId: number,
   q: ClientBalanceListQuery
-): ClientBalancesReportContext {
+): Promise<ClientBalancesReportContext> {
   const perf = makePerfMarker(`client-balances t=${tenantId} view=${q.view}`);
   const page = Math.max(1, q.page);
   const maxL = q.allow_large_export ? 5000 : 200;
@@ -72,7 +72,7 @@ export function buildClientBalancesReportContext(
   const odFrom = q.order_date_from?.trim() || null;
   const odTo = q.order_date_to?.trim() || null;
   const skipBal = q.view === "clients_delivery";
-  const where = buildClientWhere(tenantId, q, { skipBalanceFilter: skipBal });
+  const where = await buildClientWhere(tenantId, q, { skipBalanceFilter: skipBal });
   perf("where-ready", { page, limit, hasSearch: Boolean(q.search?.trim()) });
   return { tenantId, q, perf, page, limit, asOfEnd, odFrom, odTo, skipBal, where };
 }

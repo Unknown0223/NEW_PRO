@@ -36,7 +36,7 @@ export function ReturnFilterDebugPanel({
           <ChevronRight className="h-3.5 w-3.5 shrink-0 text-slate-500" />
         )}
         <Info className="h-3.5 w-3.5 shrink-0 text-teal-700" />
-        <span className="font-medium text-slate-800">Qaytarish filtri</span>
+        <span className="font-medium text-slate-800">Фильтр возврата</span>
         <span className="text-slate-500">· {returnFilterModeLabel(meta.filter_mode)}</span>
       </button>
 
@@ -48,45 +48,45 @@ export function ReturnFilterDebugPanel({
         <dl className="grid gap-1 border-t border-border/80 px-3 py-2 sm:grid-cols-2">
           {meta.client_balance != null ? (
             <>
-              <dt className="text-slate-500">Ko‘rinadigan balans</dt>
+              <dt className="text-slate-500">Отображаемый баланс</dt>
               <dd className="font-mono tabular-nums">{formatNumberGrouped(meta.client_balance)}</dd>
             </>
           ) : null}
           {meta.ledger_net_balance != null ? (
             <>
-              <dt className="text-slate-500">Ledger (zakaz+to‘lov)</dt>
+              <dt className="text-slate-500">Леджер (заказы + оплаты)</dt>
               <dd className="font-mono tabular-nums">{formatNumberGrouped(meta.ledger_net_balance)}</dd>
             </>
           ) : null}
           {meta.unpaid_delivered_total != null && meta.unpaid_delivered_total !== "0" ? (
             <>
-              <dt className="text-slate-500">To‘lanmagan yetkazish</dt>
+              <dt className="text-slate-500">Неоплаченные доставки</dt>
               <dd className="font-mono tabular-nums">{formatNumberGrouped(meta.unpaid_delivered_total)}</dd>
             </>
           ) : null}
           {meta.ledger_balance != null ? (
             <>
-              <dt className="text-slate-500">L/s jurnal</dt>
+              <dt className="text-slate-500">Журнал л/с</dt>
               <dd className="font-mono tabular-nums">{formatNumberGrouped(meta.ledger_balance)}</dd>
             </>
           ) : null}
           {meta.delivered_in_period != null ? (
             <>
-              <dt className="text-slate-500">Davr ichida yetkazilgan</dt>
-              <dd className="tabular-nums">{meta.delivered_in_period} ta</dd>
+              <dt className="text-slate-500">Доставлено за период</dt>
+              <dd className="tabular-nums">{meta.delivered_in_period} шт.</dd>
             </>
           ) : null}
           {meta.delivered_after_filter != null ? (
             <>
-              <dt className="text-slate-500">Filtrdan o‘tgan</dt>
-              <dd className="tabular-nums">{meta.delivered_after_filter} ta</dd>
+              <dt className="text-slate-500">Прошло фильтр</dt>
+              <dd className="tabular-nums">{meta.delivered_after_filter} шт.</dd>
             </>
           ) : null}
-          <dt className="text-slate-500">Davr boshlanishi</dt>
+          <dt className="text-slate-500">Начало периода</dt>
           <dd>{fmtDate(meta.period_from)}</dd>
-          <dt className="text-slate-500">Balans 0 nuqtasi</dt>
+          <dt className="text-slate-500">Точка нулевого баланса</dt>
           <dd>{fmtDate(meta.balance_zero_at)}</dd>
-          <dt className="text-slate-500">Min. zakaz sanasi</dt>
+          <dt className="text-slate-500">Мин. дата заказа</dt>
           <dd>{fmtDate(meta.min_order_created_at)}</dd>
         </dl>
       ) : null}

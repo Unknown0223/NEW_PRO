@@ -10,14 +10,14 @@ export const ordersFilterRowSelect = cn(filterSelectClassName, ORDERS_FILTER_TRI
 export const ORDERS_FILTER_GRID_CLASS =
   "grid grid-cols-2 gap-x-2 gap-y-1.5 sm:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8";
 
-/** Ko‘p tanlovdan bitta URL qiymat (checkbox UI, bitta aktiv) */
-export function pickSingleFilterValue(next: string[], prev: string): string {
-  if (next.length === 0) return "";
-  if (next.length === 1) return next[0]!;
-  const novel = next.find((x) => x !== prev);
-  return novel ?? next[next.length - 1]!;
+/** URL dagi vergul bilan bir nechta qiymat. */
+export function csvFilterSelection(value: string): string[] {
+  return value
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
 }
 
-export function singleFilterSelection(value: string): string[] {
-  return value ? [value] : [];
+export function joinCsvFilter(next: string[]): string {
+  return [...new Set(next.map((s) => s.trim()).filter(Boolean))].join(",");
 }

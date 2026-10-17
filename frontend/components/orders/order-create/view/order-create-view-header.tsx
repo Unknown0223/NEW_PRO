@@ -58,6 +58,7 @@ export function OrderCreateViewHeader({ vm }: { vm: OrderCreateVm }) {
     isEditMode,
     editOrderNumber,
     mutation,
+    requestSubmit,
     paymentMethodRef,
     requiresAgentAndPayment,
     requiresPaymentMethodForSubmit,
@@ -76,9 +77,9 @@ export function OrderCreateViewHeader({ vm }: { vm: OrderCreateVm }) {
                 ? "Обмен (связанный)"
                 : isEditMode
                   ? editOrderNumber
-                    ? `Zakazni tahrirlash · ${editOrderNumber}`
-                    : "Zakazni tahrirlash"
-                  : "Yangi zakaz"
+                    ? `Редактирование заказа · ${editOrderNumber}`
+                    : "Редактирование заказа"
+                  : "Новый заказ"
         }
         description={
           isPolkiSheet
@@ -88,23 +89,23 @@ export function OrderCreateViewHeader({ vm }: { vm: OrderCreateVm }) {
             : isExchangeFlow
               ? "Минус по доставленному заказу, плюс только из группы взаимозаменяемых."
               : isEditMode
-                ? "Faqat «Новый» zakaz. Klient va agent o‘zgarmaydi — qolgan maydonlar tahrirlanadi."
-                : "Klient, ombor va mahsulot miqdorlari — to‘liq sahifa."
+                ? "Только заказ в статусе «Новый». Клиент, агент и склад не меняются — остальные поля можно редактировать."
+                : "Клиент, склад и количество товаров — на полной странице."
         }
         actions={
           <div className="flex flex-wrap items-center justify-end gap-2">
             <Link className={cn(buttonVariants({ variant: "outline", size: "sm" }))} href="/orders">
-              {isPolkiSheet ? "← Заказы" : "← Zakazlar ro‘yxati"}
+              {isPolkiSheet ? "← Заказы" : "← Список заказов"}
             </Link>
             <Button type="button" variant="outline" size="sm" onClick={onCancel}>
-              {isPolkiSheet ? "Отмена" : "Bekor"}
+              Отмена
             </Button>
             <Button
               type="button"
               size="sm"
               data-testid="order-create-submit"
               disabled={!canSubmit}
-              onClick={() => mutation.mutate()}
+              onClick={() => requestSubmit()}
               className="bg-teal-600 text-white hover:bg-teal-700 disabled:opacity-50 dark:bg-teal-600 dark:hover:bg-teal-700"
               title={
                 isPolkiSheet
@@ -124,43 +125,43 @@ export function OrderCreateViewHeader({ vm }: { vm: OrderCreateVm }) {
                                 ? "Загрузка данных…"
                                 : undefined
                   : !hasClient
-                    ? "Avval klientni tanlang"
+                    ? "Сначала выберите клиента"
                     : !hasWarehouse
-                      ? "Avval omborni tanlang"
-                      : requiresAgentAndPayment && !agentId.trim()
-                        ? "Agentni tanlang (savdo zakazi)"
+                      ? "Сначала выберите склад"
+                      : requiresAgentAndPayment && !agentId.trim() && !isEditMode
+                        ? "Выберите агента (торговый заказ)"
                       : requiresPaymentMethodForSubmit && !paymentMethodRef.trim()
-                          ? "To‘lov usulini tanlang"
+                          ? "Выберите способ оплаты"
                           : isExchangeFlow
                             ? !agentId.trim()
-                              ? "Agentni tanlang"
+                              ? "Выберите агента"
                               : exchangeReturnsQ.isLoading
                                 ? "Загрузка строк заказа…"
                                 : !exchangePayloadCheck.ok
                                   ? "Заполните минус/плюс и проверьте лимиты"
                                   : undefined
                             : selectedItemsCount === 0
-                              ? "Kamida bitta mahsulot miqdorini kiriting"
+                              ? "Укажите количество хотя бы для одного товара"
                               : hasQtyOverStock
-                                ? "Miqdor qoldiqdan oshmasin"
+                                ? "Количество не должно превышать остаток"
                                 : hasMissingPriceForSelected
-                                  ? "Tanlangan narx turi bo‘yicha narxi yo‘q mahsulotlar bor"
+                                  ? "Есть товары без цены для выбранного типа цены"
                                   : !stockReadyForLines
-                                    ? "Qoldiqlar Загрузка…"
+                                    ? "Загрузка остатков…"
                                     : undefined
               }
             >
               {mutation.isPending
                 ? isPolkiSheet
                   ? "Оформление…"
-                  : "Saqlanmoqda…"
+                  : "Сохранение…"
                 : isPolkiSheet
                   ? "Возврат"
                   : isExchangeFlow
                     ? "Обмен"
                     : isEditMode
-                      ? "Saqlash"
-                      : "Yaratish"}
+                      ? "Сохранить"
+                      : "Создать"}
             </Button>
           </div>
         }

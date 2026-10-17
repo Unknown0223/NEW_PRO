@@ -1,8 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { ensureTenantContext } from "../../lib/tenant-context";
 import { actorUserIdOrNull } from "../../lib/request-actor";
-import { ADMIN_AND_OPERATOR_LIKE_ROLES } from "../../lib/tenant-user-roles";
-import { getAccessUser, jwtAccessVerify, requireRoles } from "../auth/auth.prehandlers";
+import { getAccessUser, jwtAccessVerify, requireAnyPermission } from "../auth/auth.prehandlers";
 import { enrichScopedReportActor, intersectRequestedAgentIds } from "../access/access-agent-scope";
 import { listConsignmentBalancesReport } from "./consignment-balances.service";
 import {
@@ -11,7 +10,17 @@ import {
   type ClientBalanceListQuery
 } from "./client-balances.service";
 
-const catalogRoles = ADMIN_AND_OPERATOR_LIKE_ROLES;
+/** Access «Балансы клиентов» — rol emas, ruxsat (legacy + yangi). */
+const balanceViewPre = [
+  jwtAccessVerify,
+  requireAnyPermission([
+    "cash.balansy_klientov.view",
+    "cash.otchety.view",
+    "cash.otchety.spisok_balansy_klientov",
+    "cash.otchety.spisok_balansy_klientov_po_konsignatsii",
+    "cash.balansy.view"
+  ])
+] as const;
 
 function parseOptPositiveInt(raw: string | undefined): number | undefined {
   if (raw == null || raw.trim() === "") return undefined;
@@ -116,7 +125,7 @@ function parseListQuery(q: Record<string, string | undefined>): ClientBalanceLis
 export async function registerClientBalanceRoutes(app: FastifyInstance) {
   app.get(
     "/api/:slug/client-balances/territory-options",
-    { preHandler: [jwtAccessVerify, requireRoles(...catalogRoles)] },
+    { preHandler: [...balanceViewPre] },
     async (request, reply) => {
       if (!ensureTenantContext(request, reply)) return;
       const q = request.query as Record<string, string | undefined>;
@@ -141,7 +150,7 @@ export async function registerClientBalanceRoutes(app: FastifyInstance) {
 
   app.get(
     "/api/:slug/client-balances",
-    { preHandler: [jwtAccessVerify, requireRoles(...catalogRoles)] },
+    { preHandler: [...balanceViewPre] },
     async (request, reply) => {
       if (!ensureTenantContext(request, reply)) return;
       const q = request.query as Record<string, string | undefined>;
@@ -157,7 +166,8 @@ export async function registerClientBalanceRoutes(app: FastifyInstance) {
       ];
       const hit = intersectRequestedAgentIds(requested, actor);
       if (hit.restricted) {
-        parsed.agent_ids = hit.agentIds;
+        // Bo‘sh jamoa → hech narsa (filter tashlab ketmasin — aks holda barcha mijozlar ochiladi).
+        parsed.agent_ids = hit.agentIds.length > 0 ? hit.agentIds : [-1];
         parsed.agent_id = undefined;
       }
       const t0 = Date.now();
@@ -181,11 +191,26 @@ export async function registerClientBalanceRoutes(app: FastifyInstance) {
 
   app.get(
     "/api/:slug/client-balances/consignment",
-    { preHandler: [jwtAccessVerify, requireRoles(...catalogRoles)] },
+    { preHandler: [...balanceViewPre] },
     async (request, reply) => {
       if (!ensureTenantContext(request, reply)) return;
       const q = request.query as Record<string, string | undefined>;
       const parsed = parseListQuery(q);
+      const viewer = getAccessUser(request);
+      const actor = await enrichScopedReportActor(request.tenant!.id, {
+        userId: actorUserIdOrNull(request),
+        role: viewer.role ?? ""
+      });
+      const requested = [
+        ...(parsed.agent_ids ?? []),
+        ...(parsed.agent_id != null && parsed.agent_id > 0 ? [parsed.agent_id] : [])
+      ];
+      const hit = intersectRequestedAgentIds(requested, actor);
+      if (hit.restricted) {
+        // Bo‘sh jamoa → hech narsa (filter tashlab ketmasin — aks holda barcha mijozlar ochiladi).
+        parsed.agent_ids = hit.agentIds.length > 0 ? hit.agentIds : [-1];
+        parsed.agent_id = undefined;
+      }
       const t0 = Date.now();
       const result = await listConsignmentBalancesReport(request.tenant!.id, parsed);
       request.log.info(

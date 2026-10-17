@@ -2,10 +2,10 @@ import { Prisma } from "@prisma/client";
 import { haversineKm, hourFloatFromDate, num } from "./gps-monitoring.helpers";
 import {
   asStops,
-  nearestPingDistanceKm,
   toPhotoDto,
   WAS_AT_POINT_KM
 } from "./gps-monitoring.day-mappers";
+import { nearestPingMeta } from "./gps-monitoring.ping-meta";
 import type {
   GpsDayResponse,
   GpsEmployeeDto,
@@ -51,7 +51,13 @@ export function assembleGpsMonitoringDay(input: {
     comment: string | null;
     client: GeoClient;
   }>;
-  pings: Array<{ latitude: Prisma.Decimal; longitude: Prisma.Decimal; recorded_at: Date }>;
+  pings: Array<{
+    latitude: Prisma.Decimal;
+    longitude: Prisma.Decimal;
+    recorded_at: Date;
+    battery_pct?: number | null;
+    network_type?: string | null;
+  }>;
   payments: Array<{
     client_id: number;
     amount: unknown;
@@ -320,7 +326,8 @@ export function assembleGpsMonitoringDay(input: {
     const clientPhotos =
       row.clientId != null ? photosByClient.get(row.clientId) ?? row.photos : row.photos;
     const firstPhoto = clientPhotos.find((p) => p.image_url);
-    const distanceToClient = nearestPingDistanceKm(pings, row.lat, row.lng, row.arrived);
+    const distanceToClientMeta = nearestPingMeta(pings, row.lat, row.lng, row.arrived);
+    const distanceToClient = distanceToClientMeta.distanceKm;
     const wasAtPoint =
       distanceToClient != null
         ? distanceToClient <= WAS_AT_POINT_KM
@@ -351,8 +358,8 @@ export function assembleGpsMonitoringDay(input: {
       wasAtPoint,
       placeType: "ТТ",
       accuracy: row.accuracy,
-      internet: "4G",
-      batteryAt: null,
+      internet: distanceToClientMeta.internet,
+      batteryAt: distanceToClientMeta.batteryAt,
       module: row.module,
       cashExpected: row.cashExpected,
       cashCollected: row.cashCollected,

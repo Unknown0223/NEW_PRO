@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { registerClientAssetsRoutes } from "./clients.route.assets";
+import { registerClientProfilePhotoRoutes } from "./clients.route.profile-photo";
 import { registerClientBalanceRoutes } from "./clients.route.balance";
 import { registerClientDedupeRoutes } from "./clients.route.dedupe";
 import { registerClientDetailRoutes } from "./clients.route.detail";

@@ -80,6 +80,36 @@ export function expeditorRulesMatch(
   return true;
 }
 
+export function hasExpeditorAssignmentConstraints(rules: ExpeditorAssignmentRules): boolean {
+  return Boolean(
+    rules.price_types?.length ||
+      rules.agent_ids?.length ||
+      rules.warehouse_ids?.length ||
+      rules.trade_directions?.length ||
+      rules.territories?.length ||
+      rules.weekdays?.length
+  );
+}
+
+/** Ishchi o‘rin qoidalari User nusxasidan ustun (joyda bor bo‘lsa). */
+export function pickExpeditorAssignmentRules(
+  slotRules: unknown,
+  userRules: unknown
+): ExpeditorAssignmentRules {
+  const fromSlot = parseExpeditorAssignmentRules(slotRules);
+  if (hasExpeditorAssignmentConstraints(fromSlot)) return fromSlot;
+  return parseExpeditorAssignmentRules(userRules);
+}
+
+/** Tenant dastavchik slot ishlatsa — joyga bog‘lanmaganlar avto-tanlovdan chiqadi. */
+export function expeditorEligibleForAutoAssign(args: {
+  usesExpeditorWorkSlots: boolean;
+  hasActiveSlot: boolean;
+}): boolean {
+  if (!args.usesExpeditorWorkSlots) return true;
+  return args.hasActiveSlot;
+}
+
 export async function resolveAutoExpeditorUserId(
   tx: Prisma.TransactionClient,
   tenantId: number,
@@ -102,9 +132,27 @@ export async function resolveAutoExpeditorUserId(
     at: Date;
   }
 ): Promise<number | null> {
+  const usesExpeditorWorkSlots =
+    (await tx.workSlot.count({
+      where: {
+        tenant_id: tenantId,
+        slot_type: "expeditor",
+        is_active: true,
+        deleted_at: null
+      }
+    })) > 0;
+
   const editors = await tx.user.findMany({
     where: { tenant_id: tenantId, role: "expeditor", is_active: true },
-    select: { id: true, expeditor_assignment_rules: true },
+    select: {
+      id: true,
+      expeditor_assignment_rules: true,
+      slot_user_links: {
+        where: { ended_at: null },
+        select: { slot: { select: { expeditor_assignment_rules: true } } },
+        take: 1
+      }
+    },
     orderBy: { id: "asc" }
   });
 
@@ -130,16 +178,19 @@ export async function resolveAutoExpeditorUserId(
   const weekday = weekday1To7(params.at);
 
   for (const e of editors) {
-    const rules = parseExpeditorAssignmentRules(e.expeditor_assignment_rules);
-    const keys = [
-      rules.price_types?.length,
-      rules.agent_ids?.length,
-      rules.warehouse_ids?.length,
-      rules.trade_directions?.length,
-      rules.territories?.length,
-      rules.weekdays?.length
-    ];
-    if (!keys.some(Boolean)) {
+    if (
+      !expeditorEligibleForAutoAssign({
+        usesExpeditorWorkSlots,
+        hasActiveSlot: e.slot_user_links.length > 0
+      })
+    ) {
+      continue;
+    }
+    const rules = pickExpeditorAssignmentRules(
+      e.slot_user_links[0]?.slot.expeditor_assignment_rules,
+      e.expeditor_assignment_rules
+    );
+    if (!hasExpeditorAssignmentConstraints(rules)) {
       continue;
     }
     if (

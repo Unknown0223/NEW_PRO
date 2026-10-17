@@ -61,7 +61,13 @@ export async function registerMobileExpeditorReturnRoutes(app: FastifyInstance) 
         return reply.send(row);
       } catch (e) {
         if (e instanceof Error && e.message === "RETURN_DISABLED") {
-          return sendApiError(reply, request, 403, "ReturnDisabled");
+          return sendApiError(
+            reply,
+            request,
+            403,
+            "ReturnDisabled",
+            "Возврат с полки отключён в настройках администратора"
+          );
         }
         throw e;
       }
@@ -97,7 +103,13 @@ export async function registerMobileExpeditorReturnRoutes(app: FastifyInstance) 
           return sendApiError(reply, request, 404, "NotFound");
         }
         if (e instanceof Error && e.message === "RETURN_DISABLED") {
-          return sendApiError(reply, request, 403, "ReturnDisabled");
+          return sendApiError(
+            reply,
+            request,
+            403,
+            "ReturnDisabled",
+            "Возврат с полки отключён в настройках администратора"
+          );
         }
         if (
           e instanceof Error &&
@@ -153,7 +165,13 @@ export async function registerMobileExpeditorReturnRoutes(app: FastifyInstance) 
           return sendApiError(reply, request, 404, "NotFound");
         }
         if (e instanceof Error && e.message === "RETURN_DISABLED") {
-          return sendApiError(reply, request, 403, "ReturnDisabled");
+          return sendApiError(
+            reply,
+            request,
+            403,
+            "ReturnDisabled",
+            "Возврат с полки отключён в настройках администратора"
+          );
         }
         if (
           e instanceof Error &&
@@ -219,7 +237,13 @@ export async function registerMobileExpeditorReturnRoutes(app: FastifyInstance) 
           return sendApiError(reply, request, 404, "NotFound");
         }
         if (e instanceof Error && e.message === "RETURN_DISABLED") {
-          return sendApiError(reply, request, 403, "ReturnDisabled");
+          return sendApiError(
+            reply,
+            request,
+            403,
+            "ReturnDisabled",
+            "Возврат с полки отключён в настройках администратора"
+          );
         }
         if (
           e instanceof Error &&

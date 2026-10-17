@@ -10,6 +10,7 @@ import '../clients/clients_list_provider.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/ui/agent_ui.dart';
+import '../../auth/biometric_quick_login_tile.dart';
 import '../shell/agent_app_bar.dart';
 import '../sync/manual_sync_runner.dart';
 
@@ -112,7 +113,7 @@ class _AgentSettingsPageState extends ConsumerState<AgentSettingsPage> {
       ),
       _SettingRow(
         id: 'consignment_new',
-        label: 'Yangi mijozga buyurtma berish (konsignatsiya emas)',
+        label: 'Заказ для нового клиента (не консигнация)',
         toggle: pl?.allowSubmitForNewClient ?? false,
         readOnly: true,
       ),
@@ -143,6 +144,26 @@ class _AgentSettingsPageState extends ConsumerState<AgentSettingsPage> {
       _SettingRow(id: 'field_phone', label: 'Телефон', toggle: fieldOn('phone'), readOnly: true),
       _SettingRow(id: 'field_visit', label: 'Дни посещения', toggle: fieldOn('visit_day'), readOnly: true),
       _SettingRow(id: 'field_address', label: 'Адрес', toggle: fieldOn('address'), readOnly: true),
+      _SettingRow(
+        id: 'bio_order',
+        label: 'Face ID / отпечаток при отправке заказа',
+        toggle: cfg?.misc.biometricConfirmForOrderSubmit ?? false,
+        readOnly: true,
+        group: 'БЕЗОПАСНОСТЬ',
+      ),
+      _SettingRow(
+        id: 'bio_payment',
+        label: 'Face ID / отпечаток при приёме оплаты',
+        toggle: cfg?.misc.biometricConfirmForPaymentAccept ?? false,
+        readOnly: true,
+      ),
+      _SettingRow(
+        id: 'face_verification',
+        label: 'Проверка лица (селфи на сервере)',
+        toggle: cfg?.misc.faceVerificationEnabled ?? false,
+        readOnly: true,
+        group: 'БЕЗОПАСНОСТЬ',
+      ),
     ];
   }
 
@@ -228,7 +249,7 @@ class _AgentSettingsPageState extends ConsumerState<AgentSettingsPage> {
                     child: TextButton.icon(
                       onPressed: () => _runFullSyncWithPrefs(prefs),
                       icon: const Icon(Icons.sync, size: 20),
-                      label: const Text('Sinxronizatsiya (to\'liq)'),
+                      label: const Text('Синхронизация (полная)'),
                     ),
                   ),
                 ),
@@ -236,6 +257,13 @@ class _AgentSettingsPageState extends ConsumerState<AgentSettingsPage> {
                 child: ListView(
                   padding: const EdgeInsets.all(12),
                   children: [
+                    if (_tab == 0) ...[
+                      AgentSurfaceCard(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        child: const BiometricQuickLoginTile(),
+                      ),
+                      const SizedBox(height: 12),
+                    ],
                     _buildGrouped(
                       rows,
                       readOnly: _tab == 1,

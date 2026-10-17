@@ -13,30 +13,56 @@ class FieldApi {
   FieldApi(this._dio);
 
   /// POST /api/{slug}/agent-locations
-  /// Send GPS ping to server
+  /// Send GPS ping to server (ixtiyoriy recorded_at — oflayn flush).
   Future<void> sendLocation(
     String slug, {
     required double latitude,
     required double longitude,
     double? accuracyMeters,
+    DateTime? recordedAt,
   }) async {
     try {
       final response = await _dio.post('/api/$slug/agent-locations', data: {
         'latitude': latitude,
         'longitude': longitude,
         if (accuracyMeters != null) 'accuracy_meters': accuracyMeters,
+        if (recordedAt != null) 'recorded_at': recordedAt.toUtc().toIso8601String(),
       },);
       // Serverdan kelgan joylashuv yozuvi vaqtidan (recorded_at) ishonchli
       // soatni langarlaymiz — sinxron oynasi qurilma soatiga tayanmasin.
       final raw = response.data;
       if (raw is Map) {
         final data = raw['data'];
-        final recordedAt = data is Map ? data['recorded_at']?.toString() : null;
-        final serverUtc = parseUtcIso(recordedAt);
+        final recordedAtRaw = data is Map ? data['recorded_at']?.toString() : null;
+        final serverUtc = parseUtcIso(recordedAtRaw);
         if (serverUtc != null) {
           ServerClock.instance.anchorFromServerUtc(serverUtc);
         }
       }
+    } on DioException catch (e) {
+      throw _map(e);
+    }
+  }
+
+  /// POST /api/{slug}/agent-locations/batch — oflayn navbat flush.
+  Future<int> sendLocationBatch(
+    String slug, {
+    required List<Map<String, dynamic>> pings,
+  }) async {
+    if (pings.isEmpty) return 0;
+    try {
+      final response = await _dio.post(
+        '/api/$slug/agent-locations/batch',
+        data: {'pings': pings},
+      );
+      final raw = response.data;
+      if (raw is Map) {
+        final data = raw['data'];
+        if (data is Map && data['inserted'] is num) {
+          return (data['inserted'] as num).toInt();
+        }
+      }
+      return pings.length;
     } on DioException catch (e) {
       throw _map(e);
     }
