@@ -59,6 +59,7 @@ import {
 import type { PaymentMethodEntryDto } from "../tenant-settings/finance-refs";
 import { paymentMethodStorageKey } from "../tenant-settings/finance-refs";
 import { adminOrAccessManager } from "./access.route.shared";
+import { loadActorDimensionBounds } from "./access-dimension-actor";
 import { buildAccessOperationsTree } from "./access-operations-tree";
 
 export async function registerAccessCatalogRoutes(app: FastifyInstance) {
@@ -66,13 +67,40 @@ export async function registerAccessCatalogRoutes(app: FastifyInstance) {
     const ok = ensureTenantContext(request, reply);
     if (!ok) return;
     const data = await getPermissionCatalogGrouped(request.tenant!.id);
+    const bounds = await loadActorDimensionBounds(request, request.tenant!.id);
+    if (bounds) {
+      const keep = (node: { key: string }) => bounds.grantableKeys.has(node.key);
+      data.flat = data.flat.filter(keep);
+      data.modules = data.modules
+        .map((mod) => ({
+          ...mod,
+          sections: mod.sections
+            .map((section) => ({ ...section, permissions: section.permissions.filter(keep) }))
+            .filter((section) => section.permissions.length > 0)
+        }))
+        .filter((mod) => mod.sections.length > 0);
+    }
     return reply.send({ data });
   });
 
   app.get("/api/:slug/access/operations-tree", { preHandler: [...adminOrAccessManager] }, async (request, reply) => {
     const ok = ensureTenantContext(request, reply);
     if (!ok) return;
-    return reply.send({ data: buildAccessOperationsTree() });
+    const bounds = await loadActorDimensionBounds(request, request.tenant!.id);
+    const tree = buildAccessOperationsTree();
+    if (!bounds) return reply.send({ data: tree });
+    const data = tree
+      .map((mod) => ({
+        ...mod,
+        sections: mod.sections
+          .map((section) => ({
+            ...section,
+            operations: section.operations.filter((op) => bounds.grantableKeys.has(op.key))
+          }))
+          .filter((section) => section.operations.length > 0)
+      }))
+      .filter((mod) => mod.sections.length > 0);
+    return reply.send({ data });
   });
 
   app.get("/api/:slug/access/territories", { preHandler: [...adminOrAccessManager] }, async (request, reply) => {
@@ -88,8 +116,13 @@ export async function registerAccessCatalogRoutes(app: FastifyInstance) {
 
     const cached = tryTerritoryCatalogResponseCache(tenantId, digest);
     if (cached && (cached.rows.length > 0 || digest === "__empty__")) {
+      const territoryBounds = await loadActorDimensionBounds(request, tenantId);
+      const cachedRows = territoryBounds
+        ? cached.rows.filter((r) => territoryBounds.territoryIds.has(r.id))
+        : cached.rows;
+      const cachedTree = payload ? buildAccessTerritoryTreeFromPayload(payload.roots, cachedRows) : [];
       return reply.send({
-        data: cached.rows.map((r) => ({
+        data: cachedRows.map((r) => ({
           id: r.id,
           key: String(r.id),
           label: r.code ? `${r.name} (${r.code})` : r.name,
@@ -97,7 +130,7 @@ export async function registerAccessCatalogRoutes(app: FastifyInstance) {
           code: r.code,
           is_active: r.is_active
         })),
-        tree: cached.tree
+        tree: cachedTree
       });
     }
     if (cached && cached.rows.length === 0 && digest !== "__empty__") {
@@ -120,8 +153,11 @@ export async function registerAccessCatalogRoutes(app: FastifyInstance) {
     }
     const tree = payload ? buildAccessTerritoryTreeFromPayload(payload.roots, rows) : [];
     setTerritoryCatalogResponseCache(tenantId, digest, rows, tree);
+    const territoryBounds = await loadActorDimensionBounds(request, tenantId);
+    const visibleRows = territoryBounds ? rows.filter((r) => territoryBounds.territoryIds.has(r.id)) : rows;
+    const visibleTree = payload ? buildAccessTerritoryTreeFromPayload(payload.roots, visibleRows) : [];
     return reply.send({
-      data: rows.map((r) => ({
+      data: visibleRows.map((r) => ({
         id: r.id,
         key: String(r.id),
         label: r.code ? `${r.name} (${r.code})` : r.name,

@@ -17,6 +17,7 @@ import {
 import { replaceUserScopes } from "./scope.service";
 import { actorCanSeeAccessUser, adminOrAccessManager, patchAccessBodySchema } from "./access.route.shared";
 import { assertActorCanPatchUser, grantGuardErrorResponse, isAdminActor, loadActorGrantableKeys } from "./access-grant-guard";
+import { loadActorDimensionBounds, maskScopeForActor, retainHiddenScopeOnPatch } from "./access-dimension-actor";
 import { getAccessUser } from "../auth/auth.prehandlers";
 import { syncEmploymentAfterActiveChange } from "../staff/staff.employment-sync";
 
@@ -96,7 +97,7 @@ export async function registerAccessUsersWriteRoutes(app: FastifyInstance) {
         },
         extra_role_keys: extraRoleRows.map((r) => r.role.key).filter((k) => k !== user.role),
         supervisees,
-        scope: {
+        scope: maskScopeForActor(await loadActorDimensionBounds(request, tenantId), {
           branches: branch_links.map((b) => b.branch_code),
           warehouses: warehouse_links.map((w) => w.warehouse_id),
           warehouse_delegate_ids: warehouse_links.filter((w) => w.link_role === "manager").map((w) => w.warehouse_id),
@@ -104,7 +105,7 @@ export async function registerAccessUsersWriteRoutes(app: FastifyInstance) {
           payment_methods: pm_links.map((p) => p.payment_method),
           territories: territoryIds.map((t) => t.territory_id),
           trade_directions: td_links.map((d) => d.trade_direction_id)
-        }
+        })
       }
     });
   });
@@ -133,6 +134,13 @@ export async function registerAccessUsersWriteRoutes(app: FastifyInstance) {
       if (res) return sendApiError(reply, request, 403, res.code, res.message, res.keys ? { keys: res.keys } : undefined);
       throw e;
     }
+    const scopeBlock = await retainHiddenScopeOnPatch(
+      tenantId,
+      id,
+      body,
+      await loadActorDimensionBounds(request, tenantId)
+    );
+    if (scopeBlock) return sendApiError(reply, request, 403, "ACCESS_SCOPE_FORBIDDEN", scopeBlock);
 
     const permDefined = body.permissions !== undefined || body.denied_permissions !== undefined;
     const scopeTouched =

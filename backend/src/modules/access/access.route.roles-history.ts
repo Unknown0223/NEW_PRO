@@ -61,7 +61,7 @@ import {
 } from "../tenant-settings/tenant-settings.service";
 import type { PaymentMethodEntryDto } from "../tenant-settings/finance-refs";
 import { paymentMethodStorageKey } from "../tenant-settings/finance-refs";
-import { adminOrAccessManager } from "./access.route.shared";
+import { accessUsersScopeWhere, adminOrAccessManager } from "./access.route.shared";
 
 export async function registerAccessRolesHistoryRoutes(app: FastifyInstance) {
   app.get("/api/:slug/access/role-defaults", { preHandler: [...adminOrAccessManager] }, async (request, reply) => {
@@ -254,7 +254,15 @@ export async function registerAccessRolesHistoryRoutes(app: FastifyInstance) {
           if (keys.length === 0) continue;
           const grantKeys = [...new Set(keys.map((k) => toGrantDelegationKey(k)))];
           const links = await tx.userRole.findMany({ where: { role_id: roleId }, select: { user_id: true } });
-          const userIds = [...new Set(links.map((l) => l.user_id))];
+          let userIds = [...new Set(links.map((l) => l.user_id))];
+          const staffScope = await accessUsersScopeWhere(request, tenantId);
+          if (staffScope && userIds.length > 0) {
+            const visible = await tx.user.findMany({
+              where: { tenant_id: tenantId, id: { in: userIds }, AND: [staffScope] },
+              select: { id: true }
+            });
+            userIds = visible.map((u) => u.id);
+          }
           if (userIds.length === 0) continue;
           const idByKey = await ensurePermissionIdsForKeys(tx, tenantId, grantKeys);
           await bulkMergeUserPermissionKeysForUsers(tx, tenantId, userIds, grantKeys, [], idByKey);
@@ -293,10 +301,19 @@ export async function registerAccessRolesHistoryRoutes(app: FastifyInstance) {
     if (!parsed.success)
       return sendApiError(reply, request, 400, "ValidationError", "Некорректные параметры запроса", zodValidationExtras(parsed.error));
     const exportKind = parsed.data.export;
+    const staffScope = await accessUsersScopeWhere(request, tenantId);
+    const visible_user_ids = staffScope
+      ? (
+          await prisma.user.findMany({
+            where: { tenant_id: tenantId, AND: [staffScope] },
+            select: { id: true }
+          })
+        ).map((u) => u.id)
+      : undefined;
     if (exportKind === "csv" || exportKind === "xlsx") {
       if (!(await ensureAnyPermission(request, reply, ["access.upravlenie.export"]))) return;
       const { export: _ignored, ...listParams } = parsed.data;
-      const exportData = await listAccessHistory(tenantId, { ...listParams, page: 1, limit: 2000 });
+      const exportData = await listAccessHistory(tenantId, { ...listParams, page: 1, limit: 2000, visible_user_ids });
       if (exportKind === "csv") {
         const sep = ";";
         const header = ["Дата", "Операции", "Исполнитель", "Пользователь", "Тип действия"].join(sep);
@@ -318,7 +335,7 @@ export async function registerAccessRolesHistoryRoutes(app: FastifyInstance) {
       return reply.send(buf);
     }
     const { export: _e2, ...listParams2 } = parsed.data;
-    const data = await listAccessHistory(tenantId, listParams2);
+    const data = await listAccessHistory(tenantId, { ...listParams2, visible_user_ids });
     return reply.send(data);
   });
 }

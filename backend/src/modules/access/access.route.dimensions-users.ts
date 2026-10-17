@@ -59,7 +59,8 @@ import {
 import type { PaymentMethodEntryDto } from "../tenant-settings/finance-refs";
 import { paymentMethodStorageKey } from "../tenant-settings/finance-refs";
 import { adminOrAccessManager } from "./access.route.shared";
-import { filterAccessWebAssignableUsers, accessWebAssignableUserWhere } from "./access-web-users.filter";
+import { filterAccessWebAssignableUsers } from "./access-web-users.filter";
+import { dimensionKeyAllowed, keepUsersInsideBounds, loadActorDimensionBounds, scopedAssignableUsers } from "./access-dimension-actor";
 
 export async function registerAccessDimensionsUsersRoutes(app: FastifyInstance) {
   app.get("/api/:slug/access/dimensions/users", { preHandler: [...adminOrAccessManager] }, async (request, reply) => {
@@ -74,13 +75,16 @@ export async function registerAccessDimensionsUsersRoutes(app: FastifyInstance) 
     if (!parsed.success)
       return sendApiError(reply, request, 400, "ValidationError", "Некорректные параметры запроса", zodValidationExtras(parsed.error));
     const { type, key } = parsed.data;
+    const bounds = await loadActorDimensionBounds(request, tenantId);
+    if (!dimensionKeyAllowed(type, key, bounds)) return reply.send({ data: [] });
+    const usersWhere = scopedAssignableUsers(tenantId, bounds);
 
     if (type === "cash_desks") {
       const cashDeskId = Number(key);
       if (!Number.isInteger(cashDeskId) || cashDeskId < 1)
         return sendApiError(reply, request, 400, "ValidationError", "Некорректный ключ кассы");
       const rows = await prisma.cashDeskUserLink.findMany({
-        where: { cash_desk_id: cashDeskId, user: accessWebAssignableUserWhere(tenantId) },
+        where: { cash_desk_id: cashDeskId, user: usersWhere },
         select: {
           user: { select: { id: true, login: true, name: true, code: true, role: true, position: true, is_active: true } }
         },
@@ -112,7 +116,7 @@ export async function registerAccessDimensionsUsersRoutes(app: FastifyInstance) 
       if (!Number.isInteger(warehouseId) || warehouseId < 1)
         return sendApiError(reply, request, 400, "ValidationError", "Некорректный ключ склада");
       const rows = await prisma.warehouseUserLink.findMany({
-        where: { warehouse_id: warehouseId, user: accessWebAssignableUserWhere(tenantId) },
+        where: { warehouse_id: warehouseId, user: usersWhere },
         select: {
           link_role: true,
           user: { select: { id: true, login: true, name: true, code: true, role: true, position: true, is_active: true } }
@@ -144,7 +148,7 @@ export async function registerAccessDimensionsUsersRoutes(app: FastifyInstance) 
 
     if (type === "branches") {
       const rows = await prisma.userBranchLink.findMany({
-        where: { tenant_id: tenantId, branch_code: key, user: accessWebAssignableUserWhere(tenantId) },
+        where: { tenant_id: tenantId, branch_code: key, user: usersWhere },
         select: {
           user: { select: { id: true, login: true, name: true, code: true, role: true, position: true, is_active: true } }
         },
@@ -173,7 +177,7 @@ export async function registerAccessDimensionsUsersRoutes(app: FastifyInstance) 
 
     if (type === "payment_methods") {
       const rows = await prisma.userPaymentMethodLink.findMany({
-        where: { tenant_id: tenantId, payment_method: key, user: accessWebAssignableUserWhere(tenantId) },
+        where: { tenant_id: tenantId, payment_method: key, user: usersWhere },
         select: {
           user: { select: { id: true, login: true, name: true, code: true, role: true, position: true, is_active: true } }
         },
@@ -206,7 +210,7 @@ export async function registerAccessDimensionsUsersRoutes(app: FastifyInstance) 
         return sendApiError(reply, request, 400, "ValidationError", "Некорректный ключ направления торговли");
       }
       const rows = await prisma.userTradeDirectionLink.findMany({
-        where: { tenant_id: tenantId, trade_direction_id: directionId, user: accessWebAssignableUserWhere(tenantId) },
+        where: { tenant_id: tenantId, trade_direction_id: directionId, user: usersWhere },
         select: {
           user: { select: { id: true, login: true, name: true, code: true, role: true, position: true, is_active: true } }
         },
@@ -351,8 +355,10 @@ export async function registerAccessDimensionsUsersRoutes(app: FastifyInstance) 
       }))
       .filter((x) => !x.from_direct_deny && (x.from_direct_allow || x.from_role));
 
+    const visibleOpsUsers = await keepUsersInsideBounds(tenantId, bounds, data);
+
     const MANAGE_CHUNK = 350;
-    const manageRows = data.map((r) => ({ id: r.id, role: r.role }));
+    const manageRows = visibleOpsUsers.map((r) => ({ id: r.id, role: r.role }));
     let manageSet = new Set<number>();
     let moduleViewSet = new Set<number>();
     if (manageRows.length <= MANAGE_CHUNK) {
@@ -377,7 +383,7 @@ export async function registerAccessDimensionsUsersRoutes(app: FastifyInstance) 
     }
     return reply.send({
       data: filterAccessWebAssignableUsers(
-        data.map((r) => ({
+        visibleOpsUsers.map((r) => ({
           ...r,
           has_access_manage: manageSet.has(r.id),
           has_access_module_view: moduleViewSet.has(r.id)

@@ -66,7 +66,7 @@ import {
   sumBranchLinkCounts,
   sumPaymentLinkCounts
 } from "./access.route.shared";
-import { accessWebAssignableUserWhere } from "./access-web-users.filter";
+import { dimensionKeyAllowed, loadActorDimensionBounds, scopedAssignableUsers } from "./access-dimension-actor";
 
 export async function registerAccessDimensionsRoutes(app: FastifyInstance) {
   app.get("/api/:slug/access/dimensions", { preHandler: [...adminOrAccessManager] }, async (request, reply) => {
@@ -80,6 +80,8 @@ export async function registerAccessDimensionsRoutes(app: FastifyInstance) {
     if (!parsed.success)
       return sendApiError(reply, request, 400, "ValidationError", "Некорректные параметры запроса", zodValidationExtras(parsed.error));
     const { type } = parsed.data;
+    const bounds = await loadActorDimensionBounds(request, tenantId);
+    const usersWhere = scopedAssignableUsers(tenantId, bounds);
 
     if (type === "cash_desks") {
       const [rows, linkGroups] = await Promise.all([
@@ -90,13 +92,14 @@ export async function registerAccessDimensionsRoutes(app: FastifyInstance) {
         }),
         prisma.cashDeskUserLink.groupBy({
           by: ["cash_desk_id"],
-          where: { user: accessWebAssignableUserWhere(tenantId) },
+          where: { user: usersWhere },
           _count: { _all: true }
         })
       ]);
       const countBy = new Map(linkGroups.map((r) => [r.cash_desk_id, r._count._all]));
+      const visible = bounds ? rows.filter((r) => bounds.cashDeskIds.has(r.id)) : rows;
       return reply.send({
-        data: rows.map((r) => ({
+        data: visible.map((r) => ({
           key: String(r.id),
           label: r.name,
           attached_users_count: countBy.get(r.id) ?? 0,
@@ -114,13 +117,14 @@ export async function registerAccessDimensionsRoutes(app: FastifyInstance) {
         }),
         prisma.warehouseUserLink.groupBy({
           by: ["warehouse_id"],
-          where: { user: accessWebAssignableUserWhere(tenantId) },
+          where: { user: usersWhere },
           _count: { _all: true }
         })
       ]);
       const countBy = new Map(linkGroups.map((r) => [r.warehouse_id, r._count._all]));
+      const visible = bounds ? rows.filter((r) => bounds.warehouseIds.has(r.id)) : rows;
       return reply.send({
-        data: rows.map((r) => ({
+        data: visible.map((r) => ({
           key: String(r.id),
           label: r.name,
           attached_users_count: countBy.get(r.id) ?? 0,
@@ -134,7 +138,7 @@ export async function registerAccessDimensionsRoutes(app: FastifyInstance) {
         loadTenantBranchesForAccess(tenantId),
         prisma.userBranchLink.groupBy({
           by: ["branch_code"],
-          where: { tenant_id: tenantId, user: accessWebAssignableUserWhere(tenantId) },
+          where: { tenant_id: tenantId, user: usersWhere },
           _count: { _all: true },
           orderBy: { branch_code: "asc" }
         })
@@ -199,7 +203,10 @@ export async function registerAccessDimensionsRoutes(app: FastifyInstance) {
         });
       }
       data.sort((a, b) => a.label.localeCompare(b.label, "ru"));
-      return reply.send({ data });
+      const visibleBranches = bounds
+        ? data.filter((r) => dimensionKeyAllowed("branches", r.key, bounds))
+        : data;
+      return reply.send({ data: visibleBranches });
     }
 
     if (type === "payment_methods") {
@@ -207,7 +214,7 @@ export async function registerAccessDimensionsRoutes(app: FastifyInstance) {
         loadPaymentMethodEntriesForResolve(tenantId),
         prisma.userPaymentMethodLink.groupBy({
           by: ["payment_method"],
-          where: { tenant_id: tenantId, user: accessWebAssignableUserWhere(tenantId) },
+          where: { tenant_id: tenantId, user: usersWhere },
           _count: { _all: true },
           orderBy: { payment_method: "asc" }
         })
@@ -247,7 +254,10 @@ export async function registerAccessDimensionsRoutes(app: FastifyInstance) {
         });
       }
       data.sort((a, b) => a.label.localeCompare(b.label, "ru"));
-      return reply.send({ data });
+      const visiblePayments = bounds
+        ? data.filter((r) => dimensionKeyAllowed("payment_methods", r.key, bounds))
+        : data;
+      return reply.send({ data: visiblePayments });
     }
 
     if (type === "trade_directions") {
@@ -259,13 +269,14 @@ export async function registerAccessDimensionsRoutes(app: FastifyInstance) {
         }),
         prisma.userTradeDirectionLink.groupBy({
           by: ["trade_direction_id"],
-          where: { tenant_id: tenantId, user: accessWebAssignableUserWhere(tenantId) },
+          where: { tenant_id: tenantId, user: usersWhere },
           _count: { _all: true }
         })
       ]);
       const countBy = new Map(linkGroups.map((r) => [r.trade_direction_id, r._count._all]));
+      const visible = bounds ? rows.filter((r) => bounds.tradeDirectionIds.has(r.id)) : rows;
       return reply.send({
-        data: rows.map((r) => ({
+        data: visible.map((r) => ({
           key: String(r.id),
           label: r.code?.trim() ? `${r.name} (${r.code.trim()})` : r.name,
           attached_users_count: countBy.get(r.id) ?? 0,
@@ -289,8 +300,9 @@ export async function registerAccessDimensionsRoutes(app: FastifyInstance) {
       },
       orderBy: { key: "asc" }
     });
+    const visibleOps = bounds ? ops.filter((r) => bounds.grantableKeys.has(r.key)) : ops;
     return reply.send({
-      data: ops.map((r) => ({
+      data: visibleOps.map((r) => ({
         key: r.key,
         label: catalog.get(r.key)?.description ?? permissionDisplayDescription(r.key, (r.description && String(r.description).trim()) || r.key),
         attached_users_count: r._count.users + r._count.roles,

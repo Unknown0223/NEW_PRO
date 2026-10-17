@@ -60,6 +60,7 @@ import {
 import type { PaymentMethodEntryDto } from "../tenant-settings/finance-refs";
 import { paymentMethodStorageKey } from "../tenant-settings/finance-refs";
 import { accessUsersScopeWhere, adminOrAccessManager, bulkAccessPatchBodySchema } from "./access.route.shared";
+import { loadActorDimensionBounds, retainHiddenScopeOnPatch } from "./access-dimension-actor";
 import { assertActorCanPatchUser, grantGuardErrorResponse, isAdminActor, loadActorGrantableKeys } from "./access-grant-guard";
 
 export async function registerAccessUsersBulkRoutes(app: FastifyInstance) {
@@ -104,6 +105,13 @@ export async function registerAccessUsersBulkRoutes(app: FastifyInstance) {
         const res = grantGuardErrorResponse(e);
         if (res) return sendApiError(reply, request, 403, res.code, res.message, res.keys ? { keys: res.keys } : undefined);
         throw e;
+      }
+      const bounds = await loadActorDimensionBounds(request, tenantId);
+      if (bounds) {
+        for (const it of items) {
+          const msg = await retainHiddenScopeOnPatch(tenantId, it.user_id, it, bounds);
+          if (msg) return sendApiError(reply, request, 403, "ACCESS_SCOPE_FORBIDDEN", msg);
+        }
       }
     }
     const allTyped = items as BulkAccessPatchItem[];
