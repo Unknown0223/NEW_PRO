@@ -1,4 +1,4 @@
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyRequest } from "fastify";
 import { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { prisma } from "../../config/database";
@@ -7,6 +7,7 @@ import { sendApiError, zodValidationExtras } from "../../lib/api-error";
 import { actorUserIdOrNull } from "../../lib/request-actor";
 import { appendTenantAuditEvent } from "../../lib/tenant-audit";
 import { getAccessUser, jwtAccessVerify, requireAnyPermission } from "../auth/auth.prehandlers";
+import { accessStaffDirectoryWhere } from "../staff/staff.route.shared";
 import {
   buildAccessHistoryXlsxBuffer,
   formatAccessHistoryDateRu,
@@ -60,6 +61,28 @@ import type { PaymentMethodEntryDto } from "../tenant-settings/finance-refs";
 import { paymentMethodStorageKey } from "../tenant-settings/finance-refs";
 
 export const adminOrAccessManager = [jwtAccessVerify, requireAccessWorkspaceView()] as const;
+
+/** Admin — hammasi. Qolganlar — faqat Dostupdagi hudud va biriktirilgan hodimlar. */
+export async function actorCanSeeAccessUser(
+  request: FastifyRequest,
+  tenantId: number,
+  userId: number
+): Promise<boolean> {
+  const scope = await accessStaffDirectoryWhere(request, tenantId);
+  if (!scope) return true;
+  const row = await prisma.user.findFirst({
+    where: { id: userId, tenant_id: tenantId, AND: [scope] },
+    select: { id: true }
+  });
+  return row != null;
+}
+
+export async function accessUsersScopeWhere(
+  request: FastifyRequest,
+  tenantId: number
+): Promise<Prisma.UserWhereInput | null> {
+  return accessStaffDirectoryWhere(request, tenantId);
+}
 
 function requireAccessWorkspaceView() {
   return requireAnyPermission(["access.upravlenie.view", "access.manage"], { allowAdminRole: true });

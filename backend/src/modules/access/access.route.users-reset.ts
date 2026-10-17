@@ -4,7 +4,7 @@ import { ensureTenantContext } from "../../lib/tenant-context";
 import { sendApiError } from "../../lib/api-error";
 import { actorUserIdOrNull } from "../../lib/request-actor";
 import { appendTenantAuditEvent } from "../../lib/tenant-audit";
-import { adminOrAccessManager } from "./access.route.shared";
+import { actorCanSeeAccessUser, adminOrAccessManager } from "./access.route.shared";
 import { getAccessUser } from "../auth/auth.prehandlers";
 import { assertActorCanPatchUser, grantGuardErrorResponse, isAdminActor } from "./access-grant-guard";
 import {
@@ -22,6 +22,9 @@ export async function registerAccessUsersResetRoutes(app: FastifyInstance) {
     const tenantId = request.tenant!.id;
     const id = Number((request.params as { id: string }).id);
     if (!Number.isInteger(id) || id < 1) return sendApiError(reply, request, 400, "InvalidId", "Некорректный ID пользователя");
+    if (!(await actorCanSeeAccessUser(request, tenantId, id))) {
+      return sendApiError(reply, request, 404, "UserNotFound");
+    }
     const user = await prisma.user.findFirst({ where: { id, tenant_id: tenantId }, select: { role: true } });
     if (!user) return sendApiError(reply, request, 404, "UserNotFound");
     const actorId = actorUserIdOrNull(request);
@@ -86,6 +89,9 @@ export async function registerAccessUsersResetRoutes(app: FastifyInstance) {
       const tenantId = request.tenant!.id;
       const id = Number((request.params as { id: string }).id);
       if (!Number.isInteger(id) || id < 1) return sendApiError(reply, request, 400, "InvalidId", "Некорректный ID пользователя");
+      if (!(await actorCanSeeAccessUser(request, tenantId, id))) {
+        return sendApiError(reply, request, 404, "UserNotFound");
+      }
       const user = await prisma.user.findFirst({
         where: { id, tenant_id: tenantId },
         select: { id: true, role: true }

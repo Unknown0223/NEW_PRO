@@ -59,7 +59,7 @@ import {
 } from "../tenant-settings/tenant-settings.service";
 import type { PaymentMethodEntryDto } from "../tenant-settings/finance-refs";
 import { paymentMethodStorageKey } from "../tenant-settings/finance-refs";
-import { adminOrAccessManager, bulkAccessPatchBodySchema } from "./access.route.shared";
+import { accessUsersScopeWhere, adminOrAccessManager, bulkAccessPatchBodySchema } from "./access.route.shared";
 import { assertActorCanPatchUser, grantGuardErrorResponse, isAdminActor, loadActorGrantableKeys } from "./access-grant-guard";
 
 export async function registerAccessUsersBulkRoutes(app: FastifyInstance) {
@@ -79,8 +79,13 @@ export async function registerAccessUsersBulkRoutes(app: FastifyInstance) {
     }
     const items = [...lastByUser.values()];
     const userIds = [...new Set(items.map((i) => i.user_id))];
+    const staffScope = await accessUsersScopeWhere(request, tenantId);
     const users = await prisma.user.findMany({
-      where: { tenant_id: tenantId, id: { in: userIds } },
+      where: {
+        tenant_id: tenantId,
+        id: { in: userIds },
+        ...(staffScope ? { AND: [staffScope] } : {})
+      },
       select: { id: true, role: true, is_active: true }
     });
     if (users.length !== userIds.length) {

@@ -15,7 +15,7 @@ import {
   SuperviseePatchError
 } from "./access-user-patch.apply";
 import { replaceUserScopes } from "./scope.service";
-import { adminOrAccessManager, patchAccessBodySchema } from "./access.route.shared";
+import { actorCanSeeAccessUser, adminOrAccessManager, patchAccessBodySchema } from "./access.route.shared";
 import { assertActorCanPatchUser, grantGuardErrorResponse, isAdminActor, loadActorGrantableKeys } from "./access-grant-guard";
 import { getAccessUser } from "../auth/auth.prehandlers";
 import { syncEmploymentAfterActiveChange } from "../staff/staff.employment-sync";
@@ -27,6 +27,9 @@ export async function registerAccessUsersWriteRoutes(app: FastifyInstance) {
     const tenantId = request.tenant!.id;
     const id = Number((request.params as { id: string }).id);
     if (!Number.isInteger(id) || id < 1) return sendApiError(reply, request, 400, "InvalidId", "Некорректный ID пользователя");
+    if (!(await actorCanSeeAccessUser(request, tenantId, id))) {
+      return sendApiError(reply, request, 404, "UserNotFound");
+    }
     const user = await prisma.user.findFirst({
       where: { id, tenant_id: tenantId },
       select: {
@@ -112,6 +115,9 @@ export async function registerAccessUsersWriteRoutes(app: FastifyInstance) {
     const tenantId = request.tenant!.id;
     const id = Number((request.params as { id: string }).id);
     if (!Number.isInteger(id) || id < 1) return sendApiError(reply, request, 400, "InvalidId", "Некорректный ID пользователя");
+    if (!(await actorCanSeeAccessUser(request, tenantId, id))) {
+      return sendApiError(reply, request, 404, "UserNotFound");
+    }
     const parsed = patchAccessBodySchema.safeParse(request.body ?? {});
     if (!parsed.success)
       return sendApiError(reply, request, 400, "ValidationError", "Некорректные данные запроса", zodValidationExtras(parsed.error));
@@ -210,6 +216,12 @@ export async function registerAccessUsersWriteRoutes(app: FastifyInstance) {
     const sourceId = Number((request.body as { source_user_id?: number })?.source_user_id);
     if (!Number.isInteger(targetId) || !Number.isInteger(sourceId)) {
       return sendApiError(reply, request, 400, "InvalidId", "Некорректный ID пользователя");
+    }
+    if (
+      !(await actorCanSeeAccessUser(request, tenantId, targetId)) ||
+      !(await actorCanSeeAccessUser(request, tenantId, sourceId))
+    ) {
+      return sendApiError(reply, request, 404, "UserNotFound");
     }
     const [sourceUser, targetUser] = await Promise.all([
       prisma.user.findFirst({ where: { id: sourceId, tenant_id: tenantId } }),

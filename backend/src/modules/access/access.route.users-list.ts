@@ -57,7 +57,7 @@ import {
 } from "../tenant-settings/tenant-settings.service";
 import type { PaymentMethodEntryDto } from "../tenant-settings/finance-refs";
 import { paymentMethodStorageKey } from "../tenant-settings/finance-refs";
-import { adminOrAccessManager, listUsersQuerySchema } from "./access.route.shared";
+import { accessUsersScopeWhere, adminOrAccessManager, listUsersQuerySchema } from "./access.route.shared";
 import { filterAccessWebPanelUsers } from "./access-web-users.filter";
 import { MOBILE_ONLY_KOMANDA_ROLES } from "../../lib/tenant-user-roles";
 
@@ -70,11 +70,14 @@ export async function registerAccessUsersListRoutes(app: FastifyInstance) {
     if (!q.success)
       return sendApiError(reply, request, 400, "ValidationError", "Некорректные параметры запроса", zodValidationExtras(q.error));
 
+    const staffScope = await accessUsersScopeWhere(request, tenantId);
+
     if (q.data.mode === "supervisor_pick") {
       const rows = await prisma.user.findMany({
         where: {
           tenant_id: tenantId,
-          OR: [{ is_active: true }, { filter_visible: true }]
+          OR: [{ is_active: true }, { filter_visible: true }],
+          ...(staffScope ? { AND: [staffScope] } : {})
         },
         select: {
           id: true,
@@ -102,7 +105,10 @@ export async function registerAccessUsersListRoutes(app: FastifyInstance) {
       });
     }
 
-    const where: Prisma.UserWhereInput = { tenant_id: tenantId };
+    const where: Prisma.UserWhereInput = {
+      tenant_id: tenantId,
+      ...(staffScope ? { AND: [staffScope] } : {})
+    };
     if (q.data.is_active === "true") where.is_active = true;
     else if (q.data.is_active === "false") where.is_active = false;
     if (q.data.role?.trim()) where.role = q.data.role.trim();
