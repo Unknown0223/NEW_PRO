@@ -22,7 +22,7 @@ COPY . .
 RUN npm install --ignore-scripts --no-save ./vendor/pivot-engine \
   && test -f node_modules/@salec/pivot-engine/dist/index.js
 
-RUN npx next build
+RUN npx next build --webpack
 RUN npm prune --omit=dev
 
 FROM node:22-bookworm-slim AS runner
