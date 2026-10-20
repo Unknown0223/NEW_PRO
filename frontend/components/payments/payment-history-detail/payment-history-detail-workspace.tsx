@@ -214,7 +214,7 @@ export function PaymentHistoryDetailWorkspace() {
         </h1>
         {p ? (
           <p className="mt-1 text-sm text-slate-500">
-            Платёж #{p.id} · {p.client_name}
+            Платёж #{p.number?.trim() || p.id} · {p.client_name}
             {p.client_code ? ` (${p.client_code})` : ""}
           </p>
         ) : null}

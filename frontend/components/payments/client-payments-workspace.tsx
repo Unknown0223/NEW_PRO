@@ -197,7 +197,7 @@ function downloadPaymentsExcel(rows: PaymentListApiRow[]) {
     "Оплаты клиентов",
     headers,
     rows.map((r) => [
-      r.id,
+      r.number?.trim() || r.id,
       r.created_at,
       r.paid_at ?? "",
       r.received_at ?? "",
@@ -786,7 +786,7 @@ export function ClientPaymentsWorkspace({ variant = "payments" }: { variant?: Cl
                           href={`/payments/${p.id}`}
                           className="flex items-center gap-1 font-medium text-emerald-700 hover:underline"
                         >
-                          {p.id}
+                          {p.number?.trim() || p.id}
                           <ExternalLink className="h-3 w-3" />
                         </Link>
                       </Td>
