@@ -1,7 +1,7 @@
 "use client";
 
 import { AddClientExpenseDialog } from "@/components/client-expenses/add-client-expense-dialog";
-import { AddPaymentDialog } from "@/components/payments/add-payment-dialog";
+import { ClientLedgerPayDialog } from "@/components/clients/balance-detail/client-ledger-pay-dialog";
 import { EditPaymentDialog } from "@/components/payments/edit-payment-dialog";
 import { PageShell } from "@/components/dashboard/page-shell";
 import { ClientBalanceDetailWorkspace } from "@/components/clients/balance-detail/client-balance-detail-workspace";
@@ -164,13 +164,16 @@ export function ClientBalanceLedgerView({ clientId, embedded = false, pageShellC
   const hydrated = useAuthStoreHydrated();
   const queryClient = useQueryClient();
   const { has } = usePermissions();
-  const canEditPayments =
-    has("cash.oplaty_klientov.create") || has("cash.oplaty_klientov.update");
+  const canPay = has("cash.oplaty_klientov.create") || has("cash.balansy_klientov.create");
+  const canDebt = has("cash.rashody_klienta.create") || has("cash.balansy_klientov.create");
+  const canEditPayments = has("cash.oplaty_klientov.update") || has("cash.balansy_klientov.update");
+  const canDeletePayments = has("cash.oplaty_klientov.delete") || has("cash.balansy_klientov.delete");
 
   const [debtorReportOpen, setDebtorReportOpen] = useState(false);
   const [editPaymentId, setEditPaymentId] = useState<number | null>(null);
   const [addDebtOpen, setAddDebtOpen] = useState(false);
   const [addPaymentOpen, setAddPaymentOpen] = useState(false);
+  const [pickedPayType, setPickedPayType] = useState("");
 
   const ledgerMetaQ = useQuery({
     queryKey: ["client-balance-ledger-meta", tenantSlug, clientId],
@@ -225,10 +228,25 @@ export function ClientBalanceLedgerView({ clientId, embedded = false, pageShellC
         tenantSlug={tenantSlug}
         clientId={clientId}
         embedded={embedded}
+        canPay={canPay}
+        canDebt={canDebt}
         canEditPayments={canEditPayments}
+        canDeletePayments={canDeletePayments}
         onEditPayment={setEditPaymentId}
-        onAddDebt={() => setAddDebtOpen(true)}
-        onAddPayment={() => setAddPaymentOpen(true)}
+        onDeletePayment={(id) => {
+          if (!window.confirm("Удалить эту оплату?")) return;
+          void api.delete(`/api/${tenantSlug}/payments/${id}`).then(() => {
+            void queryClient.invalidateQueries({ queryKey: ["client-balance-ledger", tenantSlug, clientId] });
+          });
+        }}
+        onAddDebt={(paymentType) => {
+          setPickedPayType(paymentType);
+          setAddDebtOpen(true);
+        }}
+        onAddPayment={(paymentType) => {
+          setPickedPayType(paymentType);
+          setAddPaymentOpen(true);
+        }}
       />
 
       <AddClientExpenseDialog
@@ -239,18 +257,20 @@ export function ClientBalanceLedgerView({ clientId, embedded = false, pageShellC
         fixedClientId={clientId}
         fixedClientLabel={ledgerClientLabel || `Клиент #${clientId}`}
         defaultLedgerAgentId={ledgerMetaQ.data?.client.agent_id ?? null}
+        requireNote
+        initialPaymentType={pickedPayType}
         onCreated={() => {
           void queryClient.invalidateQueries({ queryKey: ["client-balance-ledger", tenantSlug, clientId] });
         }}
       />
-      <AddPaymentDialog
+      <ClientLedgerPayDialog
         key={`pay-${clientId}`}
         open={addPaymentOpen}
         onOpenChange={setAddPaymentOpen}
         tenantSlug={tenantSlug}
-        lockedClientId={String(clientId)}
-        lockedClientLabel={ledgerClientLabel || `Клиент #${clientId}`}
-        initialLedgerAgentId={ledgerMetaQ.data?.client.agent_id ?? null}
+        clientId={clientId}
+        clientLabel={ledgerClientLabel || `Клиент #${clientId}`}
+        initialPaymentType={pickedPayType}
         onCreated={() => {
           void queryClient.invalidateQueries({ queryKey: ["client-balance-ledger", tenantSlug, clientId] });
         }}

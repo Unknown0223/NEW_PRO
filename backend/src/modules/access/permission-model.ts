@@ -171,7 +171,7 @@ export const PERMISSION_SECTIONS: PermissionSectionDef[] = [
   { module: "cash", section: "rashody_klienta", labelRu: "Расходы клиента", actions: CRUD },
   { module: "cash", section: "nachalnye_balansy", labelRu: "Начальные балансы клиентов", actions: ["view", "create", "update", "void", "restore"] },
   /** Alohida: «Балансы клиентов» — `cash.otchety` (Отчёты) bilan aralashmasin. */
-  { module: "cash", section: "balansy_klientov", labelRu: "Балансы клиентов (оплата и долги)", actions: VIEW_EXPORT, treeSectionRu: REPORTS_TREE_RU },
+  { module: "cash", section: "balansy_klientov", labelRu: "Балансы клиентов (оплата и долги)", actions: ["view", "create", "update", "delete", "export"], treeSectionRu: REPORTS_TREE_RU },
   { module: "cash", section: "otchety", labelRu: "Отчёты кассы (приходы, ДДС, акт сверки, долги)", actions: VIEW_EXPORT, treeSectionRu: REPORTS_TREE_RU },
   { module: "cash", section: "kassa", labelRu: "Касса", actions: ["view", "create", "update", "status", "export", "history"] },
   { module: "cash", section: "kurs_valyuty", labelRu: "Курс валют", actions: ["view", "create", "update", "export"] },

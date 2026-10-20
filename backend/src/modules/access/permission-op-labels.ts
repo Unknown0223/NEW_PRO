@@ -73,12 +73,13 @@ export const PERMISSION_OP_LABEL_RU: Record<string, string> = {
   "clients.ostatki_tt.view": "Просмотр остатков в торговых точках",
   "clients.ostatki_tt.import": "Загрузка остатков из Excel",
   "clients.ostatki_tt.copy": "Выгрузка остатков в Excel",
-
   "invoices.sborochnye.view": "Сборочные накладные — Список",
   "invoices.otgruzochnye.view": "Отгрузочные накладные — Список",
   "invoices.vozvratnye.view": "Возвратные накладные — Список",
   "invoices.vozvratnye.approve": "Подтвердить приёмку возврата",
-
+  "cash.balansy_klientov.create": "Оплата с карточки клиента (в кассу)",
+  "cash.balansy_klientov.update": "Изменить оплату в ведомости клиента",
+  "cash.balansy_klientov.delete": "Удалить оплату в ведомости клиента",
   "cash.oplaty_klientov.view": "Список оплаты клиента",
   "cash.oplaty_klientov.create": "Создать оплаты клиента",
   "cash.oplaty_klientov.update": "Изменить оплату клиента (сумма, распределение, разрешение на изменение)",
@@ -114,7 +115,6 @@ export const PERMISSION_OP_LABEL_RU: Record<string, string> = {
   "cash.zayavki_na_oplatu.view": "Список заявки на оплату",
   "cash.zayavki_na_oplatu.approve": "Одобрить / отклонить заявки на оплату",
   "cash.dolgi_ekspeditora.view": "Список долги экспедитора",
-
   "warehouse.sklady.view": "Список складов",
   "warehouse.sklady.create": "Создать склад",
   "warehouse.sklady.update": "Изменить склад (название, тип, адрес, ответственные)",

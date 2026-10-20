@@ -181,7 +181,7 @@ export function mapUnionToLedgerRow(r: UnionRaw): ClientLedgerRow {
   const order_kind_label = rk === "order" ? "Заказ" : returnRefundPayment ? "Возврат" : null;
   const comment_primary =
     rk === "order"
-      ? "Удержание долга по заказу"
+      ? ((r.note ?? "").trim() || null)
       : returnRefundPayment
         ? "Возврат с полки"
         : bonusDebtPayment

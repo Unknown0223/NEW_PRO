@@ -1,6 +1,7 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
+import { DateTimePickerField } from "@/components/ui/datetime-popover";
 import {
   Dialog,
   DialogContent,
@@ -322,13 +323,13 @@ export function EditPaymentDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        className="max-h-[min(92vh,880px)] w-full max-w-lg gap-4 overflow-y-auto p-5 sm:p-6"
+        className="max-h-[min(92vh,880px)] w-full gap-0 overflow-hidden p-0 sm:max-w-xl"
         data-testid="edit-payment-dialog"
       >
-        <DialogHeader>
-          <DialogTitle>Редактирование оплаты</DialogTitle>
+        <DialogHeader className="border-b border-[#d7ebe9] bg-[#f3fbfa] px-5 py-4">
+          <DialogTitle className="text-[#0f6e68]">Редактирование оплаты</DialogTitle>
           <DialogDescription>
-            Сумма, способ оплаты, касса, дата, комментарий и (при наличии) заказ. Склад и клиент не меняются.
+            Сумма, способ, касса, дата и комментарий. Клиент не меняется.
           </DialogDescription>
         </DialogHeader>
 
@@ -342,7 +343,7 @@ export function EditPaymentDialog({
           <p className="text-sm text-destructive">Эта оплата в архиве — редактирование недоступно.</p>
         ) : (
           <form
-            className="space-y-4"
+            className="space-y-3 overflow-y-auto px-5 py-4"
             onSubmit={(e) => {
               e.preventDefault();
               setFormErr(null);
@@ -419,13 +420,12 @@ export function EditPaymentDialog({
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="ep-paid">Дата / время оплаты</Label>
-              <Input
+              <DateTimePickerField
                 id="ep-paid"
-                type="datetime-local"
-                className={controlClass}
                 value={paidAtLocal}
-                onChange={(e) => setPaidAtLocal(e.target.value)}
+                onChange={setPaidAtLocal}
                 disabled={patchMut.isPending}
+                timePlacement="side"
               />
               {fieldErrs.paid_at ? (
                 <p className="text-xs text-destructive" role="alert">
@@ -477,9 +477,9 @@ export function EditPaymentDialog({
             ) : null}
             <div className="space-y-1.5">
               <Label htmlFor="ep-note">Комментарий</Label>
-              <Input
+              <textarea
                 id="ep-note"
-                className={controlClass}
+                className="min-h-20 w-full rounded-md border border-input px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-[#1aa096]/40"
                 value={note}
                 onChange={(e) => setNote(e.target.value)}
                 disabled={patchMut.isPending}
@@ -495,11 +495,11 @@ export function EditPaymentDialog({
                 {formErr}
               </p>
             ) : null}
-            <div className="flex justify-end gap-2 pt-2">
+            <div className="flex justify-end gap-2 border-t bg-[#fafbfc] px-5 py-3 -mx-5 -mb-4">
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={patchMut.isPending}>
                 Отмена
               </Button>
-              <Button type="submit" disabled={patchMut.isPending} className="bg-teal-600 text-white hover:bg-teal-700">
+              <Button type="submit" disabled={patchMut.isPending} className="bg-[#1aa096] text-white hover:bg-[#158a81]">
                 {patchMut.isPending ? "Сохранение…" : "Сохранить"}
               </Button>
             </div>

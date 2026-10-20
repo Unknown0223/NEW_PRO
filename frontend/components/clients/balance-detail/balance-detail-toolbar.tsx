@@ -6,10 +6,10 @@ import {
   ChevronDown,
   Columns3,
   FileSpreadsheet,
-  Filter,
   RefreshCw,
   Search
 } from "lucide-react";
+import { DateTimePickerField } from "@/components/ui/datetime-popover";
 import type { BalanceDetailSortDir, BalanceDetailSortField } from "@/lib/client-balance-detail/types";
 
 type Props = {
@@ -28,8 +28,6 @@ type Props = {
   onSortFieldChange: (f: BalanceDetailSortField) => void;
   onSortDirToggle: () => void;
   onColumnsClick: () => void;
-  onFiltersClick: () => void;
-  filtersOpen: boolean;
   onRefresh: () => void;
   onExport: () => void;
   refreshing?: boolean;
@@ -55,8 +53,6 @@ export function BalanceDetailToolbar({
   onSortFieldChange,
   onSortDirToggle,
   onColumnsClick,
-  onFiltersClick,
-  filtersOpen,
   onRefresh,
   onExport,
   refreshing,
@@ -92,16 +88,6 @@ export function BalanceDetailToolbar({
       >
         <Columns3 className="h-3.5 w-3.5" />
         Колонки
-      </button>
-      <button
-        type="button"
-        onClick={onFiltersClick}
-        className={`flex h-8 items-center gap-1 rounded border px-2 text-[12px] hover:bg-[#f9fafb] ${
-          filtersOpen ? "border-[#1aa096] bg-[#e6f7f5] text-[#1aa096]" : "border-[#d0d5dd] bg-white text-[#555]"
-        }`}
-      >
-        <Filter className="h-3.5 w-3.5" />
-        Фильтры
       </button>
       <select
         value={perPage}
@@ -141,20 +127,20 @@ export function BalanceDetailToolbar({
         <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? "animate-spin-slow" : ""}`} />
         Обновить
       </button>
-      <div className="flex items-center gap-1">
-        <Calendar className="h-3.5 w-3.5 text-[#999]" />
-        <input
-          type="date"
-          value={dateFrom}
-          onChange={(e) => onDateFromChange(e.target.value)}
-          className="h-8 rounded border border-[#d0d5dd] px-2 text-[12px]"
+      <div className="flex min-w-[16rem] items-center gap-1">
+        <Calendar className="h-3.5 w-3.5 shrink-0 text-[#1aa096]" />
+        <DateTimePickerField
+          dateOnly
+          value={dateFrom ? `${dateFrom}T00:00` : ""}
+          onChange={(v) => onDateFromChange(v.slice(0, 10))}
+          className="h-8"
         />
         <span className="text-[#999]">—</span>
-        <input
-          type="date"
-          value={dateTo}
-          onChange={(e) => onDateToChange(e.target.value)}
-          className="h-8 rounded border border-[#d0d5dd] px-2 text-[12px]"
+        <DateTimePickerField
+          dateOnly
+          value={dateTo ? `${dateTo}T00:00` : ""}
+          onChange={(v) => onDateToChange(v.slice(0, 10))}
+          className="h-8"
         />
       </div>
       <label className="flex cursor-pointer items-center gap-1.5 text-[12px] text-[#555]">

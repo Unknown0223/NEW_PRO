@@ -14,7 +14,6 @@ import {
   type AllocationMode,
   type PaymentAllocationRow
 } from "./payment-allocations.service";
-
 import { buildDiscountSettlementNote } from "./payment.discount-note";
 import { notifyClientPayment, soon } from "../tg-app/tg-notify";
 
@@ -233,6 +232,13 @@ export async function createPayment(
     cashDeskId = input.cash_desk_id;
   }
 
+  let expeditorId: number | null = null;
+  if (!isDiscountSettlement && input.expeditor_user_id != null && input.expeditor_user_id > 0) {
+    const ex = await prisma.user.findFirst({ where: { id: input.expeditor_user_id, tenant_id: tenantId, is_active: true } });
+    if (!ex) throw new Error("BAD_EXPEDITOR");
+    expeditorId = ex.id;
+  }
+
   const amountDec = new Prisma.Decimal(input.amount);
   const uid =
     actorUserId != null && Number.isFinite(actorUserId) && actorUserId > 0 ? actorUserId : null;
@@ -308,6 +314,7 @@ export async function createPayment(
         confirmed_at: eventAt,
         entry_kind: isDiscountSettlement ? "discount_settlement" : "payment",
         ledger_agent_id: ledgerAgentId,
+        expeditor_user_id: expeditorId,
         number: requestedNumber
       }
     });

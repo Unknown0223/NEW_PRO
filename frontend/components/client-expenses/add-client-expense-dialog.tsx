@@ -66,6 +66,10 @@ type Props = {
   fixedClientLabel?: string;
   /** Boshlang‘ich agent (kartochkadan) */
   defaultLedgerAgentId?: number | null;
+  /** Vedoma: izoh bo‘sh bo‘lmasin */
+  requireNote?: boolean;
+  /** Tugma menyusidan tanlangan hisob */
+  initialPaymentType?: string;
 };
 
 export function AddClientExpenseDialog({
@@ -75,7 +79,9 @@ export function AddClientExpenseDialog({
   onCreated,
   fixedClientId,
   fixedClientLabel,
-  defaultLedgerAgentId
+  defaultLedgerAgentId,
+  requireNote = false,
+  initialPaymentType
 }: Props) {
   const hydrated = useAuthStoreHydrated();
   const qc = useQueryClient();
@@ -111,6 +117,10 @@ export function AddClientExpenseDialog({
       }
     }
   }, [open, clientFixed, fixedClientId, defaultLedgerAgentId]);
+
+  useEffect(() => {
+    if (open && initialPaymentType?.trim()) setPaymentType(initialPaymentType.trim());
+  }, [open, initialPaymentType]);
 
   const clientsQ = useQuery({
     queryKey: ["clients", tenantSlug, "add-client-expense"],
@@ -281,6 +291,7 @@ export function AddClientExpenseDialog({
       const amt = Number.parseFloat(raw);
       if (!Number.isFinite(amt) || amt <= 0) throw new Error("NO_AMOUNT");
       const pt = (paymentType || defaultPayType).trim();
+      if (requireNote && !note.trim()) throw new Error("Комментарий обязателен.");
       let noteJoined = note.trim() || null;
       if (tradeDirection.trim()) {
         const td = `Направление: ${tradeDirection.trim()}`;
@@ -348,7 +359,7 @@ export function AddClientExpenseDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        className="flex max-h-[min(92vh,40rem)] w-full max-w-md flex-col gap-0 overflow-hidden p-0 sm:max-w-md"
+        className="flex w-full max-w-[calc(100%-2rem)] flex-col gap-0 overflow-visible p-0 sm:max-w-3xl"
         showCloseButton
       >
         <DialogHeader className="shrink-0 space-y-1 border-b border-border px-5 pb-3 pt-4 pr-14 text-left">
@@ -358,8 +369,8 @@ export function AddClientExpenseDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
-          <div className="mx-auto flex w-full max-w-md flex-col gap-4">
+        <div className="px-5 py-4">
+          <div className="grid w-full grid-cols-1 gap-3 sm:grid-cols-2">
             {err ? (
               <p className="text-sm text-destructive" role="alert">
                 {err}
@@ -373,7 +384,7 @@ export function AddClientExpenseDialog({
 
             {clientFixed ? (
               <>
-                <div className="rounded-lg border border-border bg-muted/25 px-3 py-2.5 text-sm">
+                <div className="rounded-lg border border-border bg-muted/25 px-3 py-2.5 text-sm sm:col-span-2">
                   <span className="text-muted-foreground">Клиент: </span>
                   <span className="font-medium text-foreground">
                     {fixedClientLabel?.trim() || `ID ${fixedClientId}`}
@@ -592,14 +603,14 @@ export function AddClientExpenseDialog({
               ) : null}
             </div>
 
-            <div className="grid gap-2">
+            <div className="grid gap-2 sm:col-span-2">
               <Label htmlFor="ace-note" className="text-sm font-medium text-foreground">
                 Комментарий
               </Label>
               <textarea
                 id="ace-note"
-                rows={4}
-                className={cn(controlClass, "min-h-[5.5rem] resize-y py-2.5")}
+                rows={2}
+                className={cn(controlClass, "min-h-16 resize-none py-2")}
                 value={note}
                 onChange={(e) => setNote(e.target.value)}
                 maxLength={2000}
@@ -615,10 +626,10 @@ export function AddClientExpenseDialog({
           </div>
         </div>
 
-        <div className="shrink-0 border-t border-border bg-muted/20 px-5 py-4">
+        <div className="flex justify-end border-t border-border bg-muted/20 px-5 py-3">
           <Button
             type="button"
-            className="h-10 w-full bg-teal-600 text-sm font-medium text-white hover:bg-teal-700 dark:bg-teal-600 dark:hover:bg-teal-500"
+            className="h-10 min-w-36 bg-[#1aa096] text-sm font-medium text-white hover:bg-[#158a81]"
             disabled={submitMut.isPending}
             onClick={() => submitMut.mutate()}
           >

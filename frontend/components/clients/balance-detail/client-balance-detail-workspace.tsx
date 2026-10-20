@@ -3,7 +3,6 @@
 import { useClientProfileLedgerFiltersOptional } from "@/components/clients/client-profile-ledger-filters-context";
 import { BalanceDetailCards } from "@/components/clients/balance-detail/balance-detail-cards";
 import { BalanceDetailCustomerHeader } from "@/components/clients/balance-detail/balance-detail-customer-header";
-import { BalanceDetailFilterPanel } from "@/components/clients/balance-detail/balance-detail-filter-panel";
 import { BalanceDetailLedgerTable } from "@/components/clients/balance-detail/balance-detail-ledger-table";
 import {
   BalanceDetailColumnsModal,
@@ -13,11 +12,11 @@ import {
 } from "@/components/clients/balance-detail/balance-detail-modals";
 import { BalanceDetailPagination } from "@/components/clients/balance-detail/balance-detail-pagination";
 import { BalanceDetailReportFooter } from "@/components/clients/balance-detail/balance-detail-report-footer";
+import { ClientLedgerActions } from "@/components/clients/balance-detail/client-ledger-actions";
 import { BalanceDetailToolbar } from "@/components/clients/balance-detail/balance-detail-toolbar";
 import { api } from "@/lib/api";
 import { BALANCE_DETAIL_COLUMNS } from "@/lib/client-balance-detail/columns";
 import {
-  filterOptionsFromRows,
   ledgerTotalsFromRows,
   mapBalanceCards,
   mapCustomer,
@@ -44,10 +43,14 @@ type Props = {
   tenantSlug: string;
   clientId: number;
   embedded?: boolean;
+  canPay?: boolean;
+  canDebt?: boolean;
   canEditPayments?: boolean;
+  canDeletePayments?: boolean;
   onEditPayment?: (paymentId: number) => void;
-  onAddDebt?: () => void;
-  onAddPayment?: () => void;
+  onDeletePayment?: (paymentId: number) => void;
+  onAddDebt?: (paymentType: string) => void;
+  onAddPayment?: (paymentType: string) => void;
 };
 
 function localYmd(d: Date): string {
@@ -168,8 +171,12 @@ export function ClientBalanceDetailWorkspace({
   tenantSlug,
   clientId,
   embedded = false,
+  canPay,
+  canDebt,
   canEditPayments,
+  canDeletePayments,
   onEditPayment,
+  onDeletePayment,
   onAddDebt,
   onAddPayment
 }: Props) {
@@ -190,8 +197,7 @@ export function ClientBalanceDetailWorkspace({
     noAgent: false
   });
   const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
-  const [filters, setFilters] = useState<BalanceDetailFilters>(emptyBalanceDetailFilters);
-  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [filters] = useState<BalanceDetailFilters>(emptyBalanceDetailFilters);
   const [sortField, setSortField] = useState<BalanceDetailSortField>("createdAt");
   const [sortDir, setSortDir] = useState<BalanceDetailSortDir>("desc");
   const [showSystemOps, setShowSystemOps] = useState(true);
@@ -284,11 +290,6 @@ export function ClientBalanceDetailWorkspace({
   const balanceCards = useMemo(
     () => (data ? mapBalanceCards(data, embedded ? showGeneralBlock : true) : []),
     [data, showGeneralBlock, embedded]
-  );
-
-  const filterOpts = useMemo(
-    () => filterOptionsFromRows(data?.rows ?? []),
-    [data?.rows]
   );
 
   const displayRows = useMemo(() => {
@@ -437,24 +438,6 @@ export function ClientBalanceDetailWorkspace({
             Показать общий блок
           </label>
           <div className="flex flex-wrap items-center gap-2">
-            {canEditPayments ? (
-              <>
-                <button
-                  type="button"
-                  onClick={onAddDebt}
-                  className="h-8 rounded border border-red-200 px-3 text-xs font-medium text-red-700 hover:bg-red-50"
-                >
-                  Долг
-                </button>
-                <button
-                  type="button"
-                  onClick={onAddPayment}
-                  className="h-8 rounded border border-teal-200 px-3 text-xs font-medium text-teal-800 hover:bg-teal-50"
-                >
-                  Оплата
-                </button>
-              </>
-            ) : null}
             <button
               type="button"
               onClick={refreshAll}
@@ -471,6 +454,18 @@ export function ClientBalanceDetailWorkspace({
       ) : (
         <p className="text-xs text-gray-500">Нет активных заказов по агентам для карточек.</p>
       )}
+
+      <div className="mb-2">
+        <ClientLedgerActions
+          tenantSlug={tenantSlug}
+          clientId={clientId}
+          canDebt={canDebt}
+          canPay={canPay}
+          canHistory={canEditPayments || canDeletePayments || canPay}
+          onAddDebt={onAddDebt}
+          onAddPayment={onAddPayment}
+        />
+      </div>
 
       <div>
         <div className="flex">
@@ -516,8 +511,6 @@ export function ClientBalanceDetailWorkspace({
             onSortFieldChange={setSortField}
             onSortDirToggle={() => setSortDir((d) => (d === "desc" ? "asc" : "desc"))}
             onColumnsClick={() => setColumnsOpen(true)}
-            onFiltersClick={() => setFiltersOpen((o) => !o)}
-            filtersOpen={filtersOpen}
             onRefresh={refreshAll}
             onExport={() => setExportOpen(true)}
             refreshing={ledgerQ.isFetching}
@@ -525,17 +518,6 @@ export function ClientBalanceDetailWorkspace({
             canExport={displayRows.length > 0}
             showExport={hasAny("cash.balansy_klientov.export", "clients.klient.copy")}
           />
-
-          {filtersOpen ? (
-            <BalanceDetailFilterPanel
-              filters={filters}
-              onChange={setFilters}
-              agentOptions={filterOpts.agents}
-              expeditorOptions={filterOpts.expeditors}
-              cashboxOptions={filterOpts.cashboxes}
-              creatorOptions={filterOpts.creators}
-            />
-          ) : null}
 
           <BalanceDetailLedgerTable
             rows={displayRows}
@@ -547,6 +529,8 @@ export function ClientBalanceDetailWorkspace({
             onRowClick={setSelectedRow}
             loading={ledgerQ.isLoading}
             canEditPayment={canEditPayments}
+            canDeletePayment={canDeletePayments}
+            onDeletePayment={onDeletePayment}
             onEditPayment={onEditPayment}
           />
 
