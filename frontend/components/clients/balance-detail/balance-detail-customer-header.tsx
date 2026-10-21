@@ -1,26 +1,17 @@
 "use client";
 
-import { RefreshCw } from "lucide-react";
 import type { BalanceDetailCustomer } from "@/lib/client-balance-detail/types";
 
 type Props = {
   customer: BalanceDetailCustomer;
-  showOverallModal: boolean;
-  onToggleOverallModal: (v: boolean) => void;
-  onRefresh: () => void;
-  refreshing?: boolean;
   embedded?: boolean;
-  /** Во вкладке профиля — показать карточку «Общий» */
+  /** Показать карточку «Общий» */
   showGeneralBlock?: boolean;
   onToggleGeneralBlock?: (v: boolean) => void;
 };
 
 export function BalanceDetailCustomerHeader({
   customer,
-  showOverallModal,
-  onToggleOverallModal,
-  onRefresh,
-  refreshing,
   embedded,
   showGeneralBlock,
   onToggleGeneralBlock
@@ -48,21 +39,12 @@ export function BalanceDetailCustomerHeader({
         <label className="flex cursor-pointer select-none items-center gap-2 text-[13px] text-gray-600">
           <input
             type="checkbox"
-            checked={showOverallModal}
-            onChange={(e) => onToggleOverallModal(e.target.checked)}
+            checked={Boolean(showGeneralBlock)}
+            onChange={(e) => onToggleGeneralBlock?.(e.target.checked)}
             className="h-4 w-4 rounded border-gray-300 accent-[#1aa096]"
           />
           Показать общий блок
         </label>
-        <button
-          type="button"
-          onClick={onRefresh}
-          disabled={refreshing}
-          className="flex h-10 items-center gap-2 rounded-lg bg-[#1aa096] px-4 text-[13px] font-medium text-white shadow-sm transition hover:bg-[#158a81] active:scale-[0.98] disabled:opacity-70"
-        >
-          <RefreshCw size={14} className={refreshing ? "animate-spin-slow" : ""} />
-          Обновить данные
-        </button>
       </div>
     </div>
   );

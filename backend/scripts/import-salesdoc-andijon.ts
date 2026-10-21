@@ -7,19 +7,28 @@ import { loadSalesDoc } from "./lib/salesdoc-andijon-load";
 import { applyAndijonStaff } from "./lib/salesdoc-andijon-staff";
 import { applyAndijonDocs } from "./lib/salesdoc-andijon-docs";
 import { applyAndijonLive } from "./lib/salesdoc-andijon-live";
+import { applyClientDebtFile } from "./lib/salesdoc-client-debt";
+import { applySalesDocPriceCatalog } from "./lib/salesdoc-price-catalog";
 
 const DEFAULT_ROOT = "C:\\Users\\UNKNOWN_007\\Desktop\\salesdoc-andijon";
 
 async function main() {
   const root = process.argv[2] ?? DEFAULT_ROOT;
+  if (process.env.SALESDOC_PRICE_ONLY === "1") {
+    const only = loadSalesDoc(root);
+    console.log(JSON.stringify(await applySalesDocPriceCatalog(prisma, only.priceTypes)));
+    return;
+  }
   const tenant = await prisma.tenant.findUnique({ where: { id: 1 }, select: { id: true, slug: true } });
-  if (!tenant || tenant.slug !== "aksit") {
-    throw new Error("tenant id 1 aksit emas — to‘xtatildi");
+  if (!tenant || (tenant.slug !== "aksit" && tenant.slug !== "test1")) {
+    throw new Error("tenant id 1 aksit yoki test1 emas — to‘xtatildi");
   }
   const data = loadSalesDoc(root);
   const staff = await applyAndijonStaff(prisma, data);
   const docs = await applyAndijonDocs(prisma, data, staff);
   const live = await applyAndijonLive(prisma, data, staff);
+  const debts = await applyClientDebtFile(prisma, root);
+  const priceTypes = await applySalesDocPriceCatalog(prisma, data.priceTypes);
   const verify = await prisma.$queryRaw<
     { users: number; clients: number; orders: number; payments: number }[]
   >`
@@ -37,6 +46,8 @@ async function main() {
         staff: staff.stats,
         docs: docs.counts,
         live,
+        debts,
+        priceTypes,
         skipped: docs.skipped,
         emptyMonths: data.skippedEmptyMonths,
         verify: verify[0]

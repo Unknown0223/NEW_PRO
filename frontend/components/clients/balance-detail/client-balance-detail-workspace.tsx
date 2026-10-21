@@ -274,7 +274,9 @@ export function ClientBalanceDetailWorkspace({
       return;
     }
     if (next === "main") {
+      setSelectedCardId(null);
       setAgentFilter({ agentIds: [], noAgent: false });
+      setOverallModalOpen(true);
       return;
     }
     if (next === "null") {
@@ -288,7 +290,7 @@ export function ClientBalanceDetailWorkspace({
   const data = ledgerQ.data;
   const customer = useMemo(() => (data ? mapCustomer(data) : null), [data]);
   const balanceCards = useMemo(
-    () => (data ? mapBalanceCards(data, embedded ? showGeneralBlock : true) : []),
+    () => (data ? mapBalanceCards(data, showGeneralBlock) : []),
     [data, showGeneralBlock, embedded]
   );
 
@@ -416,10 +418,6 @@ export function ClientBalanceDetailWorkspace({
       {customer ? (
         <BalanceDetailCustomerHeader
           customer={customer}
-          showOverallModal={overallModalOpen}
-          onToggleOverallModal={setOverallModalOpen}
-          onRefresh={refreshAll}
-          refreshing={ledgerQ.isFetching}
           embedded={embedded}
           showGeneralBlock={showGeneralBlock}
           onToggleGeneralBlock={setShowGeneralBlock}
@@ -437,15 +435,6 @@ export function ClientBalanceDetailWorkspace({
             />
             Показать общий блок
           </label>
-          <div className="flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              onClick={refreshAll}
-              className="flex h-8 items-center gap-1.5 rounded-lg bg-[#1aa096] px-3 text-xs font-medium text-white hover:bg-[#158a81]"
-            >
-              Обновить
-            </button>
-          </div>
         </div>
       ) : null}
 
@@ -454,18 +443,6 @@ export function ClientBalanceDetailWorkspace({
       ) : (
         <p className="text-xs text-gray-500">Нет активных заказов по агентам для карточек.</p>
       )}
-
-      <div className="mb-2">
-        <ClientLedgerActions
-          tenantSlug={tenantSlug}
-          clientId={clientId}
-          canDebt={canDebt}
-          canPay={canPay}
-          canHistory={canEditPayments || canDeletePayments || canPay}
-          onAddDebt={onAddDebt}
-          onAddPayment={onAddPayment}
-        />
-      </div>
 
       <div>
         <div className="flex">
@@ -517,6 +494,17 @@ export function ClientBalanceDetailWorkspace({
             exportBusy={excelBusy}
             canExport={displayRows.length > 0}
             showExport={hasAny("cash.balansy_klientov.export", "clients.klient.copy")}
+            actions={
+              <ClientLedgerActions
+                tenantSlug={tenantSlug}
+                clientId={clientId}
+                canDebt={canDebt}
+                canPay={canPay}
+                canHistory={canEditPayments || canDeletePayments || canPay}
+                onAddDebt={onAddDebt}
+                onAddPayment={onAddPayment}
+              />
+            }
           />
 
           <BalanceDetailLedgerTable

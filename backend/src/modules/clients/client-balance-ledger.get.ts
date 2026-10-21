@@ -84,7 +84,10 @@ export async function getClientBalanceLedger(
   ranked AS (
     SELECT b.*,
       SUM(COALESCE(b.debt_amount,0) + COALESCE(b.payment_amount,0)) OVER (
-        ORDER BY b.sort_at ASC, b.order_id ASC NULLS LAST, b.payment_id ASC NULLS LAST
+        ORDER BY b.sort_at ASC,
+          CASE b.row_kind WHEN 'order' THEN 0 WHEN 'payment' THEN 1 ELSE 2 END,
+          b.order_id ASC NULLS LAST,
+          b.payment_id ASC NULLS LAST
         ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
       )::decimal(15,2) AS balance_after
     FROM base b

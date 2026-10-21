@@ -1,8 +1,5 @@
 import type { Prisma } from "@prisma/client";
-import {
-  isExternalClientCode,
-  parseExternalClientCodeSuffix
-} from "../../../shared/client-display-id";
+import { isExternalClientCode } from "../../../shared/client-display-id";
 import { isPgInt4Id } from "../../lib/pg-int4";
 
 /** Klientlar ro‘yxati: `search` query — jadvaldagi matn ustunlari + agent / ekspeditor */
@@ -13,12 +10,7 @@ export function buildClientListSearchOrClause(searchRaw: string): Prisma.ClientW
   const ins = "insensitive" as const;
 
   if (isExternalClientCode(search)) {
-    const suffixId = parseExternalClientCodeSuffix(search);
-    const parts: Prisma.ClientWhereInput[] = [
-      { client_code: { equals: search, mode: ins } }
-    ];
-    if (isPgInt4Id(suffixId)) parts.push({ id: suffixId });
-    return parts;
+    return [{ client_code: { equals: search, mode: ins } }];
   }
 
   const orClause: Prisma.ClientWhereInput[] = [

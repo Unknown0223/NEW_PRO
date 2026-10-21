@@ -200,6 +200,45 @@ function clientDisplayId(r: ClientBalanceRow): string {
   return formatClientDisplayId(r.client_id, r.client_code);
 }
 
+function agentLabel(r: ClientBalanceRow): string | null {
+  if (r.agent_tags.length) return r.agent_tags[0];
+  if (!r.agent_name) return null;
+  return r.agent_code ? `${r.agent_name} (${r.agent_code})` : r.agent_name;
+}
+
+/** Bir xil mijoz kodi bitta qator. Agentlar yig‘iladi, balans qo‘shiladi. */
+function uniqueClientRows(rows: ClientBalanceRow[]): ClientBalanceRow[] {
+  const map = new Map<string, ClientBalanceRow>();
+  for (const r of rows) {
+    const key = (r.client_code?.trim() || r.name.trim() || String(r.client_id)).toLowerCase();
+    const label = agentLabel(r);
+    const prev = map.get(key);
+    if (!prev) {
+      map.set(key, { ...r, agent_tags: label ? [label] : [] });
+      continue;
+    }
+    const tags = new Set(prev.agent_tags);
+    if (label) tags.add(label);
+    const balance = Number(prev.balance) + Number(r.balance);
+    map.set(key, {
+      ...prev,
+      agent_tags: [...tags],
+      balance: Number.isFinite(balance) ? String(balance) : prev.balance
+    });
+  }
+  return [...map.values()];
+}
+
+/** `j3_7629` faqat shu kod. Oxiridagi raqam boshqa mijozning ichki id si emas. */
+function rowsMatchingSearch(rows: ClientBalanceRow[], search: string): ClientBalanceRow[] {
+  const unique = uniqueClientRows(rows);
+  const q = search.trim();
+  if (/^[a-z0-9]{2}_\d+$/i.test(q)) {
+    return unique.filter((r) => (r.client_code ?? "").toLowerCase() === q.toLowerCase());
+  }
+  return unique;
+}
+
 /** Backend `label` va jadval sarlavhasi registr / bo‘shliq bo‘yicha farq qilmasin. */
 function normPayColumnLabel(s: string): string {
   return s
@@ -1443,7 +1482,11 @@ export function ClientBalancesWorkspace() {
                 sort={clientSort}
                 onSort={onClientSort}
                 loading={listQ.isLoading}
-                rows={listQ.data?.view === "clients" ? (listQ.data.data as ClientBalanceRow[]) : []}
+                rows={
+                  listQ.data?.view === "clients"
+                    ? rowsMatchingSearch(listQ.data.data as ClientBalanceRow[], search)
+                    : []
+                }
                 selected={selectedClients}
                 onToggle={toggleSelect}
                 onToggleAll={toggleSelectAllPage}
@@ -1468,7 +1511,7 @@ export function ClientBalancesWorkspace() {
                 loading={listQ.isLoading}
                 rows={
                   listQ.data?.view === "clients_delivery"
-                    ? (listQ.data.data as ClientBalanceRow[])
+                    ? rowsMatchingSearch(listQ.data.data as ClientBalanceRow[], search)
                     : []
                 }
                 selected={selectedClients}
@@ -1495,7 +1538,7 @@ export function ClientBalancesWorkspace() {
                 loading={listQ.isLoading}
                 rows={
                   listQ.data?.view === "clients_legacy"
-                    ? (listQ.data.data as ClientBalanceRow[])
+                    ? rowsMatchingSearch(listQ.data.data as ClientBalanceRow[], search)
                     : []
                 }
                 selected={selectedClients}
@@ -1937,19 +1980,32 @@ function ClientLikeTable({
           </td>
         );
       case "agent_name": {
-        const tags = r.agent_tags.length ? r.agent_tags : [r.agent_name ?? "—"];
+        const tags = r.agent_tags.length ? r.agent_tags : r.agent_name ? [r.agent_name] : [];
+        const first = tags[0] ?? "—";
+        const rest = tags.slice(1);
         return (
-          <td key={colId} className="max-w-[14rem] whitespace-nowrap px-3 py-3.5">
-            <div className="flex min-w-0 max-w-full flex-nowrap items-center gap-1 overflow-hidden">
-              {tags.map((t, i) => (
-                <span
-                  key={i}
-                  className="min-w-0 max-w-full truncate rounded-md bg-[#e6f4f2] px-2 py-1 text-[11.5px] font-medium uppercase text-[#0c7d6f]"
-                  title={String(t)}
-                >
-                  {String(t)}
+          <td key={colId} className="max-w-[16rem] whitespace-nowrap px-3 py-3.5">
+            <div className="flex min-w-0 items-center gap-1">
+              <span
+                className="min-w-0 truncate rounded-md bg-[#e6f4f2] px-2 py-1 text-[11.5px] font-medium uppercase text-[#0c7d6f]"
+                title={first}
+              >
+                {first}
+              </span>
+              {rest.length > 0 ? (
+                <span className="group relative shrink-0">
+                  <span className="cursor-default rounded-md bg-slate-100 px-1.5 py-1 text-[11px] font-medium text-slate-600">
+                    ещё {rest.length}
+                  </span>
+                  <span className="pointer-events-none absolute left-0 top-full z-30 mt-1 hidden min-w-[14rem] rounded-md border border-slate-200 bg-white p-2 shadow-lg group-hover:block">
+                    {rest.map((t) => (
+                      <span key={t} className="block truncate py-0.5 text-[12px] text-slate-700">
+                        {t}
+                      </span>
+                    ))}
+                  </span>
                 </span>
-              ))}
+              ) : null}
             </div>
           </td>
         );

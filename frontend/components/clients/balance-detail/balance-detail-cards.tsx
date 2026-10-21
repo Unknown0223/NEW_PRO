@@ -14,7 +14,12 @@ function CardRow({ label, value }: { label: string; value: number }) {
   return (
     <div className="flex items-center justify-between text-[12px] leading-6">
       <span className="text-gray-500">{label}:</span>
-      <span className={cn("font-medium tabular-nums", value < 0 ? "text-red-600" : "text-gray-700")}>
+      <span
+        className={cn(
+          "font-medium tabular-nums",
+          value < 0 ? "text-red-600" : value > 0 ? "text-emerald-600" : "text-gray-700"
+        )}
+      >
         {fmtUZS(value)}
       </span>
     </div>
@@ -75,7 +80,7 @@ export function BalanceDetailCards({ cards, selectedId, onSelect }: Props) {
               <div
                 className={cn(
                   "mt-1 pl-[26px] text-[20px] font-bold leading-7 tabular-nums",
-                  isNegative ? "text-red-600" : "text-gray-900"
+                  isNegative ? "text-red-600" : card.amount > 0 ? "text-emerald-600" : "text-gray-900"
                 )}
               >
                 {fmtMoney(card.amount)} сум

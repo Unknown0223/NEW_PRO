@@ -1,15 +1,22 @@
 "use client";
 
 import {
+  DateRangePopover,
+  formatDateRangeButton,
+  localYmd
+} from "@/components/ui/date-range-popover";
+import {
   ArrowDownUp,
-  Calendar,
+  CalendarDays,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   Columns3,
   FileSpreadsheet,
   RefreshCw,
   Search
 } from "lucide-react";
-import { DateTimePickerField } from "@/components/ui/datetime-popover";
+import { useRef, useState, type ReactNode } from "react";
 import type { BalanceDetailSortDir, BalanceDetailSortField } from "@/lib/client-balance-detail/types";
 
 type Props = {
@@ -35,6 +42,7 @@ type Props = {
   canExport?: boolean;
   /** Excel tugmasi ko'rinadimi (ruxsat). */
   showExport?: boolean;
+  actions?: ReactNode;
 };
 
 export function BalanceDetailToolbar({
@@ -58,8 +66,36 @@ export function BalanceDetailToolbar({
   refreshing,
   exportBusy,
   canExport,
-  showExport = true
+  showExport = true,
+  actions
 }: Props) {
+  const rangeAnchorRef = useRef<HTMLButtonElement>(null);
+  const [rangeOpen, setRangeOpen] = useState(false);
+  const rangeLabel =
+    dateFrom.trim() || dateTo.trim() ? formatDateRangeButton(dateFrom, dateTo) : "Дата";
+
+  const shiftRange = (deltaDays: number) => {
+    const parse = (s: string) => {
+      const t = s.trim();
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(t)) return null;
+      const [y, m, d] = t.split("-").map(Number);
+      const dt = new Date(y, m - 1, d);
+      return dt.getFullYear() === y && dt.getMonth() === m - 1 && dt.getDate() === d ? dt : null;
+    };
+    let a = parse(dateFrom);
+    let b = parse(dateTo);
+    if (!a || !b) {
+      const now = new Date();
+      a = new Date(now.getFullYear(), now.getMonth(), now.getDate() + deltaDays);
+      b = new Date(a);
+    } else {
+      a = new Date(a.getFullYear(), a.getMonth(), a.getDate() + deltaDays);
+      b = new Date(b.getFullYear(), b.getMonth(), b.getDate() + deltaDays);
+    }
+    onDateFromChange(localYmd(a));
+    onDateToChange(localYmd(b));
+  };
+
   return (
     <div className="flex flex-wrap items-center gap-2 border-b border-[#e5e7eb] bg-white px-3 py-2">
       <button
@@ -127,22 +163,44 @@ export function BalanceDetailToolbar({
         <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? "animate-spin-slow" : ""}`} />
         Обновить
       </button>
-      <div className="flex min-w-[16rem] items-center gap-1">
-        <Calendar className="h-3.5 w-3.5 shrink-0 text-[#1aa096]" />
-        <DateTimePickerField
-          dateOnly
-          value={dateFrom ? `${dateFrom}T00:00` : ""}
-          onChange={(v) => onDateFromChange(v.slice(0, 10))}
-          className="h-8"
-        />
-        <span className="text-[#999]">—</span>
-        <DateTimePickerField
-          dateOnly
-          value={dateTo ? `${dateTo}T00:00` : ""}
-          onChange={(v) => onDateToChange(v.slice(0, 10))}
-          className="h-8"
-        />
+      <div className="flex h-8 shrink-0 items-center overflow-hidden rounded border border-[#d0d5dd] bg-white">
+        <button
+          type="button"
+          className="grid h-8 w-7 place-items-center border-r border-[#d0d5dd] hover:bg-[#f9fafb]"
+          aria-label="Предыдущий день"
+          onClick={() => shiftRange(-1)}
+        >
+          <ChevronLeft className="h-3.5 w-3.5 text-[#667085]" />
+        </button>
+        <button
+          ref={rangeAnchorRef}
+          type="button"
+          className="flex h-8 min-w-[9.5rem] items-center justify-center gap-1.5 px-2 text-[12px] font-medium tabular-nums text-[#333] hover:bg-[#f9fafb]"
+          onClick={() => setRangeOpen((v) => !v)}
+        >
+          <CalendarDays className="h-3.5 w-3.5 shrink-0 text-[#0f6e68]" aria-hidden />
+          <span className="truncate">{rangeLabel}</span>
+        </button>
+        <button
+          type="button"
+          className="grid h-8 w-7 place-items-center border-l border-[#d0d5dd] hover:bg-[#f9fafb]"
+          aria-label="Следующий день"
+          onClick={() => shiftRange(1)}
+        >
+          <ChevronRight className="h-3.5 w-3.5 text-[#667085]" />
+        </button>
       </div>
+      <DateRangePopover
+        open={rangeOpen}
+        onOpenChange={setRangeOpen}
+        anchorRef={rangeAnchorRef}
+        dateFrom={dateFrom}
+        dateTo={dateTo}
+        onApply={(next) => {
+          onDateFromChange(next.dateFrom);
+          onDateToChange(next.dateTo);
+        }}
+      />
       <label className="flex cursor-pointer items-center gap-1.5 text-[12px] text-[#555]">
         <input
           type="checkbox"
@@ -153,6 +211,7 @@ export function BalanceDetailToolbar({
         Системные операции
       </label>
       <ChevronDown className="hidden h-3.5 w-3.5 text-[#999]" />
+      {actions ? <div className="ml-auto flex shrink-0 items-center">{actions}</div> : null}
     </div>
   );
 }

@@ -197,6 +197,7 @@ if (Want "1") {
 }
 
 if (Want "2") {
+  # Sahifa buyPrices va purchasePrices ni ham qaytaradi — bu «Тип цены» katalogi.
   $page = Get-PageJson "/directory/product" '))({"data":'
   Save-Json "02-tovar" "products.json" $page
 }
@@ -331,6 +332,18 @@ if (Want "6") {
   Save-Json "06-pul" "debt.json" @{
     note = "Joriy debitor yig'indisi, to'lov tarixi emas."
     data = $one
+  }
+  # Mijoz kartasidagi oylik saldo shu qarzdан chiqadi. Import client-debt.json ni o‘qiydi.
+  try {
+    $aging = Post-Sd "/report/clientDebt/getData" @{ dealer_id = "$DealerId"; date = @($From, $To) }
+    $agingRows = @($aging.data)
+    if ($aging.clients) { $agingRows = @($aging.clients) }
+    Save-Json "06-pul" "client-debt.json" @{
+      note = "Diler $DealerId. total_debt musbat qarz."
+      clients = $agingRows
+    }
+  } catch {
+    Write-Host "mijoz qarzi olinmadi: $($_.Exception.Message)"
   }
   Each-Month ([datetime]::Parse($From)) ([datetime]::Parse($To)) {
     param($s, $e)

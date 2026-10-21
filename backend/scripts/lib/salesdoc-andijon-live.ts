@@ -4,7 +4,7 @@
  * Order id 868 ga tegmaydi.
  */
 import { Prisma, type PrismaClient } from "@prisma/client";
-import { LIVE_CUTOFF, type loadSalesDoc } from "./salesdoc-andijon-load";
+import { LIVE_CUTOFF, sdLedgerDate, sdOrderNumber, sdPriceTypeName, type loadSalesDoc } from "./salesdoc-andijon-load";
 import { salesDocInstant } from "./salesdoc-andijon-docs";
 import type { applyAndijonStaff } from "./salesdoc-andijon-staff";
 
@@ -49,12 +49,16 @@ export async function applyAndijonLive(prisma: PrismaClient, data: Bundle, staff
 
   type Agg = {
     date: string;
+    dateLoad: string;
+    dateDeliver: string;
     clientId: string;
     agentId: string;
     storeId: string;
     expId: string;
     comment: string;
     sum: number;
+    priceTypeId: string;
+    priceAbs: number;
     lines: { productId: string; qty: number; sum: number }[];
   };
   const orders = new Map<string, Agg>();
@@ -64,17 +68,27 @@ export async function applyAndijonLive(prisma: PrismaClient, data: Bundle, staff
     if (!o) {
       o = {
         date: line.date,
+        dateLoad: "",
+        dateDeliver: "",
         clientId: line.clientId,
         agentId: line.agentId,
         storeId: line.storeId,
         expId: line.expId,
         comment: line.comment,
         sum: 0,
+        priceTypeId: "",
+        priceAbs: 0,
         lines: []
       };
       orders.set(line.orderId, o);
     }
     o.sum += line.sum;
+    if (!o.dateLoad && line.dateLoad) o.dateLoad = line.dateLoad;
+    if (!o.dateDeliver && line.dateDeliver) o.dateDeliver = line.dateDeliver;
+    if (line.priceTypeId && Math.abs(line.sum) >= o.priceAbs) {
+      o.priceTypeId = line.priceTypeId;
+      o.priceAbs = Math.abs(line.sum);
+    }
     o.lines.push({ productId: line.productId, qty: line.qty, sum: line.sum });
   }
   const products = await prisma.product.findMany({
@@ -86,7 +100,7 @@ export async function applyAndijonLive(prisma: PrismaClient, data: Bundle, staff
   const accepted = new Map<string, Agg>();
   for (const [sdId, o] of orders) {
     const cid = clientId.get(o.clientId);
-    if (!cid) {
+    if (!cid || o.sum === 0) {
       counts.skippedOrders += 1;
       continue;
     }
@@ -98,7 +112,7 @@ export async function applyAndijonLive(prisma: PrismaClient, data: Bundle, staff
     accepted.set(sdId, o);
     orderRows.push({
       tenant_id: TENANT,
-      number: sdId.slice(0, 64),
+      number: sdOrderNumber(sdId),
       client_id: cid,
       agent_id: o.agentId ? staff.userByKey.get(`AG-${o.agentId}`) ?? null : null,
       expeditor_user_id: o.expId ? staff.userByKey.get(`EX-${o.expId}`) ?? null : null,
@@ -107,8 +121,9 @@ export async function applyAndijonLive(prisma: PrismaClient, data: Bundle, staff
       status: "delivered",
       total_sum: Math.round(o.sum * 100) / 100,
       comment: o.comment || null,
-      created_at: salesDocInstant(o.date),
-      payment_method_ref: "001"
+      created_at: salesDocInstant(sdLedgerDate(o.date, o.dateLoad, o.dateDeliver)),
+      payment_method_ref: "pm-naxt",
+      price_type: o.priceTypeId ? sdPriceTypeName(o.priceTypeId) : null
     });
   }
   if (orderRows.length) {
@@ -161,7 +176,7 @@ export async function applyAndijonLive(prisma: PrismaClient, data: Bundle, staff
   `;
   const nativePayN = new Map<string, number>();
   for (const r of nativePays) nativePayN.set(keyOf(r.client_id, r.day, Number(r.total)), r.n);
-  const liveCash = data.cash.filter((c) => c.sum !== 0 && c.date.slice(0, 10) >= LIVE_CUTOFF && clientId.has(c.clientId));
+  const liveCash = data.cash.filter((c) => c.sum > 0 && c.date.slice(0, 10) >= LIVE_CUTOFF && clientId.has(c.clientId));
   const payRows: Prisma.PaymentCreateManyInput[] = [];
   for (const c of liveCash) {
     const cid = clientId.get(c.clientId)!;
@@ -174,7 +189,7 @@ export async function applyAndijonLive(prisma: PrismaClient, data: Bundle, staff
       tenant_id: TENANT,
       number: c.id.slice(0, 64),
       client_id: cid,
-      amount: Math.round(c.sum * 100) / 100,
+      amount: Math.round(Math.abs(c.sum) * 100) / 100,
       payment_type: c.kind === "Приход" ? "Наличные" : c.kind.slice(0, 64),
       cash_desk_id: staff.cashByBox.get(c.cashbox) ?? staff.cashMainId,
       created_by_user_id: c.userId ? staff.userByKey.get(`US-${c.userId}`) ?? null : null,

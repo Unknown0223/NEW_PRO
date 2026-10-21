@@ -4,8 +4,16 @@
  */
 import * as fs from "node:fs";
 import * as path from "node:path";
+import { rememberPriceTypes } from "./salesdoc-andijon-dates";
 
-export const LIVE_CUTOFF = "2026-08-30";
+export {
+  LIVE_CUTOFF,
+  rememberPriceTypes,
+  sdLedgerDate,
+  sdOrderNumber,
+  sdPriceTypeName,
+  type SdPriceType
+} from "./salesdoc-andijon-dates";
 
 export type SdProduct = { id: string; name: string; sku: string; categoryId: string; active: boolean };
 export type SdClient = {
@@ -38,6 +46,7 @@ export type SdOrderLine = {
   storeId: string;
   expId: string;
   comment: string;
+  priceTypeId: string;
 };
 export type SdCash = {
   id: string;
@@ -145,7 +154,13 @@ export function loadSalesDoc(root: string, dealerName = "Andijon") {
   const productsRaw = readJson(path.join(root, "02-tovar", "products.json")) as {
     data?: Array<Record<string, unknown>>;
     categories?: Array<{ text: string; value: string }>;
+    buyPrices?: Array<{ text?: string; value?: string }>;
+    purchasePrices?: Array<{ text?: string; value?: string }>;
   };
+  const priceTypes = [
+    ...rememberPriceTypes(productsRaw.buyPrices ?? [], "sale"),
+    ...rememberPriceTypes(productsRaw.purchasePrices ?? [], "purchase")
+  ];
   const products: SdProduct[] = (productsRaw.data ?? []).map((p) => ({
     id: String(p.id ?? ""),
     name: String(p.name ?? "").slice(0, 300),
@@ -214,7 +229,8 @@ export function loadSalesDoc(root: string, dealerName = "Andijon") {
         agentId: String(r[9] ?? ""),
         storeId: String(r[11] ?? ""),
         expId: String(r[15] ?? ""),
-        comment: String(r[16] ?? "").slice(0, 500)
+        comment: String(r[16] ?? "").slice(0, 500),
+        priceTypeId: String(r[10] ?? "")
       });
     }
   }
@@ -348,6 +364,7 @@ export function loadSalesDoc(root: string, dealerName = "Andijon") {
   return {
     products,
     categories,
+    priceTypes,
     clients,
     namedAgents,
     lines,

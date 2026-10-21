@@ -1,6 +1,5 @@
 import { Prisma } from "@prisma/client";
 import { ORDER_STATUSES_OUTSTANDING_RECEIVABLE } from "../orders/order-status";
-import { isPgInt4Id } from "../../lib/pg-int4";
 import {
   paymentTypesFromMethodEntries,
   resolveCurrencyEntries,
@@ -11,10 +10,7 @@ import {
 
 import type { ClientBalanceListQuery } from "./client-balances.types";
 import { parseIsoDateStartUtc, parseIsoDateEndUtc } from "./client-balances.date";
-import {
-  isExternalClientCode,
-  parseExternalClientCodeSuffix
-} from "../../../shared/client-display-id";
+import { isExternalClientCode } from "../../../shared/client-display-id";
 import {
   clientWhereForRegionFilter,
   clientWhereForZoneFilter,
@@ -29,12 +25,7 @@ export function buildClientBalanceSearchOrClause(searchRaw: string): Prisma.Clie
   const ins = "insensitive" as const;
 
   if (isExternalClientCode(search)) {
-    const suffixId = parseExternalClientCodeSuffix(search);
-    const parts: Prisma.ClientWhereInput[] = [
-      { client_code: { equals: search, mode: ins } }
-    ];
-    if (isPgInt4Id(suffixId)) parts.push({ id: suffixId });
-    return parts;
+    return [{ client_code: { equals: search, mode: ins } }];
   }
 
   const idDigits = search.replace(/\s+/g, "");

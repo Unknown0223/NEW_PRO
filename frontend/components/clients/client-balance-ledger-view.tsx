@@ -2,6 +2,7 @@
 
 import { AddClientExpenseDialog } from "@/components/client-expenses/add-client-expense-dialog";
 import { ClientLedgerPayDialog } from "@/components/clients/balance-detail/client-ledger-pay-dialog";
+import { DeletePaymentModal } from "@/components/payments/client-payments/delete-payment-modal";
 import { EditPaymentDialog } from "@/components/payments/edit-payment-dialog";
 import { PageShell } from "@/components/dashboard/page-shell";
 import { ClientBalanceDetailWorkspace } from "@/components/clients/balance-detail/client-balance-detail-workspace";
@@ -171,6 +172,7 @@ export function ClientBalanceLedgerView({ clientId, embedded = false, pageShellC
 
   const [debtorReportOpen, setDebtorReportOpen] = useState(false);
   const [editPaymentId, setEditPaymentId] = useState<number | null>(null);
+  const [deletePaymentId, setDeletePaymentId] = useState<number | null>(null);
   const [addDebtOpen, setAddDebtOpen] = useState(false);
   const [addPaymentOpen, setAddPaymentOpen] = useState(false);
   const [pickedPayType, setPickedPayType] = useState("");
@@ -233,12 +235,7 @@ export function ClientBalanceLedgerView({ clientId, embedded = false, pageShellC
         canEditPayments={canEditPayments}
         canDeletePayments={canDeletePayments}
         onEditPayment={setEditPaymentId}
-        onDeletePayment={(id) => {
-          if (!window.confirm("Удалить эту оплату?")) return;
-          void api.delete(`/api/${tenantSlug}/payments/${id}`).then(() => {
-            void queryClient.invalidateQueries({ queryKey: ["client-balance-ledger", tenantSlug, clientId] });
-          });
-        }}
+        onDeletePayment={setDeletePaymentId}
         onAddDebt={(paymentType) => {
           setPickedPayType(paymentType);
           setAddDebtOpen(true);
@@ -273,6 +270,16 @@ export function ClientBalanceLedgerView({ clientId, embedded = false, pageShellC
         initialPaymentType={pickedPayType}
         onCreated={() => {
           void queryClient.invalidateQueries({ queryKey: ["client-balance-ledger", tenantSlug, clientId] });
+        }}
+      />
+      <DeletePaymentModal
+        open={deletePaymentId != null}
+        onClose={() => setDeletePaymentId(null)}
+        tenantSlug={tenantSlug}
+        paymentId={deletePaymentId ?? undefined}
+        onConfirmed={() => {
+          void queryClient.invalidateQueries({ queryKey: ["client-balance-ledger", tenantSlug, clientId] });
+          void queryClient.invalidateQueries({ queryKey: ["client-deleted-payments", tenantSlug, clientId] });
         }}
       />
       <EditPaymentDialog

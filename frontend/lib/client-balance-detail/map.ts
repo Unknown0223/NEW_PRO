@@ -51,12 +51,20 @@ export function mapBalanceCards(
 ): BalanceDetailCard[] {
   const cards: BalanceDetailCard[] = [];
   if (showGeneral) {
+    const byType = new Map<string, number>();
+    for (const ac of data.agent_cards) {
+      for (const line of ac.payment_by_type) {
+        const label = line.label.trim() || "Naxt";
+        byType.set(label, (byType.get(label) ?? 0) + parseAmount(line.amount));
+      }
+    }
+    const typeLines = [...byType.entries()].map(([label, amount]) => ({ label, amount: String(amount) }));
     cards.push(
       cardFromPaymentTypes(
         "main",
         "Общий",
         parseAmount(data.ledger_net_balance ?? data.account_balance),
-        data.summary_payment_by_type,
+        typeLines.length ? typeLines : [{ label: "Naxt", amount: "0" }],
         null
       )
     );
@@ -74,7 +82,8 @@ export function mapLedgerRow(r: ClientLedgerRow, tab: "overall" | "detailed"): B
   const debtRaw = parseAmount(r.debt_amount);
   const payRaw = parseAmount(r.payment_amount);
   const debt = tab === "overall" ? (debtRaw !== 0 ? Math.abs(debtRaw) : 0) : debtRaw;
-  const payment = tab === "overall" ? (payRaw > 0 ? payRaw : 0) : payRaw;
+  // Manfiy to'lov ham «Оплата» da turadi. Oldin 0 qilinib, qator bo'sh chiqardi.
+  const payment = payRaw;
 
   return {
     key: `${r.row_kind}-${r.order_id ?? ""}-${r.payment_id ?? ""}-${r.sort_at}`,

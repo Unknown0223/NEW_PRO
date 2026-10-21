@@ -116,7 +116,13 @@ export function BalanceDetailLedgerTable({
         );
       case "payment":
         return row.payment !== 0 ? (
-          <span className={cn("whitespace-nowrap", tab === "overall" && "font-medium text-[#1aa096]")}>
+          <span
+            className={cn(
+              "whitespace-nowrap",
+              tab === "overall" && "font-medium",
+              row.payment < 0 ? "text-red-600" : "text-[#1aa096]"
+            )}
+          >
             {fmtMoney(row.payment)}
           </span>
         ) : (

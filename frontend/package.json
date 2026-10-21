@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "cross-env NEXT_IGNORE_INCORRECT_LOCKFILE=1 node scripts/next-dev-wasm.cjs dev --webpack -H 127.0.0.1 -p 3000",
+    "dev": "cross-env NEXT_IGNORE_INCORRECT_LOCKFILE=1 node scripts/next-dev-wasm.cjs dev -H 127.0.0.1 -p 3000",
     "dev:clean": "node clean-next.cjs && cross-env NEXT_IGNORE_INCORRECT_LOCKFILE=1 node scripts/next-dev-wasm.cjs dev --webpack -H 127.0.0.1 -p 3000",
     "clean": "node clean-next.cjs",
     "build": "node scripts/sync-pivot-engine.mjs && next build --webpack",

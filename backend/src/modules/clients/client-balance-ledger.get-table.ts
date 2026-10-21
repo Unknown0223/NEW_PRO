@@ -207,7 +207,11 @@ export async function fetchClientBalanceLedgerTable(
     )
     ${rankedCte}
     SELECT * FROM ${fromTable}
-    ORDER BY sort_at DESC
+    -- Bir kunda avval buyurtma, keyin to‘lov: kartada to‘lov tepada.
+    ORDER BY sort_at DESC,
+      CASE row_kind WHEN 'payment' THEN 0 WHEN 'order' THEN 1 ELSE 2 END,
+      payment_id DESC NULLS LAST,
+      order_id DESC NULLS LAST
     LIMIT ${limit} OFFSET ${offset}
   `;
 

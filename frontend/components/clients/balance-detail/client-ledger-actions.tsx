@@ -23,7 +23,10 @@ type DeletedRow = {
   number?: string | null;
   amount: string;
   paid_at?: string | null;
+  deleted_at?: string | null;
   note?: string | null;
+  delete_reason_ref?: string | null;
+  deleted_by_name?: string | null;
   payment_type?: string | null;
 };
 
@@ -50,7 +53,7 @@ function ActButton({
         type="button"
         onClick={onToggle}
         className={cn(
-          "inline-flex h-8 items-center gap-1.5 rounded-md px-2.5 text-[12px] font-semibold text-white shadow-sm",
+          "inline-flex h-7 items-center gap-1 rounded-md px-2 text-[11px] font-semibold text-white shadow-sm",
           className
         )}
       >
@@ -58,7 +61,7 @@ function ActButton({
         <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", open && "rotate-180")} />
       </button>
       {open ? (
-        <div className="absolute left-0 top-9 z-30 min-w-[11rem] overflow-hidden rounded-lg border border-[#e6eeec] bg-white py-1 shadow-lg">
+        <div className="absolute right-0 top-8 z-30 min-w-[11rem] overflow-hidden rounded-lg border border-[#e6eeec] bg-white py-1 shadow-lg">
           {methods.map((m) => (
             <button
               key={`${id}-${m.value}`}
@@ -109,7 +112,8 @@ export function ClientLedgerActions({
   const deletedQ = useQuery({
     queryKey: ["client-deleted-payments", tenantSlug, clientId],
     enabled: historyOpen && Boolean(tenantSlug),
-    staleTime: STALE.list,
+    staleTime: 0,
+    refetchOnMount: "always",
     queryFn: async () => {
       const { data } = await api.get<{ data: DeletedRow[] }>(
         `/api/${tenantSlug}/payments?client_id=${clientId}&payment_status=deleted&limit=50&page=1`
@@ -137,34 +141,6 @@ export function ClientLedgerActions({
         ) : null}
         {canPay ? (
           <ActButton
-            id="payout"
-            open={menu === "payout"}
-            label="Выплата клиенту"
-            className="bg-[#d32f2f] hover:bg-[#b71c1c]"
-            methods={methods}
-            onToggle={() => setMenu((m) => (m === "payout" ? null : "payout"))}
-            onPick={(t) => {
-              setMenu(null);
-              onAddPayment?.(t);
-            }}
-          />
-        ) : null}
-        {canDebt ? (
-          <ActButton
-            id="writeoff"
-            open={menu === "writeoff"}
-            label="Списание долга"
-            className="bg-[#fb8c00] hover:bg-[#ef6c00]"
-            methods={methods}
-            onToggle={() => setMenu((m) => (m === "writeoff" ? null : "writeoff"))}
-            onPick={(t) => {
-              setMenu(null);
-              onAddDebt?.(t);
-            }}
-          />
-        ) : null}
-        {canPay ? (
-          <ActButton
             id="pay"
             open={menu === "pay"}
             label="Оплата"
@@ -184,7 +160,7 @@ export function ClientLedgerActions({
               setMenu(null);
               setHistoryOpen(true);
             }}
-            className="inline-flex h-8 items-center rounded-md bg-[#00897b] px-2.5 text-[12px] font-semibold text-white shadow-sm hover:bg-[#00695c]"
+            className="inline-flex h-7 items-center rounded-md bg-[#00897b] px-2 text-[11px] font-semibold text-white shadow-sm hover:bg-[#00695c]"
           >
             История удалений
           </button>
@@ -197,25 +173,31 @@ export function ClientLedgerActions({
           </DialogHeader>
           {deletedQ.isLoading ? (
             <p className="text-sm text-muted-foreground">Загрузка…</p>
+          ) : deletedQ.isError ? (
+            <p className="text-sm text-red-600">Не удалось загрузить историю удалений.</p>
           ) : (deletedQ.data?.length ?? 0) === 0 ? (
             <p className="text-sm text-muted-foreground">Удалённых оплат нет.</p>
           ) : (
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b text-left text-xs text-muted-foreground">
-                  <th className="py-2">Дата</th>
-                  <th>Номер</th>
-                  <th className="text-right">Сумма</th>
-                  <th>Комментарий</th>
+                  <th className="py-2 pr-2">Удалена</th>
+                  <th className="pr-2">Номер</th>
+                  <th className="pr-2 text-right">Сумма</th>
+                  <th className="pr-2">Кто</th>
+                  <th>Причина</th>
                 </tr>
               </thead>
               <tbody>
                 {deletedQ.data!.map((r) => (
                   <tr key={r.id} className="border-b border-gray-100">
-                    <td className="py-1.5">{r.paid_at ? fmtDateTime(r.paid_at) : "—"}</td>
-                    <td>{r.number || r.id}</td>
-                    <td className="text-right tabular-nums">{fmtMoney(Number(r.amount))}</td>
-                    <td className="max-w-[16rem] truncate">{r.note || "—"}</td>
+                    <td className="py-1.5 pr-2 whitespace-nowrap">
+                      {r.deleted_at ? fmtDateTime(r.deleted_at) : r.paid_at ? fmtDateTime(r.paid_at) : "—"}
+                    </td>
+                    <td className="pr-2">{r.number || r.id}</td>
+                    <td className="pr-2 text-right tabular-nums">{fmtMoney(Number(r.amount))}</td>
+                    <td className="pr-2">{r.deleted_by_name || "—"}</td>
+                    <td className="max-w-[14rem] truncate">{r.delete_reason_ref || r.note || "—"}</td>
                   </tr>
                 ))}
               </tbody>

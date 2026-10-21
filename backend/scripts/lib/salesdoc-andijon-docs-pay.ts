@@ -49,7 +49,8 @@ export async function writeAndijonPaymentsReturns(
       continue;
     }
     const cid = clientId.get(c.clientId);
-    if (!cid || c.sum === 0) {
+    // Manfiy summa buyurtma qarzining kassa nusxasi. Kartaga «Расход» qilib yozilmaydi.
+    if (!cid || c.sum <= 0) {
       if (c.sum !== 0 && !cid) counts.paymentsSkippedNoClient += 1;
       continue;
     }
@@ -58,7 +59,7 @@ export async function writeAndijonPaymentsReturns(
       tenant_id: TENANT,
       number: c.id.slice(0, 64),
       client_id: cid,
-      amount: Math.round(c.sum * 100) / 100,
+      amount: Math.round(Math.abs(c.sum) * 100) / 100,
       payment_type: c.kind === "Приход" ? "Наличные" : c.kind.slice(0, 64),
       cash_desk_id: box,
       created_by_user_id: c.userId ? staff.userByKey.get(`US-${c.userId}`) ?? null : null,

@@ -169,7 +169,7 @@ model Order {
   client_photo_reports        ClientPhotoReport[]
   auto_confirm_schedules      OrderAutoConfirmSchedule[]
 
-  @@unique([tenant_id, number])
+  @@unique([tenant_id, warehouse_id, number])
   @@index([tenant_id, status])
   @@index([tenant_id, expeditor_user_id])
   /// Dashboard / monitoring: sana + `order_type` bo‘yicha tez filtr
@@ -281,7 +281,7 @@ model Payment {
   @@index([tenant_id, paid_at(sort: Desc)])
   @@index([expeditor_user_id])
   @@index([ledger_agent_id])
-  @@unique([tenant_id, number])
+  @@unique([tenant_id, cash_desk_id, number])
   @@index([tenant_id, number])
   edit_grants          PaymentEditGrant[]
   bank_transfer_inbox  BankTransferInbox[]
@@ -461,7 +461,7 @@ model SalesReturn {
   tenant             Tenant            @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
   warehouse          Warehouse         @relation(fields: [warehouse_id], references: [id])
 
-  @@unique([tenant_id, number])
+  @@unique([tenant_id, warehouse_id, number])
   @@index([tenant_id, created_at(sort: Desc)])
   @@index([tenant_id, order_id, status])
   @@map("sales_returns")

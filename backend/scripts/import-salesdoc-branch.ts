@@ -1,19 +1,24 @@
 /**
- * Namangan / Qoqon SalesDoc papkasini tenant aksit (id 1) ga yozadi.
- * Raqamlar prefiksli (f2-, f5-), Andijon qatorlari va order 868 ga tegmaydi.
+ * Namangan / Qoqon SalesDoc papkasini tenant 1 ga yozadi.
+ * SALESDOC_NO_PREFIX=1: id o‘zi qoladi (x0_3521 dan x olib tashlanmaydi).
+ * Manfiy kassa — buyurtma qarzi, to‘lov emas. Nol summali buyurtma yozilmaydi.
+ * Kartadagi sana: yetkazilgan kun. Bir xil to‘lov raqami ikkinchi marta tushmaydi.
  * npx tsx scripts/import-salesdoc-branch.ts <papka> <filial> <prefiks>
  */
 import crypto from "node:crypto";
 import bcrypt from "bcryptjs";
 import type { Prisma, PrismaClient } from "@prisma/client";
 import { prisma } from "../src/config/database";
-import { LIVE_CUTOFF, loadSalesDoc } from "./lib/salesdoc-andijon-load";
+import { LIVE_CUTOFF, loadSalesDoc, sdLedgerDate, sdOrderNumber, sdPriceTypeName } from "./lib/salesdoc-andijon-load";
+import { applyClientDebtFile } from "./lib/salesdoc-client-debt";
+import { applySalesDocPriceCatalog } from "./lib/salesdoc-price-catalog";
 import { salesDocInstant } from "./lib/salesdoc-andijon-docs";
 
 const TENANT = 1;
 
 function px(prefix: string, id: string): string {
   if (!id || id === "0") return id;
+  if (process.env.SALESDOC_NO_PREFIX === "1") return id;
   return id.startsWith(prefix) ? id : `${prefix}${id}`;
 }
 
@@ -23,7 +28,7 @@ async function main() {
   const prefix = process.argv[4];
   if (!root || !branch || !prefix) throw new Error("papka, filial, prefiks kerak");
   const tenant = await prisma.tenant.findUnique({ where: { id: TENANT }, select: { slug: true } });
-  if (tenant?.slug !== "aksit") throw new Error("tenant 1 aksit emas");
+  if (tenant?.slug !== "aksit" && tenant?.slug !== "test1") throw new Error("tenant 1 aksit yoki test1 emas");
   const data = loadSalesDoc(root, branch);
   for (const c of data.clients) c.id = px(prefix, c.id);
   for (const line of data.lines) {
@@ -39,14 +44,14 @@ async function main() {
   }
   for (const r of data.returns) r.orderId = px(prefix, r.orderId);
 
-  const whCode = `${prefix}WH`.slice(0, 40);
+  const whCode = (process.env.SALESDOC_NO_PREFIX === "1" ? branch : `${prefix}WH`).slice(0, 40);
   let wh = await prisma.warehouse.findFirst({ where: { tenant_id: TENANT, code: whCode } });
   if (!wh) {
     wh = await prisma.warehouse.create({
       data: { tenant_id: TENANT, code: whCode, name: branch, type: "store" }
     });
   }
-  const deskCode = `${prefix}K`.slice(0, 20);
+  const deskCode = (process.env.SALESDOC_NO_PREFIX === "1" ? branch : `${prefix}K`).slice(0, 20);
   let desk = await prisma.cashDesk.findFirst({ where: { tenant_id: TENANT, code: deskCode } });
   if (!desk) {
     desk = await prisma.cashDesk.create({
@@ -115,10 +120,15 @@ async function main() {
     knownClients.add(id);
   }
 
+  const sameWarehouse = process.env.SALESDOC_NO_PREFIX === "1";
   const existingCodes = new Set(
     (
       await prisma.client.findMany({
-        where: { tenant_id: TENANT, client_code: { in: data.clients.map((c) => c.id.slice(0, 32)) } },
+        where: {
+          tenant_id: TENANT,
+          ...(sameWarehouse ? { warehouse_id: wh.id } : {}),
+          client_code: { in: data.clients.map((c) => c.id.slice(0, 32)) }
+        },
         select: { client_code: true }
       })
     ).map((c) => c.client_code)
@@ -144,7 +154,11 @@ async function main() {
     ).count;
   }
   const clientRows = await prisma.client.findMany({
-    where: { tenant_id: TENANT, client_code: { in: data.clients.map((c) => c.id.slice(0, 32)) } },
+    where: {
+      tenant_id: TENANT,
+      ...(sameWarehouse ? { warehouse_id: wh.id } : {}),
+      client_code: { in: data.clients.map((c) => c.id.slice(0, 32)) }
+    },
     select: { id: true, client_code: true }
   });
   const clientId = new Map(clientRows.map((c) => [c.client_code as string, c.id]));
@@ -154,25 +168,53 @@ async function main() {
   });
   const productBySd = new Map(products.map((p) => [p.sell_code as string, p.id]));
 
-  type Agg = { date: string; clientId: string; agentId: string; comment: string; sum: number; lines: { productId: string; qty: number; sum: number }[] };
+  type Agg = {
+    date: string;
+    dateLoad: string;
+    dateDeliver: string;
+    clientId: string;
+    agentId: string;
+    comment: string;
+    sum: number;
+    priceTypeId: string;
+    priceAbs: number;
+    lines: { productId: string; qty: number; sum: number }[];
+  };
   const orders = new Map<string, Agg>();
   for (const line of data.lines) {
     if (!line.date || line.date >= LIVE_CUTOFF || !line.orderId) continue;
     let o = orders.get(line.orderId);
     if (!o) {
-      o = { date: line.date, clientId: line.clientId, agentId: line.agentId, comment: line.comment, sum: 0, lines: [] };
+      o = {
+        date: line.date,
+        dateLoad: "",
+        dateDeliver: "",
+        clientId: line.clientId,
+        agentId: line.agentId,
+        comment: line.comment,
+        sum: 0,
+        priceTypeId: "",
+        priceAbs: 0,
+        lines: []
+      };
       orders.set(line.orderId, o);
     }
     o.sum += line.sum;
+    if (!o.dateLoad && line.dateLoad) o.dateLoad = line.dateLoad;
+    if (!o.dateDeliver && line.dateDeliver) o.dateDeliver = line.dateDeliver;
+    if (line.priceTypeId && Math.abs(line.sum) >= o.priceAbs) {
+      o.priceTypeId = line.priceTypeId;
+      o.priceAbs = Math.abs(line.sum);
+    }
     o.lines.push({ productId: line.productId, qty: line.qty, sum: line.sum });
   }
   const orderRows: Prisma.OrderCreateManyInput[] = [];
   for (const [sdId, o] of orders) {
     const cid = clientId.get(o.clientId.slice(0, 32));
-    if (!cid) continue;
+    if (!cid || o.sum === 0) continue;
     orderRows.push({
       tenant_id: TENANT,
-      number: sdId.slice(0, 64),
+      number: sdOrderNumber(sdId),
       client_id: cid,
       agent_id: userBy.get(o.agentId) ?? null,
       warehouse_id: wh.id,
@@ -180,8 +222,9 @@ async function main() {
       status: "delivered",
       total_sum: Math.round(o.sum * 100) / 100,
       comment: o.comment || null,
-      created_at: salesDocInstant(o.date),
-      payment_method_ref: "001"
+      created_at: salesDocInstant(sdLedgerDate(o.date, o.dateLoad, o.dateDeliver)),
+      payment_method_ref: "pm-naxt",
+      price_type: o.priceTypeId ? sdPriceTypeName(o.priceTypeId) : null
     });
   }
   let ordersInserted = 0;
@@ -189,10 +232,18 @@ async function main() {
     ordersInserted += (await prisma.order.createMany({ data: orderRows.slice(i, i + 300), skipDuplicates: true })).count;
   }
   const saved = await prisma.order.findMany({
-    where: { tenant_id: TENANT, number: { in: [...orders.keys()] }, id: { not: 868 } },
+    where: {
+      tenant_id: TENANT,
+      warehouse_id: wh.id,
+      number: { in: [...orders.keys()].map((id) => sdOrderNumber(id)) }
+    },
     select: { id: true, number: true }
   });
   const orderPk = new Map(saved.map((o) => [o.number, o.id]));
+  for (const sdId of orders.keys()) {
+    const id = orderPk.get(sdOrderNumber(sdId));
+    if (id) orderPk.set(sdId, id);
+  }
   const haveItems = new Set(
     (await prisma.orderItem.findMany({
       where: { order_id: { in: saved.map((o) => o.id) } },
@@ -200,6 +251,29 @@ async function main() {
       select: { order_id: true }
     })).map((r) => r.order_id)
   );
+  const missingProducts = new Set<string>();
+  for (const o of orders.values()) {
+    for (const line of o.lines) {
+      if (line.productId && !productBySd.has(line.productId)) missingProducts.add(line.productId);
+    }
+  }
+  if (missingProducts.size) {
+    await prisma.product.createMany({
+      data: [...missingProducts].map((code) => ({
+        tenant_id: TENANT,
+        sku: code.slice(0, 64),
+        name: code.slice(0, 300),
+        sell_code: code.slice(0, 64),
+        is_active: true
+      })),
+      skipDuplicates: true
+    });
+    const added = await prisma.product.findMany({
+      where: { tenant_id: TENANT, sell_code: { in: [...missingProducts] } },
+      select: { id: true, sell_code: true }
+    });
+    for (const p of added) if (p.sell_code) productBySd.set(p.sell_code, p.id);
+  }
   const items: Prisma.OrderItemCreateManyInput[] = [];
   for (const [sdId, o] of orders) {
     const oid = orderPk.get(sdId);
@@ -236,13 +310,14 @@ async function main() {
       continue;
     }
     const cid = clientId.get(c.clientId.slice(0, 32));
-    if (!cid || !c.sum) {
-      if (c.sum && !cid) paymentsSkippedNoClient += 1;
+    if (!cid || c.sum <= 0) {
+      if (c.sum > 0 && !cid) paymentsSkippedNoClient += 1;
       continue;
     }
-    const rawPay = c.id.startsWith(prefix) ? c.id.slice(prefix.length) : c.id;
-    let payNumber = rawPay.slice(0, 64);
-    if (usedNumbers.has(payNumber)) payNumber = c.id.slice(0, 64);
+    const rawPay =
+      process.env.SALESDOC_NO_PREFIX === "1" || !c.id.startsWith(prefix) ? c.id : c.id.slice(prefix.length);
+    const payNumber = rawPay.slice(0, 64);
+    if (usedNumbers.has(payNumber)) continue;
     usedNumbers.add(payNumber);
     pays.push({
       tenant_id: TENANT,
@@ -262,6 +337,8 @@ async function main() {
   for (let i = 0; i < pays.length; i += 400) {
     payments += (await prisma.payment.createMany({ data: pays.slice(i, i + 400), skipDuplicates: true })).count;
   }
+  const debts = await applyClientDebtFile(prisma, root, wh.id);
+  const priceTypes = await applySalesDocPriceCatalog(prisma, data.priceTypes);
   console.log(JSON.stringify({
     branch,
     prefix,
@@ -272,6 +349,8 @@ async function main() {
     payments,
     paymentsSkippedLive,
     paymentsSkippedNoClient,
+    debts,
+    priceTypes,
     emptyMonths: data.skippedEmptyMonths,
     cutoff: LIVE_CUTOFF,
     note: "2026-08-30 dan keyin yozilmadi. Soat/izoh bu dilerda yo‘q. Foto yo‘q."

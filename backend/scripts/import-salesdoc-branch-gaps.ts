@@ -5,14 +5,15 @@
  */
 import type { Prisma } from "@prisma/client";
 import { prisma } from "../src/config/database";
-import { LIVE_CUTOFF, loadSalesDoc } from "./lib/salesdoc-andijon-load";
+import { LIVE_CUTOFF, loadSalesDoc, sdOrderNumber } from "./lib/salesdoc-andijon-load";
 import { writeAndijonDeliveryLogs } from "./lib/salesdoc-andijon-delivery-logs";
 
 const TENANT = 1;
 
-function px(prefix: string, id: string): string {
+/** Asosiy importdagi buyurtma raqami: d0_1797 → 1797. Prefiks qo‘shilmaydi. */
+function orderNumber(id: string): string {
   if (!id || id === "0") return id;
-  return id.startsWith(prefix) ? id : `${prefix}${id}`;
+  return sdOrderNumber(id);
 }
 
 function ymd(value: string): string {
@@ -29,7 +30,7 @@ async function main() {
     throw new Error("papka, filial, prefiks, dilerId kerak");
   }
   const tenant = await prisma.tenant.findUnique({ where: { id: TENANT }, select: { slug: true } });
-  if (tenant?.slug !== "aksit") throw new Error("tenant 1 aksit emas");
+  if (tenant?.slug !== "aksit" && tenant?.slug !== "test1") throw new Error("tenant 1 aksit yoki test1 emas");
 
   const data = loadSalesDoc(root, branch);
   const products = await prisma.product.findMany({
@@ -47,7 +48,7 @@ async function main() {
       linesSkippedCutoff += 1;
       continue;
     }
-    const number = px(prefix, line.orderId);
+    const number = orderNumber(line.orderId);
     let o = orders.get(number);
     if (!o) {
       o = { date, dateLoad: "", dateDeliver: "" };
@@ -83,7 +84,7 @@ async function main() {
       returnsSkippedOtherDealer += 1;
       continue;
     }
-    const number = px(prefix, r.orderId);
+    const number = orderNumber(r.orderId);
     if (!orderPk.has(number)) {
       returnsSkippedNoOrder += 1;
       continue;

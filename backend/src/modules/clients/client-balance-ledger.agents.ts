@@ -1,12 +1,6 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "../../config/database";
-import {
-  paymentTypesFromMethodEntries,
-  resolveCurrencyEntries,
-  resolvePaymentMethodEntries,
-  resolvePaymentMethodRefToLabel,
-  type PaymentMethodEntryDto
-} from "../tenant-settings/finance-refs";
+import { type PaymentMethodEntryDto } from "../tenant-settings/finance-refs";
 import {
   loadDeliveryDebtByClient,
   mergeLedgerWithUnpaidDelivered
@@ -15,13 +9,12 @@ import { ORDER_STATUSES_OUTSTANDING_RECEIVABLE } from "../orders/order-status";
 import { PAYMENT_COUNTS_FOR_RECEIVABLE_NET } from "../client-balances/client-balances.constants";
 
 import type { AgentBalanceCard } from "./client-balance-ledger.types";
-import { normPayTypeKey, paymentAmountsForSpravochnik } from "./client-balance-ledger.helpers";
 
 export async function buildLedgerAgentCards(
   tenantId: number,
   clientId: number,
-  sprLabels: string[],
-  paymentMethodEntries: PaymentMethodEntryDto[]
+  _sprLabels: string[],
+  _paymentMethodEntries: PaymentMethodEntryDto[]
 ): Promise<{ agent_cards: AgentBalanceCard[] }> {
   const receivableStatuses = [...ORDER_STATUSES_OUTSTANDING_RECEIVABLE];
 
@@ -49,43 +42,6 @@ export async function buildLedgerAgentCards(
     GROUP BY o.agent_id, ag.name, ag.code
     ORDER BY ag.name ASC NULLS LAST
   `;
-
-  /**
-   * Kartochkalar «Способ оплаты» bo‘linmasi jadvaldagi to‘lov qatori bilan bir xil agentga bog‘lanadi:
-   * COALESCE(zakaz.agent_id, mijoz.agent_id) — payment_allocations emas (aks holda jadval bilan ziddiyat).
-   */
-  const payNetByLedgerAgent = await prisma.$queryRaw<
-    Array<{ agent_id: number | null; payment_type: string; net: Prisma.Decimal }>
-  >`
-    SELECT COALESCE(p.ledger_agent_id, ord.agent_id, c.agent_id) AS agent_id,
-      p.payment_type,
-      SUM(CASE WHEN p.entry_kind IN ('payment', 'refund') THEN p.amount
-               WHEN p.entry_kind = 'client_expense' THEN -p.amount
-               ELSE 0 END)::decimal(15,2) AS net
-    FROM client_payments p
-    JOIN clients c ON c.id = p.client_id AND c.tenant_id = ${tenantId}
-    LEFT JOIN orders ord ON ord.id = p.order_id AND ord.tenant_id = ${tenantId}
-    WHERE p.tenant_id = ${tenantId}
-      AND p.client_id = ${clientId}
-      AND p.deleted_at IS NULL
-      ${PAYMENT_COUNTS_FOR_RECEIVABLE_NET}
-    GROUP BY COALESCE(p.ledger_agent_id, ord.agent_id, c.agent_id), p.payment_type
-  `;
-
-  const agentPayMap = new Map<number | null, Map<string, Prisma.Decimal>>();
-  for (const r of payNetByLedgerAgent) {
-    const aid = r.agent_id ?? null;
-    let inner = agentPayMap.get(aid);
-    if (!inner) {
-      inner = new Map();
-      agentPayMap.set(aid, inner);
-    }
-    const resolved =
-      resolvePaymentMethodRefToLabel(r.payment_type, paymentMethodEntries) ?? (r.payment_type ?? "").trim();
-    const nk = normPayTypeKey(resolved);
-    const cur = inner.get(nk) ?? new Prisma.Decimal(0);
-    inner.set(nk, cur.add(r.net));
-  }
 
   /** Все агенты, которые встречаются в ведомости (заказы + платежи), чтобы карточки совпадали с таблицей. */
   const ledgerAgentKeys = await prisma.$queryRaw<
@@ -121,19 +77,46 @@ export async function buildLedgerAgentCards(
     GROUP BY agent_id
   `;
 
-  const cardByAgentKey = new Map<string, AgentBalanceCard>();
-
   const agentKey = (id: number | null) => (id == null ? "null" : String(id));
 
+  const debtByPriceType = await prisma.$queryRaw<
+    Array<{ agent_id: number | null; price_type: string; debt: Prisma.Decimal }>
+  >`
+    SELECT o.agent_id,
+      CASE
+        WHEN NULLIF(TRIM(o.price_type), '') IS NULL THEN 'Naxt'
+        WHEN TRIM(o.price_type) ~* '^d0_' THEN 'Naxt'
+        ELSE TRIM(o.price_type)
+      END AS price_type,
+      SUM(o.total_sum)::decimal(15,2) AS debt
+    FROM orders o
+    WHERE o.tenant_id = ${tenantId}
+      AND o.client_id = ${clientId}
+      AND o.status IN (${Prisma.join(receivableStatuses)})
+      AND o.order_type = 'order'
+      AND o.total_sum <> 0
+    GROUP BY o.agent_id, 2
+  `;
+  const priceTypeByAgent = new Map<string, { label: string; amount: string }[]>();
+  for (const row of debtByPriceType) {
+    const k = agentKey(row.agent_id);
+    const list = priceTypeByAgent.get(k) ?? [];
+    list.push({ label: row.price_type, amount: new Prisma.Decimal(row.debt).neg().toString() });
+    priceTypeByAgent.set(k, list);
+  }
+
+  const cardByAgentKey = new Map<string, AgentBalanceCard>();
+
+  const priceLines = (id: number | null) =>
+    priceTypeByAgent.get(agentKey(id)) ?? [{ label: "Naxt", amount: "0" }];
+
   for (const row of remainingByAgent) {
-    const aid = row.agent_id ?? null;
-    const netForAgent = agentPayMap.get(aid) ?? new Map();
     cardByAgentKey.set(agentKey(row.agent_id), {
       agent_id: row.agent_id,
       agent_name: row.agent_name?.trim() || "Без агента",
       agent_code: row.agent_code ?? null,
       remaining_on_orders: row.remaining.toString(),
-      payment_by_type: paymentAmountsForSpravochnik(sprLabels, netForAgent),
+      payment_by_type: priceLines(row.agent_id),
       ledger_general_debt_total: "0",
       ledger_general_payment_total: "0"
     });
@@ -142,14 +125,12 @@ export async function buildLedgerAgentCards(
   for (const row of ledgerAgentKeys) {
     const k = agentKey(row.agent_id);
     if (cardByAgentKey.has(k)) continue;
-    const aid = row.agent_id ?? null;
-    const netForAgent = agentPayMap.get(aid) ?? new Map();
     cardByAgentKey.set(k, {
       agent_id: row.agent_id,
       agent_name: row.agent_name?.trim() || "Без агента",
       agent_code: row.agent_code ?? null,
       remaining_on_orders: "0",
-      payment_by_type: paymentAmountsForSpravochnik(sprLabels, netForAgent),
+      payment_by_type: priceLines(row.agent_id),
       ledger_general_debt_total: "0",
       ledger_general_payment_total: "0"
     });

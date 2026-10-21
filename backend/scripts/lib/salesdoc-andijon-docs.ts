@@ -3,7 +3,7 @@
  * 2026-08-30 dan keyingi hujjatlar tashlanadi: aksitda jonli zakaz/to‘lov bor.
  */
 import type { Prisma, PrismaClient } from "@prisma/client";
-import { LIVE_CUTOFF, type loadSalesDoc } from "./salesdoc-andijon-load";
+import { LIVE_CUTOFF, sdLedgerDate, sdOrderNumber, sdPriceTypeName, type loadSalesDoc } from "./salesdoc-andijon-load";
 import { writeAndijonDeliveryLogs } from "./salesdoc-andijon-delivery-logs";
 import { writeAndijonPaymentsReturns } from "./salesdoc-andijon-docs-pay";
 import type { applyAndijonStaff } from "./salesdoc-andijon-staff";
@@ -165,6 +165,8 @@ export async function applyAndijonDocs(prisma: PrismaClient, data: Bundle, staff
     expId: string;
     comment: string;
     sum: number;
+    priceTypeId: string;
+    priceAbs: number;
     lines: { productId: string; qty: number; sum: number }[];
   };
   const orders = new Map<string, Agg>();
@@ -185,11 +187,17 @@ export async function applyAndijonDocs(prisma: PrismaClient, data: Bundle, staff
         expId: line.expId,
         comment: line.comment,
         sum: 0,
+        priceTypeId: "",
+        priceAbs: 0,
         lines: []
       };
       orders.set(line.orderId, o);
     }
     o.sum += line.sum;
+    if (line.priceTypeId && Math.abs(line.sum) >= o.priceAbs) {
+      o.priceTypeId = line.priceTypeId;
+      o.priceAbs = Math.abs(line.sum);
+    }
     if (!o.dateLoad && line.dateLoad && line.dateLoad < LIVE_CUTOFF) o.dateLoad = line.dateLoad;
     if (!o.dateDeliver && line.dateDeliver && line.dateDeliver < LIVE_CUTOFF) o.dateDeliver = line.dateDeliver;
     o.lines.push({ productId: line.productId, qty: line.qty, sum: line.sum });
@@ -198,10 +206,10 @@ export async function applyAndijonDocs(prisma: PrismaClient, data: Bundle, staff
   const orderRows: Prisma.OrderCreateManyInput[] = [];
   for (const [sdId, o] of orders) {
     const cid = clientId.get(o.clientId);
-    if (!cid) continue;
+    if (!cid || o.sum === 0) continue;
     orderRows.push({
       tenant_id: TENANT,
-      number: sdId.slice(0, 64),
+      number: sdOrderNumber(sdId),
       client_id: cid,
       agent_id: o.agentId ? staff.userByKey.get(`AG-${o.agentId}`) ?? null : null,
       expeditor_user_id: o.expId ? staff.userByKey.get(`EX-${o.expId}`) ?? null : null,
@@ -210,8 +218,9 @@ export async function applyAndijonDocs(prisma: PrismaClient, data: Bundle, staff
       status: "delivered",
       total_sum: Math.round(o.sum * 100) / 100,
       comment: o.comment || null,
-      created_at: salesDocInstant(o.date),
-      payment_method_ref: "001"
+      created_at: salesDocInstant(sdLedgerDate(o.date, o.dateLoad, o.dateDeliver)),
+      payment_method_ref: "pm-naxt",
+      price_type: o.priceTypeId ? sdPriceTypeName(o.priceTypeId) : null
     });
   }
   for (let i = 0; i < orderRows.length; i += 300) {
@@ -224,6 +233,10 @@ export async function applyAndijonDocs(prisma: PrismaClient, data: Bundle, staff
     select: { id: true, number: true }
   });
   const orderPk = new Map(orderDb.map((o) => [o.number, o.id]));
+  for (const sdId of orders.keys()) {
+    const id = orderPk.get(sdOrderNumber(sdId));
+    if (id) orderPk.set(sdId, id);
+  }
   counts.deliveryLogs = await writeAndijonDeliveryLogs(prisma, orders, orderPk);
   const withItems = new Set(
     (
