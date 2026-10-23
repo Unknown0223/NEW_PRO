@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { useAppConfirm } from "@/components/ui/app-confirm-dialog";
 import { buttonVariants } from "@/components/ui/button-variants";
 import { cn } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -22,14 +23,28 @@ import type { SlotHistoryItem, WorkSlotListItem } from "@/lib/work-slots-types";
 import { AssignUserDialog } from "./assign-user-dialog";
 import { EditSlotDialog } from "./edit-slot-dialog";
 import { SlotWorkplaceConfigDialog } from "./slot-workplace-config-dialog";
-import { formatSlotDate, slotTypeLabel } from "./work-slots-utils";
+import { formatSlotDate, formatSlotBranches, slotTypeLabel, type SlotWorkplaceConfigTabId } from "./work-slots-utils";
 import { SlotBadge } from "./slot-badge";
+import { StaffFaceAvatar } from "@/components/staff/staff-face-avatar";
+
+const CONFIG_SECTIONS = new Set<string>([
+  "main",
+  "prices",
+  "limits",
+  "mobile",
+  "skladchik",
+  "expeditor",
+  "team"
+]);
 
 export function WorkSlotDetail({ slotId }: { slotId: number }) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { tenant, ready, hydrated } = useTenantReady();
+  const { confirm, dialog: confirmDialog } = useAppConfirm();
   const [slot, setSlot] = useState<WorkSlotListItem | null>(null);
+  const [configSection, setConfigSection] = useState<SlotWorkplaceConfigTabId>("main");
+  const [configOpen, setConfigOpen] = useState(false);
   const [history, setHistory] = useState<SlotHistoryItem[]>([]);
   const [debtCollectors, setDebtCollectors] = useState<
     Array<{
@@ -42,7 +57,6 @@ export function WorkSlotDetail({ slotId }: { slotId: number }) {
   >([]);
   const [loading, setLoading] = useState(true);
   const [editOpen, setEditOpen] = useState(false);
-  const [configOpen, setConfigOpen] = useState(false);
   const [assignOpen, setAssignOpen] = useState(false);
   const [branchOptions, setBranchOptions] = useState<string[]>([]);
   const [warehouses, setWarehouses] = useState<{ id: number; name: string }[]>([]);
@@ -108,6 +122,9 @@ export function WorkSlotDetail({ slotId }: { slotId: number }) {
       setDebtCollectors(debtCol.data ?? []);
       const branches = new Set<string>();
       for (const r of list.data ?? []) {
+        for (const code of r.branch_codes ?? []) {
+          if (code.trim()) branches.add(code.trim());
+        }
         if (r.branch_code?.trim()) branches.add(r.branch_code.trim());
       }
       setBranchOptions([...branches].sort());
@@ -123,15 +140,27 @@ export function WorkSlotDetail({ slotId }: { slotId: number }) {
     void load();
   }, [load, ready]);
 
-  // Экспедитор / агент sahifasidan: /work-slots/:id?openConfig=1
+  // Staff sahifasidan: /work-slots/:id?openConfig=1&section=team
   useEffect(() => {
     if (searchParams.get("openConfig") !== "1") return;
+    const raw = searchParams.get("section")?.trim() ?? "main";
+    setConfigSection(
+      CONFIG_SECTIONS.has(raw) ? (raw as SlotWorkplaceConfigTabId) : "main"
+    );
     setConfigOpen(true);
     router.replace(`/work-slots/${slotId}`, { scroll: false });
   }, [searchParams, slotId, router]);
 
   const unassign = async () => {
-    if (!tenant || !confirm("Hozirgi xodimni ajratishni tasdiqlaysizmi?")) return;
+    if (!tenant) return;
+    const ok = await confirm({
+      title: "Открепить",
+      message: "Открепить текущего сотрудника?",
+      confirmLabel: "Да",
+      cancelLabel: "Нет",
+      destructive: true
+    });
+    if (!ok) return;
     try {
       await apiFetch(`/api/${tenant}/work-slots/${slotId}/unassign`, {
         method: "POST",
@@ -140,18 +169,18 @@ export function WorkSlotDetail({ slotId }: { slotId: number }) {
       });
       await load();
     } catch (e) {
-      alert(e instanceof Error ? e.message : "Ajratib bo‘lmadi");
+      alert(e instanceof Error ? e.message : "Не удалось открепить");
     }
   };
 
   if (!hydrated || (loading && !slot)) {
-    return <p className="text-muted-foreground">Yuklanmoqda...</p>;
+    return <p className="text-muted-foreground">Загрузка...</p>;
   }
   if (!tenant) {
-    return <p className="text-destructive">Tenant aniqlanmadi. Qayta kiring.</p>;
+    return <p className="text-destructive">Организация не определена. Войдите заново.</p>;
   }
   if (!slot) {
-    return <p className="text-destructive">Slot topilmadi</p>;
+    return <p className="text-destructive">Рабочее место не найдено</p>;
   }
 
   return (
@@ -163,21 +192,29 @@ export function WorkSlotDetail({ slotId }: { slotId: number }) {
           </Link>
           <SlotBadge code={slot.slot_code} />
           <h1 className="text-2xl font-bold">{slot.label ?? slot.slot_code}</h1>
-          {!slot.is_active ? <Badge variant="secondary">Deaktiv</Badge> : null}
+          {!slot.is_active ? <Badge variant="secondary">Деактивирован</Badge> : null}
         </div>
         <div className="flex flex-wrap gap-2">
           <Button type="button" variant="outline" size="sm" onClick={() => setEditOpen(true)}>
-            Tahrirlash
+            Редактировать
           </Button>
-          <Button type="button" variant="outline" size="sm" onClick={() => setConfigOpen(true)}>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              setConfigSection("main");
+              setConfigOpen(true);
+            }}
+          >
             Конфигурация места
           </Button>
           <Button type="button" size="sm" onClick={() => setAssignOpen(true)}>
-            Almashtirish
+            Заменить
           </Button>
           {slot.active_user_id ? (
             <Button type="button" variant="destructive" size="sm" onClick={() => void unassign()}>
-              Olib tashlash
+              Открепить
             </Button>
           ) : null}
         </div>
@@ -185,17 +222,17 @@ export function WorkSlotDetail({ slotId }: { slotId: number }) {
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Slot ma’lumotlari</CardTitle>
+          <CardTitle className="text-base">Данные рабочего места</CardTitle>
         </CardHeader>
         <CardContent className="grid gap-2 text-sm sm:grid-cols-2">
           <p>
-            <span className="text-muted-foreground">Kodi:</span> {slot.slot_code}
+            <span className="text-muted-foreground">Код:</span> {slot.slot_code}
           </p>
           <p>
-            <span className="text-muted-foreground">Nomi:</span> {slot.label ?? "—"}
+            <span className="text-muted-foreground">Название:</span> {slot.label ?? "—"}
           </p>
           <p>
-            <span className="text-muted-foreground">Filial:</span> {slot.branch_code ?? "—"}
+            <span className="text-muted-foreground">Филиал:</span> {formatSlotBranches(slot)}
           </p>
           <p>
             <span className="text-muted-foreground">Направление:</span> {slot.direction_name ?? "—"}
@@ -224,48 +261,73 @@ export function WorkSlotDetail({ slotId }: { slotId: number }) {
             </a>
           </p>
           <p>
-            <span className="text-muted-foreground">Tur:</span> {slotTypeLabel(slot.slot_type)}
+            <span className="text-muted-foreground">Тип:</span> {slotTypeLabel(slot.slot_type)}
           </p>
           <p>
-            <span className="text-muted-foreground">Holat:</span> {slot.is_active ? "✅ Aktiv" : "Deaktiv"}
+            <span className="text-muted-foreground">Статус:</span> {slot.is_active ? "✅ Активен" : "Деактивирован"}
           </p>
           <p>
-            <span className="text-muted-foreground">Yaratilgan:</span> {formatSlotDate(slot.created_at)}
+            <span className="text-muted-foreground">Создано:</span> {formatSlotDate(slot.created_at)}
           </p>
           <p>
-            <span className="text-muted-foreground">O‘zgartirilgan:</span> {formatSlotDate(slot.updated_at)}
+            <span className="text-muted-foreground">Изменено:</span> {formatSlotDate(slot.updated_at)}
           </p>
         </CardContent>
       </Card>
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Hozirgi mas’ul</CardTitle>
+          <CardTitle className="text-base">Текущий ответственный</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-2 text-sm">
-          <p>
-            <span className="text-muted-foreground">Xodim:</span>{" "}
-            {slot.active_user_name ?? <span className="italic text-muted-foreground">Bo‘sh</span>}
-          </p>
-          {slot.active_since ? (
+        <CardContent className="space-y-3 text-sm">
+          {slot.active_user_id && slot.active_user_name && tenant ? (
+            <div className="flex items-center gap-4">
+              <StaffFaceAvatar
+                tenantSlug={tenant}
+                userId={slot.active_user_face_user_id ?? slot.active_user_id}
+                initials={slot.active_user_name
+                  .split(/\s+/)
+                  .filter(Boolean)
+                  .slice(0, 2)
+                  .map((p) => p[0] ?? "")
+                  .join("")}
+                alt={slot.active_user_name}
+                size="lg"
+                hasPhoto={Boolean(slot.active_user_has_face_reference)}
+                className="border-[3px] border-teal-100 shadow-md"
+              />
+              <div className="min-w-0">
+                <p className="text-base font-semibold text-slate-900">{slot.active_user_name}</p>
+                {slot.active_since ? (
+                  <p className="text-xs text-muted-foreground">
+                    Закреплён: {formatSlotDate(slot.active_since)}
+                  </p>
+                ) : null}
+                {!slot.active_user_has_face_reference ? (
+                  <p className="mt-1 text-xs text-amber-700">Эталонное фото не загружено</p>
+                ) : null}
+              </div>
+            </div>
+          ) : (
             <p>
-              <span className="text-muted-foreground">Biriktirish:</span> {formatSlotDate(slot.active_since)}
+              <span className="text-muted-foreground">Сотрудник:</span>{" "}
+              <span className="italic text-muted-foreground">Свободно</span>
             </p>
-          ) : null}
+          )}
           <p className="text-xs text-muted-foreground">
-            Mijoz qulflashi — mijoz kartasida (slot 1). Zakazlar shartnoma qulfiga bo‘ysunadi.
+            Блокировка клиента задаётся в карточке клиента (слот 1). Заказы подчиняются блокировке по договору.
           </p>
         </CardContent>
       </Card>
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Qarz yig‘ishdagi agentlar (shu slot)</CardTitle>
+          <CardTitle className="text-base">Агенты со сбором долгов (это рабочее место)</CardTitle>
         </CardHeader>
         <CardContent>
           <p className="mb-3 text-xs text-muted-foreground">
-            Slotda ishlagan agentlar: hali to‘lanmagan yetkazilgan buyurtma qarzi. Nom bilan ko‘rsatiladi (mijoz
-            boshqa agentga o‘tgan bo‘lsa ham).
+            Агенты, работавшие на этом месте: неоплаченный долг по доставленным заказам. Отображаются по имени (даже
+            если клиент перешёл к другому агенту).
           </p>
           <Table>
             <TableHeader>
@@ -280,7 +342,7 @@ export function WorkSlotDetail({ slotId }: { slotId: number }) {
               {debtCollectors.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={4} className="text-muted-foreground">
-                    Qarzli sobiq/hozirgi agent yo‘q
+                    Нет прежних/текущих агентов с долгом
                   </TableCell>
                 </TableRow>
               ) : (
@@ -295,7 +357,7 @@ export function WorkSlotDetail({ slotId }: { slotId: number }) {
                       )}
                     </TableCell>
                     <TableCell className="text-xs text-muted-foreground">
-                      {d.on_active_slot ? "Faol slotda" : "Slotsiz"}
+                      {d.on_active_slot ? "На активном месте" : "Без рабочего места"}
                     </TableCell>
                     <TableCell className="text-right font-mono tabular-nums">
                       {Number(d.unpaid).toLocaleString("ru-RU", { maximumFractionDigits: 2 })}
@@ -310,25 +372,25 @@ export function WorkSlotDetail({ slotId }: { slotId: number }) {
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Almashtirish tarixi</CardTitle>
+          <CardTitle className="text-base">История замен</CardTitle>
         </CardHeader>
         <CardContent>
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Sana</TableHead>
-                <TableHead>Harakat</TableHead>
-                <TableHead>Eski</TableHead>
-                <TableHead>Yangi</TableHead>
-                <TableHead>Kim</TableHead>
-                <TableHead>Sabab</TableHead>
+                <TableHead>Дата</TableHead>
+                <TableHead>Действие</TableHead>
+                <TableHead>Прежний</TableHead>
+                <TableHead>Новый</TableHead>
+                <TableHead>Кто</TableHead>
+                <TableHead>Причина</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {history.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={6} className="text-muted-foreground">
-                    Tarix yo‘q
+                    Истории нет
                   </TableCell>
                 </TableRow>
               ) : (
@@ -362,15 +424,12 @@ export function WorkSlotDetail({ slotId }: { slotId: number }) {
         clientRefs={clientRefs}
         territoryNodes={territoryNodes}
         onSaved={() => void load()}
-        onOpenConfig={() => {
-          setEditOpen(false);
-          setConfigOpen(true);
-        }}
       />
       <SlotWorkplaceConfigDialog
         open={configOpen}
         onOpenChange={setConfigOpen}
         tenant={tenant}
+        section={configSection}
         slotId={slotId}
         warehouses={warehouses}
         onSaved={() => void load()}
@@ -382,6 +441,7 @@ export function WorkSlotDetail({ slotId }: { slotId: number }) {
         slotId={slotId}
         onAssigned={() => void load()}
       />
+      {confirmDialog}
     </div>
   );
 }

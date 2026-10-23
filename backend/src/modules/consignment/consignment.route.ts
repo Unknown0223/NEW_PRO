@@ -1,10 +1,11 @@
-import type { FastifyInstance, FastifyRequest } from "fastify";
+import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 import { prisma } from "../../config/database";
 import { sendApiError, zodValidationExtras } from "../../lib/api-error";
 import { ensureTenantContext } from "../../lib/tenant-context";
 import { actorUserIdOrNull } from "../../lib/request-actor";
 import { ADMIN_AND_OPERATOR_LIKE_ROLES } from "../../lib/tenant-user-roles";
+import { ensureAnyPermission } from "../access/ensure-any-permission";
 import { getAccessUser, jwtAccessVerify, requireRoles } from "../auth/auth.prehandlers";
 import {
   bulkPatchConsignmentAgentRows,
@@ -19,6 +20,7 @@ import {
   buildConsignmentImportTemplateBuffer,
   importConsignmentLimitsFromBuffer
 } from "./consignment-import.xlsx";
+import { registerConsignmentLimitRoutes } from "./consignment-limits.route";
 
 async function readConsignmentImportBuffer(
   request: FastifyRequest
@@ -54,6 +56,53 @@ async function retainOnlyActiveConsignmentRows(
 
 const catalogRoles = ADMIN_AND_OPERATOR_LIKE_ROLES;
 
+const CONSIGNMENT_TOGGLE_PERMISSION = "staff.konsignatsiya.status";
+const CONSIGNMENT_LIMIT_PERMISSION = "staff.konsignatsiya.update";
+
+function limitNumber(v: unknown): number | null {
+  if (v == null || String(v).trim() === "") return null;
+  const n = Number(String(v));
+  return Number.isFinite(n) ? n : null;
+}
+
+/** Konsignatsiyani yoqish/o'chirish va limit (summa, o'tgan oy qarzi) — alohida ruxsatlar; ikkalasi o'zgarsa ikkalasi kerak. */
+async function ensureConsignmentRowPermissions(
+  request: FastifyRequest,
+  reply: FastifyReply,
+  tenantId: number,
+  rows: Array<{
+    user_id: number;
+    consignment: boolean;
+    consignment_limit_amount: string | null;
+    consignment_ignore_previous_months_debt: boolean;
+  }>
+): Promise<boolean> {
+  const current = await prisma.user.findMany({
+    where: { tenant_id: tenantId, id: { in: rows.map((r) => r.user_id) } },
+    select: {
+      id: true,
+      consignment: true,
+      consignment_limit_amount: true,
+      consignment_ignore_previous_months_debt: true
+    }
+  });
+  const byId = new Map(current.map((u) => [u.id, u]));
+  let toggles = false;
+  let limits = false;
+  for (const row of rows) {
+    const cur = byId.get(row.user_id);
+    if (!cur) continue;
+    if (cur.consignment !== row.consignment) toggles = true;
+    if (limitNumber(cur.consignment_limit_amount) !== limitNumber(row.consignment_limit_amount)) limits = true;
+    if (row.consignment && cur.consignment && cur.consignment_ignore_previous_months_debt !== row.consignment_ignore_previous_months_debt) {
+      limits = true;
+    }
+  }
+  if (toggles && !(await ensureAnyPermission(request, reply, [CONSIGNMENT_TOGGLE_PERMISSION]))) return false;
+  if (limits && !(await ensureAnyPermission(request, reply, [CONSIGNMENT_LIMIT_PERMISSION]))) return false;
+  return true;
+}
+
 const listQuerySchema = z.object({
   year_month: z.string().regex(/^\d{4}-\d{2}$/).optional(),
   trade_direction_id: z.coerce.number().int().positive().optional(),
@@ -86,7 +135,9 @@ const bulkRowsBodySchema = z.object({
 });
 
 const settingsBodySchema = z.object({
-  month_close_day: z.number().int().min(1).max(31)
+  month_close_day: z.number().int().min(1).max(31),
+  month_close_hour: z.number().int().min(0).max(23).optional().default(0),
+  month_close_minute: z.number().int().min(0).max(59).optional().default(0)
 });
 
 const importQuerySchema = z.object({
@@ -94,6 +145,8 @@ const importQuerySchema = z.object({
 });
 
 export async function registerConsignmentRoutes(app: FastifyInstance) {
+  await registerConsignmentLimitRoutes(app);
+
   app.get(
     "/api/:slug/consignment/settings",
     { preHandler: [jwtAccessVerify, requireRoles(...catalogRoles)] },
@@ -115,15 +168,13 @@ export async function registerConsignmentRoutes(app: FastifyInstance) {
       }
       try {
         const actor = actorUserIdOrNull(request);
-        const out = await patchConsignmentSettingsForTenant(
-          request.tenant!.id,
-          parsed.data.month_close_day,
-          actor
-        );
+        const out = await patchConsignmentSettingsForTenant(request.tenant!.id, parsed.data, actor);
         return reply.send({ data: out });
       } catch (e) {
         const msg = e instanceof Error ? e.message : "";
         if (msg === "BAD_CLOSE_DAY") return sendApiError(reply, request, 400, "BadCloseDay");
+        if (msg === "BAD_CLOSE_HOUR") return sendApiError(reply, request, 400, "BadCloseHour");
+        if (msg === "BAD_CLOSE_MINUTE") return sendApiError(reply, request, 400, "BadCloseMinute");
         throw e;
       }
     }
@@ -170,6 +221,16 @@ export async function registerConsignmentRoutes(app: FastifyInstance) {
       if (!parsed.success) {
         return sendApiError(reply, request, 400, "ValidationError", undefined, zodValidationExtras(parsed.error));
       }
+      const bulkKeys = [
+        ...(parsed.data.consignment !== undefined ? [CONSIGNMENT_TOGGLE_PERMISSION] : []),
+        ...(parsed.data.consignment_limit_amount !== undefined ||
+        parsed.data.consignment_ignore_previous_months_debt !== undefined
+          ? [CONSIGNMENT_LIMIT_PERMISSION]
+          : [])
+      ];
+      for (const key of bulkKeys) {
+        if (!(await ensureAnyPermission(request, reply, [key]))) return;
+      }
       try {
         const actor = actorUserIdOrNull(request);
         const out = await bulkPatchConsignmentAgents(request.tenant!.id, parsed.data, actor);
@@ -204,6 +265,7 @@ export async function registerConsignmentRoutes(app: FastifyInstance) {
       if (!parsed.success) {
         return sendApiError(reply, request, 400, "ValidationError", undefined, zodValidationExtras(parsed.error));
       }
+      if (!(await ensureConsignmentRowPermissions(request, reply, request.tenant!.id, parsed.data.rows))) return;
       try {
         const actor = actorUserIdOrNull(request);
         const out = await bulkPatchConsignmentAgentRows(

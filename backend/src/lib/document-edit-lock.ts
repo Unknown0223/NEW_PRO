@@ -22,7 +22,7 @@ export type DocumentEditLockSettings = {
 };
 
 export const DOCUMENT_EDIT_PERIOD_LOCKED = "DOCUMENT_EDIT_PERIOD_LOCKED";
-export const DOCUMENT_EDIT_PERIOD_LOCKED_MESSAGE = "Davr yopilgan. Admin ochishi kerak.";
+export const DOCUMENT_EDIT_PERIOD_LOCKED_MESSAGE = "Период закрыт. Открыть его может администратор.";
 
 const DEFAULT_DAYS: Record<DocumentEditLockSection, number> = {
   payments: 1,

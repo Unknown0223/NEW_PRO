@@ -3,7 +3,7 @@ import { prisma } from "../../../config/database";
 import { moneyFrom, roundMoney, type Money } from "../../../domain/money";
 import { mapBonusRuleFull } from "../../bonus-rules/bonus-rules.mappers";
 import { bonusRuleInclude } from "../../bonus-rules/bonus-rules.types";
-import { resolveAllowedGiftProductIdsForRule } from "../bonus-gift-selection";
+import { bonusGiftSelectionMeta, resolveAllowedGiftProductIdsForRule } from "../bonus-gift-selection";
 import {
   getAllowedNextStatuses,
   isOperatorLateStageCancelForbidden,
@@ -36,9 +36,25 @@ export function bonusGiftMapToJson(map: Map<number, number>): Prisma.InputJsonVa
   return o;
 }
 
+/**
+ * Sovg‘a SKU ro‘yxati, trigger va kategoriya bo‘lmagan qty qoidada (`assortment_auto`, masalan «6+1»)
+ * sovg‘a — xarid qilingan mahsulotning o‘zi; shu zakaz qatorlari ruxsat etiladi.
+ */
+async function allowedGiftIdsForValidation(
+  tenantId: number,
+  rule: ReturnType<typeof mapBonusRuleFull>,
+  orderedProductIds: readonly number[]
+): Promise<number[]> {
+  const allowed = await resolveAllowedGiftProductIdsForRule(tenantId, rule);
+  if (allowed.length > 0) return allowed;
+  if (bonusGiftSelectionMeta(rule, 0).kind !== "assortment_auto") return allowed;
+  return [...new Set(orderedProductIds)].filter((id) => Number.isFinite(id) && id > 0);
+}
+
 export async function validateBonusGiftOverrides(
   tenantId: number,
-  rows: BonusGiftOverrideInput[]
+  rows: BonusGiftOverrideInput[],
+  orderedProductIds: readonly number[] = []
 ): Promise<Map<number, number>> {
   const map = new Map<number, number>();
   for (const row of rows) {
@@ -57,7 +73,7 @@ export async function validateBonusGiftOverrides(
     }
     const rule = mapBonusRuleFull(ruleRaw);
     // Validatsiyada fallback berilmaydi — aks holda assortment_auto istalgan SKU ni qabul qilardi.
-    const allowed = await resolveAllowedGiftProductIdsForRule(tenantId, rule);
+    const allowed = await allowedGiftIdsForValidation(tenantId, rule, orderedProductIds);
     if (allowed.length === 0 || !allowed.includes(row.bonus_product_id)) {
       throw new Error("BAD_BONUS_GIFT_OVERRIDE");
     }
@@ -69,7 +85,8 @@ export async function validateBonusGiftOverrides(
 /** Bir qoida uchun bir nechta sovg‘a mahsuloti/dona (mobil tanlov). */
 export async function validateBonusGiftLines(
   tenantId: number,
-  rows: BonusGiftLineInput[]
+  rows: BonusGiftLineInput[],
+  orderedProductIds: readonly number[] = []
 ): Promise<Map<number, Map<number, number>>> {
   const byRule = new Map<number, Map<number, number>>();
   for (const row of rows) {
@@ -101,7 +118,7 @@ export async function validateBonusGiftLines(
       throw new Error("BAD_BONUS_GIFT_OVERRIDE");
     }
     const rule = mapBonusRuleFull(ruleRaw);
-    const allowed = await resolveAllowedGiftProductIdsForRule(tenantId, rule);
+    const allowed = await allowedGiftIdsForValidation(tenantId, rule, orderedProductIds);
     if (allowed.length === 0) {
       throw new Error("BAD_BONUS_GIFT_OVERRIDE");
     }

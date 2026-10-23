@@ -16,6 +16,7 @@ import {
   purgeTenantTransactionalForReplace
 } from "./system-migration.import.purge";
 import { importTransactionalTables } from "./system-migration.import.transactional";
+import { importFieldActivityTables } from "./system-migration.import.field";
 import { importClientPhotoReports } from "./system-migration.import.files";
 import {
   applyTenantSettingsExtra,
@@ -23,7 +24,6 @@ import {
   SETTINGS_EXTRA_JSON_PATH
 } from "./system-migration.import.settings-extra";
 import { importExtendedPhases } from "./system-migration.extended.import";
-import { emptyIdMaps } from "./system-migration.id-maps";
 import { parseBackupZip, type ParsedBackupPreview } from "./system-migration.import.preview";
 import { prisma } from "../../config/database";
 import { patchTenantProfile } from "../tenant-settings/tenant-settings.service";
@@ -63,7 +63,7 @@ export async function applyBackupZip(
     await opts.onProgress?.({ stage, percent, message });
   };
 
-  await report("validate", 5, "Arxiv tekshirilmoqda…");
+  await report("validate", 5, "Проверка архива…");
   const preview = await parseBackupZip(buf, targetTenantId);
   if (!preview.valid) {
     throw new Error(`INVALID_BACKUP:${preview.errors.join("; ")}`);
@@ -81,7 +81,7 @@ export async function applyBackupZip(
     profileDto = JSON.parse(profileRaw) as TenantProfileDto;
   } catch {
     throw new Error(
-      "INVALID_BACKUP:Kompaniya profili buzilgan (JSON). Arxivni qayta eksport qiling."
+      "INVALID_BACKUP:Профиль компании повреждён (JSON). Выполните экспорт архива заново."
     );
   }
 
@@ -96,7 +96,7 @@ export async function applyBackupZip(
   });
 
   if (selection.applyProfile || mode === "profile_only" || stages.has("initial_setup")) {
-    await report("profile", 15, "Profil va boshlang‘ich sozlamalar…");
+    await report("profile", 15, "Профиль и начальные настройки…");
     await assertBackupProfileNotThin(targetTenantId, profileDto);
     await patchTenantProfile(targetTenantId, profilePatchFromBackup(profileDto), opts.actorUserId ?? null);
     applied.push("spravochniki/tenant-profile.json");
@@ -108,7 +108,7 @@ export async function applyBackupZip(
         await applyTenantSettingsExtra(targetTenantId, extra);
         applied.push(SETTINGS_EXTRA_JSON_PATH);
       } catch {
-        warnings.push("tenant-settings-extra.json o‘qilmadi — bonus_stack/work_slots qo‘llanmadi.");
+        warnings.push("Не удалось прочитать tenant-settings-extra.json — bonus_stack/work_slots не применены.");
       }
     }
 
@@ -117,37 +117,37 @@ export async function applyBackupZip(
       applied.push(INITIAL_SETUP_XLSX_PATH);
     }
   } else {
-    skipped.push("kompaniya profili (bo‘lim tanlanmagan)");
+    skipped.push("профиль компании (раздел не выбран)");
   }
 
   if (mode === "profile_only") {
     if (preview.has_reference_json || preview.has_transactional_json) {
-      skipped.push("reference va transactional JSON (profile_only rejimi)");
+      skipped.push("справочные и операционные JSON (режим profile_only)");
     }
     if (preview.has_initial_setup_xlsx) {
       next_steps.push(
-        "To‘liq migratsiya uchun «To‘liq import» va «Boshlang‘ich sozlamalar» bo‘limini tanlang."
+        "Для полной миграции выберите разделы «Полный импорт» и «Начальные настройки»."
       );
     }
-    await report("done", 100, "Profil qo‘llandi");
+    await report("done", 100, "Профиль применён");
     return finish({ applied, skipped, warnings, next_steps });
   }
 
   if (!preview.has_reference_json && !stages.has("initial_setup")) {
     warnings.push(
-      "Arxivda reference JSON yo‘q (format v1). Faqat profil qo‘llandi — yangi eksport oling (format v2)."
+      "В архиве нет справочных JSON (формат v1). Применён только профиль — выполните новый экспорт (формат v2)."
     );
-    await report("done", 100, "Faqat profil qo‘llandi");
+    await report("done", 100, "Применён только профиль");
     return finish({ applied, skipped, warnings, next_steps });
   }
 
   let refResult: Awaited<ReturnType<typeof importReferenceTables>> | null = null;
 
   if (stages.has("references")) {
-    await report("references", 35, "Spravochniklar (ombor, user, klient, mahsulot)…");
+    await report("references", 35, "Справочники (склады, пользователи, клиенты, товары)…");
     if (conflictPolicy === "replace" && opts.force_nonempty) {
       await purgeTenantClientsForReplace(targetTenantId);
-      warnings.push("Replace: mavjud mijozlar o‘chirildi — arxivdan toza yuklanmoqda (telefon merge yo‘q).");
+      warnings.push("Замена: существующие клиенты удалены — загрузка из архива с нуля (без объединения по телефону).");
     }
     refResult = await importReferenceTables(zip, targetTenantId, { conflictPolicy });
     applied.push(
@@ -163,33 +163,37 @@ export async function applyBackupZip(
     const branchRemapped = await remapBranchIdsInTenantSettings(targetTenantId, refResult.maps);
     if (branchRemapped > 0) {
       warnings.push(
-        `Filial bog‘lanishlari: ${branchRemapped} ta branch cash_desk/user ID remap qilindi.`
+        `Связи филиалов: переназначено ID касс/пользователей филиалов: ${branchRemapped}.`
       );
     }
   } else if (!stages.has("initial_setup")) {
-    skipped.push("spravochniklar (bo‘lim tanlanmagan)");
+    skipped.push("справочники (раздел не выбран)");
   }
 
-  // Boshlang‘ich sozlamalar: katalog/hudud/narx/slot. «extended» tanlangan bo‘lsa u yerda qoplanadi.
-  if (stages.has("initial_setup") && !stages.has("extended")) {
-    await report("references", 40, "Boshlang‘ich sozlamalar (katalog, hudud, narx, slot)…");
-    const maps = refResult?.maps ?? emptyIdMaps();
-    // references allaqachon phase 0 ni olib kelgan bo‘lsa — faqat 1–2.
-    const phases = stages.has("references") ? [1, 2] : [0, 1, 2];
+  // Boshlang‘ich sozlamalar / katalog / slot — bonus va buyurtmalardan OLDIN
+  // (work_slot_id, supplier_id, KPI target FK lar uchun map kerak).
+  let earlyCatalogDone = false;
+  const needEarlyCatalog =
+    Boolean(refResult) &&
+    (stages.has("initial_setup") ||
+      stages.has("extended") ||
+      stages.has("bonus") ||
+      stages.has("transactional"));
+
+  if (needEarlyCatalog && refResult) {
+    await report("references", 42, "Каталог, территории, цены и рабочие места…");
     try {
       await prisma.$transaction(
         async (tx) => {
-              const extCounts = await importExtendedPhases(
+          const extCounts = await importExtendedPhases(
             tx,
             zip,
             targetTenantId,
-            maps,
-            phases,
+            refResult!.maps,
+            [1, 2],
             warnings,
             {
               strictFk: false,
-              // Bo‘sh tenantda ham seed/RBAC yoki arxiv ichidagi dublikat bo‘lishi mumkin —
-              // qisman commit qoldirmaslik uchun har doim dublikatni o‘tkazib yuboramiz.
               skipDuplicateKeys: true,
               conflictPolicy
             }
@@ -200,6 +204,7 @@ export async function applyBackupZip(
         },
         { timeout: 180_000 }
       );
+      earlyCatalogDone = true;
       if (preview.has_initial_setup_xlsx && !applied.includes(INITIAL_SETUP_XLSX_PATH)) {
         applied.push(INITIAL_SETUP_XLSX_PATH);
       }
@@ -215,14 +220,14 @@ export async function applyBackupZip(
 
   if (stages.has("bonus")) {
     if (!refResult) {
-      skipped.push("bonus/KPI — spravochniklar kerak (avval spravochniklarni tanlang)");
-      warnings.push("Bonus/KPI o‘tkazib yuborildi: spravochniklar import qilinmagan.");
+      skipped.push("бонусы/KPI — нужны справочники (сначала выберите справочники)");
+      warnings.push("Бонусы/KPI пропущены: справочники не импортированы.");
     } else {
       try {
-        await report("bonus", 50, "Bonus qoidalari va KPI rejalar…");
+        await report("bonus", 50, "Бонусные правила и KPI-планы…");
         if (conflictPolicy === "replace" && opts.force_nonempty) {
           await purgeTenantBonusKpiForReplace(targetTenantId);
-          warnings.push("Replace: eski bonus/KPI o‘chirildi — arxivdan toza yuklanmoqda.");
+          warnings.push("Замена: старые бонусы/KPI удалены — загрузка из архива с нуля.");
         }
         await prisma.$transaction(
           async (tx) => {
@@ -230,6 +235,8 @@ export async function applyBackupZip(
             if (bonusCounts.bonus_rules) applied.push("data/bonus_rules.json");
             if (bonusCounts.bonus_rule_clauses) applied.push("data/bonus_rule_clauses.json");
             if (bonusCounts.bonus_rule_conditions) applied.push("data/bonus_rule_conditions.json");
+            if (bonusCounts.bonus_strategies) applied.push("data/bonus_strategies.json");
+            if (bonusCounts.bonus_strategy_members) applied.push("data/bonus_strategy_members.json");
             if (bonusCounts.kpi_groups) applied.push("data/kpi_groups.json");
             if (bonusCounts.sales_kpi_plans) applied.push("data/sales_kpi_plans.json");
           },
@@ -243,15 +250,15 @@ export async function applyBackupZip(
       }
     }
   } else {
-    skipped.push("bonus/KPI (bo‘lim tanlanmagan)");
+    skipped.push("бонусы/KPI (раздел не выбран)");
   }
 
   if (stages.has("transactional")) {
     if (!preview.has_transactional_json) {
-      warnings.push("Operatsion JSON yo‘q — buyurtmalar import qilinmadi.");
+      warnings.push("Нет операционных JSON — заказы не импортированы.");
     } else if (!refResult) {
-      skipped.push("operatsion tarix — spravochniklar kerak");
-      warnings.push("Operatsion tarix o‘tkazib yuborildi: spravochniklar import qilinmagan.");
+      skipped.push("операционная история — нужны справочники");
+      warnings.push("Операционная история пропущена: справочники не импортированы.");
     } else {
       const opsBusy =
         (preview.target_blockers.orders ?? 0) > 0 || (preview.target_blockers.payments ?? 0) > 0;
@@ -260,18 +267,43 @@ export async function applyBackupZip(
       const skipOpsToAvoidDupes =
         !preview.target_empty && opts.force_nonempty && opsBusy && conflictPolicy !== "replace";
       if (skipOpsToAvoidDupes) {
-        skipped.push("operatsion tarix (orders/payments) — maqsadda allaqachon bor");
+        skipped.push("операционная история (orders/payments) — уже есть в целевой компании");
         warnings.push(
-          "Maqsadda buyurtma/to‘lov bor: operatsion tarix import qilinmadi (dublikatdan saqlanish). Spravochniklar merge qilindi. To‘liq restore uchun «almashtirish» (replace) ni tanlang."
+          "В целевой компании уже есть заказы/оплаты: заказы/оплаты не импортированы (защита от дубликатов). Для полного восстановления выберите «Заменить новым»."
         );
+        // Keep: orders/payments o‘tkaziladi, lekin tashrif/GPS/xarajat hali ham qabul qilinadi.
+        try {
+          await report("transactional", 72, "Визиты и активность агентов…");
+          await prisma.$transaction(
+            async (tx) => {
+              const fieldCounts = await importFieldActivityTables(
+                tx,
+                zip,
+                targetTenantId,
+                refResult!.maps
+              );
+              if (fieldCounts.client_refusals) applied.push("data/client_refusals.json");
+              if (fieldCounts.agent_visits) applied.push("data/agent_visits.json");
+              if (fieldCounts.agent_location_pings) applied.push("data/agent_location_pings.json");
+              if (fieldCounts.expenses) applied.push("data/expenses.json");
+              if (fieldCounts.payment_allocations) applied.push("data/payment_allocations.json");
+            },
+            { timeout: 180_000 }
+          );
+        } catch (e) {
+          if (e instanceof Error && e.message.startsWith("MAP_MISSING:")) {
+            throw new Error(`IMPORT_MAP_ERROR:${e.message.replace("MAP_MISSING:", "")}`);
+          }
+          throw e;
+        }
       } else {
         try {
-          await report("transactional", 72, "Buyurtmalar, to‘lovlar, audit…");
+          await report("transactional", 72, "Заказы, оплаты, аудит…");
           if (opsBusy && conflictPolicy === "replace") {
             await purgeTenantTransactionalForReplace(targetTenantId);
             await purgeTenantAuditHistoryForReplace(targetTenantId);
             warnings.push(
-              "Replace: mavjud buyurtma/to‘lov/tashrif/audit o‘chirildi — arxivdan toza qayta yuklandi."
+              "Замена: существующие заказы/оплаты/визиты/аудит удалены — заново загружены из архива."
             );
           }
           const txResult = await importTransactionalTables(zip, targetTenantId, refResult.maps);
@@ -296,17 +328,19 @@ export async function applyBackupZip(
       }
     }
   } else {
-    skipped.push("operatsion tarix (bo‘lim tanlanmagan)");
+    skipped.push("операционная история (раздел не выбран)");
   }
 
   if (stages.has("extended")) {
     if (!refResult) {
-      skipped.push("kengaytirilgan jadvallar — spravochniklar kerak");
-      warnings.push("Kengaytirilgan import o‘tkazib yuborildi: spravochniklar import qilinmagan.");
+      skipped.push("расширенные таблицы — нужны справочники");
+      warnings.push("Расширенный импорт пропущен: справочники не импортированы.");
     } else {
       try {
         if ((preview.format_version ?? BACKUP_FORMAT_VERSION) >= 5) {
-          await report("extended", 90, "Katalog, RBAC va qo‘shimcha jadvallar…");
+          await report("extended", 90, "RBAC, связи и дополнительные таблицы…");
+          // 1–2 allaqachon earlyCatalog da (slot/katalog); 3–4: linklar, balans, bank inbox…
+          const phases = earlyCatalogDone ? [3, 4] : [1, 2, 3, 4];
           await prisma.$transaction(
             async (tx) => {
               const extCounts = await importExtendedPhases(
@@ -314,7 +348,7 @@ export async function applyBackupZip(
                 zip,
                 targetTenantId,
                 refResult!.maps,
-                [1, 2, 3, 4],
+                phases,
                 warnings,
                 {
                   strictFk: false,
@@ -330,7 +364,7 @@ export async function applyBackupZip(
           );
         } else if ((preview.format_version ?? 0) >= 4) {
           warnings.push(
-            "Format v4 — katalog, RBAC va qo‘shimcha jadvallar arxivda yo‘q. To‘liq zaxira uchun v5 eksport oling."
+            "Формат v4 — каталога, RBAC и дополнительных таблиц в архиве нет. Для полной резервной копии выполните экспорт v5+."
           );
         }
       } catch (e) {
@@ -341,17 +375,17 @@ export async function applyBackupZip(
       }
     }
   } else {
-    skipped.push("kengaytirilgan jadvallar (bo‘lim tanlanmagan)");
+    skipped.push("расширенные таблицы (раздел не выбран)");
   }
 
   // Fotootchyotlar — eng oxirida (mijoz/buyurtma/bog‘lanishlar tayyor bo‘lgach).
   if (stages.has("files")) {
     if (!refResult) {
-      skipped.push("fotootchyotlar — spravochniklar kerak");
-      warnings.push("Fotootchyotlar o‘tkazib yuborildi: spravochniklar import qilinmagan.");
+      skipped.push("фотоотчёты — нужны справочники");
+      warnings.push("Фотоотчёты пропущены: справочники не импортированы.");
     } else {
       try {
-        await report("files", 97, "Fotootchyotlar (oxirgi 30 kun)…");
+        await report("files", 97, "Фотоотчёты (последние 30 дней)…");
         if (conflictPolicy === "replace" && opts.force_nonempty) {
           await prisma.clientPhotoReport.deleteMany({ where: { tenant_id: targetTenantId } });
         }
@@ -361,7 +395,7 @@ export async function applyBackupZip(
         );
         if (photoCount > 0) {
           applied.push("data/client_photo_reports.json");
-          warnings.push(`Fotootchyotlar: ${photoCount} ta yozuv yuklandi (arxivdagi oxirgi 30 kun).`);
+          warnings.push(`Фотоотчёты: загружено записей: ${photoCount} (последние 30 дней в архиве).`);
         }
       } catch (e) {
         if (e instanceof Error && e.message.startsWith("MAP_MISSING:")) {
@@ -371,20 +405,20 @@ export async function applyBackupZip(
       }
     }
   } else {
-    skipped.push("fotootchyotlar (bo‘lim tanlanmagan)");
+    skipped.push("фотоотчёты (раздел не выбран)");
   }
 
   if (!preview.target_empty && opts.force_nonempty) {
     warnings.push(
       conflictPolicy === "replace"
-        ? "Maqsadli tenant bo‘sh emas edi — dublikatlarda arxiv qiymatlari yozildi (almashtirish)."
-        : "Maqsadli tenant bo‘sh emas edi — dublikatlarda mavjud yozuvlar saqlandi (eski qoldi)."
+        ? "Целевая компания была не пустой — для дубликатов записаны значения из архива (замена)."
+        : "Целевая компания была не пустой — для дубликатов сохранены существующие записи (оставлено старое)."
     );
   }
 
   next_steps.push(
-    "Import yakunlandi. Tanlangan bo‘limlar va dublikat siyosati bo‘yicha ma’lumotlar qo‘llandi."
+    "Импорт завершён. Данные применены согласно выбранным разделам и политике дубликатов."
   );
-  await report("done", 100, "Import yakunlandi");
+  await report("done", 100, "Импорт завершён");
   return finish({ applied, skipped, warnings, next_steps });
 }

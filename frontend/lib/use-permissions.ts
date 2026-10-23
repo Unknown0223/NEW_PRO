@@ -7,6 +7,7 @@ import { useAuthStore, useEffectiveRole } from "@/lib/auth-store";
 import {
   ME_PERMISSIONS_REFETCH_INTERVAL_MS,
   ME_PERMISSIONS_STALE_MS,
+  decodeAccessTokenUserId,
   isMePermissionsBroadcastFromThisTab,
   isMePermissionsInitialLoad,
   mePermissionKeySet,
@@ -25,10 +26,12 @@ import {
  */
 export function usePermissions() {
   const tenantSlug = useAuthStore((s) => s.tenantSlug);
+  const accessToken = useAuthStore((s) => s.accessToken);
+  const userId = decodeAccessTokenUserId(accessToken);
   const role = useEffectiveRole();
   const qc = useQueryClient();
   const q = useQuery({
-    queryKey: mePermissionsQueryKey(tenantSlug),
+    queryKey: mePermissionsQueryKey(tenantSlug, userId),
     enabled: Boolean(tenantSlug),
     staleTime: ME_PERMISSIONS_STALE_MS,
     refetchOnWindowFocus: true,
@@ -49,7 +52,7 @@ export function usePermissions() {
 
     const refresh = () => {
       void qc.invalidateQueries({
-        queryKey: mePermissionsQueryKey(tenantSlug),
+        queryKey: mePermissionsQueryKey(tenantSlug, userId),
         refetchType: "active"
       });
     };
@@ -77,7 +80,7 @@ export function usePermissions() {
       window.removeEventListener("salec:me-permissions-refresh", onCustom);
       ch?.close();
     };
-  }, [qc, tenantSlug]);
+  }, [qc, tenantSlug, userId]);
 
   const keys = useMemo(() => mePermissionKeySet(q.data), [q.data]);
   const isAdmin = role === "admin";

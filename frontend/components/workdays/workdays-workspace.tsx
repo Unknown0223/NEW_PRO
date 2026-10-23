@@ -9,6 +9,8 @@ import {
   ClipboardCheck,
   Eye,
   History,
+  Lock,
+  LockOpen,
   Pencil,
   Plus,
   TrendingUp,
@@ -18,7 +20,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
-import { useEffectiveRole } from "@/lib/auth-store";
+import { usePermissions } from "@/lib/use-permissions";
 import { useTabelAudit, useWorkdaysMutations, useWorkdaysState } from "@/lib/tabel/tabel-api";
 import {
   MONTH_NAMES,
@@ -33,15 +35,18 @@ import { ExceptionsTab, IndividualTab, ScheduleMatrix } from "@/components/workd
 import { useWorkdaysData } from "@/components/workdays/use-workdays-data";
 
 type Tab = "assign" | "view" | "exceptions" | "individual";
-const EDIT_ROLES = new Set(["admin", "operator", "director", "sales_director", "regional_manager", "accountant"]);
 
 const EMPTY_SCHEDULES: ScheduleMap = Object.fromEntries(
   WD_ROLES.map((r) => [r, [false, false, false, false, false, false, false]])
 ) as ScheduleMap;
 
 export function WorkdaysWorkspace() {
-  const role = useEffectiveRole();
-  const canEdit = role === "admin" || (role != null && EDIT_ROLES.has(role));
+  const perms = usePermissions();
+  const canEdit = perms.has("staff.rabochie_dni.update");
+  const canAdd = perms.has("staff.rabochie_dni.create");
+  const canRemove = perms.has("staff.rabochie_dni.delete");
+  const canHistory = perms.has("staff.rabochie_dni.history");
+  const canLock = perms.has("staff.rabochie_dni.status");
 
   const { employees } = useWorkdaysData();
   const stateQ = useWorkdaysState();
@@ -51,6 +56,10 @@ export function WorkdaysWorkspace() {
   const saved = stateQ.data?.schedules ?? EMPTY_SCHEDULES;
   const exceptions = useMemo(() => stateQ.data?.exceptions ?? [], [stateQ.data?.exceptions]);
   const overrides = useMemo(() => stateQ.data?.overrides ?? [], [stateQ.data?.overrides]);
+  const enforceRoles = useMemo(() => stateQ.data?.enforce_roles ?? [], [stateQ.data?.enforce_roles]);
+  const [lockDraft, setLockDraft] = useState<WdRole[]>([]);
+  useEffect(() => setLockDraft(enforceRoles), [enforceRoles]);
+  const lockDirty = lockDraft.length !== enforceRoles.length || lockDraft.some((r) => !enforceRoles.includes(r));
 
   const now = new Date();
   const [year, setYear] = useState(now.getFullYear());
@@ -66,8 +75,8 @@ export function WorkdaysWorkspace() {
     if (stateQ.data) setDraft(cloneSchedules(stateQ.data.schedules));
   }, [stateQ.data]);
   useEffect(() => {
-    if (canEdit && tab === "view") setTab("assign");
-  }, [canEdit, tab]);
+    if (canEdit) setTab((t) => (t === "view" ? "assign" : t));
+  }, [canEdit]);
 
   const showToast = (m: string) => {
     setToast(m);
@@ -175,6 +184,78 @@ export function WorkdaysWorkspace() {
         ))}
       </div>
 
+      <Card className="space-y-3 p-3">
+        <div className="flex flex-wrap items-center gap-3">
+          <div
+            className={cn(
+              "grid size-9 shrink-0 place-items-center rounded-lg",
+              lockDraft.length > 0 ? "bg-amber-100 text-amber-700" : "bg-muted text-muted-foreground"
+            )}
+          >
+            {lockDraft.length > 0 ? <Lock className="size-4" /> : <LockOpen className="size-4" />}
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="text-sm font-bold">Блокировка входа в нерабочие дни</div>
+            <div className="mt-0.5 text-[11px] leading-snug text-muted-foreground">
+              Отметьте роли, которым в неотмеченные (выходные) дни закрыт вход в веб-панель и мобильное приложение —
+              они видят только страницу с временем начала работы. Неотмеченные роли работают без ограничений, график
+              для них нужен только для Табеля, KPI и Зарплаты. Исключения «Обязательный»/«Тренинг» открывают день,
+              «Праздник»/«Мероприятие» — закрывают.
+            </div>
+          </div>
+          {canLock && lockDirty && (
+            <div className="flex gap-2">
+              <Button size="sm" variant="outline" onClick={() => setLockDraft(enforceRoles)}>
+                Отмена
+              </Button>
+              <Button
+                size="sm"
+                disabled={mut.saveEnforceRoles.isPending}
+                onClick={() =>
+                  mut.saveEnforceRoles.mutate(lockDraft, {
+                    onSuccess: () =>
+                      showToast(
+                        lockDraft.length > 0
+                          ? `Вход в выходные дни закрыт: ${lockDraft.join(", ")}`
+                          : "Вход в выходные дни открыт для всех ролей"
+                      ),
+                    onError: () => showToast("Ошибка сохранения")
+                  })
+                }
+              >
+                Сохранить
+              </Button>
+            </div>
+          )}
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {WD_ROLES.map((r) => {
+            const on = lockDraft.includes(r);
+            return (
+              <label
+                key={r}
+                className={cn(
+                  "flex items-center gap-2 rounded-lg border px-3 py-1.5 text-xs font-semibold",
+                  on ? "border-amber-300 bg-amber-50 text-amber-800" : "bg-card text-muted-foreground",
+                  canLock ? "cursor-pointer" : "cursor-default opacity-80"
+                )}
+              >
+                <input
+                  type="checkbox"
+                  className="size-3.5 accent-amber-600"
+                  checked={on}
+                  disabled={!canLock}
+                  onChange={() =>
+                    setLockDraft((p) => (p.includes(r) ? p.filter((x) => x !== r) : WD_ROLES.filter((x) => x === r || p.includes(x))))
+                  }
+                />
+                {r}
+              </label>
+            );
+          })}
+        </div>
+      </Card>
+
       <Card className="flex flex-wrap items-center gap-2 p-2">
         <div className="flex rounded-lg bg-muted p-1">
           {(
@@ -188,7 +269,7 @@ export function WorkdaysWorkspace() {
             <button
               key={t}
               onClick={() => {
-                if (t === "assign" && !canEdit) return showToast("Назначать график может только Admin/Оператор");
+                if (t === "assign" && !canEdit) return showToast("Нет доступа к назначению графика");
                 setTab(t);
               }}
               className={cn(
@@ -208,15 +289,15 @@ export function WorkdaysWorkspace() {
           ))}
         </div>
         <div className="ml-auto flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={() => setHistOpen(true)}>
+          <Button variant="outline" size="sm" className={cn(!canHistory && "hidden")} onClick={() => setHistOpen(true)}>
             <History className="mr-1 size-4" /> История {scheduleAudit.length > 0 && `(${scheduleAudit.length})`}
           </Button>
-          {canEdit && tab === "individual" && (
+          {canAdd && tab === "individual" && (
             <Button size="sm" className="bg-purple-600 hover:bg-purple-700" onClick={() => setOvOpen(true)}>
               <Plus className="mr-1 size-4" /> Индивидуальный
             </Button>
           )}
-          {canEdit && tab !== "individual" && (
+          {canAdd && tab !== "individual" && (
             <Button size="sm" onClick={() => setExOpen(true)}>
               <Plus className="mr-1 size-4" /> Исключение
             </Button>
@@ -247,7 +328,7 @@ export function WorkdaysWorkspace() {
           year={year}
           month={month}
           monthExceptions={monthExceptions}
-          canEdit={canEdit}
+          canEdit={canRemove}
           onRemove={(id) => mut.removeException.mutate(id, { onSuccess: () => showToast("Исключение удалено") })}
         />
       )}
@@ -259,7 +340,7 @@ export function WorkdaysWorkspace() {
           exceptions={exceptions}
           year={year}
           month={month}
-          canEdit={canEdit}
+          canEdit={canRemove}
           onRemove={(id) => mut.removeOverride.mutate(id, { onSuccess: () => showToast("Индивидуальный график удалён") })}
         />
       )}

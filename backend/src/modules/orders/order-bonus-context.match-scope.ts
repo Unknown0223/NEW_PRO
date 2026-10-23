@@ -73,9 +73,17 @@ export function ruleMatchesOrderProductScope(
   return true;
 }
 
-/** Sotib olish doirasi: mahsulot yoki kategoriya tanlangan bo‘lsa — har SKU alohida; bo‘shsa — zakaz bo‘yicha umumiy miqdor. */
+/** Sotib olish doirasi: mahsulot yoki kategoriya tanlangan. Bo‘shsa — zakaz bo‘yicha umumiy miqdor. */
 export function ruleHasPurchaseScope(rule: BonusRuleRow): boolean {
   return rule.product_ids.length > 0 || rule.product_category_ids.length > 0;
+}
+
+/**
+ * «Категория» qoidasi: turli SKU (o‘lcham) miqdorlari yig‘iladi (3+1: 1+1+1 → 1).
+ * «Только ассортимент» (faqat product_ids): har SKU alohida (5+1: 5 va 1 → faqat 5 beradi).
+ */
+export function ruleAggregatesMatchingSkuQty(rule: BonusRuleRow): boolean {
+  return rule.product_category_ids.length > 0 || rule.scope_restrict_category === true;
 }
 
 function productMatchesQtyRuleScope(rule: BonusRuleRow, product: ProductLite): boolean {

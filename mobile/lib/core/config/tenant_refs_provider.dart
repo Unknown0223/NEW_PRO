@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../auth/session.dart';
+import 'agent_cities.dart';
 import 'territory_cascade.dart';
 import 'tenant_references.dart';
 
@@ -13,9 +14,9 @@ final refusalReasonsProvider = Provider<List<RefEntry>>((ref) {
   final fromSession = ref.watch(sessionProvider).tenantReferences?.refusalReasonEntries ?? [];
   if (fromSession.isNotEmpty) return fromSession;
   return const [
-    RefEntry(id: 'seed-ref-client', name: 'Mijoz rad etdi'),
-    RefEntry(id: 'seed-ref-quality', name: 'Sifat / muddati'),
-    RefEntry(id: 'seed-ref-price', name: 'Narx kelishmovchiligi'),
+    RefEntry(id: 'seed-ref-client', name: 'Клиент отказался'),
+    RefEntry(id: 'seed-ref-quality', name: 'Качество / срок годности'),
+    RefEntry(id: 'seed-ref-price', name: 'Несогласие с ценой'),
   ];
 });
 
@@ -61,4 +62,11 @@ final sessionTenantRefsProvider = Provider<ClientFormTenantRefs>((ref) {
       nodes: refs?.territoryNodesList ?? const [],
     ),
   );
+});
+
+/// Agent `agent_cities`; bo‘sh bo‘lsa daraxt shaharlari — viloyat (oblast) emas.
+final effectiveAgentCitiesProvider = Provider<List<AgentCityOption>>((ref) {
+  final assigned = ref.watch(agentCitiesProvider);
+  if (assigned.isNotEmpty) return assigned;
+  return agentCitiesFromCascade(ref.watch(sessionTenantRefsProvider).cascadeIndex);
 });

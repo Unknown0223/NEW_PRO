@@ -22,6 +22,8 @@ import {
   type ListQuery
 } from "./order-automation.crud";
 import { getOrderAutomationFormOptions } from "./order-automation.form-options";
+import { ensureAnyPermission } from "../access/ensure-any-permission";
+import { automationListPermission, automationPatchPermission } from "./order-automation.rbac";
 import {
   autoConfirmCreateSchema,
   autoConfirmUpdateSchema,
@@ -33,16 +35,20 @@ import {
 function parseListQuery(q: Record<string, string | undefined>): ListQuery {
   const page = Number.parseInt(q.page ?? "1", 10);
   const limit = Number.parseInt(q.limit ?? "50", 10);
-  const agentId = Number.parseInt(q.agent_user_id ?? q.agent_id ?? "", 10);
-  const warehouseId = Number.parseInt(q.warehouse_id ?? "", 10);
+  const ints = (raw?: string) =>
+    [...new Set((raw ?? "").split(",").map((s) => Number.parseInt(s.trim(), 10)).filter((n) => Number.isFinite(n) && n > 0))];
+  const agentIds = ints(q.agent_user_id ?? q.agent_id);
+  const warehouseIds = ints(q.warehouse_id);
   return {
     page: Number.isFinite(page) ? page : 1,
     limit: Number.isFinite(limit) ? limit : 50,
     is_active: q.is_active === "true" ? true : q.is_active === "false" ? false : undefined,
     archive: q.archive === "true" || q.archive === "1",
     search: q.search,
-    agent_user_id: Number.isFinite(agentId) && agentId > 0 ? agentId : undefined,
-    warehouse_id: Number.isFinite(warehouseId) && warehouseId > 0 ? warehouseId : undefined,
+    agent_user_id: agentIds.length === 1 ? agentIds[0] : undefined,
+    agent_user_ids: agentIds.length > 1 ? agentIds : undefined,
+    warehouse_id: warehouseIds.length === 1 ? warehouseIds[0] : undefined,
+    warehouse_ids: warehouseIds.length > 1 ? warehouseIds : undefined,
     trade_direction_ref: q.trade_direction_ref ?? q.trade_direction,
     payment_method_ref: q.payment_method_ref ?? q.payment_type,
     zone: q.zone,
@@ -74,6 +80,7 @@ export async function registerOrderAutomationRoutes(app: FastifyInstance) {
     async (request, reply) => {
       if (!ensureTenantContext(request, reply)) return;
       const q = request.query as Record<string, string | undefined>;
+      if (!(await ensureAnyPermission(request, reply, [automationListPermission(q)]))) return;
       if (q.export === "csv") {
         const result = await listRestrictionRules(request.tenant!.id, {
           ...parseListQuery(q),
@@ -166,6 +173,7 @@ export async function registerOrderAutomationRoutes(app: FastifyInstance) {
       if (!parsed.success) {
         return sendApiError(reply, request, 400, "ValidationError", undefined, zodValidationExtras(parsed.error));
       }
+      if (!(await ensureAnyPermission(request, reply, [automationPatchPermission(request.body)]))) return;
       try {
         const row = await updateRestrictionRule(
           request.tenant!.id,
@@ -277,6 +285,7 @@ export async function registerOrderAutomationRoutes(app: FastifyInstance) {
     async (request, reply) => {
       if (!ensureTenantContext(request, reply)) return;
       const q = request.query as Record<string, string | undefined>;
+      if (!(await ensureAnyPermission(request, reply, [automationListPermission(q)]))) return;
       if (q.export === "csv") {
         const result = await listAutoConfirmRules(request.tenant!.id, {
           ...parseListQuery(q),
@@ -382,6 +391,7 @@ export async function registerOrderAutomationRoutes(app: FastifyInstance) {
       if (!parsed.success) {
         return sendApiError(reply, request, 400, "ValidationError", undefined, zodValidationExtras(parsed.error));
       }
+      if (!(await ensureAnyPermission(request, reply, [automationPatchPermission(request.body)]))) return;
       try {
         const row = await updateAutoConfirmRule(
           request.tenant!.id,

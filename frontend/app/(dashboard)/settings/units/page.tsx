@@ -115,7 +115,7 @@ export default function UnitsSettingsPage() {
     onSuccess: async () => {
       await qc.invalidateQueries({ queryKey: ["settings", "profile", tenantSlug] });
       setServerFieldErrs({});
-      setMsg("Saqlandi.");
+      setMsg("Сохранено.");
       setOpen(false);
       resetForm();
     },
@@ -128,14 +128,14 @@ export default function UnitsSettingsPage() {
           const top = flat.formErrors.map((s) => s.trim()).find(Boolean);
           const hint = firstValidationUserHint(flat);
           const line = top ?? hint ?? Object.values(per).find((m) => m.trim() !== "");
-          setMsg(line ? withApiSupportLine(line, e) : getUserFacingError(e, "Saqlashda xatolik."));
+          setMsg(line ? withApiSupportLine(line, e) : getUserFacingError(e, "Ошибка сохранения."));
           return;
         }
         setServerFieldErrs({});
       } else {
         setServerFieldErrs({});
       }
-      setMsg(getUserFacingError(e, "Saqlashda xatolik."));
+      setMsg(getUserFacingError(e, "Ошибка сохранения."));
     }
   });
 
@@ -188,18 +188,18 @@ export default function UnitsSettingsPage() {
     saveMut.mutate({ item: next, editId });
   }
 
-  if (!hydrated) return <PageShell><p className="text-sm text-muted-foreground">Sessiya...</p></PageShell>;
-  if (!tenantSlug) return <PageShell><p className="text-sm text-destructive"><Link href="/login" className="underline">Kirish</Link></p></PageShell>;
+  if (!hydrated) return <PageShell><p className="text-sm text-muted-foreground">Сессия...</p></PageShell>;
+  if (!tenantSlug) return <PageShell><p className="text-sm text-destructive"><Link href="/login" className="underline">Войти</Link></p></PageShell>;
 
   return (
     <PageShell>
       <PageHeader
         title="Единицы измерения"
-        description="Aktiv/noaktiv ro'yxat, sortirovka va kod bilan."
+        description="Список активных и неактивных единиц с сортировкой и кодом."
         actions={
           <div className="flex gap-2">
             <Button size="sm" disabled={!isAdmin} onClick={openAdd}>Добавить</Button>
-            <Link href="/settings" className={cn(buttonVariants({ variant: "outline", size: "sm" }))}>Katalog</Link>
+            <Link href="/settings" className={cn(buttonVariants({ variant: "outline", size: "sm" }))}>Каталог</Link>
           </div>
         }
       />
@@ -233,14 +233,14 @@ export default function UnitsSettingsPage() {
                     <td className="px-3 py-2">{u.comment ?? "-"}</td>
                     <td className="px-3 py-2 text-right">
                       {isAdmin ? (
-                        <TableRowActionGroup className="justify-end" ariaLabel="O‘lchov birligi">
+                        <TableRowActionGroup className="justify-end" ariaLabel="Единица измерения">
                           <Button
                             variant="outline"
                             size="icon-sm"
                             type="button"
                             className="text-muted-foreground hover:text-foreground"
-                            title="Tahrirlash"
-                            aria-label="Tahrirlash"
+                            title="Редактировать"
+                            aria-label="Редактировать"
                             onClick={() => openEdit(u)}
                           >
                             <Pencil className="size-3.5" aria-hidden />
@@ -252,7 +252,7 @@ export default function UnitsSettingsPage() {
                 ))}
                 {filtered.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="px-3 py-6 text-center text-muted-foreground">Ma’lumot yo‘q</td>
+                    <td colSpan={6} className="px-3 py-6 text-center text-muted-foreground">Нет данных</td>
                   </tr>
                 ) : null}
               </tbody>
@@ -276,7 +276,7 @@ export default function UnitsSettingsPage() {
         <DialogContent className="sm:max-w-[520px]" showCloseButton>
           <DialogHeader>
             <DialogTitle>{editId ? "Редактировать" : "Добавить"}</DialogTitle>
-            <DialogDescription>Sortirovka faqat son bo‘lishi kerak.</DialogDescription>
+            <DialogDescription>Сортировка должна быть числом.</DialogDescription>
           </DialogHeader>
           <div className="grid gap-3">
             {msg ? <p className="text-sm text-muted-foreground">{msg}</p> : null}

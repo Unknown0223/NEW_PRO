@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'dart:io' show Platform;
+import 'dart:ui' show PlatformDispatcher;
 
 import 'package:device_info_plus/device_info_plus.dart';
 import 'package:flutter/foundation.dart' show FlutterError, kIsWeb;
@@ -9,6 +11,7 @@ import 'package:intl/date_symbol_data_local.dart';
 import 'core/api/api_base_url.dart';
 import 'core/api/dio_client.dart';
 import 'core/auth/mobile_session_guard.dart';
+import 'core/auth/workday_off.dart';
 import 'core/config/env_loader.dart';
 import 'core/database/app_database.dart';
 import 'core/errors/error_reporter.dart';
@@ -20,28 +23,37 @@ import 'core/time/server_clock.dart';
 import 'core/time/work_region_time.dart';
 import 'core/update/app_update_listener.dart';
 import 'features/auth/biometric_setup_listener.dart';
+import 'features/auth/face_verification_listener.dart';
 import 'routing/app_router.dart';
 
 Future<void> main() async {
-  WidgetsFlutterBinding.ensureInitialized();
-  await initializeDateFormatting('ru');
-  await loadAppEnv();
-  await MobileLocalNotificationService.instance.init();
-  await _initServerClockPersistence();
+  await runZonedGuarded(() async {
+    WidgetsFlutterBinding.ensureInitialized();
+    await initializeDateFormatting('ru');
+    await loadAppEnv();
+    await MobileLocalNotificationService.instance.init();
+    await _initServerClockPersistence();
 
-  if (!kIsWeb && Platform.isAndroid) {
-    final info = await DeviceInfoPlugin().androidInfo;
-    configureApiHostForAndroidEmulator(!info.isPhysicalDevice);
-    debugPrint('[SalesDoc] API (resolved): ${resolveApiBaseUrl()}');
-  }
+    if (!kIsWeb && Platform.isAndroid) {
+      final info = await DeviceInfoPlugin().androidInfo;
+      configureApiHostForAndroidEmulator(!info.isPhysicalDevice);
+      debugPrint('[SalesDoc] API (resolved): ${resolveApiBaseUrl()}');
+    }
 
-  // Uncaught Flutter/zone xatolari — diagnostika jurnaliga.
-  FlutterError.onError = (details) {
-    FlutterError.presentError(details);
-    ErrorReporter.instance?.reportFatal(details.exception, details.stack);
-  };
+    // Uncaught Flutter/zone xatolari — diagnostika jurnaliga (to‘liq stack + kontekst).
+    FlutterError.onError = (details) {
+      FlutterError.presentError(details);
+      ErrorReporter.instance?.reportFlutterError(details);
+    };
+    PlatformDispatcher.instance.onError = (error, stack) {
+      ErrorReporter.instance?.reportFatal(error, stack, extra: {'source': 'platform_dispatcher'});
+      return true;
+    };
 
-  runApp(const ProviderScope(child: SalesDocApp()));
+    runApp(const ProviderScope(child: SalesDocApp()));
+  }, (error, stack) {
+    ErrorReporter.instance?.reportFatal(error, stack, extra: {'source': 'zone'});
+  });
 }
 
 /// Server-langarlangan soatni diskdagi «floor» bilan bog‘laymiz:
@@ -98,9 +110,13 @@ class _SalesDocAppState extends ConsumerState<SalesDocApp> {
         darkTheme: AppTheme.darkTheme,
         themeMode: themeMode,
         routerConfig: router,
-        builder: (context, child) => AppUpdateListener(
-          child: BiometricSetupListener(
-            child: child ?? const SizedBox.shrink(),
+        builder: (context, child) => WorkdayOffGuard(
+          child: AppUpdateListener(
+            child: BiometricSetupListener(
+              child: FaceVerificationListener(
+                child: child ?? const SizedBox.shrink(),
+              ),
+            ),
           ),
         ),
       ),

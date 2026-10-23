@@ -5,6 +5,7 @@ import {
   buildClassicPathLabels,
   classicPathPrefixKey,
   flattenPivotRowsLocal,
+  maxVisibleRowDimCount,
   splitPivotRowPath
 } from "../lib/pivot-flatten";
 import { resolveClassicLabels as resolveClassicLabelsUi } from "../components/pivot/PivotTable/PivotRow";
@@ -36,6 +37,38 @@ describe("splitPivotRowPath", () => {
       "Agent 01 TEST",
       "Mahsulot 1"
     ]);
+  });
+});
+
+describe("maxVisibleRowDimCount", () => {
+  it("collapsed root shows 1 column", () => {
+    const flat = [
+      {
+        type: "row" as const,
+        row: { key: "A", depth: 0, cells: [] },
+        depth: 0,
+        expanded: false,
+        hasChildren: true,
+        rowKey: "A",
+        pathLabels: ["A"]
+      }
+    ];
+    expect(maxVisibleRowDimCount(flat, 4)).toBe(1);
+  });
+
+  it("expanded depth grows visible columns", () => {
+    const flat = [
+      {
+        type: "row" as const,
+        row: { key: "A | B", depth: 1, cells: [] },
+        depth: 1,
+        expanded: false,
+        hasChildren: true,
+        rowKey: "A | B",
+        pathLabels: ["A", "B"]
+      }
+    ];
+    expect(maxVisibleRowDimCount(flat, 4)).toBe(2);
   });
 });
 

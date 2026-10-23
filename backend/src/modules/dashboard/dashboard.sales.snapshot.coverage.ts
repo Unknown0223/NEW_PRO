@@ -1,7 +1,8 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "../../config/database";
 import { clampPct } from "./dashboard.helpers";
-import { buildSalesTerritoryAliasClause, salesDateExprByType } from "./dashboard.sales.scope";
+import { loadTerritoryRegionIndex, rollupSalesTerritoryRows } from "./dashboard.territory-rollup";
+import { buildSalesTerritoryAliasClause } from "./dashboard.sales.scope";
 import type { SalesSnapshotQueryCtx } from "./dashboard.sales.snapshot.types";
 
 export async function fetchSalesSnapshotCoverageBlock(ctx: SalesSnapshotQueryCtx, akb: number) {
@@ -89,17 +90,21 @@ export async function fetchSalesSnapshotCoverageBlock(ctx: SalesSnapshotQueryCtx
   const territoryOkbMap = new Map<string, number>(
     territoryOkbRows.map((r) => [r.territory, Number(r.okb)])
   );
-  const territory_analytics = territorySalesRows.map((r) => {
-    const territoryOkb = territoryOkbMap.get(r.territory) ?? 0;
-    const territoryAkb = Number(r.akb);
-    return {
-      territory: r.territory,
-      sales_sum: r.sales_sum.toString(),
-      akb: territoryAkb,
-      okb: territoryOkb,
-      coverage_pct: territoryOkb > 0 ? clampPct((territoryAkb / territoryOkb) * 100) : 0
-    };
-  });
+  const territoryIndex = await loadTerritoryRegionIndex(tenantId);
+  const territory_analytics = rollupSalesTerritoryRows(
+    territorySalesRows.map((r) => {
+      const territoryOkb = territoryOkbMap.get(r.territory) ?? 0;
+      const territoryAkb = Number(r.akb);
+      return {
+        territory: r.territory,
+        sales_sum: r.sales_sum.toString(),
+        akb: territoryAkb,
+        okb: territoryOkb,
+        coverage_pct: territoryOkb > 0 ? clampPct((territoryAkb / territoryOkb) * 100) : 0
+      };
+    }),
+    territoryIndex
+  );
   const agentOkbMap = new Map<number, number>(agentOkbRows.map((r) => [r.agent_id, Number(r.okb)]));
   const agent_analytics = agentSalesRows.map((r) => {
     const rowOkb = agentOkbMap.get(r.agent_id) ?? 0;

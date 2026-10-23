@@ -5,9 +5,11 @@ import { ORDERS_LIST_EXPANDED_PANEL_CLASS } from "@/components/orders/orders-lis
 import { OrdersProductsByCategoryView } from "@/components/orders/orders-list/orders-products-by-category-view";
 import { buttonVariants } from "@/components/ui/button-variants";
 import { api } from "@/lib/api";
+import { applyOrderDetailToListCaches } from "@/lib/orders-list-cache";
 import { STALE } from "@/lib/query-stale";
+import { usePermissions } from "@/lib/use-permissions";
 import { cn } from "@/lib/utils";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Package, Pencil } from "lucide-react";
 import Link from "next/link";
 import type { CSSProperties } from "react";
@@ -23,11 +25,14 @@ function OrdersListExpandedBody({
   orderNumber?: string;
   orderStatus?: string;
 }) {
+  const qc = useQueryClient();
+  const { has } = usePermissions();
   const q = useQuery({
     queryKey: ["order", tenantSlug, orderId],
     staleTime: STALE.detail,
     queryFn: async () => {
       const { data } = await api.get<OrderDetailRow>(`/api/${tenantSlug}/orders/${orderId}`);
+      applyOrderDetailToListCaches(qc, tenantSlug, data);
       return data;
     }
   });
@@ -35,7 +40,7 @@ function OrdersListExpandedBody({
   const items = q.data?.items ?? [];
   const status = q.data?.status ?? orderStatus ?? "";
   /** Tahrirlash faqat «Новый» — Sozdat zakaz formasiga o‘tadi. */
-  const canEditHint = status === "new";
+  const canEditHint = status === "new" && has("orders.zakaz.update");
 
   return (
     <div

@@ -22,6 +22,12 @@ import { TableColumnSettingsDialog } from "@/components/data-table/table-column-
 import { PageShell } from "@/components/dashboard/page-shell";
 import { useUserTablePrefs } from "@/hooks/use-user-table-prefs";
 import { api } from "@/lib/api";
+import {
+  loadClientBalancesFilterSnapshot,
+  loadClientBalancesRememberFilters,
+  saveClientBalancesFilterSnapshot
+} from "@/lib/client-balances-filters-visibility";
+import { usePermissions } from "@/lib/use-permissions";
 import { useAuthStore, useAuthStoreHydrated } from "@/lib/auth-store";
 import {
   appendPositiveIntListParam,
@@ -129,6 +135,33 @@ const defaultForm = (): FilterForm => ({
   agent_payment_type: ""
 });
 
+const FILTER_VIEWS = ["clients", "agents", "clients_delivery", "clients_legacy", "clients_consignment"] as const;
+
+function rememberedBalancesState(): {
+  draft: FilterForm;
+  applied: FilterForm;
+  search: string;
+  view: (typeof FILTER_VIEWS)[number] | null;
+  page: number;
+} | null {
+  if (!loadClientBalancesRememberFilters()) return null;
+  const snap = loadClientBalancesFilterSnapshot();
+  if (!snap) return null;
+  const base = defaultForm();
+  const fill = (src: Record<string, string>): FilterForm => {
+    const next = { ...base };
+    for (const key of Object.keys(base) as (keyof FilterForm)[]) {
+      const v = src[key];
+      if (typeof v === "string") next[key] = v;
+    }
+    return next;
+  };
+  const view = FILTER_VIEWS.includes(snap.view as (typeof FILTER_VIEWS)[number])
+    ? (snap.view as (typeof FILTER_VIEWS)[number])
+    : null;
+  return { draft: fill(snap.draft), applied: fill(snap.applied), search: snap.search, view, page: snap.page };
+}
+
 function parseAmount(s: string): number {
   const t = String(s)
     .trim()
@@ -165,6 +198,45 @@ function formatDateOnly(iso: string | null | undefined): string {
 
 function clientDisplayId(r: ClientBalanceRow): string {
   return formatClientDisplayId(r.client_id, r.client_code);
+}
+
+function agentLabel(r: ClientBalanceRow): string | null {
+  if (r.agent_tags.length) return r.agent_tags[0];
+  if (!r.agent_name) return null;
+  return r.agent_code ? `${r.agent_name} (${r.agent_code})` : r.agent_name;
+}
+
+/** Bir xil mijoz kodi bitta qator. Agentlar yig‘iladi, balans qo‘shiladi. */
+function uniqueClientRows(rows: ClientBalanceRow[]): ClientBalanceRow[] {
+  const map = new Map<string, ClientBalanceRow>();
+  for (const r of rows) {
+    const key = (r.client_code?.trim() || r.name.trim() || String(r.client_id)).toLowerCase();
+    const label = agentLabel(r);
+    const prev = map.get(key);
+    if (!prev) {
+      map.set(key, { ...r, agent_tags: label ? [label] : [] });
+      continue;
+    }
+    const tags = new Set(prev.agent_tags);
+    if (label) tags.add(label);
+    const balance = Number(prev.balance) + Number(r.balance);
+    map.set(key, {
+      ...prev,
+      agent_tags: [...tags],
+      balance: Number.isFinite(balance) ? String(balance) : prev.balance
+    });
+  }
+  return [...map.values()];
+}
+
+/** `j3_7629` faqat shu kod. Oxiridagi raqam boshqa mijozning ichki id si emas. */
+function rowsMatchingSearch(rows: ClientBalanceRow[], search: string): ClientBalanceRow[] {
+  const unique = uniqueClientRows(rows);
+  const q = search.trim();
+  if (/^[a-z0-9]{2}_\d+$/i.test(q)) {
+    return unique.filter((r) => (r.client_code ?? "").toLowerCase() === q.toLowerCase());
+  }
+  return unique;
 }
 
 /** Backend `label` va jadval sarlavhasi registr / bo‘shliq bo‘yicha farq qilmasin. */
@@ -604,18 +676,22 @@ function parseClientBalancesView(raw: string | null | undefined): ClientBalanceV
 }
 
 export function ClientBalancesWorkspace() {
+  const canExport = usePermissions().has("cash.balansy_klientov.export");
   const tenantSlug = useAuthStore((s) => s.tenantSlug);
   const hydrated = useAuthStoreHydrated();
   const router = useRouter();
   const searchParams = useSearchParams();
 
-  const [draft, setDraft] = useState<FilterForm>(() => defaultForm());
-  const [applied, setApplied] = useState<FilterForm>(() => defaultForm());
-  const [view, setView] = useState<ClientBalanceViewMode>(() =>
-    parseClientBalancesView(searchParams.get("view"))
-  );
-  const [page, setPage] = useState(1);
-  const [search, setSearch] = useState("");
+  const remembered = useState(() => rememberedBalancesState())[0];
+  const [draft, setDraft] = useState<FilterForm>(() => remembered?.draft ?? defaultForm());
+  const [applied, setApplied] = useState<FilterForm>(() => remembered?.applied ?? defaultForm());
+  const [view, setView] = useState<ClientBalanceViewMode>(() => {
+    const fromUrl = searchParams.get("view");
+    if (fromUrl) return parseClientBalancesView(fromUrl);
+    return remembered?.view ?? "clients";
+  });
+  const [page, setPage] = useState(() => remembered?.page ?? 1);
+  const [search, setSearch] = useState(() => remembered?.search ?? "");
   const [columnDialogOpen, setColumnDialogOpen] = useState(false);
   const [copyFlash, setCopyFlash] = useState(false);
   /** Tanlangan qatorlar (sahifa almashganda ham saqlanadi) */
@@ -627,6 +703,11 @@ export function ClientBalancesWorkspace() {
   const [excelBusy, setExcelBusy] = useState(false);
   const [clientSort, setClientSort] = useState<{ col: string; dir: SortDir }>({ col: "", dir: "asc" });
   const [agentSort, setAgentSort] = useState<{ col: string; dir: SortDir }>({ col: "", dir: "asc" });
+
+  useEffect(() => {
+    if (!loadClientBalancesRememberFilters()) return;
+    saveClientBalancesFilterSnapshot({ draft, applied, search, view, page });
+  }, [draft, applied, search, view, page]);
 
   const clientsTablePrefs = useUserTablePrefs({
     tenantSlug,
@@ -768,9 +849,14 @@ export function ClientBalancesWorkspace() {
     queryKey: ["agents", tenantSlug, "client-balances-filters"],
     enabled: Boolean(tenantSlug) && hydrated,
     staleTime: STALE.reference,
+    retry: false,
     queryFn: async () => {
-      const { data } = await api.get<{ data: StaffPick[] }>(`/api/${tenantSlug}/agents?is_active=true`);
-      return data.data;
+      try {
+        const { data } = await api.get<{ data: StaffPick[] }>(`/api/${tenantSlug}/agents?picker=1`);
+        return data.data ?? [];
+      } catch {
+        return [] as StaffPick[];
+      }
     }
   });
 
@@ -778,9 +864,14 @@ export function ClientBalancesWorkspace() {
     queryKey: ["expeditors", tenantSlug, "client-balances-filters"],
     enabled: Boolean(tenantSlug) && hydrated,
     staleTime: STALE.reference,
+    retry: false,
     queryFn: async () => {
-      const { data } = await api.get<{ data: StaffPick[] }>(`/api/${tenantSlug}/expeditors?is_active=true`);
-      return data.data;
+      try {
+        const { data } = await api.get<{ data: StaffPick[] }>(`/api/${tenantSlug}/expeditors?picker=1`);
+        return data.data ?? [];
+      } catch {
+        return [] as StaffPick[];
+      }
     }
   });
 
@@ -788,11 +879,16 @@ export function ClientBalancesWorkspace() {
     queryKey: ["supervisors", tenantSlug, "client-balances-filters"],
     enabled: Boolean(tenantSlug) && hydrated,
     staleTime: STALE.reference,
+    retry: false,
     queryFn: async () => {
-      const { data } = await api.get<{ data: StaffPick[] }>(
-        `/api/${tenantSlug}/supervisors?is_active=true`
-      );
-      return data.data;
+      try {
+        const { data } = await api.get<{ data: StaffPick[] }>(
+          `/api/${tenantSlug}/supervisors?picker=1`
+        );
+        return data.data ?? [];
+      } catch {
+        return [] as StaffPick[];
+      }
     }
   });
 
@@ -1251,26 +1347,29 @@ export function ClientBalancesWorkspace() {
         />
 
         {summaryBalance != null ? (
-          <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-7">
-            <CbSummaryCard
-              title={
-                view === "clients_legacy"
-                  ? "Долг старого агента"
-                  : view === "clients_consignment"
-                    ? "Долг по консигнации"
-                    : "Общий"
-              }
-              amount={parseAmount(summaryBalance)}
-              iconIndex={0}
-            />
-            {paymentByType.map((row, i) => (
+          <div className="flex flex-wrap gap-3">
+            <div className="w-[220px] shrink-0">
               <CbSummaryCard
-                key={`${row.label}-${i}`}
-                title={row.label}
-                amount={parseAmount(row.amount)}
-                iconIndex={i + 1}
+                title={
+                  view === "clients_legacy"
+                    ? "Долг старого агента"
+                    : view === "clients_consignment"
+                      ? "Долг по консигнации"
+                      : "Общий"
+                }
+                amount={parseAmount(summaryBalance)}
+                iconIndex={0}
               />
-            ))}
+            </div>
+            {paymentByType.map((row, i) => {
+              const amount = parseAmount(row.amount);
+              if (!Number.isFinite(amount) || Math.abs(amount) < 0.0001) return null;
+              return (
+                <div key={`${row.label}-${i}`} className="w-[220px] shrink-0">
+                  <CbSummaryCard title={row.label} amount={amount} iconIndex={i + 1} />
+                </div>
+              );
+            })}
           </div>
         ) : null}
 
@@ -1339,20 +1438,22 @@ export function ClientBalancesWorkspace() {
                   <LayoutGrid size={16} className="text-slate-600" />
                 </CbToolButton>
               ) : null}
-              <button
-                type="button"
-                disabled={
-                  excelBusy ||
-                  (isConsignmentView
-                    ? !consignmentQ.data?.data.length
-                    : !listQ.data?.data.length)
-                }
-                onClick={() => void runExcelExport()}
-                className="flex h-10 items-center gap-2 rounded-lg border border-border bg-card px-4 text-[13.5px] font-medium text-slate-700 transition-colors hover:bg-muted disabled:opacity-60"
-              >
-                <FileSpreadsheet size={16} className="text-emerald-600" />
-                {excelBusy ? "Экспорт…" : "Excel"}
-              </button>
+              {canExport ? (
+                <button
+                  type="button"
+                  disabled={
+                    excelBusy ||
+                    (isConsignmentView
+                      ? !consignmentQ.data?.data.length
+                      : !listQ.data?.data.length)
+                  }
+                  onClick={() => void runExcelExport()}
+                  className="flex h-10 items-center gap-2 rounded-lg border border-border bg-card px-4 text-[13.5px] font-medium text-slate-700 transition-colors hover:bg-muted disabled:opacity-60"
+                >
+                  <FileSpreadsheet size={16} className="text-emerald-600" />
+                  {excelBusy ? "Экспорт…" : "Excel"}
+                </button>
+              ) : null}
               <CbToolButton
                 title="Обновить"
                 onClick={() =>
@@ -1381,7 +1482,11 @@ export function ClientBalancesWorkspace() {
                 sort={clientSort}
                 onSort={onClientSort}
                 loading={listQ.isLoading}
-                rows={listQ.data?.view === "clients" ? (listQ.data.data as ClientBalanceRow[]) : []}
+                rows={
+                  listQ.data?.view === "clients"
+                    ? rowsMatchingSearch(listQ.data.data as ClientBalanceRow[], search)
+                    : []
+                }
                 selected={selectedClients}
                 onToggle={toggleSelect}
                 onToggleAll={toggleSelectAllPage}
@@ -1406,7 +1511,7 @@ export function ClientBalancesWorkspace() {
                 loading={listQ.isLoading}
                 rows={
                   listQ.data?.view === "clients_delivery"
-                    ? (listQ.data.data as ClientBalanceRow[])
+                    ? rowsMatchingSearch(listQ.data.data as ClientBalanceRow[], search)
                     : []
                 }
                 selected={selectedClients}
@@ -1433,7 +1538,7 @@ export function ClientBalancesWorkspace() {
                 loading={listQ.isLoading}
                 rows={
                   listQ.data?.view === "clients_legacy"
-                    ? (listQ.data.data as ClientBalanceRow[])
+                    ? rowsMatchingSearch(listQ.data.data as ClientBalanceRow[], search)
                     : []
                 }
                 selected={selectedClients}
@@ -1875,19 +1980,32 @@ function ClientLikeTable({
           </td>
         );
       case "agent_name": {
-        const tags = r.agent_tags.length ? r.agent_tags : [r.agent_name ?? "—"];
+        const tags = r.agent_tags.length ? r.agent_tags : r.agent_name ? [r.agent_name] : [];
+        const first = tags[0] ?? "—";
+        const rest = tags.slice(1);
         return (
-          <td key={colId} className="max-w-[14rem] whitespace-nowrap px-3 py-3.5">
-            <div className="flex min-w-0 max-w-full flex-nowrap items-center gap-1 overflow-hidden">
-              {tags.map((t, i) => (
-                <span
-                  key={i}
-                  className="min-w-0 max-w-full truncate rounded-md bg-[#e6f4f2] px-2 py-1 text-[11.5px] font-medium uppercase text-[#0c7d6f]"
-                  title={String(t)}
-                >
-                  {String(t)}
+          <td key={colId} className="max-w-[16rem] whitespace-nowrap px-3 py-3.5">
+            <div className="flex min-w-0 items-center gap-1">
+              <span
+                className="min-w-0 truncate rounded-md bg-[#e6f4f2] px-2 py-1 text-[11.5px] font-medium uppercase text-[#0c7d6f]"
+                title={first}
+              >
+                {first}
+              </span>
+              {rest.length > 0 ? (
+                <span className="group relative shrink-0">
+                  <span className="cursor-default rounded-md bg-slate-100 px-1.5 py-1 text-[11px] font-medium text-slate-600">
+                    ещё {rest.length}
+                  </span>
+                  <span className="pointer-events-none absolute left-0 top-full z-30 mt-1 hidden min-w-[14rem] rounded-md border border-slate-200 bg-white p-2 shadow-lg group-hover:block">
+                    {rest.map((t) => (
+                      <span key={t} className="block truncate py-0.5 text-[12px] text-slate-700">
+                        {t}
+                      </span>
+                    ))}
+                  </span>
                 </span>
-              ))}
+              ) : null}
             </div>
           </td>
         );

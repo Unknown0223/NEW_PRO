@@ -47,17 +47,36 @@ export async function collectClientExportSheets(tenantId: number): Promise<Expor
     });
   }
 
-  const slots = await prisma.workSlot.findMany({
-    where: { tenant_id: tenantId },
-    orderBy: [{ sort_order: "asc" }, { slot_code: "asc" }],
-    include: {
-      user_links: {
-        where: { ended_at: null },
-        take: 1,
-        include: { user: { select: { login: true } } }
+  let slots: Array<{
+    slot_code: string;
+    label: string | null;
+    branch_code: string | null;
+    slot_type: string;
+    is_active: boolean;
+    sort_order: number | null;
+    user_links: Array<{ user: { login: string } }>;
+  }> = [];
+  try {
+    slots = await prisma.workSlot.findMany({
+      where: { tenant_id: tenantId },
+      orderBy: [{ sort_order: "asc" }, { slot_code: "asc" }],
+      include: {
+        user_links: {
+          where: { ended_at: null },
+          take: 1,
+          include: { user: { select: { login: true } } }
+        }
       }
+    });
+  } catch (e) {
+    const code =
+      e !== null && typeof e === "object" && "code" in e ? String((e as { code?: unknown }).code) : "";
+    if (code === "P2021" || code === "P2022") {
+      console.warn(`[initial-setup-export] skip work_slots: ${code}`);
+    } else {
+      throw e;
     }
-  });
+  }
   if (slots.length) {
     const slotRows = slots.map((r) => [
       r.slot_code,

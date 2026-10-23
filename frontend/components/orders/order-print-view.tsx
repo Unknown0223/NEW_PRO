@@ -36,12 +36,12 @@ function fmt(n: string | number) {
 
 function statusLabel(status: string): string {
   const map: Record<string, string> = {
-    new: "Yangi",
-    confirmed: "Tasdiqlangan",
-    picking: "Yig'ilmoqda",
-    delivering: "Yetkazilmoqda",
-    delivered: "Topshirilgan",
-    cancelled: "Bekor qilingan"
+    new: "Новый",
+    confirmed: "Подтверждён",
+    picking: "Комплектация",
+    delivering: "Доставка",
+    delivered: "Доставлен",
+    cancelled: "Отменён"
   };
   return map[status] ?? status;
 }
@@ -70,30 +70,30 @@ export function OrderPrintView({ order, items }: PrintOrderProps) {
 
       {/* Header */}
       <div style={{ textAlign: "center", marginBottom: "24px", borderBottom: "2px solid #333", paddingBottom: "16px" }}>
-        <h1 style={{ margin: 0, fontSize: "20px", fontWeight: "bold" }}>INVOICE / ZAKAZ</h1>
+        <h1 style={{ margin: 0, fontSize: "20px", fontWeight: "bold" }}>СЧЁТ / ЗАКАЗ</h1>
         <p style={{ margin: "4px 0 0", fontSize: "14px", color: "#666" }}>
-          Raqam: <strong>{order.number}</strong> &nbsp;|&nbsp; Sana: <strong>{new Date(order.created_at).toLocaleDateString("uz-UZ")}</strong>
+          Номер: <strong>{order.number}</strong> &nbsp;|&nbsp; Дата: <strong>{new Date(order.created_at).toLocaleDateString("ru-RU")}</strong>
         </p>
         <p style={{ margin: "2px 0 0", fontSize: "12px", color: "#888" }}>
-          Holat: {statusLabel(order.status)}
+          Статус: {statusLabel(order.status)}
         </p>
       </div>
 
       {/* Client & Details */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px", marginBottom: "24px" }}>
         <div>
-          <h3 style={{ margin: "0 0 8px", fontSize: "13px", color: "#666", textTransform: "uppercase" }}>Mijoz</h3>
+          <h3 style={{ margin: "0 0 8px", fontSize: "13px", color: "#666", textTransform: "uppercase" }}>Клиент</h3>
           <p style={{ margin: 0, fontSize: "14px", fontWeight: "bold" }}>{order.client_name}</p>
           {order.client_address && <p style={{ margin: "2px 0 0", fontSize: "12px", color: "#666" }}>{order.client_address}</p>}
-          {order.client_phone && <p style={{ margin: "2px 0 0", fontSize: "12px" }}>Tel: {order.client_phone}</p>}
-          {order.client_inn && <p style={{ margin: "2px 0 0", fontSize: "12px" }}>STIR: {order.client_inn}</p>}
+          {order.client_phone && <p style={{ margin: "2px 0 0", fontSize: "12px" }}>Тел.: {order.client_phone}</p>}
+          {order.client_inn && <p style={{ margin: "2px 0 0", fontSize: "12px" }}>ИНН: {order.client_inn}</p>}
         </div>
         <div>
-          <h3 style={{ margin: "0 0 8px", fontSize: "13px", color: "#666", textTransform: "uppercase" }}>Tafsilotlar</h3>
-          {order.warehouse_name && <p style={{ margin: 0, fontSize: "12px" }}>Ombor: {order.warehouse_name}</p>}
-          {order.agent_name && <p style={{ margin: "2px 0 0", fontSize: "12px" }}>Agent: {order.agent_name}</p>}
-          <p style={{ margin: "2px 0 0", fontSize: "12px" }}>Buyurtma ID: #{order.id}</p>
-          {order.comment && <p style={{ margin: "2px 0 0", fontSize: "12px", fontStyle: "italic" }}>Izoh: {order.comment}</p>}
+          <h3 style={{ margin: "0 0 8px", fontSize: "13px", color: "#666", textTransform: "uppercase" }}>Детали</h3>
+          {order.warehouse_name && <p style={{ margin: 0, fontSize: "12px" }}>Склад: {order.warehouse_name}</p>}
+          {order.agent_name && <p style={{ margin: "2px 0 0", fontSize: "12px" }}>Агент: {order.agent_name}</p>}
+          <p style={{ margin: "2px 0 0", fontSize: "12px" }}>ID заказа: #{order.id}</p>
+          {order.comment && <p style={{ margin: "2px 0 0", fontSize: "12px", fontStyle: "italic" }}>Комментарий: {order.comment}</p>}
         </div>
       </div>
 
@@ -102,11 +102,11 @@ export function OrderPrintView({ order, items }: PrintOrderProps) {
         <thead className="app-table-thead">
           <tr style={{ borderBottom: "2px solid #333" }}>
             <th style={{ padding: "8px", textAlign: "left", fontWeight: "bold" }}>#</th>
-            <th style={{ padding: "8px", textAlign: "left", fontWeight: "bold" }}>Kod</th>
-            <th style={{ padding: "8px", textAlign: "left", fontWeight: "bold" }}>Mahsulot</th>
-            <th style={{ padding: "8px", textAlign: "right", fontWeight: "bold" }}>Miqdor</th>
-            <th style={{ padding: "8px", textAlign: "right", fontWeight: "bold" }}>Narx</th>
-            <th style={{ padding: "8px", textAlign: "right", fontWeight: "bold" }}>Summa</th>
+            <th style={{ padding: "8px", textAlign: "left", fontWeight: "bold" }}>Код</th>
+            <th style={{ padding: "8px", textAlign: "left", fontWeight: "bold" }}>Товар</th>
+            <th style={{ padding: "8px", textAlign: "right", fontWeight: "bold" }}>Количество</th>
+            <th style={{ padding: "8px", textAlign: "right", fontWeight: "bold" }}>Цена</th>
+            <th style={{ padding: "8px", textAlign: "right", fontWeight: "bold" }}>Сумма</th>
           </tr>
         </thead>
         <tbody>
@@ -118,7 +118,7 @@ export function OrderPrintView({ order, items }: PrintOrderProps) {
                 {item.name}
                 {item.is_bonus && (
                   <span style={{ marginLeft: "4px", padding: "1px 6px", background: "#fef3c7", borderRadius: "4px", fontSize: "10px" }}>
-                    BONUS
+                    БОНУС
                   </span>
                 )}
               </td>
@@ -130,14 +130,14 @@ export function OrderPrintView({ order, items }: PrintOrderProps) {
         </tbody>
         <tfoot>
           <tr style={{ borderTop: "2px solid #333" }}>
-            <td colSpan={4} style={{ padding: "8px", textAlign: "right", fontWeight: "bold" }}>JAMI:</td>
-            <td style={{ padding: "8px", textAlign: "right", fontWeight: "bold" }}>{items.length} ta mahsulot</td>
-            <td style={{ padding: "8px", textAlign: "right", fontWeight: "bold", fontSize: "14px" }}>{fmt(order.total_sum)} so‘m</td>
+            <td colSpan={4} style={{ padding: "8px", textAlign: "right", fontWeight: "bold" }}>ИТОГО:</td>
+            <td style={{ padding: "8px", textAlign: "right", fontWeight: "bold" }}>{items.length} поз.</td>
+            <td style={{ padding: "8px", textAlign: "right", fontWeight: "bold", fontSize: "14px" }}>{fmt(order.total_sum)} сум</td>
           </tr>
           {parseFloat(order.bonus_sum) > 0 && (
             <tr>
-              <td colSpan={5} style={{ padding: "4px 8px", textAlign: "right", color: "#666" }}>Bonus summasi:</td>
-              <td style={{ padding: "4px 8px", textAlign: "right", color: "#666" }}>{fmt(order.bonus_sum)} so‘m</td>
+              <td colSpan={5} style={{ padding: "4px 8px", textAlign: "right", color: "#666" }}>Сумма бонуса:</td>
+              <td style={{ padding: "4px 8px", textAlign: "right", color: "#666" }}>{fmt(order.bonus_sum)} сум</td>
             </tr>
           )}
         </tfoot>
@@ -145,8 +145,8 @@ export function OrderPrintView({ order, items }: PrintOrderProps) {
 
       {/* Footer */}
       <div style={{ marginTop: "40px", borderTop: "1px solid #ddd", paddingTop: "16px", fontSize: "11px", color: "#888", textAlign: "center" }}>
-        <p style={{ margin: 0 }}>Ushbu hujjat elektron tarzda yaratilgan va imzolangan.</p>
-        <p style={{ margin: "4px 0 0" }}>Chop etilgan sana: {new Date().toLocaleString("uz-UZ")}</p>
+        <p style={{ margin: 0 }}>Документ сформирован и подписан в электронном виде.</p>
+        <p style={{ margin: "4px 0 0" }}>Дата печати: {new Date().toLocaleString("ru-RU")}</p>
       </div>
     </div>
   );

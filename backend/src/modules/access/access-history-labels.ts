@@ -1,5 +1,6 @@
 import { DEFAULT_PERMISSION_METADATA } from "./permission-catalog";
 import { LEGACY_PERMISSION_METADATA } from "./legacy-permission-labels";
+import { structuredCatalogByKey } from "./access-operations-tree";
 
 const PERM_DESC = new Map<string, string>();
 for (const [k, v] of Object.entries(DEFAULT_PERMISSION_METADATA)) {
@@ -10,7 +11,12 @@ for (const [k, v] of Object.entries(LEGACY_PERMISSION_METADATA)) {
 }
 
 export function permissionDescriptionForKey(key: string): string {
-  return PERM_DESC.get(key) ?? humanizePermissionKey(key);
+  return structuredCatalogByKey().get(key)?.description ?? PERM_DESC.get(key) ?? humanizePermissionKey(key);
+}
+
+function firstKey(v: unknown): string | null {
+  if (!Array.isArray(v)) return null;
+  return v.find((x): x is string => typeof x === "string" && Boolean(x.trim())) ?? null;
 }
 
 function humanizePermissionKey(key: string): string {
@@ -52,7 +58,13 @@ export function deriveAccessHistoryOperationLabel(row: AccessHistoryLabelInput):
     return "Массовое изменение доступа";
   }
   const nv = asObj(new_value);
+  if (entity_type === "role") {
+    const name = typeof nv?.role_name === "string" ? nv.role_name : entity_id;
+    return `Роль «${name}»`;
+  }
   if (nv) {
+    const grantKey = firstKey(nv.grant_delegation_allow) ?? firstKey(nv.grant_delegation_revoke);
+    if (grantKey) return permissionDescriptionForKey(grantKey);
     const rm = nv.remove_permission_keys;
     if (Array.isArray(rm) && rm.length > 0) {
       const first = rm.find((x): x is string => typeof x === "string" && Boolean(x.trim()));
@@ -81,6 +93,7 @@ export function deriveAccessHistoryOperationLabel(row: AccessHistoryLabelInput):
     if (nv.territory_ids !== undefined) return "Территории пользователя";
     if (nv.trade_direction_ids !== undefined) return "Направления пользователя";
     if (nv.supervisee_user_ids !== undefined) return "Подчинённые супервайзера";
+    if (nv.extra_role_keys !== undefined) return "Дополнительные роли";
   }
   if (entity_type === "user" && entity_id) {
     if (action_type.includes("access.cloned")) return "Копирование доступа";
@@ -103,6 +116,18 @@ export function deriveAccessHistoryActionTypeLabel(row: AccessHistoryLabelInput)
     return parts.join(", ");
   }
 
+  if (action_type === "access.role_defaults") {
+    const added = Array.isArray(nv?.added) ? nv.added.length : 0;
+    const removed = Array.isArray(ov?.removed) ? ov.removed.length : 0;
+    return `Состав роли изменён: +${added} / −${removed}`;
+  }
+
+  const grantAllow = Array.isArray(nv?.grant_delegation_allow) ? nv.grant_delegation_allow.length : 0;
+  const grantRevoke = Array.isArray(nv?.grant_delegation_revoke) ? nv.grant_delegation_revoke.length : 0;
+  if (grantAllow > 0 || grantRevoke > 0) {
+    return grantAllow > 0 ? "Разрешено выдавать другим" : "Запрещено выдавать другим";
+  }
+
   if (action_type.includes("access.cloned")) {
     const src = nv?.source_user_id;
     return typeof src === "number"
@@ -122,7 +147,7 @@ export function deriveAccessHistoryActionTypeLabel(row: AccessHistoryLabelInput)
     const keys = nv.remove_permission_keys.filter((x): x is string => typeof x === "string");
     const labels = keys.slice(0, 3).map(permissionDescriptionForKey);
     const extra = keys.length > 3 ? ` (+${keys.length - 3})` : "";
-    return `Пользовательская настройка снята: ${labels.join("; ")}${extra}`;
+    return `Операции откреплены: ${labels.join("; ")}${extra}`;
   }
 
   if (nv?.permissions !== undefined || nv?.denied_permissions !== undefined || nv?.merge_permissions !== undefined) {

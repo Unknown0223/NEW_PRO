@@ -129,7 +129,7 @@ class _DaysList extends StatelessWidget {
           child: Column(
             children: [
               _kv('План на сегодня', formatMoneyUz(todayPlan)),
-              _kv('Перенос (carry)', formatMoneyUz(carry)),
+              _kv('Перенос', formatMoneyUz(carry)),
             ],
           ),
         ),

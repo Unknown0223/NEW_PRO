@@ -89,7 +89,7 @@ class CashierHomePage extends ConsumerWidget {
                               style: AppTypography.caption.copyWith(color: AppColors.textMuted),
                             ),
                             error: (_, __) => Text(
-                              'Открыть inbox',
+                              'Открыть входящие',
                               style: AppTypography.caption.copyWith(color: AppColors.textMuted),
                             ),
                           ),
@@ -104,7 +104,7 @@ class CashierHomePage extends ConsumerWidget {
           ),
           const SizedBox(height: 12),
           Text(
-            'Назначение и подтверждение pending-оплаты — в карточке перевода. '
+            'Назначение и подтверждение ожидающей оплаты — в карточке перевода. '
             'Импорт CSV/Excel — только в веб-панели.',
             style: AppTypography.caption.copyWith(color: AppColors.textMuted),
           ),

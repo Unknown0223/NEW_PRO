@@ -43,7 +43,7 @@ export async function getPaymentDetail(
   const rawUnalloc = p.amount.sub(allocatedSum);
   const unallocated = rawUnalloc.lt(0) ? new Prisma.Decimal(0) : rawUnalloc;
 
-  const base = mapPaymentToListRow(p, tenantId);
+  const base = (await withClientCardBalance(tenantId, [mapPaymentToListRow(p, tenantId)]))[0]!;
   return {
     payment: {
       ...base,
@@ -102,6 +102,52 @@ function buildPaymentListOrderBy(q: PaymentListQuery): Prisma.PaymentOrderByWith
   }
 }
 
+/** Mijoz kartasidagi saldo: kassa qoldig‘i minus yetkazilgan zakazlar. */
+async function clientCardBalanceById(
+  tenantId: number,
+  clientIds: number[]
+): Promise<Map<number, string>> {
+  const ids = [...new Set(clientIds.filter((id) => Number.isFinite(id) && id > 0))];
+  if (ids.length === 0) return new Map();
+  const rows = await prisma.$queryRaw<Array<{ client_id: number; bal: Prisma.Decimal }>>`
+    SELECT c.id AS client_id,
+      (
+        COALESCE((
+          SELECT cb.balance FROM client_balances cb
+          WHERE cb.tenant_id = c.tenant_id AND cb.client_id = c.id
+          LIMIT 1
+        ), 0)
+        - COALESCE((
+          SELECT SUM(o.total_sum) FROM orders o
+          WHERE o.tenant_id = c.tenant_id
+            AND o.client_id = c.id
+            AND o.order_type = 'order'
+            AND o.status = 'delivered'
+        ), 0)
+      )::decimal(15,2) AS bal
+    FROM clients c
+    WHERE c.tenant_id = ${tenantId}
+      AND c.id IN (${Prisma.join(ids)})
+  `;
+  const out = new Map<number, string>();
+  for (const r of rows) out.set(Number(r.client_id), r.bal.toString());
+  return out;
+}
+
+async function withClientCardBalance<T extends { client_id: number; client_balance: string }>(
+  tenantId: number,
+  rows: T[]
+): Promise<T[]> {
+  const byClient = await clientCardBalanceById(
+    tenantId,
+    rows.map((r) => r.client_id)
+  );
+  return rows.map((r) => ({
+    ...r,
+    client_balance: byClient.get(r.client_id) ?? r.client_balance
+  }));
+}
+
 export async function listPayments(
   tenantId: number,
   q: PaymentListQuery,
@@ -126,7 +172,10 @@ export async function listPayments(
     total,
     page: q.page,
     limit: q.limit,
-    data: rows.map((r) => mapPaymentToListRow(r, tenantId))
+    data: await withClientCardBalance(
+      tenantId,
+      rows.map((r) => mapPaymentToListRow(r, tenantId))
+    )
   };
 }
 
@@ -137,7 +186,10 @@ export async function listPaymentsForOrder(tenantId: number, orderId: number): P
     orderBy: { created_at: "desc" },
     include: inc
   });
-  return rows.map((r) => mapPaymentToListRow(r, tenantId));
+  return withClientCardBalance(
+    tenantId,
+    rows.map((r) => mapPaymentToListRow(r, tenantId))
+  );
 }
 
 export async function listPaymentsForClient(tenantId: number, clientId: number, limit = 50): Promise<PaymentListRow[]> {
@@ -148,7 +200,27 @@ export async function listPaymentsForClient(tenantId: number, clientId: number, 
     take: limit,
     include: inc
   });
-  return rows.map((r) => mapPaymentToListRow(r, tenantId));
+  return withClientCardBalance(
+    tenantId,
+    rows.map((r) => mapPaymentToListRow(r, tenantId))
+  );
+}
+
+/** EPR confirm: bir nechta to‘lovni bitta so‘rovda olish */
+export async function listPaymentsByIds(tenantId: number, ids: number[]): Promise<PaymentListRow[]> {
+  const uniq = [...new Set(ids.filter((id) => Number.isFinite(id) && id >= 1))].slice(0, 100);
+  if (!uniq.length) return [];
+  const inc = paymentListInclude(tenantId);
+  const rows = await prisma.payment.findMany({
+    where: { tenant_id: tenantId, id: { in: uniq } },
+    include: inc
+  });
+  const mapped = await withClientCardBalance(
+    tenantId,
+    rows.map((r) => mapPaymentToListRow(r, tenantId))
+  );
+  const byId = new Map(mapped.map((r) => [r.id, r]));
+  return uniq.map((id) => byId.get(id)).filter((r): r is PaymentListRow => r != null);
 }
 
 export type CreatePaymentInput = {
@@ -165,23 +237,32 @@ export type CreatePaymentInput = {
   expeditor_user_id?: number | null;
   /** Vedoma: `COALESCE(ledger_agent_id, zakaz.agent, mijoz.agent)` */
   ledger_agent_id?: number | null;
+  /** Opening-balance Excel: historical agent may be inactive. */
+  ledger_agent_allow_inactive?: boolean;
   /** cash | consignment | none */
   allocation_mode?: AllocationMode;
   /** Qo‘lda tanlangan zakazlar */
   allocation_order_ids?: number[];
   /** Agent+klient kombinatsiyasi bo‘yicha tanlangan agent */
   allocation_agent_id?: number | null;
+  /** Ixtiyoriy hujjat ID (har qanday matn); bo‘sh → create dan keyin String(id) */
+  number?: string | null;
 };
 
 export async function resolveLedgerAgentId(
   tenantId: number,
   raw: number | null | undefined,
-  tx?: Prisma.TransactionClient
+  tx?: Prisma.TransactionClient,
+  opts?: { requireActive?: boolean }
 ): Promise<number | null> {
   if (raw == null || !Number.isFinite(raw) || raw < 1) return null;
   const db = tx ?? prisma;
   const u = await db.user.findFirst({
-    where: { id: raw, tenant_id: tenantId, is_active: true }
+    where: {
+      id: raw,
+      tenant_id: tenantId,
+      ...(opts?.requireActive === false ? {} : { is_active: true })
+    }
   });
   if (!u) throw new Error("BAD_LEDGER_AGENT");
   return u.id;

@@ -11,6 +11,7 @@ import { PageHeader } from "@/components/dashboard/page-header";
 import { PageShell } from "@/components/dashboard/page-shell";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { useAppConfirm } from "@/components/ui/app-confirm-dialog";
 import { buttonVariants } from "@/components/ui/button-variants";
 import { api } from "@/lib/api";
 import { useAuthStore } from "@/lib/auth-store";
@@ -33,6 +34,7 @@ function scopeFromRow(r: BonusStrategyRow): BonusStrategyScopeValue {
 export default function BonusStrategiesListPage() {
   const tenantSlug = useAuthStore((s) => s.tenantSlug);
   const qc = useQueryClient();
+  const { confirm, dialog: confirmDialog } = useAppConfirm();
   const [scopeRow, setScopeRow] = useState<BonusStrategyRow | null>(null);
   const [scopeError, setScopeError] = useState<string | null>(null);
 
@@ -169,7 +171,7 @@ export default function BonusStrategiesListPage() {
                       <div className="inline-flex items-center justify-end gap-1.5">
                         <HistoryIconButton
                           module="settings"
-                          section="bonusy_i_skidki"
+                          section="bonus_strategiya"
                           entityType="bonus_strategy"
                           entityId={r.id}
                           title={`История: ${r.name}`}
@@ -197,7 +199,16 @@ export default function BonusStrategiesListPage() {
                           type="button"
                           className="px-1.5 text-xs text-destructive hover:underline"
                           onClick={() => {
-                            if (confirm(`Удалить «${r.name}»?`)) delMut.mutate(r.id);
+                            void (async () => {
+                              const ok = await confirm({
+                                title: "Удалить",
+                                message: `Удалить «${r.name}»?`,
+                                confirmLabel: "Да",
+                                cancelLabel: "Нет",
+                                destructive: true
+                              });
+                              if (ok) delMut.mutate(r.id);
+                            })();
                           }}
                         >
                           Удалить
@@ -233,6 +244,7 @@ export default function BonusStrategiesListPage() {
           }}
         />
       ) : null}
+      {confirmDialog}
     </PageShell>
   );
 }

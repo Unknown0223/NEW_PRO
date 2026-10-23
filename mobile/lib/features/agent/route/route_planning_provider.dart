@@ -15,11 +15,19 @@ final plannedDailyRouteProvider = FutureProvider<List<RouteMapStop>>((ref) async
   final weekdayTab = ref.watch(effectiveWeekdayTabProvider);
   if (weekdayTab <= 0) return const [];
 
-  final route = await ref.watch(todayRouteProvider.future);
-  final routeStart = await ref.watch(agentRouteStartProvider.future);
-  final visitedIds = await ref.watch(visitedTodayClientIdsProvider.future);
+  // Parallel — GPS / route / visited / activity birga.
+  final packed = await Future.wait<Object?>([
+    ref.watch(todayRouteProvider.future),
+    ref.watch(agentRouteStartProvider.future),
+    ref.watch(visitedTodayClientIdsProvider.future),
+    AppDatabase().getLastClientActivityById(),
+  ]);
+
+  final route = packed[0] as Map<String, dynamic>?;
+  final routeStart = packed[1] as RouteMapStop?;
+  final visitedIds = packed[2] as Set<int>;
+  final lastActivity = packed[3] as Map<int, DateTime>;
   final routeCfg = ref.watch(sessionProvider).mobileConfig?.route ?? const RouteConfig();
-  final lastActivity = await AppDatabase().getLastClientActivityById();
 
   final rawStops = <RouteMapStop>[];
   final stopsRaw = (route?['stops'] as List?) ?? [];
@@ -61,9 +69,37 @@ final plannedDailyRouteProvider = FutureProvider<List<RouteMapStop>>((ref) async
     lastActivityByClient: lastActivity,
   );
 
-  return optimizeVisitRouteOrder(
-    capped,
-    startLat: routeStart?.latitude,
-    startLon: routeStart?.longitude,
-  );
+  final savedCount = (route?['_savedStopCount'] as num?)?.toInt() ?? 0;
+  if (savedCount <= 0) {
+    return optimizeVisitRouteOrder(
+      capped,
+      startLat: routeStart?.latitude,
+      startLon: routeStart?.longitude,
+    );
+  }
+
+  // Server (web «Маршрут дня агента») tartibi saqlanadi; qo‘shimcha reja nuqtalari oxirida.
+  final savedIds = {for (final s in rawStops.take(savedCount)) s.clientId};
+  final saved = capped.where((s) => savedIds.contains(s.clientId)).toList();
+  final extra = capped.where((s) => !savedIds.contains(s.clientId)).toList();
+  final tailStart = saved.isNotEmpty ? saved.last : routeStart;
+  final tail = extra.isEmpty
+      ? const <RouteMapStop>[]
+      : optimizeVisitRouteOrder(
+          extra,
+          startLat: tailStart?.latitude,
+          startLon: tailStart?.longitude,
+        );
+  final ordered = [...saved, ...tail];
+  return [
+    for (var i = 0; i < ordered.length; i++)
+      RouteMapStop(
+        clientId: ordered[i].clientId,
+        name: ordered[i].name,
+        latitude: ordered[i].latitude,
+        longitude: ordered[i].longitude,
+        orderIndex: i + 1,
+        visited: ordered[i].visited,
+      ),
+  ];
 });

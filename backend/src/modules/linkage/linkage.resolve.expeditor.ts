@@ -1,6 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "../../config/database";
 import { env } from "../../config/env";
+import { collectWarehouseIdsForUsers } from "./linkage.warehouse-ids";
 
 export async function resolveByExpeditor(
   tenantId: number,
@@ -13,7 +14,7 @@ export async function resolveByExpeditor(
   expeditor_ids: Set<number>;
   product_ids: Set<number>;
 }> {
-  const [expeditor, clientsByAssign, clientsByOrders, agentsByAssign, agentsByOrders, whLinks, cashLinks, productByOrders] =
+  const [expeditor, clientsByAssign, clientsByOrders, agentsByAssign, agentsByOrders, cashLinks, productByOrders] =
     await Promise.all([
       prisma.user.findFirst({
         where: { tenant_id: tenantId, id: selectedExpeditorUserId, role: "expeditor", is_active: true },
@@ -43,11 +44,6 @@ export async function resolveByExpeditor(
         distinct: ["agent_id"],
         select: { agent_id: true }
       }),
-      prisma.warehouseUserLink.findMany({
-        where: { user_id: selectedExpeditorUserId, warehouse: { tenant_id: tenantId, is_active: true } },
-        distinct: ["warehouse_id"],
-        select: { warehouse_id: true }
-      }),
       prisma.cashDeskUserLink.findMany({
         where: { user_id: selectedExpeditorUserId, cash_desk: { tenant_id: tenantId, is_active: true } },
         distinct: ["cash_desk_id"],
@@ -74,7 +70,7 @@ export async function resolveByExpeditor(
     ...agentsByOrders.map((r) => r.agent_id).filter((n): n is number => n != null)
   ];
   const uniqueAgentIds = [...new Set(agentIds)];
-  const [clientsPrimary, clientsSlots, whByAgent, cashByAgent] = await Promise.all([
+  const [clientsPrimary, clientsSlots, extraWh, cashByAgent] = await Promise.all([
     uniqueAgentIds.length
       ? prisma.client.findMany({
           where: { tenant_id: tenantId, merged_into_client_id: null, agent_id: { in: uniqueAgentIds } },
@@ -88,13 +84,7 @@ export async function resolveByExpeditor(
           select: { client_id: true }
         })
       : Promise.resolve([]),
-    uniqueAgentIds.length
-      ? prisma.warehouseUserLink.findMany({
-          where: { user_id: { in: uniqueAgentIds }, warehouse: { tenant_id: tenantId, is_active: true } },
-          distinct: ["warehouse_id"],
-          select: { warehouse_id: true }
-        })
-      : Promise.resolve([]),
+    collectWarehouseIdsForUsers(tenantId, [selectedExpeditorUserId, ...uniqueAgentIds]),
     uniqueAgentIds.length
       ? prisma.cashDeskUserLink.findMany({
           where: { user_id: { in: uniqueAgentIds }, cash_desk: { tenant_id: tenantId, is_active: true } },
@@ -108,8 +98,7 @@ export async function resolveByExpeditor(
   for (const r of clientsByOrders) client_ids.add(r.client_id);
   for (const r of clientsPrimary) client_ids.add(r.id);
   for (const r of clientsSlots) client_ids.add(r.client_id);
-  const warehouse_ids = new Set<number>(whLinks.map((r) => r.warehouse_id));
-  for (const r of whByAgent) warehouse_ids.add(r.warehouse_id);
+  const warehouse_ids = new Set<number>(extraWh);
   const cash_desk_ids = new Set<number>(cashLinks.map((r) => r.cash_desk_id));
   for (const r of cashByAgent) cash_desk_ids.add(r.cash_desk_id);
 

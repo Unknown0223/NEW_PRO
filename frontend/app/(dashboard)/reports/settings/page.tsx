@@ -99,7 +99,7 @@ export default function ReportSettingsPage() {
   const allVisibleChecked = visibleItems.length > 0 && visibleItems.every((x) => !hidden.has(x.href));
 
   return (
-    <div className="mx-auto w-full max-w-2xl p-4">
+    <div className="w-full">
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="text-base">Показать/скрыть отчеты из меню</CardTitle>

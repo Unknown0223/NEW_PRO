@@ -18,7 +18,12 @@ import {
 } from "@/components/payments/payment-history-detail/payment-history-detail-utils";
 import { buttonVariants } from "@/components/ui/button-variants";
 import { api } from "@/lib/api";
+import {
+  paymentMethodSelectOptions,
+  type ProfilePaymentMethodEntry
+} from "@/lib/payment-method-options";
 import { useAuthStore, useAuthStoreHydrated, useEffectiveRole } from "@/lib/auth-store";
+import { usePermissions } from "@/lib/use-permissions";
 import { formatNumberGrouped } from "@/lib/format-numbers";
 import type { PaymentDetailPayload } from "@/lib/payment-detail-types";
 import { STALE } from "@/lib/query-stale";
@@ -27,29 +32,32 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, Check, History, Printer, Split, Trash2, XCircle } from "lucide-react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
 function PaymentHistoryComparisonTable({ rows }: { rows: ReturnType<typeof buildPaymentHistoryRows> }) {
   return (
     <div className="rounded-xl bg-white p-6 shadow-[0_1px_4px_rgba(15,52,56,0.08)]">
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[900px] border-collapse">
+        <table className="w-full border-collapse">
           <tbody>
             {rows.map((r) => (
               <tr key={r.label} className={cn("border border-slate-200", r.shaded && "bg-slate-50")}>
-                <td className="w-[56%] border border-slate-200 px-4 py-2 text-[14px] text-slate-400">
+                <td className="w-[240px] border border-slate-200 px-4 py-2 text-[14px] text-slate-400">
                   {r.label}
                 </td>
-                <td className="w-[22%] border border-slate-200 px-4 py-2 text-[14px] text-slate-600">
-                  {r.v1 ?? ""}
-                </td>
-                <td className="w-[22%] border border-slate-200 px-4 py-2 text-[14px] text-slate-600">
-                  {r.v2 ?? ""}
+                <td className="border border-slate-200 px-4 py-2 text-[14px] text-slate-700">
+                  <div className="flex flex-wrap items-center gap-x-6 gap-y-1">
+                    {r.v1 != null && r.v1 !== "" ? <span>{r.v1}</span> : null}
+                    {r.v2 != null && r.v2 !== "" ? <span>{r.v2}</span> : null}
+                    {(r.v1 == null || r.v1 === "") && (r.v2 == null || r.v2 === "") ? (
+                      <span className="text-slate-400">—</span>
+                    ) : null}
+                  </div>
                 </td>
               </tr>
             ))}
             <tr>
-              <td colSpan={3} className="h-4" />
+              <td colSpan={2} className="h-4" />
             </tr>
           </tbody>
         </table>
@@ -122,6 +130,9 @@ export function PaymentHistoryDetailWorkspace() {
 
   const invalid = !Number.isFinite(paymentId) || paymentId < 1;
   const canDelete = effectiveRole === "admin";
+  const { has } = usePermissions();
+  const canAllocate = has("cash.oplaty_klientov.update");
+  const canApprove = has("cash.oplaty_klientov.approve");
 
   const detailQ = useQuery({
     queryKey: ["payment-detail", tenantSlug, paymentId],
@@ -160,11 +171,35 @@ export function PaymentHistoryDetailWorkspace() {
     }
   });
 
+  const profileQ = useQuery({
+    queryKey: ["settings-profile", tenantSlug, "payment-history"],
+    enabled: Boolean(tenantSlug) && hydrated,
+    staleTime: STALE.reference,
+    queryFn: async () => {
+      const { data } = await api.get<{
+        references?: {
+          payment_types?: string[];
+          payment_method_entries?: ProfilePaymentMethodEntry[];
+        };
+      }>(`/api/${tenantSlug}/settings/profile`);
+      return data.references ?? {};
+    }
+  });
+  const methodLabel = useMemo(() => {
+    const opts = paymentMethodSelectOptions(profileQ.data, profileQ.data?.payment_types);
+    const map = new Map(opts.map((o) => [o.value, o.label]));
+    return (code: string | null | undefined) => {
+      const raw = (code ?? "").trim();
+      if (!raw) return "—";
+      return map.get(raw) ?? raw;
+    };
+  }, [profileQ.data]);
+
   const p = detailQ.data?.payment;
   const data = detailQ.data;
   const isVoided = Boolean(p?.deleted_at);
   const isPending = p?.workflow_status === "pending_confirmation" && !isVoided;
-  const rows = data ? buildPaymentHistoryRows(data) : [];
+  const rows = data ? buildPaymentHistoryRows(data, methodLabel) : [];
 
   const handlePrint = () => {
     setPrintOpen(false);
@@ -179,7 +214,7 @@ export function PaymentHistoryDetailWorkspace() {
         </h1>
         {p ? (
           <p className="mt-1 text-sm text-slate-500">
-            Платёж #{p.id} · {p.client_name}
+            Платёж #{p.number?.trim() || p.id} · {p.client_name}
             {p.client_code ? ` (${p.client_code})` : ""}
           </p>
         ) : null}
@@ -330,7 +365,7 @@ export function PaymentHistoryDetailWorkspace() {
               Печать
             </button>
 
-            {!isVoided ? (
+            {!isVoided && canAllocate ? (
               <button
                 type="button"
                 className={cn(buttonVariants({ variant: "outline", size: "sm" }), "inline-flex items-center gap-1.5")}
@@ -341,7 +376,7 @@ export function PaymentHistoryDetailWorkspace() {
               </button>
             ) : null}
 
-            {isPending ? (
+            {isPending && canApprove ? (
               <>
                 <button
                   type="button"

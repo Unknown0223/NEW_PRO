@@ -1,6 +1,6 @@
 /** Поля системы — порядок в модалке импорта клиентов (совпадает с таблицей). */
 export const CLIENT_IMPORT_MAPPABLE_FIELDS: { key: string; label: string }[] = [
-  { key: "client_db_id", label: "ИД в системе (только обновление по Excel)" },
+  { key: "client_db_id", label: "ИД / id (создание с заданным id или обновление)" },
   { key: "name", label: "Наименование (новый клиент — обязательно)" },
   { key: "legal_name", label: "Юридическое название" },
   { key: "client_code", label: "Код клиента (короткий)" },
@@ -43,5 +43,14 @@ export const CLIENT_IMPORT_MAPPABLE_FIELDS: { key: string; label: string }[] = [
   { key: "contact1_phone", label: "Контакт 1: телефон" },
   { key: "contact2_firstName", label: "Контакт 2: имя" },
   { key: "contact2_lastName", label: "Контакт 2: фамилия" },
-  { key: "contact2_phone", label: "Контакт 2: телефон" }
+  { key: "contact2_phone", label: "Контакт 2: телефон" },
+  { key: "import_agent_1", label: "Команда: Агент 1" },
+  { key: "import_agent_1_days", label: "Команда: Агент 1 — дни (Пн…Вс или 1–7)" },
+  { key: "import_expeditor_1", label: "Команда: Экспедитор 1" },
+  { key: "import_agent_2", label: "Команда: Агент 2" },
+  { key: "import_agent_2_days", label: "Команда: Агент 2 — дни" },
+  { key: "import_expeditor_2", label: "Команда: Экспедитор 2" },
+  { key: "import_agent_3", label: "Команда: Агент 3" },
+  { key: "import_agent_3_days", label: "Команда: Агент 3 — дни" },
+  { key: "import_expeditor_3", label: "Команда: Экспедитор 3" }
 ];

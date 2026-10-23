@@ -155,17 +155,59 @@ describe("PivotEngine", () => {
     expect(row?.subtotal?.cells.length).toBeGreaterThan(0);
   });
 
+  it("subtotalScope columns — qator oraliq jami yo'q, ustun guruhi jami bor", () => {
+    const config: PivotConfig = {
+      ...DEFAULT_PIVOT_CONFIG,
+      rows: ["region", "product"],
+      columns: ["product", "month"],
+      values: [{ fieldId: "amount", aggregation: "SUM" }],
+      options: { ...DEFAULT_PIVOT_CONFIG.options, showSubtotals: true, subtotalScope: "columns" }
+    };
+    const result = engine.compute(ROWS, FIELDS, config);
+    expect(result.rows[0]?.subtotal).toBeUndefined();
+    const toshkent = result.rows.find((row) => row.key.includes("Toshkent"));
+    const subtotalCell = toshkent?.cells.find((cell) => cell.columnKey === "A__amount");
+    expect(subtotalCell?.rawValue).toBe(1_800_000);
+  });
+
+  it("subtotalScope rows — ustun oraliq jami yo'q", () => {
+    const config: PivotConfig = {
+      ...DEFAULT_PIVOT_CONFIG,
+      rows: ["region", "product"],
+      columns: ["product", "month"],
+      values: [{ fieldId: "amount", aggregation: "SUM" }],
+      options: { ...DEFAULT_PIVOT_CONFIG.options, showSubtotals: true, subtotalScope: "rows" }
+    };
+    const result = engine.compute(ROWS, FIELDS, config);
+    expect(result.rows[0]?.subtotal).toBeDefined();
+    const keys = result.rows[0]?.cells.map((cell) => cell.columnKey) ?? [];
+    expect(keys.some((key) => key === "A__amount")).toBe(false);
+  });
+
   it("showColumnTotals — ustun jami qatori", () => {
     const config: PivotConfig = {
       ...DEFAULT_PIVOT_CONFIG,
       rows: ["region"],
       columns: ["month"],
       values: [{ fieldId: "amount", aggregation: "SUM" }],
-      options: { ...DEFAULT_PIVOT_CONFIG.options, showColumnTotals: true }
+      options: { ...DEFAULT_PIVOT_CONFIG.options, showColumnTotals: true, showGrandTotal: false }
     };
     const result = engine.compute(ROWS, FIELDS, config);
     expect(result.columnTotals).toBeDefined();
     expect(result.columnTotals?.cells[0]?.formatted).toContain("Итог по столбцам");
+  });
+
+  it("umumiy итог yonida ustun jami qatori takrorlanmaydi", () => {
+    const config: PivotConfig = {
+      ...DEFAULT_PIVOT_CONFIG,
+      rows: ["region"],
+      columns: ["month"],
+      values: [{ fieldId: "amount", aggregation: "SUM" }],
+      options: { ...DEFAULT_PIVOT_CONFIG.options, showColumnTotals: true, showGrandTotal: true }
+    };
+    const result = engine.compute(ROWS, FIELDS, config);
+    expect(result.grandTotal).toBeDefined();
+    expect(result.columnTotals).toBeUndefined();
   });
 
   it("calculatedMeasures — formula maydoni", () => {
@@ -257,5 +299,28 @@ describe("PivotEngine", () => {
     const amountRow = toshkent?.children?.[0];
     expect(amountRow?.cells[0]?.formatted).toBe("Summa");
     expect(amountRow?.cells.length).toBeGreaterThan(2);
+  });
+
+  it("valuesPosition rows + drillDown multi-row — ota guruh summasi ko‘rinadi", () => {
+    const config: PivotConfig = {
+      ...DEFAULT_PIVOT_CONFIG,
+      rows: ["region", "product"],
+      values: [{ fieldId: "amount", aggregation: "SUM" }],
+      options: {
+        ...DEFAULT_PIVOT_CONFIG.options,
+        valuesPosition: "rows",
+        drillDown: true,
+        showSubtotals: true
+      }
+    };
+    const result = engine.compute(ROWS, FIELDS, config);
+    const toshkent = result.rows.find((r) => r.key.includes("Toshkent"));
+    expect(toshkent?.children?.length).toBeGreaterThan(0);
+    // Ota (region) — metrika bolasi emas, guruh SUM
+    expect(toshkent?.cells[1]?.rawValue).toBe(2_300_000);
+    // Leaf product otasi measure children bilan; metrika bolada
+    const productLeaf = toshkent?.children?.[0];
+    expect(productLeaf?.children?.length).toBe(1);
+    expect(productLeaf?.children?.[0]?.cells[1]?.rawValue).toBeGreaterThan(0);
   });
 });

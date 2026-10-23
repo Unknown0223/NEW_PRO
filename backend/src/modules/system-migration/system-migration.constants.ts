@@ -1,4 +1,4 @@
-export const BACKUP_FORMAT_VERSION = 5 as const;
+export const BACKUP_FORMAT_VERSION = 6 as const;
 export const BACKUP_KIND = "salec-tenant-backup" as const;
 export const BACKUP_FILE_EXTENSION = ".zip" as const;
 
@@ -25,7 +25,7 @@ export const MIGRATION_MODULES: MigrationModuleDef[] = [
     phase: 1,
     export_status: "included",
     import_status: "included",
-    import_note_uz: "Nom, telefon, manzil, feature flag va return filter."
+    import_note_uz: "Название, телефон, адрес, feature flag и фильтр возвратов."
   },
   {
     id: "initial_setup",
@@ -35,7 +35,7 @@ export const MIGRATION_MODULES: MigrationModuleDef[] = [
     export_status: "included",
     import_status: "included",
     import_note_uz:
-      "Birliklar, valyuta, to‘lov usullari, narx turlari, mijoz spravochniklari, hudud, kategoriyalar, narxlar, slotlar (Excel + JSON)."
+      "Единицы, валюта, способы оплаты, типы цен, справочники клиентов, территории, категории, цены, слоты (Excel + JSON)."
   },
   {
     id: "spravochniki",
@@ -44,7 +44,7 @@ export const MIGRATION_MODULES: MigrationModuleDef[] = [
     phase: 1,
     export_status: "included",
     import_status: "included",
-    import_note_uz: "Mijozlar, mahsulotlar, foydalanuvchilar, omborlar va qoldiqlar."
+    import_note_uz: "Клиенты, товары, пользователи, склады и остатки."
   },
   {
     id: "orders",
@@ -100,7 +100,8 @@ export const MIGRATION_MODULES: MigrationModuleDef[] = [
     label_ru: "Визиты и активность агентов",
     phase: 3,
     export_status: "included",
-    import_status: "included"
+    import_status: "included",
+    import_note_uz: "Визиты и все GPS-пинги (полная резервная копия)."
   },
   {
     id: "expenses",
@@ -112,11 +113,12 @@ export const MIGRATION_MODULES: MigrationModuleDef[] = [
   },
   {
     id: "bonus_plans",
-    label_uz: "Bonus, KPI va rejalar",
-    label_ru: "Бонусы, KPI и планы",
+    label_uz: "Bonus, KPI, strategiyalar va rejalar",
+    label_ru: "Бонусы, KPI, стратегии и планы",
     phase: 4,
     export_status: "included",
-    import_status: "included"
+    import_status: "included",
+    import_note_uz: "Бонусные правила, стратегии, KPI-группы и планы продаж."
   },
   {
     id: "files",
@@ -126,17 +128,17 @@ export const MIGRATION_MODULES: MigrationModuleDef[] = [
     export_status: "included",
     import_status: "included",
     import_note_uz:
-      "Faqat oxirgi 30 kunlik mijoz fotootchyotlari. Import eng oxirida (barcha bog‘lanishlardan keyin)."
+      "Все фотоотчёты клиентов (полная резервная копия). Импортируются в самом конце (после всех связей)."
   },
   {
     id: "extended",
-    label_uz: "Katalog, RBAC, bog‘lanishlar va qo‘shimcha tarix",
-    label_ru: "Каталог, RBAC, связи и доп. история",
+    label_uz: "Katalog, RBAC, bog‘lanishlar, bank inbox va qo‘shimcha tarix",
+    label_ru: "Каталог, RBAC, связи, bank inbox и доп. история",
     phase: 4,
     export_status: "included",
     import_status: "included",
     import_note_uz:
-      "Mahsulot katalogi, narxlar, hududlar, rollar, kassa/ombor/slot bog‘lanishlari, shartlar (srok), balans harakatlari va boshqalar."
+      "Каталог товаров, цены, территории, роли, слоты нескольких складов/касс, входящие банковские переводы, движения баланса."
   }
 ];
 
@@ -230,5 +232,5 @@ export function aggregateMigrationWarnings(warnings: string[]): string[] {
     if (!key) continue;
     counts.set(key, (counts.get(key) ?? 0) + 1);
   }
-  return [...counts.entries()].map(([msg, n]) => (n > 1 ? `${msg} (${n} ta)` : msg));
+  return [...counts.entries()].map(([msg, n]) => (n > 1 ? `${msg} (${n} шт.)` : msg));
 }

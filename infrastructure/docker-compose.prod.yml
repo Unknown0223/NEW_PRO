@@ -1,0 +1,163 @@
+# SALEC production — bitta VPS (Coolify yoki `docker compose`).
+# Secrets: `cp env.production.example .env.production` va to‘ldiring.
+# Ishga tushirish: `docker compose -f docker-compose.prod.yml --env-file .env.production up -d --build`
+# Backend image ichida worker ham ishga tushadi — alohida worker konteyner kerak emas.
+# Postgres/Redis hostga ochilmaydi. Coolify: frontend:3000 va backend:4000 ni domenlarga ulang.
+
+name: salec
+
+services:
+  postgres:
+    # Railway prod Postgres 18 — restore mosligi uchun 18
+    image: postgres:18-alpine
+    restart: unless-stopped
+    stop_grace_period: 60s
+    shm_size: 256mb
+    command:
+      - postgres
+      - -c
+      - shared_buffers=1GB
+      - -c
+      - effective_cache_size=4GB
+      - -c
+      - work_mem=16MB
+      - -c
+      - maintenance_work_mem=256MB
+      - -c
+      - max_connections=200
+    environment:
+      POSTGRES_DB: savdo_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d savdo_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - salec
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?set REDIS_PASSWORD}
+    command: >
+      redis-server
+      --appendonly yes
+      --appendfsync everysec
+      --requirepass ${REDIS_PASSWORD:?set REDIS_PASSWORD}
+      --maxmemory 768mb
+      --maxmemory-policy noeviction
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a \"$$REDIS_PASSWORD\" ping | grep -q PONG"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+    networks:
+      - salec
+
+  backend:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    expose:
+      - "4000"
+    ports:
+      - "4000:4000"
+    environment:
+      NODE_ENV: production
+      PORT: "4000"
+      TZ: Asia/Tashkent
+      # Coolify tarmog‘ida `postgres`/`redis` nomi coolify-db/coolify-redis bilan to‘qnashadi —
+      # shuning uchun compose konteyner nomlaridan foydalanamiz (salec_salec DNS).
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD}@salec-postgres-1:5432/savdo_db
+      REDIS_URL: redis://:${REDIS_PASSWORD}@salec-redis-1:6379
+      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:?set JWT_ACCESS_SECRET}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:?set JWT_REFRESH_SECRET}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:?set CORS_ALLOWED_ORIGINS}
+      RBAC_ENFORCE_PERMISSIONS: "1"
+      INTERNAL_HEALTH_TOKEN: ${INTERNAL_HEALTH_TOKEN:-}
+      PHOTO_CONTENT_RETENTION_DAYS: ${PHOTO_CONTENT_RETENTION_DAYS:-60}
+      TENANT_SLUG_ALIASES: ${TENANT_SLUG_ALIASES:-test1:aksit}
+      TELEGRAM_BOT_API_SECRET: ${TELEGRAM_BOT_API_SECRET:-}
+    volumes:
+      - backend_uploads:/app/uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:4000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 20s
+      timeout: 5s
+      retries: 8
+      start_period: 90s
+    networks:
+      - salec
+      # Traefik (Coolify proxy). coolify tarmog‘ida `postgres`/`redis` DNS
+      # coolify-db/coolify-redis ga tushadi — DATABASE_URL/REDIS_URL da
+      # salec-postgres-1 / salec-redis-1 ishlating (yuqorida).
+      - coolify
+
+  frontend:
+    build:
+      context: ../frontend
+      dockerfile: Dockerfile
+      args:
+        API_INTERNAL_ORIGIN: http://backend:4000
+        NEXT_PUBLIC_API_URL: ${PUBLIC_API_URL:-}
+    restart: unless-stopped
+    expose:
+      - "3000"
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: production
+      TZ: Asia/Tashkent
+      API_INTERNAL_ORIGIN: http://backend:4000
+      NEXT_PUBLIC_API_URL: ${PUBLIC_API_URL:-}
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - salec
+      - coolify
+
+  # Telegram mijoz-qabul boti (long polling — bir vaqtda faqat BITTA nusxa ishlashi kerak).
+  telegram-bot:
+    build:
+      context: ../telegram-client-bot
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      TZ: Asia/Tashkent
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD}@salec-postgres-1:5432/savdo_db
+      SALEC_API_URL: http://salec-backend-1:4000
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:?set TELEGRAM_BOT_TOKEN}
+      TELEGRAM_BOT_API_SECRET: ${TELEGRAM_BOT_API_SECRET:?set TELEGRAM_BOT_API_SECRET}
+      BOT_TENANT_SLUG: ${BOT_TENANT_SLUG:-aksit}
+      MIN_CLIENTS_FOR_EXCEL: ${MIN_CLIENTS_FOR_EXCEL:-5}
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - salec
+
+volumes:
+  postgres_data:
+  redis_data:
+  backend_uploads:
+
+networks:
+  salec:
+    driver: bridge
+  coolify:
+    external: true

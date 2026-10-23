@@ -1,17 +1,28 @@
 import type { BulkExportCategoryId } from "@/lib/bulk-export-templates";
 import type { NakladnoyGroupBy } from "@/lib/order-nakladnoy";
 
+/** Backend guruh varaqlari: `1.518.NAVOI …`, `2.217.BUXORO`. */
+const NUMBERED_SHEET_RE = /^\d+\.\d+\./;
+
 /** Varaq nomidan guruh kaliti (dostavchik / agent / hudud). */
 export function normalizeSheetGroupKey(sheetName: string): string {
   let s = sheetName.trim();
-  const sep = s.indexOf(" - ");
-  if (sep > 0) s = s.slice(sep + 3).trim();
+  if (NUMBERED_SHEET_RE.test(s)) {
+    s = s.replace(NUMBERED_SHEET_RE, "").replace(/\s\(\d+\)$/, "");
+  } else {
+    const sep = s.indexOf(" - ");
+    if (sep > 0) s = s.slice(sep + 3).trim();
+  }
   s = s.replace(/_\d+$/, "").trim();
   return s.toLowerCase();
 }
 
+export function isNumberedGroupSheetName(sheetName: string): boolean {
+  return NUMBERED_SHEET_RE.test(sheetName.trim());
+}
+
 export function isGroupInterleaveCategory(category: BulkExportCategoryId): boolean {
-  return category === "expeditor" || category === "invoices";
+  return category === "expeditor" || category === "invoices" || category === "warehouse";
 }
 
 export function shouldInterleaveBulkSheetsByGroup(

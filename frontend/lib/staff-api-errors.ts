@@ -12,15 +12,15 @@ export function messageFromStaffCreateError(err: unknown): string {
   }
   if (status === 409 && code === "AgentAlreadyAssigned") {
     return withApiSupportLine(
-      "Tanlangan agent allaqachon boshqa supervizorga bog‘langan.",
+      "Выбранный агент уже привязан к другому супервайзеру.",
       err
     );
   }
   if (status === 409 && code === "CashDeskUserLinkExists") {
-    return withApiSupportLine("Bu foydalanuvchi allaqachon boshqa kassaga bog‘langan.", err);
+    return withApiSupportLine("Этот пользователь уже привязан к другой кассе.", err);
   }
   if (status === 400 && code === "CashDeskOperatorOnly") {
-    return withApiSupportLine("Kassa bog‘lanishi faqat «Operator» roli uchun.", err);
+    return withApiSupportLine("Привязка к кассе доступна только для роли «Оператор».", err);
   }
   if (status === 400 && code === "ValidationError") {
     const flat = getZodFlattenFromApiErrorBody(ax.response?.data);
@@ -30,10 +30,10 @@ export function messageFromStaffCreateError(err: unknown): string {
         : typeof ax.response?.data?.message === "string"
           ? ax.response.data.message.trim() || undefined
           : undefined;
-    const base = hint ?? "Ma’lumotlarni tekshiring.";
+    const base = hint ?? "Проверьте введённые данные.";
     return withApiSupportLine(base, err);
   }
-  return getUserFacingError(err, "Xodimni qo‘shishda xatolik.");
+  return getUserFacingError(err, "Ошибка при добавлении сотрудника.");
 }
 
 /** PATCH supervisor — agent allaqachon boshqa SVRga bog‘langan. */
@@ -46,12 +46,18 @@ export function messageFromSupervisorPatchError(err: unknown): string {
   }
   if (status === 409 && code === "AgentAlreadyAssigned") {
     return withApiSupportLine(
-      "Bu agent allaqachon boshqa supervizorga bog‘langan. Avval u yerdan ajrating.",
+      "Этот агент уже привязан к другому супервайзеру. Сначала отвяжите его там.",
+      err
+    );
+  }
+  if (status === 409 && code === "WorkplaceOnSlot") {
+    return withApiSupportLine(
+      "Настройки места меняются в «Рабочее место», не в карточке сотрудника.",
       err
     );
   }
   if (typeof ax.response?.data?.message === "string" && ax.response.data.message.trim()) {
     return withApiSupportLine(ax.response.data.message.trim(), err);
   }
-  return getUserFacingError(err, "Supervizorni saqlashda xatolik.");
+  return getUserFacingError(err, "Ошибка при сохранении супервайзера.");
 }

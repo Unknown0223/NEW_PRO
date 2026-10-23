@@ -33,7 +33,9 @@ export function mapClientRow(
   deliveryOverride: DeliveryDebtInfo | null,
   /** «По клиентам»: yetkazilgan, lekin zakaz bo‘yicha to‘lanmagan — balans ustiga */
   unpaidDeliveredBlend?: DeliveryDebtInfo | null,
-  debtSplit?: ClientDebtSplit | null
+  debtSplit?: ClientDebtSplit | null,
+  /** «Баланс на дату»: kechikish va to‘lovdan keyingi kunlar shu sanaga nisbatan. */
+  asOf?: Date | null
 ): ClientBalanceRow {
   const ledgerBal = c.client_balances[0]?.balance ?? new Prisma.Decimal(0);
   let bal: Prisma.Decimal;
@@ -51,36 +53,30 @@ export function mapClientRow(
     ag?.trade_direction_row?.name?.trim() ||
     null;
 
+  const clock = asOf?.getTime() ?? Date.now();
+  const daySpan = (from: Date) => {
+    const days = Math.floor((clock - from.getTime()) / 86400000);
+    return days >= 0 ? days : null;
+  };
+  const onOrBefore = (d: Date | null | undefined) =>
+    d != null && (asOf == null || d.getTime() <= asOf.getTime()) ? d : null;
+  const firstDel =
+    onOrBefore(deliveryOverride?.firstDel) ??
+    (unpaidDeliveredBlend && unpaidDeliveredBlend.debt.gt(0) ? onOrBefore(unpaidDeliveredBlend.firstDel) : null);
   let daysOver: number | null = null;
-  if (deliveryOverride) {
-    if (deliveryOverride.firstDel) {
-      daysOver = Math.floor((Date.now() - deliveryOverride.firstDel.getTime()) / 86400000);
-    }
-  } else if (
-    unpaidDeliveredBlend &&
-    unpaidDeliveredBlend.debt.gt(0) &&
-    unpaidDeliveredBlend.firstDel
-  ) {
-    daysOver = Math.floor((Date.now() - unpaidDeliveredBlend.firstDel.getTime()) / 86400000);
-  } else if (c.license_until) {
-    const diff = Date.now() - c.license_until.getTime();
-    if (diff > 0) daysOver = Math.floor(diff / 86400000);
-  }
+  if (firstDel) daysOver = daySpan(firstDel);
+  else if (c.license_until) daysOver = daySpan(c.license_until);
 
   let daysSincePay: number | null = null;
-  if (lastPay) {
-    daysSincePay = Math.floor((Date.now() - lastPay.getTime()) / 86400000);
-  }
+  if (lastPay) daysSincePay = daySpan(lastPay);
 
   const tags: string[] = [];
   if (ag?.name) tags.push(ag.code ? `${ag.name} (${ag.code})` : ag.name);
 
   const lastOrdOut =
-    deliveryOverride?.lastDel != null
-      ? deliveryOverride.lastDel
-      : unpaidDeliveredBlend && unpaidDeliveredBlend.debt.gt(0) && unpaidDeliveredBlend.lastDel != null
-        ? unpaidDeliveredBlend.lastDel
-        : lastOrd;
+    onOrBefore(deliveryOverride?.lastDel) ??
+    (unpaidDeliveredBlend && unpaidDeliveredBlend.debt.gt(0) ? onOrBefore(unpaidDeliveredBlend.lastDel) : null) ??
+    onOrBefore(lastOrd);
 
   return {
     client_id: c.id,
@@ -126,7 +122,8 @@ export function mapDeliveryOrderRow(
   od: UnpaidDeliveredOrderRow,
   sprLabels: string[],
   paymentMethodEntries: PaymentMethodEntryDto[],
-  lastPay: Date | undefined
+  lastPay: Date | undefined,
+  asOf?: Date | null
 ): ClientBalanceRow {
   const ag = c.agent;
   const td =
@@ -136,14 +133,13 @@ export function mapDeliveryOrderRow(
   const tags: string[] = [];
   if (ag?.name) tags.push(ag.code ? `${ag.name} (${ag.code})` : ag.name);
 
-  let daysOver: number | null = null;
-  if (od.delivered_at) {
-    daysOver = Math.floor((Date.now() - od.delivered_at.getTime()) / 86400000);
-  }
-  let daysSincePay: number | null = null;
-  if (lastPay) {
-    daysSincePay = Math.floor((Date.now() - lastPay.getTime()) / 86400000);
-  }
+  const clock = asOf?.getTime() ?? Date.now();
+  const daySpan = (from: Date) => {
+    const days = Math.floor((clock - from.getTime()) / 86400000);
+    return days >= 0 ? days : null;
+  };
+  const daysOver = od.delivered_at ? daySpan(od.delivered_at) : null;
+  const daysSincePay = lastPay ? daySpan(lastPay) : null;
 
   return {
     client_id: c.id,

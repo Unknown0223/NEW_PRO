@@ -17,8 +17,9 @@ final agentRouteStartProvider = FutureProvider<RouteMapStop?>((ref) async {
 
     final last = await Geolocator.getLastKnownPosition();
     if (last != null && (last.latitude != 0 || last.longitude != 0)) {
+      // Tez yo‘l: last-known yetarli — currentPosition kutmaslik.
       return RouteMapStop(
-        name: 'Boshlanish',
+        name: 'Начало маршрута',
         latitude: last.latitude,
         longitude: last.longitude,
         orderIndex: 0,
@@ -27,14 +28,14 @@ final agentRouteStartProvider = FutureProvider<RouteMapStop?>((ref) async {
 
     final pos = await Geolocator.getCurrentPosition(
       locationSettings: const LocationSettings(
-        accuracy: LocationAccuracy.medium,
-        timeLimit: Duration(seconds: 6),
+        accuracy: LocationAccuracy.low,
+        timeLimit: Duration(seconds: 3),
       ),
-    ).timeout(const Duration(seconds: 6));
+    ).timeout(const Duration(seconds: 3));
 
     if (pos.latitude == 0 && pos.longitude == 0) return null;
     return RouteMapStop(
-      name: 'Boshlanish',
+      name: 'Начало маршрута',
       latitude: pos.latitude,
       longitude: pos.longitude,
       orderIndex: 0,

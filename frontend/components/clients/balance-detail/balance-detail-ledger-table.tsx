@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowDown, ArrowUp, ArrowUpDown, Pencil } from "lucide-react";
+import { ArrowDown, ArrowUp, ArrowUpDown, Pencil, Trash2 } from "lucide-react";
 import { BALANCE_DETAIL_COLUMNS } from "@/lib/client-balance-detail/columns";
 import { fmtDateTime, fmtMoney } from "@/lib/client-balance-detail/format";
 import type {
@@ -23,7 +23,9 @@ type Props = {
   onRowClick: (row: BalanceDetailRow) => void;
   loading?: boolean;
   canEditPayment?: boolean;
+  canDeletePayment?: boolean;
   onEditPayment?: (paymentId: number) => void;
+  onDeletePayment?: (paymentId: number) => void;
 };
 
 function SortIcon({
@@ -57,10 +59,13 @@ export function BalanceDetailLedgerTable({
   onRowClick,
   loading,
   canEditPayment,
-  onEditPayment
+  canDeletePayment,
+  onEditPayment,
+  onDeletePayment
 }: Props) {
   const visibleCols = columns.filter((c) => c.visible && c.tabs.includes(tab));
-  const colSpan = visibleCols.length + (canEditPayment ? 1 : 0);
+  const showOps = Boolean(canEditPayment || canDeletePayment);
+  const colSpan = visibleCols.length + (showOps ? 1 : 0);
 
   function renderCell(row: BalanceDetailRow, col: BalanceDetailColumnDef) {
     const r = row.raw;
@@ -103,19 +108,31 @@ export function BalanceDetailLedgerTable({
         return consignmentLabel(row.consignment);
       case "debt":
         return row.debt !== 0 ? (
-          <span className={tab === "overall" ? "font-medium text-red-600" : ""}>{fmtMoney(Math.abs(row.debt))}</span>
+          <span className={cn("whitespace-nowrap", tab === "overall" && "font-medium text-red-600")}>
+            {fmtMoney(Math.abs(row.debt))}
+          </span>
         ) : (
           "—"
         );
       case "payment":
         return row.payment !== 0 ? (
-          <span className={tab === "overall" ? "font-medium text-[#1aa096]" : ""}>{fmtMoney(row.payment)}</span>
+          <span
+            className={cn(
+              "whitespace-nowrap",
+              tab === "overall" && "font-medium",
+              row.payment < 0 ? "text-red-600" : "text-[#1aa096]"
+            )}
+          >
+            {fmtMoney(row.payment)}
+          </span>
         ) : (
           "—"
         );
       case "balanceAfter":
         return row.balanceAfter != null ? (
-          <span className={row.balanceAfter < 0 ? "text-red-600" : "text-[#1aa096]"}>{fmtMoney(row.balanceAfter)}</span>
+          <span className={cn("whitespace-nowrap", row.balanceAfter < 0 ? "text-red-600" : "text-[#1aa096]")}>
+            {fmtMoney(row.balanceAfter)}
+          </span>
         ) : (
           "—"
         );
@@ -158,7 +175,7 @@ export function BalanceDetailLedgerTable({
                 {col.sortField ? <SortIcon field={col.sortField} sortField={sortField} sortDir={sortDir} /> : null}
               </th>
             ))}
-            {canEditPayment ? <th className="w-8 px-1 py-2" /> : null}
+            {showOps ? <th className="w-16 px-1 py-2" /> : null}
           </tr>
         </thead>
         <tbody>
@@ -192,17 +209,31 @@ export function BalanceDetailLedgerTable({
                     {renderCell(row, col)}
                   </td>
                 ))}
-                {canEditPayment ? (
+                {showOps ? (
                   <td className="px-1 py-1.5" onClick={(e) => e.stopPropagation()}>
                     {row.raw.row_kind === "payment" && row.raw.payment_id != null ? (
-                      <button
-                        type="button"
-                        className="rounded p-0.5 text-[#999] hover:bg-[#eee] hover:text-[#333]"
-                        title="Редактировать"
-                        onClick={() => onEditPayment?.(row.raw.payment_id!)}
-                      >
-                        <Pencil className="h-3.5 w-3.5" />
-                      </button>
+                      <span className="inline-flex gap-1">
+                        {canEditPayment ? (
+                          <button
+                            type="button"
+                            className="rounded-md border border-sky-200 bg-sky-50 p-1 text-sky-700 hover:bg-sky-100"
+                            title="Редактировать"
+                            onClick={() => onEditPayment?.(row.raw.payment_id!)}
+                          >
+                            <Pencil className="h-3.5 w-3.5" />
+                          </button>
+                        ) : null}
+                        {canDeletePayment ? (
+                          <button
+                            type="button"
+                            className="rounded-md border border-red-200 bg-red-50 p-1 text-red-700 hover:bg-red-100"
+                            title="Удалить"
+                            onClick={() => onDeletePayment?.(row.raw.payment_id!)}
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        ) : null}
+                      </span>
                     ) : null}
                   </td>
                 ) : null}

@@ -4,37 +4,33 @@ import { StaffFilterSelect } from "@/components/staff/staff-workspace-shell";
 
 type Props = {
   draftBranch: string;
-  draftPos: string;
   draftTd: string;
   draftOblast: string;
   draftCity: string;
   onDraftBranch: (v: string) => void;
-  onDraftPos: (v: string) => void;
   onDraftTd: (v: string) => void;
   onDraftOblast: (v: string) => void;
   onDraftCity: (v: string) => void;
   branchOptions: string[];
-  positionOptions: string[];
   tradeDirectionOptions: string[];
-  territoryTokenOptions: string[];
+  oblastOptions: string[];
+  cityOptions: string[];
 };
 
 /** Agent `AgentFilterSelect` ko‘rinishi — ekspektor filtrlari (API parametrlari o‘zgarmaydi). */
 export function ExpeditorsFiltersRow({
   draftBranch,
-  draftPos,
   draftTd,
   draftOblast,
   draftCity,
   onDraftBranch,
-  onDraftPos,
   onDraftTd,
   onDraftOblast,
   onDraftCity,
   branchOptions,
-  positionOptions,
   tradeDirectionOptions,
-  territoryTokenOptions
+  oblastOptions,
+  cityOptions
 }: Props) {
   return (
     <>
@@ -63,24 +59,15 @@ export function ExpeditorsFiltersRow({
         ))}
       </StaffFilterSelect>
       <StaffFilterSelect
-        label="Должность"
-        value={draftPos}
-        onChange={onDraftPos}
-        emptyLabel="Все должности"
-      >
-        {positionOptions.map((p) => (
-          <option key={p} value={p}>
-            {p}
-          </option>
-        ))}
-      </StaffFilterSelect>
-      <StaffFilterSelect
         label="Область"
         value={draftOblast}
-        onChange={onDraftOblast}
+        onChange={(v) => {
+          onDraftOblast(v);
+          onDraftCity("");
+        }}
         emptyLabel="Все области"
       >
-        {territoryTokenOptions.map((t) => (
+        {oblastOptions.map((t) => (
           <option key={`obl-${t}`} value={t}>
             {t}
           </option>
@@ -92,7 +79,7 @@ export function ExpeditorsFiltersRow({
         onChange={onDraftCity}
         emptyLabel="Все города"
       >
-        {territoryTokenOptions.map((t) => (
+        {cityOptions.map((t) => (
           <option key={`city-${t}`} value={t}>
             {t}
           </option>

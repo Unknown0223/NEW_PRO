@@ -12,3 +12,4 @@ export const SALES_CHART_COLORS = [
 export const SALES_TEAL = "#0f9f9a";
 export const SALES_GREEN = "#17c653";
 export const SALES_RED = "#ef4444";
+export const SALES_AMBER = "#f59e0b";

@@ -9,6 +9,8 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/ui/agent_ui.dart';
 import '../../auth/auth_provider.dart';
+import '../../auth/biometric_quick_login_tile.dart';
+import '../shell/expeditor_drawer.dart';
 
 /// «Настройки» — ekspeditor. Veb «Конфигурации» bilan to'liq bog'langan:
 /// barcha qiymatlar `session.mobileConfig` (serverdan sinxron) dan o'qiladi,
@@ -23,6 +25,7 @@ class ExpeditorSettingsPage extends ConsumerWidget {
 
     return Scaffold(
       backgroundColor: AppColors.background,
+      drawer: const ExpeditorDrawer(),
       appBar: AppBar(
         title: const Text('Настройки'),
         actions: [
@@ -48,6 +51,11 @@ class ExpeditorSettingsPage extends ConsumerWidget {
                 onTap: () => _pickLocale(context, ref, prefs),
               ),
             ]),
+            AgentSurfaceCard(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              child: BiometricQuickLoginTile(accentColor: AppColors.expeditorAccent),
+            ),
+            const SizedBox(height: 12),
             _group('ЗАКАЗ', [
               _ToggleRow(
                 label: 'Показывать предложение о бонусе',
@@ -89,12 +97,12 @@ class ExpeditorSettingsPage extends ConsumerWidget {
               ),
               _ValueRow(
                 label: 'Валюта',
-                value: cfg?.expeditor?.currencySymbol ?? "so'm",
+                value: cfg?.expeditor?.currencySymbol ?? 'сум',
               ),
             ]),
             _group('НАКЛАДНЫЕ', [
               _ToggleRow(
-                label: 'Отпечаток при подтверждении',
+                label: 'Face ID / отпечаток при важных действиях',
                 value:
                     cfg?.expeditor?.fingerprintRequiredForShipmentConfirm ??
                         false,
@@ -148,11 +156,9 @@ class ExpeditorSettingsPage extends ConsumerWidget {
   }
 
   Future<void> _refreshConfig(BuildContext context, WidgetRef ref) async {
-    final messenger = ScaffoldMessenger.of(context);
     await ref.read(authStateProvider.notifier).refreshMobileConfig();
-    messenger.showSnackBar(
-      const SnackBar(content: Text('Настройки обновлены')),
-    );
+    if (!context.mounted) return;
+    showAgentToast(context, 'Настройки обновлены', accentColor: AppColors.success);
   }
 
   Future<void> _pickLocale(
@@ -173,7 +179,7 @@ class ExpeditorSettingsPage extends ConsumerWidget {
             const AgentSheetHandle(),
             const Padding(
               padding: EdgeInsets.symmetric(vertical: 8),
-              child: Text('Язык приложении',
+              child: Text('Язык приложения',
                   style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),),
             ),
             ListTile(

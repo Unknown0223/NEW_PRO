@@ -9,6 +9,8 @@ import {
   type ProfileLedgerAgentFilter
 } from "@/components/clients/client-profile-ledger-filters-context";
 import { ClientProfileEquipmentTab } from "@/components/clients/client-profile-equipment-tab";
+import { ClientTelegramPanel } from "@/components/clients/client-telegram-panel";
+import { ClientProfilePhotoView } from "@/components/clients/client-profile-photo-card";
 import { ClientProfilePhotoReportsTab } from "@/components/clients/client-profile-photo-reports-tab";
 import type { ClientMapPoint } from "@/components/clients/clients-leaflet-map";
 import { PageHeader } from "@/components/dashboard/page-header";
@@ -29,6 +31,7 @@ import { downloadXlsxSheet } from "@/lib/download-xlsx";
 import { formatDigitsGroupedLoose, formatNumberGrouped } from "@/lib/format-numbers";
 import { STALE } from "@/lib/query-stale";
 import { optionsToValueLabelMap } from "@/lib/ref-select-options";
+import { usePermissions } from "@/lib/use-permissions";
 import { ORDER_STATUS_FILTER_OPTIONS, ORDER_STATUS_LABELS } from "@/lib/order-status";
 import { cn } from "@/lib/utils";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -102,7 +105,7 @@ const CONSIGNMENT_OPTIONS: { value: string; label: string }[] = [
 
 const PAYMENT_TYPE_FILTER_OPTIONS: { value: string; label: string }[] = [
   { value: "", label: "Все способы оплаты" },
-  { value: "naqd", label: "Наличные (naqd)" },
+  { value: "naqd", label: "Наличные" },
   { value: "plastik", label: "Пластик" },
   { value: "terminal", label: "Терминал" },
   { value: "perechis", label: "Перечисление" },
@@ -214,6 +217,7 @@ function statusBadgeClass(status: string): string {
 
 type RequisitesAsideProps = {
   client: ClientDetailApiRow;
+  tenantSlug: string;
   clientId: number;
   territoryWithZone: string;
   addressMerged: string;
@@ -231,6 +235,7 @@ type RequisitesAsideProps = {
 
 function ClientProfileRequisitesAside({
   client: c,
+  tenantSlug,
   clientId,
   territoryWithZone,
   addressMerged,
@@ -269,7 +274,8 @@ function ClientProfileRequisitesAside({
   const updated = new Date(c.updated_at).toLocaleString("ru-RU", { dateStyle: "short", timeStyle: "short" });
 
   return (
-    <aside className="min-w-0 self-start lg:sticky lg:top-4 lg:col-span-1">
+    <aside className="flex min-w-0 flex-col gap-3 self-start lg:sticky lg:top-4 lg:col-span-1">
+      <ClientProfilePhotoView tenantSlug={tenantSlug} clientId={clientId} />
       <div className="overflow-hidden rounded-lg border border-border/70 bg-card shadow-sm ring-1 ring-black/[0.04] dark:ring-white/[0.06]">
         <div className="flex items-center justify-between gap-2 border-b border-border/60 bg-muted/30 px-2 py-1.5">
           <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Реквизиты</span>
@@ -426,6 +432,7 @@ type HubTab =
   | "equipment"
   | "photos"
   | "map"
+  | "telegram"
   | "service";
 
 type Props = { tenantSlug: string; clientId: number };
@@ -434,6 +441,12 @@ const ANALYTICS_TABS: HubTab[] = ["orders", "products", "sales"];
 
 function ClientProfileHubInner({ tenantSlug, clientId }: Props) {
   const queryClient = useQueryClient();
+  const { has } = usePermissions();
+  const canEdit = has("clients.klient.update");
+  const canHistory = has("clients.klient.history");
+  const canExport = has("clients.klient.copy");
+  const canEquipment = has("clients.oborudovanie.view");
+  const canPhotos = has("clients.foto.view");
   const { agentFilter } = useClientProfileLedgerFilters();
   const [hubTab, setHubTab] = useState<HubTab>("orders");
   const [filterDraft, setFilterDraft] = useState<HubAnalyticsFilters>(() => initialHubAnalyticsFilters());
@@ -533,7 +546,7 @@ function ClientProfileHubInner({ tenantSlug, clientId }: Props) {
   const clientAuditMetaQ = useQuery({
     queryKey: ["client-audit-meta", tenantSlug, clientId],
     staleTime: STALE.list,
-    enabled: Boolean(tenantSlug && clientId > 0),
+    enabled: Boolean(tenantSlug && clientId > 0) && canHistory,
     queryFn: async () => {
       const params = new URLSearchParams({ page: "1", limit: "50" });
       const { data } = await api.get<ClientAuditMetaResponse>(`/api/${tenantSlug}/clients/${clientId}/audit?${params}`);
@@ -701,13 +714,15 @@ function ClientProfileHubInner({ tenantSlug, clientId }: Props) {
         description={sub}
         actions={
           <div className="flex flex-wrap gap-2">
-            <Link
-              href={`/clients/${clientId}/edit`}
-              className={cn(buttonVariants({ variant: "outline", size: "sm" }), "gap-1.5")}
-            >
-              <Pencil className="h-4 w-4" />
-              Изменить
-            </Link>
+            {canEdit ? (
+              <Link
+                href={`/clients/${clientId}/edit`}
+                className={cn(buttonVariants({ variant: "outline", size: "sm" }), "gap-1.5")}
+              >
+                <Pencil className="h-4 w-4" />
+                Изменить
+              </Link>
+            ) : null}
             <Link
               href={`/orders/new?client_id=${clientId}`}
               className={cn(buttonVariants({ size: "sm" }), "gap-1.5 bg-teal-600 text-white hover:bg-teal-700")}
@@ -729,16 +744,17 @@ function ClientProfileHubInner({ tenantSlug, clientId }: Props) {
               <Wallet className="h-4 w-4" />
               Баланс
             </Link>
-            <Link
-              href={`/clients/${clientId}/history`}
-              className={cn(buttonVariants({ variant: "ghost", size: "sm" }), "text-muted-foreground")}
-            >
-              Журнал изменений
-            </Link>
+            {canHistory ? (
+              <Link
+                href={`/clients/${clientId}/history`}
+                className={cn(buttonVariants({ variant: "ghost", size: "sm" }), "text-muted-foreground")}
+              >
+                Журнал изменений
+              </Link>
+            ) : null}
           </div>
         }
       />
-
         <div className={cn("grid gap-5", hubTab === "service" ? "grid-cols-1" : "lg:grid-cols-3")}>
           <div className={cn(hubTab === "service" ? "" : "space-y-4 lg:col-span-2")}>
             {hubTab !== "service" ? (
@@ -770,18 +786,27 @@ function ClientProfileHubInner({ tenantSlug, clientId }: Props) {
               <TabsTrigger value="debts" className={hubTabTriggerClass}>
                 Долги
               </TabsTrigger>
-              <TabsTrigger value="equipment" className={hubTabTriggerClass}>
-                Оборудование
-              </TabsTrigger>
-              <TabsTrigger value="photos" className={hubTabTriggerClass}>
-                Фотоотчёт
-              </TabsTrigger>
+              {canEquipment ? (
+                <TabsTrigger value="equipment" className={hubTabTriggerClass}>
+                  Оборудование
+                </TabsTrigger>
+              ) : null}
+              {canPhotos ? (
+                <TabsTrigger value="photos" className={hubTabTriggerClass}>
+                  Фотоотчёт
+                </TabsTrigger>
+              ) : null}
               <TabsTrigger value="map" className={hubTabTriggerClass}>
                 Координаты
               </TabsTrigger>
-              <TabsTrigger value="service" className={hubTabTriggerClass}>
-                Служебное
+              <TabsTrigger value="telegram" className={hubTabTriggerClass}>
+                Telegram
               </TabsTrigger>
+              {canHistory ? (
+                <TabsTrigger value="service" className={hubTabTriggerClass}>
+                  Служебное
+                </TabsTrigger>
+              ) : null}
             </TabsList>
 
             {showAnalyticsChrome ? (
@@ -994,7 +1019,7 @@ function ClientProfileHubInner({ tenantSlug, clientId }: Props) {
                       : analyticsQ.data
                         ? `${formatNumberGrouped(parseSum(analyticsQ.data.kpi.delivered_sales_sum), {
                             maxFractionDigits: 2
-                          })} So'm`
+                          })} сум`
                         : "—"}
                   </span>
                 </span>
@@ -1035,19 +1060,21 @@ function ClientProfileHubInner({ tenantSlug, clientId }: Props) {
                       </div>
                     </div>
                     <div className="flex flex-wrap items-center justify-end gap-2">
-                      <button
-                        type="button"
-                        className={cn(
-                          buttonVariants({ variant: "outline", size: "sm" }),
-                          "h-8 gap-1 border-border bg-background px-2.5 text-xs"
-                        )}
-                        disabled={ordersExcelBusy}
-                        title="Экспорт в Excel (до 5000 строк по текущим фильтрам)"
-                        onClick={() => void exportClientOrdersExcel()}
-                      >
-                        <FileSpreadsheet className="h-3.5 w-3.5" />
-                        {ordersExcelBusy ? "…" : "Excel"}
-                      </button>
+                      {canExport ? (
+                        <button
+                          type="button"
+                          className={cn(
+                            buttonVariants({ variant: "outline", size: "sm" }),
+                            "h-8 gap-1 border-border bg-background px-2.5 text-xs"
+                          )}
+                          disabled={ordersExcelBusy}
+                          title="Экспорт в Excel (до 5000 строк по текущим фильтрам)"
+                          onClick={() => void exportClientOrdersExcel()}
+                        >
+                          <FileSpreadsheet className="h-3.5 w-3.5" />
+                          {ordersExcelBusy ? "…" : "Excel"}
+                        </button>
+                      ) : null}
                       <button
                         type="button"
                         className={cn(
@@ -1325,6 +1352,10 @@ function ClientProfileHubInner({ tenantSlug, clientId }: Props) {
               </Card>
             </TabsContent>
 
+            <TabsContent value="telegram" className="mt-3 outline-none">
+              {hubTab === "telegram" ? <ClientTelegramPanel tenantSlug={tenantSlug} clientId={clientId} /> : null}
+            </TabsContent>
+
             <TabsContent value="service" className="mt-3 outline-none">
               <ClientAuditHistoryWorkspace
                 tenantSlug={tenantSlug}
@@ -1342,6 +1373,7 @@ function ClientProfileHubInner({ tenantSlug, clientId }: Props) {
             client={c}
             clientId={clientId}
             territoryWithZone={territoryWithZone}
+            tenantSlug={tenantSlug}
             addressMerged={addressMerged}
             refDisplayMaps={refDisplayMaps}
             lastAuditPatch={lastAuditPatch}

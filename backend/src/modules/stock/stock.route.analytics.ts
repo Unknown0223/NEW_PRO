@@ -4,7 +4,11 @@ import { adminRoles, catalogRoles } from "./stock.route.shared";
 import { sendApiError, zodValidationExtras } from "../../lib/api-error";
 import { ensureTenantContext } from "../../lib/tenant-context";
 import { jwtAccessVerify } from "../auth/auth.prehandlers";
-import { requireRolesOrSkladchikEntitlement } from "../staff/skladchik-access.prehandler";
+import {
+  requireRolesOrSkladchikEntitlement,
+  STOCK_BALANCES_VIEW_PERMISSIONS
+} from "../staff/skladchik-access.prehandler";
+import { isStockWarehouseAllowed, resolveStockActorWarehouseIds } from "./stock.actor-scope";
 import {
   buildRecommendedStockExportBuffer,
   buildStockByDateExportBuffer,
@@ -18,11 +22,22 @@ import {
   stockByDateQuerySchema
 } from "./stock.route.schemas";
 
+const BY_DATE_VIEW = ["warehouse.ostatki_na_datu.view", ...STOCK_BALANCES_VIEW_PERMISSIONS] as const;
+const BY_DATE_EXPORT = ["warehouse.ostatki_na_datu.copy", ...BY_DATE_VIEW] as const;
+const RECOMMENDED_VIEW = [
+  "warehouse.rekomendovannyy_zapas.view",
+  ...STOCK_BALANCES_VIEW_PERMISSIONS
+] as const;
 
 export async function registerStockAnalyticsRoutes(app: FastifyInstance) {
   app.get(
     "/api/:slug/stock/by-date/export",
-    { preHandler: [jwtAccessVerify, requireRolesOrSkladchikEntitlement(catalogRoles, "stock_balance_list")] },
+    {
+      preHandler: [
+        jwtAccessVerify,
+        requireRolesOrSkladchikEntitlement(catalogRoles, "stock_balance_list", BY_DATE_EXPORT)
+      ]
+    },
     async (request, reply) => {
       if (!ensureTenantContext(request, reply)) return;
       const parsed = stockByDateExportQuerySchema.safeParse(request.query);
@@ -37,6 +52,10 @@ export async function registerStockAnalyticsRoutes(app: FastifyInstance) {
         );
       }
       const q = parsed.data;
+      const allowedWarehouseIds = await resolveStockActorWarehouseIds(request, request.tenant!.id);
+      if (!isStockWarehouseAllowed(allowedWarehouseIds, q.warehouse_id)) {
+        return sendApiError(reply, request, 403, "ForbiddenWarehouse");
+      }
       try {
         const buf = await buildStockByDateExportBuffer(request.tenant!.id, {
           date: q.date,
@@ -63,7 +82,12 @@ export async function registerStockAnalyticsRoutes(app: FastifyInstance) {
 
   app.get(
     "/api/:slug/stock/by-date",
-    { preHandler: [jwtAccessVerify, requireRolesOrSkladchikEntitlement(catalogRoles, "stock_balance_list")] },
+    {
+      preHandler: [
+        jwtAccessVerify,
+        requireRolesOrSkladchikEntitlement(catalogRoles, "stock_balance_list", BY_DATE_VIEW)
+      ]
+    },
     async (request, reply) => {
       if (!ensureTenantContext(request, reply)) return;
       const parsed = stockByDateQuerySchema.safeParse(request.query);
@@ -78,6 +102,10 @@ export async function registerStockAnalyticsRoutes(app: FastifyInstance) {
         );
       }
       const q = parsed.data;
+      const allowedWarehouseIds = await resolveStockActorWarehouseIds(request, request.tenant!.id);
+      if (!isStockWarehouseAllowed(allowedWarehouseIds, q.warehouse_id)) {
+        return sendApiError(reply, request, 403, "ForbiddenWarehouse");
+      }
       try {
         const result = await listStockBySpecificDate(request.tenant!.id, {
           date: q.date,
@@ -100,7 +128,12 @@ export async function registerStockAnalyticsRoutes(app: FastifyInstance) {
 
   app.get(
     "/api/:slug/stock/recommended/export",
-    { preHandler: [jwtAccessVerify, requireRolesOrSkladchikEntitlement(catalogRoles, "stock_balance_list")] },
+    {
+      preHandler: [
+        jwtAccessVerify,
+        requireRolesOrSkladchikEntitlement(catalogRoles, "stock_balance_list", RECOMMENDED_VIEW)
+      ]
+    },
     async (request, reply) => {
       if (!ensureTenantContext(request, reply)) return;
       const parsed = recommendedExportQuerySchema.safeParse(request.query);
@@ -115,6 +148,10 @@ export async function registerStockAnalyticsRoutes(app: FastifyInstance) {
         );
       }
       const q = parsed.data;
+      const allowedWarehouseIds = await resolveStockActorWarehouseIds(request, request.tenant!.id);
+      if (!isStockWarehouseAllowed(allowedWarehouseIds, q.warehouse_id)) {
+        return sendApiError(reply, request, 403, "ForbiddenWarehouse");
+      }
       try {
         const buf = await buildRecommendedStockExportBuffer(request.tenant!.id, {
           date_from: q.date_from,
@@ -125,7 +162,8 @@ export async function registerStockAnalyticsRoutes(app: FastifyInstance) {
           qty_mode: q.qty_mode,
           q: q.q ?? "",
           sort_by: q.sort_by,
-          sort_dir: q.sort_dir
+          sort_dir: q.sort_dir,
+          allowed_warehouse_ids: allowedWarehouseIds
         });
         reply.header(
           "Content-Type",
@@ -145,7 +183,12 @@ export async function registerStockAnalyticsRoutes(app: FastifyInstance) {
 
   app.get(
     "/api/:slug/stock/recommended",
-    { preHandler: [jwtAccessVerify, requireRolesOrSkladchikEntitlement(catalogRoles, "stock_balance_list")] },
+    {
+      preHandler: [
+        jwtAccessVerify,
+        requireRolesOrSkladchikEntitlement(catalogRoles, "stock_balance_list", RECOMMENDED_VIEW)
+      ]
+    },
     async (request, reply) => {
       if (!ensureTenantContext(request, reply)) return;
       const parsed = recommendedQuerySchema.safeParse(request.query);
@@ -160,6 +203,10 @@ export async function registerStockAnalyticsRoutes(app: FastifyInstance) {
         );
       }
       const q = parsed.data;
+      const allowedWarehouseIds = await resolveStockActorWarehouseIds(request, request.tenant!.id);
+      if (!isStockWarehouseAllowed(allowedWarehouseIds, q.warehouse_id)) {
+        return sendApiError(reply, request, 403, "ForbiddenWarehouse");
+      }
       const result = await listRecommendedStock(request.tenant!.id, {
         date_from: q.date_from,
         date_to: q.date_to,
@@ -171,7 +218,8 @@ export async function registerStockAnalyticsRoutes(app: FastifyInstance) {
         sort_by: q.sort_by,
         sort_dir: q.sort_dir,
         page: q.page,
-        limit: q.limit
+        limit: q.limit,
+        allowed_warehouse_ids: allowedWarehouseIds
       });
       return reply.send(result);
     }

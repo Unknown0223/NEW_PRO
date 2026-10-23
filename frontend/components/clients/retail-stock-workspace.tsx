@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { api } from "@/lib/api";
 import { useAuthStore } from "@/lib/auth-store";
+import { usePermissions } from "@/lib/use-permissions";
 import { CalendarDays, Download, Upload } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { ExcelDropTarget } from "@/components/ui/excel-file-drop-zone";
@@ -67,6 +68,9 @@ function fmtDate(s: string): string {
 
 export function RetailStockWorkspace() {
   const tenantSlug = useAuthStore((s) => s.tenantSlug);
+  const { has } = usePermissions();
+  const canImport = has("clients.ostatki_tt.import");
+  const canExport = has("clients.ostatki_tt.copy");
   const [loading, setLoading] = useState(false);
   const [rows, setRows] = useState<ProductViewRow[] | CategoryViewRow[]>([]);
   const [view, setView] = useState<"products" | "categories">("products");
@@ -133,7 +137,7 @@ export function RetailStockWorkspace() {
         api.get<{ data: ProductRow[] }>(`/api/${tenantSlug}/products?page=1&limit=500&is_active=true`),
         api.get<{ data: CategoryRow[] }>(`/api/${tenantSlug}/product-categories`),
         api.get<RefResponse>(`/api/${tenantSlug}/clients/references`),
-        api.get<{ data: AgentPick[] }>(`/api/${tenantSlug}/agents?is_active=true`),
+        api.get<{ data: AgentPick[] }>(`/api/${tenantSlug}/agents?picker=1`),
         api.get<{ data: string[]; options?: PriceTypeOption[] }>(`/api/${tenantSlug}/price-types?kind=sale`)
       ]);
       setProducts(r1.data.data ?? []);
@@ -215,7 +219,7 @@ export function RetailStockWorkspace() {
     <PageShell>
       <PageHeader
         title="Остатки в торговых точках"
-        description="Retail stock monitoring, shelf presence control, sell-through analytics"
+        description="Мониторинг остатков в рознице, контроль присутствия на полке, аналитика продаж"
       />
 
       <div className="grid gap-3 md:grid-cols-2">
@@ -278,17 +282,23 @@ export function RetailStockWorkspace() {
             <Button variant={view === "categories" ? "default" : "outline"} onClick={() => setView("categories")}>По категории</Button>
           </div>
           <div className="flex flex-wrap gap-2">
-            <Button variant="outline" onClick={downloadTemplate}>Скачать шаблон</Button>
-            <ExcelDropTarget
-              disabled={uploading}
-              onFile={(f) => void uploadFile(f)}
-            >
-              <Button variant="outline" onClick={() => fileRef.current?.click()} disabled={uploading}>
-                <Upload className="mr-1 h-3.5 w-3.5" />
-                {uploading ? "Загрузка..." : "Загрузить шаблон"}
-              </Button>
-            </ExcelDropTarget>
-            <Button variant="outline" onClick={exportExcel}><Download className="mr-1 h-3.5 w-3.5" />Excel</Button>
+            {canImport ? (
+              <>
+                <Button variant="outline" onClick={downloadTemplate}>Скачать шаблон</Button>
+                <ExcelDropTarget
+                  disabled={uploading}
+                  onFile={(f) => void uploadFile(f)}
+                >
+                  <Button variant="outline" onClick={() => fileRef.current?.click()} disabled={uploading}>
+                    <Upload className="mr-1 h-3.5 w-3.5" />
+                    {uploading ? "Загрузка..." : "Загрузить шаблон"}
+                  </Button>
+                </ExcelDropTarget>
+              </>
+            ) : null}
+            {canExport ? (
+              <Button variant="outline" onClick={exportExcel}><Download className="mr-1 h-3.5 w-3.5" />Excel</Button>
+            ) : null}
             <input
               ref={fileRef}
               type="file"

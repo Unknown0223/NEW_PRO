@@ -59,7 +59,7 @@ export async function registerClientDetailRoutes(app: FastifyInstance) {
           return sendApiError(reply, request, 404, "NotFound");
         }
         if (e instanceof Error && e.message === "CLIENT_OUT_OF_SCOPE") {
-          return sendApiError(reply, request, 403, "Forbidden", "Client outside agent scope");
+          return sendApiError(reply, request, 403, "Forbidden", "Клиент вне зоны доступа агента");
         }
         throw e;
       }
@@ -85,7 +85,7 @@ export async function registerClientDetailRoutes(app: FastifyInstance) {
             request,
             400,
             "DateRangeIncomplete",
-            "date_from va date_to ikkalasi ham YYYY-MM-DD ko‘rinishida yuborilishi kerak."
+            "date_from и date_to должны быть переданы в формате YYYY-MM-DD."
           );
         }
         const a = parseLocalYmd(q.date_from);
@@ -114,10 +114,10 @@ export async function registerClientDetailRoutes(app: FastifyInstance) {
         const msg = e instanceof Error ? e.message : "";
         if (msg === "NOT_FOUND") return sendApiError(reply, request, 404, "NotFound");
         if (msg === "CLIENT_OUT_OF_SCOPE") {
-          return sendApiError(reply, request, 403, "Forbidden", "Client outside agent scope");
+          return sendApiError(reply, request, 403, "Forbidden", "Клиент вне зоны доступа агента");
         }
         if (msg === "BAD_DATE_RANGE") {
-          return sendApiError(reply, request, 400, "BadDateRange", "date_from date_to dan katta.");
+          return sendApiError(reply, request, 400, "BadDateRange", "date_from больше date_to.");
         }
         if (msg === "DATE_RANGE_TOO_LONG") {
           return sendApiError(
@@ -125,7 +125,7 @@ export async function registerClientDetailRoutes(app: FastifyInstance) {
             request,
             400,
             "DateRangeTooLong",
-            "Davr 400 kundan oshmasligi kerak."
+            "Период не должен превышать 400 дней."
           );
         }
         throw e;
@@ -157,10 +157,10 @@ export async function registerClientDetailRoutes(app: FastifyInstance) {
         const msg = e instanceof Error ? e.message : "";
         if (msg === "NOT_FOUND") return sendApiError(reply, request, 404, "NotFound");
         if (msg === "CLIENT_OUT_OF_SCOPE") {
-          return sendApiError(reply, request, 403, "Forbidden", "Client outside agent scope");
+          return sendApiError(reply, request, 403, "Forbidden", "Клиент вне зоны доступа агента");
         }
         if (msg === "BAD_DATE_RANGE") {
-          return sendApiError(reply, request, 400, "BadDateRange", "date_from date_to dan katta.");
+          return sendApiError(reply, request, 400, "BadDateRange", "date_from больше date_to.");
         }
         if (msg === "DATE_RANGE_TOO_LONG") {
           return sendApiError(
@@ -168,7 +168,7 @@ export async function registerClientDetailRoutes(app: FastifyInstance) {
             request,
             400,
             "DateRangeTooLong",
-            "Davr 400 kundan oshmasligi kerak."
+            "Период не должен превышать 400 дней."
           );
         }
         throw e;
@@ -209,10 +209,10 @@ export async function registerClientDetailRoutes(app: FastifyInstance) {
         const msg = e instanceof Error ? e.message : "";
         if (msg === "NOT_FOUND") return sendApiError(reply, request, 404, "NotFound");
         if (msg === "CLIENT_OUT_OF_SCOPE") {
-          return sendApiError(reply, request, 403, "Forbidden", "Client outside agent scope");
+          return sendApiError(reply, request, 403, "Forbidden", "Клиент вне зоны доступа агента");
         }
         if (msg === "BAD_DATE_RANGE") {
-          return sendApiError(reply, request, 400, "BadDateRange", "date_from date_to dan katta.");
+          return sendApiError(reply, request, 400, "BadDateRange", "date_from больше date_to.");
         }
         if (msg === "DATE_RANGE_TOO_LONG") {
           return sendApiError(
@@ -220,7 +220,7 @@ export async function registerClientDetailRoutes(app: FastifyInstance) {
             request,
             400,
             "DateRangeTooLong",
-            "Davr 400 kundan oshmasligi kerak."
+            "Период не должен превышать 400 дней."
           );
         }
         throw e;
@@ -247,7 +247,7 @@ export async function registerClientDetailRoutes(app: FastifyInstance) {
           return sendApiError(reply, request, 404, "NotFound");
         }
         if (e instanceof Error && e.message === "CLIENT_OUT_OF_SCOPE") {
-          return sendApiError(reply, request, 403, "Forbidden", "Client outside agent scope");
+          return sendApiError(reply, request, 403, "Forbidden", "Клиент вне зоны доступа агента");
         }
         throw e;
       }
@@ -297,7 +297,7 @@ export async function registerClientDetailRoutes(app: FastifyInstance) {
           return sendApiError(reply, request, 404, "NotFound");
         }
         if (e instanceof Error && e.message === "CLIENT_OUT_OF_SCOPE") {
-          return sendApiError(reply, request, 403, "Forbidden", "Client outside agent scope");
+          return sendApiError(reply, request, 403, "Forbidden", "Клиент вне зоны доступа агента");
         }
         throw e;
       }

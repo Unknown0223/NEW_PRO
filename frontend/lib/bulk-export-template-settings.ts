@@ -1,14 +1,18 @@
 import type { NakladnoyExportPrefs, NakladnoyGroupBy } from "@/lib/order-nakladnoy";
 import type { BulkExportCategoryId } from "@/lib/bulk-export-templates";
 
-/** Eksport / «Загруз экспедитор» — har bir shablon uchun. */
-export type NakladnoyTemplateSettings = {
-  codeColumn: "sku" | "barcode";
+/** «Отделить по листам» yoqilganda varaqlar qaysi bo‘yicha ajratiladi. */
+export type SheetGroupSettings = {
   groupBy: NakladnoyGroupBy;
 };
 
+/** Eksport / «Загруз экспедитор» — har bir shablon uchun. */
+export type NakladnoyTemplateSettings = SheetGroupSettings & {
+  codeColumn: "sku" | "barcode";
+};
+
 /** «Накладные» — maydonlar. */
-export type InvoiceTemplateFieldSettings = {
+export type InvoiceTemplateFieldSettings = SheetGroupSettings & {
   companyName: boolean;
   contactPerson: boolean;
   clientBalance: boolean;
@@ -18,19 +22,22 @@ export type InvoiceTemplateFieldSettings = {
   separation: boolean;
 };
 
+/** «Загруз зав.склада» — alohida sozlamasi yo‘q shablonlar. */
+export type WarehouseGroupSettings = SheetGroupSettings;
+
 /** 112 — Загруз 1.1.2 */
-export type Warehouse112Settings = {
+export type Warehouse112Settings = SheetGroupSettings & {
   sortProducts: boolean;
 };
 
 /** 410 — Загруз 4.1 */
-export type Warehouse410Settings = {
+export type Warehouse410Settings = SheetGroupSettings & {
   showBarcode: boolean;
   showSku: boolean;
 };
 
 /** 600 — Загруз 6.0 */
-export type Warehouse600Settings = {
+export type Warehouse600Settings = SheetGroupSettings & {
   showLoadDate: boolean;
   showAgents: boolean;
   showTerritory: boolean;
@@ -43,6 +50,7 @@ export type Warehouse600Settings = {
 };
 
 export type WarehouseExportSettings =
+  | WarehouseGroupSettings
   | Warehouse112Settings
   | Warehouse410Settings
   | Warehouse600Settings;
@@ -56,6 +64,7 @@ export type BulkExportSettingsMode =
   | "none"
   | "nakladnoy"
   | "invoice"
+  | "warehouse"
   | "warehouse-112"
   | "warehouse-410"
   | "warehouse-600";
@@ -66,24 +75,33 @@ export function getTemplateSettingsMode(
 ): BulkExportSettingsMode {
   if (categoryId === "expeditor") return "nakladnoy";
   if (categoryId === "invoices") return "invoice";
+  if (categoryId !== "warehouse") return "none";
   if (templateId === "wh-1.1.2") return "warehouse-112";
   if (templateId === "wh-4.1") return "warehouse-410";
   if (templateId === "wh-6.0") return "warehouse-600";
-  return "none";
+  return "warehouse";
 }
 
 export function getCategorySettingsMode(categoryId: BulkExportCategoryId): BulkExportSettingsMode {
   if (categoryId === "expeditor") return "nakladnoy";
   if (categoryId === "invoices") return "invoice";
+  if (categoryId === "warehouse") return "warehouse";
   return "none";
 }
 
+const DEFAULT_GROUP_BY: NakladnoyGroupBy = "agent";
+
 export const DEFAULT_NAKLADNOY_TEMPLATE_SETTINGS: NakladnoyTemplateSettings = {
   codeColumn: "sku",
-  groupBy: "agent"
+  groupBy: DEFAULT_GROUP_BY
+};
+
+export const DEFAULT_WAREHOUSE_GROUP_SETTINGS: WarehouseGroupSettings = {
+  groupBy: DEFAULT_GROUP_BY
 };
 
 export const DEFAULT_INVOICE_TEMPLATE_SETTINGS: InvoiceTemplateFieldSettings = {
+  groupBy: DEFAULT_GROUP_BY,
   companyName: false,
   contactPerson: false,
   clientBalance: true,
@@ -94,15 +112,18 @@ export const DEFAULT_INVOICE_TEMPLATE_SETTINGS: InvoiceTemplateFieldSettings = {
 };
 
 export const DEFAULT_WAREHOUSE_112_SETTINGS: Warehouse112Settings = {
+  groupBy: DEFAULT_GROUP_BY,
   sortProducts: true
 };
 
 export const DEFAULT_WAREHOUSE_410_SETTINGS: Warehouse410Settings = {
+  groupBy: DEFAULT_GROUP_BY,
   showBarcode: true,
   showSku: true
 };
 
 export const DEFAULT_WAREHOUSE_600_SETTINGS: Warehouse600Settings = {
+  groupBy: DEFAULT_GROUP_BY,
   showLoadDate: true,
   showAgents: true,
   showTerritory: true,
@@ -114,7 +135,10 @@ export const DEFAULT_WAREHOUSE_600_SETTINGS: Warehouse600Settings = {
   showProductPrice: true
 };
 
-export const INVOICE_FIELD_LABELS: { key: keyof InvoiceTemplateFieldSettings; label: string }[] = [
+export const INVOICE_FIELD_LABELS: {
+  key: Exclude<keyof InvoiceTemplateFieldSettings, "groupBy">;
+  label: string;
+}[] = [
   { key: "companyName", label: "Название фирмы" },
   { key: "contactPerson", label: "Конт. лицо" },
   { key: "clientBalance", label: "Баланс клиента" },
@@ -124,7 +148,10 @@ export const INVOICE_FIELD_LABELS: { key: keyof InvoiceTemplateFieldSettings; la
   { key: "separation", label: "Разделение" }
 ];
 
-export const WAREHOUSE_600_FIELD_LABELS: { key: keyof Warehouse600Settings; label: string }[] = [
+export const WAREHOUSE_600_FIELD_LABELS: {
+  key: Exclude<keyof Warehouse600Settings, "groupBy">;
+  label: string;
+}[] = [
   { key: "showLoadDate", label: "Дата загруз." },
   { key: "showAgents", label: "Агенты" },
   { key: "showTerritory", label: "Территория" },
@@ -141,10 +168,15 @@ export function defaultTemplateSettings(
 ): BulkExportTemplateSettings | undefined {
   if (mode === "nakladnoy") return { ...DEFAULT_NAKLADNOY_TEMPLATE_SETTINGS };
   if (mode === "invoice") return { ...DEFAULT_INVOICE_TEMPLATE_SETTINGS };
+  if (mode === "warehouse") return { ...DEFAULT_WAREHOUSE_GROUP_SETTINGS };
   if (mode === "warehouse-112") return { ...DEFAULT_WAREHOUSE_112_SETTINGS };
   if (mode === "warehouse-410") return { ...DEFAULT_WAREHOUSE_410_SETTINGS };
   if (mode === "warehouse-600") return { ...DEFAULT_WAREHOUSE_600_SETTINGS };
   return undefined;
+}
+
+function normalizeGroupBy(raw: unknown): NakladnoyGroupBy {
+  return raw === "territory" || raw === "expeditor" ? raw : DEFAULT_GROUP_BY;
 }
 
 export function normalizeNakladnoyTemplateSettings(raw: unknown): NakladnoyTemplateSettings {
@@ -152,9 +184,12 @@ export function normalizeNakladnoyTemplateSettings(raw: unknown): NakladnoyTempl
   if (!raw || typeof raw !== "object") return d;
   const o = raw as Record<string, unknown>;
   const codeColumn = o.codeColumn === "barcode" ? "barcode" : "sku";
-  let groupBy: NakladnoyGroupBy = "agent";
-  if (o.groupBy === "territory" || o.groupBy === "expeditor") groupBy = o.groupBy;
-  return { codeColumn, groupBy };
+  return { codeColumn, groupBy: normalizeGroupBy(o.groupBy) };
+}
+
+export function normalizeWarehouseGroupSettings(raw: unknown): WarehouseGroupSettings {
+  if (!raw || typeof raw !== "object") return { ...DEFAULT_WAREHOUSE_GROUP_SETTINGS };
+  return { groupBy: normalizeGroupBy((raw as Record<string, unknown>).groupBy) };
 }
 
 export function normalizeInvoiceTemplateSettings(raw: unknown): InvoiceTemplateFieldSettings {
@@ -163,6 +198,7 @@ export function normalizeInvoiceTemplateSettings(raw: unknown): InvoiceTemplateF
   const o = raw as Record<string, unknown>;
   const pick = (k: keyof InvoiceTemplateFieldSettings) => o[k] === true;
   return {
+    groupBy: normalizeGroupBy(o.groupBy),
     companyName: pick("companyName"),
     contactPerson: pick("contactPerson"),
     clientBalance: o.clientBalance === undefined ? d.clientBalance : pick("clientBalance"),
@@ -181,7 +217,10 @@ export function normalizeWarehouse112Settings(raw: unknown): Warehouse112Setting
   const d = DEFAULT_WAREHOUSE_112_SETTINGS;
   if (!raw || typeof raw !== "object") return d;
   const o = raw as Record<string, unknown>;
-  return { sortProducts: pickBool(o, "sortProducts", d.sortProducts) };
+  return {
+    groupBy: normalizeGroupBy(o.groupBy),
+    sortProducts: pickBool(o, "sortProducts", d.sortProducts)
+  };
 }
 
 export function normalizeWarehouse410Settings(raw: unknown): Warehouse410Settings {
@@ -189,6 +228,7 @@ export function normalizeWarehouse410Settings(raw: unknown): Warehouse410Setting
   if (!raw || typeof raw !== "object") return d;
   const o = raw as Record<string, unknown>;
   return {
+    groupBy: normalizeGroupBy(o.groupBy),
     showBarcode: pickBool(o, "showBarcode", d.showBarcode),
     showSku: pickBool(o, "showSku", d.showSku)
   };
@@ -199,6 +239,7 @@ export function normalizeWarehouse600Settings(raw: unknown): Warehouse600Setting
   if (!raw || typeof raw !== "object") return d;
   const o = raw as Record<string, unknown>;
   return {
+    groupBy: normalizeGroupBy(o.groupBy),
     showLoadDate: pickBool(o, "showLoadDate", d.showLoadDate),
     showAgents: pickBool(o, "showAgents", d.showAgents),
     showTerritory: pickBool(o, "showTerritory", d.showTerritory),
@@ -217,21 +258,26 @@ export function normalizeTemplateSettings(
 ): BulkExportTemplateSettings | undefined {
   if (mode === "nakladnoy") return normalizeNakladnoyTemplateSettings(raw);
   if (mode === "invoice") return normalizeInvoiceTemplateSettings(raw);
+  if (mode === "warehouse") return normalizeWarehouseGroupSettings(raw);
   if (mode === "warehouse-112") return normalizeWarehouse112Settings(raw);
   if (mode === "warehouse-410") return normalizeWarehouse410Settings(raw);
   if (mode === "warehouse-600") return normalizeWarehouse600Settings(raw);
   return undefined;
 }
 
+/**
+ * Shablon sozlamasi global prefs ustidan: «тип фильтрации» hamma bo‘limda,
+ * «тип кода» faqat «Загруз экспедитор» shablonlarida.
+ */
 export function mergeNakladnoyPrefsForTemplate(
   globalPrefs: NakladnoyExportPrefs,
-  templateSettings: NakladnoyTemplateSettings | undefined
+  templateSettings: Partial<NakladnoyTemplateSettings> | undefined
 ): NakladnoyExportPrefs {
   if (!templateSettings) return globalPrefs;
   return {
     separateSheets: globalPrefs.separateSheets,
-    codeColumn: templateSettings.codeColumn,
-    groupBy: templateSettings.groupBy
+    codeColumn: templateSettings.codeColumn ?? globalPrefs.codeColumn,
+    groupBy: templateSettings.groupBy ?? globalPrefs.groupBy
   };
 }
 

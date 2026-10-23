@@ -40,6 +40,8 @@ type Props = {
   bulkMode?: boolean;
   bulkCount?: number;
   bulkLabel?: string;
+  mixedHint?: boolean;
+  loadError?: string | null;
   onSave: (ent: AgentEntitlementSavePayload) => void | Promise<void>;
 };
 
@@ -54,6 +56,8 @@ export function SlotEntitlementsEditor({
   bulkMode = false,
   bulkCount = 0,
   bulkLabel,
+  mixedHint = false,
+  loadError = null,
   onSave
 }: Props) {
   const [ptSel, setPtSel] = useState<string[]>([]);
@@ -64,8 +68,6 @@ export function SlotEntitlementsEditor({
   const [expanded, setExpanded] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
-  const wasOpenRef = useRef(false);
-
   const categoriesQ = useQuery({
     queryKey: ["product-categories", tenant, "slot-entitlements"],
     enabled: open && Boolean(tenant),
@@ -87,7 +89,7 @@ export function SlotEntitlementsEditor({
       staleTime: STALE.reference,
       queryFn: async () => {
         const { data } = await api.get<{ data: ProductListItem[] }>(
-          `/api/${tenant}/products?category_id=${c.id}&limit=500&is_active=true`
+          `/api/${tenant}/products?category_id=${c.id}&limit=2000&is_active=true`
         );
         return data.data;
       }
@@ -127,27 +129,42 @@ export function SlotEntitlementsEditor({
     setSaving(false);
   }, [initial]);
 
-  // Faqat ochilganda reset — parent har renderda yangi `initial` bersa ham tanlovni o‘chirmaydi.
+  const initialKey = useMemo(
+    () =>
+      JSON.stringify({
+        price_types: [...(initial.price_types ?? [])].sort(),
+        product_rules: (initial.product_rules ?? []).map((r) => ({
+          category_id: r.category_id,
+          all: Boolean(r.all),
+          product_ids: [...(r.product_ids ?? [])].sort((a, b) => a - b)
+        }))
+      }),
+    [initial]
+  );
+
+  // Saqlangan belgilar kelishi bilan draft yangilanadi (dialog doim mount).
   useEffect(() => {
-    if (open && !wasOpenRef.current) {
-      resetDraft();
+    if (!open) {
+      return;
     }
-    wasOpenRef.current = open;
-  }, [open, resetDraft]);
+    resetDraft();
+    // resetDraft `initial` reference o‘zgarsa ham qayta ishlamasin — faqat mazmun.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, initialKey]);
 
   const ptLabel = useCallback(
     (key: string) => priceTypeLabels?.[key] ?? key,
     [priceTypeLabels]
   );
 
-  const filteredPt = useMemo(
-    () =>
-      priceTypes.filter((p) => {
-        const s = ptSearch.toLowerCase();
-        return p.toLowerCase().includes(s) || ptLabel(p).toLowerCase().includes(s);
-      }),
-    [priceTypes, ptSearch, ptLabel]
-  );
+  const filteredPt = useMemo(() => {
+    const extra = (initial.price_types ?? []).filter((p) => !priceTypes.includes(p));
+    const keys = [...priceTypes, ...extra];
+    return keys.filter((p) => {
+      const s = ptSearch.toLowerCase();
+      return p.toLowerCase().includes(s) || ptLabel(p).toLowerCase().includes(s);
+    });
+  }, [priceTypes, ptSearch, ptLabel, initial.price_types]);
 
   const allPtSelected =
     filteredPt.length > 0 && filteredPt.every((p) => ptSel.includes(p));
@@ -171,10 +188,38 @@ export function SlotEntitlementsEditor({
     [prSearch, productsByCategory]
   );
 
-  const visibleCategories = useMemo(
-    () => categories.filter(categoryMatchesSearch),
-    [categories, categoryMatchesSearch]
+  const categoryHasSelection = useCallback(
+    (c: ProductCategoryRow) => {
+      if (categoryAll.has(c.id)) return true;
+      const prefix = `${c.id}:`;
+      if (Object.keys(prodChecked).some((k) => k.startsWith(prefix) && prodChecked[k])) return true;
+      const items = productsByCategory.get(c.id) ?? [];
+      return items.some((p) => prodChecked[productKey(c.id, p.id)]);
+    },
+    [categoryAll, prodChecked, productsByCategory]
   );
+
+  const autoExpandedRef = useRef(false);
+  useEffect(() => {
+    if (!open) {
+      autoExpandedRef.current = false;
+      return;
+    }
+    if (autoExpandedRef.current || productsLoading || categories.length === 0) return;
+    const names = categories.filter(categoryHasSelection).map((c) => c.name);
+    if (names.length > 0 && names.length <= 3) setExpanded(names);
+    autoExpandedRef.current = true;
+  }, [open, productsLoading, categories, categoryHasSelection]);
+
+  const visibleCategories = useMemo(() => {
+    const list = categories.filter(categoryMatchesSearch);
+    return [...list].sort((a, b) => {
+      const as = categoryHasSelection(a) ? 0 : 1;
+      const bs = categoryHasSelection(b) ? 0 : 1;
+      if (as !== bs) return as - bs;
+      return a.name.localeCompare(b.name, "ru");
+    });
+  }, [categories, categoryMatchesSearch, categoryHasSelection]);
 
   const isCategoryFullySelected = useCallback(
     (c: ProductCategoryRow) => {
@@ -263,8 +308,8 @@ export function SlotEntitlementsEditor({
     ? (bulkLabel ?? `Выбрано мест: ${bulkCount}`)
     : "Ограничения рабочего места";
 
-  const ptCountLabel = `${ptSel.filter((p) => priceTypes.includes(p)).length}/${priceTypes.length}`;
-  const prodSelectedCount = categories.filter(isCategoryFullySelected).length;
+  const ptCountLabel = `${ptSel.filter((p) => filteredPt.includes(p) || priceTypes.includes(p)).length}/${Math.max(priceTypes.length, ptSel.length)}`;
+  const prodSelectedCount = categories.filter(categoryHasSelection).length;
   const prodCountLabel = `${prodSelectedCount}/${categories.length}`;
 
   return (
@@ -285,6 +330,17 @@ export function SlotEntitlementsEditor({
         </div>
       </div>
 
+      {mixedHint ? (
+        <p className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+          У выбранных мест настройки отличаются — показаны все отмеченные значения.
+        </p>
+      ) : null}
+      {loadError ? (
+        <p className="mb-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+          {loadError}
+        </p>
+      ) : null}
+
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <AgentRestrictionsPanelShell
           icon="💰"
@@ -294,7 +350,7 @@ export function SlotEntitlementsEditor({
           allSelected={allPtSelected}
           search={ptSearch}
           onSearchChange={setPtSearch}
-          listClassName="max-h-64"
+          listClassName="max-h-[32rem] overflow-y-scroll"
         >
           {filteredPt.length === 0 ? (
             <p className="p-3 text-center text-xs text-slate-400">Нет типов цен</p>
@@ -325,14 +381,15 @@ export function SlotEntitlementsEditor({
           allSelected={allProductsSelected}
           search={prSearch}
           onSearchChange={setPrSearch}
-          listClassName="max-h-64"
+          listClassName="max-h-[32rem] overflow-y-scroll"
         >
-          {categoriesQ.isLoading || productsLoading ? (
+          {categoriesQ.isLoading ? (
             <p className="p-4 text-center text-xs text-slate-400">Загрузка…</p>
           ) : visibleCategories.length === 0 ? (
             <p className="p-3 text-center text-xs text-slate-400">Нет категорий</p>
           ) : (
-            visibleCategories.map((c) => (
+            <>
+            {visibleCategories.map((c) => (
               <CategoryRow
                 key={c.id}
                 category={c}
@@ -379,7 +436,13 @@ export function SlotEntitlementsEditor({
                   });
                 }}
               />
-            ))
+            ))}
+            {visibleCategories.length > 7 ? (
+              <p className="px-2 py-1.5 text-[11px] text-slate-400">
+                Прокрутите список, чтобы увидеть все категории
+              </p>
+            ) : null}
+            </>
           )}
         </AgentRestrictionsPanelShell>
       </div>
@@ -434,14 +497,31 @@ function CategoryRow({
   onToggleProduct: (productId: number) => void;
 }) {
   const cbRef = useRef<HTMLInputElement>(null);
+  const extraSelected = Object.keys(prodChecked)
+    .filter((k) => k.startsWith(`${category.id}:`) && prodChecked[k])
+    .map((k) => Number(k.slice(String(category.id).length + 1)))
+    .filter((id) => Number.isInteger(id) && id > 0 && !products.some((p) => p.id === id));
+  const mergedProducts =
+    extraSelected.length === 0
+      ? products
+      : [
+          ...products,
+          ...extraSelected.map((id) => ({
+            id,
+            name: `ID ${id}`,
+            sku: "",
+            category_id: category.id
+          }))
+        ];
   const isOpen = expanded.includes(category.name) || prSearch.trim() !== "";
   const visibleItems = prSearch.trim()
-    ? products.filter((p) => p.name.toLowerCase().includes(prSearch.trim().toLowerCase()))
-    : products;
-  const selCount = products.filter((p) => prodChecked[productKey(category.id, p.id)]).length;
+    ? mergedProducts.filter((p) => p.name.toLowerCase().includes(prSearch.trim().toLowerCase()))
+    : mergedProducts;
+  const selCount = mergedProducts.filter((p) => prodChecked[productKey(category.id, p.id)]).length;
   const all =
-    categoryAll.has(category.id) || (products.length > 0 && selCount === products.length);
-  const some = selCount > 0 && !all;
+    categoryAll.has(category.id) || (mergedProducts.length > 0 && selCount === mergedProducts.length);
+  const some = (selCount > 0 || extraSelected.length > 0) && !all;
+  const selected = all || some || categoryAll.has(category.id);
 
   useLayoutEffect(() => {
     const el = cbRef.current;
@@ -449,7 +529,13 @@ function CategoryRow({
   }, [some, all]);
 
   return (
-    <div className="overflow-hidden rounded-lg border border-slate-100">
+    <div
+      className={
+        selected
+          ? "overflow-hidden rounded-lg border border-teal-200 bg-teal-50/40"
+          : "overflow-hidden rounded-lg border border-slate-100"
+      }
+    >
       <div
         className="flex cursor-pointer items-center gap-2 px-2 py-1.5"
         onClick={() => onToggleExpand(category.name)}
@@ -463,6 +549,11 @@ function CategoryRow({
           onChange={onToggleCategory}
         />
         <span className="flex-1 truncate text-sm font-medium">{category.name}</span>
+        {all ? (
+          <span className="text-[10px] font-semibold uppercase text-teal-700">все</span>
+        ) : selCount > 0 ? (
+          <span className="text-[10px] font-semibold text-teal-700">{selCount}</span>
+        ) : null}
       </div>
       {isOpen ? (
         <div className="space-y-0.5 py-1 pl-6">

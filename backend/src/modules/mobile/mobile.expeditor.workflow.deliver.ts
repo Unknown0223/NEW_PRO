@@ -2,10 +2,14 @@
  * Ekspeditor yetkazish oqimi — bosh sahifa, vizitlar, qarzdorlar.
  */
 import { prisma } from "../../config/database";
+import { profilePhotoMobileUrl } from "../clients/client-profile-photo.pure";
+import { tenantSlug } from "../clients/client-profile-photo.service";
 import { Prisma } from "@prisma/client";
 import { loadDeliveryDebtByClient, mergeLedgerWithUnpaidDelivered } from "../client-balances/client-balances.delivery";
 import { loadExpeditorMobileConfig } from "./mobile.expeditor.service";
 import { parseExpeditorAssignmentRules } from "../staff/staff.shared.helpers";
+import { collectWarehouseIdsForUsers } from "../linkage/linkage.warehouse-ids";
+import { resolveIdsPreferBindings } from "../linkage/workplace-bindings";
 
 const COMPLETED_STATUSES = ["delivered", "returned"] as const;
 const RETURN_TYPES = ["return", "partial_return", "return_by_order"] as const;
@@ -166,6 +170,27 @@ function todayStartUtc(): Date {
   return new Date(new Date().toISOString().slice(0, 10) + "T00:00:00.000Z");
 }
 
+function reportPhotoUrl(raw: string | null | undefined): string | null {
+  const photoRaw = raw?.trim() ?? "";
+  if (!photoRaw || photoRaw.startsWith("data:") || photoRaw.length > 2048) return null;
+  return photoRaw;
+}
+
+function visitClientPhoto(
+  client: {
+    id: number;
+    profile_photo_url?: string | null;
+    updated_at?: Date | null;
+    client_photo_reports?: { image_url: string | null }[];
+  },
+  slug: string
+): string | null {
+  return (
+    profilePhotoMobileUrl(client.profile_photo_url, slug, client.id, client.updated_at) ??
+    reportPhotoUrl(client.client_photo_reports?.[0]?.image_url)
+  );
+}
+
 /** Vizitlar: active | completed | routes | unfinished */
 export async function listMobileExpeditorVisits(
   tenantId: number,
@@ -233,12 +258,22 @@ export async function listMobileExpeditorVisits(
           zone: true,
           latitude: true,
           longitude: true,
-          client_balances: { take: 1, select: { balance: true } }
+          client_balances: { take: 1, select: { balance: true } },
+          updated_at: true,
+          profile_photo_url: true,
+          client_photo_reports: {
+            where: { deleted_at: null },
+            orderBy: { created_at: "desc" as const },
+            take: 1,
+            select: { image_url: true }
+          }
         }
       }
     },
     orderBy: [{ status: "asc" }, { id: "asc" }]
   });
+
+  const slug = await tenantSlug(tenantId);
 
   if (tab === "routes") {
     const byClient = new Map<number, (typeof orders)[0]>();
@@ -246,47 +281,55 @@ export async function listMobileExpeditorVisits(
       if (!byClient.has(o.client_id)) byClient.set(o.client_id, o);
     }
     const routeList = [...byClient.values()];
-    return routeList.map((o, idx) => ({
-      seq: idx + 1,
+    return routeList.map((o, idx) => {
+      const photoUrl = visitClientPhoto(o.client, slug);
+      return {
+        seq: idx + 1,
+        order_id: o.id,
+        order_number: o.number,
+        client_id: o.client.id,
+        client_name: o.client.name,
+        phone: o.client.phone ?? null,
+        address: [o.client.city, o.client.zone, o.client.address].filter(Boolean).join(", ") || null,
+        visit_reason: o.comment?.trim() || null,
+        task_label: "Взыскание долгов",
+        status: o.status,
+        latitude: o.client.latitude != null ? Number(o.client.latitude) : null,
+        longitude: o.client.longitude != null ? Number(o.client.longitude) : null,
+        balance: Number(o.client.client_balances[0]?.balance ?? 0),
+        photo_url: photoUrl
+      };
+    });
+  }
+
+  return orders.map((o) => {
+    const photoUrl = visitClientPhoto(o.client, slug);
+    return {
       order_id: o.id,
       order_number: o.number,
       client_id: o.client.id,
       client_name: o.client.name,
       phone: o.client.phone ?? null,
       address: [o.client.city, o.client.zone, o.client.address].filter(Boolean).join(", ") || null,
-      visit_reason: o.comment?.trim() || null,
-      task_label: "Взыскание долгов",
       status: o.status,
+      total_sum: Number(o.total_sum),
+      visit_reason: o.comment?.trim() || null,
+      task_label:
+        tab === "active"
+          ? "Доставка"
+          : tab === "unfinished"
+            ? "Не завершён"
+            : "Завершено",
       latitude: o.client.latitude != null ? Number(o.client.latitude) : null,
       longitude: o.client.longitude != null ? Number(o.client.longitude) : null,
-      balance: Number(o.client.client_balances[0]?.balance ?? 0)
-    }));
-  }
-
-  return orders.map((o) => ({
-    order_id: o.id,
-    order_number: o.number,
-    client_id: o.client.id,
-    client_name: o.client.name,
-    phone: o.client.phone ?? null,
-    address: [o.client.city, o.client.zone, o.client.address].filter(Boolean).join(", ") || null,
-    status: o.status,
-    total_sum: Number(o.total_sum),
-    visit_reason: o.comment?.trim() || null,
-    task_label:
-      tab === "active"
-        ? "Доставка"
-        : tab === "unfinished"
-          ? "Не завершён"
-          : "Завершено",
-    latitude: o.client.latitude != null ? Number(o.client.latitude) : null,
-    longitude: o.client.longitude != null ? Number(o.client.longitude) : null,
-    balance: Number(o.client.client_balances[0]?.balance ?? 0)
-  }));
+      balance: Number(o.client.client_balances[0]?.balance ?? 0),
+      photo_url: photoUrl
+    };
+  });
 }
 
 /** Qarzdor mijozlar — ekspeditor zakazlari bo'yicha. */
-export async function listMobileExpeditorDebtors(tenantId: number, expeditorUserId: number, limit = 100) {
+export async function listMobileExpeditorDebtors(tenantId: number, expeditorUserId: number, limit = 500) {
   const cfg = await loadExpeditorMobileConfig(tenantId, expeditorUserId);
   if (cfg.expeditor?.accept_payment_from_debtors === false && cfg.expeditor?.accept_payment_on_delivery === false) {
     return [];
@@ -294,7 +337,9 @@ export async function listMobileExpeditorDebtors(tenantId: number, expeditorUser
 
   const clientIds = await expeditorClientIds(tenantId, expeditorUserId);
   if (!clientIds.length) return [];
+  const outLimit = Math.min(Math.max(limit, 1), 1000);
 
+  // Barcha scoped mijozlar — take+name bilan oldin qirqilmasin.
   const clients = await prisma.client.findMany({
     where: { tenant_id: tenantId, id: { in: clientIds }, is_active: true },
     select: {
@@ -305,19 +350,30 @@ export async function listMobileExpeditorDebtors(tenantId: number, expeditorUser
       address: true,
       city: true,
       region: true,
+      updated_at: true,
+      profile_photo_url: true,
       client_balances: { take: 1, select: { balance: true } }
-    },
-    orderBy: { name: "asc" },
-    take: Math.min(limit, 200)
+    }
   });
 
-  const deliveryMap = await loadDeliveryDebtByClient(tenantId, clientIds);
+  const ids = clients.map((c) => c.id);
+  const { loadOpeningDebtByClient } = await import(
+    "../opening-balances/opening-balances.debt-by-client"
+  );
+  const [deliveryMap, openingMap] = await Promise.all([
+    loadDeliveryDebtByClient(tenantId, ids),
+    loadOpeningDebtByClient(tenantId, ids)
+  ]);
 
-  return clients
-    .map((c) => {
+  const slug = await tenantSlug(tenantId);
+  const { pickMobileDebtorsByBalance } = await import("./mobile-debtors-rank");
+  return pickMobileDebtorsByBalance(
+    clients.map((c) => {
       const ledger = c.client_balances[0]?.balance ?? new Prisma.Decimal(0);
       const delivery = deliveryMap.get(c.id);
       const merged = mergeLedgerWithUnpaidDelivered(ledger, delivery);
+      const openingRaw = openingMap.get(c.id) ?? new Prisma.Decimal(0);
+      const openingDebt = openingRaw.gt(0) ? Number(openingRaw) : 0;
       return {
         id: c.id,
         name: c.name,
@@ -325,12 +381,13 @@ export async function listMobileExpeditorDebtors(tenantId: number, expeditorUser
         client_code: c.client_code,
         address: [c.city, c.region, c.address].filter(Boolean).join(", ") || null,
         balance: Number(merged),
-        overdue_at: delivery?.firstDel?.toISOString() ?? null
+        overdue_at: delivery?.firstDel?.toISOString() ?? null,
+        opening_debt: openingDebt,
+        photo_url: profilePhotoMobileUrl(c.profile_photo_url, slug, c.id, c.updated_at)
       };
-    })
-    .filter((c) => c.balance < -0.01)
-    .sort((a, b) => a.balance - b.balance)
-    .slice(0, limit);
+    }),
+    outLimit
+  );
 }
 
 /** Ekspeditor omborlari (assignment rules + zakazlar). */
@@ -353,14 +410,14 @@ export async function listMobileExpeditorWarehouses(tenantId: number, expeditorU
   });
   const orderWhIds = fromOrders.map((r) => r.warehouse_id!).filter(Boolean);
 
-  const allIds = [...new Set([...ruleIds, ...orderWhIds])];
+  const fromSlotAndLinks = await collectWarehouseIdsForUsers(tenantId, [expeditorUserId]);
+  // Qoidalar / joy bog‘lamasi ustun; tarix faqat bog‘lama bo‘lmasa.
+  const allIds = resolveIdsPreferBindings(
+    [...ruleIds, ...fromSlotAndLinks],
+    orderWhIds
+  );
   if (!allIds.length) {
-    const all = await prisma.warehouse.findMany({
-      where: { tenant_id: tenantId, is_active: true },
-      select: { id: true, name: true },
-      orderBy: { name: "asc" }
-    });
-    return all;
+    return [];
   }
 
   return prisma.warehouse.findMany({

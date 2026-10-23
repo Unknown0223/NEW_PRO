@@ -7,6 +7,7 @@ import '../../../core/config/mobile_config.dart';
 import '../../../core/config/sync_window_countdown.dart';
 import '../../../core/ui/agent_ui.dart';
 import 'agent_scaffold_key.dart';
+import '../orders/create_order_exit_guard.dart';
 
 /// Agent sahifalari uchun TopBar (shablon Agent 2.0).
 /// Sinхron oynasi taymeri har doim title yonida ko‘rinadi.
@@ -15,6 +16,9 @@ class AgentAppBar extends ConsumerWidget implements PreferredSizeWidget {
   final List<Widget>? actions;
   final bool showBack;
   final GlobalKey<ScaffoldState>? drawerScaffoldKey;
+  /// Shell ichidagi sahifa: ☰ AgentShell drawer ni ochadi (ichki Scaffold
+  /// drawer yo‘q bo‘lsa ham). Overlay (`/map`, `/draft`) da ishlatilmasin.
+  final bool useShellDrawer;
   final Widget? belowTitle;
   final Widget? titleTrailing;
   final VoidCallback? onBack;
@@ -27,6 +31,7 @@ class AgentAppBar extends ConsumerWidget implements PreferredSizeWidget {
     this.actions,
     this.showBack = false,
     this.drawerScaffoldKey,
+    this.useShellDrawer = false,
     this.belowTitle,
     this.titleTrailing,
     this.onBack,
@@ -43,6 +48,13 @@ class AgentAppBar extends ConsumerWidget implements PreferredSizeWidget {
       keyed.openDrawer();
       return;
     }
+    if (useShellDrawer) {
+      final shell = agentShellScaffoldKey.currentState;
+      if (shell != null) {
+        shell.openDrawer();
+        return;
+      }
+    }
     openAgentMenu(context);
   }
 
@@ -55,12 +67,21 @@ class AgentAppBar extends ConsumerWidget implements PreferredSizeWidget {
       Navigator.of(context).pop();
       return;
     }
-    context.go('/home');
+    final router = GoRouter.of(context);
+    final loc = GoRouterState.of(context).uri.path;
+    final container = ProviderScope.containerOf(context);
+    leaveCreateOrderThenGo(
+      container: container,
+      go: router.go,
+      path: '/home',
+      currentLocation: loc,
+    );
   }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final useMenuLeading = drawerScaffoldKey != null || !showBack;
+    final useMenuLeading =
+        drawerScaffoldKey != null || useShellDrawer || !showBack;
     final syncCfg = ref.watch(sessionProvider).mobileConfig?.sync ?? const SyncConfig();
 
     Widget? trailing = titleTrailing;

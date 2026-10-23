@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { Prisma } from "@prisma/client";
 import { prisma } from "../../config/database";
 import { appendTenantAuditEvent, AuditEntityType } from "../../lib/tenant-audit";
-import { WEB_PANEL_STAFF_ROLES } from "../../lib/tenant-user-roles";
+import { isPositionCatalogRole } from "./position-catalog.roles";
 
 function asTenantSettingsRecord(v: unknown): Record<string, unknown> {
   if (v != null && typeof v === "object" && !Array.isArray(v)) {
@@ -19,6 +19,10 @@ export const WEB_STAFF_POSITION_PRESET_AUDIT_ENTITY = "web_staff_position_preset
 export type WebStaffPositionPresetDto = {
   id: string;
   label: string;
+  /** Tizim roli (`User.role`) — katalog bog‘lanishi */
+  role: string | null;
+  code: string | null;
+  comment: string | null;
   is_active: boolean;
   sort_order: number;
   created_at: string;
@@ -30,7 +34,7 @@ export type WebStaffPositionPresetDto = {
 export type WebStaffPositionPresetAdminDto = WebStaffPositionPresetDto & {
   created_by_label: string | null;
   deactivated_by_label: string | null;
-  /** `User.position` shu shablon `label` bilan mos (trim) keladigan veb-panel xodimlari soni */
+  /** `User.position` shu shablon `label` bilan mos (trim) keladigan xodimlar soni */
   linked_operator_count: number;
 };
 
@@ -45,8 +49,31 @@ function parseOptionalUserId(v: unknown): number | null {
   return v;
 }
 
+function parseOptionalCode(v: unknown): string | null {
+  if (typeof v !== "string") return null;
+  const t = v.trim().slice(0, 20);
+  return t || null;
+}
+
+function parseOptionalComment(v: unknown): string | null {
+  if (typeof v !== "string") return null;
+  const t = v.trim().slice(0, 500);
+  return t || null;
+}
+
+function parseOptionalRole(v: unknown): string | null {
+  if (typeof v !== "string") return null;
+  const t = v.trim();
+  if (!t) return null;
+  return isPositionCatalogRole(t) ? t : null;
+}
+
 function parsePresetObject(o: Record<string, unknown>, fallbackOrder: number): WebStaffPositionPresetDto | null {
-  const id = typeof o.id === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(o.id) ? o.id : null;
+  const id =
+    typeof o.id === "string" &&
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(o.id)
+      ? o.id
+      : null;
   const label = typeof o.label === "string" ? o.label.trim().slice(0, 128) : "";
   if (!id || !label) return null;
   const is_active = o.is_active !== false;
@@ -56,6 +83,9 @@ function parsePresetObject(o: Record<string, unknown>, fallbackOrder: number): W
   return {
     id,
     label,
+    role: parseOptionalRole(o.role),
+    code: parseOptionalCode(o.code),
+    comment: parseOptionalComment(o.comment),
     is_active,
     sort_order,
     created_at,
@@ -74,6 +104,9 @@ function presetsFromStringArray(arr: string[]): WebStaffPositionPresetDto[] {
   return labels.map((label, i) => ({
     id: randomUUID(),
     label,
+    role: null,
+    code: null,
+    comment: null,
     is_active: true,
     sort_order: i,
     created_at: now,
@@ -107,7 +140,7 @@ export async function enrichPresetsWithUserLabels(
     if (p.created_by_user_id != null) ids.add(p.created_by_user_id);
     if (p.deactivated_by_user_id != null) ids.add(p.deactivated_by_user_id);
   }
-  const [actorUsers, panelStaffPositions] = await Promise.all([
+  const [actorUsers, staffPositions] = await Promise.all([
     ids.size > 0
       ? prisma.user.findMany({
           where: { tenant_id: tenantId, id: { in: [...ids] } },
@@ -115,7 +148,7 @@ export async function enrichPresetsWithUserLabels(
         })
       : Promise.resolve([] as { id: number; name: string; login: string }[]),
     prisma.user.findMany({
-      where: { tenant_id: tenantId, role: { in: [...WEB_PANEL_STAFF_ROLES] } },
+      where: { tenant_id: tenantId, position: { not: null } },
       select: { position: true }
     })
   ]);
@@ -126,11 +159,11 @@ export async function enrichPresetsWithUserLabels(
     labelById.set(u.id, n && n.length > 0 ? n : u.login);
   }
 
-  const operatorCountByPositionLabel = new Map<string, number>();
-  for (const row of panelStaffPositions) {
+  const countByPositionLabel = new Map<string, number>();
+  for (const row of staffPositions) {
     const t = row.position?.trim() ?? "";
     if (!t) continue;
-    operatorCountByPositionLabel.set(t, (operatorCountByPositionLabel.get(t) ?? 0) + 1);
+    countByPositionLabel.set(t, (countByPositionLabel.get(t) ?? 0) + 1);
   }
 
   return presets.map((p) => ({
@@ -143,7 +176,7 @@ export async function enrichPresetsWithUserLabels(
       p.deactivated_by_user_id != null
         ? (labelById.get(p.deactivated_by_user_id) ?? `ID ${p.deactivated_by_user_id}`)
         : null,
-    linked_operator_count: operatorCountByPositionLabel.get(p.label) ?? 0
+    linked_operator_count: countByPositionLabel.get(p.label) ?? 0
   }));
 }
 
@@ -181,6 +214,9 @@ export async function persistWebStaffPositionPresets(
     web_staff_position_presets: presets.map((p) => ({
       id: p.id,
       label: p.label,
+      role: p.role,
+      code: p.code,
+      comment: p.comment,
       is_active: p.is_active,
       sort_order: p.sort_order,
       created_at: p.created_at,
@@ -205,8 +241,13 @@ export async function persistWebStaffPositionPresets(
   });
 }
 
-export async function resolveWebStaffPresetsFromSettings(tenantId: number, settings: unknown): Promise<WebStaffPositionPresetDto[]> {
-  const { presets: parsed, needsMigrate } = parsePresetsArray(asTenantSettingsRecord(settings).web_staff_position_presets);
+export async function resolveWebStaffPresetsFromSettings(
+  tenantId: number,
+  settings: unknown
+): Promise<WebStaffPositionPresetDto[]> {
+  const { presets: parsed, needsMigrate } = parsePresetsArray(
+    asTenantSettingsRecord(settings).web_staff_position_presets
+  );
   const { presets: withCreated, changed: needCreated } = ensureCreatedAtOnPresets(parsed);
   let presets = withCreated;
   if (needsMigrate) {
@@ -233,3 +274,16 @@ export function activePresetLabels(presets: WebStaffPositionPresetDto[]): string
   );
 }
 
+/** Faol lavozimlar — ixtiyoriy rol filtri bilan (xodim formasi). */
+export function activePresetsForRole(
+  presets: WebStaffPositionPresetDto[],
+  role?: string | null
+): WebStaffPositionPresetDto[] {
+  const active = presets.filter((p) => p.is_active);
+  if (!role?.trim()) return active;
+  const r = role.trim();
+  const matched = active.filter((p) => p.role === r);
+  // Rol bog‘lanmagan eski shablonlar ham tanlanishi mumkin
+  const unscoped = active.filter((p) => p.role == null);
+  return [...matched, ...unscoped].sort((a, b) => a.sort_order - b.sort_order || a.label.localeCompare(b.label, "ru"));
+}

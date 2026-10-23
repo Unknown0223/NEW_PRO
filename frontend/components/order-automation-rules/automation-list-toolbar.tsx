@@ -45,7 +45,7 @@ export function AutomationListToolbar({
   itemsPerPage: number;
   onItemsPerPageChange: (n: number) => void;
   onRefresh: () => void;
-  onExport: () => void;
+  onExport?: () => void;
 }) {
   return (
     <div className="flex items-center gap-2 border-b border-border bg-card px-4 py-2">
@@ -90,14 +90,16 @@ export function AutomationListToolbar({
       >
         <RefreshCw size={16} />
       </button>
-      <button
-        type="button"
-        onClick={onExport}
-        className="flex items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-sm text-emerald-700 transition-colors hover:bg-emerald-100"
-      >
-        <FileSpreadsheet size={14} />
-        Excel
-      </button>
+      {onExport ? (
+        <button
+          type="button"
+          onClick={onExport}
+          className="flex items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-sm text-emerald-700 transition-colors hover:bg-emerald-100"
+        >
+          <FileSpreadsheet size={14} />
+          Excel
+        </button>
+      ) : null}
     </div>
   );
 }

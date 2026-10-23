@@ -45,11 +45,11 @@ const EMPTY_PRODUCTS: ProductOption[] = [];
 
 const STOCK_TABLE_ID = "stock.kirim_qoldiq.v1";
 const STOCK_COLS = [
-  { id: "warehouse_name", label: "Ombor" },
+  { id: "warehouse_name", label: "Склад" },
   { id: "sku", label: "SKU" },
-  { id: "product_name", label: "Mahsulot" },
-  { id: "qty", label: "Miqdor" },
-  { id: "reserved_qty", label: "Rezerv" }
+  { id: "product_name", label: "Товар" },
+  { id: "qty", label: "Количество" },
+  { id: "reserved_qty", label: "Резерв" }
 ] as const;
 const STOCK_DEFAULT_ORDER = STOCK_COLS.map((c) => c.id);
 const STOCK_NUMERIC = new Set<string>(["qty", "reserved_qty"]);
@@ -191,7 +191,7 @@ function StockPageContent() {
     },
     onError: (e: unknown) => {
       if (e instanceof Error && (e.message === "warehouse" || e.message === "items")) {
-        setReceiptErr("Ombor yoki miqdorlarni tekshiring (kamida bitta qator > 0).");
+        setReceiptErr("Проверьте склад и количества (хотя бы одна строка > 0).");
         return;
       }
       if (isAxiosError(e)) {
@@ -202,7 +202,7 @@ function StockPageContent() {
           return;
         }
       }
-      setReceiptErr(getUserFacingError(e, "Kirimni saqlab bo‘lmadi (ombor, mahsulot yoki miqdorni tekshiring)."));
+      setReceiptErr(getUserFacingError(e, "Не удалось сохранить приход (проверьте склад, товар или количество)."));
     }
   });
 
@@ -223,13 +223,13 @@ function StockPageContent() {
       setImportErrors(data.errors);
       setImportWarnings(data.warnings);
       setImportSummary(
-        `Qo‘llanildi: ${data.applied} qator. Xatolar: ${data.errors.length}, ogohlantirishlar: ${data.warnings.length}.`
+        `Применено строк: ${data.applied}. Ошибок: ${data.errors.length}, предупреждений: ${data.warnings.length}.`
       );
       await qc.invalidateQueries({ queryKey: ["stock", tenantSlug] });
     },
     onError: (e: unknown) => {
       setImportSummary(null);
-      let msg = getUserFacingError(e, "Import so‘rovida xato (tarmoq yoki fayl).");
+      let msg = getUserFacingError(e, "Ошибка запроса импорта (сеть или файл).");
       if (isAxiosError(e)) {
         const flat = getZodFlattenFromApiErrorBody(e.response?.data);
         const hint = flat ? firstValidationUserHint(flat) : undefined;
@@ -250,7 +250,7 @@ function StockPageContent() {
     });
     if (!res.ok) {
       setImportSummary(null);
-      setImportErrors(["Shablonni yuklab bo‘lmadi."]);
+      setImportErrors(["Не удалось скачать шаблон."]);
       return;
     }
     const blob = await res.blob();
@@ -274,7 +274,7 @@ function StockPageContent() {
   if (!tenantSlug) {
     return (
       <PageShell>
-        <p className="text-muted-foreground text-sm">Kirish kerak.</p>
+        <p className="text-muted-foreground text-sm">Необходимо войти в систему.</p>
       </PageShell>
     );
   }
@@ -282,8 +282,8 @@ function StockPageContent() {
   return (
     <PageShell>
       <PageHeader
-        title="Ombor"
-        description="Qoldiqlar, prihod va Excel orqali kirim (SKU / shtrix kod bo‘yicha moslashadi). Omborlarni boshqarish alohida sahifada."
+        title="Склад"
+        description="Остатки, приход и загрузка прихода из Excel (сопоставление по SKU / штрихкоду). Управление складами — на отдельной странице."
       />
 
       <div className="mb-4 flex flex-wrap items-center gap-2">
@@ -291,7 +291,7 @@ function StockPageContent() {
           ← Панель управления
         </Link>
         <Link className={cn(buttonVariants({ variant: "outline", size: "sm" }))} href="/stock/warehouses">
-          Omborlar boshqaruvi
+          Управление складами
         </Link>
         <Link className={cn(buttonVariants({ variant: "outline", size: "sm" }))} href="/stock/balances">
           Остатки товаров
@@ -311,14 +311,14 @@ function StockPageContent() {
           <CardContent className="space-y-4 pt-6">
             <div className="flex flex-wrap items-end gap-2">
               <div className="min-w-[12rem] flex-1 space-y-2">
-                <Label htmlFor="wh-filter">Filtr: ombor</Label>
+                <Label htmlFor="wh-filter">Фильтр: склад</Label>
                 <select
                   id="wh-filter"
                   className="border-input bg-background ring-offset-background focus-visible:ring-ring flex h-10 w-full min-w-0 rounded-md border px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
                   value={filterWarehouseId}
                   onChange={(e) => setFilterWarehouseId(e.target.value)}
                 >
-                  <option value="">Barcha omborlar</option>
+                  <option value="">Все склады</option>
                   {warehouses.map((w) => (
                     <option key={w.id} value={String(w.id)}>
                       {w.name}
@@ -331,7 +331,7 @@ function StockPageContent() {
                 variant="outline"
                 size="icon"
                 className="h-10 w-10 shrink-0"
-                title="Filtrlarni standart holatga"
+                title="Сбросить фильтры"
                 onClick={() => resetStockFilters()}
               >
                 <ListFilter className="size-4" />
@@ -354,7 +354,7 @@ function StockPageContent() {
                 variant="outline"
                 size="icon"
                 className="h-9 w-9 shrink-0"
-                title="Yangilash"
+                title="Обновить"
                 onClick={() => void refetchStock()}
               >
                 <RefreshCw className={cn("size-4", isFetching && "animate-spin")} />
@@ -380,7 +380,7 @@ function StockPageContent() {
                   <tbody>
                     <tr>
                       <td className="text-muted-foreground p-8 text-center">
-                        Ustunlar yashirilgan. «Управление столбцами» (panjara tugmasi) orqali yoqing.
+                        Все столбцы скрыты. Включите их через «Управление столбцами» (кнопка с сеткой).
                       </td>
                     </tr>
                   </tbody>
@@ -417,7 +417,7 @@ function StockPageContent() {
                             colSpan={visibleStockCols.length}
                             className="text-muted-foreground p-6 text-center"
                           >
-                            Qoldiq yo‘q yoki filtr qattiq.
+                            Нет остатков или фильтр слишком строгий.
                           </td>
                         </tr>
                       ) : (
@@ -449,22 +449,23 @@ function StockPageContent() {
           <div className="flex flex-col gap-6">
             <Card className="border-border/60 shadow-sm">
               <CardContent className="space-y-4 pt-6">
-                <h3 className="text-sm font-medium">Excel orqali kirim</h3>
+                <h3 className="text-sm font-medium">Приход через Excel</h3>
                 <p className="text-muted-foreground text-xs leading-relaxed">
-                  <strong>Klassik</strong> shablon: ombor, SKU / shtrix kod, tovar nomi (tekshiruv), miqdor, sana.
-                  <strong className="ms-1">«Поступление» (2)</strong> shablon: №, Kod tovar, Kategoriya, Mahsulot,
-                  Narx, Miqdor prihod, Miqdor blokda — umumiy dona = prihod × blok (blok bo‘sh yoki 1 bo‘lsa faqat
-                  prihod). Agar faylda «Склад» ustuni bo‘lmasa, pastdagi omborni tanlang.
+                  <strong>Классический</strong> шаблон: склад, SKU / штрихкод, наименование товара (для проверки),
+                  количество, дата.
+                  <strong className="ms-1">«Поступление» (2)</strong> шаблон: №, Код товара, Категория, Продукт,
+                  Цена, Количество прихода, Количество в блоке — всего шт. = приход × блок (если блок пуст или равен 1,
+                  берётся только приход). Если в файле нет столбца «Склад», выберите склад ниже.
                 </p>
                 <div className="space-y-2">
-                  <Label htmlFor="import-wh">Import: ombor (postupleniya fayli uchun, ixtiyoriy)</Label>
+                  <Label htmlFor="import-wh">Импорт: склад (для файла «Поступление», необязательно)</Label>
                   <select
                     id="import-wh"
                     className="border-input bg-background flex h-10 w-full max-w-md rounded-md border px-3 py-2 text-sm"
                     value={importWarehouseId}
                     onChange={(e) => setImportWarehouseId(e.target.value)}
                   >
-                    <option value="">— fayldagi «Склад» ishlatiladi —</option>
+                    <option value="">— используется «Склад» из файла —</option>
                     {warehouses.map((w) => (
                       <option key={w.id} value={String(w.id)}>
                         {w.name}
@@ -479,7 +480,7 @@ function StockPageContent() {
                     size="sm"
                     onClick={() => void downloadTemplate("classic")}
                   >
-                    Shablon (klassik)
+                    Шаблон (классический)
                   </Button>
                   <Button
                     type="button"
@@ -487,7 +488,7 @@ function StockPageContent() {
                     size="sm"
                     onClick={() => void downloadTemplate("postupleniya2")}
                   >
-                    Shablon «Поступление»
+                    Шаблон «Поступление»
                   </Button>
                   <input
                     ref={excelRef}
@@ -510,7 +511,7 @@ function StockPageContent() {
                       disabled={importMutation.isPending}
                       onClick={() => excelRef.current?.click()}
                     >
-                      {importMutation.isPending ? "Import…" : "Excel faylni tanlash"}
+                      {importMutation.isPending ? "Импорт…" : "Выбрать файл Excel"}
                     </Button>
                   </ExcelDropTarget>
                 </div>
@@ -519,25 +520,25 @@ function StockPageContent() {
                 )}
                 {importWarnings.length > 0 && (
                   <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-xs dark:border-amber-900 dark:bg-amber-950/40">
-                    <p className="font-medium text-amber-900 dark:text-amber-200">Ogohlantirishlar</p>
+                    <p className="font-medium text-amber-900 dark:text-amber-200">Предупреждения</p>
                     <ul className="mt-1 list-inside list-disc space-y-0.5 text-amber-900/90 dark:text-amber-200/90">
                       {importWarnings.slice(0, 12).map((w, i) => (
                         <li key={i}>{w}</li>
                       ))}
                       {importWarnings.length > 12 && (
-                        <li>… yana {importWarnings.length - 12} ta</li>
+                        <li>… и ещё {importWarnings.length - 12}</li>
                       )}
                     </ul>
                   </div>
                 )}
                 {importErrors.length > 0 && (
                   <div className="rounded-md border border-rose-200 bg-rose-50 p-3 text-xs dark:border-rose-900 dark:bg-rose-950/40">
-                    <p className="font-medium text-rose-900 dark:text-rose-200">Xatolar</p>
+                    <p className="font-medium text-rose-900 dark:text-rose-200">Ошибки</p>
                     <ul className="mt-1 list-inside list-disc space-y-0.5 text-rose-900/90 dark:text-rose-200/90">
                       {importErrors.slice(0, 15).map((x, i) => (
                         <li key={i}>{x}</li>
                       ))}
-                      {importErrors.length > 15 && <li>… yana {importErrors.length - 15} ta</li>}
+                      {importErrors.length > 15 && <li>… и ещё {importErrors.length - 15}</li>}
                     </ul>
                   </div>
                 )}
@@ -546,14 +547,14 @@ function StockPageContent() {
 
             <Card className="border-border/60 shadow-sm">
               <CardContent className="space-y-4 pt-6">
-                <h3 className="text-sm font-medium">Qo‘lda prihod (kirim)</h3>
+                <h3 className="text-sm font-medium">Ручной приход</h3>
                 <div className="space-y-2">
-                  <Label htmlFor="wh-receipt">Ombor</Label>
+                  <Label htmlFor="wh-receipt">Склад</Label>
                   <FilterSelect
                     id="wh-receipt"
                     className="flex h-10 w-full min-w-0 max-w-none rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                    emptyLabel="Ombor"
-                    aria-label="Ombor"
+                    emptyLabel="Склад"
+                    aria-label="Склад"
                     value={receiptWarehouseId}
                     onChange={(e) => setReceiptWarehouseId(e.target.value)}
                   >
@@ -564,22 +565,22 @@ function StockPageContent() {
                     ))}
                   </FilterSelect>
                   <p className="text-muted-foreground text-xs">
-                    Ombor tanlanganda barcha mahsulotlar ro‘yxatga chiqadi — faqat kerakli qatorlarga miqdor yozing (0
-                    yoki bo‘sh qatorlar yuborilmaydi).
+                    После выбора склада отображаются все товары — укажите количество только в нужных строках (строки с 0
+                    или пустые не отправляются).
                   </p>
                 </div>
 
                 {!receiptWarehouseId ? (
-                  <p className="text-muted-foreground text-sm">Avval omborni tanlang.</p>
+                  <p className="text-muted-foreground text-sm">Сначала выберите склад.</p>
                 ) : productsLoading ? (
-                  <p className="text-muted-foreground text-sm">Mahsulotlar Загрузка…</p>
+                  <p className="text-muted-foreground text-sm">Загрузка товаров…</p>
                 ) : lines.length === 0 ? (
-                  <p className="text-muted-foreground text-sm">Mahsulot yo‘q — avval katalogga SKU qo‘shing.</p>
+                  <p className="text-muted-foreground text-sm">Нет товаров — сначала добавьте SKU в каталог.</p>
                 ) : (
                   <div className="max-h-[min(28rem,55vh)] space-y-2 overflow-y-auto rounded-md border p-2">
                     <div className="text-muted-foreground grid grid-cols-[1fr_auto] gap-2 border-b pb-2 text-xs font-medium">
-                      <span>Mahsulot</span>
-                      <span className="w-28 text-right">Miqdor</span>
+                      <span>Товар</span>
+                      <span className="w-28 text-right">Количество</span>
                     </div>
                     {lines.map((line) => {
                       const p = products.find((x) => String(x.id) === line.product_id);
@@ -616,7 +617,7 @@ function StockPageContent() {
 
                 {receiptErr ? <p className="text-destructive text-sm">{receiptErr}</p> : null}
                 {receiptMutation.isSuccess && !receiptErr ? (
-                  <p className="text-sm text-emerald-600">Prihod qo‘llandi.</p>
+                  <p className="text-sm text-emerald-600">Приход проведён.</p>
                 ) : null}
 
                 <Button
@@ -624,7 +625,7 @@ function StockPageContent() {
                   disabled={receiptMutation.isPending || !receiptWarehouseId}
                   onClick={() => receiptMutation.mutate()}
                 >
-                  {receiptMutation.isPending ? "Saqlanmoqda…" : "Prihodni tasdiqlash"}
+                  {receiptMutation.isPending ? "Сохранение…" : "Подтвердить приход"}
                 </Button>
               </CardContent>
             </Card>

@@ -32,7 +32,7 @@ export default function NewClientPage() {
   }
 
   return (
-    <PageShell className="max-w-[min(100%,90rem)]">
+    <PageShell>
       <ClientEditForm
         tenantSlug={tenantSlug}
         mode="create"

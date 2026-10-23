@@ -38,17 +38,17 @@ export function ProductCatalogImportErrorsDialog({
           ) : null}
         </DialogHeader>
         <div className="max-h-[min(50vh,20rem)] overflow-y-auto rounded-md border border-rose-200 bg-rose-50/80 p-3 text-xs dark:border-rose-900 dark:bg-rose-950/40">
-          <p className="font-medium text-rose-900 dark:text-rose-200">Xatolar ({errors.length})</p>
+          <p className="font-medium text-rose-900 dark:text-rose-200">Ошибки ({errors.length})</p>
           <ul className="mt-2 list-inside list-disc space-y-1 text-rose-900/90 dark:text-rose-200/90">
             {visible.map((line, i) => (
               <li key={`${i}-${line.slice(0, 24)}`}>{line}</li>
             ))}
-            {hidden > 0 ? <li>… yana {hidden} ta</li> : null}
+            {hidden > 0 ? <li>… и ещё {hidden}</li> : null}
           </ul>
         </div>
         <DialogFooter>
           <Button type="button" size="sm" onClick={() => onOpenChange(false)}>
-            Yopish
+            Закрыть
           </Button>
         </DialogFooter>
       </DialogContent>

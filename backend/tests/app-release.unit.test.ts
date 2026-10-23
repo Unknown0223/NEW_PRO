@@ -2,8 +2,11 @@ import { describe, expect, it } from "vitest";
 import {
   compareSemver,
   isOwnApkDownloadUrl,
-  resolveAppUpdateBlock
+  normalizeMobileAppReleasePolicy,
+  resolveAppUpdateBlock,
+  withoutBrokenUpdateOffer
 } from "../src/modules/mobile/app-release.service";
+import { applyReleaseRoleGate } from "../src/modules/mobile/app-release.roles";
 
 describe("app-release.service", () => {
   it("compareSemver orders versions", () => {
@@ -75,5 +78,101 @@ describe("app-release.service", () => {
     );
     expect(block.required).toBe(false);
     expect(block.optional).toBe(true);
+  });
+
+  it("resolveAppUpdateBlock stays optional when force_update is off and above min", () => {
+    const block = resolveAppUpdateBlock(
+      "3.1.10",
+      {
+        min_version: "3.1.0",
+        latest_version: "3.1.21",
+        force_update: false,
+        download_url: "https://example.com/app.apk",
+        store_url_android: null,
+        store_url_ios: null,
+        release_notes: "Soft OTA"
+      },
+      "android"
+    );
+    expect(block.required).toBe(false);
+    expect(block.optional).toBe(true);
+    expect(block.apk_url).toContain("app.apk");
+  });
+
+  it("withoutBrokenUpdateOffer drops required when APK is missing", () => {
+    const next = withoutBrokenUpdateOffer({
+      required: true,
+      optional: false,
+      current_version: "3.0.9",
+      min_version: "3.1.0",
+      latest_version: "3.1.21",
+      url: "https://backend.example/api/mobile/apk-download?slug=test1",
+      apk_url: "https://backend.example/api/mobile/apk-download?slug=test1",
+      store_url_android: null,
+      store_url_ios: null,
+      notes: null
+    });
+    expect(next.required).toBe(false);
+    expect(next.optional).toBe(false);
+    expect(next.apk_url).toBeNull();
+  });
+
+  it("withoutBrokenUpdateOffer keeps required when APK file is ready", () => {
+    const url = "https://backend.example/api/mobile/apk-download?slug=test1";
+    const next = withoutBrokenUpdateOffer(
+      {
+        required: true,
+        optional: false,
+        current_version: "3.0.9",
+        min_version: "3.1.0",
+        latest_version: "3.1.21",
+        url,
+        apk_url: url,
+        store_url_android: null,
+        store_url_ios: null,
+        notes: null
+      },
+      { apkFileReady: true }
+    );
+    expect(next.required).toBe(true);
+    expect(next.apk_url).toBe(url);
+  });
+
+  it("keeps the version and shows the update only to the selected role", () => {
+    const policy = normalizeMobileAppReleasePolicy({
+      min_version: "3.0.0",
+      latest_version: "3.1.21",
+      force_update: false,
+      target_roles: ["expeditor"]
+    });
+    expect(policy.min_version).toBe("3.0.0");
+    expect(policy.latest_version).toBe("3.1.21");
+    expect(policy.target_roles).toEqual(["expeditor"]);
+
+    const block = resolveAppUpdateBlock("3.0.0", policy, "android");
+    expect(block.latest_version).toBe("3.1.21");
+    expect(block.optional).toBe(true);
+
+    const forExpeditor = applyReleaseRoleGate(block, policy.target_roles, "expeditor");
+    const forAgent = applyReleaseRoleGate(block, policy.target_roles, "agent");
+    const beforeLogin = applyReleaseRoleGate(block, policy.target_roles, null);
+
+    expect(forExpeditor.optional).toBe(true);
+    expect(forExpeditor.latest_version).toBe("3.1.21");
+    expect(forAgent.optional).toBe(false);
+    expect(forAgent.required).toBe(false);
+    expect(forAgent.latest_version).toBe("3.1.21");
+    expect(beforeLogin.optional).toBe(false);
+  });
+
+  it("keeps the update for every role when target_roles is not set", () => {
+    const policy = normalizeMobileAppReleasePolicy({
+      latest_version: "3.1.21",
+      force_update: false
+    });
+    expect(policy.target_roles).toBeNull();
+    const block = resolveAppUpdateBlock("3.0.0", policy, "android");
+    expect(applyReleaseRoleGate(block, policy.target_roles, "agent").optional).toBe(true);
+    expect(applyReleaseRoleGate(block, policy.target_roles, null).optional).toBe(true);
   });
 });

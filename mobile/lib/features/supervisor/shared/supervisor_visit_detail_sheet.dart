@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/face/face_verification_flow.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../config/supervisor_config_enforcement.dart';
@@ -7,7 +9,8 @@ import 'supervisor_api_parse.dart';
 
 /// Agent vizit hisoboti + config checklist.
 Future<void> showSupervisorVisitDetailSheet(
-  BuildContext context, {
+  BuildContext context,
+  WidgetRef ref, {
   required SupervisorVisitAgentRow row,
   required SupervisorConfigPolicy policy,
 }) {
@@ -45,18 +48,18 @@ Future<void> showSupervisorVisitDetailSheet(
                   const SizedBox(height: 12),
                   Text(row.agentName, style: AppTypography.headlineSmall),
                   if (row.agentCode != null && row.agentCode!.isNotEmpty)
-                    Text('Kod: ${row.agentCode}', style: AppTypography.bodySmall),
+                    Text('Код: ${row.agentCode}', style: AppTypography.bodySmall),
                   const SizedBox(height: 16),
-                  _MetricRow('Rejada', '${row.plannedVisits}'),
-                  _MetricRow('Bajarilgan', '${row.visitedTotal}'),
-                  _MetricRow('Qolmagan', '${row.notVisited}'),
-                  _MetricRow('Buyurtmali vizit', '${row.visitsWithOrders}'),
-                  _MetricRow('GPS vizit', '${row.gpsVisits}'),
-                  _MetricRow('Foto hisobot', '${row.photoReports}'),
-                  _MetricRow('Savdo', row.salesSum),
+                  _MetricRow('По плану', '${row.plannedVisits}'),
+                  _MetricRow('Выполнено', '${row.visitedTotal}'),
+                  _MetricRow('Не посещено', '${row.notVisited}'),
+                  _MetricRow('Визиты с заказом', '${row.visitsWithOrders}'),
+                  _MetricRow('GPS-визиты', '${row.gpsVisits}'),
+                  _MetricRow('Фотоотчёты', '${row.photoReports}'),
+                  _MetricRow('Продажи', row.salesSum),
                   if (checklist.isNotEmpty) ...[
                     const Divider(height: 32),
-                    const Text('Tekshiruv ro\'yxati', style: AppTypography.titleMedium),
+                    const Text('Чек-лист проверки', style: AppTypography.titleMedium),
                     const SizedBox(height: 8),
                     ...checklist.map(
                       (label) => CheckboxListTile(
@@ -68,13 +71,20 @@ Future<void> showSupervisorVisitDetailSheet(
                   ],
                   const SizedBox(height: 16),
                   ElevatedButton(
-                    onPressed: () {
+                    onPressed: () async {
+                      final ok = await FaceVerificationFlow.ensure(
+                        context,
+                        ref,
+                        verifyContext: 'territory_check',
+                        title: 'Проверка лица супервайзера',
+                      );
+                      if (!ok || !context.mounted) return;
                       Navigator.pop(ctx);
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Tekshiruv qayd etildi')),
+                        const SnackBar(content: Text('Проверка сохранена')),
                       );
                     },
-                    child: const Text('Saqlash'),
+                    child: const Text('Сохранить'),
                   ),
                 ],
               ),

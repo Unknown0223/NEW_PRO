@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:go_router/go_router.dart';
 import 'package:permission_handler/permission_handler.dart';
 
@@ -16,11 +17,18 @@ import '../../../core/camera/photo_service.dart';
 import '../../../core/config/client_field_policy.dart';
 import '../../../core/config/mobile_config.dart';
 import '../../../core/config/agent_cities.dart';
+import '../../../core/config/tenant_refs_provider.dart';
 import '../../../core/database/app_database.dart';
 import '../../../core/gps/gps_tracker.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/ui/agent_template_form.dart';
 import '../../../core/clients/agent_outlet_filters_provider.dart';
+import '../../../core/clients/client_outlet_filters.dart';
+import '../../../core/clients/client_local_uniques.dart';
+import '../../../core/l10n/app_strings_ru.dart';
+import '../../../core/time/work_region_time.dart';
+import '../route/agent_route_provider.dart';
+import '../route/route_planning_provider.dart';
 import 'agent_clients_page.dart';
 import 'clients_list_provider.dart';
 import '../shell/agent_app_bar.dart';
@@ -93,20 +101,48 @@ class _NewClientPageState extends ConsumerState<NewClientPage> {
     if (_gpsLoading || !showCoordinatesField(_cfg)) return;
     setState(() => _gpsLoading = true);
     try {
-      final pos = await ref.read(gpsTrackerProvider.notifier).getCurrentPosition();
+      final attached = await ref.read(gpsTrackerProvider.notifier).attachCurrentPosition();
       if (!mounted) return;
-      if (pos == null) {
-        _showFormSnack('GPS ruxsati yo‘q yoki joylashuv o‘chirilgan', backgroundColor: AppColors.error);
+      if (!attached.ok) {
+        _showGpsIssue(attached);
         return;
       }
       setState(() {
-        _latitude = pos.latitude;
-        _longitude = pos.longitude;
+        _latitude = attached.position!.latitude;
+        _longitude = attached.position!.longitude;
       });
-      // Koordinatalar formada ko‘rinadi — pastdagi tugmani to‘sadigan snackbar kerak emas.
     } finally {
       if (mounted) setState(() => _gpsLoading = false);
     }
+  }
+
+  void _showGpsIssue(GpsAttachOutcome attached) {
+    final issue = attached.issue;
+    VoidCallback? openSettings;
+    if (issue == GpsAttachIssue.serviceOff) {
+      openSettings = Geolocator.openLocationSettings;
+    } else if (issue == GpsAttachIssue.deniedForever) {
+      openSettings = openAppSettings;
+    }
+    if (!mounted) return;
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.hideCurrentSnackBar();
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(attached.message),
+        backgroundColor: AppColors.error,
+        behavior: SnackBarBehavior.floating,
+        margin: const EdgeInsets.fromLTRB(12, 0, 12, 76),
+        duration: const Duration(seconds: 5),
+        action: openSettings == null
+            ? null
+            : SnackBarAction(
+                label: 'Настройки',
+                textColor: Colors.white,
+                onPressed: openSettings,
+              ),
+      ),
+    );
   }
 
   Future<void> _capturePhoto() async {
@@ -114,7 +150,7 @@ class _NewClientPageState extends ConsumerState<NewClientPage> {
     final cam = await Permission.camera.request();
     if (!cam.isGranted) {
       if (mounted) {
-        _showFormSnack('Kamera ruxsati kerak', backgroundColor: AppColors.error);
+        _showFormSnack('Нужно разрешение на камеру', backgroundColor: AppColors.error);
       }
       return;
     }
@@ -135,12 +171,15 @@ class _NewClientPageState extends ConsumerState<NewClientPage> {
     );
   }
 
-  Future<void> _uploadPhotoIfNeeded(String slug, int clientId) async {
+  Future<String?> _uploadPhotoIfNeeded(String slug, int clientId) async {
     final b64 = await _photoBase64Payload();
-    if (b64 == null) return;
+    if (b64 == null) return _photoPath;
     setState(() => _photoUploading = true);
     try {
-      await ref.read(mobileApiProvider).postClientPhotoReport(slug, clientId, imageBase64: b64);
+      final row = await ref.read(mobileApiProvider).postClientPhotoReport(slug, clientId, imageBase64: b64);
+      final url = row.imageUrl.trim();
+      if (url.isNotEmpty && !url.startsWith('data:')) return url;
+      return _photoPath;
     } finally {
       if (mounted) setState(() => _photoUploading = false);
     }
@@ -148,14 +187,23 @@ class _NewClientPageState extends ConsumerState<NewClientPage> {
 
   bool get _territoryVisible => isClientFieldVisible(_cfg, 'territory');
 
+  bool get _useCityPicker {
+    if (!_territoryVisible) return false;
+    // Viloyat ro‘yxati o‘rniga har doim shahar tanlash (agent yoki daraxt).
+    return true;
+  }
+
+  Set<String> get _hiddenFormKeys => _useCityPicker ? const {'territory'} : const {};
+
   String? _validateForSave() {
-    if (_territoryVisible) {
-      final agentCities = ref.read(agentCitiesProvider);
-      if (agentCities.isNotEmpty && (_city == null || _city!.trim().isEmpty)) {
-        return 'Выберите город';
-      }
+    if (_useCityPicker && (_city == null || _city!.trim().isEmpty)) {
+      return 'Выберите город';
     }
-    return ClientDynamicFormFields.validate(_cfg, _controllers);
+    return ClientDynamicFormFields.validate(
+      _cfg,
+      _controllers,
+      hiddenFieldKeys: _hiddenFormKeys,
+    );
   }
 
   Future<void> _save() async {
@@ -184,10 +232,19 @@ class _NewClientPageState extends ConsumerState<NewClientPage> {
       double? lon = _longitude;
       final coordsVisible = isClientFieldVisible(_cfg, 'coordinates');
       if (coordsVisible && showCoordinatesField(_cfg) && (lat == null || lon == null)) {
-        final pos = await ref.read(gpsTrackerProvider.notifier).getCurrentPosition();
-        if (pos != null) {
-          lat = pos.latitude;
-          lon = pos.longitude;
+        final attached = await ref.read(gpsTrackerProvider.notifier).attachCurrentPosition();
+        if (attached.position != null) {
+          lat = attached.position!.latitude;
+          lon = attached.position!.longitude;
+        } else if (isClientFieldRequired(_cfg, 'coordinates')) {
+          if (mounted) {
+            setState(() {
+              _saving = false;
+              _error = attached.message;
+            });
+            _showGpsIssue(attached);
+          }
+          return;
         }
       }
 
@@ -210,6 +267,37 @@ class _NewClientPageState extends ConsumerState<NewClientPage> {
       final phoneRaw = body.remove('phone') ?? _c('phone').text.trim();
       final phone = normalizePhoneWithPrefix(_cfg, phoneRaw.toString());
 
+      final regionForUnique = (_territoryVisible && _region != null && _region!.trim().isNotEmpty)
+          ? _region!.trim()
+          : (body['region']?.toString());
+      final zoneForUnique = (_territoryVisible && _zone != null && _zone!.trim().isNotEmpty)
+          ? _zone!.trim()
+          : null;
+      final cityForUnique = (_territoryVisible && _city != null && _city!.trim().isNotEmpty)
+          ? _city!.trim()
+          : null;
+
+      final localDup = findLocalClientDuplicateMessage(
+        await AppDatabase().getAllClients(activeOnly: false),
+        name: name,
+        phone: phone,
+        inn: body['inn']?.toString(),
+        clientPinfl: body['client_pinfl']?.toString(),
+        clientCode: body['client_code']?.toString(),
+        region: regionForUnique,
+        zone: zoneForUnique,
+        city: cityForUnique,
+      );
+      if (localDup != null) {
+        if (mounted) {
+          setState(() {
+            _saving = false;
+            _error = localDup;
+          });
+        }
+        return;
+      }
+
       final row = await ref.read(mobileApiProvider).createClient(slug, {
         'name': name,
         'phone': phone,
@@ -220,12 +308,14 @@ class _NewClientPageState extends ConsumerState<NewClientPage> {
       });
 
       final clientId = (row['id'] as num?)?.toInt();
+      String? savedPhotoUrl;
       if (clientId != null && _photoPath != null && _cfg.showPhotos) {
         try {
-          await _uploadPhotoIfNeeded(slug, clientId);
+          savedPhotoUrl = await _uploadPhotoIfNeeded(slug, clientId);
         } catch (_) {
+          savedPhotoUrl = _photoPath;
           if (mounted) {
-            _showFormSnack('Klient saqlandi, lekin foto yuklanmadi', backgroundColor: AppColors.warning);
+            _showFormSnack('Клиент сохранён, но фото не загружено', backgroundColor: AppColors.warning);
           }
         }
       }
@@ -245,19 +335,28 @@ class _NewClientPageState extends ConsumerState<NewClientPage> {
           'latitude': row['latitude'] ?? lat,
           'longitude': row['longitude'] ?? lon,
           if (visitWeekdays.isNotEmpty) 'visit_weekdays': jsonEncode(visitWeekdays),
+          if ((savedPhotoUrl ?? _photoPath) != null) 'photo_url': savedPhotoUrl ?? _photoPath,
         },
       ]);
 
       ref.invalidate(clientsListProvider);
       ref.invalidate(filteredClientsProvider);
-      resetOutletFilters(ref);
+      ref.invalidate(todayRouteProvider);
+      ref.invalidate(plannedDailyRouteProvider);
+      ref.invalidate(realTodayRouteProvider);
+      ref.read(outletCategoryFilterProvider.notifier).state = null;
+      ref.read(outletVisitStatusFilterProvider.notifier).state = S.dayAll;
+      ref.read(outletDebtsOnlyProvider.notifier).state = false;
+      final todayWd = serverTodayWeekday();
+      ref.read(outletWeekdayTabProvider.notifier).state =
+          weekdayTabAfterCreatedClient(visitWeekdays, todayWd);
 
       if (!mounted) return;
 
-      final pending = _cfg.requireNewClientApproval || row['is_active'] == false;
+      final pending = row['is_active'] == false;
       if (pending) {
         _showFormSnack(
-          'Savdo nuqtasi yaratildi. Operator tasdiqlashi kutilishi mumkin.',
+          'Торговая точка создана. Возможно, потребуется подтверждение оператора.',
           backgroundColor: AppColors.info,
         );
         context.go('/clients');
@@ -268,7 +367,7 @@ class _NewClientPageState extends ConsumerState<NewClientPage> {
         context: context,
         builder: (ctx) => AlertDialog(
           title: const Text('Клиент добавлен'),
-          content: const Text('Yangi savdo nuqtasi uchun buyurtma yaratilsinmi?'),
+          content: const Text('Создать заказ для новой торговой точки?'),
           actions: [
             TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Позже')),
             FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Создать заказ')),
@@ -302,7 +401,7 @@ class _NewClientPageState extends ConsumerState<NewClientPage> {
   }
 
   Widget _citySelect() {
-    final agentCities = ref.watch(agentCitiesProvider);
+    final agentCities = ref.watch(effectiveAgentCitiesProvider);
     final seen = <String>{};
     final unique = agentCities.where((c) => seen.add(c.value)).toList();
     final options = unique.map((c) => c.value).toList();
@@ -312,21 +411,35 @@ class _NewClientPageState extends ConsumerState<NewClientPage> {
       final byLabel = unique.where((c) => c.label == value).toList();
       value = byLabel.length == 1 ? byLabel.first.value : null;
     }
-    return AgentOutlineSelect(
-      label: 'Город',
-      value: value,
-      options: options,
-      optionLabels: labels,
-      onChanged: agentCities.isEmpty
-          ? null
-          : (stored) {
-              if (stored == null) {
-                _applyCitySelection(null);
-                return;
-              }
-              final picked = unique.where((c) => c.value == stored).toList();
-              _applyCitySelection(picked.isNotEmpty ? picked.first : null);
-            },
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        AgentOutlineSelect(
+          label: 'Город',
+          value: value,
+          options: options,
+          optionLabels: labels,
+          showRequiredStar: true,
+          onChanged: agentCities.isEmpty
+              ? null
+              : (stored) {
+                  if (stored == null) {
+                    _applyCitySelection(null);
+                    return;
+                  }
+                  final picked = unique.where((c) => c.value == stored).toList();
+                  _applyCitySelection(picked.isNotEmpty ? picked.first : null);
+                },
+        ),
+        if (agentCities.isEmpty)
+          const Padding(
+            padding: EdgeInsets.only(top: 4, left: 4),
+            child: Text(
+              'Города не найдены. Администратор должен назначить агенту территорию/город.',
+              style: TextStyle(fontSize: 12, color: Colors.orange),
+            ),
+          ),
+      ],
     );
   }
 
@@ -334,8 +447,7 @@ class _NewClientPageState extends ConsumerState<NewClientPage> {
   Widget build(BuildContext context) {
     final cfg = ref.watch(sessionProvider).mobileConfig?.client ?? const ClientConfig();
     final territoryVisible = isClientFieldVisible(cfg, 'territory');
-    final agentCities = ref.watch(agentCitiesProvider);
-    final showCityPicker = territoryVisible && agentCities.isNotEmpty;
+    final showCityPicker = territoryVisible;
     final showGpsCapture = showCoordinatesField(cfg);
     final showPhotoCapture = cfg.showPhotos;
     final showLocationSection = showGpsCapture || showPhotoCapture;
@@ -365,7 +477,7 @@ class _NewClientPageState extends ConsumerState<NewClientPage> {
                       config: cfg,
                       controllers: _controllers,
                       showGpsHint: showCoordinatesField(cfg),
-                      hiddenFieldKeys: showCityPicker ? const {'territory'} : const {},
+                      hiddenFieldKeys: showCityPicker ? const {'territory'} : const <String>{},
                     ),
                     if (showCityPicker) ...[
                       const SizedBox(height: 8),
@@ -376,7 +488,7 @@ class _NewClientPageState extends ConsumerState<NewClientPage> {
                 if (showLocationSection)
                   AgentTemplateSection(
                     title: 'Локация',
-                    subtitle: showGpsCapture ? 'GPS orqali nuqtani biriktiring.' : null,
+                    subtitle: showGpsCapture ? 'Привяжите точку по GPS.' : null,
                     children: [
                       if (showGpsCapture || showPhotoCapture)
                         Row(

@@ -230,19 +230,19 @@ export function useGeoBoundaryEditorState(tenantSlug: string | null) {
 
   const startDraw = useCallback(() => {
     if (!canManualDraw) {
-      setFeedback("Oblast va Gorod — davlat chegarasi. Faqat Zona va Filial qo‘lda chiziladi.");
+      setFeedback("Для области и города используется государственная граница. Вручную рисуются только зоны и филиалы.");
       return;
     }
     if (!geoRefId) {
-      setFeedback("Avval ro‘yxatdan tanlang.");
+      setFeedback("Сначала выберите элемент из списка.");
       return;
     }
     setDrawPoints([]);
     setDrawActive(true);
     setFeedback(
       drawStyle === "lasso"
-        ? "Kursor bilan chizing — qo‘yib yuboring."
-        : "Xaritada kamida 3 nuqta bosing."
+        ? "Обведите область курсором и отпустите кнопку."
+        : "Поставьте на карте минимум 3 точки."
     );
   }, [geoRefId, drawStyle, canManualDraw]);
 
@@ -257,7 +257,7 @@ export function useGeoBoundaryEditorState(tenantSlug: string | null) {
 
   const applyLassoPolygon = useCallback((points: GeoBoundaryPoint[]) => {
     setDrawPoints(points);
-    setFeedback(`${points.length} nuqtali chegara tayyor. «Saqlash» tugmasini bosing.`);
+    setFeedback(`Граница из ${points.length} точек готова. Нажмите «Сохранить».`);
   }, []);
 
   const undoLastPoint = useCallback(() => {
@@ -286,8 +286,8 @@ export function useGeoBoundaryEditorState(tenantSlug: string | null) {
       setPendingSave(null);
       setOverlapConflicts(null);
       setPulseBoundaryId(res.boundary.id);
-      const clipNote = res.clipped ? " Kesilgan qism saqlandi." : "";
-      setFeedback(`Hudud saqlandi. ${res.clients_assigned} ta klient bog‘landi.${clipNote}`);
+      const clipNote = res.clipped ? " Сохранена обрезанная часть." : "";
+      setFeedback(`Область сохранена. Привязано клиентов: ${res.clients_assigned}.${clipNote}`);
     },
     [upsertMut]
   );
@@ -324,7 +324,7 @@ export function useGeoBoundaryEditorState(tenantSlug: string | null) {
         setOverlapConflicts(apiConflicts);
         return;
       }
-      setFeedback(getUserFacingError(e, "Saqlab bo‘lmadi."));
+      setFeedback(getUserFacingError(e, "Не удалось сохранить."));
     }
   }, [
     tenantSlug,
@@ -341,12 +341,12 @@ export function useGeoBoundaryEditorState(tenantSlug: string | null) {
 
   const applyAdminBoundary = useCallback(async () => {
     if (!tenantSlug || !geoRefId || !selectedCatalogItem || !adminRegion) {
-      setFeedback("Davlat chegarasi topilmadi.");
+      setFeedback("Государственная граница не найдена.");
       return;
     }
     const polygon = adminRegionPrimaryRing(adminRegion);
     if (polygon.length < 3) {
-      setFeedback("Chegara nuqtalari yetarli emas.");
+      setFeedback("Недостаточно точек границы.");
       return;
     }
     const body: PendingSave = {
@@ -365,7 +365,7 @@ export function useGeoBoundaryEditorState(tenantSlug: string | null) {
     try {
       await savePolygon(body);
     } catch (e) {
-      setFeedback(getUserFacingError(e, "Davlat chegarasini saqlab bo‘lmadi."));
+      setFeedback(getUserFacingError(e, "Не удалось сохранить государственную границу."));
     }
   }, [tenantSlug, geoRefId, selectedCatalogItem, adminRegion, geoKind, effectiveColor, savePolygon, warehouseId, cashDeskId]);
 
@@ -382,9 +382,9 @@ export function useGeoBoundaryEditorState(tenantSlug: string | null) {
     };
     try {
       await savePolygon(body);
-      setFeedback("Sklad va kassa bog‘landi.");
+      setFeedback("Склад и касса привязаны.");
     } catch (e) {
-      setFeedback(getUserFacingError(e, "Bog‘lab bo‘lmadi."));
+      setFeedback(getUserFacingError(e, "Не удалось привязать."));
     }
   }, [selectedBoundary, warehouseId, cashDeskId, savePolygon]);
 
@@ -394,7 +394,7 @@ export function useGeoBoundaryEditorState(tenantSlug: string | null) {
       try {
         await savePolygon(pendingSave, resolution);
       } catch (e) {
-        setFeedback(getUserFacingError(e, "Saqlab bo‘lmadi."));
+        setFeedback(getUserFacingError(e, "Не удалось сохранить."));
       }
     },
     [pendingSave, savePolygon]
@@ -409,9 +409,9 @@ export function useGeoBoundaryEditorState(tenantSlug: string | null) {
     if (!selectedBoundary) return;
     try {
       await deleteMut.mutateAsync(selectedBoundary.id);
-      setFeedback("Hudud o‘chirildi.");
+      setFeedback("Область удалена.");
     } catch (e) {
-      setFeedback(e instanceof Error ? e.message : "O‘chirib bo‘lmadi.");
+      setFeedback(e instanceof Error ? e.message : "Не удалось удалить.");
     }
   }, [selectedBoundary, deleteMut]);
 
@@ -419,9 +419,9 @@ export function useGeoBoundaryEditorState(tenantSlug: string | null) {
     if (!selectedBoundary) return;
     try {
       const res = await assignMut.mutateAsync(selectedBoundary.id);
-      setFeedback(`${res.updated} ta klient qayta bog‘landi.`);
+      setFeedback(`Перепривязано клиентов: ${res.updated}.`);
     } catch (e) {
-      setFeedback(e instanceof Error ? e.message : "Bog‘lab bo‘lmadi.");
+      setFeedback(e instanceof Error ? e.message : "Не удалось привязать.");
     }
   }, [selectedBoundary, assignMut]);
 

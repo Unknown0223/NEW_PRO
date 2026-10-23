@@ -13,7 +13,7 @@ ENV API_INTERNAL_ORIGIN=${API_INTERNAL_ORIGIN}
 COPY package.json package-lock.json ./
 COPY vendor/pivot-engine ./vendor/pivot-engine
 RUN test -f vendor/pivot-engine/dist/index.js
-RUN npm ci
+RUN npm install --legacy-peer-deps
 RUN test -e node_modules/@salec/pivot-engine/package.json \
   && test -f node_modules/@salec/pivot-engine/dist/index.js
 
@@ -22,7 +22,7 @@ COPY . .
 RUN npm install --ignore-scripts --no-save ./vendor/pivot-engine \
   && test -f node_modules/@salec/pivot-engine/dist/index.js
 
-RUN npx next build
+RUN npx next build --webpack
 RUN npm prune --omit=dev
 
 FROM node:22-bookworm-slim AS runner

@@ -7,6 +7,7 @@ export {
   assertAgentScopedClient,
   assertMobilePhotoReportForClient,
   clientSyncSelect,
+  clientSyncSelectBase,
   clientSyncSelectForAgent,
   compactClient,
   getMobileAgentConfigPayload,

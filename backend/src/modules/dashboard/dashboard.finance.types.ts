@@ -1,5 +1,5 @@
 export type FinanceDashboardFilters = {
-  date_type: "created_at" | "delivered_at";
+  date_type: "created_at" | "shipped_at" | "delivered_at";
   from: string;
   to: string;
   payment_types: string[];

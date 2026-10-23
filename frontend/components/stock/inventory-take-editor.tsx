@@ -3,6 +3,7 @@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useAppConfirm } from "@/components/ui/app-confirm-dialog";
 import { api } from "@/lib/api";
 import {
   firstMessagePerField,
@@ -96,6 +97,7 @@ type Props = {
 
 export function InventoryTakeEditor({ tenantSlug, takeId, onClose }: Props) {
   const qc = useQueryClient();
+  const { confirm, dialog: confirmDialog } = useAppConfirm();
   const [lineRows, setLineRows] = useState<EditableLine[]>([]);
   const [dirty, setDirty] = useState(false);
   const [productSearch, setProductSearch] = useState("");
@@ -245,13 +247,14 @@ export function InventoryTakeEditor({ tenantSlug, takeId, onClose }: Props) {
       setErrorMsg("Укажите фактическое количество по всем строкам перед проведением.");
       return;
     }
-    if (
-      !window.confirm(
-        "Провести инвентаризацию? Остатки на складе будут приведены к указанным количествам."
-      )
-    ) {
-      return;
-    }
+    const ok = await confirm({
+      title: "Провести",
+      message: "Провести инвентаризацию? Остатки на складе будут приведены к указанным количествам.",
+      confirmLabel: "Да",
+      cancelLabel: "Нет",
+      destructive: false
+    });
+    if (!ok) return;
     try {
       if (dirty) {
         await saveLinesMut.mutateAsync(buildPayload());
@@ -271,12 +274,19 @@ export function InventoryTakeEditor({ tenantSlug, takeId, onClose }: Props) {
     }
   };
 
-  const handleCancelDoc = () => {
+  const handleCancelDoc = async () => {
     const confirmMsg =
       detail?.status === "posted"
         ? "Отменить проведённую инвентаризацию? Остатки будут возвращены к значениям до проведения."
         : "Отменить черновик? Документ перейдёт в статус «отменён».";
-    if (!window.confirm(confirmMsg)) return;
+    const ok = await confirm({
+      title: "Отменить",
+      message: confirmMsg,
+      confirmLabel: "Да",
+      cancelLabel: "Нет",
+      destructive: true
+    });
+    if (!ok) return;
     setErrorMsg(null);
     setLineFieldErrs({});
     cancelMut.mutate();
@@ -553,6 +563,7 @@ export function InventoryTakeEditor({ tenantSlug, takeId, onClose }: Props) {
           ) : null}
         </div>
       )}
+      {confirmDialog}
     </div>
   );
 }

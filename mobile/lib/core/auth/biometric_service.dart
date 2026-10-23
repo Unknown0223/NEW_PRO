@@ -3,6 +3,9 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:local_auth/local_auth.dart';
 import 'package:local_auth_android/local_auth_android.dart';
+import 'package:local_auth_darwin/local_auth_darwin.dart';
+
+import '../errors/error_reporter.dart';
 
 /// Biometric service — telefon qulfida ishlatiladigan barmoq izi / Face ID.
 class BiometricService {
@@ -30,7 +33,7 @@ class BiometricService {
   }
 
   Future<bool> authenticate({
-    String reason = 'Tizimga kirishni tasdiqlang',
+    String reason = 'Подтвердите вход в систему',
     bool biometricOnly = false,
   }) async {
     try {
@@ -39,8 +42,14 @@ class BiometricService {
         authMessages: const [
           AndroidAuthMessages(
             signInTitle: 'Sales Arena',
-            biometricHint: 'Barmoq izini skanerlang',
-            cancelButton: 'Bekor qilish',
+            biometricHint: 'Подтвердите отпечаток',
+            cancelButton: 'Отмена',
+          ),
+          IOSAuthMessages(
+            cancelButton: 'Отмена',
+            goToSettingsButton: 'Настройки',
+            goToSettingsDescription: 'Включите Face ID или Touch ID в настройках телефона.',
+            lockOut: 'Биометрия временно недоступна',
           ),
         ],
         options: AuthenticationOptions(
@@ -54,9 +63,36 @@ class BiometricService {
       return ok;
     } on PlatformException catch (e) {
       _log('authenticate PlatformException: ${e.code} ${e.message}');
+      const skip = {
+        'UserCancel',
+        'AuthenticationCanceled',
+        'Canceled',
+        'userCanceled',
+        'NotAvailable',
+        'PasscodeNotSet',
+        'NotEnrolled',
+      };
+      if (!skip.contains(e.code)) {
+        ErrorReporter.instance?.reportCaught(
+          e,
+          module: ErrorModules.auth,
+          code: 'BiometricAuthFailed',
+          message: 'Биометрия: ошибка аутентификации (${e.code})',
+          path: '/mobile/auth/biometric',
+          payload: {'platform_code': e.code},
+        );
+      }
       return false;
-    } catch (e) {
+    } catch (e, st) {
       _log('authenticate error: $e');
+      ErrorReporter.instance?.reportCaught(
+        e,
+        stack: st,
+        module: ErrorModules.auth,
+        code: 'BiometricAuthUnexpected',
+        message: 'Биометрия: неожиданная ошибка',
+        path: '/mobile/auth/biometric',
+      );
       return false;
     }
   }
@@ -71,7 +107,10 @@ class BiometricService {
 
   /// UI matni: «отпечаток пальца», «Face ID» yoki ikkalasi.
   Future<String> getBiometricLabel({String locale = 'ru'}) async {
-    final types = await getBiometricTypes();
+    return labelForTypes(await getBiometricTypes(), locale: locale);
+  }
+
+  static String labelForTypes(List<BiometricType> types, {String locale = 'ru'}) {
     final hasFace = types.contains(BiometricType.face) || types.contains(BiometricType.iris);
     final hasFinger = types.contains(BiometricType.fingerprint);
     final hasStrong = types.contains(BiometricType.strong) || types.contains(BiometricType.weak);

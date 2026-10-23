@@ -338,3 +338,145 @@ export function resolvePriceTypeKeyToLabel(
   }
   return key;
 }
+
+function addNonEmptyAlias(set: Set<string>, s: string | null | undefined) {
+  const t = (s ?? "").trim();
+  if (t) set.add(t);
+}
+
+export function findPriceTypeEntry(
+  raw: string,
+  entries: PriceTypeEntryDto[]
+): PriceTypeEntryDto | null {
+  const key = raw.trim();
+  if (!key) return null;
+  const lower = key.toLowerCase();
+  const active = entries.filter((e) => e.active !== false);
+  for (const pool of [active, entries]) {
+    const byId = pool.find((e) => e.id.toLowerCase() === lower);
+    if (byId) return byId;
+    const byKey = pool.find((e) => priceTypeKey(e).trim().toLowerCase() === lower);
+    if (byKey) return byKey;
+    const byCode = pool.find((e) => (e.code ?? "").trim().toLowerCase() === lower);
+    if (byCode) return byCode;
+    const byName = pool.find((e) => e.name.trim().toLowerCase() === lower);
+    if (byName) return byName;
+  }
+  return null;
+}
+
+export function findPaymentMethodEntry(
+  raw: string,
+  entries: PaymentMethodEntryDto[]
+): PaymentMethodEntryDto | null {
+  const key = raw.trim();
+  if (!key) return null;
+  const lower = key.toLowerCase();
+  const active = entries.filter((e) => e.active !== false);
+  for (const pool of [active, entries]) {
+    const byId = pool.find((e) => e.id.toLowerCase() === lower);
+    if (byId) return byId;
+    const bySk = pool.find((e) => paymentMethodStorageKey(e).toLowerCase() === lower);
+    if (bySk) return bySk;
+    const byCode = pool.find((e) => (e.code ?? "").trim().toLowerCase() === lower);
+    if (byCode) return byCode;
+    const byName = pool.find((e) => e.name.trim().toLowerCase() === lower);
+    if (byName) return byName;
+  }
+  return null;
+}
+
+/**
+ * Zakaz `payment_method_ref`: avval aniq usul, bo‘lmasa tip sena → bog‘langan to‘lov usuli kaliti.
+ * Mobil create faqat `price_type` yuboradi — shu yerda saqlash kalitiga aylanadi.
+ */
+export function resolveStoredPaymentMethodRef(opts: {
+  paymentMethodRef?: string | null;
+  priceType?: string | null;
+  priceTypeEntries: PriceTypeEntryDto[];
+  paymentMethodEntries: PaymentMethodEntryDto[];
+  /** Tahrirda narx turi tanlovi — eski to‘lov usuli ustidan yoziladi. */
+  preferPriceType?: boolean;
+}): string | null {
+  const fromPrice = paymentMethodRefFromPriceType(
+    opts.priceType,
+    opts.priceTypeEntries,
+    opts.paymentMethodEntries
+  );
+  if (opts.preferPriceType && fromPrice) return fromPrice;
+
+  const explicit = (opts.paymentMethodRef ?? "").trim();
+  if (explicit) return explicit.slice(0, 64);
+  return fromPrice;
+}
+
+function paymentMethodRefFromPriceType(
+  priceType: string | null | undefined,
+  priceTypeEntries: PriceTypeEntryDto[],
+  paymentMethodEntries: PaymentMethodEntryDto[]
+): string | null {
+  const pt = (priceType ?? "").trim();
+  if (!pt) return null;
+  const ptHit = findPriceTypeEntry(pt, priceTypeEntries);
+  if (ptHit) {
+    const pm = findPaymentMethodEntry(ptHit.payment_method_id, paymentMethodEntries);
+    if (pm) return paymentMethodStorageKey(pm).slice(0, 64);
+    const pmId = ptHit.payment_method_id.trim();
+    if (pmId) return pmId.slice(0, 64);
+    return priceTypeKey(ptHit).slice(0, 64);
+  }
+  return pt.slice(0, 64);
+}
+
+/** Jadval «Тип цены»: to‘lov usuli nomi, bo‘lmasa tip sena nomi. */
+export function orderListPriceTypeLabel(
+  refRaw: string | null | undefined,
+  pmEntries: PaymentMethodEntryDto[],
+  ptEntries: PriceTypeEntryDto[]
+): string | null {
+  const ref = (refRaw ?? "").trim();
+  if (!ref) return null;
+  const viaPm = resolvePaymentMethodRefToLabel(ref, pmEntries);
+  if (viaPm != null && viaPm !== ref) return viaPm;
+  return resolvePriceTypeKeyToLabel(ref, ptEntries);
+}
+
+/**
+ * Filtr qiymati (kod / id / nom / tip sena) → `orders.payment_method_ref` da uchrashi mumkin bo‘lgan aliaslar.
+ */
+export function expandPaymentMethodFilterValues(
+  selected: string[],
+  pmEntries: PaymentMethodEntryDto[],
+  ptEntries: PriceTypeEntryDto[]
+): string[] {
+  const out = new Set<string>();
+  for (const raw of selected) {
+    const t = raw.trim();
+    if (!t) continue;
+    addNonEmptyAlias(out, t);
+    const pmDirect = findPaymentMethodEntry(t, pmEntries);
+    const pt = findPriceTypeEntry(t, ptEntries);
+    const pm = pmDirect ?? (pt ? findPaymentMethodEntry(pt.payment_method_id, pmEntries) : null);
+    if (pm) {
+      addNonEmptyAlias(out, pm.id);
+      addNonEmptyAlias(out, pm.name);
+      addNonEmptyAlias(out, pm.code);
+      addNonEmptyAlias(out, paymentMethodStorageKey(pm));
+      for (const pte of ptEntries) {
+        if (pte.payment_method_id === pm.id) {
+          addNonEmptyAlias(out, pte.id);
+          addNonEmptyAlias(out, priceTypeKey(pte));
+          addNonEmptyAlias(out, pte.code);
+          addNonEmptyAlias(out, pte.name);
+        }
+      }
+    } else if (pt) {
+      addNonEmptyAlias(out, pt.id);
+      addNonEmptyAlias(out, priceTypeKey(pt));
+      addNonEmptyAlias(out, pt.code);
+      addNonEmptyAlias(out, pt.name);
+      addNonEmptyAlias(out, pt.payment_method_id);
+    }
+  }
+  return [...out];
+}

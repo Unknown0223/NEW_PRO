@@ -15,7 +15,13 @@ import {
   createOrderCashInBatch,
   getOrderCashInContext
 } from "../payments/payment.order-cash-in";
+import { getAccessUser } from "../auth/auth.prehandlers";
 import { mobileOfflineOrderPreHandler } from "./mobile.route.shared";
+import {
+  assertFaceGateForAction,
+  isFaceGateError,
+  loadMobileConfigForFaceGate
+} from "./mobile-face.guard";
 
 export async function registerMobilePaymentRoutes(app: FastifyInstance) {
   // -----------------------------------------------------------------------
@@ -81,6 +87,12 @@ export async function registerMobilePaymentRoutes(app: FastifyInstance) {
             await assertDocWritableByDate(request, "payments", paidAt);
           }
         }
+        const viewer = getAccessUser(request);
+        const userId = Number.parseInt(viewer.sub, 10);
+        if (Number.isFinite(userId) && userId > 0) {
+          const mc = await loadMobileConfigForFaceGate(request.tenant!.id, userId);
+          await assertFaceGateForAction(request.tenant!.id, userId, "payment_accept", mc);
+        }
         const data = await createOrderCashInBatch(
           request.tenant!.id,
           parsed.data,
@@ -88,6 +100,9 @@ export async function registerMobilePaymentRoutes(app: FastifyInstance) {
         );
         return reply.status(201).send({ data });
       } catch (e) {
+        if (isFaceGateError(e)) {
+          return sendApiError(reply, request, 403, e.code, e.message);
+        }
         if (isDocumentEditPeriodLockedError(e)) return sendDocumentEditPeriodLocked(reply, request);
         const msg = e instanceof Error ? e.message : "";
         if (msg === "BAD_CLIENT") return sendApiError(reply, request, 400, "BadClient");

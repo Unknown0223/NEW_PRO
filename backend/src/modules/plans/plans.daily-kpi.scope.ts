@@ -1,6 +1,11 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "../../config/database";
 import type { DailyKpiOverviewQuery } from "./plans.daily-kpi.schema";
+import { enrichScopedReportActor } from "../access/access-agent-scope";
+import {
+  actorHasUnrestrictedDataScope,
+  resolveAllowedAgentIdsForActor
+} from "../access/access-staff-scope";
 
 export type DailyKpiAgentScope = {
   supervisor_ids: number[];
@@ -128,12 +133,30 @@ export function withEmptyBranchOption(branchOptions: string[], hasEmpty: boolean
 export function isEmptyBranchFilterValue(b: string): boolean {
   return b === DAILY_KPI_EMPTY_BRANCH || b === DAILY_KPI_EMPTY_BRANCH_LABEL;
 }
+/**
+ * Dostup (hodimlar ∩ hudud) bo‘yicha ko‘rinadigan agentlar.
+ * `null` — cheklov yo‘q (admin), `[]` — hech kim.
+ */
+export async function resolveDailyKpiAllowedAgentIds(
+  tenantId: number,
+  actor: { userId: number | null; role: string }
+): Promise<number[] | null> {
+  if (actorHasUnrestrictedDataScope(actor.role)) return null;
+  const scoped = await enrichScopedReportActor(tenantId, actor);
+  return resolveAllowedAgentIdsForActor(scoped) ?? [];
+}
+
+export function isDailyKpiAgentAllowed(agentId: number, allowedAgentIds: number[] | null): boolean {
+  return allowedAgentIds == null || allowedAgentIds.includes(agentId);
+}
+
 /** Prisma `user` where fragment — plan target query uchun. */
 export function buildDailyKpiUserWhere(
   tenantId: number,
   scope: DailyKpiAgentScope,
   search: string | undefined,
-  territoryAgentIds: number[] | null
+  territoryAgentIds: number[] | null,
+  allowedAgentIds: number[] | null = null
 ): Prisma.UserWhereInput {
   const and: Prisma.UserWhereInput[] = [
     { tenant_id: tenantId, role: "agent", is_active: true }
@@ -163,6 +186,10 @@ export function buildDailyKpiUserWhere(
       const set = new Set(territoryAgentIds);
       ids = ids.filter((id) => set.has(id));
     }
+  }
+  if (allowedAgentIds != null) {
+    const set = new Set(allowedAgentIds);
+    ids = ids == null ? [...allowedAgentIds] : ids.filter((id) => set.has(id));
   }
   if (ids != null) {
     and.push({ id: { in: ids.length > 0 ? ids : [-1] } });

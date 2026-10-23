@@ -98,7 +98,14 @@ export async function buildSalesMonitoringBreakdown(
     `
   ]);
   const okbByBranch = new Map(branchOkbRows.map((r) => [r.branch, Number(r.okb ?? 0n)]));
-  const branchSorted = [...branchPerfRows].sort((a, b) => {
+  const withSales = new Set(branchPerfRows.map((r) => r.branch));
+  const branchRows = [
+    ...branchPerfRows,
+    ...branchOkbRows
+      .filter((r) => !withSales.has(r.branch))
+      .map((r) => ({ branch: r.branch, akb: 0n, fact_sales: new Prisma.Decimal(0) }))
+  ];
+  const branchSorted = branchRows.sort((a, b) => {
     const cmp = b.fact_sales.comparedTo(a.fact_sales);
     if (cmp !== 0) return cmp;
     return a.branch.localeCompare(b.branch, "ru");

@@ -169,12 +169,14 @@ class OrdersApi {
     String? consignmentDueDate,
     String? shipmentDate,
     List<BonusStrategySelectionInput> strategySelections = const [],
+    Map<String, dynamic>? visit,
   }) async {
     try {
       final r = await _dio.post(
         '/api/$slug/mobile/orders/create',
         data: {
           'client_id': clientId,
+          if (visit != null) 'visit': visit,
           'warehouse_id': warehouseId,
           if (priceType != null && priceType.trim().isNotEmpty) 'price_type': priceType.trim(),
           'apply_bonus': applyBonus,
@@ -356,11 +358,11 @@ class OrderClientFinance {
     final out = consignmentOutstanding ?? 0;
     final avail = consignmentAvailable;
     final parts = <String>[];
-    if (lim != null) parts.add('limit: ${_fmtLimitNum(lim)}');
-    parts.add('qarz: ${_fmtLimitNum(out)}');
-    if (avail != null) parts.add('mavjud: ${_fmtLimitNum(avail)}');
-    parts.add('buyurtma: ${_fmtLimitNum(orderTotal)}');
-    return 'Konsignatsiya limiti oshdi (${parts.join(', ')})';
+    if (lim != null) parts.add('лимит: ${_fmtLimitNum(lim)}');
+    parts.add('долг: ${_fmtLimitNum(out)}');
+    if (avail != null) parts.add('доступно: ${_fmtLimitNum(avail)}');
+    parts.add('заказ: ${_fmtLimitNum(orderTotal)}');
+    return 'Превышен лимит консигнации (${parts.join(', ')})';
   }
 
   static String _fmtLimitNum(double v) {

@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import bcrypt from "bcryptjs";
 import { Prisma } from "@prisma/client";
 import { prisma } from "../../config/database";
-import { createCashDeskUserLink } from "../cash-desks/cash-desks.service";
+import { assertValidMaxSessions } from "../../lib/max-sessions";
 import { listActiveTradeDirectionLabels } from "../sales-directions/sales-directions.service";
 import { appendTenantAuditEvent, AuditEntityType } from "../../lib/tenant-audit";
 import { territoryRegionPickerNames } from "../tenant-settings/tenant-settings.service";
@@ -18,6 +18,7 @@ import {
   toPrismaJsonEntitlements
 } from "./skladchik-entitlements";
 import { onAppAccessChanged } from "../auth/app-access.service";
+import { syncEmploymentAfterActiveChange } from "./staff.employment-sync";
 import type { DistributionWebStaffRole } from "../../lib/tenant-user-roles";
 import {
   ADMIN_AND_OPERATOR_LIKE_ROLES,
@@ -59,6 +60,7 @@ import {
   resolveLoginForPatch
 } from "./staff.shared";
 import { listStaff, type PatchAgentInput, type SessionRowDto } from "./staff.crud";
+import { assertWorkplaceStaffPatchAllowed } from "../work-slots/work-slots.staff-guard";
 
 export type PatchOperatorInput = {
   first_name?: string;
@@ -73,6 +75,7 @@ export type PatchOperatorInput = {
   position?: string | null;
   can_authorize?: boolean;
   is_active?: boolean;
+  filter_visible?: boolean;
   app_access?: boolean;
   max_sessions?: number;
   password?: string;
@@ -107,15 +110,16 @@ export async function patchOperator(
   if (input.position !== undefined) data.position = input.position?.trim().slice(0, 128) || null;
   if (input.can_authorize !== undefined) data.can_authorize = input.can_authorize;
   if (input.is_active !== undefined) data.is_active = input.is_active;
+  if (input.filter_visible !== undefined) data.filter_visible = input.filter_visible;
   if (input.app_access !== undefined) data.app_access = input.app_access;
   if (input.max_sessions !== undefined) {
     const n = input.max_sessions;
-    if (!Number.isInteger(n) || n < 1 || n > 99) throw new Error("BAD_MAX_SESSIONS");
+    assertValidMaxSessions(n);
     data.max_sessions = n;
   }
   if (input.password !== undefined && input.password.trim().length > 0) {
     if (input.password.length < 6) throw new Error("BAD_PASSWORD");
-    data.password_hash = await bcrypt.hash(input.password, 10);
+    data.password_hash = await bcrypt.hash(input.password, 12);
   }
 
   if (Object.keys(data).length > 0) {
@@ -137,6 +141,9 @@ export async function patchOperator(
 
     if (input.app_access !== undefined) {
       await onAppAccessChanged(tenantId, operatorId, input.app_access);
+    }
+    if (input.is_active !== undefined) {
+      await syncEmploymentAfterActiveChange(tenantId, [operatorId], actorUserId);
     }
 
     await appendTenantAuditEvent({
@@ -168,6 +175,7 @@ export type PatchSkladchikInput = {
   position?: string | null;
   can_authorize?: boolean;
   is_active?: boolean;
+  filter_visible?: boolean;
   app_access?: boolean;
   max_sessions?: number;
   password?: string;
@@ -181,6 +189,8 @@ export async function patchSkladchik(
   input: PatchSkladchikInput,
   actorUserId: number | null = null
 ): Promise<StaffRow> {
+  await assertWorkplaceStaffPatchAllowed(skladchikId, input as Record<string, unknown>);
+
   const existing = await prisma.user.findFirst({
     where: { id: skladchikId, tenant_id: tenantId, role: "skladchik" }
   });
@@ -204,15 +214,16 @@ export async function patchSkladchik(
   if (input.position !== undefined) data.position = input.position?.trim().slice(0, 128) || null;
   if (input.can_authorize !== undefined) data.can_authorize = input.can_authorize;
   if (input.is_active !== undefined) data.is_active = input.is_active;
+  if (input.filter_visible !== undefined) data.filter_visible = input.filter_visible;
   if (input.app_access !== undefined) data.app_access = input.app_access;
   if (input.max_sessions !== undefined) {
     const n = input.max_sessions;
-    if (!Number.isInteger(n) || n < 1 || n > 99) throw new Error("BAD_MAX_SESSIONS");
+    assertValidMaxSessions(n);
     data.max_sessions = n;
   }
   if (input.password !== undefined && input.password.trim().length > 0) {
     if (input.password.length < 6) throw new Error("BAD_PASSWORD");
-    data.password_hash = await bcrypt.hash(input.password, 10);
+    data.password_hash = await bcrypt.hash(input.password, 12);
   }
 
   if (input.warehouse_ids !== undefined) {
@@ -247,6 +258,9 @@ export async function patchSkladchik(
     });
     if (input.app_access !== undefined) {
       await onAppAccessChanged(tenantId, skladchikId, input.app_access);
+    }
+    if (input.is_active !== undefined) {
+      await syncEmploymentAfterActiveChange(tenantId, [skladchikId], actorUserId);
     }
   }
 

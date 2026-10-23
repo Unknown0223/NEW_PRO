@@ -14,7 +14,12 @@ function CardRow({ label, value }: { label: string; value: number }) {
   return (
     <div className="flex items-center justify-between text-[12px] leading-6">
       <span className="text-gray-500">{label}:</span>
-      <span className={cn("font-medium tabular-nums", value < 0 ? "text-red-600" : "text-gray-700")}>
+      <span
+        className={cn(
+          "font-medium tabular-nums",
+          value < 0 ? "text-red-600" : value > 0 ? "text-emerald-600" : "text-gray-700"
+        )}
+      >
         {fmtUZS(value)}
       </span>
     </div>
@@ -33,9 +38,9 @@ export function BalanceDetailCards({ cards, selectedId, onSelect }: Props) {
           card.paymentSubLines.length > 0
             ? card.paymentSubLines
             : [
-                { label: "Naqd", amount: card.cash },
-                { label: "Perechis", amount: card.transfer },
-                { label: "Terminal", amount: card.terminal }
+                { label: "Наличные", amount: card.cash },
+                { label: "Перечисление", amount: card.transfer },
+                { label: "Терминал", amount: card.terminal }
               ];
 
         return (
@@ -75,15 +80,15 @@ export function BalanceDetailCards({ cards, selectedId, onSelect }: Props) {
               <div
                 className={cn(
                   "mt-1 pl-[26px] text-[20px] font-bold leading-7 tabular-nums",
-                  isNegative ? "text-red-600" : "text-gray-900"
+                  isNegative ? "text-red-600" : card.amount > 0 ? "text-emerald-600" : "text-gray-900"
                 )}
               >
-                {fmtMoney(card.amount)} So&apos;m
+                {fmtMoney(card.amount)} сум
               </div>
             </div>
             <div className="space-y-0 px-4 py-2.5">
               {card.oldDebtIncome !== 0 ? (
-                <CardRow label="Эски карздан кирим" value={card.oldDebtIncome} />
+                <CardRow label="Поступление по старому долгу" value={card.oldDebtIncome} />
               ) : null}
               {subLines.map((line) => (
                 <CardRow key={`${card.id}-${line.label}`} label={line.label} value={line.amount} />

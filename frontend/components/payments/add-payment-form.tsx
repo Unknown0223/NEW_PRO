@@ -149,7 +149,7 @@ export function AddPaymentForm({
     enabled: Boolean(tenantSlug) && hydrated,
     staleTime: STALE.reference,
     queryFn: async () => {
-      const { data } = await api.get<{ data: StaffPick[] }>(`/api/${tenantSlug}/agents?is_active=true`);
+      const { data } = await api.get<{ data: StaffPick[] }>(`/api/${tenantSlug}/agents?picker=1`);
       return data.data;
     }
   });
@@ -249,7 +249,7 @@ export function AddPaymentForm({
     if (!clientId.trim()) return;
     if (!filteredClients.some((c) => String(c.id) === clientId)) {
       setClientId("");
-      setSelectionNotice("Klient tanlovi yangilandi: mos bo‘lmagan qiymat olib tashlandi.");
+      setSelectionNotice("Выбор клиента обновлён: неподходящее значение удалено.");
     }
   }, [clientId, filteredClients]);
 
@@ -263,7 +263,7 @@ export function AddPaymentForm({
         return { ...b, cash_desk_id: "" };
       });
       if (changed) {
-        setSelectionNotice("Kassa tanlovi yangilandi: mos bo‘lmagan qiymatlar olib tashlandi.");
+        setSelectionNotice("Выбор кассы обновлён: неподходящие значения удалены.");
       }
       return changed ? next : prev;
     });
@@ -555,18 +555,18 @@ export function AddPaymentForm({
           <FilterSelect
             id="add-pay-allocation-mode"
             className="flex h-10 w-full min-w-0 rounded-md border border-input bg-background px-2 text-sm"
-            emptyLabel="Rejim"
+            emptyLabel="Режим"
             value={allocationMode}
             onChange={(e) => setAllocationMode(e.target.value as AllocationMode)}
             disabled={submitMut.isPending}
           >
-            <option value="none">Не выбирать (авто: сначала Naxt, потом Konsignatsiya)</option>
-            <option value="cash">Naxt</option>
-            <option value="consignment">Konsignatsiya</option>
+            <option value="none">Не выбирать (авто: сначала наличные, потом консигнация)</option>
+            <option value="cash">Наличные</option>
+            <option value="consignment">Консигнация</option>
           </FilterSelect>
           {allocationMode === "none" ? (
             <p className="text-xs text-muted-foreground">
-              Автораспределение: сначала старые долги по Naxt, затем по Konsignatsiya, остаток уйдёт в предоплату.
+              Автораспределение: сначала старые долги по наличным, затем по консигнации, остаток уйдёт в предоплату.
             </p>
           ) : orderAllocQ.isLoading ? (
             <p className="text-xs text-muted-foreground">Загрузка открытых заказов…</p>

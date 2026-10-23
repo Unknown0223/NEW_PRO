@@ -3,11 +3,14 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/auth/session.dart';
+import '../../../core/errors/error_reporter.dart';
 import '../../../core/format/money_display.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/ui/agent_ui.dart';
 import 'held_order_model.dart';
+import 'held_order_timing.dart';
 import 'held_orders_provider.dart';
 
 /// Post-visit auto-sync timer (design screen 30).
@@ -55,6 +58,8 @@ class HeldOrderSyncSheet extends ConsumerStatefulWidget {
 
 class _HeldOrderSyncSheetState extends ConsumerState<HeldOrderSyncSheet> {
   bool _didClose = false;
+  bool _postponing = false;
+  bool _sending = false;
   HeldOrder? _lastOrder;
   Timer? _homeTimer;
   int _homeSecondsLeft = 0;
@@ -94,6 +99,67 @@ class _HeldOrderSyncSheetState extends ConsumerState<HeldOrderSyncSheet> {
     _didClose = true;
     _homeTimer?.cancel();
     Navigator.pop(context, action);
+  }
+
+  int get _effectiveDelayMinutes {
+    final fromSession =
+        ref.read(sessionProvider).mobileConfig?.sync.postOrderDelayMinutes;
+    return clampPostOrderDelayMinutes(fromSession ?? widget.delayMinutes);
+  }
+
+  Future<void> _postpone() async {
+    if (_postponing || _sending || _didClose) return;
+    setState(() => _postponing = true);
+    try {
+      final delay = _effectiveDelayMinutes;
+      final updated = await ref
+          .read(heldOrderSchedulerProvider)
+          .postponeSync(widget.orderId, delayMinutes: delay);
+      if (!mounted || updated == null) return;
+      setState(() => _lastOrder = updated);
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              delay <= 0
+                  ? 'Синхронизация отложена на 1 мин'
+                  : 'Синхронизация отложена ещё на $delay мин',
+            ),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _postponing = false);
+    }
+  }
+
+  Future<void> _submitNow() async {
+    if (_sending || _postponing || _didClose) return;
+    setState(() => _sending = true);
+    try {
+      await ref.read(heldOrderSchedulerProvider).submitNow(widget.orderId);
+      if (!mounted) return;
+      _closeSheet(HeldOrderSyncAction.sent);
+    } catch (e, st) {
+      ErrorReporter.instance?.reportCaught(
+        e,
+        stack: st,
+        module: ErrorModules.heldOrders,
+        code: 'HeldOrderSubmitNowFailed',
+        message: 'Отложенный заказ: «Отправить сейчас» не удалось',
+        path: '/mobile/orders/held',
+        payload: {'held_order_id': widget.orderId},
+      );
+      if (!mounted) return;
+      setState(() => _sending = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Не удалось отправить заказ'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
   }
 
   @override
@@ -140,11 +206,17 @@ class _HeldOrderSyncSheetState extends ConsumerState<HeldOrderSyncSheet> {
     final totalMs = totalWindow.inMilliseconds <= 0 ? 1 : totalWindow.inMilliseconds;
     final leftMs = remaining.inMilliseconds.clamp(0, totalMs);
     final progress = (leftMs / totalMs).clamp(0.0, 1.0);
-    final delayLabel = '${widget.delayMinutes} мин';
+    final delayMin = _effectiveDelayMinutes;
+    final delayLabel = delayMin <= 0 ? '1 мин' : '$delayMin мин';
+    final postponeLabel = _postponing
+        ? 'Откладываем…'
+        : (delayMin <= 0
+            ? 'Отложить ещё 1 мин'
+            : 'Отложить ещё $delayMin мин');
 
     final homeLabel = _homeSecondsLeft > 0
-        ? 'Asosiy sahifaga ($_homeSecondsLeft)'
-        : 'Asosiy sahifaga';
+        ? 'На главную ($_homeSecondsLeft)'
+        : 'На главную';
 
     final bottom = MediaQuery.paddingOf(context).bottom;
 
@@ -207,7 +279,7 @@ class _HeldOrderSyncSheetState extends ConsumerState<HeldOrderSyncSheet> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const Text(
-                      'Редактировка ойнаси очиқ',
+                      'Окно редактирования открыто',
                       style: TextStyle(
                         fontSize: 15,
                         fontWeight: FontWeight.w800,
@@ -216,9 +288,9 @@ class _HeldOrderSyncSheetState extends ConsumerState<HeldOrderSyncSheet> {
                     ),
                     const SizedBox(height: 6),
                     Text(
-                      'Агар товар, бонус ёки скидкада хато бўлса, '
-                      '${widget.delayMinutes} дақиқа ичида тузатинг. '
-                      'Дарҳол юбориш — Визит бўлимида.',
+                      'Если в товарах, бонусе или скидке есть ошибка, '
+                      'исправьте её в течение ${delayMin <= 0 ? 1 : delayMin} мин. '
+                      'Отправить сразу — «Отправить сейчас».',
                       style: AppTypography.caption.copyWith(
                         color: AppColors.textMuted,
                         height: 1.35,
@@ -254,9 +326,9 @@ class _HeldOrderSyncSheetState extends ConsumerState<HeldOrderSyncSheet> {
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    'Агар $countdown ичида ўзгартиш киритилмаса, заказ автоматик '
-                    'синхрон қилиниб серверга юборилади. '
-                    'Бу kutish zakazlar ro‘yxati va bildirishnomalarda ham ko‘rinadi.',
+                    'Если в течение $countdown не внести изменения, заказ будет '
+                    'автоматически синхронизирован и отправлен на сервер. '
+                    'Он также отображается в списке ожидающих заказов и в уведомлениях.',
                     style: AppTypography.caption.copyWith(
                       color: const Color(0xFF92400E),
                       height: 1.35,
@@ -300,20 +372,28 @@ class _HeldOrderSyncSheetState extends ConsumerState<HeldOrderSyncSheet> {
           ),
           const SizedBox(height: 16),
           AgentPrimaryButton(
-            label: 'Редактировать',
+            label: _sending ? 'Отправка…' : 'Отправить сейчас',
             height: 48,
-            onPressed: () => _closeSheet(HeldOrderSyncAction.edit),
+            onPressed: (_sending || _postponing) ? null : _submitNow,
+          ),
+          const SizedBox(height: 8),
+          AgentSecondaryButton(
+            label: 'Редактировать',
+            onPressed: (_sending || _postponing)
+                ? null
+                : () => _closeSheet(HeldOrderSyncAction.edit),
+          ),
+          const SizedBox(height: 8),
+          AgentSecondaryButton(
+            label: postponeLabel,
+            onPressed: (_postponing || _sending) ? null : _postpone,
           ),
           const SizedBox(height: 8),
           AgentSecondaryButton(
             label: homeLabel,
-            onPressed: () => _closeSheet(HeldOrderSyncAction.goHome),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Отправить сейчас — в разделе «Визит»',
-            textAlign: TextAlign.center,
-            style: AppTypography.caption.copyWith(color: AppColors.textMuted),
+            onPressed: _sending
+                ? null
+                : () => _closeSheet(HeldOrderSyncAction.goHome),
           ),
         ],
       ),
@@ -360,7 +440,7 @@ class _CountdownRing extends StatelessWidget {
               ),
               const SizedBox(height: 2),
               Text(
-                'қолди',
+                'осталось',
                 style: AppTypography.caption.copyWith(
                   color: AppColors.textMuted,
                   fontWeight: FontWeight.w600,

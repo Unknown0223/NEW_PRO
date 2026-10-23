@@ -5,6 +5,7 @@ import {
   dashboardInvoicesNav,
   dashboardKassaNav,
   dashboardOrdersNav,
+  dashboardPayrollNav,
   dashboardPlansNav,
   dashboardReportsNav,
   dashboardSidebarLayout,
@@ -12,6 +13,7 @@ import {
   dashboardSuppliersNav,
   dashboardUsersNav
 } from "@/components/dashboard/nav-config";
+import { NAV_PERM } from "@/components/dashboard/nav-permission-keys";
 
 function pathOnly(href: string): string {
   const raw = href.split("?")[0] ?? href;
@@ -31,9 +33,12 @@ function collectNavItems(): NavItem[] {
   out.push(...dashboardPlansNav.items);
   out.push(...dashboardReportsNav.items);
   for (const g of dashboardUsersNav.groups) out.push(...g.items);
+  for (const g of dashboardPayrollNav.groups) out.push(...g.items);
   for (const entry of dashboardSidebarLayout) {
     if (entry.kind === "link") out.push(entry.item);
   }
+  // Header GPS chip — `/reports/gps` (jadval hisobot) prefiksi xaritani yopib qo‘ymasin.
+  out.push({ href: "/reports/gps/map", label: "GPS мониторинг", showIfAnyPermission: [...NAV_PERM.gpsMonitoring] });
   return out;
 }
 
@@ -42,10 +47,12 @@ const ALL_NAV_ITEMS = collectNavItems();
 /**
  * Joriy yo‘l uchun eng aniq (eng uzun) nav bandini topadi.
  * Faqat `roles` yoki `showIfAnyPermission` berilgan bandlar — deep-link gate uchun.
+ * Bir yo‘lda faqat `?query` bilan farq qiladigan bandlar (`/orders/new?type=…`) — ruxsatlari birlashtiriladi;
+ * aniq tur sahifaning o‘zida tekshiriladi.
  */
 export function findGatedNavItemForPath(pathname: string): NavItem | null {
   const path = pathOnly(pathname);
-  let best: NavItem | null = null;
+  let matches: NavItem[] = [];
   let bestLen = -1;
   for (const item of ALL_NAV_ITEMS) {
     if (item.placeholder || item.href === "#") continue;
@@ -54,12 +61,19 @@ export function findGatedNavItemForPath(pathname: string): NavItem | null {
     const hrefPath = pathOnly(item.href);
     if (path === hrefPath || path.startsWith(`${hrefPath}/`)) {
       if (hrefPath.length > bestLen) {
-        best = item;
+        matches = [item];
         bestLen = hrefPath.length;
+      } else if (hrefPath.length === bestLen) {
+        matches.push(item);
       }
     }
   }
-  return best;
+  if (matches.length <= 1) return matches[0] ?? null;
+  return {
+    ...matches[0]!,
+    roles: [...new Set(matches.flatMap((m) => m.roles ?? []))],
+    showIfAnyPermission: [...new Set(matches.flatMap((m) => m.showIfAnyPermission ?? []))]
+  };
 }
 
 /** Rol + permission bo‘yicha nav bandi ko‘rinadimi (app-shell bilan bir xil mantiq). */

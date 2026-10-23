@@ -20,20 +20,20 @@ export async function exportClientsFilteredCsv(
   const where = await buildClientListWhereInput(tenantId, q, actorScope);
   const headers = [
     "ID",
-    "Nomi",
-    "Firma",
-    "Telefon",
-    "INN",
-    "Viloyat",
-    "Shahar",
-    "Tuman",
-    "Zona",
-    "Toifa",
-    "Tur",
-    "Format",
-    "Savdo kanali",
-    "Faol",
-    "Yaratilgan"
+    "Наименование",
+    "Юр. название",
+    "Телефон",
+    "ИНН",
+    "Область",
+    "Город",
+    "Район",
+    "Зона",
+    "Категория",
+    "Тип",
+    "Формат",
+    "Канал продаж",
+    "Активен",
+    "Создан"
   ];
   if (where === null) {
     return {
@@ -84,7 +84,7 @@ export async function exportClientsFilteredCsv(
         r.client_type_code ?? "",
         r.client_format ?? "",
         r.sales_channel ?? "",
-        r.is_active ? "ha" : "yo‘q",
+        r.is_active ? "Да" : "Нет",
         r.created_at.toISOString().slice(0, 10)
       ]
         .map(csvEscapeCell)

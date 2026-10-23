@@ -5,7 +5,7 @@ import {
   parseVisitWeekdaysJson
 } from "./clients.types";
 import { MAX_AGENT_ASSIGNMENT_SLOTS } from "./clients.helpers";
-
+import { mergeAgentAssignmentPatches } from "./clients.agent-assignments.merge";
 
 function visitWeekdaysToPrismaJson(days: number[]): Prisma.InputJsonValue {
   const clean = parseVisitWeekdaysJson(days);
@@ -90,6 +90,17 @@ export function mergeAgentDisplayFromAssignments(
 type ReplaceClientAgentAssignmentsOptions = {
   /** Importda IDlar staff lookup bilan allaqachon tekshirilgan bo‘lsa, `user.findFirst` takrorini o‘chirish. */
   skipStaffDbValidation?: boolean;
+  /**
+   * true (import): qarzli agent/ekspeditor o‘zgarmaydi, qolgan o‘zgarishlar saqlanadi.
+   * false/undefined (UI): qarz bo‘lsa `ASSIGNMENT_PERSON_HAS_DEBT` throw.
+   */
+  softPreserveDebtLockedStaff?: boolean;
+  /** Faqat yuborilgan slot maydonlari o'zgaradi (`mergeAgentAssignmentPatches`). */
+  merge?: boolean;
+};
+
+export type ReplaceAssignmentsResult = {
+  debtBlocks: import("./clients.assignment-debt-guard").AssignmentDebtBlock[];
 };
 
 export async function replaceClientAgentAssignments(
@@ -98,31 +109,40 @@ export async function replaceClientAgentAssignments(
   clientId: number,
   raw: AgentAssignmentPatch[],
   options?: ReplaceClientAgentAssignmentsOptions
-): Promise<void> {
+): Promise<ReplaceAssignmentsResult> {
   const skipStaffDbValidation = options?.skipStaffDbValidation === true;
+  const softDebt = options?.softPreserveDebtLockedStaff === true;
+  const existingRows = await tx.clientAgentAssignment.findMany({
+    where: { client_id: clientId },
+    select: {
+      slot: true,
+      agent_id: true,
+      visit_date: true,
+      expeditor_phone: true,
+      expeditor_user_id: true,
+      visit_weekdays: true,
+      lock_type: true,
+      lock_reason: true,
+      lock_set_by: true,
+      auto_assign_status: true,
+      work_slot_id: true
+    }
+  });
+  const existingBySlot = new Map(existingRows.map((row) => [row.slot, row]));
+  const merge = options?.merge === true;
   const bySlot = new Map<number, AgentAssignmentPatch>();
-  for (const s of raw) {
+  for (const s of merge ? mergeAgentAssignmentPatches(existingRows, raw) : raw) {
     const slot = Math.floor(Number(s.slot));
     if (slot < 1 || slot > MAX_AGENT_ASSIGNMENT_SLOTS) {
       throw new Error("VALIDATION");
     }
     bySlot.set(slot, s);
   }
-
-  const existingBySlot = new Map(
-    (
-      await tx.clientAgentAssignment.findMany({
-        where: { client_id: clientId },
-        select: {
-          slot: true,
-          lock_type: true,
-          lock_reason: true,
-          lock_set_by: true,
-          auto_assign_status: true,
-          work_slot_id: true
-        }
-      })
-    ).map((row) => [row.slot, row])
+  const prevPersonBySlot = new Map(
+    existingRows.map((r) => [
+      r.slot,
+      { agent_id: r.agent_id, expeditor_user_id: r.expeditor_user_id }
+    ])
   );
 
   const rows: Array<{
@@ -147,7 +167,8 @@ export async function replaceClientAgentAssignments(
       if (!Number.isFinite(uid) || uid < 1) {
         throw new Error("VALIDATION");
       }
-      if (skipStaffDbValidation) {
+      const keptAgent = merge && existingBySlot.get(slot)?.agent_id === uid;
+      if (skipStaffDbValidation || keptAgent) {
         agent_id = uid;
       } else {
         const u = await tx.user.findFirst({
@@ -156,9 +177,12 @@ export async function replaceClientAgentAssignments(
         if (!u) {
           throw new Error("AGENT_NOT_FOUND");
         }
-        const { assertAgentCanTakeNewWork } = await import("../work-slots/work-slots.agent-gate");
-        await assertAgentCanTakeNewWork(tenantId, uid);
         agent_id = uid;
+      }
+      /** Import ham UI: agent faol рабочее местоda bo‘lishi shart */
+      if (!keptAgent) {
+        const { assertAgentCanTakeNewWork } = await import("../work-slots/work-slots.agent-gate");
+        await assertAgentCanTakeNewWork(tenantId, agent_id);
       }
     }
 
@@ -179,7 +203,8 @@ export async function replaceClientAgentAssignments(
       if (!Number.isFinite(eid) || eid < 1) {
         throw new Error("VALIDATION");
       }
-      if (skipStaffDbValidation) {
+      const keptExpeditor = merge && existingBySlot.get(slot)?.expeditor_user_id === eid;
+      if (skipStaffDbValidation || keptExpeditor) {
         expeditor_user_id = eid;
       } else {
         const eu = await tx.user.findFirst({
@@ -189,6 +214,10 @@ export async function replaceClientAgentAssignments(
           throw new Error("EXPEDITOR_NOT_FOUND");
         }
         expeditor_user_id = eid;
+      }
+      if (!keptExpeditor) {
+        const { assertExpeditorCanTakeNewWork } = await import("../work-slots/work-slots.expeditor-gate");
+        await assertExpeditorCanTakeNewWork(tenantId, expeditor_user_id);
       }
     }
 
@@ -212,6 +241,58 @@ export async function replaceClientAgentAssignments(
       auto_assign_status: prev?.auto_assign_status ?? "assigned",
       work_slot_id: prev?.work_slot_id ?? null
     });
+  }
+
+  const { enforceAssignmentDebtLocks } = await import("./clients.assignment-debt-guard");
+  const locked = await enforceAssignmentDebtLocks({
+    tenantId,
+    clientId,
+    prevBySlot: prevPersonBySlot,
+    nextRows: rows.map((r) => ({
+      slot: r.slot,
+      agent_id: r.agent_id,
+      expeditor_user_id: r.expeditor_user_id
+    })),
+    tx
+  });
+
+  if (locked.blocks.length > 0 && !softDebt) {
+    const err = new Error("ASSIGNMENT_PERSON_HAS_DEBT") as Error & {
+      debtBlocks: typeof locked.blocks;
+      debtMessage: string;
+    };
+    err.debtBlocks = locked.blocks;
+    err.debtMessage = locked.blocks.map((b) => b.messageRu).join(" ");
+    throw err;
+  }
+
+  /** Soft: qarzli xodimlarni saqlab, qolgan slotlarni yangilash */
+  if (locked.blocks.length > 0) {
+    const byNext = new Map(rows.map((r) => [r.slot, r]));
+    for (const lockedRow of locked.rows) {
+      const cur = byNext.get(lockedRow.slot);
+      const prev = existingBySlot.get(lockedRow.slot);
+      if (cur) {
+        cur.agent_id = lockedRow.agent_id;
+        cur.expeditor_user_id = lockedRow.expeditor_user_id;
+      } else if (prev) {
+        byNext.set(lockedRow.slot, {
+          slot: lockedRow.slot,
+          agent_id: lockedRow.agent_id,
+          visit_date: prev.visit_date,
+          expeditor_phone: prev.expeditor_phone,
+          expeditor_user_id: lockedRow.expeditor_user_id,
+          visit_weekdays: visitWeekdaysToPrismaJson(parseVisitWeekdaysJson(prev.visit_weekdays)),
+          lock_type: prev.lock_type ?? "none",
+          lock_reason: prev.lock_reason ?? null,
+          lock_set_by: prev.lock_set_by ?? null,
+          auto_assign_status: prev.auto_assign_status ?? "assigned",
+          work_slot_id: prev.work_slot_id ?? null
+        });
+      }
+    }
+    rows.length = 0;
+    rows.push(...[...byNext.values()].sort((a, b) => a.slot - b.slot));
   }
 
   /** Bitta yo‘nalish = bitta agent; bir xil agent bir klientda ikki yo‘nalishda bo‘lmasin. */
@@ -253,6 +334,8 @@ export async function replaceClientAgentAssignments(
       visit_date: s1?.visit_date ?? null
     }
   });
+
+  return { debtBlocks: locked.blocks };
 }
 
 export async function syncAssignmentSlotOneWithClientRow(

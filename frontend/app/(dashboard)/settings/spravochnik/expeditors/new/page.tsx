@@ -35,7 +35,7 @@ export default function NewExpeditorPage() {
     <PageShell>
       <div className="mb-4">
         <Link href="/settings/spravochnik/expeditors" className="text-sm text-primary underline">
-          ← Ekseditorlar ro‘yxati
+          ← Список экспедиторов
         </Link>
       </div>
       <StaffCreateForm

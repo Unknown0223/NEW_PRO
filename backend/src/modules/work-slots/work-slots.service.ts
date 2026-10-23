@@ -13,6 +13,9 @@ import { getWorkSlotDetail } from "./work-slots.query";
 import {
   bulkPatchActiveUsersOnSlots,
   hasActiveUserAttrsPatch,
+  hasOccupantUserAttrsPatch,
+  hasWorkplaceGeoAttrsPatch,
+  occupantUserUpdateData,
   type ActiveUserAttrsPatch
 } from "./work-slots.user-attrs";
 import {
@@ -22,7 +25,17 @@ import {
   mirrorSlotConfigToUser,
   type SlotConfigPatch
 } from "./work-slots.config-mirror";
+import { mergeMobileConfigPatch } from "../staff/agent-mobile-config.patch";
+import { parseMobileConfigV1 } from "../staff/agent-mobile-config.parse";
 import { unassignUserFromSlot } from "./work-slots.assign";
+import { resolveBranchCodesPatch } from "./work-slots.multi-bindings";
+import {
+  assertSupervisorUserId,
+  syncAfterAgentSlotOccupancyChange,
+  syncSupervisorTeamToUsers,
+  validateSuperviseeAgentSlotIds
+} from "./work-slots.supervisor-team";
+import { assertSlotCodeMatchesType, normalizeSlotCode } from "./work-slots.codes";
 
 export { suggestNextSlotCode } from "./work-slots.codes";
 
@@ -53,6 +66,7 @@ export async function createWorkSlot(
     slot_code: string;
     label?: string | null;
     branch_code?: string | null;
+    branch_codes?: string[];
     direction_id?: number | null;
     slot_type?: string;
     is_active?: boolean;
@@ -60,8 +74,10 @@ export async function createWorkSlot(
   },
   actorUserId?: number | null
 ) {
-  const code = body.slot_code.trim().toUpperCase();
+  const code = normalizeSlotCode(body.slot_code);
   if (!code) throw new Error("VALIDATION");
+  const slotType = body.slot_type ?? "agent";
+  assertSlotCodeMatchesType(code, slotType);
 
   if (body.direction_id != null) {
     const dir = await prisma.tradeDirection.findFirst({
@@ -71,15 +87,23 @@ export async function createWorkSlot(
     if (!dir) throw new Error("BAD_DIRECTION");
   }
 
+  const branches = resolveBranchCodesPatch({
+    existingCodes: [],
+    existingPrimary: null,
+    branch_codes: body.branch_codes,
+    branch_code: body.branch_code
+  });
+
   try {
     const row = await prisma.workSlot.create({
       data: {
         tenant_id: tenantId,
         slot_code: code,
         label: body.label?.trim() || null,
-        branch_code: body.branch_code?.trim() || null,
+        branch_code: branches?.branch_code ?? null,
+        branch_codes: branches?.branch_codes ?? [],
         direction_id: body.direction_id ?? null,
-        slot_type: body.slot_type ?? "agent",
+        slot_type: slotType,
         is_active: body.is_active !== false,
         sort_order: body.sort_order ?? 0
       }
@@ -105,26 +129,36 @@ export async function patchWorkSlot(
   tenantId: number,
   slotId: number,
   body: {
-    slot_code?: string;
     label?: string | null;
     branch_code?: string | null;
+    branch_codes?: string[];
     direction_id?: number | null;
     slot_type?: string;
     is_active?: boolean;
     sort_order?: number;
+    supervisee_agent_slot_ids?: number[];
+    territory_zones?: string[];
+    territory_oblasts?: string[];
+    territory_cities?: string[];
   } & ActiveUserAttrsPatch &
     SlotConfigPatch,
   actorUserId?: number | null
 ) {
   const existing = await prisma.workSlot.findFirst({
     where: { id: slotId, tenant_id: tenantId },
-    select: { id: true, territory: true }
+    select: {
+      id: true,
+      territory: true,
+      slot_type: true,
+      slot_code: true,
+      branch_code: true,
+      branch_codes: true
+    }
   });
   if (!existing) throw new Error("NOT_FOUND");
 
-  if (body.slot_code !== undefined) {
-    const code = body.slot_code.trim().toUpperCase();
-    if (!code || !/^[A-Z0-9-]{1,32}$/.test(code)) throw new Error("BAD_CODE");
+  if (body.slot_type !== undefined && body.slot_type !== existing.slot_type) {
+    assertSlotCodeMatchesType(existing.slot_code, body.slot_type);
   }
 
   if (body.direction_id !== undefined && body.direction_id != null) {
@@ -135,10 +169,22 @@ export async function patchWorkSlot(
     if (!dir) throw new Error("BAD_DIRECTION");
   }
 
+  if (body.supervisor_user_id !== undefined) {
+    await assertSupervisorUserId(tenantId, body.supervisor_user_id);
+  }
+
+  const branchesResolved = resolveBranchCodesPatch({
+    existingCodes: existing.branch_codes ?? [],
+    existingPrimary: existing.branch_code,
+    branch_codes: body.branch_codes,
+    branch_code: body.branch_code
+  });
+
   const slotData: Prisma.WorkSlotUpdateInput = {
-    ...(body.slot_code !== undefined ? { slot_code: body.slot_code.trim().toUpperCase() } : {}),
     ...(body.label !== undefined ? { label: body.label?.trim() || null } : {}),
-    ...(body.branch_code !== undefined ? { branch_code: body.branch_code?.trim() || null } : {}),
+    ...(branchesResolved
+      ? { branch_code: branchesResolved.branch_code, branch_codes: branchesResolved.branch_codes }
+      : {}),
     ...(body.direction_id !== undefined ? { direction_id: body.direction_id } : {}),
     ...(body.slot_type !== undefined ? { slot_type: body.slot_type } : {}),
     ...(body.is_active !== undefined ? { is_active: body.is_active } : {}),
@@ -149,9 +195,15 @@ export async function patchWorkSlot(
     territory_zone: body.territory_zone,
     territory_oblast: body.territory_oblast,
     territory_city: body.territory_city,
+    territory_zones: body.territory_zones,
+    territory_oblasts: body.territory_oblasts,
+    territory_cities: body.territory_cities,
+    territories: body.territories,
     warehouse_id: body.warehouse_id,
+    warehouse_ids: body.warehouse_ids,
     return_warehouse_id: body.return_warehouse_id,
     cash_desk_id: body.cash_desk_id,
+    cash_desk_ids: body.cash_desk_ids,
     price_type: body.price_type,
     price_types: body.price_types,
     entitlements: body.entitlements,
@@ -166,20 +218,50 @@ export async function patchWorkSlot(
     expeditor_assignment_rules: body.expeditor_assignment_rules
   };
 
+  const teamTouched = body.supervisee_agent_slot_ids !== undefined;
+
   try {
     await prisma.$transaction(async (tx) => {
+      if (teamTouched) {
+        const slotType = body.slot_type ?? existing.slot_type;
+        if (slotType !== "supervisor") throw new Error("BAD_SUPERVISEE_AGENT_SLOTS");
+        const ids = await validateSuperviseeAgentSlotIds(
+          tx,
+          tenantId,
+          body.supervisee_agent_slot_ids ?? []
+        );
+        (slotData as Prisma.WorkSlotUncheckedUpdateInput).supervisee_agent_slot_ids = ids;
+      }
+
       if (Object.keys(slotData).length > 0) {
         await tx.workSlot.update({ where: { id: slotId }, data: slotData });
       }
-      if (hasSlotConfigPatch(configPatch) || hasActiveUserAttrsPatch(body)) {
+      const active = await tx.slotUserLink.findFirst({
+        where: { slot_id: slotId, ended_at: null },
+        select: { user_id: true }
+      });
+      if (hasSlotConfigPatch(configPatch) || hasWorkplaceGeoAttrsPatch(body)) {
         await applySlotConfigPatch(tx, tenantId, slotId, configPatch, existing.territory);
-        const active = await tx.slotUserLink.findFirst({
-          where: { slot_id: slotId, ended_at: null },
-          select: { user_id: true }
-        });
         if (active) {
           await mirrorSlotConfigToUser(tx, tenantId, slotId, active.user_id);
         }
+      } else if (active && branchesResolved) {
+        await mirrorSlotConfigToUser(tx, tenantId, slotId, active.user_id);
+      }
+      if (active && hasOccupantUserAttrsPatch(body)) {
+        await tx.user.update({
+          where: { id: active.user_id },
+          data: occupantUserUpdateData(body)
+        });
+      }
+      if (teamTouched) {
+        await syncSupervisorTeamToUsers(tx, tenantId, slotId);
+      } else if (
+        (body.slot_type ?? existing.slot_type) === "agent" &&
+        (hasSlotConfigPatch(configPatch) || hasWorkplaceGeoAttrsPatch(body) || Boolean(branchesResolved))
+      ) {
+        // Config mirror supervisor ni o‘zgartirmaydi; jamoa bog‘lanishini qayta tiklash.
+        await syncAfterAgentSlotOccupancyChange(tx, tenantId, slotId);
       }
     });
   } catch (e) {
@@ -207,6 +289,7 @@ export async function bulkPatchWorkSlots(
     slot_ids: number[];
     delete?: true;
     unassign?: true;
+    revoke_sessions?: true;
     is_active?: boolean;
     label?: string | null;
     branch_code?: string | null;
@@ -216,6 +299,8 @@ export async function bulkPatchWorkSlots(
     territory_zones?: string[];
     territory_oblasts?: string[];
     territory_cities?: string[];
+    supervisee_agent_slot_ids?: number[];
+    mobile_config_mode?: "merge" | "replace";
   } & ActiveUserAttrsPatch &
     SlotConfigPatch,
   actorUserId?: number | null
@@ -229,6 +314,16 @@ export async function bulkPatchWorkSlots(
   });
   if (found !== ids.length) throw new Error("BAD_SLOT_IDS");
 
+  if (body.slot_type !== undefined) {
+    const slotsForType = await prisma.workSlot.findMany({
+      where: { tenant_id: tenantId, id: { in: ids } },
+      select: { slot_code: true }
+    });
+    for (const s of slotsForType) {
+      assertSlotCodeMatchesType(s.slot_code, body.slot_type);
+    }
+  }
+
   if (body.delete === true) {
     const slots = await prisma.workSlot.findMany({
       where: { tenant_id: tenantId, id: { in: ids } },
@@ -236,6 +331,13 @@ export async function bulkPatchWorkSlots(
     });
     for (const s of slots) {
       assertNotVoided(s);
+    }
+    const openLinks = await prisma.slotUserLink.findMany({
+      where: { tenant_id: tenantId, slot_id: { in: slots.map((s) => s.id) }, ended_at: null },
+      select: { slot_id: true }
+    });
+    for (const link of openLinks) {
+      await unassignUserFromSlot(tenantId, link.slot_id, actorUserId ?? null, "Рабочее место удалено");
     }
     await prisma.$transaction(
       slots.map((s) =>
@@ -258,6 +360,36 @@ export async function bulkPatchWorkSlots(
       payload: { slot_ids: ids, deleted: slots.length, soft: true }
     });
     return { deleted: slots.length };
+  }
+
+  if (body.revoke_sessions === true) {
+    const links = await prisma.slotUserLink.findMany({
+      where: { tenant_id: tenantId, slot_id: { in: ids }, ended_at: null },
+      select: { user_id: true }
+    });
+    const userIds = [...new Set(links.map((l) => l.user_id))];
+    const skipped_no_user = ids.length - userIds.length;
+    let sessions_revoked = 0;
+    if (userIds.length > 0) {
+      const revoked = await prisma.refreshToken.updateMany({
+        where: {
+          tenant_id: tenantId,
+          user_id: { in: userIds },
+          revoked_at: null
+        },
+        data: { revoked_at: new Date() }
+      });
+      sessions_revoked = revoked.count;
+    }
+    await appendTenantAuditEvent({
+      tenantId,
+      actorUserId: actorUserId ?? null,
+      entityType: "work_slot",
+      entityId: ids[0]!,
+      action: "work_slot.sessions.revoke",
+      payload: { slot_ids: ids, user_ids: userIds, sessions_revoked, skipped_no_user }
+    });
+    return { sessions_revoked, users_revoked: userIds.length, skipped_no_user };
   }
 
   if (body.unassign === true) {
@@ -295,6 +427,13 @@ export async function bulkPatchWorkSlots(
   }
 
   const configPatch: SlotConfigPatch = {
+    ...(body.territory_zone !== undefined ? { territory_zone: body.territory_zone } : {}),
+    ...(body.territory_oblast !== undefined ? { territory_oblast: body.territory_oblast } : {}),
+    ...(body.territory_city !== undefined ? { territory_city: body.territory_city } : {}),
+    ...(body.territory_zones !== undefined ? { territory_zones: body.territory_zones } : {}),
+    ...(body.territory_oblasts !== undefined ? { territory_oblasts: body.territory_oblasts } : {}),
+    ...(body.territory_cities !== undefined ? { territory_cities: body.territory_cities } : {}),
+    ...(body.territories !== undefined ? { territories: body.territories } : {}),
     ...(body.return_warehouse_id !== undefined
       ? { return_warehouse_id: body.return_warehouse_id }
       : {}),
@@ -333,6 +472,7 @@ export async function bulkPatchWorkSlots(
     is_active?: boolean;
     label?: string | null;
     branch_code?: string | null;
+    branch_codes?: string[];
     direction_id?: number | null;
     slot_type?: string;
   } = {};
@@ -346,27 +486,23 @@ export async function bulkPatchWorkSlots(
   const branchCodeSingle =
     body.branch_code !== undefined ? body.branch_code?.trim() || null : undefined;
 
+  // Geo territory — faqat configPatch (daraxt resolve). Round-robin bare city saqlamasin.
   const userAttrs: ActiveUserAttrsPatch = {
-    ...(body.territory_zone !== undefined ? { territory_zone: body.territory_zone } : {}),
-    ...(body.territory_oblast !== undefined ? { territory_oblast: body.territory_oblast } : {}),
-    ...(body.territory_city !== undefined ? { territory_city: body.territory_city } : {}),
     ...(body.warehouse_id !== undefined ? { warehouse_id: body.warehouse_id } : {}),
-    ...(body.cash_desk_id !== undefined ? { cash_desk_id: body.cash_desk_id } : {})
-  };
-
-  const territoryRoundRobin = {
-    ...(body.territory_zones?.length ? { territory_zones: body.territory_zones } : {}),
-    ...(body.territory_oblasts?.length ? { territory_oblasts: body.territory_oblasts } : {}),
-    ...(body.territory_cities?.length ? { territory_cities: body.territory_cities } : {})
+    ...(body.warehouse_ids !== undefined ? { warehouse_ids: body.warehouse_ids } : {}),
+    ...(body.cash_desk_id !== undefined ? { cash_desk_id: body.cash_desk_id } : {}),
+    ...(body.cash_desk_ids !== undefined ? { cash_desk_ids: body.cash_desk_ids } : {}),
+    ...(body.position !== undefined ? { position: body.position } : {}),
+    ...(body.app_access !== undefined ? { app_access: body.app_access } : {}),
+    ...(body.max_sessions !== undefined ? { max_sessions: body.max_sessions } : {})
   };
 
   const hasBranchPatch = branchCodeSingle !== undefined || branchCodes.length > 0;
   const hasSlotDataPatch = Object.keys(data).length > 0 || hasBranchPatch;
-  const hasUserPatch =
-    hasActiveUserAttrsPatch(userAttrs) ||
-    Object.keys(territoryRoundRobin).length > 0;
+  const hasUserPatch = hasActiveUserAttrsPatch(userAttrs);
+  const teamTouched = body.supervisee_agent_slot_ids !== undefined;
 
-  if (!hasSlotDataPatch && !hasUserPatch && !hasConfigPatch) {
+  if (!hasSlotDataPatch && !hasUserPatch && !hasConfigPatch && !teamTouched) {
     throw new Error("EMPTY_PATCH");
   }
 
@@ -379,38 +515,57 @@ export async function bulkPatchWorkSlots(
     updated = result.count;
   }
 
-  if (branchCodes.length > 1) {
-    for (let i = 0; i < ids.length; i++) {
-      const code = branchCodes[i % branchCodes.length]!;
-      await prisma.workSlot.update({
-        where: { id: ids[i]!, tenant_id: tenantId },
-        data: { branch_code: code }
-      });
-    }
-    updated = ids.length;
-  } else if (branchCodes.length === 1) {
+  if (branchCodes.length > 0) {
+    const resolved = resolveBranchCodesPatch({
+      existingCodes: [],
+      existingPrimary: null,
+      branch_codes: branchCodes
+    });
     const result = await prisma.workSlot.updateMany({
       where: { tenant_id: tenantId, id: { in: ids } },
-      data: { branch_code: branchCodes[0]! }
+      data: {
+        branch_code: resolved?.branch_code ?? null,
+        branch_codes: resolved?.branch_codes ?? []
+      }
     });
     updated = Math.max(updated, result.count);
   } else if (branchCodeSingle !== undefined) {
     const result = await prisma.workSlot.updateMany({
       where: { tenant_id: tenantId, id: { in: ids } },
-      data: { branch_code: branchCodeSingle }
+      data: {
+        branch_code: branchCodeSingle,
+        branch_codes: branchCodeSingle ? [branchCodeSingle] : []
+      }
     });
     updated = Math.max(updated, result.count);
   }
 
   let users_updated = 0;
   let skipped_no_user = 0;
+  if (hasBranchPatch && !hasConfigPatch) {
+    for (const slotId of ids) {
+      await prisma.$transaction(async (tx) => {
+        const link = await tx.slotUserLink.findFirst({
+          where: { tenant_id: tenantId, slot_id: slotId, ended_at: null },
+          select: { user_id: true }
+        });
+        if (link) {
+          await mirrorSlotConfigToUser(tx, tenantId, slotId, link.user_id);
+          users_updated += 1;
+        }
+        const slotMeta = await tx.workSlot.findFirst({
+          where: { id: slotId, tenant_id: tenantId },
+          select: { slot_type: true }
+        });
+        if (slotMeta?.slot_type === "agent") {
+          await syncAfterAgentSlotOccupancyChange(tx, tenantId, slotId);
+        }
+      });
+    }
+  }
+
   if (hasUserPatch) {
-    const r = await bulkPatchActiveUsersOnSlots(
-      tenantId,
-      ids,
-      userAttrs,
-      Object.keys(territoryRoundRobin).length > 0 ? territoryRoundRobin : undefined
-    );
+    const r = await bulkPatchActiveUsersOnSlots(tenantId, ids, userAttrs);
     users_updated = r.users_updated;
     skipped_no_user = r.skipped_no_user;
   }
@@ -438,9 +593,20 @@ export async function bulkPatchWorkSlots(
             !Array.isArray(entitlementsPatch)
               ? (entitlementsPatch as Record<string, unknown>)
               : {};
-          delete prev.mobile_config;
+          // mobile_config joy manbasi — bulk merge saqlaydi (next ustun).
           const merged = { ...prev, ...next };
-          delete merged.mobile_config;
+          if (
+            body.mobile_config_mode !== "replace" &&
+            next.mobile_config != null &&
+            typeof next.mobile_config === "object" &&
+            !Array.isArray(next.mobile_config)
+          ) {
+            const patchMc = parseMobileConfigV1(next.mobile_config);
+            if (patchMc) {
+              const storedMc = parseMobileConfigV1(prev.mobile_config);
+              merged.mobile_config = mergeMobileConfigPatch(storedMc, patchMc);
+            }
+          }
           entitlementsPatch = merged;
         }
 
@@ -463,8 +629,42 @@ export async function bulkPatchWorkSlots(
           skipped_no_user += 1;
         }
       });
+      const slotMeta = await prisma.workSlot.findFirst({
+        where: { id: slotId, tenant_id: tenantId },
+        select: { slot_type: true }
+      });
+      if (slotMeta?.slot_type === "agent") {
+        await prisma.$transaction(async (tx) => {
+          await syncAfterAgentSlotOccupancyChange(tx, tenantId, slotId);
+        });
+      }
       updated = Math.max(updated, ids.length);
     }
+  }
+
+  if (teamTouched) {
+    for (const slotId of ids) {
+      await prisma.$transaction(async (tx) => {
+        const slot = await tx.workSlot.findFirst({
+          where: { id: slotId, tenant_id: tenantId },
+          select: { slot_type: true }
+        });
+        if (!slot || slot.slot_type !== "supervisor") {
+          throw new Error("BAD_SUPERVISEE_AGENT_SLOTS");
+        }
+        const teamIds = await validateSuperviseeAgentSlotIds(
+          tx,
+          tenantId,
+          body.supervisee_agent_slot_ids ?? []
+        );
+        await tx.workSlot.update({
+          where: { id: slotId },
+          data: { supervisee_agent_slot_ids: teamIds }
+        });
+        await syncSupervisorTeamToUsers(tx, tenantId, slotId);
+      });
+    }
+    updated = Math.max(updated, ids.length);
   }
 
   await appendTenantAuditEvent({

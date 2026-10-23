@@ -23,7 +23,7 @@ export function TemplateModal({ open, onClose, title, children, maxWidth = "max-
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center">
+    <div className="fixed inset-0 z-[400] flex items-center justify-center">
       <div className="fixed inset-0 bg-black/40" onClick={onClose} aria-hidden />
       <div
         className={`relative z-10 mx-4 w-full ${maxWidth} max-h-[90vh] overflow-y-auto rounded-lg bg-card shadow-2xl`}

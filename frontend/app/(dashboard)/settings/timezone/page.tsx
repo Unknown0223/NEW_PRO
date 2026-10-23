@@ -2,7 +2,7 @@
 export default function TimezoneSettingsPage() {
   return (
     <p className="text-sm text-muted-foreground">
-      Vaqt mintaqasi sozlamasi oynada ochiladi…
+      Настройка часового пояса откроется в окне…
     </p>
   );
 }

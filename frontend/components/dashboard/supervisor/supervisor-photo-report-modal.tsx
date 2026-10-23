@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Copy, Loader2 } from "lucide-react";
 import { api } from "@/lib/api";
@@ -18,7 +18,6 @@ import {
   SupervisorPhotoGalleryLightbox,
   type PhotoGalleryItem
 } from "@/components/dashboard/supervisor/supervisor-photo-gallery-lightbox";
-import * as XLSX from "xlsx";
 
 export type SupervisorPhotoReportModalTarget = {
   agentId: number;
@@ -87,15 +86,38 @@ export function SupervisorPhotoReportModal({
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(10);
   const [search, setSearch] = useState("");
+  const [searchDebounced, setSearchDebounced] = useState("");
   const [galleryOpen, setGalleryOpen] = useState(false);
   const [galleryPhotos, setGalleryPhotos] = useState<PhotoGalleryItem[]>([]);
   const [galleryIndex, setGalleryIndex] = useState(0);
-  const [galleryLoading, setGalleryLoading] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    setPage(1);
+    setSearch("");
+    setSearchDebounced("");
+    setGalleryOpen(false);
+    setGalleryPhotos([]);
+  }, [open, target?.agentId]);
+
+  useEffect(() => {
+    const t = window.setTimeout(() => setSearchDebounced(search.trim()), 300);
+    return () => window.clearTimeout(t);
+  }, [search]);
 
   const baseQs = useMemo(() => buildSupervisorDashboardQueryString(filters), [filters]);
 
   const reportQ = useQuery({
-    queryKey: ["dashboard-supervisor", "photo-reports", tenantSlug, baseQs, target?.agentId, page, limit, search],
+    queryKey: [
+      "dashboard-supervisor",
+      "photo-reports",
+      tenantSlug,
+      baseQs,
+      target?.agentId,
+      page,
+      limit,
+      searchDebounced
+    ],
     enabled: open && Boolean(tenantSlug) && target != null,
     staleTime: STALE.report,
     refetchOnWindowFocus: false,
@@ -104,7 +126,7 @@ export function SupervisorPhotoReportModal({
       q.set("agent_id", String(target!.agentId));
       q.set("page", String(page));
       q.set("limit", String(limit));
-      if (search.trim()) q.set("search", search.trim());
+      if (searchDebounced) q.set("search", searchDebounced);
       const { data } = await api.get<PhotoReportApi>(
         `/api/${tenantSlug}/dashboard/supervisor/photo-reports?${q.toString()}`
       );
@@ -123,27 +145,14 @@ export function SupervisorPhotoReportModal({
 
   const openGalleryWithFetch = async (metas: PhotoReportMeta[], startIndex = 0) => {
     if (!metas.length || !tenantSlug) return;
-    setGalleryLoading(true);
-    try {
-      const ids = metas.map((p) => p.id).join(",");
-      const { data } = await api.get<{ data: Array<{ id: number; image_url: string; caption: string | null }> }>(
-        `/api/${tenantSlug}/dashboard/supervisor/photo-reports/images?ids=${ids}`
-      );
-      const byId = new Map(data.data.map((p) => [p.id, p.image_url]));
-      openGallery(
-        metas.map((p) => ({
-          id: p.id,
-          image_url: byId.get(p.id) ?? "",
-          caption: p.caption,
-          client_name: p.client_name
-        })),
-        startIndex
-      );
-    } catch {
-      /* ignore */
-    } finally {
-      setGalleryLoading(false);
-    }
+    // API kutmasdan darhol ochamiz — URL lar oldindan ma’lum (proxy content).
+    const photos: PhotoGalleryItem[] = metas.map((p) => ({
+      id: p.id,
+      image_url: `/api/${tenantSlug}/dashboard/supervisor/photo-reports/${p.id}/content`,
+      caption: p.caption,
+      client_name: p.client_name
+    }));
+    openGallery(photos, startIndex);
   };
 
   const openAllPhotos = () => {
@@ -151,7 +160,7 @@ export function SupervisorPhotoReportModal({
     void openGalleryWithFetch(all);
   };
 
-  const exportExcel = () => {
+  const exportExcel = async () => {
     const rows = reportQ.data?.rows ?? [];
     const flat = rows.flatMap((r) =>
       r.categories.map((c) => ({
@@ -163,6 +172,7 @@ export function SupervisorPhotoReportModal({
         Фото: c.count
       }))
     );
+    const XLSX = await import("xlsx");
     const ws = XLSX.utils.json_to_sheet(flat);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Фотоотчет");
@@ -198,14 +208,6 @@ export function SupervisorPhotoReportModal({
           </DialogHeader>
 
           <div className="relative min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-6">
-            {galleryLoading ? (
-              <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center bg-background/60">
-                <div className="flex items-center gap-2 rounded-lg border bg-card px-4 py-3 text-sm shadow-panel">
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Загрузка фото…
-                </div>
-              </div>
-            ) : null}
             <SupervisorEnterpriseToolbar
               pageSize={limit}
               onPageSizeChange={(n) => {
@@ -218,18 +220,17 @@ export function SupervisorPhotoReportModal({
                 setPage(1);
               }}
               searchPlaceholder="Поиск"
-              onExcel={exportExcel}
+              onExcel={() => void exportExcel()}
               onRefresh={() => void reportQ.refetch()}
               refreshing={reportQ.isFetching}
               totalCount={reportQ.data?.total}
             >
               <button
                 type="button"
-                disabled={!reportQ.data?.all_photos.length || galleryLoading}
+                disabled={!reportQ.data?.all_photos.length}
                 onClick={openAllPhotos}
                 className="inline-flex h-10 items-center gap-2 rounded-xl bg-teal-600 px-4 text-sm font-medium text-white hover:bg-teal-500 disabled:opacity-50"
               >
-                {galleryLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
                 Все картинки
               </button>
             </SupervisorEnterpriseToolbar>

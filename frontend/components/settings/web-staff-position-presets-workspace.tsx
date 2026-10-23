@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { isAxiosError } from "axios";
+import { Pencil } from "lucide-react";
 import { api } from "@/lib/api";
 import {
   firstMessagePerField,
@@ -10,9 +11,14 @@ import {
   getZodFlattenFromApiErrorBody
 } from "@/lib/api-validation-details";
 import { getUserFacingError, withApiSupportLine } from "@/lib/error-utils";
+import {
+  POSITION_CATALOG_ROLE_OPTIONS,
+  positionCatalogRoleLabel
+} from "@/lib/position-catalog-roles";
 import { STALE } from "@/lib/query-stale";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Dialog,
   DialogContent,
@@ -22,11 +28,13 @@ import {
   DialogTitle
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
-import { HistoryIcon, Loader2Icon, ScrollTextIcon } from "lucide-react";
 
 export type WebStaffPositionPresetRow = {
   id: string;
   label: string;
+  role: string | null;
+  code: string | null;
+  comment: string | null;
   is_active: boolean;
   sort_order: number;
   created_at: string;
@@ -35,33 +43,29 @@ export type WebStaffPositionPresetRow = {
   deactivated_at: string | null;
   deactivated_by_user_id: number | null;
   deactivated_by_label: string | null;
-  /** Saqlangan nom bo‘yicha: veb-panel xodimlari `position` maydoni mos keladiganlar soni */
   linked_operator_count: number;
 };
 
-type AuditHistoryRow = {
-  id: number;
-  action: string;
-  payload: unknown;
-  actor_user_id: number | null;
-  actor_login: string | null;
-  created_at: string;
-};
-
 type Props = { tenantSlug: string };
-
 type PresetTab = "active" | "inactive";
 
-function invalidateOperatorQueries(qc: ReturnType<typeof useQueryClient>, tenantSlug: string) {
-  void qc.invalidateQueries({ queryKey: ["operators", tenantSlug] });
-}
+type FormState = {
+  label: string;
+  role: string;
+  code: string;
+  sort_order: string;
+  comment: string;
+  is_active: boolean;
+};
 
-function formatDateTime(iso: string | null | undefined): string {
-  if (!iso?.trim()) return "—";
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "—";
-  return new Intl.DateTimeFormat("uz-UZ", { dateStyle: "short", timeStyle: "short" }).format(d);
-}
+const emptyForm = (): FormState => ({
+  label: "",
+  role: "",
+  code: "",
+  sort_order: "",
+  comment: "",
+  is_active: true
+});
 
 function pickZodLeaf(per: Record<string, string>, leaf: string): string | undefined {
   for (const [k, v] of Object.entries(per)) {
@@ -70,44 +74,23 @@ function pickZodLeaf(per: Record<string, string>, leaf: string): string | undefi
   return undefined;
 }
 
-function actionLabelUz(action: string): string {
-  switch (action) {
-    case "create":
-      return "Yaratildi";
-    case "patch.label":
-      return "Nomi o‘zgartirildi";
-    case "deactivate":
-      return "Nofaollashtirildi";
-    case "reactivate":
-      return "Faollashtirildi";
-    default:
-      return action;
-  }
-}
-
-function payloadSummary(action: string, payload: unknown): string | null {
-  if (payload == null || typeof payload !== "object") return null;
-  const o = payload as Record<string, unknown>;
-  if (action === "patch.label" && typeof o.from === "string" && typeof o.to === "string") {
-    return `«${o.from}» → «${o.to}»`;
-  }
-  if (typeof o.label === "string") {
-    return `«${o.label}»`;
-  }
-  return null;
+function invalidateStaffQueries(qc: ReturnType<typeof useQueryClient>, tenantSlug: string) {
+  void qc.invalidateQueries({ queryKey: ["operators", tenantSlug] });
+  void qc.invalidateQueries({ queryKey: ["agents", tenantSlug] });
+  void qc.invalidateQueries({ queryKey: ["expeditors", tenantSlug] });
+  void qc.invalidateQueries({ queryKey: ["supervisors", tenantSlug] });
 }
 
 export function WebStaffPositionPresetsWorkspace({ tenantSlug }: Props) {
   const qc = useQueryClient();
-  const [presetTab, setPresetTab] = useState<PresetTab>("active");
-  const [createOpen, setCreateOpen] = useState(false);
-  const [createLabel, setCreateLabel] = useState("");
-  const [createServerFieldErrs, setCreateServerFieldErrs] = useState<Record<string, string>>({});
-  const [createMsg, setCreateMsg] = useState<string | null>(null);
-  const [patchBanner, setPatchBanner] = useState<string | null>(null);
-  const [patchLabelErrByPresetId, setPatchLabelErrByPresetId] = useState<Record<string, string>>({});
-  const [drafts, setDrafts] = useState<Record<string, string>>({});
-  const [historyPresetId, setHistoryPresetId] = useState<string | null>(null);
+  const [tab, setTab] = useState<PresetTab>("active");
+  const [open, setOpen] = useState(false);
+  const [editId, setEditId] = useState<string | null>(null);
+  const [form, setForm] = useState<FormState>(emptyForm);
+  const [msg, setMsg] = useState<string | null>(null);
+  const [fieldErrs, setFieldErrs] = useState<Record<string, string>>({});
+  const [banner, setBanner] = useState<string | null>(null);
+  const [roleFilter, setRoleFilter] = useState("");
 
   const listQ = useQuery({
     queryKey: ["operators", tenantSlug, "position-presets-admin"],
@@ -121,468 +104,359 @@ export function WebStaffPositionPresetsWorkspace({ tenantSlug }: Props) {
     }
   });
 
-  const historyQ = useQuery({
-    queryKey: ["operators", tenantSlug, "position-preset-history", historyPresetId],
-    enabled: Boolean(tenantSlug) && Boolean(historyPresetId),
-    staleTime: STALE.detail,
-    queryFn: async () => {
-      const { data } = await api.get<{
-        data: AuditHistoryRow[];
-        total: number;
-      }>(`/api/${tenantSlug}/operators/meta/position-presets/history/${historyPresetId}`);
-      return data;
-    }
-  });
-
   const rows = useMemo(() => listQ.data ?? [], [listQ.data]);
   const activeRows = useMemo(() => rows.filter((r) => r.is_active), [rows]);
   const inactiveRows = useMemo(() => rows.filter((r) => !r.is_active), [rows]);
-  const subset = presetTab === "active" ? activeRows : inactiveRows;
-  const mode = presetTab === "active" ? "active" : "inactive";
+  const subset = useMemo(() => {
+    const base = tab === "active" ? activeRows : inactiveRows;
+    if (!roleFilter) return base;
+    return base.filter((r) => r.role === roleFilter);
+  }, [tab, activeRows, inactiveRows, roleFilter]);
 
-  useEffect(() => {
-    const next: Record<string, string> = {};
-    for (const r of rows) {
-      next[r.id] = r.label;
-    }
-    setDrafts(next);
-  }, [rows]);
-
-  const createMut = useMutation({
-    mutationFn: async (label: string) => {
+  const saveMut = useMutation({
+    mutationFn: async () => {
+      const body = {
+        label: form.label.trim(),
+        role: form.role.trim() || null,
+        code: form.code.trim() || null,
+        comment: form.comment.trim() || null,
+        sort_order: form.sort_order.trim() === "" ? null : Number(form.sort_order),
+        is_active: form.is_active
+      };
+      if (editId) {
+        const { data } = await api.patch<{ data: WebStaffPositionPresetRow }>(
+          `/api/${tenantSlug}/operators/meta/position-presets/${editId}`,
+          body
+        );
+        return data.data;
+      }
       const { data } = await api.post<{ data: WebStaffPositionPresetRow }>(
         `/api/${tenantSlug}/operators/meta/position-presets`,
-        { label }
+        body
       );
       return data.data;
     },
-    onSuccess: async () => {
-      setPresetTab("active");
+    onSuccess: async (row) => {
+      setOpen(false);
+      setEditId(null);
+      setForm(emptyForm());
+      setBanner(null);
+      setTab(row.is_active ? "active" : "inactive");
       await listQ.refetch();
-      invalidateOperatorQueries(qc, tenantSlug);
+      invalidateStaffQueries(qc, tenantSlug);
     }
   });
 
-  const patchMut = useMutation({
-    mutationFn: async (args: { presetId: string; body: { label?: string; is_active?: boolean } }) => {
+  const toggleMut = useMutation({
+    mutationFn: async (args: { id: string; is_active: boolean }) => {
       const { data } = await api.patch<{ data: WebStaffPositionPresetRow }>(
-        `/api/${tenantSlug}/operators/meta/position-presets/${args.presetId}`,
-        args.body
+        `/api/${tenantSlug}/operators/meta/position-presets/${args.id}`,
+        { is_active: args.is_active }
       );
       return data.data;
     },
-    onSuccess: async (_, vars) => {
-      setPatchBanner(null);
-      if (vars.body.label !== undefined) {
-        setPatchLabelErrByPresetId((prev) => {
-          const next = { ...prev };
-          delete next[vars.presetId];
-          return next;
-        });
-      } else {
-        setPatchLabelErrByPresetId({});
-      }
+    onSuccess: async (row) => {
+      setBanner(null);
+      setTab(row.is_active ? "active" : "inactive");
       await listQ.refetch();
-      invalidateOperatorQueries(qc, tenantSlug);
-      void qc.invalidateQueries({
-        queryKey: ["operators", tenantSlug, "position-preset-history", vars.presetId]
-      });
-      if (vars.body.is_active === false) setPresetTab("inactive");
-      if (vars.body.is_active === true) setPresetTab("active");
+      invalidateStaffQueries(qc, tenantSlug);
     }
   });
 
-  const dirtyById = useMemo(() => {
-    const m: Record<string, boolean> = {};
-    for (const r of rows) {
-      const d = (drafts[r.id] ?? r.label).trim();
-      m[r.id] = d !== r.label && d.length > 0;
-    }
-    return m;
-  }, [rows, drafts]);
-
-  function setDraft(id: string, v: string) {
-    setDrafts((prev) => ({ ...prev, [id]: v }));
+  function openCreate() {
+    setEditId(null);
+    setForm(emptyForm());
+    setMsg(null);
+    setFieldErrs({});
+    setOpen(true);
   }
 
-  function submitCreate() {
+  function openEdit(row: WebStaffPositionPresetRow) {
+    setEditId(row.id);
+    setForm({
+      label: row.label,
+      role: row.role ?? "",
+      code: row.code ?? "",
+      sort_order: row.sort_order != null ? String(row.sort_order) : "",
+      comment: row.comment ?? "",
+      is_active: row.is_active
+    });
+    setMsg(null);
+    setFieldErrs({});
+    setOpen(true);
+  }
+
+  function submit() {
     void (async () => {
-      setCreateServerFieldErrs({});
-      setCreateMsg(null);
-      const t = createLabel.trim();
-      if (!t) return;
+      setMsg(null);
+      setFieldErrs({});
+      if (!form.label.trim()) {
+        setFieldErrs({ label: "Название обязательно" });
+        return;
+      }
+      if (!form.role.trim()) {
+        setFieldErrs({ role: "Выберите роль" });
+        return;
+      }
       try {
-        await createMut.mutateAsync(t);
-        setCreateServerFieldErrs({});
-        setCreateMsg(null);
-        setCreateOpen(false);
-        setCreateLabel("");
+        await saveMut.mutateAsync();
       } catch (e: unknown) {
         if (isAxiosError(e)) {
           const flat = getZodFlattenFromApiErrorBody(e.response?.data);
           if (flat) {
             const per = firstMessagePerField(flat);
-            setCreateServerFieldErrs(per);
-            const top = flat.formErrors.map((s) => s.trim()).find(Boolean);
+            setFieldErrs(per);
             const hint = firstValidationUserHint(flat);
-            const line = top ?? hint ?? Object.values(per).find((m) => m.trim() !== "");
-            setCreateMsg(line ? withApiSupportLine(line, e) : getUserFacingError(e, "Yaratishda xatolik."));
+            setMsg(hint ? withApiSupportLine(hint, e) : getUserFacingError(e, "Ошибка при сохранении."));
             return;
           }
-          setCreateServerFieldErrs({});
-        } else {
-          setCreateServerFieldErrs({});
+          const code = (e.response?.data as { error?: string } | undefined)?.error;
+          if (code === "DuplicateLabel") {
+            setMsg("Такое название уже существует.");
+            return;
+          }
+          if (code === "BadRole") {
+            setFieldErrs({ role: "Некорректная роль" });
+            return;
+          }
         }
-        setCreateMsg(getUserFacingError(e, "Yaratishda xatolik."));
+        setMsg(getUserFacingError(e, "Ошибка при сохранении."));
       }
     })();
   }
 
   useEffect(() => {
-    if (!createOpen) return;
-    setCreateServerFieldErrs({});
-    setCreateMsg(null);
-  }, [createOpen]);
-
-  const historyTitleRow = rows.find((r) => r.id === historyPresetId);
+    if (!open) return;
+    setMsg(null);
+    setFieldErrs({});
+  }, [open]);
 
   const emptyMsg =
-    mode === "active"
-      ? "Faol lavozim yo‘q — «Yangi lavozim» bilan qo‘shing."
-      : "Nofaol lavozim yo‘q.";
-
-  const colCount = 8;
+    tab === "active"
+      ? "Активных должностей нет — добавьте кнопкой «Добавить»."
+      : "Неактивных должностей нет.";
 
   return (
     <div className="space-y-4">
-      {/* Huddi `agents-workspace`: ixcham pastki chiziqli yorliqlar + qo‘shish o‘ngda */}
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="flex gap-2 border-b border-border" role="tablist" aria-label="Lavozimlar holati">
+        <div className="flex gap-2 border-b border-border" role="tablist" aria-label="Должности">
           <button
             type="button"
             role="tab"
-            id="tab-preset-active"
-            aria-selected={presetTab === "active"}
+            aria-selected={tab === "active"}
             className={cn(
               "-mb-px border-b-2 px-3 py-2 text-sm font-medium",
-              presetTab === "active"
+              tab === "active"
                 ? "border-primary text-primary"
                 : "border-transparent text-muted-foreground hover:text-foreground"
             )}
-            onClick={() => setPresetTab("active")}
+            onClick={() => setTab("active")}
           >
-            Faol{activeRows.length ? ` (${activeRows.length})` : ""}
+            Активный{activeRows.length ? ` (${activeRows.length})` : ""}
           </button>
           <button
             type="button"
             role="tab"
-            id="tab-preset-inactive"
-            aria-selected={presetTab === "inactive"}
+            aria-selected={tab === "inactive"}
             className={cn(
               "-mb-px border-b-2 px-3 py-2 text-sm font-medium",
-              presetTab === "inactive"
+              tab === "inactive"
                 ? "border-primary text-primary"
                 : "border-transparent text-muted-foreground hover:text-foreground"
             )}
-            onClick={() => setPresetTab("inactive")}
+            onClick={() => setTab("inactive")}
           >
-            Nofaol{inactiveRows.length ? ` (${inactiveRows.length})` : ""}
+            Не активный{inactiveRows.length ? ` (${inactiveRows.length})` : ""}
           </button>
         </div>
-        <Button type="button" size="sm" onClick={() => setCreateOpen(true)}>
-          Yangi lavozim
-        </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          <select
+            className="h-9 rounded-md border border-input bg-background px-2 text-sm"
+            value={roleFilter}
+            onChange={(e) => setRoleFilter(e.target.value)}
+            aria-label="Фильтр по роли"
+          >
+            <option value="">Все роли</option>
+            {POSITION_CATALOG_ROLE_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
+            ))}
+          </select>
+          <Button type="button" size="sm" onClick={openCreate}>
+            Добавить
+          </Button>
+        </div>
       </div>
 
-      {patchBanner ? <p className="text-sm text-destructive">{patchBanner}</p> : null}
+      {banner ? <p className="text-sm text-destructive">{banner}</p> : null}
 
-      <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+      <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Yangi lavozim</DialogTitle>
+            <DialogTitle>{editId ? "Изменить" : "Добавить"}</DialogTitle>
             <DialogDescription>
-              Har bir lavozim alohida yaratiladi. Ro‘yxat veb xodimlar sahifasida tanlov sifatida ishlatiladi.
+              Название должности сохраняется в карточке сотрудника; роль связана с системной ролью пользователя.
             </DialogDescription>
           </DialogHeader>
-          <div className="grid gap-2">
-            {createMsg ? <p className="text-sm text-destructive">{createMsg}</p> : null}
-            <label className="text-xs font-medium text-muted-foreground" htmlFor="preset-create-label">
-              Lavozim nomi
+          <div className="grid gap-3">
+            {msg ? <p className="text-sm text-destructive">{msg}</p> : null}
+
+            <div className="grid gap-1.5">
+              <Label htmlFor="pos-role">Роль</Label>
+              <select
+                id="pos-role"
+                className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                value={form.role}
+                onChange={(e) => setForm((f) => ({ ...f, role: e.target.value }))}
+              >
+                <option value="">— Выберите —</option>
+                {POSITION_CATALOG_ROLE_OPTIONS.map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
+              </select>
+              {pickZodLeaf(fieldErrs, "role") ? (
+                <p className="text-xs text-destructive">{pickZodLeaf(fieldErrs, "role")}</p>
+              ) : null}
+            </div>
+
+            <div className="grid gap-1.5">
+              <Label htmlFor="pos-label">Названия</Label>
+              <Input
+                id="pos-label"
+                value={form.label}
+                maxLength={128}
+                placeholder="Например: AGENT"
+                onChange={(e) => setForm((f) => ({ ...f, label: e.target.value }))}
+              />
+              {pickZodLeaf(fieldErrs, "label") ? (
+                <p className="text-xs text-destructive">{pickZodLeaf(fieldErrs, "label")}</p>
+              ) : null}
+            </div>
+
+            <div className="grid gap-1.5">
+              <Label htmlFor="pos-code">Код</Label>
+              <Input
+                id="pos-code"
+                value={form.code}
+                maxLength={20}
+                placeholder="0 / 20"
+                onChange={(e) => setForm((f) => ({ ...f, code: e.target.value.slice(0, 20) }))}
+              />
+              <p className="text-[11px] text-muted-foreground">{form.code.length} / 20</p>
+            </div>
+
+            <div className="grid gap-1.5">
+              <Label htmlFor="pos-sort">Сортировка</Label>
+              <Input
+                id="pos-sort"
+                type="number"
+                value={form.sort_order}
+                onChange={(e) => setForm((f) => ({ ...f, sort_order: e.target.value }))}
+              />
+            </div>
+
+            <div className="grid gap-1.5">
+              <Label htmlFor="pos-comment">Комментарий</Label>
+              <Input
+                id="pos-comment"
+                value={form.comment}
+                maxLength={500}
+                onChange={(e) => setForm((f) => ({ ...f, comment: e.target.value }))}
+              />
+            </div>
+
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={form.is_active}
+                onChange={(e) => setForm((f) => ({ ...f, is_active: e.target.checked }))}
+              />
+              Активный
             </label>
-            <Input
-              id="preset-create-label"
-              value={createLabel}
-              placeholder="Masalan: Kassir"
-              onChange={(e) => setCreateLabel(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  e.preventDefault();
-                  submitCreate();
-                }
-              }}
-            />
-            {pickZodLeaf(createServerFieldErrs, "label") ? (
-              <p className="text-xs text-destructive">{pickZodLeaf(createServerFieldErrs, "label")}</p>
-            ) : null}
           </div>
           <DialogFooter className="border-0 bg-transparent p-0 sm:justify-end">
-            <Button type="button" variant="outline" onClick={() => setCreateOpen(false)}>
-              Bekor qilish
+            <Button type="button" variant="outline" onClick={() => setOpen(false)}>
+              Отмена
             </Button>
-            <Button
-              type="button"
-              disabled={!createLabel.trim() || createMut.isPending}
-              onClick={submitCreate}
-            >
-              {createMut.isPending ? "Yaratilmoqda…" : "Yaratish"}
+            <Button type="button" disabled={saveMut.isPending} onClick={submit}>
+              {saveMut.isPending ? "…" : editId ? "Сохранить" : "Добавить"}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
       <div className="overflow-hidden rounded-xl border border-border/80 bg-card shadow-sm">
-        <div
-          className="overflow-x-auto"
-          role="tabpanel"
-          id={presetTab === "active" ? "panel-preset-active" : "panel-preset-inactive"}
-          aria-labelledby={presetTab === "active" ? "tab-preset-active" : "tab-preset-inactive"}
-        >
-          <table className="w-full min-w-[880px] table-fixed text-sm">
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[820px] text-sm">
             <thead className="app-table-thead text-left text-xs">
               <tr>
-                <th className="w-9 px-1.5 py-2.5">№</th>
-                <th className="w-[200px] max-w-[200px] px-2 py-2.5">Lavozim nomi</th>
-                <th
-                  className="w-[52px] px-1 py-2.5 text-center"
-                  title="Veb xodimlar kartasidagi «Lavozim» maydoni saqlangan shablon nomi bilan mos keladigan akkauntlar soni"
-                >
-                  Bog‘langan
+                <th className="px-3 py-2.5">Названия</th>
+                <th className="px-3 py-2.5">Должность</th>
+                <th className="px-3 py-2.5">Сортировка</th>
+                <th className="px-3 py-2.5">Код</th>
+                <th className="px-3 py-2.5">Комментарий</th>
+                <th className="px-3 py-2.5 text-center" title="Количество сотрудников">
+                  Связь
                 </th>
-                {mode === "active" ? (
-                  <>
-                    <th className="w-[128px] whitespace-nowrap px-2 py-2.5">Yaratilgan</th>
-                    <th className="w-[120px] px-2 py-2.5">Kim yaratgan</th>
-                  </>
-                ) : (
-                  <>
-                    <th className="w-[128px] whitespace-nowrap px-2 py-2.5">Nofaollashtirilgan</th>
-                    <th className="w-[120px] px-2 py-2.5">Kim nofaollashtirgan</th>
-                  </>
-                )}
-                <th
-                  className="w-11 px-1 py-2.5 text-center"
-                  title="Tarix"
-                >
-                  <span className="sr-only">Tarix</span>
-                  <HistoryIcon className="mx-auto size-3.5 opacity-70" aria-hidden />
-                </th>
-                <th className="w-[76px] px-1 py-2.5 text-center">Saqlash</th>
-                <th className="w-[132px] px-1 py-2.5 text-center">
-                  {mode === "active" ? (
-                    <span title="Nofaollashtirish">Nofaol</span>
-                  ) : (
-                    <span title="Faollashtirish">Faol qilish</span>
-                  )}
-                </th>
+                <th className="w-24 px-2 py-2.5 text-center">Действия</th>
               </tr>
             </thead>
             <tbody>
               {listQ.isLoading ? (
                 <tr>
-                  <td colSpan={colCount} className="px-4 py-10 text-center text-muted-foreground">
+                  <td colSpan={7} className="px-4 py-10 text-center text-muted-foreground">
                     Загрузка…
                   </td>
                 </tr>
               ) : subset.length === 0 ? (
                 <tr>
-                  <td colSpan={colCount} className="px-4 py-10 text-center text-muted-foreground">
+                  <td colSpan={7} className="px-4 py-10 text-center text-muted-foreground">
                     {emptyMsg}
                   </td>
                 </tr>
               ) : (
-                subset.map((r, i) => (
-                  <tr key={r.id} className="border-t border-border/50 transition-colors hover:bg-muted/25">
-                    <td className="px-1.5 py-2 tabular-nums text-muted-foreground">{i + 1}</td>
-                    <td className="w-[200px] max-w-[200px] px-2 py-2">
-                      <div>
-                        <Input
-                          className="h-9 w-full max-w-[184px]"
-                          value={drafts[r.id] ?? r.label}
-                          placeholder="Lavozim nomi"
-                          disabled={patchMut.isPending}
-                          onChange={(e) => {
-                            setPatchBanner(null);
-                            setPatchLabelErrByPresetId((prev) => {
-                              if (!prev[r.id]) return prev;
-                              const next = { ...prev };
-                              delete next[r.id];
-                              return next;
-                            });
-                            setDraft(r.id, e.target.value);
-                          }}
-                        />
-                        {patchLabelErrByPresetId[r.id] ? (
-                          <p className="mt-0.5 max-w-[184px] text-xs text-destructive">{patchLabelErrByPresetId[r.id]}</p>
-                        ) : null}
+                subset.map((r) => (
+                  <tr key={r.id} className="border-t border-border/60">
+                    <td className="px-3 py-2 font-medium">{r.label}</td>
+                    <td className="px-3 py-2 text-muted-foreground">
+                      {positionCatalogRoleLabel(r.role)}
+                    </td>
+                    <td className="px-3 py-2">{r.sort_order ?? "—"}</td>
+                    <td className="px-3 py-2">{r.code?.trim() || "—"}</td>
+                    <td className="max-w-[220px] truncate px-3 py-2 text-muted-foreground">
+                      {r.comment?.trim() || "—"}
+                    </td>
+                    <td className="px-3 py-2 text-center tabular-nums">{r.linked_operator_count}</td>
+                    <td className="px-2 py-2">
+                      <div className="flex items-center justify-center gap-1">
+                        <Button
+                          type="button"
+                          size="icon"
+                          variant="ghost"
+                          className="size-8 text-amber-600"
+                          title="Изменить"
+                          onClick={() => openEdit(r)}
+                        >
+                          <Pencil className="size-4" />
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          className="h-8 px-2 text-xs"
+                          disabled={toggleMut.isPending}
+                          onClick={() =>
+                            void toggleMut
+                              .mutateAsync({ id: r.id, is_active: !r.is_active })
+                              .catch((e) => setBanner(getUserFacingError(e, "Ошибка.")))
+                          }
+                        >
+                          {r.is_active ? "Выкл" : "Вкл"}
+                        </Button>
                       </div>
-                    </td>
-                    <td
-                      className="px-1 py-2 text-center align-middle tabular-nums text-sm font-medium text-foreground"
-                      title={
-                        dirtyById[r.id]
-                          ? "Hisob saqlangan lavozim nomi bo‘yicha; yangi nomni saqlagach yangilanadi"
-                          : "Veb xodimlar «Lavozim» maydoni shu nom bilan mos keladigan akkauntlar"
-                      }
-                    >
-                      {r.linked_operator_count ?? 0}
-                    </td>
-                    {mode === "active" ? (
-                      <>
-                        <td className="whitespace-nowrap px-2 py-2 text-xs text-muted-foreground">
-                          {formatDateTime(r.created_at)}
-                        </td>
-                        <td className="truncate px-2 py-2 text-xs" title={r.created_by_label ?? undefined}>
-                          {r.created_by_label ?? "—"}
-                        </td>
-                      </>
-                    ) : (
-                      <>
-                        <td className="whitespace-nowrap px-2 py-2 text-xs text-muted-foreground">
-                          {formatDateTime(r.deactivated_at)}
-                        </td>
-                        <td
-                          className="truncate px-2 py-2 text-xs"
-                          title={r.deactivated_by_label ?? undefined}
-                        >
-                          {r.deactivated_by_label ?? "—"}
-                        </td>
-                      </>
-                    )}
-                    <td className="px-1 py-2 text-center align-middle">
-                      <Button
-                        type="button"
-                        size="icon-sm"
-                        variant="ghost"
-                        className="size-8 text-muted-foreground hover:text-foreground"
-                        title="Tarix"
-                        onClick={() => setHistoryPresetId(r.id)}
-                      >
-                        <HistoryIcon className="size-4" />
-                        <span className="sr-only">Tarix</span>
-                      </Button>
-                    </td>
-                    <td className="px-1 py-2 text-center align-middle">
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="secondary"
-                        className="h-8 min-w-[4.5rem] px-2 text-xs"
-                        disabled={!dirtyById[r.id] || patchMut.isPending}
-                        onClick={() => {
-                          void (async () => {
-                            const t = (drafts[r.id] ?? r.label).trim();
-                            if (!t) return;
-                            setPatchBanner(null);
-                            setPatchLabelErrByPresetId((prev) => {
-                              const next = { ...prev };
-                              delete next[r.id];
-                              return next;
-                            });
-                            try {
-                              await patchMut.mutateAsync({ presetId: r.id, body: { label: t } });
-                              setPatchBanner(null);
-                            } catch (e: unknown) {
-                              if (isAxiosError(e)) {
-                                const flat = getZodFlattenFromApiErrorBody(e.response?.data);
-                                if (flat) {
-                                  const per = firstMessagePerField(flat);
-                                  const leaf = pickZodLeaf(per, "label");
-                                  const top = flat.formErrors.map((s) => s.trim()).find(Boolean);
-                                  const hint = firstValidationUserHint(flat);
-                                  const line = top ?? hint ?? Object.values(per).find((m) => m.trim() !== "");
-                                  if (leaf) {
-                                    setPatchLabelErrByPresetId((prev) => ({ ...prev, [r.id]: leaf }));
-                                  }
-                                  setPatchBanner(
-                                    line ? withApiSupportLine(line, e) : getUserFacingError(e, "Saqlashda xatolik.")
-                                  );
-                                  return;
-                                }
-                              }
-                              setPatchBanner(getUserFacingError(e, "Saqlashda xatolik."));
-                            }
-                          })();
-                        }}
-                      >
-                        Saqlash
-                      </Button>
-                    </td>
-                    <td className="px-1 py-2 text-center align-middle">
-                      {mode === "active" ? (
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="outline"
-                          className="h-8 w-full min-w-0 px-2 text-xs whitespace-normal leading-snug"
-                          disabled={patchMut.isPending}
-                          onClick={() => {
-                            void (async () => {
-                              setPatchBanner(null);
-                              setPatchLabelErrByPresetId({});
-                              try {
-                                await patchMut.mutateAsync({ presetId: r.id, body: { is_active: false } });
-                              } catch (e: unknown) {
-                                if (isAxiosError(e)) {
-                                  const flat = getZodFlattenFromApiErrorBody(e.response?.data);
-                                  if (flat) {
-                                    const per = firstMessagePerField(flat);
-                                    const top = flat.formErrors.map((s) => s.trim()).find(Boolean);
-                                    const hint = firstValidationUserHint(flat);
-                                    const line = top ?? hint ?? Object.values(per).find((m) => m.trim() !== "");
-                                    setPatchBanner(line ? withApiSupportLine(line, e) : getUserFacingError(e, "Xatolik."));
-                                    return;
-                                  }
-                                }
-                                setPatchBanner(getUserFacingError(e, "Xatolik."));
-                              }
-                            })();
-                          }}
-                        >
-                          Nofaollashtirish
-                        </Button>
-                      ) : (
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="outline"
-                          className="h-8 w-full min-w-0 px-2 text-xs"
-                          disabled={patchMut.isPending}
-                          onClick={() => {
-                            void (async () => {
-                              setPatchBanner(null);
-                              setPatchLabelErrByPresetId({});
-                              try {
-                                await patchMut.mutateAsync({ presetId: r.id, body: { is_active: true } });
-                              } catch (e: unknown) {
-                                if (isAxiosError(e)) {
-                                  const flat = getZodFlattenFromApiErrorBody(e.response?.data);
-                                  if (flat) {
-                                    const per = firstMessagePerField(flat);
-                                    const top = flat.formErrors.map((s) => s.trim()).find(Boolean);
-                                    const hint = firstValidationUserHint(flat);
-                                    const line = top ?? hint ?? Object.values(per).find((m) => m.trim() !== "");
-                                    setPatchBanner(line ? withApiSupportLine(line, e) : getUserFacingError(e, "Xatolik."));
-                                    return;
-                                  }
-                                }
-                                setPatchBanner(getUserFacingError(e, "Xatolik."));
-                              }
-                            })();
-                          }}
-                        >
-                          Faollashtirish
-                        </Button>
-                      )}
                     </td>
                   </tr>
                 ))
@@ -590,110 +464,10 @@ export function WebStaffPositionPresetsWorkspace({ tenantSlug }: Props) {
             </tbody>
           </table>
         </div>
+        <div className="border-t border-border/60 px-3 py-2 text-xs text-muted-foreground">
+          Показано {subset.length ? 1 : 0} - {subset.length} / {subset.length}
+        </div>
       </div>
-
-      <p className="text-xs text-muted-foreground">
-        <span className="font-medium text-foreground">Qayerda ishlatiladi:</span> faol shablonlar{" "}
-        <span className="whitespace-nowrap">«Veb xodimlar»</span> jadvalidagi lavozim filtri hamda xodim yaratish va
-        tahrirlash oynalaridagi kiritish maydonining takliflari (datalist) orqali beriladi — backend bularni bitta
-        ro‘yxatda birlashtiradi (<code className="text-foreground">filter-options</code> →{" "}
-        <code className="text-foreground">positions</code>). «Bog‘langan» ustuni — veb xodimlar profilidagi lavozim
-        matni shu shablon nomi bilan to‘liq mos (trim) keladigan akkauntlar soni. Nofaol shablonlar tanlovlarda
-        chiqmaydi.
-        «Nofaollashtirish» yozuvni o‘chirmaydi; JWT <code className="text-foreground">operator</code> rolini
-        o‘zgartirmaydi.
-      </p>
-
-      <Dialog
-        open={historyPresetId != null}
-        onOpenChange={(open) => {
-          if (!open) setHistoryPresetId(null);
-        }}
-      >
-        <DialogContent className="gap-0 overflow-hidden p-0 sm:max-w-[420px]">
-          <div className="flex items-start gap-3 border-b border-border/70 bg-gradient-to-b from-muted/50 to-transparent px-4 py-3.5">
-            <div
-              className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary/12 text-primary shadow-inner ring-1 ring-primary/15"
-              aria-hidden
-            >
-              <HistoryIcon className="size-[18px]" strokeWidth={2} />
-            </div>
-            <div className="min-w-0 flex-1 space-y-1">
-              <DialogTitle className="text-left text-base font-semibold leading-tight">
-                Lavozim tarixi
-              </DialogTitle>
-              <DialogDescription className="text-left text-xs leading-snug text-muted-foreground">
-                {historyTitleRow ? (
-                  <>
-                    <span className="font-medium text-foreground">{historyTitleRow.label}</span>
-                    <span className="text-muted-foreground"> — audit bo‘yicha o‘zgarishlar zanjiri</span>
-                  </>
-                ) : (
-                  "Загрузка…"
-                )}
-              </DialogDescription>
-            </div>
-          </div>
-
-          <div className="max-h-[min(52vh,300px)] overflow-y-auto px-4 py-4">
-            {historyQ.isLoading ? (
-              <div className="flex flex-col items-center justify-center gap-2 py-10 text-muted-foreground">
-                <Loader2Icon className="size-8 animate-spin opacity-50" aria-hidden />
-                <p className="text-xs">Загрузка…</p>
-              </div>
-            ) : historyQ.isError ? (
-              <div className="rounded-lg border border-destructive/25 bg-destructive/5 px-3 py-3 text-center text-xs text-destructive">
-                Tarixni yuklab bo‘lmadi. Internet yoki serverni tekshirib, yana «Tarix» ni bosing.
-              </div>
-            ) : !historyQ.data?.data.length ? (
-              <div className="flex flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-border/80 bg-muted/15 px-4 py-10 text-center">
-                <ScrollTextIcon className="size-11 text-muted-foreground/35" strokeWidth={1.25} aria-hidden />
-                <div className="space-y-1">
-                  <p className="text-sm font-medium text-foreground">Hozircha yozuv yo‘q</p>
-                  <p className="mx-auto max-w-[280px] text-xs leading-relaxed text-muted-foreground">
-                    Yangi shablon yoki audit yoqilguncha bo‘sh. Keyingi yaratish, nom o‘zgartirish va
-                    nofaollashtirish shu yerda paydo bo‘ladi.
-                  </p>
-                </div>
-              </div>
-            ) : (
-              <ul className="relative space-y-0 text-sm before:absolute before:top-2 before:bottom-2 before:left-[6px] before:w-px before:bg-border/90">
-                {[...historyQ.data.data].reverse().map((ev) => {
-                  const extra = payloadSummary(ev.action, ev.payload);
-                  return (
-                    <li key={ev.id} className="relative pb-5 pl-6 last:pb-0">
-                      <span
-                        className="absolute top-1.5 left-0 size-2 rounded-full bg-primary shadow-[0_0_0_3px_var(--background)] ring-1 ring-primary/30"
-                        aria-hidden
-                      />
-                      <div className="font-medium leading-snug text-foreground">{actionLabelUz(ev.action)}</div>
-                      <div className="mt-1 text-xs text-muted-foreground">
-                        {formatDateTime(ev.created_at)}
-                        {ev.actor_login ? (
-                          <span className="text-foreground/80"> · {ev.actor_login}</span>
-                        ) : ev.actor_user_id ? (
-                          <span> · ID {ev.actor_user_id}</span>
-                        ) : null}
-                      </div>
-                      {extra ? (
-                        <p className="mt-1.5 rounded-md bg-muted/50 px-2 py-1.5 text-[11px] leading-relaxed text-muted-foreground">
-                          {extra}
-                        </p>
-                      ) : null}
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
-          </div>
-
-          <DialogFooter className="border-t border-border/70 bg-muted/25 px-4 py-3 sm:justify-end">
-            <Button type="button" variant="secondary" size="sm" onClick={() => setHistoryPresetId(null)}>
-              Yopish
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

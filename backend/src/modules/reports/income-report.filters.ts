@@ -1,11 +1,17 @@
 import { prisma } from "../../config/database";
-import { buildScopedAgentWhereForActor } from "../access/access-agent-scope";
+import {
+  cashDeskWhereForFilterOptions,
+  filterTerritoryRowsByTerms,
+  pruneTerritoryNodesByTerms,
+  resolveFilterOptionsScope,
+  staffWhereForFilterOptions
+} from "../access/access-filter-options-scope";
 import {
   resolveCurrencyEntries,
   resolvePaymentMethodEntries,
   resolvePaymentMethodRefToLabel
 } from "../tenant-settings/finance-refs";
-import { mergeTerritoryFilterOptions } from "./territory-nodes";
+import { mergeTerritoryFilterOptions, parseTerritoryNodes } from "./territory-nodes";
 import {
   buildIncomeCatalogColumns,
   INCOME_OTHER_PAYMENT_KEY,
@@ -16,6 +22,7 @@ export async function getIncomeReportFilterOptions(
   tenantId: number,
   actor?: { userId: number | null; role: string }
 ) {
+  const scope = await resolveFilterOptionsScope(tenantId, actor);
   const tenant = await prisma.tenant.findUnique({
     where: { id: tenantId },
     select: { settings: true }
@@ -28,41 +35,52 @@ export async function getIncomeReportFilterOptions(
   const paymentEntries = resolvePaymentMethodEntries(refs, currencyEntries);
   const catalogColumns = buildIncomeCatalogColumns(paymentEntries);
 
-  const whereAgent = await buildScopedAgentWhereForActor(tenantId, actor);
-  const [agents, expeditors, cashDesks, categories, paymentTypes, tradeDirections, territoryRows] = await Promise.all([
-    prisma.user.findMany({
-      where: whereAgent,
-      select: { id: true, name: true },
-      orderBy: { name: "asc" }
-    }),
-    prisma.user.findMany({
-      where: { tenant_id: tenantId, is_active: true, role: { in: ["expeditor", "Expeditor", "EXPEDITOR"] } },
-      select: { id: true, name: true },
-      orderBy: { name: "asc" }
-    }),
-    prisma.cashDesk.findMany({ where: { tenant_id: tenantId, is_active: true }, select: { id: true, name: true }, orderBy: { name: "asc" } }),
-    prisma.client.findMany({ where: { tenant_id: tenantId, category: { not: null } }, select: { category: true }, distinct: ["category"] }),
-    prisma.payment.findMany({
-      where: { tenant_id: tenantId, deleted_at: null, entry_kind: "payment", workflow_status: "confirmed" },
-      select: { payment_type: true },
-      distinct: ["payment_type"]
-    }),
-    prisma.user.findMany({
-      where: {
-        tenant_id: tenantId,
-        is_active: true,
-        trade_direction: { not: null },
-        role: { in: ["agent", "Agent", "AGENT"] }
-      },
-      select: { trade_direction: true },
-      distinct: ["trade_direction"]
-    }),
-    prisma.$queryRaw<Array<{ t1: string | null; t2: string | null; t3: string | null }>>`
+  const [agents, expeditors, cashDesks, categories, paymentTypes, tradeDirections, territoryRowsRaw] =
+    await Promise.all([
+      prisma.user.findMany({
+        where: staffWhereForFilterOptions(tenantId, scope, "agent"),
+        select: { id: true, name: true },
+        orderBy: { name: "asc" }
+      }),
+      prisma.user.findMany({
+        where: staffWhereForFilterOptions(tenantId, scope, ["expeditor", "Expeditor", "EXPEDITOR"]),
+        select: { id: true, name: true },
+        orderBy: { name: "asc" }
+      }),
+      prisma.cashDesk.findMany({
+        where: cashDeskWhereForFilterOptions(tenantId, scope),
+        select: { id: true, name: true },
+        orderBy: { name: "asc" }
+      }),
+      prisma.client.findMany({
+        where: { tenant_id: tenantId, category: { not: null } },
+        select: { category: true },
+        distinct: ["category"]
+      }),
+      prisma.payment.findMany({
+        where: {
+          tenant_id: tenantId,
+          deleted_at: null,
+          entry_kind: "payment",
+          workflow_status: "confirmed"
+        },
+        select: { payment_type: true },
+        distinct: ["payment_type"]
+      }),
+      prisma.user.findMany({
+        where: {
+          ...staffWhereForFilterOptions(tenantId, scope, ["agent", "Agent", "AGENT"]),
+          trade_direction: { not: null }
+        },
+        select: { trade_direction: true },
+        distinct: ["trade_direction"]
+      }),
+      prisma.$queryRaw<Array<{ t1: string | null; t2: string | null; t3: string | null }>>`
       SELECT DISTINCT c.zone AS t1, c.region AS t2, c.city AS t3
       FROM clients c
       WHERE c.tenant_id = ${tenantId}
     `
-  ]);
+    ]);
 
   const paymentMethods: Array<{ value: string; label: string }> = catalogColumns.map((c) => ({
     value: c.key,
@@ -71,7 +89,10 @@ export async function getIncomeReportFilterOptions(
   const seenValues = new Set(paymentMethods.map((m) => m.value));
   const seenBuckets = new Set(paymentMethods.map((m) => m.value));
 
-  for (const raw of paymentTypes.map((x) => x.payment_type).filter(Boolean).sort()) {
+  for (const raw of paymentTypes
+    .map((x) => x.payment_type)
+    .filter(Boolean)
+    .sort()) {
     if (seenValues.has(raw)) continue;
     const bucket = resolveIncomePaymentBucketKey(raw, paymentEntries);
     if (bucket !== INCOME_OTHER_PAYMENT_KEY && seenBuckets.has(bucket)) continue;
@@ -81,15 +102,32 @@ export async function getIncomeReportFilterOptions(
     if (bucket !== INCOME_OTHER_PAYMENT_KEY) seenBuckets.add(bucket);
   }
 
-  const territoryOpts = mergeTerritoryFilterOptions(refs, territoryRows);
+  const territoryRows = filterTerritoryRowsByTerms(territoryRowsRaw, scope.territoryTerms);
+  const refsForTerritory =
+    scope.territoryTerms === null
+      ? refs
+      : {
+          ...refs,
+          territory_nodes: pruneTerritoryNodesByTerms(
+            parseTerritoryNodes(refs.territory_nodes),
+            scope.territoryTerms
+          )
+        };
+  const territoryOpts = mergeTerritoryFilterOptions(refsForTerritory, territoryRows);
   return {
     agents,
     expeditors,
     cashDesks,
-    categories: categories.map((x) => x.category).filter((x): x is string => Boolean(x)).sort(),
+    categories: categories
+      .map((x) => x.category)
+      .filter((x): x is string => Boolean(x))
+      .sort(),
     paymentMethods,
     paymentTypes: paymentMethods.map((m) => m.value),
-    tradeDirections: tradeDirections.map((x) => x.trade_direction).filter((x): x is string => Boolean(x)).sort(),
+    tradeDirections: tradeDirections
+      .map((x) => x.trade_direction)
+      .filter((x): x is string => Boolean(x))
+      .sort(),
     territories1: territoryOpts.territory_1,
     territories2: territoryOpts.territory_2,
     territories3: territoryOpts.territory_3,

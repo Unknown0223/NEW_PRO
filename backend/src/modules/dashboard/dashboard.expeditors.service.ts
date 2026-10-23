@@ -1,5 +1,13 @@
-import { Prisma } from "@prisma/client";
+﻿import { Prisma } from "@prisma/client";
 import { prisma } from "../../config/database";
+import {
+  listBranches,
+  listExpeditorOptions,
+  listRoleOptions,
+  loadExpeditorGroup,
+  loadStatusBreakdown,
+  rollupExpeditors
+} from "./dashboard.expeditors.groups";
 
 /** Pending tasdiqlanmagan to'lovlar hisobga olinmaydi (vedoma bilan bir xil). */
 const PAYMENT_NOT_PENDING = Prisma.sql`COALESCE(p.workflow_status, 'confirmed') <> 'pending_confirmation'`;
@@ -10,6 +18,9 @@ export type ExpeditorsDashboardFilters = {
   /** YYYY-MM-DD */
   date_to: string;
   expeditor_ids: number[];
+  agent_ids: number[];
+  supervisor_ids: number[];
+  branches: string[];
 };
 
 export type ExpeditorDashboardRow = {
@@ -40,6 +51,32 @@ export type ExpeditorsDashboardResponse = {
     debt: string;
   };
   expeditors: Array<{ id: number; name: string; code: string | null }>;
+  agents: Array<{ id: number; name: string; code: string | null }>;
+  supervisors: Array<{ id: number; name: string; code: string | null }>;
+  branches: string[];
+  by_filial: ExpeditorGroupRow[];
+  by_supervisor: ExpeditorGroupRow[];
+  by_agent: ExpeditorGroupRow[];
+  status_by: Record<"filial" | "supervisor" | "agent" | "expeditor", ExpeditorStatusRow[]>;
+};
+
+export type ExpeditorStatusRow = {
+  name: string;
+  code: string | null;
+  delivered_orders: number;
+  delivered_sum: string;
+  by_status: Record<string, string>;
+  by_status_days: Record<string, number>;
+};
+
+export type ExpeditorGroupRow = {
+  name: string;
+  code: string | null;
+  delivered_orders: number;
+  delivered_sum: string;
+  returned_sum: string;
+  payments_collected: string;
+  debt: string;
 };
 
 function ymd(d: Date): string {
@@ -80,8 +117,36 @@ export function parseExpeditorsDashboardFilters(
   return {
     date_from: from,
     date_to: to,
-    expeditor_ids: csvToIntArray(q.expeditor_ids)
+    expeditor_ids: csvToIntArray(q.expeditor_ids),
+    agent_ids: csvToIntArray(q.agent_ids),
+    supervisor_ids: csvToIntArray(q.supervisor_ids),
+    branches: (q.branches ?? "")
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean)
+      .slice(0, 40)
   };
+}
+
+function orderScope(f: ExpeditorsDashboardFilters): Prisma.Sql {
+  const parts: Prisma.Sql[] = [];
+  if (f.expeditor_ids.length) parts.push(Prisma.sql`AND o.expeditor_user_id IN (${Prisma.join(f.expeditor_ids)})`);
+  if (f.agent_ids.length) parts.push(Prisma.sql`AND o.agent_id IN (${Prisma.join(f.agent_ids)})`);
+  if (f.branches.length) {
+    parts.push(Prisma.sql`AND EXISTS (
+      SELECT 1 FROM users bx
+      WHERE bx.id = o.expeditor_user_id AND bx.tenant_id = o.tenant_id
+        AND bx.branch IN (${Prisma.join(f.branches)})
+    )`);
+  }
+  if (f.supervisor_ids.length) {
+    parts.push(Prisma.sql`AND EXISTS (
+      SELECT 1 FROM users sx
+      WHERE sx.id = o.expeditor_user_id AND sx.tenant_id = o.tenant_id
+        AND sx.supervisor_user_id IN (${Prisma.join(f.supervisor_ids)})
+    )`);
+  }
+  return parts.length ? Prisma.join(parts, " ") : Prisma.empty;
 }
 
 function dec(v: Prisma.Decimal | null | undefined): string {
@@ -113,14 +178,13 @@ export async function getExpeditorsDashboard(
 ): Promise<ExpeditorsDashboardResponse> {
   const fromUtc = new Date(`${f.date_from}T00:00:00.000Z`);
   const toUtc = new Date(`${f.date_to}T23:59:59.999Z`);
-  const expFilter =
-    f.expeditor_ids.length > 0
-      ? Prisma.sql`AND o.expeditor_user_id IN (${Prisma.join(f.expeditor_ids)})`
-      : Prisma.empty;
-  const userFilter =
-    f.expeditor_ids.length > 0
-      ? Prisma.sql`AND u.id IN (${Prisma.join(f.expeditor_ids)})`
-      : Prisma.empty;
+  const expFilter = orderScope(f);
+  const userParts = [
+    f.expeditor_ids.length ? Prisma.sql`AND u.id IN (${Prisma.join(f.expeditor_ids)})` : null,
+    f.branches.length ? Prisma.sql`AND u.branch IN (${Prisma.join(f.branches)})` : null,
+    f.supervisor_ids.length ? Prisma.sql`AND u.supervisor_user_id IN (${Prisma.join(f.supervisor_ids)})` : null
+  ].filter((p): p is Prisma.Sql => p != null);
+  const userFilter = userParts.length ? Prisma.join(userParts, " ") : Prisma.empty;
 
   const rows = await prisma.$queryRaw<RawRow[]>`
     WITH ord AS (
@@ -238,12 +302,75 @@ export async function getExpeditorsDashboard(
     }
   );
 
+  const unassigned = await prisma.$queryRaw<
+    Array<{ delivered_orders: bigint | number; delivered_sum: Prisma.Decimal; returned_orders: bigint | number; returned_sum: Prisma.Decimal; debt: Prisma.Decimal }>
+  >`
+    SELECT
+      COUNT(*) FILTER (WHERE o.status = 'delivered') AS delivered_orders,
+      COALESCE(SUM(o.total_sum) FILTER (WHERE o.status = 'delivered'), 0)::numeric(20,2) AS delivered_sum,
+      COUNT(*) FILTER (WHERE o.status = 'returned') AS returned_orders,
+      COALESCE(SUM(o.total_sum) FILTER (WHERE o.status = 'returned'), 0)::numeric(20,2) AS returned_sum,
+      COALESCE(SUM(GREATEST(o.total_sum, 0)) FILTER (WHERE o.status = 'delivered'), 0)::numeric(20,2) AS debt
+    FROM orders o
+    WHERE o.tenant_id = ${tenantId}
+      AND o.expeditor_user_id IS NULL
+      AND o.order_type = 'order'
+      AND o.created_at >= ${fromUtc} AND o.created_at <= ${toUtc}
+  `;
+  const bare = unassigned[0];
+  if (bare && (num(bare.delivered_orders) > 0 || num(bare.returned_orders) > 0)) {
+    mapped.push({
+      expeditor_user_id: 0,
+      expeditor_name: "Без доставщика",
+      expeditor_code: null,
+      total_orders: num(bare.delivered_orders) + num(bare.returned_orders),
+      delivered_orders: num(bare.delivered_orders),
+      delivered_sum: dec(bare.delivered_sum),
+      returned_orders: num(bare.returned_orders),
+      returned_sum: dec(bare.returned_sum),
+      payments_collected: "0.00",
+      debt: dec(bare.debt)
+    });
+    totals.total_orders += num(bare.delivered_orders) + num(bare.returned_orders);
+    totals.delivered_orders += num(bare.delivered_orders);
+    totals.delivered_sum = totals.delivered_sum.add(bare.delivered_sum);
+    totals.returned_orders += num(bare.returned_orders);
+    totals.returned_sum = totals.returned_sum.add(bare.returned_sum);
+    totals.debt = totals.debt.add(bare.debt);
+  }
+
+  const metas = mapped.filter((r) => r.expeditor_user_id > 0).length
+    ? await prisma.user.findMany({
+        where: { id: { in: mapped.filter((r) => r.expeditor_user_id > 0).map((r) => r.expeditor_user_id) } },
+        select: {
+          id: true,
+          branch: true,
+          supervisor: { select: { name: true, code: true } }
+        }
+      })
+    : [];
+  const metaById = new Map(metas.map((m) => [m.id, m]));
+  const by_filial = rollupExpeditors(mapped, (r) => {
+    const branch = metaById.get(r.expeditor_user_id)?.branch?.trim() || "Без филиала";
+    return { name: branch, code: null };
+  });
+  const by_supervisor = rollupExpeditors(mapped, (r) => {
+    const s = metaById.get(r.expeditor_user_id)?.supervisor;
+    return { name: s?.name?.trim() || "Без СВР", code: s?.code ?? null };
+  });
+  const by_agent = await loadExpeditorGroup(tenantId, fromUtc, toUtc, expFilter, "agent");
+  const status_by = await loadStatusBreakdown(tenantId, fromUtc, toUtc, expFilter);
+
   return {
     date_from: f.date_from,
     date_to: f.date_to,
     rows: mapped,
+    by_filial,
+    by_supervisor,
+    by_agent,
+    status_by,
     totals: {
-      expeditors_count: mapped.length,
+      expeditors_count: mapped.filter((r) => r.expeditor_user_id > 0).length,
       total_orders: totals.total_orders,
       delivered_orders: totals.delivered_orders,
       delivered_sum: totals.delivered_sum.toFixed(2),
@@ -252,18 +379,10 @@ export async function getExpeditorsDashboard(
       payments_collected: totals.payments_collected.toFixed(2),
       debt: totals.debt.toFixed(2)
     },
-    expeditors: await listExpeditorOptions(tenantId)
+    expeditors: await listExpeditorOptions(tenantId),
+    agents: await listRoleOptions(tenantId, "agent"),
+    supervisors: await listRoleOptions(tenantId, "supervisor"),
+    branches: await listBranches(tenantId)
   };
 }
 
-/** Filtr uchun ekspeditorlar ro'yxati (User role='expeditor'). */
-export async function listExpeditorOptions(
-  tenantId: number
-): Promise<Array<{ id: number; name: string; code: string | null }>> {
-  const rows = await prisma.user.findMany({
-    where: { tenant_id: tenantId, role: "expeditor" },
-    select: { id: true, name: true, code: true },
-    orderBy: { name: "asc" }
-  });
-  return rows.map((r) => ({ id: r.id, name: r.name, code: r.code }));
-}

@@ -275,7 +275,7 @@ class _NotificationsSheetState extends ConsumerState<_NotificationsSheet> {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  '${formatMoneySpaced(amount)} so\'m'
+                  '${formatMoneySpaced(amount)} сум'
                   '${orderNumber != null ? ' • #$orderNumber' : ''}',
                   style: AppTypography.bodySmall
                       .copyWith(color: AppColors.textSecondary),

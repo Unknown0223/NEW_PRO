@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { Suspense } from "react";
 import { DailyKpiWorkspace } from "@/components/plans/daily-kpi/daily-kpi-workspace";
+import { NAV_PERM } from "@/components/dashboard/nav-permission-keys";
 import { useAuthStore, useAuthStoreHydrated } from "@/lib/auth-store";
 import { usePermissions } from "@/lib/use-permissions";
 
@@ -22,7 +23,7 @@ function DailyKpiPageInner() {
       </p>
     );
   }
-  if (!perms.isLoading && !perms.has("plans.ustanovka_planov.view")) {
+  if (!perms.isLoading && !NAV_PERM.dailyKpi.some((k) => perms.has(k))) {
     return <p className="p-6 text-sm text-muted-foreground">Нет доступа к этому разделу.</p>;
   }
 

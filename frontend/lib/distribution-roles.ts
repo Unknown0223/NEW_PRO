@@ -3,13 +3,13 @@
  * (Ruxsat matritsasi keyin; bu yerda faqat ko‘rsatish / forma.)
  */
 export const WEB_PANEL_ACCESS_ROLE_OPTIONS = [
-  { value: "operator", label: "Operator" },
-  { value: "director", label: "Direktor" },
-  { value: "sales_director", label: "Savdo direktori" },
-  { value: "manager", label: "Menejer" },
-  { value: "regional_manager", label: "Regional menejer" },
-  { value: "accountant", label: "Buxgalter" },
-  { value: "warehouse_manager", label: "Ombor menejeri" }
+  { value: "operator", label: "Оператор" },
+  { value: "director", label: "Директор" },
+  { value: "sales_director", label: "Коммерческий директор" },
+  { value: "manager", label: "Менеджер" },
+  { value: "regional_manager", label: "Региональный менеджер" },
+  { value: "accountant", label: "Бухгалтер" },
+  { value: "warehouse_manager", label: "Заведующий складом" }
 ] as const;
 
 export const WEB_ACCESS_ROLE_LABELS: Record<string, string> = Object.fromEntries(

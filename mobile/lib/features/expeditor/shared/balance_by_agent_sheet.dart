@@ -257,7 +257,7 @@ class _BalanceByAgentSheetState extends ConsumerState<BalanceByAgentSheet> {
                           style: AppTypography.caption
                               .copyWith(color: AppColors.textSecondary),),
                     ),
-                    Text("${formatMoneySpaced(mBal)} So'm",
+                    Text('${formatMoneySpaced(mBal)} сум',
                         style: TextStyle(
                             fontSize: 12,
                             fontWeight: FontWeight.w600,

@@ -7,7 +7,9 @@ import {
 } from "../../lib/document-edit-lock.http";
 import { assertDocWritableById } from "../../lib/document-edit-lock.request";
 import { ensureTenantContext } from "../../lib/tenant-context";
+import { ensureAnyPermission } from "../access/ensure-any-permission";
 import { getAccessUser, jwtAccessVerify } from "../auth/auth.prehandlers";
+import { prisma } from "../../config/database";
 import {
   requireRolesOrSkladchikEntitlement
 } from "../staff/skladchik-access.prehandler";
@@ -52,6 +54,14 @@ function replyWarehouseTransferError(reply: FastifyReply, request: FastifyReques
     void sendApiError(reply, request, 404, "NotFound");
     return true;
   }
+  if (msg === "WAREHOUSE_NO_BRANCH") {
+    void sendApiError(reply, request, 400, "WarehouseNoBranch", "Склад не привязан к филиалу");
+    return true;
+  }
+  if (msg === "SAME_BRANCH") {
+    void sendApiError(reply, request, 400, "SameBranch", "Склады должны быть в разных филиалах");
+    return true;
+  }
   if (msg === "SAME_WAREHOUSE" || msg === "BAD_WAREHOUSE") {
     void sendApiError(reply, request, 400, msg === "SAME_WAREHOUSE" ? "SameWarehouse" : "BadWarehouse");
     return true;
@@ -88,6 +98,7 @@ export async function registerWarehouseTransferRoutes(app: FastifyInstance) {
       limit: q.limit ? parseInt(q.limit) : 20,
       source_warehouse_id: q.sourceWarehouseId ? parseInt(q.sourceWarehouseId) : undefined,
       destination_warehouse_id: q.destinationWarehouseId ? parseInt(q.destinationWarehouseId) : undefined,
+      kind: q.kind === "branch" || q.kind === "warehouse" ? q.kind : undefined,
     });
     return reply.send(data);
   });
@@ -116,9 +127,16 @@ export async function registerWarehouseTransferRoutes(app: FastifyInstance) {
 
   app.post("/api/:slug/transfers", { preHandler: preWrite }, async (request: FastifyRequest, reply: FastifyReply) => {
     if (!ensureTenantContext(request, reply)) return;
-    const body = request.body as any;
+    const body = request.body as { kind?: string };
+    const branchMove = body?.kind === "branch";
+    const allowed = await ensureAnyPermission(
+      request,
+      reply,
+      branchMove ? ["warehouse.peremeshchenie_filial.create"] : ["warehouse.peremeshchenie.create"]
+    );
+    if (!allowed) return;
     try {
-      const data = await createTransfer(request.tenant!.id, body);
+      const data = await createTransfer(request.tenant!.id, request.body as any);
       return reply.status(201).send(data);
     } catch (e) {
       if (replyWarehouseTransferError(reply, request, e)) return;
@@ -140,9 +158,23 @@ export async function registerWarehouseTransferRoutes(app: FastifyInstance) {
     }
   });
 
-  app.post("/api/:slug/transfers/:id/start", { preHandler: preWrite }, async (request: FastifyRequest, reply: FastifyReply) => {
+  async function transferKind(tenantId: number, id: number): Promise<string | null> {
+  const rows = await prisma.$queryRaw<{ kind: string }[]>`
+    SELECT kind FROM warehouse_transfers WHERE tenant_id = ${tenantId} AND id = ${id}
+  `;
+  return rows[0]?.kind ?? null;
+}
+
+app.post("/api/:slug/transfers/:id/start", { preHandler: preWrite }, async (request: FastifyRequest, reply: FastifyReply) => {
     if (!ensureTenantContext(request, reply)) return;
     const { id } = (request.params as Record<string, string>);
+    const kind = await transferKind(request.tenant!.id, parseInt(id, 10));
+    const allowed = await ensureAnyPermission(
+      request,
+      reply,
+      kind === "branch" ? ["warehouse.peremeshchenie_filial.status"] : ["warehouse.peremeshchenie.transfer"]
+    );
+    if (!allowed) return;
     try {
       await assertDocWritableById(request, "stock", parseInt(id), "transfer");
       await startTransfer(request.tenant!.id, parseInt(id));
@@ -156,6 +188,13 @@ export async function registerWarehouseTransferRoutes(app: FastifyInstance) {
   app.post("/api/:slug/transfers/:id/receive", { preHandler: preWrite }, async (request: FastifyRequest, reply: FastifyReply) => {
     if (!ensureTenantContext(request, reply)) return;
     const { id } = (request.params as Record<string, string>);
+    const kind = await transferKind(request.tenant!.id, parseInt(id, 10));
+    const allowed = await ensureAnyPermission(
+      request,
+      reply,
+      kind === "branch" ? ["warehouse.peremeshchenie_filial.transfer"] : ["warehouse.peremeshchenie.transfer"]
+    );
+    if (!allowed) return;
     const body = request.body as any;
     const jwtUser = getAccessUser(request);
     try {

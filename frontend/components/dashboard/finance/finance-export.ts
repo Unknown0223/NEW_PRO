@@ -33,7 +33,7 @@ export async function exportFinanceAll(data: FinanceDashboardSnapshot, prefix: s
 
   const sheets: Array<{ name: string; rows: Array<Array<string | number>> }> = [
     {
-      name: "Summary",
+      name: "Сводка",
       rows: [
         ["Показатель", "Значение"],
         ["Продажи", data.summary.total_sales_sum],
@@ -45,7 +45,7 @@ export async function exportFinanceAll(data: FinanceDashboardSnapshot, prefix: s
       ]
     },
     {
-      name: "Categories",
+      name: "Категории",
       rows: [
         catCols.map((c) => c.label),
         ...data.category_analytics.map((row) =>
@@ -54,7 +54,7 @@ export async function exportFinanceAll(data: FinanceDashboardSnapshot, prefix: s
       ]
     },
     {
-      name: "Territories",
+      name: "Территории",
       rows: [
         terrCols.map((c) => c.label),
         ...data.territory_debts.map((row) =>
@@ -63,7 +63,7 @@ export async function exportFinanceAll(data: FinanceDashboardSnapshot, prefix: s
       ]
     },
     {
-      name: "Clients",
+      name: "Клиенты",
       rows: [
         ["Клиент", "Агент", "Супервайзер", "Баланс", "Долг доставки", "Эффективный"],
         ...data.clients_debt_list.map((row) => [

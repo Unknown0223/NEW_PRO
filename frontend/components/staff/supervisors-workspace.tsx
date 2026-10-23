@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
+import { useStaffCrudPermissions } from "@/lib/use-staff-crud-permissions";
 import { STALE } from "@/lib/query-stale";
 import { activeBranchNamesFromProfile } from "@/lib/branch-options";
 import { Button } from "@/components/ui/button";
@@ -17,15 +18,14 @@ import { downloadXlsxSheet } from "@/lib/download-xlsx";
 import { TableColumnSettingsDialog } from "@/components/data-table/table-column-settings-dialog";
 import { useUserTablePrefs } from "@/hooks/use-user-table-prefs";
 import { DEFAULT_TABLE_PAGE_SIZES } from "@/lib/table-page-sizes";
-import { StaffActiveSessionsDialog } from "@/components/staff/staff-active-sessions-dialog";
-import { MonitorSmartphone, Pencil, Settings2, UserMinus } from "lucide-react";
-import { AgentConfigurationsDialog } from "@/components/staff/agent-configurations-dialog";
+import { Pencil, KeyRound, UserMinus } from "lucide-react";
 import { SupervisorFormModal } from "@/components/staff/supervisor-form-modal";
+import { StaffFloatingToast, useStaffFloatingToast } from "@/components/staff/staff-floating-toast";
 import { messageFromStaffCreateError, messageFromSupervisorPatchError } from "@/lib/staff-api-errors";
 import { AgentIconButton, AgentTemplateConfirmDialog } from "@/components/staff/agent-workspace-template-ui";
 import { StaffBulkFloatingBar } from "@/components/staff/staff-bulk-floating-bar";
+import { StaffPasswordChangeDialog } from "@/components/staff/staff-password-change-dialog";
 import {
-  StaffFilterSelect,
   StaffWorkspaceFilterPanel,
   StaffWorkspaceHeader,
   StaffWorkspaceLayout,
@@ -34,18 +34,14 @@ import {
 import { StaffImportDialog } from "@/components/staff/staff-import-dialog";
 import { useStaffExcelImport } from "@/components/staff/use-staff-excel-import";
 import { useStaffKomandaBulk } from "@/hooks/use-staff-komanda-bulk";
+import { useStaffFilterVisible } from "@/hooks/use-staff-filter-visible";
 import { formatPersonDisplayName } from "@/lib/person-display";
 import {
-  StaffKomandaActiveSessionsCell,
   StaffKomandaApkCell,
-  StaffKomandaAppAccessToggle,
   StaffKomandaBranchCell,
-  StaffKomandaCodeCell,
   StaffKomandaFioCell,
   StaffKomandaLoginCell,
-  StaffKomandaMaxSessionsCell,
-  StaffKomandaPinflCell,
-  StaffKomandaPositionCell
+  StaffKomandaPinflCell
 } from "@/components/staff/staff-komanda-table-cells";
 
 export type SuperviseeRow = {
@@ -74,6 +70,7 @@ export type SupervisorRow = {
   max_sessions: number;
   login: string;
   is_active: boolean;
+  filter_visible?: boolean;
   supervisees: SuperviseeRow[];
   phone: string | null;
   email: string | null;
@@ -84,6 +81,9 @@ export type SupervisorRow = {
     product_rules?: unknown;
     mobile_config?: unknown;
   };
+  work_slot_id?: number | null;
+  work_slot_code?: string | null;
+  has_face_reference?: boolean;
 };
 
 type TenantProfile = {
@@ -101,30 +101,21 @@ type TenantProfile = {
 const COLS = [
   "Ф.И.О",
   "Агент",
-  "Код",
   "Авторизоваться",
   "ПИНФЛ",
   "Филиал",
-  "Должность",
-  "Версия APK",
-  "Доступ к приложение",
-  "Количество активных сессий",
-  "Максимальное количество сессий"
+  "Версия APK"
 ] as const;
 
-const SUPERVISOR_TABLE_ID = "staff.supervisors.v1";
+/** v2: код / должность / сессии / app_access olib tashlandi — Рабочее место */
+const SUPERVISOR_TABLE_ID = "staff.supervisors.v2";
 const SUPERVISOR_COLUMN_IDS = [
   "fio",
   "supervisees",
-  "code",
   "login",
   "pinfl",
   "branch",
-  "position",
-  "apk_version",
-  "app_access",
-  "active_sessions",
-  "max_sessions"
+  "apk_version"
 ] as const;
 const SUPERVISOR_COLUMNS = SUPERVISOR_COLUMN_IDS.map((id, i) => ({
   id,
@@ -184,10 +175,9 @@ function SuperviseeCell({ list }: { list: SuperviseeRow[] }) {
 }
 
 export function SupervisorsWorkspace({ tenantSlug, initialCreateOpen = false }: Props) {
+  const perms = useStaffCrudPermissions("supervayzer");
   const qc = useQueryClient();
   const [tab, setTab] = useState<"active" | "inactive">("active");
-  const [draftPos, setDraftPos] = useState("");
-  const [appliedPos, setAppliedPos] = useState("");
   const [search, setSearch] = useState("");
   const [columnDialogOpen, setColumnDialogOpen] = useState(false);
   const [page, setPage] = useState(1);
@@ -208,25 +198,12 @@ export function SupervisorsWorkspace({ tenantSlug, initialCreateOpen = false }: 
   const staffImport = useStaffExcelImport(tenantSlug, "supervisor");
 
   const [editRow, setEditRow] = useState<SupervisorRow | null>(null);
+  const [passwordRow, setPasswordRow] = useState<SupervisorRow | null>(null);
   const [addOpen, setAddOpen] = useState(initialCreateOpen);
   const [createError, setCreateError] = useState<string | null>(null);
   const [editError, setEditError] = useState<string | null>(null);
-  const [sessionSup, setSessionSup] = useState<SupervisorRow | null>(null);
-  const [configSup, setConfigSup] = useState<SupervisorRow | null>(null);
-  const [configSaving, setConfigSaving] = useState(false);
   const [deactivateRow, setDeactivateRow] = useState<SupervisorRow | null>(null);
-
-  const filterOptQ = useQuery({
-    queryKey: ["supervisors-filter-options", tenantSlug],
-    enabled: Boolean(tenantSlug),
-    staleTime: STALE.reference,
-    queryFn: async () => {
-      const { data } = await api.get<{ data: { positions: string[] } }>(
-        `/api/${tenantSlug}/supervisors/filter-options`
-      );
-      return data.data;
-    }
-  });
+  const { toast, toastTone, setToast } = useStaffFloatingToast();
 
   const profileQ = useQuery({
     queryKey: ["settings", "profile", tenantSlug, "supervisors-ws"],
@@ -244,13 +221,12 @@ export function SupervisorsWorkspace({ tenantSlug, initialCreateOpen = false }: 
   );
 
   const listQ = useQuery({
-    queryKey: ["supervisors", tenantSlug, tab, appliedPos],
+    queryKey: ["supervisors", tenantSlug, tab],
     enabled: Boolean(tenantSlug),
     staleTime: STALE.list,
     queryFn: async () => {
       const params = new URLSearchParams();
       params.set("is_active", tab === "active" ? "true" : "false");
-      if (appliedPos.trim()) params.set("position", appliedPos.trim());
       const { data } = await api.get<{ data: SupervisorRow[] }>(
         `/api/${tenantSlug}/supervisors?${params.toString()}`
       );
@@ -258,37 +234,17 @@ export function SupervisorsWorkspace({ tenantSlug, initialCreateOpen = false }: 
     }
   });
 
-  const agentsQ = useQuery({
-    queryKey: ["agents", tenantSlug, "supervisors-ws-pick"],
-    enabled: Boolean(tenantSlug) && (Boolean(editRow) || addOpen),
-    staleTime: STALE.reference,
-    queryFn: async () => {
-      const params = new URLSearchParams();
-      params.set("is_active", "true");
-      const { data } = await api.get<{
-        data: { id: number; fio: string; code: string | null; supervisor_user_id: number | null }[];
-      }>(`/api/${tenantSlug}/agents?${params.toString()}`);
-      return data.data;
-    }
-  });
-
   const createMut = useMutation({
-    mutationFn: async (vars: { body: Record<string, unknown>; superviseeIds: number[] }) => {
+    mutationFn: async (vars: { body: Record<string, unknown> }) => {
       const { data } = await api.post<SupervisorRow>(`/api/${tenantSlug}/supervisors`, vars.body);
-      if (vars.superviseeIds.length > 0) {
-        await api.patch(`/api/${tenantSlug}/supervisors/${data.id}`, {
-          supervisee_agent_ids: vars.superviseeIds
-        });
-      }
       return data;
     },
     onSuccess: () => {
       setCreateError(null);
       setAddOpen(false);
+      setToast("Сохранено");
       void qc.invalidateQueries({ queryKey: ["supervisors", tenantSlug] });
-      void qc.invalidateQueries({ queryKey: ["supervisors-filter-options", tenantSlug] });
       void qc.invalidateQueries({ queryKey: ["supervisors", tenantSlug, "staff-agent-dropdown"] });
-      void qc.invalidateQueries({ queryKey: ["agents", tenantSlug, "supervisors-ws-pick"] });
     },
     onError: (e: Error) => {
       setCreateError(messageFromStaffCreateError(e));
@@ -301,9 +257,9 @@ export function SupervisorsWorkspace({ tenantSlug, initialCreateOpen = false }: 
       return data;
     },
     onSuccess: () => {
+      setToast("Сохранено");
       void qc.invalidateQueries({ queryKey: ["supervisors", tenantSlug] });
       void qc.invalidateQueries({ queryKey: ["supervisor-detail", tenantSlug] });
-      void qc.invalidateQueries({ queryKey: ["supervisors-filter-options", tenantSlug] });
       void qc.invalidateQueries({ queryKey: ["supervisors", tenantSlug, "staff-agent-dropdown"] });
       void qc.invalidateQueries({ queryKey: ["agents", tenantSlug, "supervisors-ws-pick"] });
     }
@@ -349,21 +305,11 @@ export function SupervisorsWorkspace({ tenantSlug, initialCreateOpen = false }: 
 
   useEffect(() => {
     setPage(1);
-  }, [tab, appliedPos, search, pageSize]);
+  }, [tab, search, pageSize]);
 
   useEffect(() => {
     setSelected(new Set());
-  }, [tab, appliedPos, safePage, pageSize]);
-
-  const applyFilters = () => {
-    setAppliedPos(draftPos);
-  };
-
-  const resetFilters = () => {
-    setDraftPos("");
-    setAppliedPos("");
-    setPage(1);
-  };
+  }, [tab, safePage, pageSize]);
 
   const toggleSupervisorSelection = (id: number, checked: boolean) => {
     setSelected((prev) => {
@@ -390,13 +336,16 @@ export function SupervisorsWorkspace({ tenantSlug, initialCreateOpen = false }: 
   const bulk = useStaffKomandaBulk({
     tenantSlug,
     apiSegment: "supervisors",
-    invalidateQueryKeys: [
-      ["supervisors", tenantSlug],
-      ["supervisors-filter-options", tenantSlug]
-    ],
+    invalidateQueryKeys: [["supervisors", tenantSlug]],
     selectedIds: selected,
     setSelectedIds: setSelected,
     selectedRows
+  });
+
+  const filterVisibleMut = useStaffFilterVisible({
+    tenantSlug,
+    segment: "supervisors",
+    invalidateQueryKeys: [["supervisors", tenantSlug]]
   });
 
   function supervisorExportCellString(r: SupervisorRow, colId: string): string {
@@ -405,24 +354,14 @@ export function SupervisorsWorkspace({ tenantSlug, initialCreateOpen = false }: 
         return formatPersonDisplayName(r);
       case "supervisees":
         return r.supervisees.map((s) => formatPersonDisplayName(s)).join("; ");
-      case "code":
-        return r.code ?? "";
       case "login":
         return r.login;
       case "pinfl":
         return r.pinfl ?? "";
       case "branch":
         return r.branch ?? "";
-      case "position":
-        return r.position ?? "";
       case "apk_version":
         return r.apk_version ?? "";
-      case "app_access":
-        return r.app_access ? "Да" : "Нет";
-      case "active_sessions":
-        return String(r.active_session_count);
-      case "max_sessions":
-        return String(r.max_sessions);
       default:
         return "";
     }
@@ -438,40 +377,19 @@ export function SupervisorsWorkspace({ tenantSlug, initialCreateOpen = false }: 
             middle_name={r.middle_name}
             fio={r.fio}
             kpiColor={r.kpi_color}
+            face={{ tenantSlug, userId: r.id, hasPhoto: r.has_face_reference === true }}
           />
         );
       case "supervisees":
         return <SuperviseeCell list={r.supervisees} />;
-      case "code":
-        return <StaffKomandaCodeCell code={r.code} />;
       case "login":
         return <StaffKomandaLoginCell login={r.login} />;
       case "pinfl":
         return <StaffKomandaPinflCell pinfl={r.pinfl} />;
       case "branch":
         return <StaffKomandaBranchCell branch={r.branch} />;
-      case "position":
-        return <StaffKomandaPositionCell position={r.position} />;
       case "apk_version":
         return <StaffKomandaApkCell version={r.apk_version} />;
-      case "app_access":
-        return (
-          <StaffKomandaAppAccessToggle
-            checked={r.app_access}
-            disabled={patchMut.isPending}
-            onChange={(next) => patchMut.mutate({ id: r.id, body: { app_access: next } })}
-          />
-        );
-      case "active_sessions":
-        return (
-          <StaffKomandaActiveSessionsCell
-            count={r.active_session_count}
-            max={r.max_sessions}
-            onClick={() => setSessionSup(r)}
-          />
-        );
-      case "max_sessions":
-        return <StaffKomandaMaxSessionsCell max={r.max_sessions} />;
       default:
         return "—";
     }
@@ -483,6 +401,7 @@ export function SupervisorsWorkspace({ tenantSlug, initialCreateOpen = false }: 
         title="Супервайзер"
         subtitle="Управление супервайзерами и привязкой агентов"
         addLabel="Добавить супервайзера"
+        canAdd={perms.canCreate}
         onAdd={() => {
           setCreateError(null);
           setAddOpen(true);
@@ -491,22 +410,9 @@ export function SupervisorsWorkspace({ tenantSlug, initialCreateOpen = false }: 
       />
 
       <StaffWorkspaceFilterPanel
-        filters={
-          <StaffFilterSelect
-            label="Должность"
-            value={draftPos}
-            onChange={setDraftPos}
-            emptyLabel="Все должности"
-          >
-            {(filterOptQ.data?.positions ?? []).map((p) => (
-              <option key={p} value={p}>
-                {p}
-              </option>
-            ))}
-          </StaffFilterSelect>
-        }
-        onReset={resetFilters}
-        onApply={applyFilters}
+        filters={null}
+        onReset={() => setPage(1)}
+        onApply={() => setPage(1)}
         tab={tab}
         onTabChange={setTab}
         pageSize={pageSize}
@@ -516,18 +422,24 @@ export function SupervisorsWorkspace({ tenantSlug, initialCreateOpen = false }: 
         onColumnSettings={() => setColumnDialogOpen(true)}
         onSearch={setSearch}
         searchPlaceholder="Поиск по ФИО, коду, логину…"
-        onExport={() => {
-          const order = tablePrefs.visibleColumnOrder;
-          const headers = order.map((id) => SUPERVISOR_COLUMN_LABEL_BY_ID.get(id) ?? id);
-          const exportData = filteredRows.map((r) => order.map((colId) => supervisorExportCellString(r, colId)));
-          downloadXlsxSheet(
-            `supervisors_${tab}_${new Date().toISOString().slice(0, 10)}.xlsx`,
-            "Супервайзеры",
-            headers,
-            exportData
-          );
-        }}
-        onImport={() => staffImport.setOpen(true)}
+        onExport={
+          perms.canExport
+            ? () => {
+                const order = tablePrefs.visibleColumnOrder;
+                const headers = order.map((id) => SUPERVISOR_COLUMN_LABEL_BY_ID.get(id) ?? id);
+                const exportData = filteredRows.map((r) =>
+                  order.map((colId) => supervisorExportCellString(r, colId))
+                );
+                downloadXlsxSheet(
+                  `supervisors_${tab}_${new Date().toISOString().slice(0, 10)}.xlsx`,
+                  "Супервайзеры",
+                  headers,
+                  exportData
+                );
+              }
+            : undefined
+        }
+        onImport={perms.canImport ? () => staffImport.setOpen(true) : undefined}
         onRefresh={() => void listQ.refetch()}
         isFetching={listQ.isFetching}
       />
@@ -558,21 +470,33 @@ export function SupervisorsWorkspace({ tenantSlug, initialCreateOpen = false }: 
         selectedIds={selected}
         onToggleSelection={toggleSupervisorSelection}
         onToggleAllOnPage={toggleAllSupervisorsOnPage}
+        filterVisible={
+          tab === "inactive"
+            ? {
+                checked: (id) => pageRows.find((r) => r.id === id)?.filter_visible === true,
+                busy: filterVisibleMut.isPending,
+                onToggle: (ids, next) => void filterVisibleMut.mutate({ ids, filter_visible: next }),
+                groupLabel: (id) => pageRows.find((r) => r.id === id)?.branch?.trim() || "Без филиала"
+              }
+            : undefined
+        }
         renderCell={(colId, row) => renderSupervisorDataCell(colId, pageRows.find((r) => r.id === row.id)!)}
         renderActions={(row) => {
+          if (!perms.canAnyRowAction) return null;
           const r = pageRows.find((x) => x.id === row.id)!;
           return (
             <div className="flex items-center justify-end gap-1">
-              <AgentIconButton title="Конфигурации" onClick={() => setConfigSup(r)}>
-                <Settings2 className="h-4 w-4" />
-              </AgentIconButton>
-              <AgentIconButton title="Сессии" onClick={() => setSessionSup(r)}>
-                <MonitorSmartphone className="h-4 w-4" />
-              </AgentIconButton>
-              <AgentIconButton title="Редактировать" onClick={() => setEditRow(r)}>
-                <Pencil className="h-4 w-4 text-amber-600" />
-              </AgentIconButton>
-              {tab === "active" ? (
+              {perms.canUpdate ? (
+                <AgentIconButton title="Изменить пароль" onClick={() => setPasswordRow(r)}>
+                  <KeyRound className="h-4 w-4" />
+                </AgentIconButton>
+              ) : null}
+              {perms.canUpdate ? (
+                <AgentIconButton title="Редактировать" onClick={() => setEditRow(r)}>
+                  <Pencil className="h-4 w-4 text-amber-600" />
+                </AgentIconButton>
+              ) : null}
+              {tab === "active" && perms.canDeactivate ? (
                 <AgentIconButton title="Деактивировать" onClick={() => setDeactivateRow(r)}>
                   <UserMinus className="h-4 w-4 text-rose-600" />
                 </AgentIconButton>
@@ -582,16 +506,31 @@ export function SupervisorsWorkspace({ tenantSlug, initialCreateOpen = false }: 
         }}
       />
 
-      <StaffBulkFloatingBar
-        count={selected.size}
-        allAccessOn={bulk.allAccessOn}
-        isActiveTab={tab === "active"}
-        busy={bulk.bulkBusy}
-        onToggleAccess={bulk.onToggleAccess}
-        onToggleActive={() => bulk.onRequestToggleActive(tab === "active")}
-        onClearSessions={bulk.onClearSessions}
-        onClearSelection={() => setSelected(new Set())}
-      />
+      {perms.canUpdate || perms.canDeactivate || perms.canActivate ? (
+        <StaffBulkFloatingBar
+          count={selected.size}
+          isActiveTab={tab === "active"}
+          busy={bulk.bulkBusy}
+          onToggleActive={
+            (tab === "active" && perms.canDeactivate) || (tab === "inactive" && perms.canActivate)
+              ? () => bulk.onRequestToggleActive(tab === "active")
+              : undefined
+          }
+          onClearSelection={() => setSelected(new Set())}
+          filterVisibleOn={tab === "inactive" && selectedRows.every((r) => r.filter_visible)}
+          onToggleFilterVisible={
+            tab === "inactive"
+              ? () => {
+                  const allOn = selectedRows.every((r) => r.filter_visible);
+                  void filterVisibleMut.mutate({
+                    ids: selectedRows.map((r) => r.id),
+                    filter_visible: !allOn
+                  });
+                }
+              : undefined
+          }
+        />
+      ) : null}
 
       <AgentTemplateConfirmDialog
         open={bulk.confirmBulk != null}
@@ -601,53 +540,21 @@ export function SupervisorsWorkspace({ tenantSlug, initialCreateOpen = false }: 
         onConfirm={bulk.handleConfirmBulk}
       />
 
-      <AgentConfigurationsDialog
-        open={configSup != null}
-        agent={
-          configSup
-            ? {
-                id: configSup.id,
-                fio: configSup.fio,
-                code: configSup.code,
-                login: configSup.login,
-                agent_entitlements: configSup.agent_entitlements ?? {}
-              }
-            : null
-        }
-        variant="supervisor"
-        saving={configSaving}
-        paymentMethodEntries={profileQ.data?.references?.payment_method_entries}
-        onClose={() => setConfigSup(null)}
-        onSave={async (ent) => {
-          if (!configSup) return;
-          setConfigSaving(true);
-          try {
-            await patchMut.mutateAsync({ id: configSup.id, body: { agent_entitlements: ent } });
-            setConfigSup(null);
-          } finally {
-            setConfigSaving(false);
-          }
-        }}
-      />
-
       <SupervisorFormModal
         mode="create"
         open={addOpen}
         row={null}
         tenantSlug={tenantSlug}
         branchOptions={branchOptions}
-        positionSuggestions={filterOptQ.data?.positions ?? []}
-        agents={agentsQ.data ?? []}
-        supervisorId={null}
         loading={createMut.isPending}
         errorMessage={createError}
         onClose={() => {
           setAddOpen(false);
           setCreateError(null);
         }}
-        onSubmitCreate={(body, superviseeIds) => {
+        onSubmitCreate={(body) => {
           setCreateError(null);
-          createMut.mutate({ body, superviseeIds });
+          createMut.mutate({ body });
         }}
         onSubmitEdit={async () => {}}
       />
@@ -658,9 +565,6 @@ export function SupervisorsWorkspace({ tenantSlug, initialCreateOpen = false }: 
         row={editRow}
         tenantSlug={tenantSlug}
         branchOptions={branchOptions}
-        positionSuggestions={filterOptQ.data?.positions ?? []}
-        agents={agentsQ.data ?? []}
-        supervisorId={editRow?.id ?? null}
         loading={patchMut.isPending}
         errorMessage={editError}
         onClose={() => {
@@ -680,14 +584,15 @@ export function SupervisorsWorkspace({ tenantSlug, initialCreateOpen = false }: 
         }}
       />
 
-      <StaffActiveSessionsDialog
-        open={sessionSup != null}
-        onOpenChange={(o) => !o && setSessionSup(null)}
+      <StaffPasswordChangeDialog
+        open={passwordRow != null}
         tenantSlug={tenantSlug}
-        staffKind="supervisor"
-        userId={sessionSup?.id ?? null}
-        maxSessions={sessionSup?.max_sessions ?? 1}
-        onPatched={() => {
+        apiSegment="supervisors"
+        userId={passwordRow?.id ?? null}
+        login={passwordRow?.login ?? ""}
+        onClose={() => setPasswordRow(null)}
+        onDone={() => {
+          setPasswordRow(null);
           void qc.invalidateQueries({ queryKey: ["supervisors", tenantSlug] });
         }}
       />
@@ -703,7 +608,6 @@ export function SupervisorsWorkspace({ tenantSlug, initialCreateOpen = false }: 
         onConfirm={(file) => {
           void staffImport.runImport(file).then(() => {
             void qc.invalidateQueries({ queryKey: ["supervisors", tenantSlug] });
-            void qc.invalidateQueries({ queryKey: ["supervisors-filter-options", tenantSlug] });
           });
         }}
       />
@@ -730,6 +634,7 @@ export function SupervisorsWorkspace({ tenantSlug, initialCreateOpen = false }: 
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      <StaffFloatingToast message={toast} tone={toastTone} />
     </StaffWorkspaceLayout>
   );
 }

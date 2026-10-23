@@ -61,6 +61,20 @@ export function isMobileOnlyKomandaRole(role: string): boolean {
   return (MOBILE_ONLY_KOMANDA_ROLES as readonly string[]).includes(role.trim());
 }
 
+/**
+ * Veb-panelga kira olmaydigan maydon rollari (faqat mobil ilova).
+ * Van-seller alohida `users.role` emas — odatda `agent`.
+ * Supervisor vebda qoladi.
+ */
+export const WEB_PANEL_DENIED_ROLES = ["agent", "expeditor", "collector"] as const;
+
+export function isWebPanelDeniedRole(role: string | null | undefined): boolean {
+  const r = (role ?? "").trim().toLowerCase();
+  if (!r) return false;
+  if ((WEB_PANEL_DENIED_ROLES as readonly string[]).includes(r)) return true;
+  return r === "vansell" || r === "vanseller" || r === "van_seller";
+}
+
 /** «Доступ» → «Пользователи» va veb huquq modallari: mobil-only KOMANDA chiqariladi. */
 export function isExcludedFromAccessWebUsersList(role: string): boolean {
   return isMobileOnlyKomandaRole(role);

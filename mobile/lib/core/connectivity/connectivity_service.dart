@@ -13,6 +13,24 @@ class ConnectivityService {
     return !results.contains(ConnectivityResult.none);
   }
 
+  /// GPS monitoring uchun qisqa label: 4G / WiFi / —
+  Future<String?> networkTypeLabel() async {
+    try {
+      final results = await _connectivity.checkConnectivity();
+      if (results.contains(ConnectivityResult.none) || results.isEmpty) return '—';
+      if (results.contains(ConnectivityResult.wifi)) return 'WiFi';
+      if (results.contains(ConnectivityResult.ethernet)) return 'WiFi';
+      if (results.contains(ConnectivityResult.mobile)) return '4G';
+      if (results.contains(ConnectivityResult.vpn)) {
+        if (results.contains(ConnectivityResult.wifi)) return 'WiFi';
+        if (results.contains(ConnectivityResult.mobile)) return '4G';
+      }
+      return '4G';
+    } catch (_) {
+      return null;
+    }
+  }
+
   /// Stream of connectivity changes
   Stream<bool> get onConnectivityChanged {
     return _connectivity.onConnectivityChanged.map(

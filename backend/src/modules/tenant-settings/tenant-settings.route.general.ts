@@ -2,7 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import {
   getMobileAppReleasePolicy,
-  listOutdatedMobileUsers,
+  listMobileAppUsers,
   patchMobileAppReleasePolicy
 } from "../mobile/app-release.service";
 import { notifyAppUpdateToOutdatedUsers } from "../mobile/fcm-push.service";
@@ -16,7 +16,7 @@ import { env } from "../../config/env";
 import { actorUserIdOrNull } from "../../lib/request-actor";
 import { ensureTenantContext } from "../../lib/tenant-context";
 import { ADMIN_AND_OPERATOR_LIKE_ROLES } from "../../lib/tenant-user-roles";
-import { jwtAccessVerify, requireRoles } from "../auth/auth.prehandlers";
+import { jwtAccessVerify, requireAnyPermission, requireRoles } from "../auth/auth.prehandlers";
 import { getTenantProfile, patchTenantProfile } from "./tenant-settings.service";
 import { buildInitialSetupExportBuffer } from "./initial-setup-export.service";
 import { mobileAppReleasePatchSchema, profilePatchSchema } from "./tenant-settings.route.schemas";
@@ -105,7 +105,7 @@ export async function registerTenantSettingsGeneralRoutes(app: FastifyInstance) 
             request,
             400,
             "TerritoryNodesEmptyRejected",
-            "Bo‘sh territoriya daraxti saqlanmaydi — mavjud ma’lumot o‘chib ketmasin."
+            "Пустое дерево территорий не сохраняется, чтобы не удалить существующие данные."
           );
         }
         if (e instanceof Error && e.message.startsWith("REF_EMPTY_WIPE_REJECTED:")) {
@@ -115,7 +115,7 @@ export async function registerTenantSettingsGeneralRoutes(app: FastifyInstance) 
             request,
             400,
             "RefEmptyWipeRejected",
-            `Bo‘sh «${field}» saqlanmaydi — mavjud spravochnik o‘chib ketmasin.`
+            `Пустой справочник «${field}» не сохраняется, чтобы не удалить существующие данные.`
           );
         }
         if (e instanceof Error && e.message === "INVALID_BRANCH_CASH_DESK") {
@@ -131,19 +131,23 @@ export async function registerTenantSettingsGeneralRoutes(app: FastifyInstance) 
 
   app.get(
     "/api/:slug/settings/mobile-app-release",
-    { preHandler: [jwtAccessVerify, requireRoles(...adminRoles)] },
+    { preHandler: [jwtAccessVerify, requireAnyPermission(["settings.mobile_app.view"])] },
     async (request, reply) => {
       if (!ensureTenantContext(request, reply)) return;
       const policy = await getMobileAppReleasePolicy(request.tenant!.id);
-      const outdated = await listOutdatedMobileUsers(request.tenant!.id);
+      const users = await listMobileAppUsers(request.tenant!.id);
+      const outdated = users.filter((u) => u.is_outdated);
       const { mobileApkReady, buildMobileApkDownloadUrl } = await import("../mobile/mobile-apk.service");
       const {
         resolveRequestOrigin
       } = await import("../mobile/app-release.service");
       const apk = await mobileApkReady(request.tenant!.slug);
       const origin = resolveRequestOrigin(request.headers);
+      reply.header("Cache-Control", "no-store");
       return reply.send({
         policy,
+        users,
+        users_count: users.length,
         outdated_count: outdated.length,
         outdated_users: outdated,
         apk: {
@@ -158,7 +162,7 @@ export async function registerTenantSettingsGeneralRoutes(app: FastifyInstance) 
 
   app.patch(
     "/api/:slug/settings/mobile-app-release",
-    { preHandler: [jwtAccessVerify, requireRoles(...adminRoles)] },
+    { preHandler: [jwtAccessVerify, requireAnyPermission(["settings.mobile_app.update"])] },
     async (request, reply) => {
       if (!ensureTenantContext(request, reply)) return;
       const parsed = mobileAppReleasePatchSchema.safeParse(request.body);
@@ -186,7 +190,7 @@ export async function registerTenantSettingsGeneralRoutes(app: FastifyInstance) 
 
   app.post(
     "/api/:slug/settings/mobile-app-release/notify",
-    { preHandler: [jwtAccessVerify, requireRoles(...adminRoles)] },
+    { preHandler: [jwtAccessVerify, requireAnyPermission(["settings.mobile_app.transfer"])] },
     async (request, reply) => {
       if (!ensureTenantContext(request, reply)) return;
       const body = z
@@ -211,7 +215,7 @@ export async function registerTenantSettingsGeneralRoutes(app: FastifyInstance) 
 
   app.post(
     "/api/:slug/settings/mobile-app-release/upload",
-    { preHandler: [jwtAccessVerify, requireRoles(...adminRoles)] },
+    { preHandler: [jwtAccessVerify, requireAnyPermission(["settings.mobile_app.import"])] },
     async (request, reply) => {
       if (!ensureTenantContext(request, reply)) return;
       const file = await request.file({
@@ -220,7 +224,7 @@ export async function registerTenantSettingsGeneralRoutes(app: FastifyInstance) 
       if (!file) return sendApiError(reply, request, 400, "NoFile");
       const filename = (file.filename ?? "").toLowerCase();
       if (!filename.endsWith(".apk")) {
-        return sendApiError(reply, request, 400, "InvalidFile", "Faqat .apk fayl yuklang");
+        return sendApiError(reply, request, 400, "InvalidFile", "Загрузите файл .apk");
       }
       try {
         const bytes = await saveMobileApkStream(request.tenant!.slug, file.file);
@@ -231,15 +235,17 @@ export async function registerTenantSettingsGeneralRoutes(app: FastifyInstance) 
         const origin = `${proto || "https"}://${host}`;
         const downloadUrl = buildMobileApkDownloadUrl(origin, request.tenant!.slug);
         const verFromFilename = filename.match(/(\d+\.\d+\.\d+)/)?.[1] ?? null;
+        const prev = await getMobileAppReleasePolicy(request.tenant!.id);
         const policy = await patchMobileAppReleasePolicy(request.tenant!.id, {
           download_url: downloadUrl,
-          // Majburiy bloklash — alohida PATCH / force flag orqali.
-          // Har yuklashda force=true qilish loginni berkitib qo‘yardi.
+          // Soft OTA: majburiy emas — faqat latest yangilanadi; min saqlanadi.
+          // Majburiy bloklash: vebda «Majburiy yangilash» yoki PATCH force_update=true.
           force_update: false,
           ...(verFromFilename
             ? {
                 latest_version: verFromFilename,
-                min_version: verFromFilename.replace(/\.\d+$/, ".0")
+                // min_version ni avtomatik ko‘tarmaymiz — aks holda hammaga «required» bo‘ladi.
+                ...(prev.min_version ? {} : { min_version: null })
               }
             : {})
         });
@@ -257,7 +263,7 @@ export async function registerTenantSettingsGeneralRoutes(app: FastifyInstance) 
             request,
             413,
             "PayloadTooLarge",
-            `APK hajmi ${Math.round(MOBILE_APK_MAX_BYTES / (1024 * 1024))} MB dan oshmasligi kerak`
+            `Размер APK не должен превышать ${Math.round(MOBILE_APK_MAX_BYTES / (1024 * 1024))} МБ`
           );
         }
         throw e;

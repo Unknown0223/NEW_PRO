@@ -1,6 +1,6 @@
 import type { Prisma } from "@prisma/client";
 import { prisma } from "../../config/database";
-import { invalidatePriceTypesCache } from "../../lib/redis-cache";
+import { invalidateDashboard, invalidatePriceTypesCache, invalidateTenantSettingsCache } from "../../lib/redis-cache";
 import { appendTenantAuditEvent, AuditEntityType } from "../../lib/tenant-audit";
 import { asRecord } from "./tenant-settings.shared";
 import type {
@@ -22,7 +22,7 @@ import {
   toClientRefEntryDto
 } from "./tenant-settings.refs";
 import { territoryRegionPickerNames } from "./tenant-settings.territory";
-import { invalidateTenantSettingsCache } from "../../lib/redis-cache";
+import { propagateTerritoryRenamesInTx } from "./tenant-settings.territory-rename";
 import { getTenantProfile } from "./tenant-settings.profile.read";
 import { normalizeReturnFilterSettings } from "../returns/returns-filter.settings";
 import type { ReturnFilterSettings } from "../returns/returns-filter.types";
@@ -346,7 +346,10 @@ export async function patchTenantProfile(
           SELECT settings FROM tenants WHERE id = ${tenantId} FOR UPDATE
         `;
         if (!rows[0]) throw new Error("NOT_FOUND");
-        const nextSettings = mergeProfilePatchIntoSettings(asRecord(rows[0].settings), settingsOnlyPatch);
+        const prevSettings = asRecord(rows[0].settings);
+        let nextSettings = mergeProfilePatchIntoSettings(prevSettings, settingsOnlyPatch);
+        if (patch.references?.territory_nodes != null)
+          ({ settings: nextSettings } = await propagateTerritoryRenamesInTx(tx, tenantId, prevSettings, nextSettings));
         await tx.tenant.update({
           where: { id: tenantId },
           data: {
@@ -354,7 +357,7 @@ export async function patchTenantProfile(
             settings: nextSettings as Prisma.InputJsonValue
           }
         });
-      });
+      }, { timeout: 60_000 });
     } else {
       await prisma.tenant.update({
         where: { id: tenantId },
@@ -383,14 +386,11 @@ export async function patchTenantProfile(
     }
     if (patch.references?.territory_nodes != null || patch.references?.territory_tree != null) {
       void import("../access/access-territories-sync").then((m) => m.invalidateAccessTerritorySyncCache(tenantId));
+      void invalidateDashboard(tenantId);
     }
   }
 
-  try {
-    await invalidateTenantSettingsCache(tenantId);
-  } catch {
-    /* ignore */
-  }
+  await invalidateTenantSettingsCache(tenantId).catch(() => undefined);
   return getTenantProfile(tenantId);
 }
 

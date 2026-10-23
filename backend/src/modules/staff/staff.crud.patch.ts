@@ -154,6 +154,7 @@ export type PatchAgentInput = {
   app_access?: boolean;
   territory?: string | null;
   is_active?: boolean;
+  filter_visible?: boolean;
   password?: string;
   max_sessions?: number;
   kpi_color?: string | null;

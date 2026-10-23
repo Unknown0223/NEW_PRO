@@ -38,6 +38,14 @@ function parseYmd(ymd: string): { y: number; m: number; d: number } | null {
   return { y, m: mo, d };
 }
 
+export function tashkentDayStartUtc(ymd: string): Date | null {
+  return localDateStartToUtc(ymd);
+}
+
+export function tashkentDayEndUtc(ymd: string): Date | null {
+  return localDateEndToUtc(ymd);
+}
+
 function localDateStartToUtc(ymd: string): Date | null {
   const p = parseYmd(ymd);
   if (!p) return null;

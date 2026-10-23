@@ -122,7 +122,7 @@ export async function changeMobileMePassword(
   const ok = await bcrypt.compare(oldPw, u.password_hash);
   if (!ok) throw new Error("INVALID_OLD_PASSWORD");
 
-  const password_hash = await bcrypt.hash(newPw, 10);
+  const password_hash = await bcrypt.hash(newPw, 12);
   await prisma.user.update({ where: { id: userId }, data: { password_hash } });
   return { ok: true as const };
 }

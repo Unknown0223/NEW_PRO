@@ -11,7 +11,7 @@ export function AutomationPageHeader({
 }: {
   activeTab: TabId;
   onTabChange: (t: TabId) => void;
-  onCreateClick: () => void;
+  onCreateClick?: () => void;
 }) {
   return (
     <div className="border-b border-border bg-card">
@@ -42,14 +42,16 @@ export function AutomationPageHeader({
               Авто-подтверждение
             </button>
           </div>
-          <button
-            type="button"
-            onClick={onCreateClick}
-            className="flex items-center gap-1.5 rounded-lg bg-teal-600 px-4 py-1.5 text-sm text-white transition-colors hover:bg-teal-700"
-          >
-            <Plus size={16} />
-            Создать
-          </button>
+          {onCreateClick ? (
+            <button
+              type="button"
+              onClick={onCreateClick}
+              className="flex items-center gap-1.5 rounded-lg bg-teal-600 px-4 py-1.5 text-sm text-white transition-colors hover:bg-teal-700"
+            >
+              <Plus size={16} />
+              Создать
+            </button>
+          ) : null}
         </div>
       </div>
     </div>

@@ -58,9 +58,11 @@ export function useStaffKomandaBulk({
         });
         return;
       }
-      for (const id of ids) {
-        await api.patch(`/api/${tenantSlug}/${apiSegment}/${id}`, { app_access });
-      }
+      await api.post(`/api/${tenantSlug}/${apiSegment}/bulk`, {
+        action: "set_app_access",
+        user_ids: ids,
+        app_access
+      });
     },
     onSuccess: () => {
       invalidate();
@@ -71,9 +73,19 @@ export function useStaffKomandaBulk({
   const bulkActiveMut = useMutation({
     mutationFn: async (is_active: boolean) => {
       const ids = Array.from(selectedIds);
-      for (const id of ids) {
-        await api.patch(`/api/${tenantSlug}/${apiSegment}/${id}`, { is_active });
+      if (apiSegment === "agents") {
+        await api.post(`/api/${tenantSlug}/agents/bulk`, {
+          action: "set_is_active",
+          agent_ids: ids,
+          is_active
+        });
+        return;
       }
+      await api.post(`/api/${tenantSlug}/${apiSegment}/bulk`, {
+        action: "set_is_active",
+        user_ids: ids,
+        is_active
+      });
     },
     onSuccess: () => {
       invalidate();
@@ -92,13 +104,10 @@ export function useStaffKomandaBulk({
         });
         return;
       }
-      if (apiSegment === "skladchik") {
-        await api.post(`/api/${tenantSlug}/skladchik/bulk/sessions/revoke`, { user_ids: ids });
-        return;
-      }
-      for (const id of ids) {
-        await api.post(`/api/${tenantSlug}/${apiSegment}/${id}/sessions/revoke`, { all: true });
-      }
+      await api.post(`/api/${tenantSlug}/${apiSegment}/bulk`, {
+        action: "revoke_sessions",
+        user_ids: ids
+      });
     },
     onSuccess: () => {
       invalidate();

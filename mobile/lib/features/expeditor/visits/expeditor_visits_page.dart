@@ -6,6 +6,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/ui/agent_ui.dart';
 import '../../../core/ui/agent_ui_extended.dart';
+import '../../../core/ui/client_photo_thumb.dart';
 import '../../../core/format/money_display.dart';
 import '../../agent/orders/order_create_models.dart' show formatMoneySpaced;
 import '../expeditor_providers.dart';
@@ -174,15 +175,10 @@ class _VisitCard extends StatelessWidget {
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Container(
-                    width: 40,
-                    height: 40,
-                    decoration: BoxDecoration(
-                      color: AppColors.surfaceVariant,
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: const Icon(Icons.storefront_outlined,
-                        color: AppColors.textSecondary, size: 20,),
+                  ClientPhotoThumb(
+                    source: row['photo_url']?.toString(),
+                    size: 40,
+                    radius: 10,
                   ),
                   const SizedBox(width: 12),
                   Expanded(
@@ -312,7 +308,7 @@ class _ClientVisitCard extends StatelessWidget {
             ],
           ),
         ),
-        Text("${formatMoneySpaced(orderSum)} So'm",
+        Text('${formatMoneySpaced(orderSum)} сум',
             style: const TextStyle(
                 fontSize: 15,
                 fontWeight: FontWeight.w800,
@@ -344,15 +340,10 @@ class _ClientVisitCard extends StatelessWidget {
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Container(
-                    width: 48,
-                    height: 48,
-                    decoration: BoxDecoration(
-                      color: AppColors.surfaceVariant,
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: const Icon(Icons.storefront_outlined,
-                        color: AppColors.textSecondary, size: 24,),
+                  ClientPhotoThumb(
+                    source: row['photo_url']?.toString(),
+                    size: 48,
+                    radius: 10,
                   ),
                   const SizedBox(width: 12),
                   Expanded(
@@ -392,7 +383,7 @@ class _ClientVisitCard extends StatelessWidget {
                     Expanded(
                       child: _MiniStat(
                         label: 'Баланс',
-                        value: "${formatMoneySpaced(balance)} So'm",
+                        value: '${formatMoneySpaced(balance)} сум',
                         valueColor:
                             isDebt ? AppColors.error : AppColors.textPrimary,
                         showChevron: true,
@@ -403,7 +394,7 @@ class _ClientVisitCard extends StatelessWidget {
                     Expanded(
                       child: _MiniStat(
                         label: 'Заказ на сумму',
-                        value: "${formatMoneySpaced(orderSum)} So'm",
+                        value: '${formatMoneySpaced(orderSum)} сум',
                         valueColor: AppColors.expeditorAccent,
                       ),
                     ),

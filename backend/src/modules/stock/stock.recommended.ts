@@ -38,6 +38,7 @@ type RecommendedStockListOpts = {
   product_id?: number;
   qty_mode: "all" | "positive" | "zero";
   q: string;
+  allowed_warehouse_ids?: number[] | null;
   sort_by:
     | "sku"
     | "category"
@@ -80,6 +81,30 @@ export async function listRecommendedStock(
   };
   if (opts.warehouse_id != null) {
     whWhere.id = opts.warehouse_id;
+  } else if (opts.allowed_warehouse_ids != null) {
+    if (opts.allowed_warehouse_ids.length === 0) {
+      return {
+        data: [],
+        total: 0,
+        page: opts.page,
+        limit: opts.limit,
+        kpi: { total_days: totalDays, passed_days: passedDays, remaining_days: remainingDays }
+      };
+    }
+    whWhere.id = { in: opts.allowed_warehouse_ids };
+  }
+  if (
+    opts.warehouse_id != null &&
+    opts.allowed_warehouse_ids != null &&
+    !opts.allowed_warehouse_ids.includes(opts.warehouse_id)
+  ) {
+    return {
+      data: [],
+      total: 0,
+      page: opts.page,
+      limit: opts.limit,
+      kpi: { total_days: totalDays, passed_days: passedDays, remaining_days: remainingDays }
+    };
   }
   const warehouseIds = (
     await prisma.warehouse.findMany({ where: whWhere, select: { id: true } })

@@ -3,18 +3,18 @@
 import { Input } from "@/components/ui/input";
 import type { SettingsItem } from "@/lib/settings-structure";
 import {
-  filterSettingsSectionsByRole,
-  findSettingsItemRequiringRolesForPath,
-  isSettingsItemAllowedForRole,
+  filterSettingsSectionsForAccess,
+  findSettingsItemForPath,
+  isSettingsItemAllowedForAccess,
   resolveSettingsItemHref,
   settingsSections
 } from "@/lib/settings-structure";
 import { AccessDeniedBanner } from "@/components/access/access-denied-banner";
 import { TimezoneSettingsDialog } from "@/components/settings/timezone-settings-dialog";
 import { useEffectiveRole } from "@/lib/auth-store";
+import { usePermissions } from "@/lib/use-permissions";
 import { cn } from "@/lib/utils";
 import { ChevronDown, ChevronRight, Search } from "lucide-react";
-import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import type { ReactNode } from "react";
 import { useEffect, useMemo, useState } from "react";
@@ -88,6 +88,8 @@ export function shouldShowSettingsSecondaryAside(pathname: string): boolean {
   if (path === "/settings/cash-desks" || path.startsWith("/settings/cash-desks/")) return false;
   /** Xarita chegaralari — to‘liq ekran xarita; ichki sozlamalar paneli kerak emas */
   if (path === "/settings/geo-boundaries") return false;
+  /** Zarplata sahifalari — «Зарплата» bo‘limi yon panelida */
+  if (path === "/settings/payroll" || path.startsWith("/settings/payroll/")) return false;
   return path === "/settings" || path.startsWith("/settings/");
 }
 
@@ -99,6 +101,7 @@ export function SettingsShell({ children }: { children: ReactNode }) {
   const hideSettingsAside = !shouldShowSettingsSecondaryAside(pathname);
   const isGeoBoundariesPage = normalizeSettingsPathname(pathname) === "/settings/geo-boundaries";
   const role = useEffectiveRole();
+  const perms = usePermissions();
   const [search, setSearch] = useState("");
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
   const [timezoneModalOpen, setTimezoneModalOpen] = useState(false);
@@ -129,8 +132,8 @@ export function SettingsShell({ children }: { children: ReactNode }) {
   };
 
   const roleFilteredSections = useMemo(
-    () => filterSettingsSectionsByRole(settingsSections, role),
-    [role]
+    () => filterSettingsSectionsForAccess(settingsSections, role, perms.keys),
+    [role, perms.keys]
   );
 
   useEffect(() => {
@@ -180,19 +183,23 @@ export function SettingsShell({ children }: { children: ReactNode }) {
   }, [search, roleFilteredSections]);
 
   const settingsRoleGate = useMemo(() => {
-    const item = findSettingsItemRequiringRolesForPath(pathname);
+    if (pathname === "/settings" || pathname === "/settings/") return null;
+    const item = findSettingsItemForPath(pathname, currentSearch);
     if (!item) return null;
-    if (isSettingsItemAllowedForRole(item, role)) return null;
+    if (isSettingsItemAllowedForAccess(item, role, perms.keys)) return null;
     return item;
-  }, [pathname, role]);
+  }, [pathname, currentSearch, role, perms.keys]);
 
-  const gatedChildren = settingsRoleGate ? (
+  const gatedChildren =
+    perms.isLoading && role !== "admin" ? (
+      <p className="p-6 text-sm text-muted-foreground">Проверка доступа…</p>
+    ) : settingsRoleGate ? (
     <div className="flex flex-1 items-start justify-center py-8">
       <AccessDeniedBanner
-        title="Нет доступа / Ruxsat yo‘q"
-        message={`Раздел «${settingsRoleGate.title}» недоступен для вашей роли. / Bu sozlama bo‘limi sizning rolingiz uchun yopiq.`}
+        title="Нет доступа"
+        message={`Раздел «${settingsRoleGate.title}» недоступен для вашей роли или прав.`}
         primaryHref="/settings"
-        primaryLabel="К настройкам / Sozlamalar"
+        primaryLabel="К настройкам"
       />
     </div>
   ) : (
@@ -224,12 +231,13 @@ export function SettingsShell({ children }: { children: ReactNode }) {
         <div className="shrink-0 space-y-2 border-b border-border/60 px-3 py-3 md:px-4">
           <div className="flex items-baseline justify-between gap-2 px-0.5">
             <p className="text-sm font-bold text-foreground">Настройки</p>
-            <Link
-              href="/dashboard"
+            <button
+              type="button"
+              onClick={() => router.push("/dashboard")}
               className="text-[11px] text-primary underline-offset-4 hover:underline md:text-xs"
             >
               ← Дашборд
-            </Link>
+            </button>
           </div>
           <div className="relative">
             <Search
@@ -246,7 +254,7 @@ export function SettingsShell({ children }: { children: ReactNode }) {
           </div>
         </div>
         <nav
-          className="scrollbar-none min-h-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-contain px-2 py-2 md:px-3 md:py-3"
+          className="scrollbar-none min-h-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-y-contain px-2 py-2 md:px-3 md:py-3"
           aria-label="Внутреннее меню настроек"
         >
           {filteredSections.map((section, sectionIndex) => (
@@ -293,10 +301,11 @@ export function SettingsShell({ children }: { children: ReactNode }) {
                               const childActive = isItemActive(pathname, currentSearch, chref);
                               return (
                                 <li key={child.slug}>
-                                  <Link
-                                    href={chref}
+                                  <button
+                                    type="button"
+                                    onClick={() => router.push(chref)}
                                     className={cn(
-                                      "relative block rounded-md py-1.5 pl-8 pr-2 text-[13px] font-normal text-muted-foreground transition-colors hover:bg-muted/80 hover:text-foreground",
+                                      "relative block w-full rounded-md py-1.5 pl-8 pr-2 text-left text-[13px] font-normal text-muted-foreground transition-colors hover:bg-muted/80 hover:text-foreground",
                                       "before:absolute before:left-4 before:top-1/2 before:size-1 before:-translate-y-1/2 before:rounded-full before:bg-muted-foreground/45",
                                       childActive &&
                                         "bg-primary/10 font-medium text-foreground before:bg-primary",
@@ -305,7 +314,7 @@ export function SettingsShell({ children }: { children: ReactNode }) {
                                     )}
                                   >
                                     {child.title}
-                                  </Link>
+                                  </button>
                                 </li>
                               );
                             })}
@@ -340,11 +349,12 @@ export function SettingsShell({ children }: { children: ReactNode }) {
                   const active = isItemActive(pathname, currentSearch, href);
                   return (
                     <li key={item.slug}>
-                      <Link
-                        href={href}
+                      <button
+                        type="button"
                         title={item.description}
+                        onClick={() => router.push(href)}
                         className={cn(
-                          "relative block rounded-md py-1.5 pl-6 pr-2 text-[13px] font-normal text-muted-foreground transition-colors hover:bg-muted/80 hover:text-foreground",
+                          "relative block w-full rounded-md py-1.5 pl-6 pr-2 text-left text-[13px] font-normal text-muted-foreground transition-colors hover:bg-muted/80 hover:text-foreground",
                           "before:absolute before:left-2 before:top-1/2 before:size-1 before:-translate-y-1/2 before:rounded-full before:bg-muted-foreground/45",
                           active && "bg-primary/10 font-medium text-foreground before:bg-primary",
                           active &&
@@ -352,7 +362,7 @@ export function SettingsShell({ children }: { children: ReactNode }) {
                         )}
                       >
                         {item.title}
-                      </Link>
+                      </button>
                     </li>
                   );
                 })}
@@ -362,7 +372,7 @@ export function SettingsShell({ children }: { children: ReactNode }) {
         </nav>
       </aside>
 
-      <main className="min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-contain px-3 py-4 md:px-4 md:py-5">
+      <main className="min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-y-contain px-3 py-4 md:px-4 md:py-5">
         {gatedChildren}
       </main>
     </div>

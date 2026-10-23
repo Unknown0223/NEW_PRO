@@ -33,7 +33,7 @@ class MobileApi {
   }
 
   /// Login oldidan versiya siyosati (public endpoint).
-  Future<AppUpdateInfo?> fetchAppRelease(String slug, String version) async {
+  Future<AppUpdateInfo?> fetchAppRelease(String slug, String version, {String? role}) async {
     try {
       final r = await _dio.get(
         '/api/mobile/app-release',
@@ -41,6 +41,7 @@ class MobileApi {
           'slug': slug,
           'version': version,
           'platform': 'android',
+          if (role != null && role.isNotEmpty) 'role': role,
         },
       );
       final data = r.data;
@@ -148,8 +149,12 @@ class MobileApi {
           if (e.value.isNotEmpty) body[e.key] = e.value;
         }
       }
-      final r = await _dio.post('/api/$slug/mobile/sync/delta', data: _jsonBody(body));
-      return SyncFullResult.fromJson(r.data as Map<String, dynamic>);
+      final r = await _dio.post<String>(
+        '/api/$slug/mobile/sync/delta',
+        data: _jsonBody(body),
+        options: Options(responseType: ResponseType.plain),
+      );
+      return compute(parseSyncFullResultJson, r.data ?? '{}');
     } on DioException catch (e) { throw _map(e); }
   }
 
@@ -278,6 +283,46 @@ class MobileApi {
     }
   }
 
+  Future<List<Map<String, dynamic>>> listInAppNotifications(
+    String slug, {
+    bool unreadOnly = false,
+    int limit = 40,
+  }) async {
+    try {
+      final r = await _dio.get(
+        '/api/$slug/notifications',
+        queryParameters: {
+          if (unreadOnly) 'unread_only': 'true',
+          'limit': limit,
+        },
+      );
+      final data = r.data;
+      final list = data is Map ? (data['data'] as List? ?? const []) : const [];
+      return list
+          .whereType<Map>()
+          .map((e) => Map<String, dynamic>.from(e))
+          .toList();
+    } on DioException catch (e) {
+      throw _map(e);
+    }
+  }
+
+  Future<void> markInAppNotificationRead(String slug, int id) async {
+    try {
+      await _dio.patch('/api/$slug/notifications/$id/read', data: _jsonBody());
+    } on DioException catch (e) {
+      throw _map(e);
+    }
+  }
+
+  Future<void> markAllInAppNotificationsRead(String slug) async {
+    try {
+      await _dio.post('/api/$slug/notifications/read-all', data: _jsonBody());
+    } on DioException catch (e) {
+      throw _map(e);
+    }
+  }
+
   Future<List<DebtorClient>> getDebtors(String slug) async {
     try {
       final r = await _dio.get('/api/$slug/mobile/clients/debtors');
@@ -324,6 +369,8 @@ class MobileApi {
     required List items,
     String? priceType,
     String? comment,
+    Map<String, dynamic>? visit,
+    DateTime? createdAt,
   }) async {
     try {
       final r = await _dio.post('/api/$slug/mobile/orders/enqueue', data: {
@@ -332,7 +379,8 @@ class MobileApi {
         'items': items,
         if (priceType != null) 'price_type': priceType,
         if (comment != null) 'comment': comment,
-        'offline_created_at': DateTime.now().toUtc().toIso8601String(),
+        if (visit != null) 'visit': visit,
+        'offline_created_at': (createdAt ?? DateTime.now()).toUtc().toIso8601String(),
       },);
       return r.data;
     } on DioException catch (e) { throw _map(e); }
@@ -340,7 +388,10 @@ class MobileApi {
 
   Future<List<ClientPhotoReport>> getClientPhotoReports(String slug, int clientId) async {
     try {
-      final r = await _dio.get('/api/$slug/mobile/clients/$clientId/photo-reports');
+      final r = await _dio.get(
+        '/api/$slug/mobile/clients/$clientId/photo-reports',
+        queryParameters: {'include_images': '1'},
+      );
       final list = r.data['data'] as List? ?? [];
       return list
           .map((e) => ClientPhotoReport.fromJson(Map<String, dynamic>.from(e as Map)))
@@ -470,12 +521,14 @@ class ClientPhotoReport {
   final String imageUrl;
   final String? caption;
   final int? orderId;
+  final int? createdByUserId;
   final String createdAt;
   const ClientPhotoReport({
     required this.id,
     required this.imageUrl,
     this.caption,
     this.orderId,
+    this.createdByUserId,
     required this.createdAt,
   });
   factory ClientPhotoReport.fromJson(Map<String, dynamic> j) => ClientPhotoReport(
@@ -483,6 +536,7 @@ class ClientPhotoReport {
         imageUrl: j['image_url']?.toString() ?? '',
         caption: j['caption']?.toString(),
         orderId: (j['order_id'] as num?)?.toInt(),
+        createdByUserId: (j['created_by_user_id'] as num?)?.toInt(),
         createdAt: j['created_at']?.toString() ?? '',
       );
 }
@@ -622,6 +676,15 @@ class SyncFullResult {
       workUtcOffsetHours: offsetRaw is num ? offsetRaw : num.tryParse('$offsetRaw'),
     );
   }
+}
+
+/// Isolate uchun top-level: delta sync JSON parse.
+SyncFullResult parseSyncFullResultJson(String raw) {
+  final decoded = jsonDecode(raw);
+  if (decoded is! Map) {
+    return SyncFullResult(syncAt: '');
+  }
+  return SyncFullResult.fromJson(Map<String, dynamic>.from(decoded));
 }
 
 class SyncClient {
@@ -1628,7 +1691,9 @@ class DebtorClient {
   final String? overdueAt;
   final double legacyDebt;
   final double currentDebt;
+  final double openingDebt;
   final bool debtCollectionOnly;
+  final String? photoUrl;
 
   DebtorClient({
     required this.id,
@@ -1639,7 +1704,9 @@ class DebtorClient {
     this.overdueAt,
     this.legacyDebt = 0,
     this.currentDebt = 0,
+    this.openingDebt = 0,
     this.debtCollectionOnly = false,
+    this.photoUrl,
   });
 
   factory DebtorClient.fromJson(Map<String, dynamic> j) => DebtorClient(
@@ -1651,7 +1718,9 @@ class DebtorClient {
         overdueAt: j['overdue_at']?.toString(),
         legacyDebt: (j['legacy_debt'] as num?)?.toDouble() ?? 0,
         currentDebt: (j['current_debt'] as num?)?.toDouble() ?? 0,
+        openingDebt: (j['opening_debt'] as num?)?.toDouble() ?? 0,
         debtCollectionOnly: j['debt_collection_only'] == true,
+        photoUrl: j['photo_url']?.toString(),
       );
 }
 

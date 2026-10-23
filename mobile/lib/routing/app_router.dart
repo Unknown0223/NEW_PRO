@@ -7,7 +7,9 @@ import '../core/theme/app_colors.dart';
 import '../features/auth/auth_provider.dart';
 import '../features/auth/pin_setup_screen.dart';
 import '../features/auth/pin_unlock_screen.dart';
+import '../core/permissions/app_permissions.dart';
 import '../features/auth/login_screen.dart';
+import '../features/auth/permission_gate_page.dart';
 import '../features/auth/bootstrap_screen.dart';
 import '../features/auth/session_splash_screen.dart';
 import '../features/agent/home/agent_home_page.dart';
@@ -74,10 +76,17 @@ import '../features/supervisor/gps/supervisor_gps_page.dart';
 import '../features/supervisor/kpi/supervisor_kpi_page.dart';
 import '../features/supervisor/kpi/supervisor_kpi_route_page.dart';
 import '../features/supervisor/settings/supervisor_settings_page.dart';
+import '../features/supervisor/clients/supervisor_clients_page.dart';
+import '../features/supervisor/clients/supervisor_client_edit_page.dart';
+import '../features/supervisor/clients/supervisor_new_client_page.dart';
+import '../features/supervisor/clients/supervisor_notifications_page.dart';
 import '../features/shared/profile/profile_page.dart';
 import '../features/cashier/cashier_home_page.dart';
 import '../features/cashier/bank_transfer_inbox_page.dart';
 import '../features/cashier/bank_transfer_inbox_detail_page.dart';
+import '../features/tasks/task_create_page.dart';
+import '../features/tasks/task_detail_page.dart';
+import '../features/tasks/tasks_page.dart';
 import 'role_guard.dart';
 
 /// Dialoglar uchun (MaterialApp.builder kontekstida Navigator yo‘q).
@@ -88,6 +97,9 @@ final _shellKey = GlobalKey<NavigatorState>();
 class _AppRouterRefresh extends ChangeNotifier {
   _AppRouterRefresh(Ref ref) {
     ref.listen<AuthState>(authStateProvider, (_, __) => notifyListeners());
+    ref.listen<AppPermissionsState>(appPermissionsProvider, (prev, next) {
+      if (prev?.allGranted != next.allGranted || prev?.checkedOnce != next.checkedOnce) notifyListeners();
+    });
   }
 }
 
@@ -191,7 +203,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       }
 
       if (s == AuthStatus.ready) {
-        if (isLogin || isBoot || isSplash || loc == '/unlock' || loc == '/pin-setup') {
+        final perms = ref.read(appPermissionsProvider);
+        if (perms.checkedOnce && !perms.allGranted) {
+          return loc == '/permissions' ? null : '/permissions';
+        }
+        if (isLogin || isBoot || isSplash || loc == '/unlock' || loc == '/pin-setup' || loc == '/permissions') {
           return '/home';
         }
 
@@ -210,6 +226,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/pin-setup', builder: (_, __) => const PinSetupScreen()),
       GoRoute(path: '/unlock', builder: (_, __) => const PinUnlockScreen()),
       GoRoute(path: '/bootstrap', builder: (_, __) => const BootstrapScreen()),
+      GoRoute(path: '/permissions', builder: (_, __) => const PermissionGatePage()),
       GoRoute(
         path: '/exp-manual-sync',
         parentNavigatorKey: rootNavigatorKey,
@@ -254,6 +271,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         },
       ),
       GoRoute(
+        path: '/draft',
+        parentNavigatorKey: rootNavigatorKey,
+        builder: (_, __) => const AgentDraftPage(),
+      ),
+      GoRoute(
         path: '/orders/detail/:orderId',
         parentNavigatorKey: rootNavigatorKey,
         builder: (ctx, state) {
@@ -265,6 +287,56 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: '/kpi/route/days',
         parentNavigatorKey: rootNavigatorKey,
         builder: (_, __) => const AgentKpiDiagnosticsDaysPage(),
+      ),
+      // Fullscreen: ShellRoute ichida parentNavigatorKey=root bo‘lishi mumkin emas.
+      GoRoute(
+        path: '/kpi/calc',
+        parentNavigatorKey: rootNavigatorKey,
+        builder: (_, __) => const AgentKpiCalcPage(),
+      ),
+      GoRoute(
+        path: '/sv-kpi/route',
+        parentNavigatorKey: rootNavigatorKey,
+        builder: (_, __) => const SupervisorKpiRoutePage(),
+      ),
+      GoRoute(
+        path: '/sv-clients/new',
+        parentNavigatorKey: rootNavigatorKey,
+        builder: (_, __) => const SupervisorNewClientPage(),
+      ),
+      GoRoute(
+        path: '/sv-clients/:id',
+        parentNavigatorKey: rootNavigatorKey,
+        builder: (_, state) {
+          final id = int.tryParse(state.pathParameters['id'] ?? '') ?? 0;
+          return SupervisorClientEditPage(clientId: id);
+        },
+      ),
+      GoRoute(
+        path: '/sv-notifications',
+        parentNavigatorKey: rootNavigatorKey,
+        builder: (_, __) => const SupervisorNotificationsPage(),
+      ),
+      GoRoute(
+        path: '/tasks',
+        parentNavigatorKey: rootNavigatorKey,
+        builder: (_, __) => const TasksPage(),
+      ),
+      GoRoute(
+        path: '/tasks/new',
+        parentNavigatorKey: rootNavigatorKey,
+        builder: (_, __) => const TaskCreatePage(),
+      ),
+      GoRoute(
+        path: '/tasks/:id',
+        parentNavigatorKey: rootNavigatorKey,
+        builder: (_, state) {
+          final id = int.tryParse(state.pathParameters['id'] ?? '');
+          if (id == null) {
+            return const Scaffold(body: Center(child: Text('Задача не найдена')));
+          }
+          return TaskDetailPage(taskId: id);
+        },
       ),
       GoRoute(
         path: '/clients/new',
@@ -282,7 +354,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         builder: (ctx, state) {
           final id = int.tryParse(state.pathParameters['clientId'] ?? '');
           if (id == null) {
-            return const Scaffold(body: Center(child: Text('Vizit topilmadi')));
+            return const Scaffold(body: Center(child: Text('Визит не найден')));
           }
           return VisitInProgressScreen(clientId: id);
         },
@@ -294,7 +366,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           final id = int.tryParse(state.pathParameters['id'] ?? '');
           if (id == null) {
             return const Scaffold(
-                body: Center(child: Text('Mijoz ID noto\'g\'ri')),);
+                body: Center(child: Text('Неверный ID клиента')),);
           }
           return ClientDetailScreen(clientId: id);
         },
@@ -354,7 +426,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           final id = int.tryParse(state.pathParameters['id'] ?? '');
           if (id == null) {
             return const Scaffold(
-                body: Center(child: Text('Buyurtma ID noto\'g\'ri')),);
+                body: Center(child: Text('Неверный ID заказа')),);
           }
           return ExpeditorDeliveryDetailPage(orderId: id);
         },
@@ -366,7 +438,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           final id = int.tryParse(state.pathParameters['id'] ?? '');
           if (id == null) {
             return const Scaffold(
-                body: Center(child: Text('Mijoz ID noto\'g\'ri')),);
+                body: Center(child: Text('Неверный ID клиента')),);
           }
           final extra = state.extra;
           return ExpeditorClientDetailPage(
@@ -382,7 +454,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           final id = int.tryParse(state.pathParameters['id'] ?? '');
           if (id == null) {
             return const Scaffold(
-                body: Center(child: Text('Mijoz ID noto\'g\'ri')),);
+                body: Center(child: Text('Неверный ID клиента')),);
           }
           final extra = state.extra;
           return ExpeditorDebtorClientPage(
@@ -398,7 +470,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           final id = int.tryParse(state.pathParameters['id'] ?? '');
           if (id == null) {
             return const Scaffold(
-                body: Center(child: Text('Mijoz ID noto\'g\'ri')),);
+                body: Center(child: Text('Неверный ID клиента')),);
           }
           return ExpeditorClientOrdersPage(clientId: id);
         },
@@ -410,7 +482,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           final id = int.tryParse(state.pathParameters['id'] ?? '');
           if (id == null) {
             return const Scaffold(
-                body: Center(child: Text('Mijoz ID noto\'g\'ri')),);
+                body: Center(child: Text('Неверный ID клиента')),);
           }
           return ExpeditorClientLedgerPage(clientId: id);
         },
@@ -499,7 +571,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           final id = int.tryParse(state.pathParameters['id'] ?? '');
           if (id == null) {
             return const Scaffold(
-              body: Center(child: Text('ID noto\'g\'ri')),
+              body: Center(child: Text('Неверный ID')),
             );
           }
           return BankTransferInboxDetailPage(inboxId: id);
@@ -543,13 +615,6 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: '/kpi',
             builder: (_, __) => const AgentKpiPage(),
-            routes: [
-              GoRoute(
-                path: 'calc',
-                parentNavigatorKey: rootNavigatorKey,
-                builder: (_, __) => const AgentKpiCalcPage(),
-              ),
-            ],
           ),
           GoRoute(
             path: '/kpi/route',
@@ -563,7 +628,6 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           GoRoute(
               path: '/debtors-by-orders',
               builder: (_, __) => const AgentDebtorsByOrdersPage(),),
-          GoRoute(path: '/draft', builder: (_, __) => const AgentDraftPage()),
           GoRoute(
               path: '/sync-success',
               builder: (_, __) => const SyncSuccessScreen(),),
@@ -593,17 +657,13 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               builder: (_, __) => const SupervisorGpsPage(),),
           GoRoute(
               path: '/sv-kpi',
-              builder: (_, __) => const SupervisorKpiPage(),
-              routes: [
-                GoRoute(
-                  path: 'route',
-                  parentNavigatorKey: rootNavigatorKey,
-                  builder: (_, __) => const SupervisorKpiRoutePage(),
-                ),
-              ],),
+              builder: (_, __) => const SupervisorKpiPage(),),
           GoRoute(
               path: '/sv-settings',
               builder: (_, __) => const SupervisorSettingsPage(),),
+          GoRoute(
+              path: '/sv-clients',
+              builder: (_, __) => const SupervisorClientsPage(),),
           GoRoute(
               path: '/agents',
               builder: (_, __) => const SupervisorAgentsPage(),),
@@ -671,7 +731,10 @@ class _NavShell extends ConsumerWidget {
         type: BottomNavigationBarType.fixed,
         selectedFontSize: 11,
         unselectedFontSize: 11,
-        onTap: (i) => context.go(items[i].path),
+        onTap: (i) {
+          final router = GoRouter.of(context);
+          router.go(items[i].path);
+        },
         items: items
             .map((it) => BottomNavigationBarItem(
                   icon: Icon(it.icon),

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 
 type Options = {
   /** Trigger visibility once and keep true (default true). */
@@ -14,10 +14,11 @@ type Options = {
 /**
  * Returns true when the ref element enters (or has entered) the viewport.
  * Used to defer heavy dashboard API calls until the user scrolls to a section.
+ * `ref` is a callback ref: the section is often mounted later (after the summary loads).
  */
 export function useDashboardSectionVisible(options: Options = {}) {
   const { once = true, rootMargin = "120px", threshold = 0.05, enabled = true } = options;
-  const ref = useRef<HTMLDivElement>(null);
+  const [el, setEl] = useState<HTMLDivElement | null>(null);
   const [visible, setVisible] = useState(false);
 
   useEffect(() => {
@@ -25,7 +26,6 @@ export function useDashboardSectionVisible(options: Options = {}) {
       setVisible(false);
       return;
     }
-    const el = ref.current;
     if (!el) return;
 
     if (typeof IntersectionObserver === "undefined") {
@@ -49,7 +49,7 @@ export function useDashboardSectionVisible(options: Options = {}) {
 
     observer.observe(el);
     return () => observer.disconnect();
-  }, [enabled, once, rootMargin, threshold]);
+  }, [el, enabled, once, rootMargin, threshold]);
 
-  return { ref, visible };
+  return { ref: setEl, visible };
 }

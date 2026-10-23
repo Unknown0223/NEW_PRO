@@ -115,7 +115,7 @@ export function FinanceCurrenciesSettings() {
 
   const saveMut = useMutation({
     mutationFn: async (next: CurrencyEntry[]) => {
-      if (!tenantSlug) throw new Error("no tenant");
+      if (!tenantSlug) throw new Error("Компания не выбрана");
       await api.patch(`/api/${tenantSlug}/settings/profile`, {
         references: { currency_entries: ensureOneDefault(next) }
       });
@@ -124,7 +124,7 @@ export function FinanceCurrenciesSettings() {
       await qc.invalidateQueries({ queryKey: ["settings", "profile", tenantSlug] });
       await qc.invalidateQueries({ queryKey: ["price-types", tenantSlug] });
       setServerFieldErrs({});
-      setMsg("Saqlandi.");
+      setMsg("Сохранено.");
       setOpen(false);
       resetForm();
     },
@@ -137,14 +137,14 @@ export function FinanceCurrenciesSettings() {
           const top = flat.formErrors.map((s) => s.trim()).find(Boolean);
           const hint = firstValidationUserHint(flat);
           const line = top ?? hint ?? Object.values(per).find((m) => m.trim() !== "");
-          setMsg(line ? withApiSupportLine(line, e) : getUserFacingError(e, "Saqlashda xatolik."));
+          setMsg(line ? withApiSupportLine(line, e) : getUserFacingError(e, "Ошибка при сохранении."));
           return;
         }
         setServerFieldErrs({});
       } else {
         setServerFieldErrs({});
       }
-      setMsg(getUserFacingError(e, "Saqlashda xatolik."));
+      setMsg(getUserFacingError(e, "Ошибка при сохранении."));
     },
   });
 
@@ -198,7 +198,7 @@ export function FinanceCurrenciesSettings() {
   if (!hydrated) {
     return (
       <PageShell>
-        <p className="text-sm text-muted-foreground">Sessiya...</p>
+        <p className="text-sm text-muted-foreground">Загрузка сессии…</p>
       </PageShell>
     );
   }
@@ -207,7 +207,7 @@ export function FinanceCurrenciesSettings() {
       <PageShell>
         <p className="text-sm text-destructive">
           <Link href="/login" className="underline">
-            Kirish
+            Войти
           </Link>
         </p>
       </PageShell>
@@ -218,14 +218,14 @@ export function FinanceCurrenciesSettings() {
     <PageShell>
       <PageHeader
         title="Валюты"
-        description="Standart valyuta bittasi; kodlar mahsulot narxlari (currency) bilan mos keladi."
+        description="Валюта по умолчанию — только одна; коды совпадают с валютой (currency) в ценах товаров."
         actions={
           <div className="flex gap-2">
             <Button size="sm" disabled={!isAdmin} onClick={openAdd}>
               Добавить
             </Button>
             <Link href="/settings" className={cn(buttonVariants({ variant: "outline", size: "sm" }))}>
-              Katalog
+              Каталог
             </Link>
             <Link href="/currency-rates" className={cn(buttonVariants({ variant: "outline", size: "sm" }))}>
               Курс валют
@@ -276,14 +276,14 @@ export function FinanceCurrenciesSettings() {
                     <td className="px-3 py-2">{r.is_default ? "✓" : "—"}</td>
                     <td className="px-3 py-2 text-right">
                       {isAdmin ? (
-                        <TableRowActionGroup className="justify-end" ariaLabel="Valyuta">
+                        <TableRowActionGroup className="justify-end" ariaLabel="Валюта">
                           <Button
                             variant="outline"
                             size="icon-sm"
                             type="button"
                             className="text-muted-foreground hover:text-foreground"
-                            title="Tahrirlash"
-                            aria-label="Tahrirlash"
+                            title="Редактировать"
+                            aria-label="Редактировать"
                             onClick={() => openEdit(r)}
                           >
                             <Pencil className="size-3.5" aria-hidden />
@@ -296,7 +296,7 @@ export function FinanceCurrenciesSettings() {
                 {filtered.length === 0 ? (
                   <tr>
                     <td colSpan={5} className="px-3 py-6 text-center text-muted-foreground">
-                      Ma&apos;lumot yo&apos;q
+                      Нет данных
                     </td>
                   </tr>
                 ) : null}
@@ -312,7 +312,7 @@ export function FinanceCurrenciesSettings() {
         <DialogContent className="sm:max-w-[520px]" showCloseButton>
           <DialogHeader>
             <DialogTitle>{editId ? "Редактировать" : "Добавить"}</DialogTitle>
-            <DialogDescription>Kod: 2–20 ta lotin harf yoki raqam. Bitta default valyuta.</DialogDescription>
+            <DialogDescription>Код: 2–20 латинских букв или цифр. Валюта по умолчанию — только одна.</DialogDescription>
           </DialogHeader>
           <div className="grid gap-3">
             <div className="grid gap-1.5">

@@ -5,19 +5,18 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 
-import '../../../core/auth/biometric_preferences.dart';
-import '../../../core/auth/biometric_service.dart';
 import '../../../core/api/api_exceptions.dart';
 import '../../../core/api/auth_api.dart';
 import '../../../core/api/dio_client.dart' show ensureAuthTokens;
+import '../../../core/face/face_verification_api.dart';
 import '../../../core/api/mobile_api.dart';
 import '../../../core/auth/session.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/ui/agent_ui.dart';
+import '../../auth/biometric_quick_login_tile.dart';
 import '../../auth/auth_provider.dart';
 import '../../agent/shell/agent_app_bar.dart';
-import '../../agent/shell/agent_scaffold_key.dart';
 
 class ProfilePage extends ConsumerStatefulWidget {
   const ProfilePage({super.key});
@@ -36,9 +35,6 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
 
   bool _loading = true;
   bool _saving = false;
-  bool _bioAvailable = false;
-  bool _bioEnabled = false;
-  String _bioLabel = 'биометрию';
   String? _error;
   String? _avatarBase64;
 
@@ -68,21 +64,13 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
     });
     try {
       await ensureAuthTokens(ref);
-      final bio = ref.read(biometricServiceProvider);
-      final prefs = ref.read(biometricPreferencesProvider);
       final p = await ref.read(mobileApiProvider).getMyProfile(slug);
-      final bioAvailable = await bio.isAvailable();
-      final bioEnabled = await prefs.isEnabled();
-      final bioLabel = await bio.getBiometricLabel();
       if (!mounted) return;
       _firstName.text = p.firstName ?? _splitName(p.name).$1;
       _lastName.text = p.lastName ?? _splitName(p.name).$2;
       _phone.text = (p.phone ?? '').replaceAll(RegExp(r'\D'), '');
       setState(() {
         _avatarBase64 = p.avatarBase64;
-        _bioAvailable = bioAvailable;
-        _bioEnabled = bioEnabled;
-        _bioLabel = bioLabel;
         _loading = false;
       });
     } on ApiException catch (e) {
@@ -116,7 +104,7 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
     if (bytes.length > 150000) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Rasm juda katta — kichikroq tanlang'), backgroundColor: AppColors.warning),
+          const SnackBar(content: Text('Изображение слишком большое — выберите поменьше'), backgroundColor: AppColors.warning),
         );
       }
       return;
@@ -135,11 +123,11 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
     final newPw2 = _newPass2.text;
     if (newPw.isNotEmpty || newPw2.isNotEmpty || oldPw.isNotEmpty) {
       if (oldPw.isEmpty || newPw.length < 6) {
-        setState(() => _error = 'Parol: eski parol va yangi (kamida 6 belgi) kerak');
+        setState(() => _error = 'Пароль: укажите старый и новый пароль (минимум 6 символов)');
         return;
       }
       if (newPw != newPw2) {
-        setState(() => _error = 'Yangi parollar mos emas');
+        setState(() => _error = 'Новые пароли не совпадают');
         return;
       }
     }
@@ -168,6 +156,9 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
       };
 
       final updated = await api.patchMyProfile(slug, body);
+      if (_avatarBase64 != null && _avatarBase64!.isNotEmpty) {
+        await ref.read(faceVerificationApiProvider).uploadReference(slug, _avatarBase64!);
+      }
       final u = ref.read(sessionProvider).user;
       if (u != null) {
         await ref.read(sessionProvider.notifier).setUser(
@@ -266,12 +257,10 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: isAgent
-          ? AgentAppBar(
+          ? const AgentAppBar(
               title: 'Редактировать профиль',
               showBack: true,
-              actions: [
-                AgentIconButton(icon: Icons.menu, onPressed: () => openAgentMenu(context)),
-              ],
+              useShellDrawer: true,
             )
           : const AgentAppBar(
               title: 'Редактировать профиль',
@@ -320,34 +309,11 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
                         ),
                       ),
                       const SizedBox(height: 16),
-                      if (_bioAvailable)
-                        AgentSurfaceCard(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                          child: SwitchListTile(
-                            value: _bioEnabled,
-                            activeThumbColor: accent,
-                            onChanged: (v) async {
-                              if (v) {
-                                final ok = await ref.read(authStateProvider.notifier).enableBiometricLock();
-                                if (!mounted) return;
-                                if (ok) {
-                                  setState(() => _bioEnabled = true);
-                                  showAgentToast(context, 'Biometrik qulf yoqildi', accentColor: AppColors.success);
-                                }
-                              } else {
-                                await ref.read(authStateProvider.notifier).disableBiometricLock();
-                                if (mounted) setState(() => _bioEnabled = false);
-                              }
-                            },
-                            secondary: Icon(Icons.fingerprint_rounded, color: accent),
-                            title: const Text('Быстрый вход', style: TextStyle(fontWeight: FontWeight.w700)),
-                            subtitle: Text(
-                              '$_bioLabel — только на этом телефоне, не на сервере',
-                              style: AppTypography.bodySmall.copyWith(color: AppColors.textMuted),
-                            ),
-                          ),
-                        ),
-                      if (_bioAvailable) const SizedBox(height: 16),
+                      AgentSurfaceCard(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        child: BiometricQuickLoginTile(accentColor: accent),
+                      ),
+                      const SizedBox(height: 16),
                       AgentSurfaceCard(
                         padding: const EdgeInsets.all(16),
                         child: Column(

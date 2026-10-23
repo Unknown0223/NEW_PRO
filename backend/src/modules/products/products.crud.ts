@@ -256,3 +256,30 @@ export async function softDeleteProduct(
   });
   return row;
 }
+
+export async function bulkSetProductsEquipment(
+  tenantId: number,
+  productIds: number[],
+  isEquipment: boolean,
+  actorUserId: number | null = null
+): Promise<{ updated: number }> {
+  const uniq = [...new Set(productIds.filter((id) => Number.isInteger(id) && id > 0))];
+  if (!uniq.length) return { updated: 0 };
+  const count = await prisma.product.count({
+    where: { tenant_id: tenantId, id: { in: uniq } }
+  });
+  if (count !== uniq.length) throw new Error("BAD_PRODUCT_IDS");
+  const result = await prisma.product.updateMany({
+    where: { tenant_id: tenantId, id: { in: uniq } },
+    data: { is_equipment: isEquipment }
+  });
+  await appendTenantAuditEvent({
+    tenantId,
+    actorUserId,
+    entityType: AuditEntityType.product,
+    entityId: "products_bulk",
+    action: "products.bulk_equipment",
+    payload: { count: result.count, is_equipment: isEquipment }
+  });
+  return { updated: result.count };
+}

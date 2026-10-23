@@ -100,8 +100,13 @@ export function UserMenu() {
       }
     }
     clearSession();
-    router.replace("/login");
-    router.refresh();
+    qc.clear();
+    try {
+      window.localStorage.removeItem("salec:rq:v1");
+    } catch {
+      /* ignore */
+    }
+    window.location.assign("/login");
   }
 
   function clearCache() {

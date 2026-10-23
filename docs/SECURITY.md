@@ -3,14 +3,14 @@
 ## Parol xeshlash
 
 - Kutubxona: **bcryptjs** (`backend/src/modules/auth/auth.service.ts`, `backend/src/modules/staff/staff.crud.create.web.ts` va boshqa staff CRUD).
-- Cost factor: **10** (`bcrypt.hash(password, 10)`).
+- Cost factor: **12** (`bcrypt.hash(password, 12)`).
 - Parollar hech qachon log yoki API javobida qaytarilmaydi.
 
 ## Cookie va sessiya
 
-- Refresh token: `HttpOnly`, `SameSite=Strict`, `Path=/`.
+- Refresh token: `HttpOnly` cookie (`salec_rt`), `SameSite=Strict`, `Path=/`. TTL 30 kun. Brauzer `localStorage` ga **yozilmaydi**.
 - Production (`NODE_ENV=production`): `Secure` flag majburiy (`auth-cookies.ts`).
-- Access token: qisqa muddatli JWT; brauzerda `localStorage` / Zustand (`frontend/lib/auth-store.ts`).
+- Access token: JWT 24 soat; Zustand persist (XSS da refresh o‘g‘irlanmasin). Sahifa yangilanganda cookie `salec_rt` orqali tiklanadi.
 
 ## PII va ma'lumot saqlash (draft)
 

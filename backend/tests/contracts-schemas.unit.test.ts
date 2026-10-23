@@ -45,6 +45,20 @@ describe("contracts schemas (unit)", () => {
     expect(r.success).toBe(true);
   });
 
+  it("createOrderBodySchema — creation_channel ni web tanasidan olib tashlaydi", () => {
+    const r = createOrderBodySchema.safeParse({
+      client_id: 1,
+      warehouse_id: 1,
+      agent_id: 1,
+      items: [{ product_id: 1, qty: 1 }],
+      creation_channel: "mobile"
+    });
+    expect(r.success).toBe(true);
+    if (r.success) {
+      expect("creation_channel" in r.data).toBe(false);
+    }
+  });
+
   it("patchOrderStatusBodySchema — status majburiy", () => {
     expect(patchOrderStatusBodySchema.safeParse({}).success).toBe(false);
     expect(patchOrderStatusBodySchema.safeParse({ status: "new" }).success).toBe(true);
@@ -87,6 +101,11 @@ describe("contracts schemas (unit)", () => {
     expect(q.page).toBe(2);
     expect(q.limit).toBe(10);
     expect(q.deal_type).toBe("consignment");
+  });
+
+  it("parsePaymentsListQuery — territory_zone ko‘p tanlov saqlanadi", () => {
+    const q = parsePaymentsListQuery({ territory_zone: "FV|SOUTH-WEST" });
+    expect(q.territory_zone).toBe("FV|SOUTH-WEST");
   });
 
   it("parseProductsListQuery — uncategorized", () => {

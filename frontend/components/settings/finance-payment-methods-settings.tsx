@@ -138,7 +138,7 @@ export function FinancePaymentMethodsSettings() {
 
   const saveMut = useMutation({
     mutationFn: async (next: PaymentMethodEntry[]) => {
-      if (!tenantSlug) throw new Error("no tenant");
+      if (!tenantSlug) throw new Error("Компания не выбрана");
       await api.patch(`/api/${tenantSlug}/settings/profile`, {
         references: { payment_method_entries: next }
       });
@@ -146,7 +146,7 @@ export function FinancePaymentMethodsSettings() {
     onSuccess: async () => {
       await qc.invalidateQueries({ queryKey: ["settings", "profile", tenantSlug] });
       setServerFieldErrs({});
-      setMsg("Saqlandi. To‘lov turlari (bonus/kompaniya) nomlar bilan yangilandi.");
+      setMsg("Сохранено. Названия типов оплаты (бонус/компания) обновлены.");
       setOpen(false);
       resetForm();
     },
@@ -159,26 +159,26 @@ export function FinancePaymentMethodsSettings() {
           const top = flat.formErrors.map((s) => s.trim()).find(Boolean);
           const hint = firstValidationUserHint(flat);
           const line = top ?? hint ?? Object.values(per).find((m) => m.trim() !== "");
-          setMsg(line ? withApiSupportLine(line, e) : getUserFacingError(e, "Saqlashda xatolik."));
+          setMsg(line ? withApiSupportLine(line, e) : getUserFacingError(e, "Ошибка при сохранении."));
           return;
         }
         setServerFieldErrs({});
       } else {
         setServerFieldErrs({});
       }
-      setMsg(getUserFacingError(e, "Saqlashda xatolik."));
+      setMsg(getUserFacingError(e, "Ошибка при сохранении."));
     }
   });
   const saveOrderCreateFlagMut = useMutation({
     mutationFn: async (next: boolean) => {
-      if (!tenantSlug) throw new Error("no tenant");
+      if (!tenantSlug) throw new Error("Компания не выбрана");
       await api.patch(`/api/${tenantSlug}/settings/profile`, {
         feature_flags: { show_order_payment_method_selector: next }
       });
     },
     onSuccess: async () => {
       await qc.invalidateQueries({ queryKey: ["settings", "profile", tenantSlug] });
-      setMsg("Zakaz formasidagi to‘lov usuli ko‘rinish sozlamasi saqlandi.");
+      setMsg("Настройка отображения способа оплаты в форме заказа сохранена.");
     },
     onError: (e: unknown) => {
       if (isAxiosError(e)) {
@@ -188,11 +188,11 @@ export function FinancePaymentMethodsSettings() {
           const top = flat.formErrors.map((s) => s.trim()).find(Boolean);
           const hint = firstValidationUserHint(flat);
           const line = top ?? hint ?? Object.values(per).find((m) => m.trim() !== "");
-          setMsg(line ? withApiSupportLine(line, e) : getUserFacingError(e, "Sozlamani saqlashda xatolik."));
+          setMsg(line ? withApiSupportLine(line, e) : getUserFacingError(e, "Ошибка при сохранении настройки."));
           return;
         }
       }
-      setMsg(getUserFacingError(e, "Sozlamani saqlashda xatolik."));
+      setMsg(getUserFacingError(e, "Ошибка при сохранении настройки."));
     }
   });
 
@@ -257,7 +257,7 @@ export function FinancePaymentMethodsSettings() {
   if (!hydrated) {
     return (
       <PageShell>
-        <p className="text-sm text-muted-foreground">Sessiya...</p>
+        <p className="text-sm text-muted-foreground">Загрузка сессии…</p>
       </PageShell>
     );
   }
@@ -266,7 +266,7 @@ export function FinancePaymentMethodsSettings() {
       <PageShell>
         <p className="text-sm text-destructive">
           <Link href="/login" className="underline">
-            Kirish
+            Войти
           </Link>
         </p>
       </PageShell>
@@ -277,7 +277,7 @@ export function FinancePaymentMethodsSettings() {
     <PageShell>
       <PageHeader
         title="Способ оплаты"
-        description="Har bir usul valyutaga bog‘langan; saqlanganda kompaniya «to‘lov turlari» ro‘yxati yangilanadi."
+        description="Каждый способ привязан к валюте; при сохранении обновляется список «типов оплаты» компании."
         actions={
           <div className="flex gap-2">
             <Button size="sm" disabled={!isAdmin} onClick={openAdd}>
@@ -287,7 +287,7 @@ export function FinancePaymentMethodsSettings() {
               Валюты
             </Link>
             <Link href="/settings" className={cn(buttonVariants({ variant: "outline", size: "sm" }))}>
-              Katalog
+              Каталог
             </Link>
           </div>
         }
@@ -297,9 +297,9 @@ export function FinancePaymentMethodsSettings() {
         <div className="rounded-lg border bg-card p-4">
           <div className="flex items-center justify-between gap-3">
             <div className="space-y-1">
-              <h3 className="text-sm font-semibold">Zakaz formasida to‘lov usuli select</h3>
+              <h3 className="text-sm font-semibold">Выбор способа оплаты в форме заказа</h3>
               <p className="text-xs text-muted-foreground">
-                O‘chiq bo‘lsa zakaz yaratishda `sposib oplata` maydoni ko‘rinmaydi (ixtiyoriy metadata).
+                Если выключено, поле «Способ оплаты» не отображается при создании заказа (необязательные метаданные).
               </p>
             </div>
             <label className="inline-flex items-center gap-2 text-sm">
@@ -313,7 +313,7 @@ export function FinancePaymentMethodsSettings() {
                 }}
                 disabled={!isAdmin || saveOrderCreateFlagMut.isPending}
               />
-              <span>{showOrderPaymentMethodSelector ? "Yoqilgan" : "O‘chiq"}</span>
+              <span>{showOrderPaymentMethodSelector ? "Включено" : "Выключено"}</span>
             </label>
           </div>
         </div>
@@ -380,14 +380,14 @@ export function FinancePaymentMethodsSettings() {
                     </td>
                     <td className="px-3 py-2 text-right">
                       {isAdmin ? (
-                        <TableRowActionGroup className="justify-end" ariaLabel="To‘lov usuli">
+                        <TableRowActionGroup className="justify-end" ariaLabel="Способ оплаты">
                           <Button
                             variant="outline"
                             size="icon-sm"
                             type="button"
                             className="text-muted-foreground hover:text-foreground"
-                            title="Tahrirlash"
-                            aria-label="Tahrirlash"
+                            title="Редактировать"
+                            aria-label="Редактировать"
                             onClick={() => openEdit(r)}
                           >
                             <Pencil className="size-3.5" aria-hidden />
@@ -400,7 +400,7 @@ export function FinancePaymentMethodsSettings() {
                 {filtered.length === 0 ? (
                   <tr>
                     <td colSpan={7} className="px-3 py-6 text-center text-muted-foreground">
-                      Ma&apos;lumot yo&apos;q
+                      Нет данных
                     </td>
                   </tr>
                 ) : null}
@@ -416,7 +416,7 @@ export function FinancePaymentMethodsSettings() {
         <DialogContent className="sm:max-w-[520px]" showCloseButton>
           <DialogHeader>
             <DialogTitle>{editId ? "Редактировать" : "Добавить"}</DialogTitle>
-            <DialogDescription>Ichki kod: a–z, 0–9, _ (max 30). Valyutani oldin «Валюты» bo‘limida yarating.</DialogDescription>
+            <DialogDescription>Внутренний код: a–z, 0–9, _ (макс. 30). Сначала создайте валюту в разделе «Валюты».</DialogDescription>
           </DialogHeader>
           <div className="grid gap-3">
             <div className="grid gap-1.5">
@@ -514,8 +514,8 @@ export function FinancePaymentMethodsSettings() {
                 />
               </span>
               <span className="text-xs text-muted-foreground">
-                Belgilansa: Bank Transfer Inbox / 1C dan kelgan to‘lovlar shu usul kodini oladi.
-                Qo‘lda kiritilgan перечисление ham shu usulda bo‘ladi, lekin «Вручную» deb ajraladi.
+                Если отмечено: оплаты из Bank Transfer Inbox / 1С получают код этого способа.
+                Перечисление, введённое вручную, тоже относится к этому способу, но помечается как «Вручную».
               </span>
             </label>
             {pickZodLeaf(serverFieldErrs, "sync_with_1c") ? (

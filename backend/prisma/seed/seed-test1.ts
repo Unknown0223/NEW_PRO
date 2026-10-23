@@ -227,9 +227,9 @@ export async function seedTest1Tenant() {
           gps: { tracking_enabled: true, tracking_interval_sec: 300 },
           photo: {
             required_for_order: true,
-            jpeg_quality: 92,
-            max_width_px: 4032,
-            max_height_px: 4032
+            jpeg_quality: 75,
+            max_width_px: 1600,
+            max_height_px: 1600
           },
           misc: { visit_start_end_enabled: true },
           product_list: { show_out_of_stock: true },

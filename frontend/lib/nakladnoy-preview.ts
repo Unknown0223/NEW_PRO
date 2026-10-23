@@ -13,6 +13,12 @@ export type NakladnoyPreviewCell = {
   skip?: boolean;
   colSpan?: number;
   rowSpan?: number;
+  /** Excelda katakda chegara (border) yo‘q. */
+  noBorder?: boolean;
+  /** Excel wrapText (sahifalangan varaqlarda). */
+  wrap?: boolean;
+  /** Shrift o‘lchami, pt (sahifalangan varaqlarda). */
+  fs?: number;
 };
 
 export type NakladnoyPreviewPage = {
@@ -22,6 +28,10 @@ export type NakladnoyPreviewPage = {
   grid?: {
     colCount: number;
     rows: NakladnoyPreviewCell[][];
+    /** Shu indeksli qatordan keyin yangi qog‘oz (0-based). Bor bo‘lsa — varaq qog‘ozlarga bo‘lingan. */
+    pageBreakAfterRows?: number[];
+    colWidthsPx?: number[];
+    rowHeightsPt?: number[];
   };
 };
 
@@ -30,6 +40,36 @@ export type NakladnoyPreviewResponse = {
   filename: string;
   pages: NakladnoyPreviewPage[];
 };
+
+export type NakladnoyPaperChunk = {
+  /** Varaqdagi birinchi qator indeksi (0-based). */
+  start: number;
+  rows: NakladnoyPreviewCell[][];
+  rowHeightsPt?: number[];
+};
+
+/** Grid qatorlarini Excel sahifa bo‘linishlari bo‘yicha qog‘ozlarga ajratadi. */
+export function splitNakladnoyGridIntoPapers(
+  grid: NonNullable<NakladnoyPreviewPage["grid"]>
+): NakladnoyPaperChunk[] {
+  const total = grid.rows.length;
+  const cuts = [...new Set(grid.pageBreakAfterRows ?? [])]
+    .filter((i) => Number.isInteger(i) && i >= 0 && i < total - 1)
+    .sort((a, b) => a - b);
+  const chunks: NakladnoyPaperChunk[] = [];
+  let start = 0;
+  for (const cut of [...cuts, total - 1]) {
+    const end = cut + 1;
+    if (end <= start) continue;
+    chunks.push({
+      start,
+      rows: grid.rows.slice(start, end),
+      rowHeightsPt: grid.rowHeightsPt?.slice(start, end)
+    });
+    start = end;
+  }
+  return chunks;
+}
 
 export async function fetchNakladnoyPreview(args: {
   tenantSlug: string;
@@ -40,10 +80,10 @@ export async function fetchNakladnoyPreview(args: {
 }): Promise<NakladnoyPreviewResponse> {
   const { tenantSlug, orderIds, template, prefs, warehouseExportOptions } = args;
   if (!template.apiTemplate) {
-    throw new Error("Shablon API bilan bog‘lanmagan.");
+    throw new Error("Шаблон не связан с API.");
   }
   if (orderIds.length === 0) {
-    throw new Error("Zakaz tanlanmagan.");
+    throw new Error("Заказ не выбран.");
   }
   try {
     const { data } = await api.post<NakladnoyPreviewResponse>(
@@ -64,6 +104,6 @@ export async function fetchNakladnoyPreview(args: {
     );
     return data;
   } catch (e: unknown) {
-    throw new Error(getUserFacingError(e, "Ko‘rinishni yuklab bo‘lmadi."));
+    throw new Error(getUserFacingError(e, "Не удалось загрузить предпросмотр."));
   }
 }

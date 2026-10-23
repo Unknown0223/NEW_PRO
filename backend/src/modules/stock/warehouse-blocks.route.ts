@@ -49,6 +49,15 @@ function mapBlockError(reply: FastifyReply, request: FastifyRequest, e: unknown)
   const msg = e instanceof Error ? e.message : "";
   if (msg === "BAD_WAREHOUSE") return sendApiError(reply, request, 400, "BadWarehouse");
   if (msg === "BAD_EXPEDITOR_USER") return sendApiError(reply, request, 400, "BadExpeditorUser");
+  if (msg === "EXPEDITOR_NOT_ON_SLOT") {
+    return sendApiError(
+      reply,
+      request,
+      403,
+      "ExpeditorNotOnSlot",
+      "Экспедитор не назначен на рабочее место — назначение на блок запрещено"
+    );
+  }
   if (msg === "BAD_GRUZCHIK_USER") return sendApiError(reply, request, 400, "BadGruzchikUser");
   if (msg === "TOO_MANY_EXPEDITORS") {
     return sendApiError(reply, request, 400, "TooManyExpeditors");
@@ -76,8 +85,15 @@ export async function registerWarehouseBlockRoutes(app: FastifyInstance) {
           orderBy: [{ name: "asc" }, { login: "asc" }]
         })
       ]);
+      const { filterUsersOnActiveWorkSlot, tenantUsesExpeditorWorkSlots } = await import(
+        "../work-slots/work-slots.expeditor-gate"
+      );
+      const onSlotExpeditors = await filterUsersOnActiveWorkSlot(
+        await tenantUsesExpeditorWorkSlots(tid),
+        pickers.expeditors
+      );
       /** Blok ↔ bitta доставщик: tanlov faqat `expeditor` roli. */
-      const expeditorCandidates = [...pickers.expeditors].sort((a, b) =>
+      const expeditorCandidates = [...onSlotExpeditors].sort((a, b) =>
         a.name.localeCompare(b.name, "ru", { sensitivity: "base" })
       );
       return reply.send({

@@ -13,7 +13,7 @@ GpsPositionCheck checkGpsPosition(GpsConfig gps, Position position) {
   if (maxAcc != null && maxAcc > 0 && position.accuracy > maxAcc) {
     return GpsPositionCheck(
       ok: false,
-      message: 'GPS aniqligi yetarli emas (≤ ${maxAcc.toStringAsFixed(0)} m)',
+      message: 'Недостаточная точность GPS (нужно ≤ ${maxAcc.toStringAsFixed(0)} м)',
     );
   }
   return const GpsPositionCheck(ok: true);

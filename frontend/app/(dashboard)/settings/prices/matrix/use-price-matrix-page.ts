@@ -194,15 +194,15 @@ export function usePriceMatrixPage() {
       setSaveDialogOpen(false);
       if (data.mode === "scheduled" && data.effective_at) {
         const when = new Date(data.effective_at).toLocaleString("ru-RU");
-        setMsg(`Rejalashtirildi: narxlar ${when} da qo‘llanadi.`);
+        setMsg(`Запланировано: цены вступят в силу ${when}.`);
       } else {
-        setMsg("Saqlandi.");
+        setMsg("Сохранено.");
       }
     },
     onError: (e: unknown) => {
       if (e instanceof Error && e.message === "EMPTY") {
         setServerFieldErrs({});
-        setMsg("Kamida bitta narx kiriting.");
+        setMsg("Введите хотя бы одну цену.");
         return;
       }
       if (isAxiosError(e)) {
@@ -213,14 +213,14 @@ export function usePriceMatrixPage() {
           const top = flat.formErrors.map((s) => s.trim()).find(Boolean);
           const hint = firstValidationUserHint(flat);
           const line = top ?? hint ?? Object.values(per).find((m) => m.trim() !== "");
-          setMsg(line ? withApiSupportLine(line, e) : getUserFacingError(e, "Saqlashda xato."));
+          setMsg(line ? withApiSupportLine(line, e) : getUserFacingError(e, "Ошибка сохранения."));
           return;
         }
         setServerFieldErrs({});
       } else {
         setServerFieldErrs({});
       }
-      setMsg(getUserFacingError(e, "Saqlashda xato."));
+      setMsg(getUserFacingError(e, "Ошибка сохранения."));
     }
   });
 
@@ -246,15 +246,15 @@ export function usePriceMatrixPage() {
   async function handleDownloadTemplate() {
     setImportParseErr(null);
     if (!priceType) {
-      setImportParseErr("Avval narx turini tanlang.");
+      setImportParseErr("Сначала выберите тип цены.");
       return;
     }
     if (categoryIdsArr.length === 0) {
-      setImportParseErr("Avval kamida bitta kategoriya belgilang.");
+      setImportParseErr("Сначала отметьте хотя бы одну категорию.");
       return;
     }
     if (matrixRows.length === 0) {
-      setImportParseErr("Tanlangan kategoriyalarda mahsulot yo‘q.");
+      setImportParseErr("В выбранных категориях нет товаров.");
       return;
     }
     setTemplateLoading(true);
@@ -267,10 +267,10 @@ export function usePriceMatrixPage() {
       });
     } catch (e: unknown) {
       if (e instanceof Error && e.message === "PRICE_TYPE_REQUIRED") {
-        setImportParseErr("Narx turini tanlang.");
+        setImportParseErr("Выберите тип цены.");
         return;
       }
-      setImportParseErr(getUserFacingError(e, "Shablon yuklab olishda xato."));
+      setImportParseErr(getUserFacingError(e, "Ошибка скачивания шаблона."));
     } finally {
       setTemplateLoading(false);
     }
@@ -279,15 +279,15 @@ export function usePriceMatrixPage() {
   async function handleImportFile(file: File) {
     setImportParseErr(null);
     if (!priceType) {
-      setImportParseErr("Narx turini tanlang.");
+      setImportParseErr("Выберите тип цены.");
       return;
     }
     if (categoryIdsArr.length === 0) {
-      setImportParseErr("Avval kamida bitta kategoriya belgilang.");
+      setImportParseErr("Сначала отметьте хотя бы одну категорию.");
       return;
     }
     if (matrixRows.length === 0) {
-      setImportParseErr("Tanlangan kategoriyalarda mahsulot yo‘q.");
+      setImportParseErr("В выбранных категориях нет товаров.");
       return;
     }
     try {
@@ -295,20 +295,20 @@ export function usePriceMatrixPage() {
       const skuIndex = buildSkuIndex(matrixRows);
       const parsed = parsePriceMatrixXlsxRows(matrix, skuIndex);
       if (parsed.length === 0) {
-        setImportParseErr("Faylda import qilinadigan qator yo‘q.");
+        setImportParseErr("В файле нет строк для импорта.");
         return;
       }
       setImportRows(parsed);
       setImportOpen(true);
     } catch (e: unknown) {
-      setImportParseErr(getUserFacingError(e, "Excel o‘qishda xato."));
+      setImportParseErr(getUserFacingError(e, "Ошибка чтения Excel."));
     }
   }
 
   async function handleImportSaved() {
     await qc.invalidateQueries({ queryKey: ["price-matrix", tenantSlug] });
     await qc.invalidateQueries({ queryKey: ["finance-price-overview", tenantSlug] });
-    setMsg("Excel import saqlandi.");
+    setMsg("Импорт из Excel сохранён.");
   }
 
   const hasCategories = categoryIdsArr.length > 0;

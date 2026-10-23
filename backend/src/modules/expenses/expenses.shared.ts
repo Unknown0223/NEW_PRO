@@ -56,6 +56,10 @@ export function enrichExpense(
     deleted_at?: Date | null;
     deleted_by_user_id?: number | null;
     delete_reason_ref?: string | null;
+    cash_desk_id?: number | null;
+    employee_user_id?: number | null;
+    source_type?: string | null;
+    source_id?: number | null;
   },
   userMap: Map<number, string>,
   whMap: Map<number, string>
@@ -82,6 +86,10 @@ export function enrichExpense(
     deleted_at: expense.deleted_at ? expense.deleted_at.toISOString() : null,
     deleted_by_user_id: dbid,
     deleted_by_name: dbid != null ? (userMap.get(dbid) ?? null) : null,
-    delete_reason_ref: expense.delete_reason_ref?.trim() || null
+    delete_reason_ref: expense.delete_reason_ref?.trim() || null,
+    cash_desk_id: expense.cash_desk_id ?? null,
+    employee_user_id: expense.employee_user_id ?? null,
+    source_type: expense.source_type || "manual",
+    source_id: expense.source_id ?? null
   };
 }

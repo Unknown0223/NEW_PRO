@@ -302,7 +302,7 @@ export function CatalogInterchangeableTab({
       setOpen(false);
       await qc.invalidateQueries({ queryKey: ["catalog-interchangeable", tenantSlug] });
     },
-    onError: (e: unknown) => setMsg(getUserFacingError(e, "Saqlashda xato yoki ruxsat yo‘q."))
+    onError: (e: unknown) => setMsg(getUserFacingError(e, "Ошибка сохранения или нет доступа."))
   });
 
   const productSummary = () =>
@@ -392,14 +392,14 @@ export function CatalogInterchangeableTab({
                   </td>
                   <td className="px-3 py-2 text-right">
                     {isAdmin ? (
-                      <TableRowActionGroup className="justify-end" ariaLabel="Guruh">
+                      <TableRowActionGroup className="justify-end" ariaLabel="Группа">
                         <Button
                           type="button"
                           variant="outline"
                           size="icon-sm"
                           className="text-muted-foreground hover:text-foreground"
-                          title="Tahrirlash"
-                          aria-label="Tahrirlash"
+                          title="Редактировать"
+                          aria-label="Редактировать"
                           onClick={() => openEdit(r)}
                         >
                           <Pencil className="size-3.5" aria-hidden />

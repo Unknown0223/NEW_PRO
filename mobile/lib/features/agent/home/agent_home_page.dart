@@ -24,11 +24,12 @@ import '../visits/visit_stats_helper.dart';
 import '../../../core/sync/sync_data_refresh.dart';
 import 'agent_dashboard_provider.dart';
 import 'home_visit_metrics_provider.dart';
+import 'last_created_order_banner.dart';
 import 'sync_count_provider.dart';
 
 String planDashboardLine(AgentDashboardResult dash, String? planVersion) {
   final base =
-      'Reja: ${dash.planSum.toStringAsFixed(0)} · Buyurtma: ${dash.ordersSumToday.toStringAsFixed(0)}';
+      'План: ${dash.planSum.toStringAsFixed(0)} · Заказы: ${dash.ordersSumToday.toStringAsFixed(0)}';
   final v = planVersion?.trim();
   if (v == null || v.isEmpty) return base;
   return '$base · v$v';
@@ -41,8 +42,17 @@ final homeStatsProvider = FutureProvider<Map<String, int>>((ref) async {
     'products': await db.productCount(),
     'orders': await db.orderCount(),
     'pending': await db.pendingCount(),
+    'pending_photos': await db.pendingPhotoReportCount(),
+    'synced_photos': await db.getPhotosSyncedToday(),
+    'failed_photos': await db.failedPhotoReportCount(),
   };
 });
+
+String _photoSyncStatusLabel({required int pending, required int failed}) {
+  if (pending > 0) return '${S.photoSyncPending}: $pending';
+  if (failed > 0) return '${S.photoSyncFailed}: $failed';
+  return S.photoSyncOk;
+}
 
 class AgentHomePage extends ConsumerStatefulWidget {
   const AgentHomePage({super.key});
@@ -121,6 +131,17 @@ class _AgentHomePageState extends ConsumerState<AgentHomePage> {
     if (!evaluateSyncPolicy(syncCfg).allowed) return;
     final db = AppDatabase();
     if (!await db.needsFullClientCatalogResync()) return;
+
+    // Bir kunda bir marta majburiy katalog — har home ochilishda to‘liq sync emas.
+    const cooldownKey = 'client_catalog_force_attempt_at';
+    final lastRaw = await db.getSyncMeta(cooldownKey);
+    final lastAt = DateTime.tryParse(lastRaw ?? '');
+    if (lastAt != null &&
+        DateTime.now().toUtc().difference(lastAt.toUtc()) < const Duration(hours: 12)) {
+      return;
+    }
+    await db.setSyncMeta(cooldownKey, DateTime.now().toUtc().toIso8601String());
+
     final r = await ref.read(authStateProvider.notifier).resync(
           full: false,
           forceClientCatalog: true,
@@ -147,6 +168,7 @@ class _AgentHomePageState extends ConsumerState<AgentHomePage> {
     final statsAsync = ref.watch(homeStatsProvider);
     final dashAsync = ref.watch(agentDashboardProvider);
     final metricsAsync = ref.watch(homeVisitMetricsProvider);
+    final createdBanner = ref.watch(lastCreatedOrderBannerProvider);
     final dash = dashAsync.valueOrNull;
     final metrics = metricsAsync.valueOrNull;
     final showPlan = session.mobileConfig?.outlet.showPlanInReports ?? false;
@@ -166,6 +188,7 @@ class _AgentHomePageState extends ConsumerState<AgentHomePage> {
       backgroundColor: AppColors.background,
       appBar: AgentAppBar(
         title: S.home,
+        useShellDrawer: true,
         actions: [
           const AgentNotificationsBell(),
           AgentIconButton(
@@ -206,6 +229,46 @@ class _AgentHomePageState extends ConsumerState<AgentHomePage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              if (createdBanner != null)
+                AgentSurfaceCard(
+                  padding: const EdgeInsets.fromLTRB(12, 10, 8, 10),
+                  margin: const EdgeInsets.only(bottom: 8),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.check_circle, color: AppColors.success, size: 22),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              S.orderCreatedBanner(createdBanner.number),
+                              style: AppTypography.bodySmall.copyWith(
+                                fontWeight: FontWeight.w800,
+                                color: AppColors.textTitle,
+                              ),
+                            ),
+                            Text(
+                              createdBanner.clientName?.trim().isNotEmpty == true
+                                  ? createdBanner.clientName!
+                                  : S.orderCreatedBannerHint,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: AppTypography.caption.copyWith(color: AppColors.textMuted),
+                            ),
+                          ],
+                        ),
+                      ),
+                      IconButton(
+                        tooltip: S.cancel,
+                        onPressed: () {
+                          ref.read(lastCreatedOrderBannerProvider.notifier).state = null;
+                        },
+                        icon: const Icon(Icons.close, size: 20, color: AppColors.textMuted),
+                      ),
+                    ],
+                  ),
+                ),
               if (mustSync)
                 AgentSurfaceCard(
                   padding: const EdgeInsets.all(12),
@@ -233,7 +296,13 @@ class _AgentHomePageState extends ConsumerState<AgentHomePage> {
                 Padding(
                   padding: const EdgeInsets.only(bottom: 8),
                   child: Text(
-                    syncWindowMessage(syncCfg),
+                    [
+                      syncWindowMessage(syncCfg),
+                      if (session.user?.workSlotCode != null &&
+                          session.user!.workSlotCode!.trim().isNotEmpty)
+                        'Рабочее место: ${session.user!.workSlotCode}',
+                      'В веб-версии откройте «Рабочее место» → «Синхронизация», проверьте окно и нажмите «Сохранить», затем повторите попытку здесь.',
+                    ].join('\n'),
                     style: AppTypography.caption.copyWith(color: AppColors.warning),
                   ),
                 ),
@@ -354,13 +423,29 @@ class _AgentHomePageState extends ConsumerState<AgentHomePage> {
                     ),
                     const SizedBox(height: 16),
                     statsAsync.when(
-                        data: (s) => Column(
-                          children: [
-                            _infoRow(S.unsyncedPhotos, '0'),
-                            _infoRow(S.lastSync, _formatSync(session.lastSyncAt)),
-                            _infoRow('Клиенты (лок.)', '${s['clients'] ?? 0}'),
-                          ],
-                        ),
+                        data: (s) {
+                          final pending = ref.watch(pendingPhotoCountProvider).valueOrNull ??
+                              s['pending_photos'] ??
+                              0;
+                          final synced = ref.watch(syncedPhotoCountTodayProvider).valueOrNull ??
+                              s['synced_photos'] ??
+                              0;
+                          final failed = ref.watch(failedPhotoCountProvider).valueOrNull ??
+                              s['failed_photos'] ??
+                              0;
+                          return Column(
+                            children: [
+                              _infoRow(S.unsyncedPhotos, '$pending'),
+                              _infoRow(S.syncedPhotos, '$synced'),
+                              _infoRow(
+                                S.photoSyncStatus,
+                                _photoSyncStatusLabel(pending: pending, failed: failed),
+                              ),
+                              _infoRow(S.lastSync, _formatSync(session.lastSyncAt)),
+                              _infoRow('Клиенты (лок.)', '${s['clients'] ?? 0}'),
+                            ],
+                          );
+                        },
                         loading: () => const Padding(
                           padding: EdgeInsets.all(8),
                           child: Center(child: CircularProgressIndicator(strokeWidth: 2)),

@@ -101,7 +101,10 @@ export type ListClientsQuery = {
   search?: string;
   is_active?: boolean;
   category?: string;
+  /** Bir nechta kategoriya (OR) */
+  categories?: string[];
   region?: string;
+  regions?: string[];
   district?: string;
   neighborhood?: string;
   zone?: string;
@@ -109,9 +112,13 @@ export type ListClientsQuery = {
   zones?: string[];
   /** Shahar (kod yoki nom) — aniq moslik */
   city?: string;
+  cities?: string[];
   client_type_code?: string;
+  client_type_codes?: string[];
   client_format?: string;
+  client_formats?: string[];
   sales_channel?: string;
+  sales_channels?: string[];
   /** Asosiy `agent_id` yoki istalgan jamoa qatoridagi agent */
   agent_id?: number;
   /** Bir nechta agent (OR) */
@@ -132,6 +139,7 @@ export type ListClientsQuery = {
   has_active_equipment?: boolean;
   /** Faol inventarda `equipment_kind` yoki `inventory_type` dan biriga mos (contains, case-insensitive) */
   equipment_kind?: string;
+  equipment_kinds?: string[];
   /** `credit_limit` > 0 */
   has_credit?: boolean;
   /** Asosiy yoki slot agenti `User.consignment === true` */
@@ -210,10 +218,24 @@ export type ClientReferences = {
   region_options: ClientRefOptionDto[];
   /** Shahar qiymati (kod yoki nom) → daraxtdan viloyat va zona */
   city_territory_hints: Record<string, CityTerritoryHintDto>;
+  /** Dostup bilan kesilgan hudud daraxti (filter UI). Admin uchun odatda yo‘q. */
+  territory_nodes?: unknown[];
 };
 
 /** JSON / massivdan 1..7 (Du..Ya) butun sonlarni ajratadi */
 export function parseVisitWeekdaysJson(raw: unknown): number[] {
+  if (raw == null) return [];
+  if (typeof raw === "string") {
+    const t = raw.trim();
+    if (!t) return [];
+    try {
+      const parsed: unknown = JSON.parse(t);
+      if (typeof parsed === "string") return [];
+      return parseVisitWeekdaysJson(parsed);
+    } catch {
+      return [];
+    }
+  }
   if (!Array.isArray(raw)) return [];
   const out: number[] = [];
   for (const x of raw) {

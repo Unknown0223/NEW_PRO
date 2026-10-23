@@ -28,7 +28,8 @@ export const AuditEntityType = {
   warehouse_block: "warehouse_block",
   currency_rate: "currency_rate",
   automation_rule: "automation_rule",
-  client_dedupe: "client_dedupe"
+  client_dedupe: "client_dedupe",
+  payroll: "payroll"
 } as const;
 
 export type AuditEntityTypeValue = (typeof AuditEntityType)[keyof typeof AuditEntityType];
@@ -45,9 +46,13 @@ function maskString(s: string): string {
 }
 
 /**
- * Audit log uchun JSON: parol/token kalitlari olib tashlanadi, PII qisqartiriladi.
+ * Audit / error journal uchun JSON: parol/token kalitlari olib tashlanadi, PII qisqartiriladi.
+ * @param maxChars JSON uzunlik limiti (default 12k; error journal uchun kattaroq beriladi).
  */
-export function sanitizePayloadForAudit(value: unknown): Record<string, unknown> {
+export function sanitizePayloadForAudit(
+  value: unknown,
+  maxChars: number = MAX_PAYLOAD_JSON_CHARS
+): Record<string, unknown> {
   const walk = (v: unknown): unknown => {
     if (v === null || v === undefined) return v;
     if (typeof v === "string" || typeof v === "number" || typeof v === "boolean") return v;
@@ -60,8 +65,6 @@ export function sanitizePayloadForAudit(value: unknown): Record<string, unknown>
         if (SENSITIVE_KEY_SUBSTRINGS.some((s) => low.includes(s))) {
           if (low.includes("password") || low === "password_hash") {
             out[k] = "[redacted]";
-          } else {
-            continue;
           }
           continue;
         }
@@ -83,8 +86,9 @@ export function sanitizePayloadForAudit(value: unknown): Record<string, unknown>
       : { value: raw };
 
   let json = JSON.stringify(obj);
-  if (json.length > MAX_PAYLOAD_JSON_CHARS) {
-    json = json.slice(0, MAX_PAYLOAD_JSON_CHARS) + `…[truncated,len=${json.length}]`;
+  const limit = Math.max(1_000, maxChars);
+  if (json.length > limit) {
+    json = json.slice(0, limit - 1) + `…[truncated,len=${json.length}]`;
     return { _truncated: true, preview: json } as Record<string, unknown>;
   }
   return obj;

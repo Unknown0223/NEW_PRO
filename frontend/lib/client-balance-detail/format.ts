@@ -9,7 +9,7 @@ export function fmtUZS(n: number): string {
 }
 
 export function fmtSom(n: number): string {
-  return `${fmtMoney(n)} So'm`;
+  return `${fmtMoney(n)} сум`;
 }
 
 export function fmtDateTime(iso: string): string {

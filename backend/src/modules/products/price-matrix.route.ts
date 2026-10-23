@@ -25,7 +25,7 @@ export async function registerPriceMatrixRoutes(app: FastifyInstance) {
         request,
         400,
         "MissingParams",
-        "productId and clientCategory required"
+        "Требуются productId и clientCategory"
       );
     }
     const data = await getPriceForClient(
@@ -73,7 +73,7 @@ export async function registerPriceMatrixRoutes(app: FastifyInstance) {
       is_active?: boolean;
     }> };
     if (!body.items || !Array.isArray(body.items)) {
-      return sendApiError(reply, request, 400, "InvalidBody", "items array required");
+      return sendApiError(reply, request, 400, "InvalidBody", "Требуется массив items");
     }
     const data = await bulkUpsertPrices(request.tenant!.id, body.items);
     await appendTenantAuditEvent({

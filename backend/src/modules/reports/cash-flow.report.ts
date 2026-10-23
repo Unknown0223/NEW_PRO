@@ -7,9 +7,9 @@ import {
   resolvePaymentMethodEntries
 } from "../tenant-settings/finance-refs";
 import type { CashFlowReportPayload, CashFlowTableChild, CashFlowTableRow, Split } from "./cash-flow.types";
+import { aggregateDeskExpenses, aggregateDeskSupplierPayments } from "./cash-flow.desk-outflows";
 import {
   add,
-  aggregateExpensesApproved,
   aggregatePaymentsDesk,
   decStr,
   foldOpeningOnly,
@@ -42,10 +42,13 @@ export async function getCashFlowReport(
   const currencies = resolveCurrencyEntries(ref ?? {});
   const methods = resolvePaymentMethodEntries(ref ?? {}, currencies);
 
-  const [rowsBefore, rowsInside, expenseRows, lastShift] = await Promise.all([
+  const [rowsBefore, rowsInside, expenseRows, expensesBefore, supplierBefore, supplierInside, lastShift] = await Promise.all([
     aggregatePaymentsDesk(tenantId, desk.id, "before", dayStart, dayEnd),
     aggregatePaymentsDesk(tenantId, desk.id, "inside", dayStart, dayEnd),
-    aggregateExpensesApproved(tenantId, dayStart, dayEnd),
+    aggregateDeskExpenses(tenantId, desk.id, "inside", dayStart, dayEnd),
+    aggregateDeskExpenses(tenantId, desk.id, "before", dayStart, dayEnd),
+    aggregateDeskSupplierPayments(tenantId, desk.id, "before", dayStart, dayEnd, methods),
+    aggregateDeskSupplierPayments(tenantId, desk.id, "inside", dayStart, dayEnd, methods),
     prisma.cashDeskShift.findFirst({
       where: {
         tenant_id: tenantId,
@@ -57,7 +60,11 @@ export async function getCashFlowReport(
     })
   ]);
 
-  const opening = foldOpeningOnly(rowsBefore, methods);
+  const expensesBeforeSum = expensesBefore.reduce((s, r) => s.add(r.s), new Prisma.Decimal(0));
+  const opening = sub(sub(foldOpeningOnly(rowsBefore, methods), supplierBefore), {
+    terminal: new Prisma.Decimal(0),
+    cash: expensesBeforeSum
+  });
   const { incomePayment, incomeOther, expenseClient } = foldPeriodIncomeExpense(rowsInside, methods);
 
   let expenseCompany = new Prisma.Decimal(0);
@@ -76,7 +83,7 @@ export async function getCashFlowReport(
   const expenseCompanySplit: Split = { terminal: new Prisma.Decimal(0), cash: expenseCompany };
 
   const incomeSectionTotal = add(incomePayment, incomeOther);
-  const expenseTotal = add(expenseClient, expenseCompanySplit);
+  const expenseTotal = add(add(expenseClient, expenseCompanySplit), supplierInside);
   const periodNet = sub(incomeSectionTotal, expenseTotal);
   const closing = add(opening, periodNet);
   const expenseSectionTotal = expenseTotal;
@@ -147,6 +154,11 @@ export async function getCashFlowReport(
           label: "Расход клиента (учёт)",
           ...splitTotal(expenseClient)
         },
+        {
+          key: "ex-supplier",
+          label: "Оплаты поставщикам",
+          ...splitTotal(supplierInside)
+        },
         ...(expenseChildren.length
           ? expenseChildren
           : [
@@ -170,8 +182,8 @@ export async function getCashFlowReport(
   ];
 
   const notes = [
-    "Остаток на начало = сумма подтверждённых движений по выбранной кассе до начала периода (оплаты +, расход клиента −), дата: COALESCE(paid_at, confirmed_at, created_at).",
-    "Расходы «из кассы» — одобренные записи expenses за период по тенанту (поле cash_desk в расходах пока не используется); суммы отнесены в колонку Naqd.",
+    "Остаток на начало = подтверждённые движения по выбранной кассе до начала периода: оплаты +, расход клиента −, оплаты поставщикам −, расходы кассы −.",
+    "Расходы «из кассы» — одобренные expenses с cash_desk_id этой кассы (включая авансы и зарплату); расходы без кассы в отчёт не входят. Суммы — в колонке Naqd.",
     "Начальные балансы клиентов (client_opening_balance_entries) в расчёт opening не включены — только client_payments.",
     "Риск дубля: одна и та же операция не должна дублироваться в payment и в отдельном cash_transaction (у нас только client_payments).",
     "Closing = Opening + Income − Expense по каждой колонке Terminal/Naqd; итог по строкам согласован с формулой."

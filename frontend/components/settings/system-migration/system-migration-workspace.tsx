@@ -55,20 +55,20 @@ function sanitizeMigrationUserMessage(raw: string, fallback: string): string {
     )
   ) {
     if (/product/i.test(m)) {
-      return "Mahsulot narxi import qilinmadi: mahsulot topilmadi. Avval asosiy spravochniklarni belgilang.";
+      return "Цена товара не импортирована: товар не найден. Сначала отметьте основные справочники.";
     }
-    return "Import amalga oshmadi: ba’zi bog‘lanishlar topilmadi. Spravochniklarni tekshirib qayta urinib ko‘ring.";
+    return "Импорт не выполнен: некоторые связи не найдены. Проверьте справочники и повторите попытку.";
   }
   return m;
 }
 
 const TARGET_BLOCKER_LABELS_UZ: Record<string, string> = {
-  orders: "buyurtmalar",
-  payments: "to‘lovlar",
-  clients: "mijozlar",
-  products: "mahsulotlar",
-  users: "foydalanuvchilar",
-  warehouses: "omborlar"
+  orders: "заказы",
+  payments: "оплаты",
+  clients: "клиенты",
+  products: "товары",
+  users: "пользователи",
+  warehouses: "склады"
 };
 
 function formatTargetBlockersUz(blockers: Record<string, number> | undefined): string {
@@ -117,7 +117,7 @@ function ImportProgressPanel({ progress }: { progress: MigrationImportProgress }
       <div className="flex items-center justify-between gap-2">
         <span className="flex items-center gap-2 font-medium">
           <Loader2 className="size-4 animate-spin text-sky-700" />
-          Import jarayoni
+          Ход импорта
         </span>
         <span className="tabular-nums font-semibold">{pct}%</span>
       </div>
@@ -168,6 +168,7 @@ export function SystemMigrationWorkspace() {
   const [preview, setPreview] = useState<MigrationImportPreview | null>(null);
   const [toast, setToast] = useState<{ text: string; kind: "ok" | "err" } | null>(null);
   const [exportBusy, setExportBusy] = useState(false);
+  const [exportProgress, setExportProgress] = useState<MigrationImportProgress | null>(null);
   const [importMode, setImportMode] = useState<"full" | "profile_only">("full");
   const [selectedModules, setSelectedModules] = useState<string[]>([]);
   const [conflictOpen, setConflictOpen] = useState(false);
@@ -189,18 +190,18 @@ export function SystemMigrationWorkspace() {
       setSelectedModules(ids);
       setToast({
         text: data.valid
-          ? "Arxiv tekshirildi — endi bo‘limlarni tanlab import qilishingiz mumkin"
+          ? "Архив проверен — теперь можно выбрать разделы и выполнить импорт"
           : data.errors.length
-            ? `Arxiv yaroqsiz: ${data.errors.slice(0, 2).join("; ")}`
-            : "Arxivda xatolar bor — boshqa ZIP tanlang",
+            ? `Архив недействителен: ${data.errors.slice(0, 2).join("; ")}`
+            : "В архиве есть ошибки — выберите другой ZIP",
         kind: data.valid ? "ok" : "err"
       });
     },
     onError: (e) =>
       setToast({
         text: sanitizeMigrationUserMessage(
-          getUserFacingError(e, "Arxivni tekshirib bo‘lmadi"),
-          "Arxivni tekshirib bo‘lmadi"
+          getUserFacingError(e, "Не удалось проверить архив"),
+          "Не удалось проверить архив"
         ),
         kind: "err"
       })
@@ -211,7 +212,7 @@ export function SystemMigrationWorkspace() {
       conflictPolicy: MigrationConflictPolicy;
       forceNonempty: boolean;
     }) => {
-      if (!selectedFile) throw new Error("Fayl tanlanmagan");
+      if (!selectedFile) throw new Error("Файл не выбран");
       return applyMigrationBackup(tenantSlug!, selectedFile, {
         forceNonempty: opts.forceNonempty,
         mode: importMode,
@@ -223,14 +224,14 @@ export function SystemMigrationWorkspace() {
     },
     onSuccess: (data) => {
       setLastResult(data);
-      setImportProgress({ stage: "done", percent: 100, message: "Import yakunlandi" });
+      setImportProgress({ stage: "done", percent: 100, message: "Импорт завершён" });
       const warnN = data.warnings?.length ?? 0;
       const appliedN = data.applied?.length ?? 0;
       setToast({
         text:
           warnN > 0
-            ? `Import yakunlandi (${appliedN} qism). Ogohlantirish: ${warnN} ta — pastda ko‘ring.`
-            : `Import muvaffaqiyatli: ${appliedN} qism qo‘llandi.`,
+            ? `Импорт завершён (частей: ${appliedN}). Предупреждений: ${warnN} — см. ниже.`
+            : `Импорт выполнен успешно: применено частей — ${appliedN}.`,
         kind: "ok"
       });
       void inventoryQ.refetch();
@@ -239,8 +240,8 @@ export function SystemMigrationWorkspace() {
       setImportProgress(null);
       setToast({
         text: sanitizeMigrationUserMessage(
-          getUserFacingError(e, "Import amalga oshmadi. Qayta urinib ko‘ring."),
-          "Import amalga oshmadi. Qayta urinib ko‘ring."
+          getUserFacingError(e, "Импорт не выполнен. Повторите попытку."),
+          "Импорт не выполнен. Повторите попытку."
         ),
         kind: "err"
       });
@@ -250,7 +251,7 @@ export function SystemMigrationWorkspace() {
   const runApply = (conflictPolicy: MigrationConflictPolicy, forceNonempty: boolean) => {
     if (!selectedFile || !tenantSlug) return;
     setConflictOpen(false);
-    setImportProgress({ stage: "queued", percent: 1, message: "Yuklanmoqda…" });
+    setImportProgress({ stage: "queued", percent: 1, message: "Загрузка…" });
     setLastResult(null);
     applyMut.mutate({ conflictPolicy, forceNonempty });
   };
@@ -267,7 +268,7 @@ export function SystemMigrationWorkspace() {
       void (async () => {
         const check = await isLikelyBackupZip(file);
         if (!check.ok) {
-          setToast({ text: check.reason ?? "ZIP qabul qilinmadi", kind: "err" });
+          setToast({ text: check.reason ?? "ZIP не принят", kind: "err" });
           if (fileRef.current) fileRef.current.value = "";
           return;
         }
@@ -281,11 +282,14 @@ export function SystemMigrationWorkspace() {
   const onExport = useCallback(async () => {
     if (!tenantSlug) return;
     setExportBusy(true);
+    setExportProgress({ stage: "queued", percent: 1, message: "Экспорт начат…" });
     try {
-      await downloadMigrationBackup(tenantSlug);
-      setToast({ text: "To‘liq zaxira yuklab olindi", kind: "ok" });
+      await downloadMigrationBackup(tenantSlug, (p) => setExportProgress(p));
+      setToast({ text: "Полная резервная копия скачана", kind: "ok" });
+      setExportProgress({ stage: "done", percent: 100, message: "Готово" });
     } catch (e) {
-      setToast({ text: getUserFacingError(e, "Zaxirani yuklab bo‘lmadi"), kind: "err" });
+      setToast({ text: getUserFacingError(e, "Не удалось скачать резервную копию"), kind: "err" });
+      setExportProgress(null);
     } finally {
       setExportBusy(false);
     }
@@ -312,7 +316,7 @@ export function SystemMigrationWorkspace() {
     if (!preview?.valid) return;
     const hasModulePicker = (preview.modules?.length ?? 0) > 0;
     if (importMode === "full" && hasModulePicker && selectedModules.length === 0) {
-      setToast({ text: "Kamida bitta bo‘limni tanlang", kind: "err" });
+      setToast({ text: "Выберите хотя бы один раздел", kind: "err" });
       return;
     }
     if (!preview.target_empty && importMode === "full") {
@@ -323,12 +327,12 @@ export function SystemMigrationWorkspace() {
   };
 
   if (!hydrated) {
-    return <p className="text-sm text-muted-foreground">Yuklanmoqda…</p>;
+    return <p className="text-sm text-muted-foreground">Загрузка…</p>;
   }
 
   if (role !== "admin") {
     return (
-      <p className="text-sm text-muted-foreground">Bu bo‘lim faqat administrator uchun.</p>
+      <p className="text-sm text-muted-foreground">Этот раздел доступен только администратору.</p>
     );
   }
 
@@ -336,7 +340,7 @@ export function SystemMigrationWorkspace() {
   const selectedLabels =
     preview?.modules
       .filter((m) => selectedModules.includes(m.id))
-      .map((m) => m.label_uz || m.id)
+      .map((m) => m.label_ru || m.label_uz || m.id)
       .slice(0, 6) ?? [];
   const opsBusyOnTarget =
     (preview?.target_blockers?.orders ?? 0) > 0 || (preview?.target_blockers?.payments ?? 0) > 0;
@@ -364,7 +368,7 @@ export function SystemMigrationWorkspace() {
             className={cn("underline", toast.kind === "ok" ? "text-emerald-700" : "text-red-700")}
             onClick={() => setToast(null)}
           >
-            Yopish
+            Закрыть
           </button>
         </div>
       ) : null}
@@ -374,11 +378,11 @@ export function SystemMigrationWorkspace() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base">
               <Archive className="size-5 text-primary" />
-              To‘liq zaxira (eksport)
+              Полная резервная копия (экспорт)
             </CardTitle>
             <CardDescription>
-              Barcha spravochniklar, buyurtmalar, to‘lovlar, audit va boshqa ma’lumotlarni bitta ZIP
-              arxivga yig‘adi. Yangi serverga ko‘chirish uchun saqlang.
+              Собирает все справочники, заказы, оплаты, аудит и прочие данные в один ZIP-архив.
+              Сохраните его для переноса на новый сервер.
             </CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-3">
@@ -388,11 +392,25 @@ export function SystemMigrationWorkspace() {
               ) : (
                 <Download className="mr-2 size-4" />
               )}
-              To‘liq zaxira yuklab olish (.zip)
+              Скачать полную резервную копию (.zip)
             </Button>
+            {exportBusy && exportProgress ? (
+              <div className="rounded-md border border-border/80 bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+                <div className="mb-1 flex justify-between gap-2">
+                  <span>{exportProgress.message || "Экспорт…"}</span>
+                  <span>{exportProgress.percent}%</span>
+                </div>
+                <div className="h-1.5 overflow-hidden rounded bg-muted">
+                  <div
+                    className="h-full bg-primary transition-[width]"
+                    style={{ width: `${Math.max(2, exportProgress.percent)}%` }}
+                  />
+                </div>
+              </div>
+            ) : null}
             <p className="text-xs text-muted-foreground">
-              Format v5: profil, boshlang‘ich sozlamalar, katalog, RBAC, narxlar, bonus/KPI, operatsion
-              tarix va fotolar — bitta ZIP.
+              Формат v6: профиль, настройки, каталог, RBAC, цены, бонусы/KPI, операционная история,
+              визиты, все GPS-данные и фото (сжатый JPEG) — в одном ZIP.
             </p>
           </CardContent>
         </Card>
@@ -401,11 +419,11 @@ export function SystemMigrationWorkspace() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base">
               <Upload className="size-5 text-primary" />
-              Yangi serverga yuklash (import)
+              Загрузка на новый сервер (импорт)
             </CardTitle>
             <CardDescription>
-              Tizimdan yuklab olingan ZIP ni tanlang yoki shu yerga tashlang. Keyin bo‘limlarni
-              (jumladan boshlang‘ich sozlamalarni) alohida belgilang.
+              Выберите ZIP, скачанный из системы, или перетащите его сюда. Затем отметьте нужные разделы
+              (в том числе начальные настройки).
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -457,13 +475,13 @@ export function SystemMigrationWorkspace() {
                   }}
                 >
                   <FileArchive className="mr-2 size-4" />
-                  ZIP tanlash
+                  Выбрать ZIP
                 </Button>
                 {selectedFile ? (
                   <span className="truncate text-muted-foreground">{selectedFile.name}</span>
                 ) : (
                   <span className="text-muted-foreground">
-                    yoki .zip faylni shu yerga tashlang
+                    или перетащите файл .zip сюда
                   </span>
                 )}
               </div>
@@ -472,7 +490,7 @@ export function SystemMigrationWorkspace() {
             {previewMut.isPending ? (
               <p className="flex items-center gap-2 text-sm text-muted-foreground">
                 <Loader2 className="size-4 animate-spin" />
-                Tekshirilmoqda…
+                Проверка…
               </p>
             ) : null}
 
@@ -487,26 +505,26 @@ export function SystemMigrationWorkspace() {
                     <AlertTriangle className="size-4 text-amber-600" />
                   )}
                   <span className="font-medium">
-                    Manba: {preview.source?.tenant_slug ?? "—"} ({preview.source?.tenant_name ?? "—"})
+                    Источник: {preview.source?.tenant_slug ?? "—"} ({preview.source?.tenant_name ?? "—"})
                   </span>
                   <StatusBadge
                     ok={preview.target_empty}
-                    label={preview.target_empty ? "Maqsad tenant bo‘sh" : "Maqsad tenant bo‘sh emas"}
+                    label={preview.target_empty ? "Целевая компания пуста" : "Целевая компания не пуста"}
                   />
                 </div>
                 <div className="flex flex-wrap gap-2 text-xs">
                   <StatusBadge
                     ok={(preview.format_version ?? 0) >= 5}
-                    label={`Format v${preview.format_version ?? "?"}`}
+                    label={`Формат v${preview.format_version ?? "?"}`}
                   />
-                  <StatusBadge ok={preview.has_profile} label="Profil" />
+                  <StatusBadge ok={preview.has_profile} label="Профиль" />
                   <StatusBadge
                     ok={preview.has_initial_setup_xlsx}
-                    label="Boshlang‘ich sozlamalar (Excel)"
+                    label="Начальные настройки (Excel)"
                   />
-                  <StatusBadge ok={preview.has_reference_json} label="Spravochnik JSON" />
-                  <StatusBadge ok={preview.has_transactional_json} label="Operatsion JSON" />
-                  <StatusBadge ok={preview.has_field_activity_json} label="Agent/xarajat JSON" />
+                  <StatusBadge ok={preview.has_reference_json} label="Справочники JSON" />
+                  <StatusBadge ok={preview.has_transactional_json} label="Операции JSON" />
+                  <StatusBadge ok={preview.has_field_activity_json} label="Агенты/расходы JSON" />
                 </div>
                 {preview.errors.length > 0 ? (
                   <ul className="list-inside list-disc text-amber-800">
@@ -517,10 +535,10 @@ export function SystemMigrationWorkspace() {
                 ) : null}
                 {!preview.target_empty ? (
                   <p className="text-amber-800">
-                    Maqsadda allaqachon bor:{" "}
-                    {formatTargetBlockersUz(preview.target_blockers) || "ma’lumotlar"}. Import oldidan
-                    dublikat siyosatini tanlaysiz; buyurtma/to‘lov bo‘lsa operatsion tarix o‘tkazib
-                    yuboriladi.
+                    В целевой компании уже есть:{" "}
+                    {formatTargetBlockersUz(preview.target_blockers) || "данные"}. Перед импортом вы
+                    выберете политику для дубликатов; если есть заказы/оплаты, операционная история
+                    будет пропущена.
                   </p>
                 ) : null}
 
@@ -533,7 +551,7 @@ export function SystemMigrationWorkspace() {
                       disabled={importBusy}
                       onChange={() => setImportMode("full")}
                     />
-                    To‘liq import (tanlangan bo‘limlar)
+                    Полный импорт (выбранные разделы)
                   </label>
                   <label className="flex items-center gap-2">
                     <input
@@ -543,14 +561,14 @@ export function SystemMigrationWorkspace() {
                       disabled={importBusy}
                       onChange={() => setImportMode("profile_only")}
                     />
-                    Faqat profil
+                    Только профиль
                   </label>
                 </div>
 
                 {importMode === "full" && previewGroups.length > 0 ? (
                   <div className="space-y-3 rounded-md border bg-background/80 p-2">
                     <div className="flex flex-wrap items-center justify-between gap-2">
-                      <p className="text-xs font-medium text-foreground">Arxiv bo‘limlari</p>
+                      <p className="text-xs font-medium text-foreground">Разделы архива</p>
                       <div className="flex gap-2 text-[11px]">
                         <button
                           type="button"
@@ -562,7 +580,7 @@ export function SystemMigrationWorkspace() {
                             )
                           }
                         >
-                          Hammasini
+                          Выбрать все
                         </button>
                         <button
                           type="button"
@@ -570,7 +588,7 @@ export function SystemMigrationWorkspace() {
                           disabled={importBusy}
                           onClick={() => setSelectedModules([])}
                         >
-                          Hech qaysi
+                          Снять все
                         </button>
                       </div>
                     </div>
@@ -601,7 +619,7 @@ export function SystemMigrationWorkspace() {
                                   />
                                   <span className="min-w-0 flex-1">
                                     <span className="font-medium text-foreground">
-                                      {m.label_uz || m.id}
+                                      {m.label_ru || m.label_uz || m.id}
                                     </span>
                                     <span className="mt-0.5 block text-muted-foreground">
                                       {total > 0 && m.counts
@@ -609,7 +627,7 @@ export function SystemMigrationWorkspace() {
                                             .filter(([, v]) => v > 0)
                                             .map(([k, v]) => `${k}: ${v}`)
                                             .join(", ")
-                                        : "yozuvlar yo‘q / rejada"}
+                                        : "нет записей / запланировано"}
                                     </span>
                                   </span>
                                 </label>
@@ -634,35 +652,36 @@ export function SystemMigrationWorkspace() {
                   onClick={onApplyClick}
                 >
                   {importBusy ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
-                  {importMode === "full" ? "To‘liq importni qo‘llash" : "Profilni qo‘llash"}
+                  {importMode === "full" ? "Принять полностью / применить" : "Применить профиль"}
                 </Button>
                 {!preview.target_empty && importMode === "full" ? (
                   <p className="text-xs text-muted-foreground">
-                    Qo‘llashdan oldin dublikatlar oynasi ochiladi: eskisini qoldirish (xavfsiz) yoki
-                    yangisini almashtirish.
+                    Перед применением откроется выбор. Для полной копии нажмите{" "}
+                    <span className="font-medium text-foreground">«Принять полностью»</span>{" "}
+                    (замена) — чтобы ничего не потерялось.
                   </p>
                 ) : null}
                 {importMode === "full" &&
                 selectedModules.includes("initial_setup") &&
                 !selectedModules.includes("spravochniki") ? (
                   <p className="text-xs text-amber-800">
-                    Maslahat: narxlar uchun «Asosiy spravochniklar»ni ham belgilang — aks holda ba’zi
-                    narxlar o‘tkazib yuborilishi mumkin.
+                    Совет: для цен отметьте также «Основные справочники» — иначе часть цен
+                    может быть пропущена.
                   </p>
                 ) : null}
                 {importMode === "full" && (preview.format_version ?? 0) < 5 ? (
                   <p className="text-xs text-amber-800">
-                    Format v{preview.format_version} — to‘liq zaxira (katalog, RBAC, bog‘lanishlar) uchun
-                    yangi eksport oling (v5).
+                    Формат v{preview.format_version} — для полной резервной копии (каталог, RBAC, связи)
+                    сделайте новый экспорт (v6).
                   </p>
                 ) : null}
                 {importMode === "profile_only" && preview.has_initial_setup_xlsx ? (
                   <p className="text-xs text-muted-foreground">
-                    Keyin{" "}
+                    Затем импортируйте Excel из архива (initial-setup.xlsx) через раздел{" "}
                     <Link href="/settings/initial-setup" className="text-primary underline">
-                      Boshlang‘ich sozlash
-                    </Link>{" "}
-                    orqali arxivdagi Excel (initial-setup.xlsx) ni import qiling.
+                      Начальная настройка
+                    </Link>
+                    .
                   </p>
                 ) : null}
               </div>
@@ -670,11 +689,11 @@ export function SystemMigrationWorkspace() {
 
             {lastResult && !importBusy ? (
               <div className="space-y-2 rounded-md border bg-muted/20 p-3 text-xs">
-                <p className="font-medium text-sm">Oxirgi natija</p>
+                <p className="font-medium text-sm">Последний результат</p>
                 <p className="text-muted-foreground">
-                  Qo‘llandi: {lastResult.applied.length} qism
-                  {lastResult.skipped.length ? ` · o‘tkazib yuborildi: ${lastResult.skipped.length}` : ""}
-                  {lastResult.warnings.length ? ` · ogohlantirish: ${lastResult.warnings.length}` : ""}
+                  Применено частей: {lastResult.applied.length}
+                  {lastResult.skipped.length ? ` · пропущено: ${lastResult.skipped.length}` : ""}
+                  {lastResult.warnings.length ? ` · предупреждений: ${lastResult.warnings.length}` : ""}
                 </p>
                 {lastResult.warnings.length ? (
                   <ul className="list-inside list-disc text-amber-800">
@@ -682,13 +701,13 @@ export function SystemMigrationWorkspace() {
                       <li key={`warn-${i}-${w.slice(0, 24)}`}>{w}</li>
                     ))}
                     {lastResult.warnings.length > 12 ? (
-                      <li>… yana {lastResult.warnings.length - 12} ta</li>
+                      <li>… и ещё {lastResult.warnings.length - 12}</li>
                     ) : null}
                   </ul>
                 ) : null}
                 {lastResult.skipped.length ? (
                   <p className="text-muted-foreground">
-                    O‘tkazib yuborildi: {lastResult.skipped.join(", ")}
+                    Пропущено: {lastResult.skipped.join(", ")}
                   </p>
                 ) : null}
                 {lastResult.next_steps.length ? (
@@ -706,24 +725,24 @@ export function SystemMigrationWorkspace() {
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Ma’lumotlar qamrovi</CardTitle>
+          <CardTitle className="text-base">Охват данных</CardTitle>
           <CardDescription>
-            Joriy tenantdagi yozuvlar soni — bo‘limlar bo‘yicha. «Rejada» — keyingi bosqichlarda
-            qo‘shiladi.
+            Количество записей в текущей компании по разделам. «Запланировано» — будет добавлено
+            на следующих этапах.
           </CardDescription>
         </CardHeader>
         <CardContent>
           {inventoryQ.isLoading ? (
-            <p className="text-sm text-muted-foreground">Hisoblanmoqda…</p>
+            <p className="text-sm text-muted-foreground">Подсчёт…</p>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full min-w-[640px] text-left text-sm">
                 <thead>
                   <tr className="border-b text-muted-foreground">
-                    <th className="py-2 pr-3 font-medium">Modul</th>
-                    <th className="py-2 pr-3 font-medium">Yozuvlar</th>
-                    <th className="py-2 pr-3 font-medium">Eksport</th>
-                    <th className="py-2 font-medium">Import</th>
+                    <th className="py-2 pr-3 font-medium">Модуль</th>
+                    <th className="py-2 pr-3 font-medium">Записи</th>
+                    <th className="py-2 pr-3 font-medium">Экспорт</th>
+                    <th className="py-2 font-medium">Импорт</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -740,8 +759,7 @@ export function SystemMigrationWorkspace() {
                       {group.items.map((m) => (
                         <tr key={m.id} className="border-b border-border/60">
                           <td className="py-2 pr-3">
-                            <div className="font-medium">{m.label_uz}</div>
-                            <div className="text-xs text-muted-foreground">{m.label_ru}</div>
+                            <div className="font-medium">{m.label_ru || m.label_uz}</div>
                           </td>
                           <td className="py-2 pr-3 tabular-nums">
                             {moduleCountTotal(m.counts) > 0
@@ -780,26 +798,26 @@ export function SystemMigrationWorkspace() {
       <Dialog open={conflictOpen} onOpenChange={setConflictOpen}>
         <DialogContent className="sm:max-w-lg" overlayClassName="bg-black/40">
           <DialogHeader>
-            <DialogTitle>Dublikatlar: qanday davom etamiz?</DialogTitle>
+            <DialogTitle>Приём резервной копии</DialogTitle>
             <DialogDescription>
-              Bu kompaniyada allaqachon ma’lumot bor. Bir xil kod/SKU/login bo‘lgan yozuvlar uchun
-              quyidagidan birini tanlang.
+              В этой компании уже есть данные. Для полной миграции примите архив полностью; иначе
+              часть заказов/оплат может не перенестись.
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-3 text-sm">
-            <div className="rounded-md border bg-muted/30 px-3 py-2 space-y-1.5">
-              <p className="font-medium text-foreground">Eskisini qoldirish</p>
+            <div className="rounded-md border border-emerald-200 bg-emerald-50/80 px-3 py-2 space-y-1.5">
+              <p className="font-medium text-foreground">Принять полностью (рекомендуется)</p>
               <p className="text-xs text-muted-foreground">
-                Mavjud mijoz, mahsulot, user va boshqalar o‘zgarmaydi. Arxivdagi yangi qiymatlar
-                yozilmaydi — xavfsizroq tanlov (odatda shuni tanlang).
+                Записи с одинаковыми ключами обновляются из архива; заказы/оплаты/визиты/фото также
+                полностью записываются из архива. Выберите этот вариант при переносе с другого сервера.
               </p>
             </div>
             <div className="rounded-md border bg-muted/30 px-3 py-2 space-y-1.5">
-              <p className="font-medium text-foreground">Yangisini almashtirish</p>
+              <p className="font-medium text-foreground">Сохранить существующие (слияние)</p>
               <p className="text-xs text-muted-foreground">
-                Bir xil kalitli yozuvlar arxivdagi ma’lumot bilan yangilanadi (nom, narx, telefon va
-                hokazo). Faqat arxivdagi ma’lumot to‘g‘ri ekaniga ishonchingiz komil bo‘lsa.
+                Существующие клиенты/товары/пользователи сохраняются. Если в целевой компании уже есть
+                заказы/оплаты, они не перезаписываются — добавляются только визиты/GPS и справочники.
               </p>
             </div>
 
@@ -807,19 +825,19 @@ export function SystemMigrationWorkspace() {
               <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-950 space-y-1">
                 <p className="font-medium flex items-center gap-1.5">
                   <AlertTriangle className="size-3.5 shrink-0" />
-                  Import oldidan eslatma
+                  Перед импортом
                 </p>
-                {blockersSummary ? <p>Maqsadda bor: {blockersSummary}.</p> : null}
+                {blockersSummary ? <p>В целевой компании есть: {blockersSummary}.</p> : null}
                 {opsBusyOnTarget ? (
                   <p>
-                    Maqsadda buyurtmalar yoki to‘lovlar bor — operatsion tarix (buyurtma/to‘lov)
-                    import qilinmaydi (dublikatdan saqlanish).
+                    В целевой компании есть заказы/оплаты. В режиме «Сохранить существующие» они не
+                    импортируются; для полной копии выберите «Принять полностью».
                   </p>
                 ) : null}
                 {priceWithoutProductsRisk ? (
                   <p>
-                    «Boshlang‘ich sozlamalar» tanlangan, lekin «Asosiy spravochniklar» yo‘q —
-                    mahsulot narxlari uchun mahsulotlar topilmasa, ular o‘tkazib yuboriladi.
+                    Выбраны «Начальные настройки», но не выбраны «Основные справочники» — если товары
+                    для цен не будут найдены, эти цены будут пропущены.
                   </p>
                 ) : null}
               </div>
@@ -827,7 +845,7 @@ export function SystemMigrationWorkspace() {
 
             {selectedLabels.length ? (
               <p className="text-xs text-muted-foreground">
-                Tanlangan bo‘limlar: {selectedLabels.join(", ")}
+                Выбранные разделы: {selectedLabels.join(", ")}
                 {selectedModules.length > selectedLabels.length ? "…" : ""}
               </p>
             ) : null}
@@ -836,20 +854,20 @@ export function SystemMigrationWorkspace() {
           <DialogFooter className="gap-2 sm:flex-col sm:space-x-0">
             <Button
               type="button"
+              className="w-full"
+              disabled={importBusy}
+              onClick={() => runApply("replace", true)}
+            >
+              Принять полностью
+            </Button>
+            <Button
+              type="button"
               variant="outline"
               className="w-full"
               disabled={importBusy}
               onClick={() => runApply("keep", true)}
             >
-              Eskisini qoldirish
-            </Button>
-            <Button
-              type="button"
-              className="w-full"
-              disabled={importBusy}
-              onClick={() => runApply("replace", true)}
-            >
-              Yangisini almashtirish
+              Сохранить существующие (слияние)
             </Button>
             <Button
               type="button"
@@ -858,7 +876,7 @@ export function SystemMigrationWorkspace() {
               disabled={importBusy}
               onClick={() => setConflictOpen(false)}
             >
-              Bekor qilish
+              Отмена
             </Button>
           </DialogFooter>
         </DialogContent>

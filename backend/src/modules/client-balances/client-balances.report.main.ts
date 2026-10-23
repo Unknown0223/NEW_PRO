@@ -16,6 +16,7 @@ import type {
 } from "./client-balances.types";
 import { agentInclude } from "./client-balances.constants";
 import { buildOrderCreatedLocalDateClause } from "./client-balances.date";
+import { loadConsignmentDueByClient } from "./client-balances.consignment-due";
 import { buildClientWhere } from "./client-balances.where";
 import type { DeliveryDebtInfo } from "./client-balances.delivery";
 import { makePerfMarker, parseIsoDateEndUtc } from "./client-balances.date";
@@ -26,15 +27,18 @@ import {
   processUnpaidPayRefRows
 } from "./client-balances.payments.data";
 import {
-  buildSummaryNetMinusUnpaid,
+  buildSummaryOverpaymentsByType,
   compareNumForSort,
   moneySortValueFromPaymentAmounts,
-  normPayTypeKey,
   paymentAmountsNetMinusUnpaid,
   readSortDir
 } from "./client-balances.payments.util";
-import { loadPaymentNetTotalsByTypeGlobally } from "./client-balances.payments.aggregate";
-import { loadBalancesAsOf, loadLastDeliveryByClient, loadLastPaymentByClient } from "./client-balances.ledger";
+import {
+  loadBalancesAsOf,
+  loadLastDeliveryByClient,
+  loadLastPaymentByClient,
+  loadLedgerCardNetByClient
+} from "./client-balances.ledger";
 import {
   loadDeliveryDebtByClient,
   loadUnpaidDeliveredOrderDebtRows,
@@ -77,20 +81,32 @@ export async function listClientBalancesReportMain(
   const totalBalanceStr = sumMergedTotal.toString();
 
   const { labels: sprLabels, entries: pmEntries } = await loadTenantPaymentRefs(tenantId);
-  const [netGlobalByType, rawUnpaidAll] = await Promise.all([
-    loadPaymentNetTotalsByTypeGlobally(tenantId, ids, asOfEnd, pmEntries),
+  const [payNormAllClients, rawUnpaidAll] = await Promise.all([
+    loadPaymentNetNormByClient(tenantId, ids, asOfEnd, pmEntries),
     loadUnpaidOrderBalanceRawByPaymentRef(tenantId, ids, odFrom, odTo)
   ]);
   perf("clients-all.payment-sources-loaded", {
     payTypeCount: sprLabels.length,
     unpaidRows: rawUnpaidAll.length
   });
-  const { byClient: unpaidByClientMethod, globalUnpaidNorm } = processUnpaidPayRefRows(
+  const { byClient: unpaidByClientMethod } = processUnpaidPayRefRows(
     rawUnpaidAll,
     pmEntries,
     sprLabels
   );
-  const summaryPaymentByType = buildSummaryNetMinusUnpaid(sprLabels, netGlobalByType, globalUnpaidNorm);
+  const summaryPaymentByType = buildSummaryOverpaymentsByType(
+    sprLabels,
+    allClientsLedger.map((c) => {
+      const ledger = balAsOfMapAll?.get(c.id) ?? c.client_balances[0]?.balance ?? new Prisma.Decimal(0);
+      const d = deliveryMapForSummary.get(c.id);
+      const blendPass = d && d.debt.gt(0) ? d : null;
+      return {
+        balance: mergeLedgerWithUnpaidDelivered(ledger, blendPass ?? undefined),
+        payNorm: payNormAllClients.get(c.id),
+        unpaidNorm: unpaidByClientMethod.get(c.id)
+      };
+    })
+  );
 
   if (q.view === "agents") {
     const fallbackAgentByClient = new Map<number, number | null>(
@@ -100,11 +116,12 @@ export async function listClientBalancesReportMain(
       ids.length > 0
         ? await loadWorkplaceAgentByClient(tenantId, ids, fallbackAgentByClient)
         : new Map<number, number | null>();
-    const [payNormByClient, debtSplits] = await Promise.all([
-      loadPaymentNetNormByClient(tenantId, ids, asOfEnd, pmEntries),
+    const [payNormByClient, debtSplits, cardNetByClient] = await Promise.all([
+      Promise.resolve(payNormAllClients),
       ids.length > 0
         ? loadDebtSplitByClient(tenantId, ids, workplaceByClient)
-        : Promise.resolve(new Map())
+        : Promise.resolve(new Map()),
+      ids.length > 0 ? loadLedgerCardNetByClient(tenantId, ids) : Promise.resolve(new Map())
     ]);
     perf("agents.aggregates-loaded", {
       ids: ids.length,
@@ -128,12 +145,8 @@ export async function listClientBalancesReportMain(
     for (const c of allClientsLedger) {
       /** Real-time: ish o‘rnidagi joriy agent (slot), aks holda clients.agent_id. */
       const aid = workplaceByClient.get(c.id) ?? c.agent_id ?? null;
-      const ledger = c.client_balances[0]?.balance ?? new Prisma.Decimal(0);
-      const base = balAsOfMapAll?.get(c.id) ?? ledger;
-      const del = deliveryMapForSummary.get(c.id);
-      const blendPass = del && del.debt.gt(0) ? del : null;
-      /** «По клиентам» qatori bilan bir xil: ledger + yetkazilgan, yopilmagan zakazlar qarzi. */
-      const bal = mergeLedgerWithUnpaidDelivered(base, blendPass ?? undefined);
+      /** Mijoz kartasidagi «Общий»: to‘lovlar minus yetkazilgan zakazlar. */
+      const bal = cardNetByClient.get(c.id) ?? new Prisma.Decimal(0);
       const split = debtSplits.get(c.id);
       const inner = payNormByClient.get(c.id);
       const cur = byAgent.get(aid) ?? {
@@ -198,7 +211,7 @@ export async function listClientBalancesReportMain(
           legacy_debt: v.legacy_debt.toString(),
           current_debt: v.current_debt.toString(),
           is_active: agent_id == null ? null : (meta?.is_active ?? null),
-          payment_amounts: paymentAmountsNetMinusUnpaid(sprLabels, v.payAgg, v.unpaidAgg)
+          payment_amounts: paymentAmountsNetMinusUnpaid(sprLabels, v.payAgg, v.unpaidAgg, v.balance)
         };
       })
       .filter((r) => r.agent_id == null || r.is_active === true);
@@ -238,26 +251,39 @@ export async function listClientBalancesReportMain(
 
     const total = agentRows.length;
     const slice = agentRows.slice((page - 1) * limit, page * limit);
+    let agentBalance = new Prisma.Decimal(0);
+    const payByLabel = new Map<string, Prisma.Decimal>();
+    for (const r of agentRows) {
+      agentBalance = agentBalance.add(r.balance);
+      for (const p of r.payment_amounts) {
+        payByLabel.set(p.label, (payByLabel.get(p.label) ?? new Prisma.Decimal(0)).add(p.amount));
+      }
+    }
     return {
       view: "agents",
       data: slice,
       total,
       page,
       limit,
-      summary: { balance: totalBalanceStr, payment_by_type: summaryPaymentByType }
+      summary: {
+        balance: agentBalance.toString(),
+        payment_by_type: summaryPaymentByType.map((p) => ({
+          label: p.label,
+          amount: (payByLabel.get(p.label) ?? new Prisma.Decimal(0)).toFixed(2)
+        }))
+      }
     };
   }
 
   if (q.view === "clients_legacy") {
-    const debtSplitsAll = await loadDebtSplitByClient(tenantId, ids);
+    const [debtSplitsAll, cardNetByClient] = await Promise.all([
+      loadDebtSplitByClient(tenantId, ids),
+      ids.length > 0 ? loadLedgerCardNetByClient(tenantId, ids) : Promise.resolve(new Map())
+    ]);
     let legacyIds = ids.filter((id) => {
       const s = debtSplitsAll.get(id);
       return s != null && s.legacy_debt.gt(0);
     });
-    let legacySum = new Prisma.Decimal(0);
-    for (const id of legacyIds) {
-      legacySum = legacySum.add(debtSplitsAll.get(id)!.legacy_debt);
-    }
 
     const sortBy = q.sort_by?.trim() ?? "";
     const sortDir = readSortDir(q);
@@ -279,33 +305,27 @@ export async function listClientBalancesReportMain(
         return compareNumForSort(av, bv, effectiveDir);
       });
     } else if (effectiveSort === "balance" || effectiveSort.startsWith("pay:")) {
-      const ledgerById = new Map(
-        allClientsLedger.map((x) => [x.id, x.client_balances[0]?.balance ?? new Prisma.Decimal(0)])
-      );
       if (effectiveSort === "balance") {
         legacyIds = [...legacyIds].sort((a, b) => {
-          const aLedger = balAsOfMapAll?.get(a) ?? ledgerById.get(a) ?? new Prisma.Decimal(0);
-          const bLedger = balAsOfMapAll?.get(b) ?? ledgerById.get(b) ?? new Prisma.Decimal(0);
-          const aBal = Number(
-            mergeLedgerWithUnpaidDelivered(aLedger, deliveryMapForSummary.get(a)).toString()
-          );
-          const bBal = Number(
-            mergeLedgerWithUnpaidDelivered(bLedger, deliveryMapForSummary.get(b)).toString()
-          );
+          const aBal = Number((cardNetByClient.get(a) ?? new Prisma.Decimal(0)).toString());
+          const bBal = Number((cardNetByClient.get(b) ?? new Prisma.Decimal(0)).toString());
           return compareNumForSort(aBal, bBal, effectiveDir);
         });
       } else {
-        const payNormAll = await loadPaymentNetNormByClient(tenantId, legacyIds, asOfEnd, pmEntries);
         legacyIds = [...legacyIds].sort((a, b) => {
+          const aBal = cardNetByClient.get(a) ?? new Prisma.Decimal(0);
+          const bBal = cardNetByClient.get(b) ?? new Prisma.Decimal(0);
           const aAmounts = paymentAmountsNetMinusUnpaid(
             sprLabels,
-            payNormAll.get(a),
-            unpaidByClientMethod.get(a)
+            payNormAllClients.get(a),
+            unpaidByClientMethod.get(a),
+            aBal
           );
           const bAmounts = paymentAmountsNetMinusUnpaid(
             sprLabels,
-            payNormAll.get(b),
-            unpaidByClientMethod.get(b)
+            payNormAllClients.get(b),
+            unpaidByClientMethod.get(b),
+            bBal
           );
           const aVal = moneySortValueFromPaymentAmounts(aAmounts, effectiveSort, sprLabels);
           const bVal = moneySortValueFromPaymentAmounts(bAmounts, effectiveSort, sprLabels);
@@ -314,21 +334,15 @@ export async function listClientBalancesReportMain(
       }
     }
 
-    const [netLegacyGlobal] = await Promise.all([
-      loadPaymentNetTotalsByTypeGlobally(tenantId, legacyIds, asOfEnd, pmEntries)
-    ]);
-    const unpaidLegacyNorm = new Map<string, Prisma.Decimal>();
-    for (const id of legacyIds) {
-      const u = unpaidByClientMethod.get(id);
-      if (!u) continue;
-      for (const [nk, v] of u) {
-        unpaidLegacyNorm.set(nk, (unpaidLegacyNorm.get(nk) ?? new Prisma.Decimal(0)).add(v));
-      }
-    }
-    const summaryPaymentLegacy = buildSummaryNetMinusUnpaid(
+    let cardNetSum = new Prisma.Decimal(0);
+    for (const id of legacyIds) cardNetSum = cardNetSum.add(cardNetByClient.get(id) ?? new Prisma.Decimal(0));
+    const summaryPaymentLegacy = buildSummaryOverpaymentsByType(
       sprLabels,
-      netLegacyGlobal,
-      unpaidLegacyNorm
+      legacyIds.map((id) => ({
+        balance: cardNetByClient.get(id) ?? new Prisma.Decimal(0),
+        payNorm: payNormAllClients.get(id),
+        unpaidNorm: unpaidByClientMethod.get(id)
+      }))
     );
 
     const total = legacyIds.length;
@@ -353,26 +367,34 @@ export async function listClientBalancesReportMain(
           });
     const clientsById = new Map(clients.map((c) => [c.id, c]));
     const orderedClients = pageIds.map((id) => clientsById.get(id)!).filter(Boolean);
-    const [pagePayNorm, lastPays, lastOrds, pageBalAsOf] = await Promise.all([
+    const [pagePayNorm, lastPays, lastOrds, pageBalAsOf, dueByClient] = await Promise.all([
       loadPaymentNetNormByClient(tenantId, pageIds, asOfEnd, pmEntries),
       loadLastPaymentByClient(tenantId, pageIds, asOfEnd),
-      loadLastDeliveryByClient(tenantId, pageIds),
-      asOfEnd && pageIds.length > 0 ? loadBalancesAsOf(tenantId, pageIds, asOfEnd) : Promise.resolve(null)
+      loadLastDeliveryByClient(tenantId, pageIds, asOfEnd),
+      asOfEnd && pageIds.length > 0 ? loadBalancesAsOf(tenantId, pageIds, asOfEnd) : Promise.resolve(null),
+      pageIds.length > 0
+        ? loadConsignmentDueByClient(tenantId, pageIds, q.consignment_due_from, q.consignment_due_to)
+        : Promise.resolve(new Map<number, Date>())
     ]);
     perf("clients-legacy-page.loaded", { pageIds: pageIds.length, total, page });
 
     const data: ClientBalanceRow[] = orderedClients.map((c) => {
-      const b = deliveryMapForSummary.get(c.id);
-      const blend = b && b.debt.gt(0) ? b : null;
+      const displayBal = cardNetByClient.get(c.id) ?? new Prisma.Decimal(0);
       return mapClientRow(
-        c,
-        paymentAmountsNetMinusUnpaid(sprLabels, pagePayNorm.get(c.id), unpaidByClientMethod.get(c.id)),
+        dueByClient.get(c.id) ? { ...c, license_until: dueByClient.get(c.id)! } : c,
+        paymentAmountsNetMinusUnpaid(
+          sprLabels,
+          pagePayNorm.get(c.id),
+          unpaidByClientMethod.get(c.id),
+          displayBal
+        ),
         lastPays.get(c.id),
         lastOrds.get(c.id),
         pageBalAsOf?.get(c.id) ?? null,
         null,
-        blend,
-        debtSplitsAll.get(c.id) ?? null
+        null,
+        debtSplitsAll.get(c.id) ?? null,
+        asOfEnd
       );
     });
 
@@ -382,8 +404,19 @@ export async function listClientBalancesReportMain(
       total,
       page,
       limit,
-      summary: { balance: legacySum.toString(), payment_by_type: summaryPaymentLegacy }
+      summary: { balance: cardNetSum.toString(), payment_by_type: summaryPaymentLegacy }
     };
+  }
+
+  const cardNetByClient =
+    q.view === "clients" && ids.length > 0
+      ? await loadLedgerCardNetByClient(tenantId, ids, asOfEnd)
+      : null;
+  let clientsSummaryBalance = totalBalanceStr;
+  if (cardNetByClient) {
+    let sum = new Prisma.Decimal(0);
+    for (const id of ids) sum = sum.add(cardNetByClient.get(id) ?? new Prisma.Decimal(0));
+    clientsSummaryBalance = sum.toString();
   }
 
   const sortBy = q.sort_by?.trim() ?? "";
@@ -395,28 +428,41 @@ export async function listClientBalancesReportMain(
   if (q.view === "clients" && (sortBy === "balance" || sortBy.startsWith("pay:"))) {
     if (sortBy === "balance") {
       sortedIds = [...ids].sort((a, b) => {
-        const aLedger = balAsOfMapAll?.get(a) ?? ledgerById.get(a) ?? new Prisma.Decimal(0);
-        const bLedger = balAsOfMapAll?.get(b) ?? ledgerById.get(b) ?? new Prisma.Decimal(0);
-        const aBal = Number(
-          mergeLedgerWithUnpaidDelivered(aLedger, deliveryMapForSummary.get(a)).toString()
-        );
-        const bBal = Number(
-          mergeLedgerWithUnpaidDelivered(bLedger, deliveryMapForSummary.get(b)).toString()
-        );
+        const aBal = cardNetByClient
+          ? Number((cardNetByClient.get(a) ?? new Prisma.Decimal(0)).toString())
+          : Number(
+              mergeLedgerWithUnpaidDelivered(
+                balAsOfMapAll?.get(a) ?? ledgerById.get(a) ?? new Prisma.Decimal(0),
+                deliveryMapForSummary.get(a)
+              ).toString()
+            );
+        const bBal = cardNetByClient
+          ? Number((cardNetByClient.get(b) ?? new Prisma.Decimal(0)).toString())
+          : Number(
+              mergeLedgerWithUnpaidDelivered(
+                balAsOfMapAll?.get(b) ?? ledgerById.get(b) ?? new Prisma.Decimal(0),
+                deliveryMapForSummary.get(b)
+              ).toString()
+            );
         return compareNumForSort(aBal, bBal, sortDir);
       });
     } else {
-      const payNormAll = await loadPaymentNetNormByClient(tenantId, ids, asOfEnd, pmEntries);
       sortedIds = [...ids].sort((a, b) => {
+        const aLedger = balAsOfMapAll?.get(a) ?? ledgerById.get(a) ?? new Prisma.Decimal(0);
+        const bLedger = balAsOfMapAll?.get(b) ?? ledgerById.get(b) ?? new Prisma.Decimal(0);
+        const aBal = mergeLedgerWithUnpaidDelivered(aLedger, deliveryMapForSummary.get(a));
+        const bBal = mergeLedgerWithUnpaidDelivered(bLedger, deliveryMapForSummary.get(b));
         const aAmounts = paymentAmountsNetMinusUnpaid(
           sprLabels,
-          payNormAll.get(a),
-          unpaidByClientMethod.get(a)
+          payNormAllClients.get(a),
+          unpaidByClientMethod.get(a),
+          aBal
         );
         const bAmounts = paymentAmountsNetMinusUnpaid(
           sprLabels,
-          payNormAll.get(b),
-          unpaidByClientMethod.get(b)
+          payNormAllClients.get(b),
+          unpaidByClientMethod.get(b),
+          bBal
         );
         const aVal = moneySortValueFromPaymentAmounts(aAmounts, sortBy, sprLabels);
         const bVal = moneySortValueFromPaymentAmounts(bAmounts, sortBy, sprLabels);
@@ -450,12 +496,15 @@ export async function listClientBalancesReportMain(
   const orderedClients = pageIds.map((id) => clientsById.get(id)!).filter(Boolean);
   const deliveryMapPage =
     q.view === "clients" && pageIds.length > 0 ? deliveryMapForSummary : new Map<number, DeliveryDebtInfo>();
-  const [pagePayNorm, lastPays, lastOrds, pageBalAsOf, debtSplits] = await Promise.all([
+  const [pagePayNorm, lastPays, lastOrds, pageBalAsOf, debtSplits, dueByClient] = await Promise.all([
     loadPaymentNetNormByClient(tenantId, pageIds, asOfEnd, pmEntries),
     loadLastPaymentByClient(tenantId, pageIds, asOfEnd),
-    loadLastDeliveryByClient(tenantId, pageIds),
+    loadLastDeliveryByClient(tenantId, pageIds, asOfEnd),
     asOfEnd && pageIds.length > 0 ? loadBalancesAsOf(tenantId, pageIds, asOfEnd) : Promise.resolve(null),
-    pageIds.length > 0 ? loadDebtSplitByClient(tenantId, pageIds) : Promise.resolve(new Map())
+    pageIds.length > 0 ? loadDebtSplitByClient(tenantId, pageIds) : Promise.resolve(new Map()),
+    pageIds.length > 0
+      ? loadConsignmentDueByClient(tenantId, pageIds, q.consignment_due_from, q.consignment_due_to)
+      : Promise.resolve(new Map<number, Date>())
   ]);
   perf("clients-page.loaded", {
     pageIds: pageIds.length,
@@ -466,15 +515,26 @@ export async function listClientBalancesReportMain(
   const data: ClientBalanceRow[] = orderedClients.map((c) => {
     const b = deliveryMapPage.get(c.id);
     const blend = b && b.debt.gt(0) ? b : null;
+    const ledger = pageBalAsOf?.get(c.id) ?? c.client_balances[0]?.balance ?? new Prisma.Decimal(0);
+    const cardNet = cardNetByClient
+      ? (cardNetByClient.get(c.id) ?? new Prisma.Decimal(0))
+      : null;
+    const displayBal = cardNet ?? mergeLedgerWithUnpaidDelivered(ledger, blend ?? undefined);
     return mapClientRow(
-      c,
-      paymentAmountsNetMinusUnpaid(sprLabels, pagePayNorm.get(c.id), unpaidByClientMethod.get(c.id)),
+      dueByClient.get(c.id) ? { ...c, license_until: dueByClient.get(c.id)! } : c,
+      paymentAmountsNetMinusUnpaid(
+        sprLabels,
+        pagePayNorm.get(c.id) ?? payNormAllClients.get(c.id),
+        unpaidByClientMethod.get(c.id),
+        displayBal
+      ),
       lastPays.get(c.id),
       lastOrds.get(c.id),
-      pageBalAsOf?.get(c.id) ?? null,
+      cardNet ?? pageBalAsOf?.get(c.id) ?? null,
       null,
-      blend,
-      debtSplits.get(c.id) ?? null
+      cardNet != null ? null : blend,
+      debtSplits.get(c.id) ?? null,
+      asOfEnd
     );
   });
 
@@ -484,6 +544,6 @@ export async function listClientBalancesReportMain(
     total,
     page,
     limit,
-    summary: { balance: totalBalanceStr, payment_by_type: summaryPaymentByType }
+    summary: { balance: clientsSummaryBalance, payment_by_type: summaryPaymentByType }
   };
 }

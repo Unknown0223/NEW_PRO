@@ -175,6 +175,16 @@ export function OrdersFiltersPanel(props: OrdersFiltersPanelProps) {
                     type="radio"
                     name="orders-filter-date-mode"
                     className="size-3.5 accent-teal-600 sm:size-4"
+                    checked={filterDraft.date_mode === "delivery"}
+                    onChange={() => patchDraft({ date_mode: "delivery" })}
+                  />
+                  Дата доставки
+                </label>
+                <label className="flex cursor-pointer items-center gap-1.5 text-xs text-foreground sm:text-sm">
+                  <input
+                    type="radio"
+                    name="orders-filter-date-mode"
+                    className="size-3.5 accent-teal-600 sm:size-4"
                     checked={filterDraft.date_mode === "created"}
                     onChange={() => patchDraft({ date_mode: "created" })}
                   />

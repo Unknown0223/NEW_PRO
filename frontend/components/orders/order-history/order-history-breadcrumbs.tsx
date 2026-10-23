@@ -17,7 +17,7 @@ export function OrderHistoryBreadcrumbs({
   ];
 
   return (
-    <nav className="mb-4 flex flex-wrap items-center gap-2 text-sm" aria-label="Breadcrumb">
+    <nav className="mb-4 flex flex-wrap items-center gap-2 text-sm" aria-label="Навигационная цепочка">
       {items.map((item, index) => (
         <div key={item.label} className="flex min-w-0 items-center gap-2">
           {index > 0 ? (

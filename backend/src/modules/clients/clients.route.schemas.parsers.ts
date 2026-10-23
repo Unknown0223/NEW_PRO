@@ -1,6 +1,7 @@
 import type { FastifyReply, FastifyRequest } from "fastify";
 import { env } from "../../config/env";
 import { assertExcelImportSize } from "../../lib/multipart-limits";
+import { parseVisitWeekdaysFromCell } from "./clients.visit-weekdays";
 import type { ListClientsQuery } from "./clients.service";
 import { buildClientUpdateImportTemplateBuffer } from "./clients.service";
 
@@ -27,6 +28,7 @@ type ClientImportMultipartOk = {
   importMode?: "create" | "update";
   duplicateKeyFields?: string[];
   updateApplyFields?: string[];
+  commitDecision?: "accept_valid" | "reject_all";
 };
 
 export async function parseClientImportMultipart(request: FastifyRequest): Promise<ClientImportMultipartOk | null> {
@@ -37,6 +39,7 @@ export async function parseClientImportMultipart(request: FastifyRequest): Promi
   let importMode: "create" | "update" | undefined;
   let duplicateKeyFields: string[] | undefined;
   let updateApplyFields: string[] | undefined;
+  let commitDecision: "accept_valid" | "reject_all" | undefined;
 
   const parts = request.parts({ limits: { fileSize: env.MULTIPART_EXCEL_MAX_BYTES } });
   for await (const part of parts) {
@@ -75,6 +78,9 @@ export async function parseClientImportMultipart(request: FastifyRequest): Promi
         } catch {
           /* ignore */
         }
+      } else if (part.fieldname === "commitDecision") {
+        const d = String(part.value ?? "").trim().toLowerCase();
+        if (d === "accept_valid" || d === "reject_all") commitDecision = d;
       }
     }
   }
@@ -83,7 +89,16 @@ export async function parseClientImportMultipart(request: FastifyRequest): Promi
     return null;
   }
   assertExcelImportSize(buf.length);
-  return { buf, sheetName, headerRowIndex, columnMap, importMode, duplicateKeyFields, updateApplyFields };
+  return {
+    buf,
+    sheetName,
+    headerRowIndex,
+    columnMap,
+    importMode,
+    duplicateKeyFields,
+    updateApplyFields,
+    commitDecision
+  };
 }
 
 export function parseLocalYmd(s: string): Date | null {
@@ -120,7 +135,9 @@ function parsePositiveIntList(raw: string | undefined, maxItems = 40): number[] 
 }
 
 function parseWeekdayList(raw: string | undefined): number[] {
-  return parsePositiveIntList(raw, 7).filter((n) => n >= 1 && n <= 7);
+  if (!raw?.trim()) return [];
+  const { days } = parseVisitWeekdaysFromCell(raw);
+  return days.slice(0, 7);
 }
 
 function parseStringList(raw: string | undefined, maxItems = 30): string[] {
@@ -138,6 +155,15 @@ function mergeIntList(multiRaw: string | undefined, singleRaw: string | undefine
   if (singleRaw != null && singleRaw !== "") {
     const n = Number.parseInt(singleRaw, 10);
     if (Number.isFinite(n) && n > 0) return [n];
+  }
+  return [];
+}
+
+function mergeWeekdayList(multiRaw: string | undefined, singleRaw: string | undefined): number[] {
+  const fromMulti = parseWeekdayList(multiRaw);
+  if (fromMulti.length > 0) return fromMulti;
+  if (singleRaw != null && singleRaw.trim() !== "") {
+    return parseWeekdayList(singleRaw);
   }
   return [];
 }
@@ -178,7 +204,7 @@ export function parseClientListQuery(q: Record<string, string | undefined>): Lis
   const pageNum = Math.max(1, Number.parseInt(q.page ?? "1", 10) || 1);
   const mapMode = q.map === "1" || q.map === "true";
   const visitPlanner = q.visit_planner === "1" || q.visit_planner === "true";
-  const maxLimit = visitPlanner ? 60_000 : mapMode ? 4000 : 100;
+  const maxLimit = visitPlanner ? 60_000 : mapMode ? 4000 : 500;
   const defaultLimit = visitPlanner ? 50_000 : mapMode ? 2500 : 50;
   const parsedLimit = Number.parseInt(q.limit ?? String(defaultLimit), 10) || defaultLimit;
   const limitNum = Math.min(maxLimit, Math.max(1, parsedLimit));
@@ -186,19 +212,25 @@ export function parseClientListQuery(q: Record<string, string | undefined>): Lis
   let is_active: boolean | undefined;
   if (q.is_active === "true") is_active = true;
   else if (q.is_active === "false") is_active = false;
-  const category = q.category?.trim() || undefined;
-  const region = q.region?.trim() || undefined;
+  const categoryList = mergeStringList(q.categories, q.category);
+  const category = categoryList.length === 1 ? categoryList[0] : undefined;
+  const regionList = mergeStringList(q.regions, q.region);
+  const region = regionList.length === 1 ? regionList[0] : undefined;
   const district = q.district?.trim() || undefined;
   const neighborhood = q.neighborhood?.trim() || undefined;
-  const city = q.city?.trim() || undefined;
-  const client_type_code = q.client_type_code?.trim() || undefined;
-  const client_format = q.client_format?.trim() || undefined;
-  const sales_channel = q.sales_channel?.trim() || undefined;
+  const cityList = mergeStringList(q.cities, q.city);
+  const city = cityList.length === 1 ? cityList[0] : undefined;
+  const clientTypeList = mergeStringList(q.client_type_codes, q.client_type_code);
+  const client_type_code = clientTypeList.length === 1 ? clientTypeList[0] : undefined;
+  const clientFormatList = mergeStringList(q.client_formats, q.client_format);
+  const client_format = clientFormatList.length === 1 ? clientFormatList[0] : undefined;
+  const salesChannelList = mergeStringList(q.sales_channels, q.sales_channel);
+  const sales_channel = salesChannelList.length === 1 ? salesChannelList[0] : undefined;
   const agent_ids = mergeIntList(q.agent_ids, q.agent_id);
   const agent_id = agent_ids.length === 1 ? agent_ids[0] : undefined;
   const expeditor_user_ids = mergeIntList(q.expeditor_user_ids, q.expeditor_user_id);
   const expeditor_user_id = expeditor_user_ids.length === 1 ? expeditor_user_ids[0] : undefined;
-  const visit_weekdays = mergeIntList(q.visit_weekdays, q.visit_weekday).filter((n) => n >= 1 && n <= 7);
+  const visit_weekdays = mergeWeekdayList(q.visit_weekdays, q.visit_weekday).filter((n) => n >= 1 && n <= 7);
   const visit_weekday = visit_weekdays.length === 1 ? visit_weekdays[0] : undefined;
   const zones = mergeStringList(q.zones, q.zone);
   const zone = zones.length === 1 ? zones[0] : undefined;
@@ -208,7 +240,8 @@ export function parseClientListQuery(q: Record<string, string | undefined>): Lis
   let has_active_equipment: boolean | undefined;
   if (q.has_active_equipment === "true") has_active_equipment = true;
   else if (q.has_active_equipment === "false") has_active_equipment = false;
-  const equipment_kind = q.equipment_kind?.trim() || undefined;
+  const equipmentKindList = mergeStringList(q.equipment_kinds, q.equipment_kind);
+  const equipment_kind = equipmentKindList.length === 1 ? equipmentKindList[0] : undefined;
   let has_credit: boolean | undefined;
   if (q.has_credit === "true") has_credit = true;
   else if (q.has_credit === "false") has_credit = false;
@@ -262,16 +295,22 @@ export function parseClientListQuery(q: Record<string, string | undefined>): Lis
     limit: limitNum,
     search,
     ...(is_active !== undefined ? { is_active } : {}),
-    category,
-    region,
+    ...(category ? { category } : {}),
+    ...(categoryList.length > 1 ? { categories: categoryList } : {}),
+    ...(region ? { region } : {}),
+    ...(regionList.length > 1 ? { regions: regionList } : {}),
     district,
     neighborhood,
     ...(zone ? { zone } : {}),
     ...(zones.length > 1 ? { zones } : {}),
     ...(city ? { city } : {}),
+    ...(cityList.length > 1 ? { cities: cityList } : {}),
     ...(client_type_code ? { client_type_code } : {}),
+    ...(clientTypeList.length > 1 ? { client_type_codes: clientTypeList } : {}),
     ...(client_format ? { client_format } : {}),
+    ...(clientFormatList.length > 1 ? { client_formats: clientFormatList } : {}),
     ...(sales_channel ? { sales_channel } : {}),
+    ...(salesChannelList.length > 1 ? { sales_channels: salesChannelList } : {}),
     ...(agent_id !== undefined ? { agent_id } : {}),
     ...(agent_ids.length > 1 ? { agent_ids } : {}),
     ...(expeditor_user_id !== undefined ? { expeditor_user_id } : {}),
@@ -283,6 +322,7 @@ export function parseClientListQuery(q: Record<string, string | undefined>): Lis
     ...(client_pinfl ? { client_pinfl } : {}),
     ...(has_active_equipment !== undefined ? { has_active_equipment } : {}),
     ...(equipment_kind ? { equipment_kind } : {}),
+    ...(equipmentKindList.length > 1 ? { equipment_kinds: equipmentKindList } : {}),
     ...(has_credit !== undefined ? { has_credit } : {}),
     ...(agent_consignment !== undefined ? { agent_consignment } : {}),
     ...(agent_consignment_limited !== undefined ? { agent_consignment_limited } : {}),
@@ -314,7 +354,7 @@ export function parseReconciliationDateRange(
           ok: false,
           status: 400,
           error: "DateRangeIncomplete",
-          message: "date_from va date_to ikkalasi ham YYYY-MM-DD ko‘rinishida yuborilishi kerak."
+          message: "date_from и date_to должны быть переданы в формате YYYY-MM-DD."
         };
       }
       const a = parseLocalYmd(q.date_from);

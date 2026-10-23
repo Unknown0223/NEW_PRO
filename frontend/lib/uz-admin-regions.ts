@@ -106,7 +106,7 @@ export async function loadUzAdminRegions(): Promise<UzAdminRegion[]> {
   if (loadPromise) return loadPromise;
   loadPromise = (async () => {
     const res = await fetch("/data/uz-admin-regions.geojson");
-    if (!res.ok) throw new Error("Viloyat chegaralari yuklanmadi");
+    if (!res.ok) throw new Error("Не удалось загрузить границы областей");
     const geo = (await res.json()) as { features?: GeoJsonFeature[] };
     const list =
       geo.features?.map((f, i) => parseFeature(f, i)).filter((x): x is UzAdminRegion => x != null) ?? [];

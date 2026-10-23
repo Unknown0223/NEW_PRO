@@ -22,6 +22,8 @@ export type AccessHistoryQuery = {
   search?: string;
   /** Сортировка по дате записи */
   sort_dir?: "asc" | "desc";
+  /** Bo‘sh bo‘lmasa — faqat shu odamlar ishtirok etgan yozuvlar. */
+  visible_user_ids?: number[];
 };
 
 function labelInputFromRow(r: {
@@ -100,6 +102,14 @@ function endOfLocalDayFromYmd(raw: string): Date | null {
 export async function listAccessHistory(tenantId: number, q: AccessHistoryQuery) {
   const idOnly = q.access_log_id != null && Number.isInteger(q.access_log_id) && q.access_log_id > 0;
   const where: Prisma.AccessLogWhereInput = { tenant_id: tenantId };
+  if (q.visible_user_ids) {
+    const ids = q.visible_user_ids;
+    where.AND = [
+      {
+        OR: [{ target_user_id: { in: ids } }, { actor_user_id: { in: ids } }]
+      }
+    ];
+  }
   if (idOnly) {
     where.id = q.access_log_id!;
   } else {
@@ -129,7 +139,9 @@ export async function listAccessHistory(tenantId: number, q: AccessHistoryQuery)
   const search = !idOnly ? q.search?.trim() : "";
   if (search) {
     const mode = Prisma.QueryMode.insensitive;
+    const prev = Array.isArray(where.AND) ? where.AND : [];
     where.AND = [
+      ...prev,
       {
         OR: [
           { action_type: { contains: search, mode } },

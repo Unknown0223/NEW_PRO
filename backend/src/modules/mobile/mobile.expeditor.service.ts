@@ -2,9 +2,9 @@
  * Mobil ekspeditor (dastavchik) — yetkazish, to'lov, qaytarish, mijoz koordinatasi.
  * Barrel: feature modullardan re-export.
  */
+export { createMobileExpeditorPartialReturn } from "./mobile.expeditor.return-create";
 export {
   assertExpeditorOwnsOrder,
-  createMobileExpeditorPartialReturn,
   createMobileExpeditorReloadFromVehicle,
   getMobileExpeditorOrderDetail,
   listMobileExpeditorDeliveries,

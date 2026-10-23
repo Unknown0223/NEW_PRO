@@ -38,7 +38,7 @@ export async function listOpeningBalances(
     const aliases = await resolveTradeDirectionAliases(tenantId, q.trade_direction);
     query = { ...q, trade_direction_aliases: aliases };
   }
-  const where = buildWhere(tenantId, query, actor);
+  const where = await buildWhere(tenantId, query, actor);
   const [total, rows] = await prisma.$transaction([
     prisma.clientOpeningBalanceEntry.count({ where }),
     prisma.clientOpeningBalanceEntry.findMany({

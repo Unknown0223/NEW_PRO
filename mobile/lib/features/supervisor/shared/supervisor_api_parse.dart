@@ -28,7 +28,7 @@ class SupervisorVisitAgentRow {
 
   factory SupervisorVisitAgentRow.fromJson(Map<String, dynamic> j) => SupervisorVisitAgentRow(
         agentId: j['agent_id'] as int? ?? 0,
-        agentName: j['agent_name']?.toString() ?? 'Agent',
+        agentName: j['agent_name']?.toString() ?? 'Агент',
         agentCode: j['agent_code']?.toString(),
         plannedVisits: j['planned_visits'] as int? ?? 0,
         visitedTotal: j['visited_total'] as int? ?? 0,
