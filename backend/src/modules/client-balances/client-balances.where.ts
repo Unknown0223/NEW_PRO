@@ -1,5 +1,4 @@
 import { Prisma } from "@prisma/client";
-import { ORDER_STATUSES_OUTSTANDING_RECEIVABLE } from "../orders/order-status";
 import {
   paymentTypesFromMethodEntries,
   resolveCurrencyEntries,
@@ -9,7 +8,7 @@ import {
 } from "../tenant-settings/finance-refs";
 
 import type { ClientBalanceListQuery } from "./client-balances.types";
-import { parseIsoDateStartUtc, parseIsoDateEndUtc } from "./client-balances.date";
+import { clientIdsWithConsignmentDue } from "./client-balances.consignment-due";
 import { isExternalClientCode } from "../../../shared/client-display-id";
 import {
   clientWhereForRegionFilter,
@@ -183,20 +182,9 @@ export async function buildClientWhere(
     }
   }
 
-  const cFrom = q.consignment_due_from?.trim() ? parseIsoDateStartUtc(q.consignment_due_from) : null;
-  const cTo = q.consignment_due_to?.trim() ? parseIsoDateEndUtc(q.consignment_due_to) : null;
-  if (cFrom || cTo) {
-    andParts.push({
-      orders: {
-        some: {
-          order_type: "order",
-          consignment_due_date: {
-            ...(cFrom ? { gte: cFrom } : {}),
-            ...(cTo ? { lte: cTo } : {})
-          }
-        }
-      }
-    });
+  if (q.consignment_due_from?.trim() || q.consignment_due_to?.trim()) {
+    const ids = await clientIdsWithConsignmentDue(tenantId, q.consignment_due_from, q.consignment_due_to);
+    andParts.push({ id: { in: ids.length > 0 ? ids : [-1] } });
   }
 
   if (!opts?.skipTerritoryFilters) {

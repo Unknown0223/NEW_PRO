@@ -42,6 +42,7 @@ import {
   loadUnpaidDeliveredOrderDebtRows
 } from "./client-balances.delivery";
 import { mapClientRow, mapDeliveryOrderRow } from "./client-balances.mappers";
+import { loadConsignmentDueByClient } from "./client-balances.consignment-due";
 import type { ClientBalancesReportContext } from "./client-balances.report.context";
 import { loadDebtSplitByClient } from "./client-debt-by-agent";
 
@@ -135,7 +136,7 @@ export async function listClientBalancesReportFiltered(
     const sliceRows = orderedEligible.slice((page - 1) * limit, page * limit);
     const sliceIds = sliceRows.map((r) => r.id);
 
-    const [clients, pagePayNorm, lastPays, lastOrds, debtSplits] = await Promise.all([
+    const [clients, pagePayNorm, lastPays, lastOrds, debtSplits, dueByClient] = await Promise.all([
       (async () => {
         if (sliceIds.length === 0) return [];
         return prisma.client.findMany({
@@ -156,8 +157,11 @@ export async function listClientBalancesReportFiltered(
       })(),
       loadPaymentNetNormByClient(tenantId, sliceIds, asOfEnd, pmEntries),
       loadLastPaymentByClient(tenantId, sliceIds, asOfEnd),
-      loadLastDeliveryByClient(tenantId, sliceIds),
-      sliceIds.length > 0 ? loadDebtSplitByClient(tenantId, sliceIds) : Promise.resolve(new Map())
+      loadLastDeliveryByClient(tenantId, sliceIds, asOfEnd),
+      sliceIds.length > 0 ? loadDebtSplitByClient(tenantId, sliceIds) : Promise.resolve(new Map()),
+      sliceIds.length > 0
+        ? loadConsignmentDueByClient(tenantId, sliceIds, q.consignment_due_from, q.consignment_due_to)
+        : Promise.resolve(new Map<number, Date>())
     ]);
     const orderMap = new Map(clients.map((c) => [c.id, c]));
     const orderedClients = sliceIds.map((id) => orderMap.get(id)!).filter(Boolean);
@@ -165,7 +169,7 @@ export async function listClientBalancesReportFiltered(
     const data: ClientBalanceRow[] = orderedClients.map((c) => {
       const displayBal = netOf(c.id);
       return mapClientRow(
-        c,
+        dueByClient.get(c.id) ? { ...c, license_until: dueByClient.get(c.id)! } : c,
         paymentAmountsNetMinusUnpaid(
           sprLabels,
           pagePayNorm.get(c.id) ?? payNormEligible.get(c.id),
@@ -177,7 +181,8 @@ export async function listClientBalancesReportFiltered(
         netOf(c.id),
         null,
         null,
-        debtSplits.get(c.id) ?? null
+        debtSplits.get(c.id) ?? null,
+        asOfEnd
       );
     });
 

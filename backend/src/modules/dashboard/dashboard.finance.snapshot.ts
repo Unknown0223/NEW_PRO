@@ -51,12 +51,13 @@ import {
   financeDateExprByType,
   financeOrderScopeSql
 } from "./dashboard.finance.scope";
+import { loadTerritoryRegionIndex, resolveTerritoryLabel, rollupDebtTerritoryRows } from "./dashboard.territory-rollup";
 
 export async function getFinanceDashboardSnapshot(
   tenantId: number,
   filters: FinanceDashboardFilters
 ): Promise<FinanceDashboardSnapshot> {
-  const snapshotKey = `tenant:${tenantId}:dashboard:finance:${stableJsonStringify(filters)}`;
+  const snapshotKey = `tenant:${tenantId}:dashboard:finance:v2:${stableJsonStringify(filters)}`;
   const cached = await getSnapshotCache<FinanceDashboardSnapshot>(snapshotKey);
   if (cached) return cached;
 
@@ -334,11 +335,15 @@ export async function getFinanceDashboardSnapshot(
     share_pct: payGrand.gt(0) ? clampPct(r.amount.div(payGrand).mul(100).toNumber()) : 0
   }));
 
-  const territory_debts: FinanceTerritoryDebtRow[] = territoryRows.map((r) => ({
-    territory: r.territory,
-    debt_sum: r.debt_sum.toString(),
-    debtors_count: Number(r.debtors_count)
-  }));
+  const territoryIndex = await loadTerritoryRegionIndex(tenantId);
+  const territory_debts: FinanceTerritoryDebtRow[] = rollupDebtTerritoryRows(
+    territoryRows.map((r) => ({
+      territory: r.territory,
+      debt_sum: r.debt_sum.toString(),
+      debtors_count: Number(r.debtors_count)
+    })),
+    territoryIndex
+  );
 
   const general_balance: FinanceBalanceBlock = {
     total_balance: (balanceRows[0]?.s ?? new Prisma.Decimal(0)).toString(),
@@ -359,7 +364,7 @@ export async function getFinanceDashboardSnapshot(
     client_name: r.client_name,
     agent_name: r.agent_name,
     supervisor_name: r.supervisor_name,
-    territory: r.territory,
+    territory: resolveTerritoryLabel(r.territory ?? "—", territoryIndex),
     ledger_balance: r.ledger_balance.toString(),
     delivered_debt: r.delivered_debt.toString(),
     effective_balance: r.effective_balance.toString()

@@ -15,6 +15,8 @@ import {
   type ClientBalanceListQuery,
   type ClientBalancePaymentTypeSummary
 } from "./client-balances.service";
+import { tashkentDayEndUtc, tashkentDayStartUtc } from "./client-balances.date";
+import { consignmentMatchSql, effectiveDueSql } from "./client-balances.consignment-due";
 import { loadLedgerCardNetByClient } from "./client-balances.ledger";
 
 const LARGE_CLIENT_IDS_CHUNK = 10000;
@@ -101,12 +103,25 @@ async function loadConsignmentDebtByClient(
   tenantId: number,
   clientIds: number[],
   orderDateFrom: string | null | undefined,
-  orderDateTo: string | null | undefined
+  orderDateTo: string | null | undefined,
+  dueFrom: string | null | undefined,
+  dueTo: string | null | undefined
 ): Promise<Map<number, ConsignmentDebtAgg>> {
   const map = new Map<number, ConsignmentDebtAgg>();
   if (clientIds.length === 0) return map;
 
   const orderDateClause = buildOrderCreatedLocalDateClause(orderDateFrom, orderDateTo);
+  const dueStart = dueFrom?.trim() ? tashkentDayStartUtc(dueFrom) : null;
+  const dueEnd = dueTo?.trim() ? tashkentDayEndUtc(dueTo) : null;
+  const dueExpr = effectiveDueSql();
+  const dueClause =
+    dueStart && dueEnd
+      ? Prisma.sql`AND ${dueExpr} >= ${dueStart} AND ${dueExpr} <= ${dueEnd}`
+      : dueStart
+        ? Prisma.sql`AND ${dueExpr} >= ${dueStart}`
+        : dueEnd
+          ? Prisma.sql`AND ${dueExpr} <= ${dueEnd}`
+          : Prisma.empty;
 
   const chunkSize = LARGE_CLIENT_IDS_CHUNK;
   for (let i = 0; i < clientIds.length; i += chunkSize) {
@@ -122,20 +137,16 @@ async function loadConsignmentDebtByClient(
       }>
     >`
       WITH cand AS (
-        SELECT o.id, o.client_id, o.total_sum, o.consignment_due_date
+        SELECT o.id, o.client_id, o.total_sum, ${effectiveDueSql()} AS consignment_due_date
         FROM orders o
+        LEFT JOIN users ag ON ag.id = o.agent_id AND ag.tenant_id = o.tenant_id
         WHERE o.tenant_id = ${tenantId}
           AND o.order_type = 'order'
           AND o.status IN (${Prisma.join([...ORDER_STATUSES_OUTSTANDING_RECEIVABLE])})
-          AND (
-            o.is_consignment = true
-            OR EXISTS (
-              SELECT 1 FROM users ag
-              WHERE ag.id = o.agent_id AND ag.tenant_id = o.tenant_id AND ag.consignment = true
-            )
-          )
+          AND ${consignmentMatchSql()}
           AND o.client_id IN (${Prisma.join(chunk)})
           ${orderDateClause}
+          ${dueClause}
       ),
       alloc AS (
         SELECT pa.order_id, SUM(pa.amount)::decimal(15,2) AS allocated
@@ -216,7 +227,14 @@ export async function listConsignmentBalancesReport(
   const odFrom = q.order_date_from?.trim() || null;
   const odTo = q.order_date_to?.trim() || null;
 
-  const debtMap = await loadConsignmentDebtByClient(tenantId, ids, odFrom, odTo);
+  const debtMap = await loadConsignmentDebtByClient(
+    tenantId,
+    ids,
+    odFrom,
+    odTo,
+    q.consignment_due_from,
+    q.consignment_due_to
+  );
   perf("debt-map-loaded", { debtClients: debtMap.size });
 
   const eligible = ids.filter((id) => debtMap.has(id));

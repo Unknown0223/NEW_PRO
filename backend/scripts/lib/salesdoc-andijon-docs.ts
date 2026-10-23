@@ -2,18 +2,41 @@
  * Andijon mahsulot, mijoz, buyurtma, to‘lov, qaytarish, bonus.
  * 2026-08-30 dan keyingi hujjatlar tashlanadi: aksitda jonli zakaz/to‘lov bor.
  */
-import type { Prisma, PrismaClient } from "@prisma/client";
+import { Prisma, type PrismaClient } from "@prisma/client";
 import { LIVE_CUTOFF, sdLedgerDate, sdOrderNumber, sdPriceTypeName, type loadSalesDoc } from "./salesdoc-andijon-load";
 import { writeAndijonDeliveryLogs } from "./salesdoc-andijon-delivery-logs";
 import { writeAndijonPaymentsReturns } from "./salesdoc-andijon-docs-pay";
 import type { applyAndijonStaff } from "./salesdoc-andijon-staff";
 
-export { salesDocInstant } from "./salesdoc-andijon-time";
-import { salesDocInstant } from "./salesdoc-andijon-time";
+export { salesDocInstant, salesDocMonthEnd } from "./salesdoc-andijon-time";
+import { salesDocInstant, salesDocMonthEnd } from "./salesdoc-andijon-time";
 
 type Bundle = ReturnType<typeof loadSalesDoc>;
 type Staff = Awaited<ReturnType<typeof applyAndijonStaff>>;
 const TENANT = 1;
+
+/** Qayta yuklashda allaqachon yozilgan, muddati bo‘sh buyurtmaga oyning oxirgi kuni. */
+export async function fillMissingMonthEndDue(
+  prisma: PrismaClient,
+  tenantId: number,
+  numbers: string[]
+): Promise<void> {
+  const list = numbers.filter((n) => n.length > 0);
+  for (let i = 0; i < list.length; i += 400) {
+    const chunk = list.slice(i, i + 400);
+    await prisma.$executeRaw`
+      UPDATE orders
+      SET consignment_due_date = (
+        date_trunc('month', timezone('Asia/Tashkent', created_at))
+        + interval '1 month'
+        - interval '1 day'
+      ) AT TIME ZONE 'Asia/Tashkent'
+      WHERE tenant_id = ${tenantId}
+        AND number IN (${Prisma.join(chunk)})
+        AND consignment_due_date IS NULL
+    `;
+  }
+}
 
 function gps(text: string): { lat: number; lng: number } | null {
   const m = text.split(",").map((s) => Number(s.trim()));
@@ -219,6 +242,7 @@ export async function applyAndijonDocs(prisma: PrismaClient, data: Bundle, staff
       total_sum: Math.round(o.sum * 100) / 100,
       comment: o.comment || null,
       created_at: salesDocInstant(sdLedgerDate(o.date, o.dateLoad, o.dateDeliver)),
+      consignment_due_date: salesDocMonthEnd(sdLedgerDate(o.date, o.dateLoad, o.dateDeliver)),
       payment_method_ref: "pm-naxt",
       price_type: o.priceTypeId ? sdPriceTypeName(o.priceTypeId) : null
     });
@@ -228,6 +252,7 @@ export async function applyAndijonDocs(prisma: PrismaClient, data: Bundle, staff
     counts.orders += res.count;
   }
   const numbers = orderRows.map((o) => o.number);
+  await fillMissingMonthEndDue(prisma, TENANT, numbers);
   const orderDb = await prisma.order.findMany({
     where: { tenant_id: TENANT, number: { in: numbers }, id: { not: 868 } },
     select: { id: true, number: true }

@@ -8,3 +8,13 @@ export function salesDocInstant(date: string): Date {
   }
   return new Date(`${m[1]}T06:00:00+05:00`);
 }
+
+/** Zakaz urilgan oyning oxirgi kuni, 06:00 +05. Muddat bo‘lmasa shu qo‘yiladi. */
+export function salesDocMonthEnd(date: string): Date {
+  const m = date.trim().match(/^(\d{4})-(\d{2})-/);
+  if (!m) return new Date("2000-01-31T06:00:00+05:00");
+  const y = Number(m[1]);
+  const mo = Number(m[2]);
+  const last = new Date(Date.UTC(y, mo, 0)).getUTCDate();
+  return new Date(`${m[1]}-${m[2]}-${String(last).padStart(2, "0")}T06:00:00+05:00`);
+}

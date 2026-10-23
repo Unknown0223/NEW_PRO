@@ -5,7 +5,7 @@
  */
 import { Prisma, type PrismaClient } from "@prisma/client";
 import { LIVE_CUTOFF, sdLedgerDate, sdOrderNumber, sdPriceTypeName, type loadSalesDoc } from "./salesdoc-andijon-load";
-import { salesDocInstant } from "./salesdoc-andijon-docs";
+import { fillMissingMonthEndDue, salesDocInstant, salesDocMonthEnd } from "./salesdoc-andijon-docs";
 import type { applyAndijonStaff } from "./salesdoc-andijon-staff";
 
 type Bundle = ReturnType<typeof loadSalesDoc>;
@@ -122,6 +122,7 @@ export async function applyAndijonLive(prisma: PrismaClient, data: Bundle, staff
       total_sum: Math.round(o.sum * 100) / 100,
       comment: o.comment || null,
       created_at: salesDocInstant(sdLedgerDate(o.date, o.dateLoad, o.dateDeliver)),
+      consignment_due_date: salesDocMonthEnd(sdLedgerDate(o.date, o.dateLoad, o.dateDeliver)),
       payment_method_ref: "pm-naxt",
       price_type: o.priceTypeId ? sdPriceTypeName(o.priceTypeId) : null
     });
@@ -130,6 +131,7 @@ export async function applyAndijonLive(prisma: PrismaClient, data: Bundle, staff
     const res = await prisma.order.createMany({ data: orderRows, skipDuplicates: true });
     counts.orders = res.count;
   }
+  await fillMissingMonthEndDue(prisma, TENANT, orderRows.map((o) => o.number));
   const saved = await prisma.order.findMany({
     where: { tenant_id: TENANT, number: { in: [...accepted.keys()] }, id: { not: 868 } },
     select: { id: true, number: true }

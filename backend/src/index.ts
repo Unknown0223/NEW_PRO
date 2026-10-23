@@ -21,11 +21,13 @@ import {
 import { disableAuditRetentionCron, enableAuditRetentionCron } from "./lib/audit-retention-cron";
 import { disablePayrollCron, enablePayrollCron } from "./lib/payroll-cron";
 import { startPayrollOrderHook } from "./modules/payroll/payroll.auto-hooks";
+import { startMonthEndDueBackfill } from "./modules/client-balances/client-balances.consignment-due";
 import { startFinishedReturnOrderBackfill } from "./modules/returns/returns-finished-order-backfill";
 import { startTgApp, stopTgApp } from "./modules/tg-app/tg-runner";
 
 async function main() {
   await prisma.$connect();
+  startMonthEndDueBackfill();
   const app = buildApp();
   await initOrderEventBusRedis(app.log);
 

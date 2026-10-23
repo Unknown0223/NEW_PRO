@@ -12,7 +12,7 @@ import { prisma } from "../src/config/database";
 import { LIVE_CUTOFF, loadSalesDoc, sdLedgerDate, sdOrderNumber, sdPriceTypeName } from "./lib/salesdoc-andijon-load";
 import { applyClientDebtFile } from "./lib/salesdoc-client-debt";
 import { applySalesDocPriceCatalog } from "./lib/salesdoc-price-catalog";
-import { salesDocInstant } from "./lib/salesdoc-andijon-docs";
+import { fillMissingMonthEndDue, salesDocInstant, salesDocMonthEnd } from "./lib/salesdoc-andijon-docs";
 
 const TENANT = 1;
 
@@ -223,6 +223,7 @@ async function main() {
       total_sum: Math.round(o.sum * 100) / 100,
       comment: o.comment || null,
       created_at: salesDocInstant(sdLedgerDate(o.date, o.dateLoad, o.dateDeliver)),
+      consignment_due_date: salesDocMonthEnd(sdLedgerDate(o.date, o.dateLoad, o.dateDeliver)),
       payment_method_ref: "pm-naxt",
       price_type: o.priceTypeId ? sdPriceTypeName(o.priceTypeId) : null
     });
@@ -231,6 +232,11 @@ async function main() {
   for (let i = 0; i < orderRows.length; i += 300) {
     ordersInserted += (await prisma.order.createMany({ data: orderRows.slice(i, i + 300), skipDuplicates: true })).count;
   }
+  await fillMissingMonthEndDue(
+    prisma,
+    TENANT,
+    orderRows.map((o) => o.number)
+  );
   const saved = await prisma.order.findMany({
     where: {
       tenant_id: TENANT,

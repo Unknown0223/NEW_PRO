@@ -302,10 +302,27 @@ export async function loadAccessDataScope(
       ? []
       : [...supervisees.map((s) => s.id), ...staffLinks.map((l) => l.staff_user_id), ...teamUserIds]
   );
+  const territoryStaff = mergeGeoStaffIds(territoryStaffIds, termStaffIds);
+  let territoryRestricts = territory_ids.length > 0 || territoryTerms.length > 0;
+  // Hudud chegarasi hamma faol xodimga bog‘langan bo‘lsa, bu shaxsiy filtr emas.
+  // Filial biriktirilganida kesishma viloyat ma’lumotini yashirmasin.
+  if (
+    territoryRestricts &&
+    branchCodes.length > 0 &&
+    branchStaffIds.length > 0 &&
+    territoryStaff.length > 0
+  ) {
+    const activeStaff = await prisma.user.count({
+      where: { tenant_id: tenantId, is_active: true }
+    });
+    if (activeStaff > 0 && territoryStaff.length >= Math.ceil(activeStaff * 0.85)) {
+      territoryRestricts = false;
+    }
+  }
   const intersected = resolveStaffVisibilityByDimensions([
     {
-      bound: territory_ids.length > 0 || territoryTerms.length > 0,
-      staffIds: mergeGeoStaffIds(territoryStaffIds, termStaffIds)
+      bound: territoryRestricts,
+      staffIds: territoryStaff
     },
     { bound: branchCodes.length > 0, staffIds: branchStaffIds },
     { bound: explicitIds.length > 0, staffIds: explicitIds }

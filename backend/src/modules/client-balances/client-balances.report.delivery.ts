@@ -11,6 +11,7 @@ import {
 import { loadLastPaymentByClient, loadLedgerCardNetByClient } from "./client-balances.ledger";
 import { loadUnpaidDeliveredOrderDebtRows } from "./client-balances.delivery";
 import { mapDeliveryOrderRow } from "./client-balances.mappers";
+import { loadConsignmentDueByClient } from "./client-balances.consignment-due";
 import type { ClientBalancesReportContext } from "./client-balances.report.context";
 
 export async function listClientBalancesReportDelivery(
@@ -46,14 +47,14 @@ export async function listClientBalancesReportDelivery(
   const sliceClientIds = [...new Set(pageSlice.map((r) => r.client_id))];
 
   const deliveryClientIds = [...new Set(orderRows.map((r) => r.client_id))];
-  const cardNetByClient = await loadLedgerCardNetByClient(tenantId, deliveryClientIds);
+  const cardNetByClient = await loadLedgerCardNetByClient(tenantId, deliveryClientIds, asOfEnd);
   let cardNetSum = new Prisma.Decimal(0);
   for (const id of deliveryClientIds) {
     cardNetSum = cardNetSum.add(cardNetByClient.get(id) ?? new Prisma.Decimal(0));
   }
   const totalBalanceStr = cardNetSum.toString();
 
-  const [clients, lastPays] = await Promise.all([
+  const [clients, lastPays, dueByClient] = await Promise.all([
     (async () => {
       if (sliceClientIds.length === 0) return [];
       return prisma.client.findMany({
@@ -72,7 +73,10 @@ export async function listClientBalancesReportDelivery(
         }
       });
     })(),
-    loadLastPaymentByClient(tenantId, sliceClientIds, asOfEnd)
+    loadLastPaymentByClient(tenantId, sliceClientIds, asOfEnd),
+    sliceClientIds.length > 0
+      ? loadConsignmentDueByClient(tenantId, sliceClientIds, q.consignment_due_from, q.consignment_due_to)
+      : Promise.resolve(new Map<number, Date>())
   ]);
   perf("delivery.summary-built", {
     pageSlice: pageSlice.length,
@@ -88,7 +92,15 @@ export async function listClientBalancesReportDelivery(
   for (const od of pageSlice) {
     const c = clientById.get(od.client_id);
     if (!c) continue;
-    const row = mapDeliveryOrderRow(c, od, sprDelivery, pmEntriesDelivery, lastPays.get(od.client_id));
+    const due = dueByClient.get(od.client_id);
+    const row = mapDeliveryOrderRow(
+      due ? { ...c, license_until: due } : c,
+      od,
+      sprDelivery,
+      pmEntriesDelivery,
+      lastPays.get(od.client_id),
+      asOfEnd
+    );
     row.balance = (cardNetByClient.get(od.client_id) ?? new Prisma.Decimal(0)).toString();
     data.push(row);
   }

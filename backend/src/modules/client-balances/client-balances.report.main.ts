@@ -16,6 +16,7 @@ import type {
 } from "./client-balances.types";
 import { agentInclude } from "./client-balances.constants";
 import { buildOrderCreatedLocalDateClause } from "./client-balances.date";
+import { loadConsignmentDueByClient } from "./client-balances.consignment-due";
 import { buildClientWhere } from "./client-balances.where";
 import type { DeliveryDebtInfo } from "./client-balances.delivery";
 import { makePerfMarker, parseIsoDateEndUtc } from "./client-balances.date";
@@ -366,18 +367,21 @@ export async function listClientBalancesReportMain(
           });
     const clientsById = new Map(clients.map((c) => [c.id, c]));
     const orderedClients = pageIds.map((id) => clientsById.get(id)!).filter(Boolean);
-    const [pagePayNorm, lastPays, lastOrds, pageBalAsOf] = await Promise.all([
+    const [pagePayNorm, lastPays, lastOrds, pageBalAsOf, dueByClient] = await Promise.all([
       loadPaymentNetNormByClient(tenantId, pageIds, asOfEnd, pmEntries),
       loadLastPaymentByClient(tenantId, pageIds, asOfEnd),
-      loadLastDeliveryByClient(tenantId, pageIds),
-      asOfEnd && pageIds.length > 0 ? loadBalancesAsOf(tenantId, pageIds, asOfEnd) : Promise.resolve(null)
+      loadLastDeliveryByClient(tenantId, pageIds, asOfEnd),
+      asOfEnd && pageIds.length > 0 ? loadBalancesAsOf(tenantId, pageIds, asOfEnd) : Promise.resolve(null),
+      pageIds.length > 0
+        ? loadConsignmentDueByClient(tenantId, pageIds, q.consignment_due_from, q.consignment_due_to)
+        : Promise.resolve(new Map<number, Date>())
     ]);
     perf("clients-legacy-page.loaded", { pageIds: pageIds.length, total, page });
 
     const data: ClientBalanceRow[] = orderedClients.map((c) => {
       const displayBal = cardNetByClient.get(c.id) ?? new Prisma.Decimal(0);
       return mapClientRow(
-        c,
+        dueByClient.get(c.id) ? { ...c, license_until: dueByClient.get(c.id)! } : c,
         paymentAmountsNetMinusUnpaid(
           sprLabels,
           pagePayNorm.get(c.id),
@@ -389,7 +393,8 @@ export async function listClientBalancesReportMain(
         pageBalAsOf?.get(c.id) ?? null,
         null,
         null,
-        debtSplitsAll.get(c.id) ?? null
+        debtSplitsAll.get(c.id) ?? null,
+        asOfEnd
       );
     });
 
@@ -491,12 +496,15 @@ export async function listClientBalancesReportMain(
   const orderedClients = pageIds.map((id) => clientsById.get(id)!).filter(Boolean);
   const deliveryMapPage =
     q.view === "clients" && pageIds.length > 0 ? deliveryMapForSummary : new Map<number, DeliveryDebtInfo>();
-  const [pagePayNorm, lastPays, lastOrds, pageBalAsOf, debtSplits] = await Promise.all([
+  const [pagePayNorm, lastPays, lastOrds, pageBalAsOf, debtSplits, dueByClient] = await Promise.all([
     loadPaymentNetNormByClient(tenantId, pageIds, asOfEnd, pmEntries),
     loadLastPaymentByClient(tenantId, pageIds, asOfEnd),
-    loadLastDeliveryByClient(tenantId, pageIds),
+    loadLastDeliveryByClient(tenantId, pageIds, asOfEnd),
     asOfEnd && pageIds.length > 0 ? loadBalancesAsOf(tenantId, pageIds, asOfEnd) : Promise.resolve(null),
-    pageIds.length > 0 ? loadDebtSplitByClient(tenantId, pageIds) : Promise.resolve(new Map())
+    pageIds.length > 0 ? loadDebtSplitByClient(tenantId, pageIds) : Promise.resolve(new Map()),
+    pageIds.length > 0
+      ? loadConsignmentDueByClient(tenantId, pageIds, q.consignment_due_from, q.consignment_due_to)
+      : Promise.resolve(new Map<number, Date>())
   ]);
   perf("clients-page.loaded", {
     pageIds: pageIds.length,
@@ -513,7 +521,7 @@ export async function listClientBalancesReportMain(
       : null;
     const displayBal = cardNet ?? mergeLedgerWithUnpaidDelivered(ledger, blend ?? undefined);
     return mapClientRow(
-      c,
+      dueByClient.get(c.id) ? { ...c, license_until: dueByClient.get(c.id)! } : c,
       paymentAmountsNetMinusUnpaid(
         sprLabels,
         pagePayNorm.get(c.id) ?? payNormAllClients.get(c.id),
@@ -525,7 +533,8 @@ export async function listClientBalancesReportMain(
       cardNet ?? pageBalAsOf?.get(c.id) ?? null,
       null,
       cardNet != null ? null : blend,
-      debtSplits.get(c.id) ?? null
+      debtSplits.get(c.id) ?? null,
+      asOfEnd
     );
   });
 

@@ -16,10 +16,9 @@ import type {
   ClientBalanceRow
 } from "./client-balances.types";
 import { agentInclude } from "./client-balances.constants";
-import { buildOrderCreatedLocalDateClause } from "./client-balances.date";
+import { buildOrderCreatedLocalDateClause, makePerfMarker, tashkentDayEndUtc } from "./client-balances.date";
 import { buildClientWhere } from "./client-balances.where";
 import type { DeliveryDebtInfo } from "./client-balances.delivery";
-import { makePerfMarker, parseIsoDateEndUtc } from "./client-balances.date";
 import {
   loadPaymentNetNormByClient,
   loadTenantPaymentRefs,
@@ -68,7 +67,7 @@ export async function buildClientBalancesReportContext(
   const maxL = q.allow_large_export ? 5000 : 200;
   const limit = Math.min(maxL, Math.max(1, q.limit));
   const asOfRaw = q.balance_as_of?.trim();
-  const asOfEnd = asOfRaw ? parseIsoDateEndUtc(asOfRaw) : null;
+  const asOfEnd = asOfRaw ? tashkentDayEndUtc(asOfRaw) : null;
   const odFrom = q.order_date_from?.trim() || null;
   const odTo = q.order_date_to?.trim() || null;
   const skipBal = q.view === "clients_delivery";

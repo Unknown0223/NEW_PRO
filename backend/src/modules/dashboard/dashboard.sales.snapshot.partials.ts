@@ -120,7 +120,7 @@ export async function getSalesDashboardBreakdown(
 ): Promise<SalesDashboardBreakdownPayload> {
   const page = Math.max(1, opts.page ?? 1);
   const limit = Math.min(200, Math.max(1, opts.limit ?? 50));
-  const snapshotKey = `tenant:${tenantId}:dashboard:sales:breakdown:v2:${stableJsonStringify({ filters, page, limit })}`;
+  const snapshotKey = `tenant:${tenantId}:dashboard:sales:breakdown:v3:${stableJsonStringify({ filters, page, limit })}`;
   const cached = await getSnapshotCache<SalesDashboardBreakdownPayload>(snapshotKey);
   if (cached) return cached;
 

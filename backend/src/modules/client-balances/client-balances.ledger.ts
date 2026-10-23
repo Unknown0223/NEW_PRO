@@ -77,10 +77,18 @@ export async function loadLastPaymentByClient(
 
 export async function loadLastDeliveryByClient(
   tenantId: number,
-  clientIds: number[]
+  clientIds: number[],
+  asOfEnd: Date | null = null
 ): Promise<Map<number, Date>> {
   const out = new Map<number, Date>();
   if (clientIds.length === 0) return out;
+  const asOfClause = asOfEnd
+    ? Prisma.sql`AND COALESCE(
+        (SELECT MIN(sl.created_at) FROM order_status_logs sl
+         WHERE sl.order_id = o.id AND sl.to_status IN (${Prisma.join([...ORDER_STATUSES_OUTSTANDING_RECEIVABLE])})),
+        o.created_at
+      ) <= ${asOfEnd}`
+    : Prisma.empty;
   const chunkSize = LARGE_CLIENT_IDS_CHUNK;
   for (let i = 0; i < clientIds.length; i += chunkSize) {
     const chunk = clientIds.slice(i, i + chunkSize);
@@ -89,13 +97,14 @@ export async function loadLastDeliveryByClient(
         MAX(COALESCE(
           (SELECT MIN(sl.created_at) FROM order_status_logs sl
            WHERE sl.order_id = o.id AND sl.to_status IN (${Prisma.join([...ORDER_STATUSES_OUTSTANDING_RECEIVABLE])})),
-          o.updated_at
+          o.created_at
         )) AS lu
       FROM orders o
       WHERE o.tenant_id = ${tenantId}
         AND o.status <> 'cancelled'
         AND o.order_type = 'order'
         AND o.client_id IN (${Prisma.join(chunk)})
+        ${asOfClause}
       GROUP BY o.client_id
     `;
     for (const r of rows) {
