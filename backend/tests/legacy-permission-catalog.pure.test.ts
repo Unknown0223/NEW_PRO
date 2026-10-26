@@ -58,7 +58,7 @@ describe("legacy permission catalog metadata", () => {
     expect(
       catalogParentPathLabel("staff", "Пользователи / Зарплаты", "staff.zarplaty.spisok_zarplat")
     ).toBe("Зарплата");
-    expect(catalogParentPathLabel("staff", "Табель", "staff.tabel.view")).toBe("Пользователи · Табель");
+    expect(catalogParentPathLabel("staff", "Табель", "staff.tabel.view")).toBe("Табель и посещаемость · Табель");
     expect(catalogParentPathLabel("cash", "Приходы", "cash.prihody.view")).toBe("Касса · Приходы");
   });
 
@@ -73,10 +73,13 @@ describe("legacy permission catalog metadata", () => {
       "Зарплата / Утверждение авансов / Просмотр"
     );
     expect(permissionDisplayDescription("staff.tabel.view", "Пользователи / Табель / Просмотр")).toBe(
-      "Пользователи / Табель / Просмотр"
+      "Табель и посещаемость / Табель / Просмотр"
     );
     const payroll = buildStructuredPermissionCatalog().filter((e) => permissionDisplayGroup(e.key) === "Зарплата");
     expect(payroll.length).toBeGreaterThan(0);
     for (const e of payroll) expect(e.description.startsWith("Зарплата / ")).toBe(true);
+    const tabel = buildStructuredPermissionCatalog().filter((e) => permissionDisplayGroup(e.key) === "Табель и посещаемость");
+    expect(tabel.length).toBeGreaterThan(0);
+    for (const e of tabel) expect(e.description.startsWith("Табель и посещаемость / ")).toBe(true);
   });
 });

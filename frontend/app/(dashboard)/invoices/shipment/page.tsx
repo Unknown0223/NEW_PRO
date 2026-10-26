@@ -32,11 +32,11 @@ export default function ShipmentInvoicesPage() {
   const [expeditorDraft, setExpeditorDraft] = useState("all");
   const [statusDraft, setStatusDraft] = useState("delivering");
   const [searchDraft, setSearchDraft] = useState("");
-  useDebouncedSearchCommit(searchDraft, setSearch);
   const [warehouse, setWarehouse] = useState("all");
   const [expeditor, setExpeditor] = useState("all");
   const [status, setStatus] = useState("delivering");
   const [search, setSearch] = useState("");
+  useDebouncedSearchCommit(searchDraft, setSearch);
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [dateRangeOpen, setDateRangeOpen] = useState(false);

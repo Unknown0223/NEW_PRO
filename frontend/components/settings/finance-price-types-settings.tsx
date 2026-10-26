@@ -23,7 +23,8 @@ import {
 } from "@/lib/api-validation-details";
 import { getUserFacingError, withApiSupportLine } from "@/lib/error-utils";
 import { STALE } from "@/lib/query-stale";
-import { useAuthStore, useAuthStoreHydrated, useEffectiveRole } from "@/lib/auth-store";
+import { useAuthStore, useAuthStoreHydrated } from "@/lib/auth-store";
+import { usePermissions } from "@/lib/use-permissions";
 import { cn } from "@/lib/utils";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { isAxiosError } from "axios";
@@ -43,8 +44,7 @@ import {
 export function FinancePriceTypesSettings() {
   const tenantSlug = useAuthStore((s) => s.tenantSlug);
   const hydrated = useAuthStoreHydrated();
-  const role = useEffectiveRole();
-  const isAdmin = role === "admin";
+  const canEdit = usePermissions().has("settings.tip_tseny.update");
   const qc = useQueryClient();
 
   const [open, setOpen] = useState(false);
@@ -197,7 +197,7 @@ export function FinancePriceTypesSettings() {
         description="Продажа или закупка; привязан к способу оплаты. Ключ: код, если задан, иначе название. Если справочник заполнен, в заказах и приходах можно выбрать только эти записи."
         actions={
           <div className="flex gap-2">
-            <Button size="sm" disabled={!isAdmin || payList.length === 0} onClick={openAdd}>
+            <Button size="sm" disabled={!canEdit || payList.length === 0} onClick={openAdd}>
               Добавить
             </Button>
             <Link
@@ -244,7 +244,7 @@ export function FinancePriceTypesSettings() {
                     <td className="px-3 py-2">{r.kind === "purchase" ? "Покупка" : "Продажа"}</td>
                     <td className="px-3 py-2 font-mono text-xs">{priceTypeKey(r)}</td>
                     <td className="px-3 py-2 text-right">
-                      {isAdmin ? (
+                      {canEdit ? (
                         <TableRowActionGroup className="justify-end" ariaLabel="Тип цены">
                           <Button
                             variant="outline"
@@ -371,7 +371,7 @@ export function FinancePriceTypesSettings() {
             {pickZodLeaf(serverFieldErrs, "attached_clients_only") ? (
               <p className="text-xs text-destructive">{pickZodLeaf(serverFieldErrs, "attached_clients_only")}</p>
             ) : null}
-            <Button onClick={submitForm} disabled={saveMut.isPending || !isAdmin}>
+            <Button onClick={submitForm} disabled={saveMut.isPending || !canEdit}>
               {editId ? "Сохранить" : "Добавить"}
             </Button>
           </div>

@@ -70,9 +70,15 @@ describe("access grant guard — forbidden / admin", () => {
     ).rejects.toBeInstanceOf(AccessAdminTargetError);
   });
 
-  it("admin actor — tekshiruvsiz", async () => {
+  it("admin foydalanuvchi hech kim tomonidan cheklanmaydi", async () => {
     await expect(
       assertActorCanPatchUser(1, { userId: 1, role: "admin" }, { id: 9, role: "admin" }, { permissions: ["x.y.view"] })
+    ).rejects.toBeInstanceOf(AccessAdminTargetError);
+  });
+
+  it("admin actor boshqa rolni tahrirlay oladi", async () => {
+    await expect(
+      assertActorCanPatchUser(1, { userId: 1, role: "admin" }, { id: 9, role: "operator" }, { permissions: ["x.y.view"] })
     ).resolves.toBeUndefined();
   });
 
@@ -82,6 +88,9 @@ describe("access grant guard — forbidden / admin", () => {
     expect(res?.message).toContain("Список и просмотр заказов");
     expect(res?.keys).toEqual(["orders.zakaz.view"]);
     expect(grantGuardErrorResponse(new Error("x"))).toBeNull();
+    const adminRes = grantGuardErrorResponse(new AccessAdminTargetError());
+    expect(adminRes?.code).toBe("ACCESS_ADMIN_TARGET");
+    expect(adminRes?.message).toMatch(/полный доступ/);
   });
 });
 

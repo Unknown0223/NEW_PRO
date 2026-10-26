@@ -244,6 +244,61 @@ export const settingsSections: SettingsSection[] = [
     ]
   },
   {
+    title: "Табель, Face ID и посещаемость",
+    slug: "tabel-i-poseshaemost",
+    items: [
+      {
+        title: "Правила опозданий и штрафов",
+        slug: "lateness-rules",
+        href: "/settings/tabel/lateness-rules",
+        status: "available",
+        description: "Лимит допустимых опозданий в месяц, минуты прощения и уведомления"
+      },
+      {
+        title: "Видео-отметка и 3-значный код",
+        slug: "punch-video",
+        href: "/settings/tabel/punch-video",
+        status: "available",
+        description: "Видео 5–10 сек, 3-значный дневной код (100–999) и доступ сотрудникам"
+      },
+      {
+        title: "Face ID, Liveness и Анти-фрод",
+        slug: "face-antifraud",
+        href: "/settings/tabel/face-antifraud",
+        status: "available",
+        description: "Порог распознавания лица, 4/8 поворотов головы, защита от Fake GPS и Киоск"
+      },
+      {
+        title: "Telegram-канал / группа для видео-отметок",
+        slug: "telegram-attendance",
+        href: "/settings/tabel/telegram-attendance",
+        status: "available",
+        description: "Привязка Telegram группы/канала для автоматической отправки фото и видео отметок"
+      },
+      {
+        title: "Сроки хранения фото и видео (Retention)",
+        slug: "retention",
+        href: "/settings/tabel/retention",
+        status: "available",
+        description: "Сжатие фото (720px/62%) и авто-очистка фото (90 дн), видео (30 дн) и эталонов лиц"
+      },
+      {
+        title: "Локации и гео-зоны посещаемости",
+        slug: "locations",
+        href: "/settings/tabel/locations",
+        status: "available",
+        description: "Координаты офисов и складов, допустимый радиус и обязательный комментарий"
+      },
+      {
+        title: "Справочник видов отсутствий и смен",
+        slug: "dictionaries",
+        href: "/settings/tabel/dictionaries",
+        status: "available",
+        description: "Виды отпусков, больничных, командировок и шаблоны обходных листов"
+      }
+    ]
+  },
+  {
     title: "Период и регламент",
     slug: "period-reglament",
     items: [
@@ -376,27 +431,27 @@ export function resolveSettingsItemHref(item: SettingsItem): string {
 
 /** Sozlamalar punkty — Dostup kaliti (href yoki slug). */
 const SETTINGS_HREF_VIEW_PERMS: Record<string, readonly string[]> = {
-  "/settings/appearance": ["settings.appearance.view"],
-  "/settings/returns/filter": ["settings.returns_filter.view"],
+  "/settings/appearance": ["settings.appearance.view", "settings.appearance.update"],
+  "/settings/returns/filter": ["settings.returns_filter.view", "settings.returns_filter.update"],
   "/settings/mobile-app": ["settings.mobile_app.view", "settings.mobile_app.update"],
-  "/settings/territories": ["settings.territoriya.view"],
-  "/settings/units": ["settings.edinitsy.view"],
-  "/settings/branches": ["settings.filial.view"],
+  "/settings/territories": ["settings.territoriya.view", "settings.territoriya.update"],
+  "/settings/units": ["settings.edinitsy.view", "settings.edinitsy.update"],
+  "/settings/branches": ["settings.filial.view", "settings.filial.update"],
   "/settings/geo-boundaries": ["settings.geo_granitsy.view"],
-  "/settings/web-staff-position-presets": ["settings.web_staff_positions.view", "settings.dolzhnost.view"],
-  "/settings/client-formats": ["settings.format_klienta.view"],
-  "/settings/client-types": ["settings.tip_klienta.view"],
-  "/settings/client-categories": ["settings.kategoriya_klienta.view"],
-  "/settings/product-categories": ["settings.kategoriya_tovara.view"],
+  "/settings/web-staff-position-presets": ["settings.web_staff_positions.view", "settings.dolzhnost.view", "settings.web_staff_positions.update"],
+  "/settings/client-formats": ["settings.format_klienta.view", "settings.format_klienta.update"],
+  "/settings/client-types": ["settings.tip_klienta.view", "settings.tip_klienta.update"],
+  "/settings/client-categories": ["settings.kategoriya_klienta.view", "settings.kategoriya_klienta.update"],
+  "/settings/product-categories": ["settings.kategoriya_tovara.view", "settings.kategoriya_tovara.update"],
   "/settings/products": ["settings.tovar.view"],
   "/settings/products?tab=product-groups": ["settings.kategoriya_tovara.view", "settings.tovar.view"],
   "/settings/products?tab=interchangeable": ["settings.tovar.view"],
   "/settings/products?tab=brands": ["settings.brend.view"],
   "/settings/products?tab=manufacturers": ["settings.tovar.view"],
   "/settings/products?tab=segments": ["settings.segment.view"],
-  "/settings/currencies": ["settings.valyuty.view"],
-  "/settings/payment-methods": ["settings.sposob_oplaty.view"],
-  "/settings/price-types": ["settings.tip_tseny.view"],
+  "/settings/currencies": ["settings.valyuty.view", "settings.valyuty.update"],
+  "/settings/payment-methods": ["settings.sposob_oplaty.view", "settings.sposob_oplaty.update"],
+  "/settings/price-types": ["settings.tip_tseny.view", "settings.tip_tseny.update"],
   "/settings/prices": ["settings.tsena.view"],
   "/settings/sales-directions/trade": ["settings.napravlenie_torgovli.view"],
   "/settings/sales-directions/sales-channels": ["settings.kanal_sbyta.view"],
@@ -405,29 +460,36 @@ const SETTINGS_HREF_VIEW_PERMS: Record<string, readonly string[]> = {
   "/settings/discount-rules": ["settings.skidki.view"],
   "/settings/bonus-strategies": ["settings.bonus_strategiya.view"],
   "/settings/bonus-stack": ["settings.bonusy.view", "settings.skidki.view", "settings.bonus_strategiya.view"],
-  "/settings/reasons/request-types": ["settings.prichiny.view"],
-  "/settings/reasons/refusal-reasons": ["settings.prichiny.view"],
-  "/settings/reasons/cancel-payment-reasons": ["settings.prichiny.view"],
-  "/settings/reasons/order-notes": ["settings.prichiny.view"],
-  "/settings/reasons/photo-categories": ["settings.prichiny.view"],
-  "/settings/reasons/finance-categories": ["settings.prichiny.view"],
-  "/settings/inventory/type": ["settings.inventar_i_korobka.view"],
-  "/settings/inventory/box-type": ["settings.inventar_i_korobka.view"],
-  "/settings/equipment/printers": ["settings.oborudovanie.view"],
-  "/settings/equipment/tare": ["settings.oborudovanie.view"],
-  "/settings/knowledge-base/type": ["settings.baza_znaniy.view"],
-  "/settings/knowledge-base/base": ["settings.baza_znaniy.view"],
-  "/settings/company": ["settings.profil_kompanii.view"],
+  "/settings/reasons/request-types": ["settings.prichiny.view", "settings.prichiny.update"],
+  "/settings/reasons/refusal-reasons": ["settings.prichiny.view", "settings.prichiny.update"],
+  "/settings/reasons/cancel-payment-reasons": ["settings.prichiny.view", "settings.prichiny.update"],
+  "/settings/reasons/order-notes": ["settings.prichiny.view", "settings.prichiny.update"],
+  "/settings/reasons/photo-categories": ["settings.prichiny.view", "settings.prichiny.update"],
+  "/settings/reasons/finance-categories": ["settings.prichiny.view", "settings.prichiny.update"],
+  "/settings/inventory/type": ["settings.inventar_i_korobka.view", "settings.inventar_i_korobka.update"],
+  "/settings/inventory/box-type": ["settings.inventar_i_korobka.view", "settings.inventar_i_korobka.update"],
+  "/settings/equipment/printers": ["settings.oborudovanie.view", "settings.oborudovanie.update"],
+  "/settings/equipment/tare": ["settings.oborudovanie.view", "settings.oborudovanie.update"],
+  "/settings/knowledge-base/type": ["settings.baza_znaniy.view", "settings.baza_znaniy.update"],
+  "/settings/knowledge-base/base": ["settings.baza_znaniy.view", "settings.baza_znaniy.update"],
+  "/settings/company": ["settings.profil_kompanii.view", "settings.profil_kompanii.update"],
   "/settings/document-edit-lock": [
     "settings.document_edit_lock.view",
     "settings.document_edit_lock.update",
     "settings.document_edit_lock.assign"
   ],
   "/settings/period/orders-consignment": ["settings.orders_consignment.view"],
-  "/settings/timezone": ["settings.timezone.view"],
+  "/settings/timezone": ["settings.timezone.view", "settings.timezone.update"],
   "/settings/initial-setup": ["settings.initial_setup.view"],
   "/settings/system-migration": ["settings.system_migration.view"],
-  "/settings/audit": ["audit.log.view"]
+  "/settings/audit": ["audit.log.view"],
+  "/settings/tabel/lateness-rules": ["settings.tabel_pravila.view", "settings.tabel_pravila.update", "staff.tabel.view"],
+  "/settings/tabel/punch-video": ["settings.tabel_pravila.view", "settings.tabel_pravila.update", "staff.tabel.view"],
+  "/settings/tabel/face-antifraud": ["settings.tabel_pravila.view", "settings.tabel_pravila.update", "staff.tabel.view"],
+  "/settings/tabel/telegram-attendance": ["settings.tabel_pravila.view", "settings.tabel_pravila.update", "staff.tabel.view"],
+  "/settings/tabel/retention": ["settings.tabel_pravila.view", "settings.tabel_pravila.update", "staff.tabel.view"],
+  "/settings/tabel/locations": ["settings.tabel_pravila.view", "settings.tabel_pravila.update", "staff.tabel.view"],
+  "/settings/tabel/dictionaries": ["settings.tabel_pravila.view", "settings.tabel_pravila.update", "staff.tabel.view"]
 };
 
 export function settingsItemViewPermissions(item: SettingsItem): readonly string[] | null {

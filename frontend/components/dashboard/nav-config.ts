@@ -304,8 +304,6 @@ export const dashboardUsersNav: {
           label: "Консигнация",
           showIfAnyPermission: [...NAV_PERM.staffConsignment]
         },
-        { href: "/users/workdays", label: "Рабочие дни", showIfAnyPermission: [...NAV_PERM.staffWorkdays] },
-        { href: "/users/timesheet", label: "Табель", showIfAnyPermission: [...NAV_PERM.staffTimesheet] },
         { href: "/users/tasks", label: "Задачи", showIfAnyPermission: [...NAV_PERM.staffTasks] },
         { href: "/users/task-types", label: "Типы задач", showIfAnyPermission: [...NAV_PERM.staffTaskTypes] }
       ]
@@ -315,6 +313,52 @@ export const dashboardUsersNav: {
 
 export function dashboardUsersNavFlatItems(): NavItem[] {
   return dashboardUsersNav.groups.flatMap((g) => g.items).filter((i) => !i.disabled && i.href !== "#");
+}
+
+/** Табель и посещаемость — kunlik nazorat, smenalar, arizalar, analitika va Face ID terminallar. */
+export const dashboardTabelNav: {
+  sectionTitle: string;
+  groups: { title: string; items: NavItem[] }[];
+} = {
+  sectionTitle: "Табель и посещаемость",
+  groups: [
+    {
+      title: "ТАБЕЛЬ И ОТМЕТКИ",
+      items: [
+        { href: "/tabel/timesheet", label: "Табель посещаемости", showIfAnyPermission: [...NAV_PERM.staffTimesheet] },
+        { href: "/tabel/marks", label: "Журнал отметок (Приход / Уход)", showIfAnyPermission: [...NAV_PERM.tabelMarks] },
+        { href: "/tabel/problems", label: "Проблемные отметки и нарушения", showIfAnyPermission: [...NAV_PERM.tabelProblems] },
+        { href: "/tabel/corrections", label: "Корректировка табеля", showIfAnyPermission: [...NAV_PERM.tabelCorrections] }
+      ]
+    },
+    {
+      title: "ГРАФИКИ И СМЕНЫ",
+      items: [
+        { href: "/tabel/workdays", label: "Рабочие дни и графики", showIfAnyPermission: [...NAV_PERM.staffWorkdays] },
+        { href: "/tabel/shifts", label: "Смены и расписание (Часы работы)", showIfAnyPermission: [...NAV_PERM.tabelShifts] },
+        { href: "/tabel/agent-norm", label: "Норматив агентов", showIfAnyPermission: [...NAV_PERM.staffTimesheetNorm] }
+      ]
+    },
+    {
+      title: "ЗАЯВКИ И КАДРЫ",
+      items: [
+        { href: "/tabel/absence-requests", label: "Заявки на отпуск и больничный", showIfAnyPermission: [...NAV_PERM.tabelAbsenceRequests] },
+        { href: "/tabel/overtime-requests", label: "Сверхурочные и работа в выходной", showIfAnyPermission: [...NAV_PERM.tabelOvertimeRequests] },
+        { href: "/tabel/clearance-sheets", label: "Обходные листы (Увольнение)", showIfAnyPermission: [...NAV_PERM.tabelClearanceSheets] }
+      ]
+    },
+    {
+      title: "АНАЛИТИКА И УСТРОЙСТВА",
+      items: [
+        { href: "/tabel/analytics", label: "Статистика посещаемости", showIfAnyPermission: [...NAV_PERM.tabelAnalytics] },
+        { href: "/tabel/devices", label: "Терминалы Face ID и киоск", showIfAnyPermission: [...NAV_PERM.tabelDevices] }
+      ]
+    }
+  ]
+};
+
+export function dashboardTabelNavFlatItems(): NavItem[] {
+  return dashboardTabelNav.groups.flatMap((g) => g.items).filter((i) => !i.disabled && i.href !== "#");
 }
 
 /** Зарплата — hisob, avans, kassada berish va sozlamalar bitta bo‘limda. */
@@ -499,6 +543,7 @@ export type SidebarLayoutEntry =
   | { kind: "reports" }
   | { kind: "kassa" }
   | { kind: "users" }
+  | { kind: "tabel" }
   | { kind: "payroll" }
   | { kind: "plans" }
   /** Loyihada hali yo‘q bo‘lim — sariq, bosib bo‘lmaydigan sarlavha (keyin qo‘shamiz). */
@@ -521,6 +566,7 @@ export const dashboardSidebarLayout: SidebarLayoutEntry[] = [
   { kind: "plans" },
   { kind: "reports" },
   { kind: "users" },
+  { kind: "tabel" },
   { kind: "payroll" },
   {
     kind: "link",
@@ -597,6 +643,8 @@ export function flattenMobileNavItems(): NavItem[] {
       for (const item of dashboardKassaNavFlatItems()) pushUnique(item);
     } else if (e.kind === "users") {
       for (const item of dashboardUsersNavFlatItems()) pushUnique(item);
+    } else if (e.kind === "tabel") {
+      for (const item of dashboardTabelNavFlatItems()) pushUnique(item);
     } else if (e.kind === "payroll") {
       for (const item of dashboardPayrollNavFlatItems()) pushUnique(item);
     }
@@ -628,6 +676,7 @@ export function flattenNavSearchEntries(): NavSearchEntry[] {
     else if (e.kind === "plans") push(dashboardPlansNav.sectionTitle, dashboardPlansNav.items);
     else if (e.kind === "reports") push(dashboardReportsNav.sectionTitle, dashboardReportsNav.items);
     else if (e.kind === "users") push(dashboardUsersNav.sectionTitle, dashboardUsersNavFlatItems());
+    else if (e.kind === "tabel") push(dashboardTabelNav.sectionTitle, dashboardTabelNavFlatItems());
     else if (e.kind === "payroll") push(dashboardPayrollNav.sectionTitle, dashboardPayrollNavFlatItems());
     else if (e.kind === "link") push(null, [e.item]);
   }
@@ -658,6 +707,11 @@ const BREADCRUMB_ENTRIES: Array<{ path: string; section: string | null; label: s
   push(dashboardReportsNav.sectionTitle, dashboardReportsNav.items);
   push(dashboardPlansNav.sectionTitle, dashboardPlansNav.items);
   push(dashboardUsersNav.sectionTitle, dashboardUsersNavFlatItems());
+  push(dashboardTabelNav.sectionTitle, [
+    ...dashboardTabelNavFlatItems(),
+    { href: "/users/timesheet", label: "Табель посещаемости" },
+    { href: "/users/workdays", label: "Рабочие дни и графики" }
+  ]);
   push(dashboardPayrollNav.sectionTitle, dashboardPayrollNavFlatItems());
   push(null, [
     { href: "/reports/gps/map", label: "GPS мониторинг" },

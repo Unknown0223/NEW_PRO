@@ -19,6 +19,7 @@ import {
   enableConsignmentClosureCron
 } from "./lib/consignment-closure-cron";
 import { disableAuditRetentionCron, enableAuditRetentionCron } from "./lib/audit-retention-cron";
+import { disableTabelShiftCloseCron, enableTabelShiftCloseCron } from "./lib/tabel-shift-close-cron";
 import { disablePayrollCron, enablePayrollCron } from "./lib/payroll-cron";
 import { startPayrollOrderHook } from "./modules/payroll/payroll.auto-hooks";
 import { startMonthEndDueBackfill } from "./modules/client-balances/client-balances.consignment-due";
@@ -46,6 +47,8 @@ async function main() {
   enableDashboardCacheWarm();
   enableAuditRetentionCron();
   app.log.info("Audit retention cron enabled (audit + activity).");
+  enableTabelShiftCloseCron();
+  app.log.info("Tabel shift-close cron enabled (every 10 minutes).");
   enableConsignmentClosureCron();
   app.log.info("Consignment month closure cron enabled.");
   const stopPayrollOrderHook = startPayrollOrderHook();
@@ -62,6 +65,7 @@ async function main() {
     disablePaymentReturnFinalizeCron();
     disableDashboardCacheWarm();
     disableAuditRetentionCron();
+    disableTabelShiftCloseCron();
     disableConsignmentClosureCron();
     await app.close();
     await closeOrderEventBusRedis();

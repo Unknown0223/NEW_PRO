@@ -24,7 +24,8 @@ import {
 } from "@/lib/api-validation-details";
 import { getUserFacingError, withApiSupportLine } from "@/lib/error-utils";
 import { STALE } from "@/lib/query-stale";
-import { useAuthStore, useAuthStoreHydrated, useEffectiveRole } from "@/lib/auth-store";
+import { useAuthStore, useAuthStoreHydrated } from "@/lib/auth-store";
+import { usePermissions } from "@/lib/use-permissions";
 import { cn } from "@/lib/utils";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { isAxiosError } from "axios";
@@ -72,8 +73,7 @@ function sortUnits(units: UnitMeasure[]): UnitMeasure[] {
 export default function UnitsSettingsPage() {
   const tenantSlug = useAuthStore((s) => s.tenantSlug);
   const hydrated = useAuthStoreHydrated();
-  const role = useEffectiveRole();
-  const isAdmin = role === "admin";
+  const canEdit = usePermissions().has("settings.edinitsy.update");
   const qc = useQueryClient();
 
   const [tab, setTab] = useState<"active" | "inactive">("active");
@@ -198,7 +198,7 @@ export default function UnitsSettingsPage() {
         description="Список активных и неактивных единиц с сортировкой и кодом."
         actions={
           <div className="flex gap-2">
-            <Button size="sm" disabled={!isAdmin} onClick={openAdd}>Добавить</Button>
+            <Button size="sm" disabled={!canEdit} onClick={openAdd}>Добавить</Button>
             <Link href="/settings" className={cn(buttonVariants({ variant: "outline", size: "sm" }))}>Каталог</Link>
           </div>
         }
@@ -232,7 +232,7 @@ export default function UnitsSettingsPage() {
                     <td className="px-3 py-2">{u.code ?? "-"}</td>
                     <td className="px-3 py-2">{u.comment ?? "-"}</td>
                     <td className="px-3 py-2 text-right">
-                      {isAdmin ? (
+                      {canEdit ? (
                         <TableRowActionGroup className="justify-end" ariaLabel="Единица измерения">
                           <Button
                             variant="outline"
@@ -328,7 +328,7 @@ export default function UnitsSettingsPage() {
             {pickZodLeaf(serverFieldErrs, "active") ? (
               <p className="text-xs text-destructive">{pickZodLeaf(serverFieldErrs, "active")}</p>
             ) : null}
-            <Button onClick={submitForm} disabled={saveMut.isPending || !isAdmin}>{editId ? "Сохранить" : "Добавить"}</Button>
+            <Button onClick={submitForm} disabled={saveMut.isPending || !canEdit}>{editId ? "Сохранить" : "Добавить"}</Button>
           </div>
         </DialogContent>
       </Dialog>

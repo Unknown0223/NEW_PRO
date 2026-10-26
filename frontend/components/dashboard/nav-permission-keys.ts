@@ -129,6 +129,15 @@ export const NAV_PERM = {
   staffTimesheetHistory: ["staff.tabel.history"],
   staffTimesheetNorm: ["staff.tabel_normativ.view", "staff.tabel_normativ.update"],
   staffTimesheetNormEdit: ["staff.tabel_normativ.update"],
+  tabelMarks: ["tabel.otmetki.view", "staff.tabel.view"],
+  tabelProblems: ["tabel.otmetki.view", "tabel.otmetki.approve", "staff.tabel.update"],
+  tabelCorrections: ["staff.tabel.update", "staff.tabel.history", "tabel.otmetki.update"],
+  tabelShifts: ["tabel.smeny.view", "staff.rabochie_dni.view"],
+  tabelAbsenceRequests: ["tabel.zayavki.view", "staff.tabel.view"],
+  tabelOvertimeRequests: ["tabel.zayavki.view", "staff.tabel.view"],
+  tabelClearanceSheets: ["tabel.obhodnye.view", "staff.sotrudniki.view"],
+  tabelAnalytics: ["staff.tabel.view", "tabel.otmetki.view", "tabel.statistika.view"],
+  tabelDevices: ["tabel.ustroystva.view"],
   staffTasks: ["staff.zadachi_spisok.view"],
   staffTaskTypes: ["settings.tipy_zadach.view"],
   agentRoutePlan: ["gps.marshrut.view", "gps.marshrut.update"],
@@ -184,6 +193,7 @@ export const NAV_PERM = {
     "settings.web_staff_positions.view",
     "settings.timezone.view",
     "settings.initial_setup.view",
-    "settings.system_migration.view"
+    "settings.system_migration.view",
+    "settings.tabel_pravila.view"
   ]
 } as const;

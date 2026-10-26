@@ -1,12 +1,15 @@
 import { describe, expect, it } from "vitest";
 import {
+  agentIdsForNormSales,
   applyAgentNormToDays,
   consignmentOpenDays,
   DEFAULT_AGENT_NORM,
   describeAgentNormChanges,
   parseAgentNormConfig,
+  resolveAgentNormConfig,
   summarizeAgentNorm,
   type AgentDaySales,
+  type AgentNormConfig,
   type NormDay
 } from "../src/modules/timesheet/timesheet.agent-norm.pure";
 
@@ -132,7 +135,99 @@ describe("parseAgentNormConfig", () => {
     expect(parseAgentNormConfig({ timesheet: { agent_norm: { open_amount: 1_200_000, enabled: false } } })).toMatchObject({
       enabled: false,
       open_amount: 1_200_000,
-      closed_amount: 650_000
+      closed_amount: 650_000,
+      min_orders: 0,
+      half_day_ratio: 0,
+      overrides: []
     });
+  });
+
+  it("agent override va qo‘shimcha shartlarni o‘qiydi", () => {
+    const cfg = parseAgentNormConfig({
+      timesheet: {
+        agent_norm: {
+          min_orders: 2,
+          half_day_ratio: 0.5,
+          overrides: [
+            { user_id: 7, open_amount: 2_000_000, enabled: true },
+            { user_id: 7, open_amount: 9 },
+            { user_id: 0, open_amount: 100 }
+          ]
+        }
+      }
+    });
+    expect(cfg.min_orders).toBe(2);
+    expect(cfg.half_day_ratio).toBe(0.5);
+    expect(cfg.overrides).toEqual([{ user_id: 7, enabled: true, open_amount: 2_000_000 }]);
+  });
+});
+
+describe("resolveAgentNormConfig va savdo ro‘yxati", () => {
+  const base: AgentNormConfig = {
+    ...DEFAULT_AGENT_NORM,
+    overrides: [
+      { user_id: 2, open_amount: 2_000_000, closed_amount: 900_000 },
+      { user_id: 3, enabled: false }
+    ]
+  };
+
+  it("override maydonlari umumiyga yopishadi", () => {
+    expect(resolveAgentNormConfig(base, 1)).toMatchObject({ open_amount: 1_000_000, enabled: true, overrides: [] });
+    expect(resolveAgentNormConfig(base, 2)).toMatchObject({ open_amount: 2_000_000, closed_amount: 900_000, enabled: true });
+    expect(resolveAgentNormConfig(base, 3).enabled).toBe(false);
+  });
+
+  it("savdo faqat hisoblanadigan agentlarga yuklanadi", () => {
+    expect(agentIdsForNormSales(base, [1, 2, 3])).toEqual([1, 2]);
+    expect(agentIdsForNormSales({ ...base, enabled: false }, [1, 2, 3])).toEqual([]);
+    expect(
+      agentIdsForNormSales({ ...base, enabled: false, overrides: [{ user_id: 2, enabled: true }] }, [1, 2, 3])
+    ).toEqual([2]);
+  });
+});
+
+describe("qo‘shimcha shartlar", () => {
+  it("min_orders yetmasa — kelmadi, half_day_ratio — yarim kun", () => {
+    const lowOrders = [day("2026-10-01")];
+    applyAgentNormToDays(lowOrders, {
+      cfg: { ...DEFAULT_AGENT_NORM, min_orders: 3 },
+      today: "2026-10-31",
+      isWorkingDay: () => true,
+      planDays: 26,
+      sales: () => ({ gross: 2_000_000, refused: 0, returned: 0, orders: 1 }),
+      consignmentOpen: () => true
+    });
+    expect(lowOrders[0]!.status).toBe("absent");
+    expect(lowOrders[0]!.comment).toContain("минимум 3");
+
+    const half = [day("2026-10-01")];
+    applyAgentNormToDays(half, {
+      cfg: { ...DEFAULT_AGENT_NORM, half_day_ratio: 0.5 },
+      today: "2026-10-31",
+      isWorkingDay: () => true,
+      planDays: 26,
+      sales: () => s(600_000),
+      consignmentOpen: () => true
+    });
+    expect(half[0]!.status).toBe("half_day");
+    expect(half[0]!.comment).toContain("полдня");
+  });
+
+  it("agent override summasini qo‘llaydi", () => {
+    const d = [day("2026-10-01")];
+    const resolved = resolveAgentNormConfig(
+      { ...DEFAULT_AGENT_NORM, overrides: [{ user_id: 9, open_amount: 2_000_000 }] },
+      9
+    );
+    applyAgentNormToDays(d, {
+      cfg: resolved,
+      today: "2026-10-31",
+      isWorkingDay: () => true,
+      planDays: 26,
+      sales: () => s(1_200_000),
+      consignmentOpen: () => true
+    });
+    expect(d[0]!.status).toBe("absent");
+    expect(d[0]!.norm).toBe(2_000_000);
   });
 });

@@ -10,7 +10,8 @@ import {
   DialogTitle
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { useAuthStore, useEffectiveRole } from "@/lib/auth-store";
+import { useAuthStore } from "@/lib/auth-store";
+import { usePermissions } from "@/lib/use-permissions";
 import { api } from "@/lib/api";
 import { DEFAULT_APP_TIMEZONE, setAppTimezone } from "@/lib/app-timezone";
 import { getUserFacingError } from "@/lib/error-utils";
@@ -38,8 +39,7 @@ type Props = {
 
 export function TimezoneSettingsDialog({ open, onOpenChange }: Props) {
   const tenantSlug = useAuthStore((s) => s.tenantSlug);
-  const role = useEffectiveRole();
-  const isAdmin = role === "admin";
+  const canEdit = usePermissions().has("settings.timezone.update");
   const qc = useQueryClient();
 
   const [timezone, setTimezone] = useState(DEFAULT_APP_TIMEZONE);
@@ -132,7 +132,7 @@ export function TimezoneSettingsDialog({ open, onOpenChange }: Props) {
                   onChange={(e) => setQuery(e.target.value)}
                   placeholder="Поиск: Tashkent, Moscow, UTC+5…"
                   className="h-9 pl-9"
-                  disabled={!isAdmin || saveMut.isPending}
+                  disabled={!canEdit || saveMut.isPending}
                   autoFocus
                 />
               </div>
@@ -140,7 +140,7 @@ export function TimezoneSettingsDialog({ open, onOpenChange }: Props) {
               {deviceTz ? (
                 <button
                   type="button"
-                  disabled={!isAdmin || saveMut.isPending}
+                  disabled={!canEdit || saveMut.isPending}
                   onClick={() => {
                     setTimezone(deviceTz);
                     setMsg(null);
@@ -176,7 +176,7 @@ export function TimezoneSettingsDialog({ open, onOpenChange }: Props) {
                             type="button"
                             role="option"
                             aria-selected={active}
-                            disabled={!isAdmin || saveMut.isPending}
+                            disabled={!canEdit || saveMut.isPending}
                             onClick={() => {
                               setTimezone(z.id);
                               setMsg(null);
@@ -186,7 +186,7 @@ export function TimezoneSettingsDialog({ open, onOpenChange }: Props) {
                               active
                                 ? "bg-primary/10 text-foreground"
                                 : "hover:bg-muted/70 text-muted-foreground hover:text-foreground",
-                              (!isAdmin || saveMut.isPending) && "opacity-60"
+                              (!canEdit || saveMut.isPending) && "opacity-60"
                             )}
                           >
                             <span className="mt-0.5 w-4 shrink-0">
@@ -218,8 +218,8 @@ export function TimezoneSettingsDialog({ open, onOpenChange }: Props) {
                   : null}
               </p>
 
-              {!isAdmin ? (
-                <p className="text-xs text-muted-foreground">Изменять может только администратор.</p>
+              {!canEdit ? (
+                <p className="text-xs text-muted-foreground">Нет права на изменение часового пояса (Доступ).</p>
               ) : null}
               {msg ? (
                 <p
@@ -243,7 +243,7 @@ export function TimezoneSettingsDialog({ open, onOpenChange }: Props) {
           >
             Закрыть
           </Button>
-          {isAdmin ? (
+          {canEdit ? (
             <div className="flex gap-2">
               {dirty ? (
                 <Button

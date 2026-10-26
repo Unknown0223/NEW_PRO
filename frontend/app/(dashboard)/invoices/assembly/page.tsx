@@ -32,11 +32,11 @@ export default function AssemblyInvoicesPage() {
   const [statusDraft, setStatusDraft] = useState("picking");
   const [expeditorDraft, setExpeditorDraft] = useState("all");
   const [searchDraft, setSearchDraft] = useState("");
-  useDebouncedSearchCommit(searchDraft, setSearch);
   const [warehouse, setWarehouse] = useState("all");
   const [status, setStatus] = useState("picking");
   const [expeditor, setExpeditor] = useState("all");
   const [search, setSearch] = useState("");
+  useDebouncedSearchCommit(searchDraft, setSearch);
   const [viewMode, setViewMode] = useState<"list" | "summary">("list");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");

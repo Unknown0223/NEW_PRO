@@ -23,6 +23,7 @@ class _RoleRoutes {
     '/draft',
     '/notifications',
     '/tabel',
+    '/attendance',
     '/kpi',
     '/kpi/calc',
     '/orders/create',
@@ -45,6 +46,7 @@ class _RoleRoutes {
     '/exp-visits-map',
     '/exp-manual-sync',
     '/my-returns',
+    '/attendance',
   };
   static const supervisor = {
     '/home',
@@ -61,11 +63,13 @@ class _RoleRoutes {
     '/sv-clients',
     '/sv-notifications',
     '/agents',
+    '/attendance',
   };
   static const cashier = {
     '/home',
     '/profile',
     '/bank-transfers',
+    '/attendance',
   };
 
   static Set<String> forRole(String role) {

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { CalendarDays, Lock, LockOpen, Save, ShieldAlert, Target } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -91,7 +92,11 @@ export function TimesheetNormDialog({
             Норматив агентов
           </DialogTitle>
           <p className="text-xs text-muted-foreground">
-            Табель агентов заполняется автоматически по сумме дневных заказов.
+            Общая норма для всех агентов. Отдельные условия — на странице{" "}
+            <Link href="/tabel/agent-norm" className="font-medium text-primary underline-offset-2 hover:underline">
+              Норматив агентов
+            </Link>
+            .
           </p>
         </DialogHeader>
 

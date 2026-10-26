@@ -87,6 +87,7 @@ import '../features/cashier/bank_transfer_inbox_detail_page.dart';
 import '../features/tasks/task_create_page.dart';
 import '../features/tasks/task_detail_page.dart';
 import '../features/tasks/tasks_page.dart';
+import '../features/attendance/attendance_hub_screen.dart';
 import 'role_guard.dart';
 
 /// Dialoglar uchun (MaterialApp.builder kontekstida Navigator yo‘q).
@@ -418,6 +419,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: '/tabel',
         parentNavigatorKey: rootNavigatorKey,
         builder: (_, __) => const AgentTabelPage(),
+      ),
+      GoRoute(
+        path: '/attendance',
+        parentNavigatorKey: rootNavigatorKey,
+        builder: (_, __) => const AttendanceHubScreen(),
       ),
       GoRoute(
         path: '/deliveries/:id',

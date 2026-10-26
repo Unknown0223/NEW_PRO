@@ -4,10 +4,12 @@ import { listCalendarWorkingDays, listMonthDays, tenantMonthRangeUtc, ymdInTimeZ
 import { parseWorkdaysState, type WorkdaysState } from "../tabel/workdays.service";
 import { loadTimezoneFromSettingsJson } from "../tenant-settings/tenant-timezone";
 import { defaultTimesheetDay, employmentYmd, visitDayKeys } from "../timesheet/timesheet.day-status";
-import { parseTimesheetState } from "../timesheet/timesheet.service";
+import { parseTimesheetState, statusWorkValue, type AttendanceStatus, type AttendanceSource } from "../timesheet/timesheet.service";
+import { migrateTimesheetJsonOverridesToDayRecords, resolveAttendanceCell } from "../timesheet/timesheet.day-ledger";
+import { applyLateAllowance, normalizeLatenessRules } from "../tabel/tabel-engine.pure";
 import { applyAgentNormForUser, loadAgentNormContext, type AgentNormContext } from "../timesheet/timesheet.agent-norm";
 import type { NormDay } from "../timesheet/timesheet.agent-norm.pure";
-import { computeUserMonthFact } from "./payroll-kpi-month";
+import { computeUserMonthFact, LEADER_ROLES } from "./payroll-kpi-month";
 import { userMonthFactFromCache, type BaseBundle, type MonthFactCache } from "./payroll.month-shared";
 import { computeUserMonthPlan, type PlanMonthCache } from "./payroll-slot-plan";
 import { computeTeamMonthPlan } from "./payroll-team-plan";
@@ -22,6 +24,7 @@ export type TenantPayrollEnv = {
 };
 
 export async function loadTenantPayrollEnv(tenantId: number): Promise<TenantPayrollEnv> {
+  await migrateTimesheetJsonOverridesToDayRecords(tenantId);
   const t = await prisma.tenant.findUnique({ where: { id: tenantId }, select: { settings: true } });
   const settings = t?.settings ?? {};
   return {
@@ -51,6 +54,10 @@ export type AttendanceSummary = {
   trip: number;
   absent: number;
   half: number;
+  late_unexcused_days: number;
+  late_minutes: number;
+  early_leave_minutes: number;
+  overtime_hours: number;
 };
 
 export type AttendancePrep = { visitKeys: Set<string>; norm: AgentNormContext };
@@ -118,11 +125,57 @@ export async function computeUserAttendance(
     sick: 0,
     trip: 0,
     absent: 0,
-    half: 0
+    half: 0,
+    late_unexcused_days: 0,
+    late_minutes: 0,
+    early_leave_minutes: 0,
+    overtime_hours: 0
   };
-  const days: NormDay[] = listMonthDays(year, month).map((ymd) => {
+  const rootObj = env.settings && typeof env.settings === "object" && !Array.isArray(env.settings) ? (env.settings as Record<string, unknown>) : {};
+  const tabelCfg = rootObj.tabel_settings && typeof rootObj.tabel_settings === "object" && !Array.isArray(env.settings) ? (rootObj.tabel_settings as Record<string, unknown>) : {};
+  const latenessRules = normalizeLatenessRules(tabelCfg.lateness);
+  const recMap = new Map<
+    string,
+    { status: AttendanceStatus; source: AttendanceSource; late_minutes: number; early_leave_minutes: number; overtime_minutes: number }
+  >();
+  try {
+    const mStart = new Date(Date.UTC(year, month - 1, 1));
+    const mEnd = new Date(Date.UTC(year, month, 1));
+    const [dayRecs, reqs] = await Promise.all([
+      prisma.attendanceDayRecord.findMany({ where: { tenant_id: tenantId, user_id: user.id, work_date: { gte: mStart, lt: mEnd } } }),
+      prisma.staffAbsenceRequest.findMany({ where: { tenant_id: tenantId, user_id: user.id, status: "approved", from_date: { lt: mEnd }, to_date: { gte: mStart } } })
+    ]);
+    for (const req of reqs) {
+      const fStr = req.from_date.toISOString().slice(0, 10);
+      const tStr = req.to_date.toISOString().slice(0, 10);
+      for (const ymd of listMonthDays(year, month)) {
+        if (ymd >= fStr && ymd <= tStr) {
+          const otMin = req.type === "overtime" || req.type === "weekend_work" ? Math.round(Math.max(0, Number(req.hours ?? 0)) * 60) : 0;
+          recMap.set(ymd, {
+            status: req.type as AttendanceStatus,
+            source: "request",
+            late_minutes: 0,
+            early_leave_minutes: 0,
+            overtime_minutes: otMin
+          });
+        }
+      }
+    }
+    for (const r of dayRecs) {
+      recMap.set(r.work_date.toISOString().slice(0, 10), {
+        status: r.status as AttendanceStatus,
+        source: r.source as AttendanceSource,
+        late_minutes: r.late_minutes,
+        early_leave_minutes: r.early_leave_minutes,
+        overtime_minutes: r.overtime_minutes
+      });
+    }
+  } catch {
+    /* ignore if unmigrated */
+  }
+  const days: Array<NormDay & { rec?: { late_minutes: number; early_leave_minutes: number; overtime_minutes: number } }> = listMonthDays(year, month).map((ymd) => {
     const key = `${user.id}:${ymd}`;
-    const override = env.timesheet.overrides[key];
+    const rec = recMap.get(ymd);
     const def = defaultTimesheetDay({
       state: env.workdays,
       role: user.role,
@@ -130,14 +183,18 @@ export async function computeUserAttendance(
       ymd,
       hasGpsVisit: visitKeys.has(key),
       hiredYmd,
-      dismissedYmd
+      dismissedYmd,
+      strictNonAgentAbsent: latenessRules.strictNonAgentAbsent && ymd <= today,
+      hasPunch: Boolean(rec)
     });
+    const resolved = resolveAttendanceCell(rec, def);
     return {
       date: ymd,
-      status: override?.status ?? def.status,
-      source: override?.source ?? def.source,
-      manual: Boolean(override),
-      off_employment: def.off_employment && !override
+      status: resolved.status,
+      source: resolved.source,
+      manual: Boolean(rec && (rec.source === "manual" || rec.source === "request")),
+      off_employment: def.off_employment && !rec,
+      rec
     };
   });
   if (user.role === "agent") {
@@ -159,17 +216,29 @@ export async function computeUserAttendance(
       ));
     applyAgentNormForUser(ctx, user, days, env.workdays, year, month);
   }
-  for (const { date: ymd, status } of days) {
-    if (ymd > today) break;
-    if (status === "worked") s.worked += 1;
-    else if (status === "half_day") {
-      s.worked += 0.5;
-      s.half += 1;
-    } else if (status === "vacation") s.vacation += 1;
-    else if (status === "sick") s.sick += 1;
-    else if (status === "trip") s.trip += 1;
-    else if (status === "absent") s.absent += 1;
+  const withLate = applyLateAllowance(
+    days.map((d) => ({ ...d, lateMinutes: d.rec?.late_minutes ?? 0 })),
+    latenessRules
+  );
+  let overtimeMinTotal = 0;
+  for (const d of withLate) {
+    if (d.date > today) break;
+    const wVal = statusWorkValue(d.status, {
+      lateExcused: d.lateExcused,
+      penalizeUnexcusedLateAsHalfDay: latenessRules.penalizeUnexcusedLateAsHalfDay
+    });
+    s.worked += wVal;
+    if (d.status === "half_day" || d.status === "early_leave" || (d.status === "late" && wVal === 0.5)) s.half += 1;
+    else if (d.status === "vacation" || d.status === "unpaid_leave") s.vacation += 1;
+    else if (d.status === "sick") s.sick += 1;
+    else if (d.status === "trip") s.trip += 1;
+    else if (d.status === "absent") s.absent += 1;
+    if (d.status === "late" && !d.lateExcused) s.late_unexcused_days += 1;
+    s.late_minutes += d.rec?.late_minutes ?? 0;
+    s.early_leave_minutes += d.rec?.early_leave_minutes ?? 0;
+    overtimeMinTotal += d.rec?.overtime_minutes ?? 0;
   }
+  s.overtime_hours = Math.round((overtimeMinTotal / 60) * 100) / 100;
   return s;
 }
 
@@ -261,7 +330,7 @@ export async function loadPayrollInputs(
       : computeUserMonthFact(tenantId, user.id, user.role, range, productGroups),
     computeUserMonthPlan(tenantId, user.id, year, month, range, env.timeZone, env.workdays, cache?.plans),
     cache?.advances ? Promise.resolve(cache.advances.get(user.id) ?? 0) : sumPaidAdvances(tenantId, user.id, year, month),
-    user.role === "supervisor"
+    LEADER_ROLES.has(user.role)
       ? computeTeamMonthPlan(tenantId, user.id, year, month, range, env.timeZone, env.workdays, cache?.plans)
       : Promise.resolve(null)
   ]);
@@ -278,6 +347,10 @@ export async function loadPayrollInputs(
     trip_days: attendance.trip,
     absent_days: attendance.absent,
     half_days: attendance.half,
+    late_unexcused_days: attendance.late_unexcused_days,
+    late_minutes: attendance.late_minutes,
+    early_leave_minutes: attendance.early_leave_minutes,
+    overtime_hours: attendance.overtime_hours,
     fact_total: fact.agent.total,
     fact_by_group: fact.agent.byGroup,
     returned_sum: fact.agent.returned_sum,

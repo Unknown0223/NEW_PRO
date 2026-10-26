@@ -25,7 +25,9 @@ import { getUserFacingError, withApiSupportLine } from "@/lib/error-utils";
 import { STALE } from "@/lib/query-stale";
 import type { ClientRefEntry } from "@/lib/client-ref-entries";
 import { legacyStringsToEntries, sortClientRefEntries } from "@/lib/client-ref-entries";
-import { useAuthStore, useAuthStoreHydrated, useEffectiveRole } from "@/lib/auth-store";
+import { useAuthStore, useAuthStoreHydrated } from "@/lib/auth-store";
+import { settingsWriteKeyForRef } from "@/lib/settings-write-keys";
+import { usePermissions } from "@/lib/use-permissions";
 import { cn } from "@/lib/utils";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { isAxiosError } from "axios";
@@ -64,8 +66,7 @@ export function ClientRefSettingsPage({ config }: { config: ClientRefSettingsCon
   const { title, profileRefKey, legacyKey, legacyIdPrefix, showColor } = config;
   const tenantSlug = useAuthStore((s) => s.tenantSlug);
   const hydrated = useAuthStoreHydrated();
-  const role = useEffectiveRole();
-  const isAdmin = role === "admin";
+  const canEdit = usePermissions().has(settingsWriteKeyForRef(profileRefKey));
   const qc = useQueryClient();
 
   const [tab, setTab] = useState<"active" | "inactive">("active");
@@ -246,7 +247,7 @@ export function ClientRefSettingsPage({ config }: { config: ClientRefSettingsCon
         description="Активные / неактивные записи; добавление и редактирование через модальное окно."
         actions={
           <div className="flex gap-2">
-            <Button size="sm" disabled={!isAdmin} onClick={openAdd}>
+            <Button size="sm" disabled={!canEdit} onClick={openAdd}>
               Добавить
             </Button>
             <Link href="/settings" className={cn(buttonVariants({ variant: "outline", size: "sm" }))}>
@@ -311,7 +312,7 @@ export function ClientRefSettingsPage({ config }: { config: ClientRefSettingsCon
                     <td className="px-3 py-2">{r.sort_order ?? "—"}</td>
                     <td className="px-3 py-2">{r.comment ?? "—"}</td>
                     <td className="px-3 py-2 text-right">
-                      {isAdmin ? (
+                      {canEdit ? (
                         <TableRowActionGroup className="justify-end" ariaLabel="Запись">
                           <Button
                             variant="outline"
@@ -417,7 +418,7 @@ export function ClientRefSettingsPage({ config }: { config: ClientRefSettingsCon
               <span>Активный</span>
               <input type="checkbox" checked={active} onChange={(e) => setActive(e.target.checked)} />
             </label>
-            <Button onClick={submitForm} disabled={saveMut.isPending || !isAdmin}>
+            <Button onClick={submitForm} disabled={saveMut.isPending || !canEdit}>
               {editId ? "Сохранить" : "Добавить"}
             </Button>
           </div>

@@ -10,6 +10,9 @@
 import { PERMISSION_OP_LABEL_RU } from "./permission-op-labels";
 import { CLIENT_PERMISSION_SECTIONS } from "./permission-client-sections";
 import { ORDER_PERMISSION_SECTIONS } from "./permission-order-sections";
+import { TABEL_GROUP_RU, TABEL_PERMISSION_SECTIONS } from "./permission-tabel-sections";
+
+export { TABEL_GROUP_RU };
 
 /** Qo'llab-quvvatlanadigan amal tiplari. CRUD + soft-void + alohida holat tiplari. */
 export const PERMISSION_ACTIONS = [
@@ -111,6 +114,7 @@ export const PERMISSION_MODULE_LABEL_RU: Record<string, string> = {
   pivot: "Сводные отчёты",
   access: "Доступ",
   users: "Пользователи",
+  tabel: "Табель и посещаемость",
   work_slots: "Рабочее место",
   diagnostics: "Диагностика",
   activity: "Активность"
@@ -138,8 +142,10 @@ const SYSTEM_SETTINGS_TREE_RU = "Системные настройки";
 /** Ko'p qo'llaniladigan amal to'plamlari (qisqartma uchun). */
 const CRUD: PermissionAction[] = ["view", "create", "update", "delete"];
 const VIEW_ONLY: PermissionAction[] = ["view"];
+const VIEW_UPDATE: PermissionAction[] = ["view", "update"];
 const VIEW_COPY: PermissionAction[] = ["view", "copy"];
 const VIEW_EXPORT: PermissionAction[] = ["view", "export"];
+const DICT_CRUD: PermissionAction[] = ["view", "create", "update", "delete"];
 const STAFF_CRUD: PermissionAction[] = ["view", "create", "update", "activate", "deactivate", "export", "history"];
 
 /**
@@ -229,12 +235,10 @@ export const PERMISSION_SECTIONS: PermissionSectionDef[] = [
   { module: "staff", section: "konsignatsiya_zakrytie", labelRu: "Время автозакрытия консигнации", actions: ["update"], treeSectionRu: CONSIGNMENT_TREE_RU },
   { module: "staff", section: "konsignatsiya_perekid", labelRu: "Перераспределение лимита консигнации", actions: ["update"], treeSectionRu: CONSIGNMENT_TREE_RU },
   { module: "staff", section: "konsignatsiya_limity", labelRu: "Установка лимитов консигнации (прошлый месяц / % от плана)", actions: ["update"], treeSectionRu: CONSIGNMENT_TREE_RU },
-  { module: "staff", section: "tabel", labelRu: "Табель (посещаемость)", actions: ["view", "update", "export", "history"] },
-  { module: "staff", section: "rabochie_dni", labelRu: "Рабочие дни (график)", actions: ["view", "update", "create", "delete", "status", "history"] },
-  { module: "staff", section: "tabel_normativ", labelRu: "Табель · Норматив агентов", actions: ["view", "update"] },
   { module: "staff", section: "zadachi_spisok", labelRu: "Задачи (поручения сотрудникам)", actions: ["view", "create", "update", "delete", "export"] },
-  { module: "settings", section: "tipy_zadach", labelRu: "Типы задач (справочник)", actions: VIEW_ONLY, groupRu: "Пользователи" },
+  { module: "settings", section: "tipy_zadach", labelRu: "Типы задач (справочник)", actions: DICT_CRUD, groupRu: "Пользователи" },
   { module: "staff", section: "zadachi", labelRu: "Уведомления (колокольчик)", actions: ["view", "update"] },
+  ...TABEL_PERMISSION_SECTIONS,
 
   // ── GPS — har bir xodim turi alohida (GPS мониторинг xaritasi) ──
   { module: "gps", section: "agenty", labelRu: "GPS мониторинг по агентам", actions: VIEW_EXPORT },
@@ -258,37 +262,36 @@ export const PERMISSION_SECTIONS: PermissionSectionDef[] = [
   { module: "settings", section: "mobile_app", labelRu: "Мобильное приложение (обновление APK)", actions: ["view", "update", "import", "transfer"] },
   { module: "settings", section: "document_edit_lock", labelRu: "Ограничение периода редактирования", actions: ["view", "update", "assign"] },
   { module: "settings", section: "system_migration", labelRu: "Системная миграция", actions: ["view", "update", "import"] },
-  { module: "settings", section: "kategoriya_tovara", labelRu: "Категория товара", actions: VIEW_EXPORT, treeSectionRu: DICTIONARIES_TREE_RU },
-  { module: "settings", section: "tip_tseny", labelRu: "Тип цены", actions: VIEW_ONLY, treeSectionRu: DICTIONARIES_TREE_RU },
-  { module: "settings", section: "sposob_oplaty", labelRu: "Способ оплаты", actions: VIEW_ONLY, treeSectionRu: DICTIONARIES_TREE_RU },
-  { module: "settings", section: "valyuty", labelRu: "Валюты", actions: VIEW_ONLY, treeSectionRu: DICTIONARIES_TREE_RU },
-  { module: "settings", section: "filial", labelRu: "Филиал", actions: VIEW_ONLY, treeSectionRu: DICTIONARIES_TREE_RU },
-  { module: "settings", section: "dolzhnost", labelRu: "Должность", actions: VIEW_ONLY, treeSectionRu: DICTIONARIES_TREE_RU },
-  { module: "settings", section: "web_staff_positions", labelRu: "Должности веб-сотрудников", actions: VIEW_ONLY, treeSectionRu: DICTIONARIES_TREE_RU },
-  { module: "settings", section: "edinitsy", labelRu: "Единицы измерения", actions: VIEW_ONLY, treeSectionRu: DICTIONARIES_TREE_RU },
-  { module: "settings", section: "brend", labelRu: "Бренд", actions: VIEW_ONLY, treeSectionRu: DICTIONARIES_TREE_RU },
-  { module: "settings", section: "segment", labelRu: "Сегмент", actions: VIEW_ONLY, treeSectionRu: DICTIONARIES_TREE_RU },
-  { module: "settings", section: "kanal_sbyta", labelRu: "Канал сбыта", actions: VIEW_EXPORT, treeSectionRu: DICTIONARIES_TREE_RU },
-  { module: "settings", section: "format_klienta", labelRu: "Формат клиента", actions: VIEW_ONLY, treeSectionRu: DICTIONARIES_TREE_RU },
-  { module: "settings", section: "tip_klienta", labelRu: "Тип клиента", actions: VIEW_ONLY, treeSectionRu: DICTIONARIES_TREE_RU },
-  { module: "settings", section: "kategoriya_klienta", labelRu: "Категория клиента", actions: VIEW_ONLY, treeSectionRu: DICTIONARIES_TREE_RU },
-  { module: "settings", section: "prichiny", labelRu: "Причины и примечания", actions: VIEW_ONLY, treeSectionRu: DICTIONARIES_TREE_RU },
-  { module: "settings", section: "inventar_i_korobka", labelRu: "Инвентарь и упаковка", actions: VIEW_ONLY, treeSectionRu: DICTIONARIES_TREE_RU },
-  { module: "settings", section: "oborudovanie", labelRu: "Оборудование (принтеры/тара)", actions: VIEW_ONLY, treeSectionRu: DICTIONARIES_TREE_RU },
-  { module: "settings", section: "ustanovit_natsenku", labelRu: "Наценка", actions: VIEW_ONLY, treeSectionRu: SYSTEM_SETTINGS_TREE_RU },
-  { module: "settings", section: "zakrytie_perioda", labelRu: "Закрытие периода", actions: VIEW_ONLY, treeSectionRu: SYSTEM_SETTINGS_TREE_RU },
-  { module: "settings", section: "baza_znaniy", labelRu: "База знаний", actions: VIEW_ONLY, treeSectionRu: SYSTEM_SETTINGS_TREE_RU },
-  { module: "settings", section: "seansy", labelRu: "Сеансы пользователей", actions: VIEW_ONLY, treeSectionRu: SYSTEM_SETTINGS_TREE_RU },
-  { module: "settings", section: "appearance", labelRu: "Тема и цвета", actions: VIEW_ONLY, treeSectionRu: SYSTEM_SETTINGS_TREE_RU },
-  { module: "settings", section: "returns_filter", labelRu: "Фильтр возврата", actions: VIEW_ONLY, treeSectionRu: SYSTEM_SETTINGS_TREE_RU },
-  { module: "settings", section: "orders_consignment", labelRu: "Заказы → консигнация", actions: VIEW_EXPORT, treeSectionRu: SYSTEM_SETTINGS_TREE_RU },
-  { module: "settings", section: "timezone", labelRu: "Часовой пояс", actions: VIEW_ONLY, treeSectionRu: SYSTEM_SETTINGS_TREE_RU },
+  { module: "settings", section: "kategoriya_tovara", labelRu: "Категория товара", actions: [...DICT_CRUD, "export"], treeSectionRu: DICTIONARIES_TREE_RU },
+  { module: "settings", section: "tip_tseny", labelRu: "Тип цены", actions: DICT_CRUD, treeSectionRu: DICTIONARIES_TREE_RU },
+  { module: "settings", section: "sposob_oplaty", labelRu: "Способ оплаты", actions: DICT_CRUD, treeSectionRu: DICTIONARIES_TREE_RU },
+  { module: "settings", section: "valyuty", labelRu: "Валюты", actions: DICT_CRUD, treeSectionRu: DICTIONARIES_TREE_RU },
+  { module: "settings", section: "filial", labelRu: "Филиал", actions: DICT_CRUD, treeSectionRu: DICTIONARIES_TREE_RU },
+  { module: "settings", section: "dolzhnost", labelRu: "Должность", actions: DICT_CRUD, treeSectionRu: DICTIONARIES_TREE_RU },
+  { module: "settings", section: "web_staff_positions", labelRu: "Должности веб-сотрудников", actions: DICT_CRUD, treeSectionRu: DICTIONARIES_TREE_RU },
+  { module: "settings", section: "edinitsy", labelRu: "Единицы измерения", actions: DICT_CRUD, treeSectionRu: DICTIONARIES_TREE_RU },
+  { module: "settings", section: "brend", labelRu: "Бренд", actions: DICT_CRUD, treeSectionRu: DICTIONARIES_TREE_RU },
+  { module: "settings", section: "segment", labelRu: "Сегмент", actions: DICT_CRUD, treeSectionRu: DICTIONARIES_TREE_RU },
+  { module: "settings", section: "kanal_sbyta", labelRu: "Канал сбыта", actions: [...DICT_CRUD, "export"], treeSectionRu: DICTIONARIES_TREE_RU },
+  { module: "settings", section: "format_klienta", labelRu: "Формат клиента", actions: DICT_CRUD, treeSectionRu: DICTIONARIES_TREE_RU },
+  { module: "settings", section: "tip_klienta", labelRu: "Тип клиента", actions: DICT_CRUD, treeSectionRu: DICTIONARIES_TREE_RU },
+  { module: "settings", section: "kategoriya_klienta", labelRu: "Категория клиента", actions: DICT_CRUD, treeSectionRu: DICTIONARIES_TREE_RU },
+  { module: "settings", section: "prichiny", labelRu: "Причины и примечания", actions: DICT_CRUD, treeSectionRu: DICTIONARIES_TREE_RU },
+  { module: "settings", section: "inventar_i_korobka", labelRu: "Инвентарь и упаковка", actions: DICT_CRUD, treeSectionRu: DICTIONARIES_TREE_RU },
+  { module: "settings", section: "oborudovanie", labelRu: "Оборудование (принтеры/тара)", actions: DICT_CRUD, treeSectionRu: DICTIONARIES_TREE_RU },
+  { module: "settings", section: "ustanovit_natsenku", labelRu: "Наценка", actions: VIEW_UPDATE, treeSectionRu: SYSTEM_SETTINGS_TREE_RU },
+  { module: "settings", section: "zakrytie_perioda", labelRu: "Закрытие периода", actions: VIEW_UPDATE, treeSectionRu: SYSTEM_SETTINGS_TREE_RU },
+  { module: "settings", section: "baza_znaniy", labelRu: "База знаний", actions: DICT_CRUD, treeSectionRu: SYSTEM_SETTINGS_TREE_RU },
+  { module: "settings", section: "seansy", labelRu: "Сеансы пользователей", actions: VIEW_UPDATE, treeSectionRu: SYSTEM_SETTINGS_TREE_RU },
+  { module: "settings", section: "appearance", labelRu: "Тема и цвета", actions: VIEW_UPDATE, treeSectionRu: SYSTEM_SETTINGS_TREE_RU },
+  { module: "settings", section: "returns_filter", labelRu: "Фильтр возврата", actions: VIEW_UPDATE, treeSectionRu: SYSTEM_SETTINGS_TREE_RU },
+  { module: "settings", section: "orders_consignment", labelRu: "Заказы → консигнация", actions: [...VIEW_EXPORT, "update"], treeSectionRu: SYSTEM_SETTINGS_TREE_RU },
+  { module: "settings", section: "timezone", labelRu: "Часовой пояс", actions: VIEW_UPDATE, treeSectionRu: SYSTEM_SETTINGS_TREE_RU },
   { module: "settings", section: "initial_setup", labelRu: "Начальная настройка", actions: VIEW_EXPORT, treeSectionRu: SYSTEM_SETTINGS_TREE_RU },
 
   // ── Audit ──────────────────────────────────────────────────
   // `finance.obzor.view` — `dashboard.finansy.view` bilan bir xil sahifa (alias, `legacy-key-map.ts`).
   { module: "audit", section: "log", labelRu: "Журнал аудита (все изменения в системе)", actions: VIEW_EXPORT },
-  { module: "audit", section: "tabel", labelRu: "Аудит табеля и рабочих дней", actions: VIEW_ONLY },
   { module: "audit", section: "podozritelnye_vhody", labelRu: "Подозрительные входы (общие устройства и IP)", actions: ["view", "update", "create", "delete", "export"] },
 
   // ── Зарплата — kalitlar eski modullarda (grantlar saqlanadi), Access UI'da alohida guruh ─

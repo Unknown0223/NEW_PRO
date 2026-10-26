@@ -16,6 +16,8 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { saveProfileReferenceArrayItem } from "@/lib/settings-profile-save";
+import { settingsWriteKeyForRef } from "@/lib/settings-write-keys";
+import { usePermissions } from "@/lib/use-permissions";
 import { api } from "@/lib/api";
 import {
   firstMessagePerField,
@@ -24,7 +26,7 @@ import {
 } from "@/lib/api-validation-details";
 import { getUserFacingError, withApiSupportLine } from "@/lib/error-utils";
 import { STALE } from "@/lib/query-stale";
-import { useAuthStore, useAuthStoreHydrated, useEffectiveRole } from "@/lib/auth-store";
+import { useAuthStore, useAuthStoreHydrated } from "@/lib/auth-store";
 import { cn } from "@/lib/utils";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { isAxiosError } from "axios";
@@ -80,6 +82,7 @@ export type GenericRefConfig = {
   idPrefix?: string;
   /** Qo'shimcha quick-link tugmalar */
   extraActions?: React.ReactNode;
+  writePermission?: string;
 };
 
 export function GenericRefSettingsPage({ config }: { config: GenericRefConfig }) {
@@ -93,12 +96,12 @@ export function GenericRefSettingsPage({ config }: { config: GenericRefConfig })
     showSortOrder = true,
     idPrefix = "gr",
     extraActions,
+    writePermission,
   } = config;
 
   const tenantSlug = useAuthStore((s) => s.tenantSlug);
   const hydrated = useAuthStoreHydrated();
-  const role = useEffectiveRole();
-  const isAdmin = role === "admin";
+  const canEdit = usePermissions().has(writePermission ?? settingsWriteKeyForRef(profileRefKey));
   const qc = useQueryClient();
 
   const [tab, setTab] = useState<"active" | "inactive">("active");
@@ -274,7 +277,7 @@ export function GenericRefSettingsPage({ config }: { config: GenericRefConfig })
         actions={
           <div className="flex flex-wrap gap-2">
             {extraActions}
-            <Button size="sm" disabled={!isAdmin} onClick={openAdd}>
+            <Button size="sm" disabled={!canEdit} onClick={openAdd}>
               Добавить
             </Button>
             <Link href="/settings" className={cn(buttonVariants({ variant: "outline", size: "sm" }))}>
@@ -342,7 +345,7 @@ export function GenericRefSettingsPage({ config }: { config: GenericRefConfig })
                     )}
                     {showComment && <td className="px-3 py-2">{r.comment ?? "—"}</td>}
                     <td className="px-3 py-2 text-right">
-                      {isAdmin ? (
+                      {canEdit ? (
                         <TableRowActionGroup className="justify-end" ariaLabel={title}>
                           <Button
                             variant="outline"
@@ -374,8 +377,8 @@ export function GenericRefSettingsPage({ config }: { config: GenericRefConfig })
       </SettingsWorkspace>
 
       {msg ? <p className="mt-3 text-sm text-muted-foreground">{msg}</p> : null}
-      {!isAdmin ? (
-        <p className="mt-2 text-xs text-muted-foreground">Редактирование доступно только администратору.</p>
+      {!canEdit ? (
+        <p className="mt-2 text-xs text-muted-foreground">Нет права на изменение этого справочника (Доступ).</p>
       ) : null}
 
       <Dialog open={open} onOpenChange={setOpen}>
@@ -456,7 +459,7 @@ export function GenericRefSettingsPage({ config }: { config: GenericRefConfig })
               <span>Активный</span>
               <input type="checkbox" checked={active} onChange={(e) => setActive(e.target.checked)} />
             </label>
-            <Button onClick={submitForm} disabled={saveMut.isPending || !isAdmin}>
+            <Button onClick={submitForm} disabled={saveMut.isPending || !canEdit}>
               {editId ? "Сохранить" : "Добавить"}
             </Button>
           </div>

@@ -21,6 +21,7 @@ const expeditorMenuRoutes = <String>[
   '/deliveries',
   '/exp-unfinished',
   '/exp-settings',
+  '/attendance',
   '/profile',
 ];
 
@@ -169,6 +170,11 @@ class _ExpeditorDrawerState extends ConsumerState<ExpeditorDrawer> {
                           icon: Icons.task_alt_outlined,
                           label: 'Задачи',
                           onTap: () => go('/tasks', push: true),
+                        ),
+                        AgentMenuTile(
+                          icon: Icons.how_to_reg_outlined,
+                          label: 'Отметка посещаемости (Face ID / Видео)',
+                          onTap: () => go('/attendance', push: true),
                         ),
                       ],
                     ),

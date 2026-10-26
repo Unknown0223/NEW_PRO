@@ -24,11 +24,20 @@ export async function teamAgentIds(tenantId: number, userId: number, range: Rang
     });
     return [...new Set(holders.map((h) => h.user_id))];
   }
-  const agents = await prisma.user.findMany({
-    where: { tenant_id: tenantId, supervisor_user_id: userId, role: "agent" },
-    select: { id: true }
+  const people = await prisma.user.findMany({
+    where: { tenant_id: tenantId, supervisor_user_id: userId },
+    select: { id: true, role: true }
   });
-  return agents.map((a) => a.id);
+  const ids = new Set(people.filter((p) => p.role === "agent").map((p) => p.id));
+  const leaders = people.filter((p) => p.role !== "agent").map((p) => p.id);
+  if (leaders.length) {
+    const nested = await prisma.user.findMany({
+      where: { tenant_id: tenantId, role: "agent", supervisor_user_id: { in: leaders } },
+      select: { id: true }
+    });
+    for (const n of nested) ids.add(n.id);
+  }
+  return [...ids];
 }
 
 /**

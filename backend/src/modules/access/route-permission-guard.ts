@@ -25,6 +25,8 @@ import {
   RETURN_SHELF_PERMISSION
 } from "../orders/order-create-permissions";
 import { PAYROLL_ROUTE_PERMISSION_RULES } from "./route-permission-guard.payroll";
+import { SETTINGS_PROFILE_WRITE_KEYS } from "./permission-settings-write";
+import { TABEL_ROUTE_PERMISSION_RULES } from "./route-permission-guard.tabel";
 import { CLIENT_BULK_PATCH_PERMISSIONS, CLIENT_GROUP_TAGS_PERMISSION } from "../clients/client-bulk-permissions";
 import { GPS_MONITORING_VIEW_PERMISSIONS } from "../gps-monitoring/gps-monitoring.access";
 import {
@@ -57,6 +59,7 @@ function r(methods: Method[], test: RegExp, ...anyOf: string[]): RoutePermission
  */
 const ROUTE_PERMISSION_RULES: RoutePermissionRule[] = [
   ...PAYROLL_ROUTE_PERMISSION_RULES,
+  ...TABEL_ROUTE_PERMISSION_RULES,
   // ─────────── Заказы (orders) ───────────
   r(WRITE, /\/orders\/[^/]+\/approval(\/|$)/, "plans.ustanovka_planov.approve"),
   r(READ, /\/orders\/[^/]+\/approval(\/|$)/, "orders.zakaz.view"),
@@ -262,8 +265,8 @@ const ROUTE_PERMISSION_RULES: RoutePermissionRule[] = [
   r(["PUT", "PATCH"], /\/api\/(?::slug|[^/]+)\/products\/:id$/, "settings.tovar.update"),
   r(["DELETE"], /\/api\/(?::slug|[^/]+)\/products\/:id$/, "settings.tovar.delete"),
   r(READ, /\/api\/(?::slug|[^/]+)\/products(\/|$)/, "settings.tovar.view"),
-  r(WRITE, /\/settings\/profile$/, "settings.profil_kompanii.update"),
-  r(READ, /\/settings\/profile$/, "settings.profil_kompanii.view", "settings.tipy_zadach.view"),
+  r(WRITE, /\/settings\/profile$/, ...SETTINGS_PROFILE_WRITE_KEYS),
+  r(READ, /\/settings\/profile$/, "settings.profil_kompanii.view", "settings.tipy_zadach.view", ...SETTINGS_PROFILE_WRITE_KEYS),
   r(["POST"], /\/settings\/mobile-app-release\/notify$/, "settings.mobile_app.transfer"),
   r(["POST"], /\/settings\/mobile-app-release\/upload$/, "settings.mobile_app.import"),
   r(WRITE, /\/settings\/mobile-app-release/, "settings.mobile_app.update"),
@@ -496,8 +499,9 @@ const ROUTE_PERMISSION_RULES: RoutePermissionRule[] = [
 function matchRule(method: string, routePath: string): RoutePermissionRule | null {
   const candidates = pathsToMatch(routePath);
   // Mobil API o‘z JWT+rol guardida; veb CRUD kalitlari (`clients.foto.view` va h.k.)
-  // `/mobile/clients/:id/photo-reports` ga tushmasin.
-  if (candidates.some((c) => c.includes("/mobile/") || c.includes("/telegram-bot/"))) return null;
+  // `/mobile/clients/:id/photo-reports` ga tushmasin. Davomat (`/mobile/attendance`) — Access.
+  if (candidates.some((c) => c.includes("/telegram-bot/"))) return null;
+  if (candidates.some((c) => c.includes("/mobile/") && !c.includes("/mobile/attendance"))) return null;
   for (const rule of ROUTE_PERMISSION_RULES) {
     if (!rule.methods.includes(method as Method)) continue;
     if (candidates.some((c) => rule.test.test(c))) return rule;
@@ -531,7 +535,8 @@ export function registerRoutePermissionGuard(app: FastifyInstance) {
     // Haqiqiy URL — `routeOptions.url` ba'zan faqat `/clients` bo'lishi mumkin
     // (prefix/encapsulate); mobil API veb CRUD kalitlariga tushmasin.
     const rawUrl = (request.url ?? "").split("?")[0] ?? "";
-    if (rawUrl.includes("/mobile/") || rawUrl.includes("/telegram-bot/")) return;
+    if (rawUrl.includes("/telegram-bot/")) return;
+    if (rawUrl.includes("/mobile/") && !rawUrl.includes("/mobile/attendance")) return;
 
     const routePath =
       (request as { routeOptions?: { url?: string } }).routeOptions?.url ??

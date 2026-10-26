@@ -11,6 +11,7 @@ import {
   dashboardSidebarLayout,
   dashboardStockNav,
   dashboardSuppliersNav,
+  dashboardTabelNav,
   dashboardUsersNav
 } from "@/components/dashboard/nav-config";
 import { NAV_PERM } from "@/components/dashboard/nav-permission-keys";
@@ -33,6 +34,11 @@ function collectNavItems(): NavItem[] {
   out.push(...dashboardPlansNav.items);
   out.push(...dashboardReportsNav.items);
   for (const g of dashboardUsersNav.groups) out.push(...g.items);
+  for (const g of dashboardTabelNav.groups) out.push(...g.items);
+  out.push(
+    { href: "/users/timesheet", label: "Табель", showIfAnyPermission: [...NAV_PERM.staffTimesheet] },
+    { href: "/users/workdays", label: "Рабочие дни", showIfAnyPermission: [...NAV_PERM.staffWorkdays] }
+  );
   for (const g of dashboardPayrollNav.groups) out.push(...g.items);
   for (const entry of dashboardSidebarLayout) {
     if (entry.kind === "link") out.push(entry.item);

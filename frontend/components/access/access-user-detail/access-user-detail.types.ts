@@ -192,7 +192,7 @@ export function staffRoleGroupLabel(role: string): string {
 export function staffRoleFilterOptions(): { id: string; title: string }[] {
   return [
     { id: "", title: "Все роли" },
-    ...STAFF_ROLE_ORDER.map((id) => ({ id, title: staffRoleGroupLabel(id) }))
+    ...STAFF_ROLE_ORDER.filter((id) => id !== "admin").map((id) => ({ id, title: staffRoleGroupLabel(id) }))
   ];
 }
 

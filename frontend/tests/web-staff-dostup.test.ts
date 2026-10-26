@@ -20,7 +20,8 @@ import {
   filterSettingsSectionsForAccess,
   isSettingsItemAllowedForAccess,
   settingsItemViewPermissions,
-  settingsSections
+  settingsSections,
+  type SettingsItem
 } from "@/lib/settings-structure";
 
 function item(href: string) {
@@ -122,6 +123,25 @@ describe("sozlamalar hub — Dostup kalitlari", () => {
   it("admin barcha punktlarni ko‘radi", () => {
     const sections = filterSettingsSectionsForAccess(settingsSections, "admin", new Set());
     expect(sections.length).toBeGreaterThan(5);
+  });
+
+  it("tabel sozlamalari va timezone update kalitlari bilan ham ochiladi", () => {
+    const punch: SettingsItem = {
+      title: "Видео",
+      slug: "punch-video",
+      href: "/settings/tabel/punch-video",
+      status: "available"
+    };
+    const tz: SettingsItem = {
+      title: "Часовой пояс",
+      slug: "timezone",
+      href: "/settings/timezone",
+      status: "available"
+    };
+    expect(settingsItemViewPermissions(punch)).toContain("settings.tabel_pravila.update");
+    expect(settingsItemViewPermissions(tz)).toContain("settings.timezone.update");
+    expect(isSettingsItemAllowedForAccess(punch, "operator", new Set(["settings.tabel_pravila.update"]))).toBe(true);
+    expect(isSettingsItemAllowedForAccess(tz, "operator", new Set(["settings.timezone.update"]))).toBe(true);
   });
 
   it("har bir mapped punkt view kalitiga ega", () => {

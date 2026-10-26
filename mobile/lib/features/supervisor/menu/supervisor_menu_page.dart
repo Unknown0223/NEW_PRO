@@ -210,6 +210,13 @@ class SupervisorMenuPage extends ConsumerWidget {
                     ),
                     const Divider(height: 1),
                     tile(
+                      icon: Icons.how_to_reg_outlined,
+                      title: 'Посещаемость и Киоск бригады',
+                      subtitle: 'Фото/Видео отметка (3-код) и Киоск Face ID',
+                      onTap: () => context.push('/attendance'),
+                    ),
+                    const Divider(height: 1),
+                    tile(
                       icon: Icons.gps_fixed,
                       title: l10n.gpsMonitoring,
                       onTap: () => context.push('/sv-gps'),

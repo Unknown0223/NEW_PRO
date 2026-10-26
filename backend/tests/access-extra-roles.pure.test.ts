@@ -33,6 +33,10 @@ describe("extraRoleKeysFromLinks", () => {
       "skladchik"
     ]);
   });
+
+  it("extra admin paketini hech qachon qaytarmaydi", () => {
+    expect(extraRoleKeysFromLinks("operator", ["admin", "cashier"])).toEqual(["cashier"]);
+  });
 });
 
 describe("bir akkaunt — bir nechta rol paketi (union)", () => {

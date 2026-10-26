@@ -143,6 +143,9 @@ describe("access users filter", () => {
     expect(filterAccessUsers(rows, { role: "", status: "active", manage: "all" }).map((r) => r.id)).toEqual([1, 3]);
     expect(filterAccessUsers(rows, { role: "", status: "all", manage: "yes" }).map((r) => r.id)).toEqual([1]);
     expect(filterAccessUsers(rows, { role: "", status: "active", manage: "no" }).map((r) => r.id)).toEqual([3]);
+    expect(filterAccessUsers([u(9, "admin", "active", true), ...rows], { role: "", status: "all", manage: "all" }).map((r) => r.id)).toEqual([
+      1, 2, 3
+    ]);
   });
 });
 

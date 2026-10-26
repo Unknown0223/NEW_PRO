@@ -12,6 +12,10 @@ export type PayrollCalcInputs = {
   trip_days: number;
   absent_days: number;
   half_days: number;
+  late_unexcused_days?: number;
+  late_minutes?: number;
+  early_leave_minutes?: number;
+  overtime_hours?: number;
   fact_total: KpiMetrics;
   fact_by_group: Map<number, KpiMetrics>;
   returned_sum: number;
@@ -59,7 +63,16 @@ export function staticVariableGroups(): Array<{ group: string; items: string[] }
         "Больничный",
         "Командировка",
         "Прогул",
-        "Полдня"
+        "Прогул_кун",
+        "Полдня",
+        "Кечиккан_кун",
+        "Кечиккан_дақиқа",
+        "Эрта_кетган_дақиқа",
+        "Қўшимча_соат",
+        "Опоздания (дни)",
+        "Опоздания (минуты)",
+        "Ранний уход (минуты)",
+        "Сверхурочные (часы)"
       ]
     },
     { group: "KPI — План", items: METRIC_LABELS.map(([, l]) => `KPI - ${l} (План)`) },
@@ -126,8 +139,9 @@ export function buildFormulaVars(
   set(VAR_BASE_WORKED, inp.base_salary);
   const days = timesheetFactor(inp);
   const kpiAmount = kpiGroupId != null ? inp.kpi_amounts?.get(kpiGroupId) : undefined;
-  const rawItem = kpiAmount != null ? kpiAmount : targetItemId != null ? inp.item_parts?.get(targetItemId) ?? 0 : 0;
-  set(VAR_ITEM_AMOUNT, rawItem * days);
+  const rawItem =
+    kpiAmount != null ? kpiAmount * days : targetItemId != null ? inp.item_parts?.get(targetItemId) ?? 0 : 0;
+  set(VAR_ITEM_AMOUNT, rawItem);
   set(VAR_WORKED_DAYS, inp.worked_days);
   set(VAR_PLAN_DAYS, inp.plan_days);
   set("Рабочие дни (план)", inp.plan_days);
@@ -136,7 +150,16 @@ export function buildFormulaVars(
   set("Больничный", inp.sick_days);
   set("Командировка", inp.trip_days);
   set("Прогул", inp.absent_days);
+  set("Прогул_кун", inp.absent_days);
   set("Полдня", inp.half_days);
+  set("Кечиккан_кун", inp.late_unexcused_days ?? 0);
+  set("Опоздания (дни)", inp.late_unexcused_days ?? 0);
+  set("Кечиккан_дақиқа", inp.late_minutes ?? 0);
+  set("Опоздания (минуты)", inp.late_minutes ?? 0);
+  set("Эрта_кетган_дақиқа", inp.early_leave_minutes ?? 0);
+  set("Ранний уход (минуты)", inp.early_leave_minutes ?? 0);
+  set("Қўшимча_соат", inp.overtime_hours ?? 0);
+  set("Сверхурочные (часы)", inp.overtime_hours ?? 0);
 
   const fact = kpiGroupId ? inp.fact_by_group.get(kpiGroupId) ?? ZERO_METRICS : inp.fact_total;
   const plan = kpiGroupId ? inp.plan_by_group.get(kpiGroupId) ?? ZERO_METRICS : inp.plan_total;
@@ -172,7 +195,7 @@ export function buildFormulaVars(
   set("Аванс", inp.advances_paid);
   for (const [name, v] of itemValues) set(name, v);
   if (items) {
-    for (const [id, it] of items) set(partVarName(it.name), (inp.item_parts?.get(id) ?? 0) * timesheetFactor(inp));
+    for (const [id, it] of items) set(partVarName(it.name), inp.item_parts?.get(id) ?? 0);
   }
   return m;
 }

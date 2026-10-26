@@ -7,6 +7,7 @@ import { sendApiError, zodValidationExtras } from "../../lib/api-error";
 import { actorUserIdOrNull } from "../../lib/request-actor";
 import { appendTenantAuditEvent } from "../../lib/tenant-audit";
 import { getAccessUser, jwtAccessVerify, requireAnyPermission } from "../auth/auth.prehandlers";
+import { isTenantAdminRole } from "../../lib/tenant-user-roles";
 import { accessStaffDirectoryWhere } from "../staff/staff.route.shared";
 import {
   buildAccessHistoryXlsxBuffer,
@@ -69,12 +70,12 @@ export async function actorCanSeeAccessUser(
   userId: number
 ): Promise<boolean> {
   const scope = await accessStaffDirectoryWhere(request, tenantId);
-  if (!scope) return true;
   const row = await prisma.user.findFirst({
-    where: { id: userId, tenant_id: tenantId, AND: [scope] },
-    select: { id: true }
+    where: { id: userId, tenant_id: tenantId, ...(scope ? { AND: [scope] } : {}) },
+    select: { id: true, role: true }
   });
-  return row != null;
+  if (!row || isTenantAdminRole(row.role)) return false;
+  return true;
 }
 
 export async function accessUsersScopeWhere(

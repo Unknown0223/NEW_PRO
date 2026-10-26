@@ -18,6 +18,7 @@ const EXTRA_ROLE_LABELS: Record<string, string> = {
   partner: "Партнёр",
   warehouse: "Складчик",
   commercial_director: "Коммерческий директор",
+  storekeeper_view: "Кладовщик (просмотр)",
   vansell: "Ван-селлинг",
   vanseller: "Ван-селлинг",
   van_seller: "Ван-селлинг"

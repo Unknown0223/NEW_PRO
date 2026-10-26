@@ -23,7 +23,8 @@ import {
 } from "@/lib/api-validation-details";
 import { getUserFacingError, withApiSupportLine } from "@/lib/error-utils";
 import { STALE } from "@/lib/query-stale";
-import { useAuthStore, useAuthStoreHydrated, useEffectiveRole } from "@/lib/auth-store";
+import { useAuthStore, useAuthStoreHydrated } from "@/lib/auth-store";
+import { usePermissions } from "@/lib/use-permissions";
 import { cn } from "@/lib/utils";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { isAxiosError } from "axios";
@@ -84,8 +85,7 @@ function pickZodLeaf(per: Record<string, string>, leaf: string): string | undefi
 export function FinancePaymentMethodsSettings() {
   const tenantSlug = useAuthStore((s) => s.tenantSlug);
   const hydrated = useAuthStoreHydrated();
-  const role = useEffectiveRole();
-  const isAdmin = role === "admin";
+  const canEdit = usePermissions().has("settings.sposob_oplaty.update");
   const qc = useQueryClient();
 
   const [tab, setTab] = useState<"active" | "inactive">("active");
@@ -280,7 +280,7 @@ export function FinancePaymentMethodsSettings() {
         description="Каждый способ привязан к валюте; при сохранении обновляется список «типов оплаты» компании."
         actions={
           <div className="flex gap-2">
-            <Button size="sm" disabled={!isAdmin} onClick={openAdd}>
+            <Button size="sm" disabled={!canEdit} onClick={openAdd}>
               Добавить
             </Button>
             <Link href="/settings/currencies" className={cn(buttonVariants({ variant: "outline", size: "sm" }))}>
@@ -311,7 +311,7 @@ export function FinancePaymentMethodsSettings() {
                   setShowOrderPaymentMethodSelector(next);
                   saveOrderCreateFlagMut.mutate(next);
                 }}
-                disabled={!isAdmin || saveOrderCreateFlagMut.isPending}
+                disabled={!canEdit || saveOrderCreateFlagMut.isPending}
               />
               <span>{showOrderPaymentMethodSelector ? "Включено" : "Выключено"}</span>
             </label>
@@ -379,7 +379,7 @@ export function FinancePaymentMethodsSettings() {
                       )}
                     </td>
                     <td className="px-3 py-2 text-right">
-                      {isAdmin ? (
+                      {canEdit ? (
                         <TableRowActionGroup className="justify-end" ariaLabel="Способ оплаты">
                           <Button
                             variant="outline"
@@ -521,7 +521,7 @@ export function FinancePaymentMethodsSettings() {
             {pickZodLeaf(serverFieldErrs, "sync_with_1c") ? (
               <p className="text-xs text-destructive">{pickZodLeaf(serverFieldErrs, "sync_with_1c")}</p>
             ) : null}
-            <Button onClick={submitForm} disabled={saveMut.isPending || !isAdmin}>
+            <Button onClick={submitForm} disabled={saveMut.isPending || !canEdit}>
               {editId ? "Сохранить" : "Добавить"}
             </Button>
           </div>

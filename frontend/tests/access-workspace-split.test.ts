@@ -38,7 +38,7 @@ describe("access-workspace split", () => {
       { id: 4, role: "auditor" }
     ];
     const filtered = filterAccessWebPanelUsers(rows);
-    expect(filtered.map((r) => r.role)).toEqual(["admin", "supervisor"]);
+    expect(filtered.map((r) => r.role)).toEqual(["supervisor"]);
   });
 
   it("isWebPanelDeniedRole blocks field roles from the web panel", async () => {

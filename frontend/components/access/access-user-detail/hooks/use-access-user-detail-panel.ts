@@ -776,7 +776,7 @@ export function useAccessUserDetailPanel({
         .filter((r) => {
           const k = r.key.trim();
           if (!k || k === primary) return false;
-          if (k === "admin" && primary !== "admin") return false;
+          if (k === "admin") return false;
           return true;
         })
         .map((r) => ({

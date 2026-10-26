@@ -18,6 +18,7 @@ export const MODULE_PARENT_LABEL_RU: Record<string, string> = {
   finance: "Финансы",
   reports: "Отчёт",
   users: "Пользователи",
+  tabel: "Табель и посещаемость",
   access: "Доступ",
   audit: "Аудит",
   routes: "Маршруты",

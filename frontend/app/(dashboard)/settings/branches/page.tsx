@@ -29,7 +29,8 @@ import {
 } from "@/lib/api-validation-details";
 import { getUserFacingError, withApiSupportLine } from "@/lib/error-utils";
 import { STALE } from "@/lib/query-stale";
-import { useAuthStore, useAuthStoreHydrated, useEffectiveRole } from "@/lib/auth-store";
+import { useAuthStore, useAuthStoreHydrated } from "@/lib/auth-store";
+import { usePermissions } from "@/lib/use-permissions";
 import { cn } from "@/lib/utils";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { isAxiosError } from "axios";
@@ -150,8 +151,7 @@ function formatCompactListLabels(
 export default function BranchesSettingsPage() {
   const tenantSlug = useAuthStore((s) => s.tenantSlug);
   const hydrated = useAuthStoreHydrated();
-  const role = useEffectiveRole();
-  const isAdmin = role === "admin";
+  const canEdit = usePermissions().has("settings.filial.update");
   const qc = useQueryClient();
 
   const [tab, setTab] = useState<"active" | "inactive">("active");
@@ -502,7 +502,7 @@ export default function BranchesSettingsPage() {
         description="Филиалы, привязка к территории/городу и кассе."
         actions={
           <div className="flex gap-2">
-            <Button size="sm" disabled={!isAdmin} onClick={openAdd}>Добавить</Button>
+            <Button size="sm" disabled={!canEdit} onClick={openAdd}>Добавить</Button>
             <Link href="/settings/cash-desks" className={cn(buttonVariants({ variant: "outline", size: "sm" }))}>
               Кассы
             </Link>
@@ -579,7 +579,7 @@ export default function BranchesSettingsPage() {
                     <td className="px-3 py-2">{r.code ?? "-"}</td>
                     <td className="px-3 py-2">{r.comment ?? "-"}</td>
                     <td className="px-3 py-2 text-right">
-                      {isAdmin ? (
+                      {canEdit ? (
                         <TableRowActionGroup className="justify-end" ariaLabel="Филиал">
                           <Button
                             variant="outline"
@@ -833,7 +833,7 @@ export default function BranchesSettingsPage() {
               <span>Активный</span>
               <input type="checkbox" checked={active} onChange={(e) => setActive(e.target.checked)} />
             </label>
-            <Button onClick={submitForm} disabled={saveMut.isPending || !isAdmin}>{editId ? "Сохранить" : "Добавить"}</Button>
+            <Button onClick={submitForm} disabled={saveMut.isPending || !canEdit}>{editId ? "Сохранить" : "Добавить"}</Button>
           </div>
         </DialogContent>
       </Dialog>
@@ -897,7 +897,7 @@ export default function BranchesSettingsPage() {
 
           <div className="flex justify-end gap-2">
             <Button type="button" variant="outline" onClick={() => setUsersOpen(false)}>Отменить</Button>
-            <Button type="button" onClick={applyUsersToBranch} disabled={!isAdmin || saveMut.isPending}>Сохранить</Button>
+            <Button type="button" onClick={applyUsersToBranch} disabled={!canEdit || saveMut.isPending}>Сохранить</Button>
           </div>
         </DialogContent>
       </Dialog>

@@ -9,9 +9,11 @@ import {
 } from "../../lib/workday-calendar";
 import type { WorkdaysState } from "../tabel/workdays.service";
 import {
+  agentIdsForNormSales,
   applyAgentNormToDays,
   consignmentOpenDays,
   parseAgentNormConfig,
+  resolveAgentNormConfig,
   type AgentDaySales,
   type AgentNormConfig,
   type NormDay
@@ -116,13 +118,19 @@ export async function loadAgentNormContext(
   const ctx: AgentNormContext = { cfg, today, sales: new Map(), consignmentOpen: new Map() };
   const days = listMonthDays(year, month);
   const tracked = agents.filter((a) => isGpsTrackedRole(a.role));
-  if (!cfg.enabled || tracked.length === 0 || days[days.length - 1]! < cfg.start_date || days[0]! > today) {
+  const salesIds = agentIdsForNormSales(
+    cfg,
+    tracked.map((a) => a.id)
+  );
+  const earliest = cfg.overrides.reduce((m, o) => (o.start_date && o.start_date < m ? o.start_date : m), cfg.start_date);
+  if (salesIds.length === 0 || days[days.length - 1]! < earliest || days[0]! > today) {
     return ctx;
   }
   const { from, to } = tenantMonthRangeUtc(year, month, timeZone);
+  const salesAgents = tracked.filter((a) => salesIds.includes(a.id));
   const [sales, consignmentOpen] = await Promise.all([
-    loadAgentDaySales(tenantId, tracked.map((a) => a.id), from, to, timeZone),
-    loadConsignmentOpenByAgent(tenantId, tracked, to, days, timeZone)
+    loadAgentDaySales(tenantId, salesIds, from, to, timeZone),
+    loadConsignmentOpenByAgent(tenantId, salesAgents, to, days, timeZone)
   ]);
   ctx.sales = sales;
   ctx.consignmentOpen = consignmentOpen;
@@ -139,9 +147,11 @@ export function applyAgentNormForUser(
   month: number
 ): void {
   if (!isGpsTrackedRole(user.role)) return;
+  const cfg = resolveAgentNormConfig(ctx.cfg, user.id);
+  if (!cfg.enabled) return;
   const open = ctx.consignmentOpen.get(user.id);
   applyAgentNormToDays(days, {
-    cfg: ctx.cfg,
+    cfg,
     today: ctx.today,
     isWorkingDay: (ymd) => isCalendarWorkingDay(workdays, user.role, user.id, ymd),
     planDays: listCalendarWorkingDays(workdays, user.role, user.id, year, month).length,

@@ -121,9 +121,9 @@ export async function assertActorCanPatchUser(
   body: GrantGuardPatchBody,
   grantableCache?: Set<string>
 ): Promise<void> {
-  if (isAdminActor(actor)) return;
   if (target.role === TENANT_ADMIN_ROLE || body.role?.trim() === TENANT_ADMIN_ROLE) throw new AccessAdminTargetError();
   if ((body.extra_role_keys ?? []).includes(TENANT_ADMIN_ROLE)) throw new AccessAdminTargetError();
+  if (isAdminActor(actor)) return;
 
   const needsCurrent = body.merge_permissions !== true && (body.permissions !== undefined || body.denied_permissions !== undefined);
   const currentEffects = new Map<string, "allow" | "deny">();
@@ -152,8 +152,8 @@ export async function assertActorCanEditRoleDefaults(
   currentKeys: readonly string[],
   nextKeys: readonly string[]
 ): Promise<void> {
-  if (isAdminActor(actor)) return;
   if (roleKey === TENANT_ADMIN_ROLE) throw new AccessAdminTargetError();
+  if (isAdminActor(actor)) return;
   const cur = new Set(currentKeys);
   const next = new Set(nextKeys);
   const touched = [...[...next].filter((k) => !cur.has(k)), ...[...cur].filter((k) => !next.has(k))].filter(
@@ -167,7 +167,7 @@ export async function assertActorCanEditRoleDefaults(
 /** Route'lar uchun: guard xatosini HTTP javobga aylantiradi (boshqa xatolar — null). */
 export function grantGuardErrorResponse(e: unknown): { code: string; message: string; keys?: string[] } | null {
   if (e instanceof AccessAdminTargetError) {
-    return { code: e.code, message: "Права администратора может изменять только администратор." };
+    return { code: e.code, message: "Администратор всегда имеет полный доступ и не участвует в ограничениях." };
   }
   if (e instanceof AccessGrantForbiddenError) {
     return {

@@ -94,18 +94,18 @@ export async function registerAccessUsersBulkRoutes(app: FastifyInstance) {
     }
     const byId = new Map(users.map((u) => [u.id, u]));
     const actor = { userId: actorId, role: getAccessUser(request)?.role };
-    if (!isAdminActor(actor)) {
-      try {
-        const grantable = await loadActorGrantableKeys(tenantId, actor);
-        for (const it of items) {
-          const { user_id, ...body } = it;
-          await assertActorCanPatchUser(tenantId, actor, byId.get(user_id)!, body, grantable);
-        }
-      } catch (e) {
-        const res = grantGuardErrorResponse(e);
-        if (res) return sendApiError(reply, request, 403, res.code, res.message, res.keys ? { keys: res.keys } : undefined);
-        throw e;
+    try {
+      const grantable = isAdminActor(actor) ? undefined : await loadActorGrantableKeys(tenantId, actor);
+      for (const it of items) {
+        const { user_id, ...body } = it;
+        await assertActorCanPatchUser(tenantId, actor, byId.get(user_id)!, body, grantable);
       }
+    } catch (e) {
+      const res = grantGuardErrorResponse(e);
+      if (res) return sendApiError(reply, request, 403, res.code, res.message, res.keys ? { keys: res.keys } : undefined);
+      throw e;
+    }
+    if (!isAdminActor(actor)) {
       const bounds = await loadActorDimensionBounds(request, tenantId);
       if (bounds) {
         for (const it of items) {

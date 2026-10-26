@@ -27,12 +27,11 @@ export const OP_ACTIVITY_FILTER_ITEMS: SearchableMultiSelectItem<string>[] = [{ 
 /** Qanchadan ko‘p variant bo‘lsa, ochilganda qidiruv ko‘rinadi. */
 export const ACCESS_FILTER_MULTI_SEARCH_MIN = 8;
 
-export const ACCESS_MODAL_ROLE_ORDER = ["admin", "supervisor", "agent", "expeditor", "operator", "manager"];
+export const ACCESS_MODAL_ROLE_ORDER = ["supervisor", "agent", "expeditor", "operator", "manager"];
 
 export function accessModalRoleGroupLabel(role: string): string {
   const r = role.toLowerCase().trim();
   const map: Record<string, string> = {
-    admin: "Администраторы",
     supervisor: "Супервайзеры",
     agent: "Агенты",
     expeditor: "Экспедиторы",

@@ -24,7 +24,8 @@ import {
 } from "@/lib/api-validation-details";
 import { getUserFacingError, withApiSupportLine } from "@/lib/error-utils";
 import { STALE } from "@/lib/query-stale";
-import { useAuthStore, useAuthStoreHydrated, useEffectiveRole } from "@/lib/auth-store";
+import { useAuthStore, useAuthStoreHydrated } from "@/lib/auth-store";
+import { usePermissions } from "@/lib/use-permissions";
 import { PRODUCT_UNIT_OPTIONS } from "@/lib/product-units";
 import { cn } from "@/lib/utils";
 import { usePermissions } from "@/lib/use-permissions";
@@ -91,8 +92,7 @@ function pickZodLeaf(per: Record<string, string>, leaf: string): string | undefi
 export default function ProductCategoriesSettingsPage() {
   const tenantSlug = useAuthStore((s) => s.tenantSlug);
   const hydrated = useAuthStoreHydrated();
-  const role = useEffectiveRole();
-  const isAdmin = role === "admin";
+  const canEdit = usePermissions().has("settings.kategoriya_tovara.update");
   const canExport = usePermissions().has("settings.kategoriya_tovara.export");
   const qc = useQueryClient();
 
@@ -401,7 +401,7 @@ export default function ProductCategoriesSettingsPage() {
         description="Три уровня: категория → группа → подкатегория. Форма товара использует этот же список."
         actions={
           <div className="flex flex-wrap gap-2">
-            <Button size="sm" disabled={!isAdmin} onClick={openAdd}>
+            <Button size="sm" disabled={!canEdit} onClick={openAdd}>
               {addLabel}
             </Button>
             {canExport ? (
@@ -499,7 +499,7 @@ export default function ProductCategoriesSettingsPage() {
                     <td className="px-3 py-2">{r.sort_order ?? "—"}</td>
                     <td className="px-3 py-2">{r.comment ?? "—"}</td>
                     <td className="px-3 py-2 text-right">
-                      {isAdmin ? (
+                      {canEdit ? (
                         <TableRowActionGroup className="justify-end" ariaLabel="Категория">
                           <Button
                             variant="outline"
@@ -682,7 +682,7 @@ export default function ProductCategoriesSettingsPage() {
             {pickZodLeaf(serverFieldErrs, "is_active") ? (
               <p className="text-xs text-destructive">{pickZodLeaf(serverFieldErrs, "is_active")}</p>
             ) : null}
-            <Button onClick={submit} disabled={saveMut.isPending || !isAdmin}>
+            <Button onClick={submit} disabled={saveMut.isPending || !canEdit}>
               {editId ? "Сохранить" : "Добавить"}
             </Button>
           </div>

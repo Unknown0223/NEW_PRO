@@ -283,6 +283,7 @@ class _AgentDrawerState extends ConsumerState<AgentDrawer> {
     if (label.contains('Задачи')) return Icons.task_alt_outlined;
     if (label.contains('локация')) return Icons.my_location_outlined;
     if (label.contains('Табель') || label.contains('jadval')) return Icons.assignment_outlined;
+    if (label.contains('посещаемости') || label.contains('Отметка')) return Icons.face_retouching_natural;
     if (label.contains('Настройки')) return Icons.settings_outlined;
     return Icons.chevron_right;
   }

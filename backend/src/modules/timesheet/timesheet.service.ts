@@ -12,8 +12,23 @@ import { defaultTimesheetDay, employmentYmd, visitDayKeys } from "./timesheet.da
 import { applyAgentNormForUser, loadAgentNormContext } from "./timesheet.agent-norm";
 import type { NormDay } from "./timesheet.agent-norm.pure";
 import { parseWorkdaysState } from "../tabel/workdays.service";
+import {
+  ALL_ATTENDANCE_SOURCES,
+  ALL_ATTENDANCE_STATUSES,
+  EXTENDED_STATUS_LABEL_RU,
+  applyLateAllowance,
+  extendedStatusWorkValue,
+  normalizeLatenessRules,
+  type ExtendedAttendanceSource,
+  type ExtendedAttendanceStatus
+} from "../tabel/tabel-engine.pure";
 import { loadTimezoneFromSettingsJson } from "../tenant-settings/tenant-timezone";
 import { parseYearMonth, tenantMonthRangeUtc } from "../../lib/workday-calendar";
+import {
+  migrateTimesheetJsonOverridesToDayRecords,
+  resolveAttendanceCell,
+  upsertManualDayRecord
+} from "./timesheet.day-ledger";
 
 /** Табельda ko‘rsatilmaydigan rollar (masalan tizim admini). */
 const TIMESHEET_EXCLUDED_ROLES = ["admin"] as const;
@@ -35,25 +50,20 @@ export function sanitizeTimesheetRoles(roles: string[] | undefined): {
 }
 
 /**
- * Полная модель статусов (паритет с прототипом TabelERP):
- *  worked=1 · half_day=0.5 · absent=0 · holiday=выходной · vacation=отпуск ·
- *  sick=больничный · trip=командировка.
+ * Полная модель статусов (15 статусов HR Hub + TabelERP):
+ *  worked=1 · late=1/0.5 · early_leave=0.5 · half_day=0.5 · absent=0 ·
+ *  excused_absent=0 · holiday=выходной · vacation=отпуск · unpaid_leave=БС ·
+ *  sick=больничный · trip=командировка · overtime=1 · weekend_work=1 · remote=1 · not_started=0.
  */
-export type AttendanceStatus =
-  | "worked"
-  | "half_day"
-  | "absent"
-  | "vacation"
-  | "sick"
-  | "holiday"
-  | "trip";
-export type AttendanceSource = "manual" | "gps" | "mobile_login" | "auto";
+export type AttendanceStatus = ExtendedAttendanceStatus;
+export type AttendanceSource = ExtendedAttendanceSource;
 
 /** Вклад статуса в «Итого» рабочих дней. */
-export function statusWorkValue(status: AttendanceStatus): number {
-  if (status === "worked") return 1;
-  if (status === "half_day") return 0.5;
-  return 0;
+export function statusWorkValue(
+  status: AttendanceStatus,
+  opts?: { lateExcused?: boolean; penalizeUnexcusedLateAsHalfDay?: boolean }
+): number {
+  return extendedStatusWorkValue(status, opts);
 }
 
 type OverrideRow = {
@@ -96,6 +106,13 @@ export type TimesheetCellDto = {
   net_sales?: number;
   /** Shu kun uchun kunlik norma. */
   norm?: number;
+  late_minutes?: number;
+  late_excused?: boolean;
+  early_leave_minutes?: number;
+  worked_minutes?: number;
+  overtime_minutes?: number;
+  first_in_at?: string | null;
+  last_out_at?: string | null;
 };
 
 export type TimesheetRowDto = {
@@ -113,6 +130,10 @@ export type TimesheetRowDto = {
   cells: TimesheetCellDto[];
   worked_days: number;
   absent_days: number;
+  late_minutes?: number;
+  late_unexcused_days?: number;
+  early_leave_minutes?: number;
+  overtime_hours?: number;
   /** Slotdan chiqish sanasi (YYYY-MM-DD) — shu kundan keyin blok. */
   slot_left_at: string | null;
   /** Oy ichida slotdan chiqib, hozir faol sloti yo‘q. */
@@ -124,19 +145,11 @@ function asObj(v: unknown): Record<string, unknown> {
 }
 
 function isStatus(v: string): v is AttendanceStatus {
-  return (
-    v === "worked" ||
-    v === "half_day" ||
-    v === "absent" ||
-    v === "vacation" ||
-    v === "sick" ||
-    v === "holiday" ||
-    v === "trip"
-  );
+  return (ALL_ATTENDANCE_STATUSES as readonly string[]).includes(v);
 }
 
 function isSource(v: string): v is AttendanceSource {
-  return v === "manual" || v === "gps" || v === "mobile_login" || v === "auto";
+  return (ALL_ATTENDANCE_SOURCES as readonly string[]).includes(v);
 }
 
 export function parseTimesheetState(settings: Prisma.JsonValue): TimesheetState {
@@ -160,18 +173,6 @@ export function parseTimesheetState(settings: Prisma.JsonValue): TimesheetState 
     ? ts.locked_months.filter((x): x is string => typeof x === "string" && /^\d{4}-\d{2}$/.test(x))
     : [];
   return { overrides, locked_months };
-}
-
-function patchTimesheetState(settings: Prisma.JsonValue, state: TimesheetState): Prisma.InputJsonValue {
-  const root = asObj(settings);
-  return {
-    ...root,
-    timesheet: {
-      ...asObj(root.timesheet),
-      overrides: state.overrides,
-      locked_months: state.locked_months
-    }
-  } as Prisma.InputJsonValue;
 }
 
 function monthDateRange(month: string): { from: Date; to: Date; daysInMonth: number } {
@@ -280,6 +281,7 @@ export async function listTimesheetMatrix(
   locked: boolean;
 }> {
   const { daysInMonth } = monthDateRange(input.month);
+  await migrateTimesheetJsonOverridesToDayRecords(tenantId);
   const tenant = await prisma.tenant.findUnique({ where: { id: tenantId }, select: { settings: true } });
   if (!tenant) throw new Error("NOT_FOUND");
   const state = parseTimesheetState(tenant.settings);
@@ -402,6 +404,93 @@ export async function listTimesheetMatrix(
     : [];
   const visitByUserDay = visitDayKeys(visits, timeZone);
   const normCtx = await loadAgentNormContext(tenantId, tenant.settings, users, ym.year, ym.month, timeZone);
+  const latenessRules = normalizeLatenessRules(asObj(asObj(tenant.settings).tabel_settings).lateness);
+  const todayYmd = new Intl.DateTimeFormat("en-CA", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit"
+  }).format(new Date());
+
+  const dayRecordByKey = new Map<
+    string,
+    {
+      status: AttendanceStatus;
+      source: AttendanceSource;
+      first_in_at: Date | null;
+      last_out_at: Date | null;
+      late_minutes: number;
+      early_leave_minutes: number;
+      worked_minutes: number;
+      overtime_minutes: number;
+      override_by: number | null;
+      override_comment: string | null;
+    }
+  >();
+  if (userIds.length) {
+    try {
+      const mStart = new Date(`${input.month}-01T00:00:00.000Z`);
+      const mEnd = new Date(Date.UTC(ym.year, ym.month, 1, 0, 0, 0));
+      const [dayRecs, reqs] = await Promise.all([
+        prisma.attendanceDayRecord.findMany({
+          where: { tenant_id: tenantId, user_id: { in: userIds }, work_date: { gte: mStart, lt: mEnd } }
+        }),
+        prisma.staffAbsenceRequest.findMany({
+          where: {
+            tenant_id: tenantId,
+            user_id: { in: userIds },
+            status: "approved",
+            from_date: { lt: mEnd },
+            to_date: { gte: mStart }
+          }
+        })
+      ]);
+      for (const req of reqs) {
+        const fromStr = req.from_date.toISOString().slice(0, 10);
+        const toStr = req.to_date.toISOString().slice(0, 10);
+        for (let d = 1; d <= daysInMonth; d++) {
+          const ymd = isoDateForDay(input.month, d);
+          if (ymd < fromStr || ymd > toStr) continue;
+          const st: AttendanceStatus = isStatus(req.type) ? req.type : "vacation";
+          const otMin =
+            req.type === "overtime" || req.type === "weekend_work"
+              ? Math.round(Math.max(0, Number(req.hours ?? 0)) * 60)
+              : 0;
+          dayRecordByKey.set(`${req.user_id}:${ymd}`, {
+            status: st,
+            source: "request",
+            first_in_at: null,
+            last_out_at: null,
+            late_minutes: 0,
+            early_leave_minutes: 0,
+            worked_minutes: 0,
+            overtime_minutes: otMin,
+            override_by: req.approved_by,
+            override_comment: req.reason
+          });
+        }
+      }
+      for (const r of dayRecs) {
+        const ymd = r.work_date.toISOString().slice(0, 10);
+        const st: AttendanceStatus = isStatus(r.status) ? r.status : "worked";
+        const src: AttendanceSource = isSource(r.source) ? r.source : "auto";
+        dayRecordByKey.set(`${r.user_id}:${ymd}`, {
+          status: st,
+          source: src,
+          first_in_at: r.first_in_at,
+          last_out_at: r.last_out_at,
+          late_minutes: r.late_minutes,
+          early_leave_minutes: r.early_leave_minutes,
+          worked_minutes: r.worked_minutes,
+          overtime_minutes: r.overtime_minutes,
+          override_by: r.override_by,
+          override_comment: r.override_comment
+        });
+      }
+    } catch {
+      /* jadvallar hali migratsiya qilinmagan bo'lsa e'tiborsiz */
+    }
+  }
 
   const days = Array.from({ length: daysInMonth }, (_, i) => i + 1);
   const rows: TimesheetRowDto[] = users.map((u) => {
@@ -409,10 +498,13 @@ export async function listTimesheetMatrix(
     const isDeparted = departedSet.has(u.id);
     const hiredYmd = employmentYmd(u.hired_at, timeZone);
     const dismissedYmd = employmentYmd(u.dismissed_at, timeZone);
-    const normDays = days.map((day): NormDay & { day: number } => {
+    const normDays = days.map((day): NormDay & {
+      day: number;
+      rec?: ReturnType<typeof dayRecordByKey.get>;
+    } => {
       const date = isoDateForDay(input.month, day);
       const key = `${u.id}:${date}`;
-      const override = state.overrides[key];
+      const rec = dayRecordByKey.get(key);
       const def = defaultTimesheetDay({
         state: workdays,
         role: u.role,
@@ -420,28 +512,63 @@ export async function listTimesheetMatrix(
         ymd: date,
         hasGpsVisit: visitByUserDay.has(key),
         hiredYmd,
-        dismissedYmd
+        dismissedYmd,
+        strictNonAgentAbsent: latenessRules.strictNonAgentAbsent && date <= todayYmd,
+        hasPunch: Boolean(rec?.first_in_at)
       });
+      const resolved = resolveAttendanceCell(rec, def);
       return {
         day,
         date,
-        status: override ? override.status : def.status,
-        source: override ? override.source : def.source,
-        manual: Boolean(override),
-        off_employment: def.off_employment && !override
+        status: resolved.status,
+        source: resolved.source,
+        manual: Boolean(rec?.override_by != null || rec?.source === "manual" || rec?.source === "request"),
+        off_employment: def.off_employment && !rec,
+        comment: rec?.override_comment ?? undefined,
+        rec
       };
     });
     applyAgentNormForUser(normCtx, u, normDays, workdays, ym.year, ym.month);
+    const withLateAllowance = applyLateAllowance(
+      normDays.map((d) => ({
+        ...d,
+        lateMinutes: d.rec?.late_minutes ?? 0
+      })),
+      latenessRules
+    );
     let worked = 0;
     let absent = 0;
-    const cells = normDays.map((d): TimesheetCellDto => {
-      worked += statusWorkValue(d.status);
+    let totalLateMin = 0;
+    let lateUnexcusedDays = 0;
+    let totalEarlyLeaveMin = 0;
+    let totalOvertimeMin = 0;
+    const cells = withLateAllowance.map((d): TimesheetCellDto => {
+      worked += statusWorkValue(d.status, {
+        lateExcused: d.lateExcused,
+        penalizeUnexcusedLateAsHalfDay: latenessRules.penalizeUnexcusedLateAsHalfDay
+      });
       if (d.status === "absent") absent += 1;
+      const lateMin = d.rec?.late_minutes ?? 0;
+      const earlyMin = d.rec?.early_leave_minutes ?? 0;
+      const otMin = d.rec?.overtime_minutes ?? 0;
+      totalLateMin += lateMin;
+      totalEarlyLeaveMin += earlyMin;
+      totalOvertimeMin += otMin;
+      if (d.status === "late" && !d.lateExcused) lateUnexcusedDays += 1;
       const cell: TimesheetCellDto = { day: d.day, date: d.date, status: d.status, source: d.source };
       if (d.off_employment) cell.off_employment = true;
       if (d.comment) cell.comment = d.comment;
       if (d.net_sales != null) cell.net_sales = d.net_sales;
       if (d.norm != null) cell.norm = d.norm;
+      if (lateMin > 0) {
+        cell.late_minutes = lateMin;
+        cell.late_excused = d.lateExcused;
+      }
+      if (earlyMin > 0) cell.early_leave_minutes = earlyMin;
+      if ((d.rec?.worked_minutes ?? 0) > 0) cell.worked_minutes = d.rec!.worked_minutes;
+      if (otMin > 0) cell.overtime_minutes = otMin;
+      if (d.rec?.first_in_at) cell.first_in_at = d.rec.first_in_at.toISOString();
+      if (d.rec?.last_out_at) cell.last_out_at = d.rec.last_out_at.toISOString();
       return cell;
     });
     const branch =
@@ -465,6 +592,10 @@ export async function listTimesheetMatrix(
       cells,
       worked_days: worked,
       absent_days: absent,
+      late_minutes: totalLateMin,
+      late_unexcused_days: lateUnexcusedDays,
+      early_leave_minutes: totalEarlyLeaveMin,
+      overtime_hours: Math.round((totalOvertimeMin / 60) * 100) / 100,
       slot_left_at: leftAt,
       is_departed: isDeparted
     };
@@ -475,15 +606,7 @@ export async function listTimesheetMatrix(
   return { month: input.month, days, rows: ordered, locked };
 }
 
-export const ATTENDANCE_STATUS_LABEL_RU: Record<AttendanceStatus, string> = {
-  worked: "Работал",
-  half_day: "Полдня",
-  absent: "Отсутствовал",
-  holiday: "Выходной",
-  vacation: "Отпуск",
-  sick: "Больничный",
-  trip: "Командировка"
-};
+export const ATTENDANCE_STATUS_LABEL_RU: Record<AttendanceStatus, string> = EXTENDED_STATUS_LABEL_RU;
 
 export type AttendanceCellInput = {
   userId: number;
@@ -519,6 +642,7 @@ export async function patchAttendanceCells(
   }
   const months = new Set(entries.map((e) => e.date.slice(0, 7)));
 
+  await migrateTimesheetJsonOverridesToDayRecords(tenantId);
   const tenant = await prisma.tenant.findUnique({ where: { id: tenantId }, select: { settings: true } });
   if (!tenant) throw new Error("NOT_FOUND");
 
@@ -556,9 +680,18 @@ export async function patchAttendanceCells(
     }
   }
 
-  const effectiveBefore = await loadEffectiveCellsBefore(tenantId, entries, state);
+  const effectiveBefore = await loadEffectiveCellsBefore(tenantId, entries);
+  const existingRows = await prisma.attendanceDayRecord.findMany({
+    where: {
+      tenant_id: tenantId,
+      OR: entries.map((e) => ({ user_id: e.userId, work_date: new Date(`${e.date}T00:00:00.000Z`) }))
+    },
+    select: { user_id: true, work_date: true, status: true, source: true, override_by: true }
+  });
+  const existingByKey = new Map(
+    existingRows.map((r) => [`${r.user_id}:${r.work_date.toISOString().slice(0, 10)}`, r])
+  );
 
-  const now = new Date().toISOString();
   const actor = changedBy?.trim() || "система";
   const additions: NewTabelAuditRecord[] = [];
   const auditEventData: Prisma.TenantAuditEventCreateManyInput[] = [];
@@ -568,20 +701,22 @@ export async function patchAttendanceCells(
 
   for (const e of entries) {
     const key = `${e.userId}:${e.date}`;
-    const prev = state.overrides[key] ?? null;
+    const prev = existingByKey.get(key) ?? null;
     const before = effectiveBefore.get(key);
-    const prevStatus: AttendanceStatus = prev?.status ?? before?.status ?? "absent";
-    const prevLabel = prev
+    const prevStatus: AttendanceStatus = (prev?.status as AttendanceStatus | undefined) ?? before?.status ?? "absent";
+    const wasManual = Boolean(prev && (prev.override_by != null || prev.source === "manual"));
+    const prevLabel = wasManual
       ? `${ATTENDANCE_STATUS_LABEL_RU[prevStatus]} (вручную)`
       : `${ATTENDANCE_STATUS_LABEL_RU[prevStatus]} (авто)`;
-    const next: OverrideRow = {
+    await upsertManualDayRecord({
+      tenantId,
+      userId: e.userId,
+      ymd: e.date,
       status: e.status,
-      source: e.source ?? "manual",
-      updated_at: now,
-      updated_by: actorUserId
-    };
-    state.overrides[key] = next;
-    if (prev && prevStatus === e.status) continue;
+      actorUserId,
+      comment: e.comment
+    });
+    if (wasManual && prevStatus === e.status) continue;
     changed += 1;
     additions.push({
       module: "timesheet",
@@ -590,7 +725,7 @@ export async function patchAttendanceCells(
       subtitle: e.date,
       oldValue: prevLabel,
       newValue: `${ATTENDANCE_STATUS_LABEL_RU[e.status]} (вручную)`,
-      comment: [e.comment?.trim() || "Изменено в табеле", !prev && before?.comment ? `Авто было: ${before.comment}` : ""]
+      comment: [e.comment?.trim() || "Изменено в табеле", !wasManual && before?.comment ? `Авто было: ${before.comment}` : ""]
         .filter(Boolean)
         .join(" · "),
       changedBy: actor
@@ -601,19 +736,22 @@ export async function patchAttendanceCells(
       entity_type: AuditEntityType.user,
       entity_id: String(e.userId).slice(0, 64),
       action: "timesheet.patch.attendance",
-      payload: sanitizePayloadForAudit({ date: e.date, old: prev, new: next }) as Prisma.InputJsonValue
+      payload: sanitizePayloadForAudit({
+        date: e.date,
+        old: prev ? { status: prev.status, source: prev.source } : null,
+        new: { status: e.status, source: "manual" }
+      }) as Prisma.InputJsonValue
     });
   }
 
-  const settingsRoot = patchTimesheetState(tenant.settings, state) as Record<string, unknown>;
   if (additions.length > 0) {
+    const settingsRoot = asObj(tenant.settings);
     settingsRoot.tabel_audit = mergeTabelAudit(readTabelAudit(tenant.settings), additions);
+    await prisma.tenant.update({
+      where: { id: tenantId },
+      data: { settings: settingsRoot as Prisma.InputJsonValue }
+    });
   }
-
-  await prisma.tenant.update({
-    where: { id: tenantId },
-    data: { settings: settingsRoot as Prisma.InputJsonValue }
-  });
 
   if (auditEventData.length > 0) {
     await prisma.tenantAuditEvent.createMany({ data: auditEventData });
@@ -625,13 +763,11 @@ export async function patchAttendanceCells(
 /** Qo‘lda belgilanmagan kataklar uchun o‘zgartirishdan oldingi avtomatik holat (tarix uchun). */
 async function loadEffectiveCellsBefore(
   tenantId: number,
-  entries: AttendanceCellInput[],
-  state: TimesheetState
+  entries: AttendanceCellInput[]
 ): Promise<Map<string, { status: AttendanceStatus; comment?: string }>> {
   const out = new Map<string, { status: AttendanceStatus; comment?: string }>();
   const usersByMonth = new Map<string, Set<number>>();
   for (const e of entries) {
-    if (state.overrides[`${e.userId}:${e.date}`]) continue;
     const m = e.date.slice(0, 7);
     usersByMonth.set(m, (usersByMonth.get(m) ?? new Set()).add(e.userId));
   }

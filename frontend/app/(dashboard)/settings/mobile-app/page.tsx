@@ -18,15 +18,20 @@ import { useEffect, useState } from "react";
 import {
   AlertTriangle,
   CheckCircle2,
+  Clock,
   Download,
   ExternalLink,
   FileUp,
   Loader2,
+  MapPin,
   RefreshCw,
   Save,
+  Shield,
   Smartphone,
-  Users
+  Users,
+  Video
 } from "lucide-react";
+import Link from "next/link";
 import { type AxiosProgressEvent } from "axios";
 
 type MobileAppReleasePolicy = {
@@ -151,6 +156,7 @@ export default function MobileAppSettingsPage() {
   const canEdit = has("settings.mobile_app.update");
   const canUpload = has("settings.mobile_app.import");
   const canNotify = has("settings.mobile_app.transfer");
+  const canTabelSettings = hasAny("settings.tabel_pravila.view", "settings.tabel_pravila.update");
   const hydrated = useAuthStoreHydrated();
   const qc = useQueryClient();
   const { confirm, dialog: confirmDialog } = useAppConfirm();
@@ -356,6 +362,31 @@ export default function MobileAppSettingsPage() {
         title="Мобильное приложение — обновление с сервера"
         description="Загрузите новый APK на сервер. Агенты получат обновление внутри приложения при его открытии — удалять не нужно (при совпадении ключа подписи PIN и кеш сохраняются). Включайте «Принудительное обновление» только когда APK готов."
       />
+
+      {canTabelSettings ? (
+        <Card className="overflow-hidden hover:shadow-sm">
+          <CardHeader className="bg-muted/15">
+            <CardTitle className="text-base">Конфигурация посещаемости в мобильном приложении</CardTitle>
+            <CardDescription>
+              Видео-отметка, Face ID / анти-фрод, геозоны и правила опозданий — те же права, что в «Доступ → Настройки табеля».
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="grid gap-2 pt-4 sm:grid-cols-2 lg:grid-cols-4">
+            <Link href="/settings/tabel/punch-video" className="flex items-center gap-2 rounded-lg border px-3 py-2 text-sm hover:bg-muted/50">
+              <Video className="size-4 text-muted-foreground" /> Видео и 3-значный код
+            </Link>
+            <Link href="/settings/tabel/face-antifraud" className="flex items-center gap-2 rounded-lg border px-3 py-2 text-sm hover:bg-muted/50">
+              <Shield className="size-4 text-muted-foreground" /> Face ID и анти-фрод
+            </Link>
+            <Link href="/settings/tabel/lateness-rules" className="flex items-center gap-2 rounded-lg border px-3 py-2 text-sm hover:bg-muted/50">
+              <Clock className="size-4 text-muted-foreground" /> Опоздания и штрафы
+            </Link>
+            <Link href="/settings/tabel/locations" className="flex items-center gap-2 rounded-lg border px-3 py-2 text-sm hover:bg-muted/50">
+              <MapPin className="size-4 text-muted-foreground" /> Локации и гео-зоны
+            </Link>
+          </CardContent>
+        </Card>
+      ) : null}
 
       {isLoading ? (
         <div className="flex items-center gap-2 rounded-xl border border-border/70 bg-muted/20 px-4 py-8 text-sm text-muted-foreground">

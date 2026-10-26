@@ -17,6 +17,7 @@ import {
 import { replaceUserScopes } from "./scope.service";
 import { actorCanSeeAccessUser, adminOrAccessManager, patchAccessBodySchema } from "./access.route.shared";
 import { assertActorCanPatchUser, grantGuardErrorResponse, isAdminActor, loadActorGrantableKeys } from "./access-grant-guard";
+import { isTenantAdminRole } from "../../lib/tenant-user-roles";
 import { loadActorDimensionBounds, maskScopeForActor, retainHiddenScopeOnPatch } from "./access-dimension-actor";
 import { getAccessUser } from "../auth/auth.prehandlers";
 import { syncEmploymentAfterActiveChange } from "../staff/staff.employment-sync";
@@ -92,11 +93,11 @@ export async function registerAccessUsersWriteRoutes(app: FastifyInstance) {
         /** Kim tahrirlayapti: admin hammasini beradi, boshqalar faqat `actor_grantable_keys`. */
         actor: {
           is_admin: actorIsAdmin,
-          can_edit_user: actorIsAdmin || user.role !== "admin",
+          can_edit_user: !isTenantAdminRole(user.role),
           grantable_keys: actorGrantable ? [...actorGrantable] : null
         },
-        extra_role_keys: extraRoleRows.map((r) => r.role.key).filter((k) => k !== user.role),
-        supervisees,
+        extra_role_keys: extraRoleRows.map((r) => r.role.key).filter((k) => k !== user.role && !isTenantAdminRole(k)),
+        supervisees: supervisees.filter((s) => !isTenantAdminRole(s.role)),
         scope: maskScopeForActor(await loadActorDimensionBounds(request, tenantId), {
           branches: branch_links.map((b) => b.branch_code),
           warehouses: warehouse_links.map((w) => w.warehouse_id),

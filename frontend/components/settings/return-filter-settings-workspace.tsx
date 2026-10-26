@@ -3,7 +3,8 @@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { useAuthStore, useAuthStoreHydrated, useEffectiveRole } from "@/lib/auth-store";
+import { useAuthStore, useAuthStoreHydrated } from "@/lib/auth-store";
+import { usePermissions } from "@/lib/use-permissions";
 import { api } from "@/lib/api";
 import { getUserFacingError } from "@/lib/error-utils";
 import {
@@ -42,8 +43,7 @@ function draftFromForm(
 
 export function ReturnFilterSettingsWorkspace() {
   const tenantSlug = useAuthStore((s) => s.tenantSlug);
-  const role = useEffectiveRole();
-  const isAdmin = role === "admin";
+  const canEdit = usePermissions().has("settings.returns_filter.update");
   const hydrated = useAuthStoreHydrated();
   const qc = useQueryClient();
 
@@ -139,7 +139,7 @@ export function ReturnFilterSettingsWorkspace() {
               <button
                 key={preset.id}
                 type="button"
-                disabled={!isAdmin || isLoading}
+                disabled={!canEdit || isLoading}
                 onClick={() => applyPreset(preset.id)}
                 className={cn(
                   "rounded-xl border p-4 text-left transition-colors",
@@ -187,7 +187,7 @@ export function ReturnFilterSettingsWorkspace() {
             type="checkbox"
             className="mt-1"
             checked={periodEnabled}
-            disabled={!isAdmin || isLoading}
+            disabled={!canEdit || isLoading}
             onChange={(e) => setPeriodEnabled(e.target.checked)}
           />
           <span>
@@ -208,7 +208,7 @@ export function ReturnFilterSettingsWorkspace() {
                 min={1}
                 max={365}
                 value={periodValue}
-                disabled={!isAdmin}
+                disabled={!canEdit}
                 onChange={(e) => setPeriodValue(e.target.value)}
                 className="w-28"
               />
@@ -218,7 +218,7 @@ export function ReturnFilterSettingsWorkspace() {
               <select
                 id="period-unit"
                 value={periodUnit}
-                disabled={!isAdmin}
+                disabled={!canEdit}
                 onChange={(e) => setPeriodUnit(e.target.value === "month" ? "month" : "day")}
                 className="h-10 min-w-[100px] rounded-md border border-input bg-background px-3 text-sm"
               >
@@ -234,7 +234,7 @@ export function ReturnFilterSettingsWorkspace() {
             type="checkbox"
             className="mt-1"
             checked={balanceZeroEnabled}
-            disabled={!isAdmin || isLoading}
+            disabled={!canEdit || isLoading}
             onChange={(e) => setBalanceZeroEnabled(e.target.checked)}
           />
           <span>
@@ -255,12 +255,12 @@ export function ReturnFilterSettingsWorkspace() {
       </section>
 
       <footer className="flex flex-wrap items-center gap-3 border-t border-border pt-4">
-        {isAdmin ? (
+        {canEdit ? (
           <Button type="button" disabled={saveMut.isPending || isLoading} onClick={() => saveMut.mutate()}>
             {saveMut.isPending ? "Сохранение…" : "Сохранить"}
           </Button>
         ) : (
-          <p className="text-sm text-muted-foreground">Изменять может только администратор.</p>
+          <p className="text-sm text-muted-foreground">Нет права на изменение фильтра возврата (Доступ).</p>
         )}
         {msg ? (
           <p

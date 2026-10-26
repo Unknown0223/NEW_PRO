@@ -3,7 +3,8 @@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { useAuthStore, useAuthStoreHydrated, useEffectiveRole } from "@/lib/auth-store";
+import { useAuthStore, useAuthStoreHydrated } from "@/lib/auth-store";
+import { usePermissions } from "@/lib/use-permissions";
 import { api } from "@/lib/api";
 import {
   firstMessagePerField,
@@ -45,8 +46,7 @@ function pickZodLeaf(per: Record<string, string>, leaf: string): string | undefi
 
 export default function CompanySettingsPage() {
   const tenantSlug = useAuthStore((s) => s.tenantSlug);
-  const role = useEffectiveRole();
-  const isAdmin = role === "admin";
+  const canEdit = usePermissions().has("settings.profil_kompanii.update");
   const hydrated = useAuthStoreHydrated();
   const qc = useQueryClient();
   const [name, setName] = useState("");
@@ -158,7 +158,7 @@ export default function CompanySettingsPage() {
               id="co-name"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              disabled={!isAdmin || saveMut.isPending}
+              disabled={!canEdit || saveMut.isPending}
             />
             {pickZodLeaf(serverFieldErrs, "name") ? (
               <p className="text-xs text-destructive">{pickZodLeaf(serverFieldErrs, "name")}</p>
@@ -170,7 +170,7 @@ export default function CompanySettingsPage() {
               id="co-phone"
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
-              disabled={!isAdmin || saveMut.isPending}
+              disabled={!canEdit || saveMut.isPending}
             />
             {pickZodLeaf(serverFieldErrs, "phone") ? (
               <p className="text-xs text-destructive">{pickZodLeaf(serverFieldErrs, "phone")}</p>
@@ -182,7 +182,7 @@ export default function CompanySettingsPage() {
               id="co-addr"
               value={address}
               onChange={(e) => setAddress(e.target.value)}
-              disabled={!isAdmin || saveMut.isPending}
+              disabled={!canEdit || saveMut.isPending}
             />
             {pickZodLeaf(serverFieldErrs, "address") ? (
               <p className="text-xs text-destructive">{pickZodLeaf(serverFieldErrs, "address")}</p>
@@ -194,7 +194,7 @@ export default function CompanySettingsPage() {
               id="co-logo"
               value={logoUrl}
               onChange={(e) => setLogoUrl(e.target.value)}
-              disabled={!isAdmin || saveMut.isPending}
+              disabled={!canEdit || saveMut.isPending}
             />
             {pickZodLeaf(serverFieldErrs, "logo_url") ? (
               <p className="text-xs text-destructive">{pickZodLeaf(serverFieldErrs, "logo_url")}</p>
@@ -205,7 +205,7 @@ export default function CompanySettingsPage() {
               type="checkbox"
               checked={ordersSse}
               onChange={(e) => setOrdersSse(e.target.checked)}
-              disabled={!isAdmin || saveMut.isPending}
+              disabled={!canEdit || saveMut.isPending}
             />
             Заказы SSE (обновление в реальном времени)
           </label>
@@ -229,7 +229,7 @@ export default function CompanySettingsPage() {
               className="min-h-[72px] rounded-md border bg-background px-3 py-2 text-sm"
               value={payTypes}
               onChange={(e) => setPayTypes(e.target.value)}
-              disabled={!isAdmin || saveMut.isPending}
+              disabled={!canEdit || saveMut.isPending}
             />
             {pickZodLeaf(serverFieldErrs, "payment_types") ? (
               <p className="text-xs text-destructive">{pickZodLeaf(serverFieldErrs, "payment_types")}</p>
@@ -255,13 +255,13 @@ export default function CompanySettingsPage() {
               className="min-h-[72px] rounded-md border bg-background px-3 py-2 text-sm"
               value={regions}
               onChange={(e) => setRegions(e.target.value)}
-              disabled={!isAdmin || saveMut.isPending}
+              disabled={!canEdit || saveMut.isPending}
             />
             {pickZodLeaf(serverFieldErrs, "regions") ? (
               <p className="text-xs text-destructive">{pickZodLeaf(serverFieldErrs, "regions")}</p>
             ) : null}
           </div>
-          {isAdmin ? (
+          {canEdit ? (
             <Button type="button" disabled={saveMut.isPending} onClick={() => saveMut.mutate()}>
               {saveMut.isPending ? "Сохранение…" : "Сохранить"}
             </Button>

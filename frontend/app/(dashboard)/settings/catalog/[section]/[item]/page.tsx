@@ -7,15 +7,16 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 type Props = {
-  params: {
+  params: Promise<{
     section: string;
     item: string;
-  };
+  }>;
 };
 
-export default function SettingsCatalogItemPage({ params }: Props) {
-  const section = settingsSections.find((s) => s.slug === params.section);
-  const item = findSettingsItem(params.section, params.item);
+export default async function SettingsCatalogItemPage({ params }: Props) {
+  const { section: sectionSlug, item: itemSlug } = await params;
+  const section = settingsSections.find((s) => s.slug === sectionSlug);
+  const item = findSettingsItem(sectionSlug, itemSlug);
 
   if (!section || !item) {
     notFound();

@@ -12,12 +12,27 @@ import { getAgentNormSettings, saveAgentNormSettings } from "./timesheet.norm-se
 const readRoles = [...ADMIN_AND_OPERATOR_LIKE_ROLES, "supervisor"] as const;
 const writeRoles = ADMIN_AND_OPERATOR_LIKE_ROLES;
 
+const overrideBody = z
+  .object({
+    user_id: z.number().int().positive(),
+    enabled: z.boolean().optional(),
+    start_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+    open_amount: z.number().positive().max(1_000_000_000_000).optional(),
+    closed_amount: z.number().positive().max(1_000_000_000_000).optional(),
+    min_orders: z.number().int().min(0).max(1000).optional(),
+    half_day_ratio: z.number().min(0).max(1).optional()
+  })
+  .strict();
+
 const normBody = z
   .object({
     enabled: z.boolean(),
     start_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
     open_amount: z.number().positive().max(1_000_000_000_000),
     closed_amount: z.number().positive().max(1_000_000_000_000),
+    min_orders: z.number().int().min(0).max(1000).optional(),
+    half_day_ratio: z.number().min(0).max(1).optional(),
+    overrides: z.array(overrideBody).max(500).optional(),
     comment: z.string().max(500).optional()
   })
   .strict();
@@ -58,12 +73,19 @@ export async function registerTimesheetNormRoutes(app: FastifyInstance) {
       if (!parsed.success)
         return sendApiError(reply, request, 400, "ValidationError", undefined, zodValidationExtras(parsed.error));
       const { comment, ...cfg } = parsed.data;
-      const data = await saveAgentNormSettings(request.tenant!.id, cfg, {
-        userId: actorUserIdOrNull(request),
-        label: await timesheetActorLabel(request),
-        comment
-      });
-      return reply.send({ data });
+      try {
+        const data = await saveAgentNormSettings(request.tenant!.id, cfg, {
+          userId: actorUserIdOrNull(request),
+          label: await timesheetActorLabel(request),
+          comment
+        });
+        return reply.send({ data });
+      } catch (e) {
+        if (e instanceof Error && e.message === "INVALID_OVERRIDE_USERS") {
+          return sendApiError(reply, request, 400, "ValidationError", "Особое условие можно задать только агенту.");
+        }
+        throw e;
+      }
     }
   );
 

@@ -24,7 +24,7 @@ export async function listPayrollCandidateUserIds(tenantId: number, year: number
   const { from, to } = tenantMonthRangeUtc(year, month, timeZone);
   const p = prevYm({ year, month });
   const prefix = ymdOf(year, month, 1).slice(0, 7);
-  const [records, links, orders, advances, prevRecs, empCfg, roleCfg, tenant] = await Promise.all([
+  const [records, links, orders, advances, prevRecs, empCfg, roleCfg, tenant, roleFormulas, bonusAssignments, dayRecUsers] = await Promise.all([
     prisma.payrollRecord.findMany({ where: { tenant_id: tenantId, year, month }, select: { user_id: true } }),
     prisma.slotUserLink.findMany({
       where: { tenant_id: tenantId, started_at: { lt: to }, OR: [{ ended_at: null }, { ended_at: { gt: from } }] },
@@ -50,20 +50,43 @@ export async function listPayrollCandidateUserIds(tenantId: number, year: number
     }),
     prisma.payrollEmployeeConfig.findMany({ where: { tenant_id: tenantId }, select: { user_id: true } }),
     prisma.payrollRoleConfig.findMany({ where: { tenant_id: tenantId }, select: { role: true } }),
-    prisma.tenant.findUnique({ where: { id: tenantId }, select: { settings: true } })
+    prisma.tenant.findUnique({ where: { id: tenantId }, select: { settings: true } }),
+    prisma.payrollFormula.findMany({
+      where: {
+        tenant_id: tenantId,
+        is_active: true,
+        NOT: { role: null },
+        OR: [{ year: null }, { month: null }, { year, month }]
+      },
+      select: { role: true }
+    }),
+    prisma.payrollBonusAssignment.findMany({
+      where: { tenant_id: tenantId, year, month },
+      select: { user_id: true },
+      distinct: ["user_id"]
+    }),
+    prisma.attendanceDayRecord.findMany({
+      where: { tenant_id: tenantId, work_date: { gte: from, lt: to } },
+      select: { user_id: true },
+      distinct: ["user_id"]
+    })
   ]);
   const ids = new Set<number>();
-  for (const r of [...records, ...links, ...advances, ...prevRecs]) ids.add(r.user_id);
+  for (const r of [...records, ...links, ...advances, ...prevRecs, ...bonusAssignments, ...dayRecUsers]) ids.add(r.user_id);
   for (const o of orders) ids.add(Number(o.uid));
   const ts = (tenant?.settings as { timesheet?: { overrides?: Record<string, unknown> } } | null)?.timesheet?.overrides ?? {};
   for (const key of Object.keys(ts)) {
     const [uid, date] = key.split(":");
     if (date?.startsWith(prefix)) ids.add(Number(uid));
   }
+  const roleSet = new Set<string>(roleCfg.map((r) => r.role));
+  for (const rf of roleFormulas) {
+    if (rf.role) roleSet.add(rf.role);
+  }
   const configured = await prisma.user.findMany({
     where: {
       tenant_id: tenantId,
-      OR: [{ id: { in: empCfg.map((e) => e.user_id) } }, { role: { in: roleCfg.map((r) => r.role) } }],
+      OR: [{ id: { in: empCfg.map((e) => e.user_id) } }, { role: { in: [...roleSet] } }],
       AND: [
         { OR: [{ hired_at: null }, { hired_at: { lt: to } }] },
         { OR: [{ dismissed_at: null }, { dismissed_at: { gte: from } }] }

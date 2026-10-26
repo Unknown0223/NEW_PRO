@@ -1,5 +1,5 @@
 import type { Prisma } from "@prisma/client";
-import { isExcludedFromAccessWebUsersList, MOBILE_ONLY_KOMANDA_ROLES } from "../../lib/tenant-user-roles";
+import { ACCESS_WEB_USERS_EXCLUDED_ROLES, isExcludedFromAccessWebUsersList } from "../../lib/tenant-user-roles";
 
 /** Veb «Доступ» UI — mobil-only KOMANDA (agent, expeditor, …) ni chiqaradi. */
 export function filterAccessWebPanelUsers<T extends { role: string }>(rows: T[]): T[] {
@@ -18,6 +18,6 @@ export function accessWebAssignableUserWhere(tenantId: number): Prisma.UserWhere
   return {
     tenant_id: tenantId,
     is_active: true,
-    role: { notIn: [...MOBILE_ONLY_KOMANDA_ROLES] }
+    role: { notIn: [...ACCESS_WEB_USERS_EXCLUDED_ROLES] }
   };
 }

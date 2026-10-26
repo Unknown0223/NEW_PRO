@@ -85,6 +85,20 @@ class FaceVerificationFlow {
     );
   }
 
+  /// Davomat: etalon yuz bo‘lmasa kameradan yuklaydi (tenant face-flagiga bog‘liq emas).
+  static Future<bool> ensureReference(
+    BuildContext context,
+    WidgetRef ref, {
+    String title = 'Загрузите эталонное фото лица',
+  }) async {
+    final slug = ref.read(sessionProvider).tenantSlug ?? '';
+    if (slug.isEmpty) return false;
+    final status = await ref.read(faceVerificationApiProvider).getStatus(slug);
+    if (status.hasReference) return true;
+    if (!context.mounted) return false;
+    return _captureReference(context, ref, slug, title);
+  }
+
   /// Face yoqilgan va bugun hali tasdiqlanmagan — UI bloklash uchun.
   static Future<bool> isDailyLoginBlocking(WidgetRef ref) async {
     final slug = ref.read(sessionProvider).tenantSlug ?? '';

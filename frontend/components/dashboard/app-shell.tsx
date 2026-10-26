@@ -15,6 +15,7 @@ import {
   dashboardSidebarLayout,
   dashboardStockNav,
   dashboardSuppliersNav,
+  dashboardTabelNav,
   dashboardUsersNav,
   flattenNavSearchEntries,
   resolvePageBreadcrumb,
@@ -259,6 +260,15 @@ function payrollNavChildActive(pathname: string): boolean {
   );
 }
 
+function tabelNavChildActive(pathname: string): boolean {
+  if (pathname === "/users/timesheet" || pathname === "/users/workdays" || pathname.startsWith("/tabel/")) {
+    return true;
+  }
+  return dashboardTabelNav.groups.some((g) =>
+    g.items.some((item) => !item.disabled && item.href !== "#" && isNavActive(pathname, item.href))
+  );
+}
+
 type SidebarSection =
   | "dashboard"
   | "clients"
@@ -270,6 +280,7 @@ type SidebarSection =
   | "plans"
   | "kassa"
   | "users"
+  | "tabel"
   | "payroll";
 
 function placeholderIcon(icon: "plans" | "pivot" | "audit") {
@@ -335,7 +346,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const hydrated = useAuthStoreHydrated();
   const accessToken = useAuthStore((s) => s.accessToken);
   const { tenantSlug, clearSession } = useAuthStore();
-  const effectiveRole = useEffectiveRole();
+  const persistRole = useEffectiveRole();
+  /**
+   * zustand persist clientda birinchi renderdan oldin to‘lishi mumkin.
+   * SSR esa bo‘sh store — shu qiymatlarni `hydrated` gacha ishlatmaslik kerak,
+   * aks holda Next hydration overlay click/focusni yopadi.
+   */
+  const shellRole = hydrated ? persistRole : null;
+  const shellSlug = hydrated ? tenantSlug : null;
   const qc = useQueryClient();
 
   /** Eski JWT da `tenantSlug` bo‘lmasa — bazadan slugni `/auth/me` orqali store ga yozamiz (404 TenantNotFound oldini). */
@@ -435,6 +453,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       setOpenSection("payroll");
       return;
     }
+    if (tabelNavChildActive(pathname)) {
+      setOpenSection("tabel");
+      return;
+    }
     if (usersNavChildActive(pathname)) {
       setOpenSection("users");
       return;
@@ -488,10 +510,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       new Set(
         dashboardReportsNav.items
           .filter((x) => !x.disabled && x.href !== "#" && x.href !== "/reports/settings")
-          .filter((x) => navItemVisible(x, effectiveRole, permissionKeySet))
+          .filter((x) => navItemVisible(x, shellRole, permissionKeySet))
           .map((x) => x.href)
       ),
-    [effectiveRole, permissionKeySet]
+    [shellRole, permissionKeySet]
   );
 
   const hiddenReportHrefs = useMemo(() => {
@@ -510,30 +532,30 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const reportMenuItems = useMemo(
     () =>
       dashboardReportsNav.items.filter((item) => {
-        if (!navItemVisible(item, effectiveRole, permissionKeySet)) return false;
+        if (!navItemVisible(item, shellRole, permissionKeySet)) return false;
         if (item.href === "/reports/settings") return true;
         return !hiddenReportsCurrent.has(item.href);
       }),
-    [effectiveRole, permissionKeySet, hiddenReportsCurrent]
+    [shellRole, permissionKeySet, hiddenReportsCurrent]
   );
 
   const navSearchEntries = useMemo(
     () =>
       flattenNavSearchEntries().filter(({ item }) => {
-        if (!navItemVisible(item, effectiveRole, permissionKeySet)) return false;
+        if (!navItemVisible(item, shellRole, permissionKeySet)) return false;
         if (!reportItemHrefSet.has(item.href)) return true;
         return !hiddenReportsCurrent.has(item.href);
       }),
-    [effectiveRole, permissionKeySet, reportItemHrefSet, hiddenReportsCurrent]
+    [shellRole, permissionKeySet, reportItemHrefSet, hiddenReportsCurrent]
   );
 
   const reportsSettingsItems = useMemo(
     () =>
       dashboardReportsNav.items
         .filter((x) => !x.disabled && x.href !== "#" && x.href !== "/reports/settings")
-        .filter((x) => navItemVisible(x, effectiveRole, permissionKeySet))
+        .filter((x) => navItemVisible(x, shellRole, permissionKeySet))
         .map((x) => ({ href: x.href, label: x.label })),
-    [effectiveRole, permissionKeySet]
+    [shellRole, permissionKeySet]
   );
   const reportsSearchNorm = reportsSearch.trim().toLowerCase();
   const reportsSettingsVisibleItems = useMemo(
@@ -575,7 +597,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   const sidebarTree = dashboardSidebarLayout.map((entry, idx) => {
             if (entry.kind === "link") {
-              if (!navItemVisible(entry.item, effectiveRole, permissionKeySet)) return null;
+              if (!navItemVisible(entry.item, shellRole, permissionKeySet)) return null;
               const { href, label, disabled } = entry.item;
               const active = !disabled && href !== "#" && isNavActive(pathname, href);
               const Icon = linkIcon(href);
@@ -625,7 +647,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               if (
                 !navItemsSomeVisible(
                   dashboardOrdersNav.groups.flatMap((g) => g.items),
-                  effectiveRole,
+                  shellRole,
                   permissionKeySet
                 )
               ) {
@@ -656,7 +678,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                     <div className="ml-1 space-y-3 border-l border-sidebar-border/60 py-0.5 pl-2">
                       {dashboardOrdersNav.groups.map((group) => {
                         const visibleItems = group.items.filter((item) =>
-                          navItemVisible(item, effectiveRole, permissionKeySet)
+                          navItemVisible(item, shellRole, permissionKeySet)
                         );
                         if (visibleItems.length === 0) return null;
                         return (
@@ -701,7 +723,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             }
 
             if (entry.kind === "invoices") {
-              if (!navItemsSomeVisible(dashboardInvoicesNav.items, effectiveRole, permissionKeySet)) {
+              if (!navItemsSomeVisible(dashboardInvoicesNav.items, shellRole, permissionKeySet)) {
                 return null;
               }
               return (
@@ -728,7 +750,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   {invoicesOpen && (
                     <ul className="ml-1 flex flex-col gap-0.5 border-l border-sidebar-border/60 py-0.5 pl-2">
                       {dashboardInvoicesNav.items
-                        .filter((item) => navItemVisible(item, effectiveRole, permissionKeySet))
+                        .filter((item) => navItemVisible(item, shellRole, permissionKeySet))
                         .map((item) => {
                           const muted = Boolean(item.disabled || item.href === "#");
                           const active = !muted && isNavActive(pathname, item.href);
@@ -766,7 +788,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             }
 
             if (entry.kind === "clients") {
-              if (!navItemsSomeVisible(dashboardClientsNav.items, effectiveRole, permissionKeySet)) {
+              if (!navItemsSomeVisible(dashboardClientsNav.items, shellRole, permissionKeySet)) {
                 return null;
               }
               return (
@@ -793,7 +815,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   {clientsOpen && (
                     <ul className="ml-1 flex flex-col gap-0.5 border-l border-sidebar-border/60 py-0.5 pl-2">
                       {dashboardClientsNav.items
-                        .filter((item) => navItemVisible(item, effectiveRole, permissionKeySet))
+                        .filter((item) => navItemVisible(item, shellRole, permissionKeySet))
                         .map((item) => {
                         const muted = Boolean(item.disabled || item.href === "#");
                         const active = !muted && isNavActive(pathname, item.href);
@@ -842,7 +864,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
             if (entry.kind === "dashboard") {
               const dashboardItems = dashboardHomeNav.items.filter((item) =>
-                navItemVisible(item, effectiveRole, permissionKeySet)
+                navItemVisible(item, shellRole, permissionKeySet)
               );
               if (dashboardItems.length === 0) return null;
               return (
@@ -899,9 +921,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
             if (entry.kind === "stock") {
               const stockItems = dashboardStockNav.items.filter((item) =>
-                navItemVisible(item, effectiveRole, permissionKeySet)
+                navItemVisible(item, shellRole, permissionKeySet)
               );
-              if (!navItemsSomeVisible(stockItems, effectiveRole, permissionKeySet)) {
+              if (!navItemsSomeVisible(stockItems, shellRole, permissionKeySet)) {
                 return null;
               }
               return (
@@ -958,9 +980,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
             if (entry.kind === "suppliers") {
               const suppliersItems = dashboardSuppliersNav.items.filter((item) =>
-                navItemVisible(item, effectiveRole, permissionKeySet)
+                navItemVisible(item, shellRole, permissionKeySet)
               );
-              if (!navItemsSomeVisible(suppliersItems, effectiveRole, permissionKeySet)) {
+              if (!navItemsSomeVisible(suppliersItems, shellRole, permissionKeySet)) {
                 return null;
               }
               return (
@@ -1019,7 +1041,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               if (
                 !navItemsSomeVisible(
                   dashboardKassaNav.groups.flatMap((g) => g.items),
-                  effectiveRole,
+                  shellRole,
                   permissionKeySet
                 )
               ) {
@@ -1059,7 +1081,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                     <div className="ml-1 space-y-3 border-l border-sidebar-border/60 py-0.5 pl-2">
                       {dashboardKassaNav.groups.map((group) => {
                         const visibleItems = group.items.filter((item) =>
-                          navItemVisible(item, effectiveRole, permissionKeySet)
+                          navItemVisible(item, shellRole, permissionKeySet)
                         );
                         if (visibleItems.length === 0) return null;
                         return (
@@ -1104,7 +1126,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             }
 
             if (entry.kind === "reports") {
-              if (!navItemsSomeVisible(reportMenuItems, effectiveRole, permissionKeySet)) {
+              if (!navItemsSomeVisible(reportMenuItems, shellRole, permissionKeySet)) {
                 return null;
               }
               return (
@@ -1178,7 +1200,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
             if (entry.kind === "plans") {
               const plansItems = dashboardPlansNav.items.filter((item) =>
-                navItemVisible(item, effectiveRole, permissionKeySet)
+                navItemVisible(item, shellRole, permissionKeySet)
               );
               if (plansItems.length === 0) return null;
               return (
@@ -1228,6 +1250,26 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               );
             }
 
+            if (entry.kind === "tabel") {
+              return (
+                <SidebarGroupedSection
+                  key="tabel"
+                  title={dashboardTabelNav.sectionTitle}
+                  icon={CalendarRange}
+                  groups={dashboardTabelNav.groups}
+                  open={openSection === "tabel"}
+                  active={tabelNavChildActive(pathname)}
+                  onToggle={() => toggleSection("tabel")}
+                  isItemVisible={(item) => navItemVisible(item, shellRole, permissionKeySet)}
+                  isItemActive={(href) =>
+                    isNavActive(pathname, href) ||
+                    (href === "/tabel/timesheet" && pathname === "/users/timesheet") ||
+                    (href === "/tabel/workdays" && pathname === "/users/workdays")
+                  }
+                />
+              );
+            }
+
             if (entry.kind === "payroll") {
               return (
                 <SidebarGroupedSection
@@ -1238,7 +1280,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   open={openSection === "payroll"}
                   active={payrollNavChildActive(pathname)}
                   onToggle={() => toggleSection("payroll")}
-                  isItemVisible={(item) => navItemVisible(item, effectiveRole, permissionKeySet)}
+                  isItemVisible={(item) => navItemVisible(item, shellRole, permissionKeySet)}
                   isItemActive={(href) => isNavActive(pathname, href)}
                 />
               );
@@ -1248,7 +1290,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               if (
                 !navItemsSomeVisible(
                   dashboardUsersNav.groups.flatMap((g) => g.items),
-                  effectiveRole,
+                  shellRole,
                   permissionKeySet
                 )
               ) {
@@ -1288,7 +1330,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                     <div className="ml-1 space-y-3 border-l border-sidebar-border/60 py-0.5 pl-2">
                       {dashboardUsersNav.groups.map((group) => {
                         const visibleItems = group.items.filter((item) =>
-                          navItemVisible(item, effectiveRole, permissionKeySet)
+                          navItemVisible(item, shellRole, permissionKeySet)
                         );
                         if (visibleItems.length === 0) return null;
                         return (
@@ -1347,8 +1389,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <SalesArenaLogo variant="dark" height={48} className="w-full" />
         </Link>
         <div className="flex items-center justify-between gap-2">
-          <p className="min-w-0 truncate text-sm font-semibold text-sidebar-foreground" title={tenantSlug ?? undefined}>
-            {tenantSlug ?? "—"}
+          <p className="min-w-0 truncate text-sm font-semibold text-sidebar-foreground" title={shellSlug ?? undefined}>
+            {shellSlug ?? "—"}
           </p>
           <TenantSidebarClock />
         </div>
@@ -1397,7 +1439,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 <span className="truncate text-sm font-semibold text-foreground">{breadcrumb.label}</span>
               </div>
             ) : null}
-            {(effectiveRole === "admin" ||
+            {(shellRole === "admin" ||
               permissionKeySet == null ||
               NAV_PERM.gpsMonitoring.some((k) => permissionKeySet.has(k))) && (
               <Link
@@ -1446,12 +1488,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 <SalesArenaLogo variant="light" height={36} />
               </Link>
               <div className="flex items-center justify-between gap-2">
-                <span className="min-w-0 truncate text-sm font-semibold">{tenantSlug ?? "Панель"}</span>
+                <span className="min-w-0 truncate text-sm font-semibold">{shellSlug ?? "Панель"}</span>
                 <TenantSidebarClock tone="header" />
               </div>
             </div>
             <div className="flex items-center gap-2">
-              {(effectiveRole === "admin" ||
+              {(shellRole === "admin" ||
                 permissionKeySet == null ||
                 NAV_PERM.gpsMonitoring.some((k) => permissionKeySet.has(k))) && (
                 <Link

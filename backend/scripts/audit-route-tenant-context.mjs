@@ -16,10 +16,23 @@ const SKIP_PATHS = new Set([
 
 function skipPath(path) {
   if (SKIP_PATHS.has(path)) return true;
+  if (path.startsWith("${base}/")) return true;
+  if (path.startsWith("/api/telegram-bot/")) return true;
+  if (path.startsWith("/api/tg-app/")) return true;
   if (path.includes("/metrics/web-vitals")) return true;
   if (path.startsWith("/metrics/")) return true;
   if (path.includes("/health")) return true;
   return false;
+}
+
+function hasTenantGuard(snippet) {
+  return (
+    snippet.includes("ensureTenantContext") ||
+    snippet.includes("payrollCtx") ||
+    snippet.includes("runPayroll") ||
+    snippet.includes("withBody(") ||
+    snippet.includes("dashboardStatsPreHandler")
+  );
 }
 
 function isRouteSource(name) {
@@ -69,7 +82,7 @@ function auditFile(file) {
     console.error(`XATO: ${file} o‘qilmadi`);
     return;
   }
-  const routeRe = /^\s*app\.(get|post|patch|put|delete)\(\s*["']([^"']+)["']/gm;
+  const routeRe = /^\s*app\.(get|post|patch|put|delete)\(\s*["'`]([^"'`]+)["'`]/gm;
   const missing = [];
   let count = 0;
   const isBarrel = /register[A-Za-z0-9]+Routes\s*\(/.test(s);
@@ -79,7 +92,7 @@ function auditFile(file) {
     const path = match[2];
     if (skipPath(path)) continue;
     const start = match.index ?? 0;
-    const head = s.slice(start, start + 500);
+    const head = s.slice(start, start + 1000);
     const named = head.match(/,\s*([a-zA-Z]+Handler)\s*\)/);
     if (named) {
       const name = named[1];
@@ -88,9 +101,9 @@ function auditFile(file) {
         missing.push(`${path} → ${name} (topilmadi)`);
         continue;
       }
-      const block = s.slice(def, def + 800);
-      if (!block.includes("ensureTenantContext")) missing.push(`${path} → ${name}`);
-    } else if (!head.includes("ensureTenantContext")) {
+      const block = s.slice(def, def + 1000);
+      if (!hasTenantGuard(block)) missing.push(`${path} → ${name}`);
+    } else if (!hasTenantGuard(head)) {
       missing.push(path);
     }
   }

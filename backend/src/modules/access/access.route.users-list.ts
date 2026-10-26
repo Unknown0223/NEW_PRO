@@ -59,7 +59,11 @@ import type { PaymentMethodEntryDto } from "../tenant-settings/finance-refs";
 import { paymentMethodStorageKey } from "../tenant-settings/finance-refs";
 import { accessUsersScopeWhere, adminOrAccessManager, listUsersQuerySchema } from "./access.route.shared";
 import { filterAccessWebPanelUsers } from "./access-web-users.filter";
-import { MOBILE_ONLY_KOMANDA_ROLES } from "../../lib/tenant-user-roles";
+import {
+  ACCESS_WEB_USERS_EXCLUDED_ROLES,
+  isExcludedFromAccessWebUsersList,
+  TENANT_ADMIN_ROLE
+} from "../../lib/tenant-user-roles";
 
 export async function registerAccessUsersListRoutes(app: FastifyInstance) {
   app.get("/api/:slug/access/users", { preHandler: [...adminOrAccessManager] }, async (request, reply) => {
@@ -76,6 +80,7 @@ export async function registerAccessUsersListRoutes(app: FastifyInstance) {
       const rows = await prisma.user.findMany({
         where: {
           tenant_id: tenantId,
+          role: { not: TENANT_ADMIN_ROLE },
           OR: [{ is_active: true }, { filter_visible: true }],
           ...(staffScope ? { AND: [staffScope] } : {})
         },
@@ -111,10 +116,15 @@ export async function registerAccessUsersListRoutes(app: FastifyInstance) {
     };
     if (q.data.is_active === "true") where.is_active = true;
     else if (q.data.is_active === "false") where.is_active = false;
-    if (q.data.role?.trim()) where.role = q.data.role.trim();
-    else {
-      /** Veb «Доступ»: faqat web-panel foydalanuvchilari (mobil-only KOMANDA chiqariladi). */
-      where.role = { notIn: [...MOBILE_ONLY_KOMANDA_ROLES] };
+    if (q.data.role?.trim()) {
+      const role = q.data.role.trim();
+      if (isExcludedFromAccessWebUsersList(role)) {
+        return reply.send({ data: [] });
+      }
+      where.role = role;
+    } else {
+      /** Veb «Доступ»: admin va mobil-only KOMANDA chiqariladi. */
+      where.role = { notIn: [...ACCESS_WEB_USERS_EXCLUDED_ROLES] };
     }
     if (q.data.search?.trim()) {
       const s = q.data.search.trim();

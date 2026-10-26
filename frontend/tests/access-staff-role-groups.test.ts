@@ -12,6 +12,8 @@ describe("access staff role groups", () => {
     expect(staffRoleGroupLabel("skladchik")).toBe("Складчики");
     expect(staffRoleGroupLabel("operator")).toBe("Операторы");
     expect(staffRoleGroupLabel("warehouse_manager")).toBe("Заведующие складом");
+    expect(staffRoleGroupLabel("sales_director")).toBe("Директора по продажам");
+    expect(staffRoleGroupLabel("commercial_director")).toBe("Коммерческие директора");
   });
 
   it("orders field roles after supervisors and operators", () => {
@@ -31,6 +33,7 @@ describe("access staff role groups", () => {
     for (const id of ["collector", "auditor", "skladchik", "cashier", "director"]) {
       expect(ids).toContain(id);
     }
+    expect(ids).not.toContain("admin");
     expect(new Set(ids).size).toBe(ids.length);
   });
 });

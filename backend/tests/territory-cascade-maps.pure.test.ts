@@ -47,11 +47,13 @@ describe("territory cascade maps", () => {
   it("findCityParentsInTerritoryTree resolves real parents", () => {
     expect(findCityParentsInTerritoryTree(tree, "ASAKA")).toEqual({
       zone: "FV",
-      oblast: "ANDIJON VILOYATI"
+      oblast: "ANDIJON VILOYATI",
+      city: "ASAKA"
     });
     expect(findCityParentsInTerritoryTree(tree, "Bog'ot")).toEqual({
       zone: "SOUTH-WEST",
-      oblast: "XORAZM VILOYATI"
+      oblast: "XORAZM VILOYATI",
+      city: "Bog'ot"
     });
   });
 });

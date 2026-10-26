@@ -7,13 +7,14 @@ import { ADMIN_AND_OPERATOR_LIKE_ROLES, TENANT_ADMIN_ROLE } from "../../lib/tena
 import { jwtAccessVerify, requireRoles } from "../auth/auth.prehandlers";
 import { accessStaffDirectoryWhere } from "../staff/staff.route.shared";
 import { listTimesheetFilters, listTimesheetMatrix, patchAttendanceCell, patchAttendanceCells } from "./timesheet.service";
+import { ALL_ATTENDANCE_SOURCES, ALL_ATTENDANCE_STATUSES } from "../tabel/tabel-engine.pure";
 import { registerTimesheetNormRoutes, timesheetActorLabel } from "./timesheet.route.norm";
 
 const readRoles = [...ADMIN_AND_OPERATOR_LIKE_ROLES, "supervisor"] as const;
 const writeRoles = ADMIN_AND_OPERATOR_LIKE_ROLES;
 
-const statusEnum = z.enum(["worked", "half_day", "absent", "vacation", "sick", "holiday", "trip"]);
-const sourceEnum = z.enum(["manual", "gps", "mobile_login", "auto"]);
+const statusEnum = z.enum(ALL_ATTENDANCE_STATUSES);
+const sourceEnum = z.enum(ALL_ATTENDANCE_SOURCES);
 
 const patchBody = z.object({
   status: statusEnum,

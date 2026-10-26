@@ -16,12 +16,12 @@ import { env } from "../../config/env";
 import { actorUserIdOrNull } from "../../lib/request-actor";
 import { ensureTenantContext } from "../../lib/tenant-context";
 import { ADMIN_AND_OPERATOR_LIKE_ROLES } from "../../lib/tenant-user-roles";
+import { SETTINGS_PROFILE_WRITE_KEYS } from "../access/permission-settings-write";
 import { jwtAccessVerify, requireAnyPermission, requireRoles } from "../auth/auth.prehandlers";
 import { getTenantProfile, patchTenantProfile } from "./tenant-settings.service";
 import { buildInitialSetupExportBuffer } from "./initial-setup-export.service";
 import { mobileAppReleasePatchSchema, profilePatchSchema } from "./tenant-settings.route.schemas";
 
-const adminRoles = ["admin"] as const;
 const profileReadRoles = [...ADMIN_AND_OPERATOR_LIKE_ROLES, "supervisor"] as const;
 
 export async function registerTenantSettingsGeneralRoutes(app: FastifyInstance) {
@@ -74,7 +74,7 @@ export async function registerTenantSettingsGeneralRoutes(app: FastifyInstance) 
 
   app.patch(
     "/api/:slug/settings/profile",
-    { preHandler: [jwtAccessVerify, requireRoles(...adminRoles)] },
+    { preHandler: [jwtAccessVerify, requireAnyPermission([...SETTINGS_PROFILE_WRITE_KEYS])] },
     async (request, reply) => {
       if (!ensureTenantContext(request, reply)) return;
       const parsed = profilePatchSchema.safeParse(request.body);

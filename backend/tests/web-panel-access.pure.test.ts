@@ -6,7 +6,18 @@ import {
   isBrowserWebRequest,
   isMobileAppLogin
 } from "../src/modules/auth/web-panel-access";
-import { isWebPanelDeniedRole } from "../src/lib/tenant-user-roles";
+import { isExcludedFromAccessWebUsersList, isTenantAdminRole, isWebPanelDeniedRole } from "../src/lib/tenant-user-roles";
+
+describe("isExcludedFromAccessWebUsersList", () => {
+  it("hides admin and mobile-only KOMANDA from Доступ", () => {
+    expect(isTenantAdminRole("admin")).toBe(true);
+    expect(isTenantAdminRole("Admin")).toBe(true);
+    expect(isExcludedFromAccessWebUsersList("admin")).toBe(true);
+    expect(isExcludedFromAccessWebUsersList("agent")).toBe(true);
+    expect(isExcludedFromAccessWebUsersList("operator")).toBe(false);
+    expect(isExcludedFromAccessWebUsersList("supervisor")).toBe(false);
+  });
+});
 
 describe("isWebPanelDeniedRole", () => {
   it("blocks agent, expeditor, collector and van-seller aliases", () => {

@@ -43,6 +43,27 @@ function uniq(...lists: string[][]): string[] {
   return [...new Set(lists.flat())];
 }
 
+/** O‘zining mobil belgisi + shaxsiy ariza (agent, kassir, ombor…). */
+function tabelOwnPunch(): string[] {
+  return uniq(
+    secOnly("tabel", "mobilnaya_otmetka", ["view", "create"]),
+    secOnly("tabel", "zayavki", ["view", "create"])
+  );
+}
+
+/** Jamoa: jurnal, statistika, arizalarni tasdiqlash. */
+function tabelLeadView(): string[] {
+  return uniq(
+    tabelOwnPunch(),
+    secOnly("staff", "tabel", ["view"]),
+    secOnly("tabel", "otmetki", ["view"]),
+    secOnly("tabel", "statistika", ["view"]),
+    secOnly("tabel", "zayavki", ["view", "create", "approve"]),
+    secOnly("tabel", "smeny", ["view"]),
+    secOnly("tabel", "ustroystva", ["assign"])
+  );
+}
+
 /** Zakaz status o'tishlari (`orders.status_<slug>.*`, daraxtda «Статус»). */
 function orderStatus(...slugs: string[]): string[] {
   return slugs.flatMap((slug) => sec("orders", `status_${slug}`));
@@ -86,7 +107,8 @@ const PRESET_BUILDERS: Record<string, () => string[]> = {
       secOnly("work_slots", "raboche_mesto", ["view"]),
       secOnly("staff", "konsignatsiya", ["view"]),
       secOnly("plans", "ustanovka_planov", ["view"]),
-      secOnly("reports", "dnevnye_kpi_plany", ["view"])
+      secOnly("reports", "dnevnye_kpi_plany", ["view"]),
+      tabelOwnPunch()
     ),
 
   director: () =>
@@ -107,7 +129,11 @@ const PRESET_BUILDERS: Record<string, () => string[]> = {
       secOnly("staff", "sotrudniki", ["activate", "deactivate"]),
       secOnly("staff", "zarplaty", ["view", "copy", "approve", "status"]),
       sec("staff", "zadachi_spisok"),
-      sec("staff", "avans")
+      sec("staff", "avans"),
+      tabelLeadView(),
+      secOnly("tabel", "statistika", ["view", "export"]),
+      secOnly("tabel", "otmetki", ["view", "export"]),
+      secOnly("settings", "tabel_pravila", ["view"])
     ),
 
   sales_director: () =>
@@ -119,7 +145,8 @@ const PRESET_BUILDERS: Record<string, () => string[]> = {
       mod("plans"),
       secOnly("work_slots", "raboche_mesto", ["view", "update", "history"]),
       sec("staff", "zadachi_spisok"),
-      sec("staff", "avans")
+      sec("staff", "avans"),
+      tabelLeadView()
     ),
 
   regional_manager: () =>
@@ -131,7 +158,8 @@ const PRESET_BUILDERS: Record<string, () => string[]> = {
       sec("plans", "nastroyka_utverzhdayushchih"),
       secOnly("plans", "ustanovka_planov", ["view", "update", "approve"]),
       sec("staff", "zadachi_spisok"),
-      sec("staff", "avans")
+      sec("staff", "avans"),
+      tabelLeadView()
     ),
 
   commercial_director: () =>
@@ -140,7 +168,8 @@ const PRESET_BUILDERS: Record<string, () => string[]> = {
       mod("reports"),
       modViewOnly("orders"),
       modViewOnly("clients"),
-      mod("plans")
+      mod("plans"),
+      tabelLeadView()
     ),
 
   accountant: () =>
@@ -157,10 +186,14 @@ const PRESET_BUILDERS: Record<string, () => string[]> = {
       sec("staff", "avans_limity"),
       secOnly("staff", "avans", ["view", "copy"]),
       secOnly("staff", "tabel", ["view", "history"]),
-      secOnly("staff", "tabel_normativ", ["view"])
+      secOnly("staff", "tabel_normativ", ["view"]),
+      secOnly("tabel", "statistika", ["view"]),
+      secOnly("tabel", "otmetki", ["view"]),
+      secOnly("tabel", "zayavki", ["view"]),
+      secOnly("tabel", "obhodnye", ["view"])
     ),
 
-  cashier: () => uniq(mod("cash"), modViewOnly("orders"), modViewOnly("clients")),
+  cashier: () => uniq(mod("cash"), modViewOnly("orders"), modViewOnly("clients"), tabelOwnPunch()),
 
   warehouse_manager: () =>
     uniq(
@@ -168,7 +201,8 @@ const PRESET_BUILDERS: Record<string, () => string[]> = {
       mod("invoices"),
       modViewOnly("orders"),
       modViewOnly("suppliers"),
-      sec("staff", "skladchik")
+      sec("staff", "skladchik"),
+      tabelOwnPunch()
     ),
 
   /**
@@ -183,7 +217,8 @@ const PRESET_BUILDERS: Record<string, () => string[]> = {
       secOnly("warehouse", "peremeshchenie_filial", ["view", "create", "status", "transfer"]),
       secOnly("warehouse", "bloki", ["create", "update"]),
       secOnly("staff", "skladchik", ["view"]),
-      modViewOnly("invoices")
+      modViewOnly("invoices"),
+      tabelOwnPunch()
     ),
 
   skladchik: () =>
@@ -194,7 +229,8 @@ const PRESET_BUILDERS: Record<string, () => string[]> = {
       secOnly("warehouse", "peremeshchenie_filial", ["view", "create", "status", "transfer"]),
       secOnly("warehouse", "bloki", ["create", "update"]),
       secOnly("staff", "skladchik", ["view"]),
-      modViewOnly("invoices")
+      modViewOnly("invoices"),
+      tabelOwnPunch()
     ),
 
   // Agent — buyurtma yaratish, mijoz qo'shish, dashboard
@@ -210,7 +246,8 @@ const PRESET_BUILDERS: Record<string, () => string[]> = {
       secOnly("plans", "ustanovka_planov", ["view", "update"]),
       secOnly("reports", "dnevnye_kpi_plany", ["view"]),
       secOnly("staff", "kpi", ["view"]),
-      secOnly("staff", "tabel", ["view"])
+      secOnly("staff", "tabel", ["view"]),
+      tabelOwnPunch()
     ),
 
   // Supervisor — ko'rish + agentlar + buyurtma tasdiqlash zanjirida qatnashish
@@ -235,7 +272,8 @@ const PRESET_BUILDERS: Record<string, () => string[]> = {
       sec("gps", "trek"),
       sec("gps", "marshrut"),
       sec("staff", "zadachi_spisok"),
-      sec("staff", "avans")
+      sec("staff", "avans"),
+      tabelLeadView()
     ),
 
   expeditor: () =>
@@ -246,7 +284,8 @@ const PRESET_BUILDERS: Record<string, () => string[]> = {
       secOnly("clients", "foto", ["view", "create", "void"]),
       modViewOnly("invoices"),
       secOnly("cash", "zayavki_na_oplatu", ["view"]),
-      secOnly("cash", "dolgi_ekspeditora", ["view", "copy"])
+      secOnly("cash", "dolgi_ekspeditora", ["view", "copy"]),
+      tabelOwnPunch()
     ),
 
   auditor: () =>
@@ -255,14 +294,16 @@ const PRESET_BUILDERS: Record<string, () => string[]> = {
       sec("staff", "nastroyki_audita"),
       mod("audit"),
       modViewOnly("clients"),
-      modViewOnly("orders")
+      modViewOnly("orders"),
+      tabelOwnPunch()
     ),
 
-  collector: () => uniq(secOnly("cash", "zayavki_na_oplatu", ["view"]), secOnly("cash", "oplaty_klientov", ["view", "create", "export"])),
-  gruzchik: () => uniq(modViewOnly("invoices"), modViewOnly("warehouse")),
+  collector: () =>
+    uniq(secOnly("cash", "zayavki_na_oplatu", ["view"]), secOnly("cash", "oplaty_klientov", ["view", "create", "export"]), tabelOwnPunch()),
+  gruzchik: () => uniq(modViewOnly("invoices"), modViewOnly("warehouse"), tabelOwnPunch()),
   driver: () =>
-    uniq(modViewOnly("orders"), modViewOnly("invoices"), sec("gps", "dostavshchiki"), sec("gps", "trek"), sec("gps", "marshrut")),
-  dispatcher: () => uniq(modViewOnly("orders"), mod("gps"), sec("reports", "gps")),
+    uniq(modViewOnly("orders"), modViewOnly("invoices"), sec("gps", "dostavshchiki"), sec("gps", "trek"), sec("gps", "marshrut"), tabelOwnPunch()),
+  dispatcher: () => uniq(modViewOnly("orders"), mod("gps"), sec("reports", "gps"), tabelLeadView()),
   logist: () =>
     uniq(
       modViewOnly("orders"),
@@ -270,9 +311,10 @@ const PRESET_BUILDERS: Record<string, () => string[]> = {
       sec("gps", "trek"),
       sec("gps", "marshrut"),
       sec("reports", "gps"),
-      modViewOnly("warehouse")
+      modViewOnly("warehouse"),
+      tabelLeadView()
     ),
-  merchandiser: () => uniq(modViewOnly("clients"), secOnly("dashboard", "prodazhi", ["view"])),
+  merchandiser: () => uniq(modViewOnly("clients"), secOnly("dashboard", "prodazhi", ["view"]), tabelOwnPunch()),
   manager: () =>
     uniq(
       mod("dashboard"),
@@ -284,7 +326,8 @@ const PRESET_BUILDERS: Record<string, () => string[]> = {
       secOnly("work_slots", "raboche_mesto", ["view", "history"]),
       secOnly("staff", "konsignatsiya", ["view"]),
       sec("staff", "zadachi_spisok"),
-      sec("staff", "avans")
+      sec("staff", "avans"),
+      tabelLeadView()
     ),
   partner: () => uniq(modViewOnly("orders"), modViewOnly("clients")),
   storekeeper_view: () => modViewOnly("warehouse")

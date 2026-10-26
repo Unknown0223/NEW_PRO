@@ -84,7 +84,9 @@ const RULES: Rule[] = [
   { re: /^\/api\/[^/]+\/access\/users-bulk-patch$/, reason: "staff", target: tenantWide },
   { re: /^\/api\/[^/]+\/staff\/users\/(\d+)(\/|$)(?!face-reference)/, reason: "staff", target: userFromMatch },
   { re: /^\/api\/[^/]+\/work-slots(\/|$)/, reason: "work_slots", target: tenantWide },
-  { re: /^\/api\/[^/]+\/clients\/merge$/, reason: "clients_merge", target: tenantWide }
+  { re: /^\/api\/[^/]+\/clients\/merge$/, reason: "clients_merge", target: tenantWide },
+  { re: /^\/api\/[^/]+\/tabel(\/|$)/, reason: "tabel", target: tenantWide },
+  { re: /^\/api\/[^/]+\/mobile\/attendance(\/|$)/, reason: "tabel_punch", target: tenantWide }
 ];
 
 type TimesheetCell = { userId: number; year: number; month: number };

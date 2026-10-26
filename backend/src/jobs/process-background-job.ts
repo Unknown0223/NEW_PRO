@@ -207,5 +207,17 @@ export async function processBackgroundJob(job: Job): Promise<unknown> {
     return { ok: true, kind: "cleanup_old_logs", at: new Date().toISOString() };
   }
 
+  if (job.name === "tabel_retention_purge") {
+    const { purgeTabelMediaAndFaces } = await import("../modules/tabel/tabel-media-telegram.service");
+    const d = (job.data ?? {}) as { tenant_id?: number };
+    return purgeTabelMediaAndFaces(d.tenant_id);
+  }
+
+  if (job.name === "tabel_shift_close_sweep") {
+    const { closeEndedShiftsAndMarkAbsent } = await import("../modules/tabel/tabel-shift-close.service");
+    const d = (job.data ?? {}) as { tenant_id?: number };
+    return closeEndedShiftsAndMarkAbsent(d.tenant_id);
+  }
+
   throw new Error(`Неизвестная задача: ${job.name}`);
 }

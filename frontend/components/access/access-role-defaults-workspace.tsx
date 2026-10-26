@@ -19,6 +19,7 @@ import { isExcludedFromAccessWebUsersList, isWebPanelDeniedRole } from "@/lib/ac
 import { accessRoleDisplayName } from "@/lib/access-role-label";
 import { splitPermissionPath } from "@/lib/access-display";
 import { Button } from "@/components/ui/button";
+import { EmptyState } from "@/components/ui/empty-state";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { AccessBulkBottomBar } from "@/components/access/access-bulk-bottom-bar";
@@ -50,17 +51,6 @@ type CatalogRow = {
   description: string | null;
   parent_path: string;
 };
-
-function RoleDefaultsInfoEmptyState() {
-  return (
-    <div className="flex min-h-[min(280px,45vh)] flex-1 flex-col items-center justify-center gap-4 px-4 py-8">
-      <div className="flex size-16 items-center justify-center rounded-full bg-muted/80">
-        <Search className="size-7 text-muted-foreground/70" strokeWidth={1.25} aria-hidden />
-      </div>
-      <p className="text-center text-sm text-muted-foreground">Никакой информации не найдено!!!</p>
-    </div>
-  );
-}
 
 export function AccessRoleDefaultsWorkspace({
   tenantSlug,
@@ -495,7 +485,12 @@ export function AccessRoleDefaultsWorkspace({
 
       <div className="access-right-panel flex min-h-0 min-w-0 flex-col gap-3 overflow-hidden p-3 md:p-4">
         {!selectedRole ? (
-          <RoleDefaultsInfoEmptyState />
+          <EmptyState
+            className="min-h-[min(280px,45vh)] flex-1 border-0 bg-transparent"
+            icon={<Search className="size-7" strokeWidth={1.25} aria-hidden />}
+            title="Роль не выбрана"
+            description="Выберите роль слева, чтобы посмотреть настройки доступа."
+          />
         ) : catalogQ.isLoading ? (
           <div className="flex min-h-[min(200px,35vh)] flex-1 flex-col items-center justify-center px-4">
             <p className="text-sm text-muted-foreground">Загрузка каталога операций…</p>

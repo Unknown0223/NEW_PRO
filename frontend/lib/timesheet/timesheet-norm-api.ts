@@ -6,16 +6,47 @@ import { STALE } from "@/lib/query-stale";
 import { useAuthStore } from "@/lib/auth-store";
 import type { TabelAuditRecord } from "@/lib/tabel/tabel-api";
 
+export type AgentNormOverride = {
+  user_id: number;
+  enabled?: boolean;
+  start_date?: string;
+  open_amount?: number;
+  closed_amount?: number;
+  min_orders?: number;
+  half_day_ratio?: number;
+};
+
 export type AgentNormSettings = {
   enabled: boolean;
   start_date: string;
   open_amount: number;
   closed_amount: number;
+  min_orders?: number;
+  half_day_ratio?: number;
+  overrides?: AgentNormOverride[];
   updated_at: string | null;
   updated_by: string | null;
 };
 
-export type AgentNormSettingsInput = Omit<AgentNormSettings, "updated_at" | "updated_by"> & { comment?: string };
+export type AgentNormSettingsInput = {
+  enabled: boolean;
+  start_date: string;
+  open_amount: number;
+  closed_amount: number;
+  min_orders?: number;
+  half_day_ratio?: number;
+  overrides?: AgentNormOverride[];
+  comment?: string;
+};
+
+export function fmtNormSum(n: number): string {
+  return Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, " ");
+}
+
+export function parseNormSum(raw: string): number {
+  const n = Number(String(raw).replace(/\D/g, ""));
+  return Number.isFinite(n) ? n : 0;
+}
 
 export function useAgentNormSettings(enabled: boolean) {
   const tenantSlug = useAuthStore((s) => s.tenantSlug);

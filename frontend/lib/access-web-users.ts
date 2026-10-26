@@ -1,6 +1,12 @@
 /** Veb «Доступ» — mobil-only KOMANDA rollari (agent, expeditor, collector, auditor). */
 export const MOBILE_ONLY_KOMANDA_ROLES = ["agent", "expeditor", "collector", "auditor"] as const;
 
+export const TENANT_ADMIN_ROLE = "admin" as const;
+
+export function isTenantAdminRole(role: string | null | undefined): boolean {
+  return (role ?? "").trim().toLowerCase() === TENANT_ADMIN_ROLE;
+}
+
 /** Veb-panelga kira olmaydigan maydon rollari (faqat mobil ilova). Van-seller = agent. */
 export const WEB_PANEL_DENIED_ROLES = ["agent", "expeditor", "collector"] as const;
 
@@ -16,7 +22,7 @@ export function isWebPanelDeniedRole(role: string | null | undefined): boolean {
 }
 
 export function isExcludedFromAccessWebUsersList(role: string): boolean {
-  return isMobileOnlyKomandaRole(role);
+  return isMobileOnlyKomandaRole(role) || isTenantAdminRole(role);
 }
 
 export function filterAccessWebPanelUsers<T extends { role: string }>(rows: T[]): T[] {

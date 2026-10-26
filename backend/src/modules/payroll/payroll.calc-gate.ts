@@ -27,7 +27,12 @@ export async function usersWithPaySetup(tenantId: number, year: number, month: n
       distinct: ["user_id"]
     }),
     prisma.payrollFormula.findMany({
-      where: { tenant_id: tenantId, is_active: true, NOT: { role: null }, OR: [{ year: null }, { year, month }] },
+      where: {
+        tenant_id: tenantId,
+        is_active: true,
+        NOT: { role: null },
+        OR: [{ year: null }, { month: null }, { year, month }]
+      },
       select: { role: true }
     }),
     prisma.payrollScheme.findMany({

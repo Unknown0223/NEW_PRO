@@ -161,7 +161,14 @@ function emptyFact(userId: number): UserFact {
   return { user_id: userId, work_slot_id: null, byGroup: new Map(), total: { ...ZERO_METRICS }, returned_sum: 0 };
 }
 
-export const LEADER_ROLES = new Set(["supervisor", "manager", "regional_manager", "sales_director", "director"]);
+export const LEADER_ROLES = new Set([
+  "supervisor",
+  "manager",
+  "regional_manager",
+  "sales_director",
+  "commercial_director",
+  "director"
+]);
 
 async function memberGroups(tenantId: number, userId: number): Promise<Set<number>> {
   const rows = await prisma.kpiGroupAgent.findMany({

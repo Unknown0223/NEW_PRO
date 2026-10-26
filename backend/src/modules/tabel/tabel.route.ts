@@ -6,6 +6,8 @@ import { ADMIN_AND_OPERATOR_LIKE_ROLES } from "../../lib/tenant-user-roles";
 import { getAccessUser, jwtAccessVerify, requireRoles } from "../auth/auth.prehandlers";
 import { readTabelAudit } from "./tabel-audit";
 import { getWorkdayAccessStatus } from "./workday-access";
+import { registerTabelHubRoutes } from "./tabel.route.hub";
+import { registerTabelMobileRoutes } from "./tabel.route.mobile";
 import { prisma } from "../../config/database";
 import {
   WD_ROLES,
@@ -57,6 +59,8 @@ function actorLabel(request: FastifyRequest): string {
 }
 
 export async function registerTabelRoutes(app: FastifyInstance) {
+  await registerTabelHubRoutes(app);
+  await registerTabelMobileRoutes(app);
   // ─────────── Рабочие дни ───────────
   app.get(
     "/api/:slug/workdays",

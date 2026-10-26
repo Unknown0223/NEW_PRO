@@ -12,6 +12,7 @@ import { accessRoleLabel } from "@/lib/access-role-label";
 import { formatOpsCount } from "@/lib/access-history-summary";
 import { useAccessToast } from "@/components/access/permission-tree/access-save-bar";
 import { AccessUsersBulkOpsDialog } from "./access-users-bulk-ops-dialog";
+import { isExcludedFromAccessWebUsersList } from "@/lib/access-web-users";
 import type { AccessUserRow } from "./access-workspace.shared";
 import type { UseAccessWorkspaceReturn } from "./use-access-workspace";
 
@@ -23,6 +24,7 @@ export function filterAccessUsers(
 ): AccessUserRow[] {
   return rows.filter(
     (r) =>
+      !isExcludedFromAccessWebUsersList(r.role) &&
       (f.status === "all" || r.status === f.status) &&
       (!f.role || r.role === f.role) &&
       (f.manage === "all" || Boolean(r.has_access_manage) === (f.manage === "yes"))
