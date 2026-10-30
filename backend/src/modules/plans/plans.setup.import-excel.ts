@@ -8,6 +8,11 @@ import { getDirection, parseDecimalInput } from "./plans.setup.shared";
 import { ensurePlansAndTargets } from "./plans.setup.create";
 import { canRoleSetPlan } from "./plans.setup.roles";
 import type { PlansSetupImportBody } from "./plans.setup.schema";
+import { getActiveSlotForUser } from "../work-slots/work-slots.query.read";
+import {
+  resolveUserBySmartCodeForMonth,
+  type SmartCodeResolution
+} from "../work-slots/work-slots.holder-at-month";
 
 export type PlansImportApplyResult = {
   updated: number;
@@ -17,46 +22,19 @@ export type PlansImportApplyResult = {
   unknown_kpi_groups: string[];
 };
 
-async function resolveAgentIdBySmartCode(
+/** Slot kodi bo'lsa — reja oyida o'rinda bo'lgan agent (hozirgi ega emas). */
+async function resolveAgentBySmartCode(
   tenantId: number,
-  rawCode: string
-): Promise<number | null> {
-  const code = rawCode.trim();
-  if (!code) return null;
-
-  const byUserCode = await prisma.user.findFirst({
-    where: {
-      tenant_id: tenantId,
-      role: "agent",
-      is_active: true,
-      code: { equals: code, mode: "insensitive" }
-    },
-    select: { id: true }
+  rawCode: string,
+  year: number,
+  month: number
+): Promise<SmartCodeResolution | null> {
+  return resolveUserBySmartCodeForMonth(tenantId, rawCode, {
+    year,
+    month,
+    roles: ["agent"],
+    slotTypes: ["agent"]
   });
-  if (byUserCode) return byUserCode.id;
-
-  const slot = await prisma.workSlot.findFirst({
-    where: {
-      tenant_id: tenantId,
-      is_active: true,
-      slot_type: "agent",
-      slot_code: { equals: code, mode: "insensitive" }
-    },
-    select: { id: true }
-  });
-  if (!slot) return null;
-
-  const link = await prisma.slotUserLink.findFirst({
-    where: {
-      tenant_id: tenantId,
-      slot_id: slot.id,
-      ended_at: null,
-      user: { role: "agent", is_active: true }
-    },
-    select: { user_id: true },
-    orderBy: { started_at: "desc" }
-  });
-  return link?.user_id ?? null;
 }
 
 function buildMetricPatch(input: {
@@ -106,6 +84,7 @@ export async function applyPlansSetupImport(
   const unknown_kpi_groups: string[] = [];
   const resolvedRows: Array<{
     userId: number;
+    slotId: number | null;
     values: Array<{
       kpiGroupId: number;
       cost?: string | number | null;
@@ -117,11 +96,12 @@ export async function applyPlansSetupImport(
   }> = [];
 
   for (const row of input.rows) {
-    const userId = await resolveAgentIdBySmartCode(tenantId, row.smart_code);
-    if (userId == null) {
+    const resolved = await resolveAgentBySmartCode(tenantId, row.smart_code, input.year, input.month);
+    if (resolved == null) {
       missing_codes.push(row.smart_code.trim());
       continue;
     }
+    const userId = resolved.userId;
 
     const user = await prisma.user.findFirst({
       where: { id: userId, tenant_id: tenantId },
@@ -155,7 +135,7 @@ export async function applyPlansSetupImport(
         order_count: v.order_count
       });
     }
-    if (values.length > 0) resolvedRows.push({ userId, values });
+    if (values.length > 0) resolvedRows.push({ userId, slotId: resolved.slotId, values });
   }
 
   const userIds = [...new Set(resolvedRows.map((r) => r.userId))];
@@ -218,11 +198,13 @@ export async function applyPlansSetupImport(
         });
         updated += 1;
       } else {
+        const slotId = row.slotId ?? (await getActiveSlotForUser(row.userId))?.slot_id ?? null;
         await prisma.salesKpiPlanTarget.create({
           data: {
             tenant_id: tenantId,
             plan_id: planId,
             user_id: row.userId,
+            work_slot_id: slotId,
             cost: (patch.cost as Prisma.Decimal | undefined) ?? undefined,
             count: (patch.count as Prisma.Decimal | undefined) ?? undefined,
             volume: (patch.volume as Prisma.Decimal | undefined) ?? undefined,

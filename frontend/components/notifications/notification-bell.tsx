@@ -33,7 +33,7 @@ export function NotificationBell({ tenantSlug }: { tenantSlug: string | null }) 
     refetchInterval: 60_000,
     queryFn: async () => {
       const { data } = await api.get<{ data: NotifRow[]; unread_count: number }>(
-        `/api/${tenantSlug}/notifications?limit=30`
+        `/api/${tenantSlug}/notifications?unread_only=true&limit=30`
       );
       return data;
     }
@@ -99,18 +99,23 @@ export function NotificationBell({ tenantSlug }: { tenantSlug: string | null }) 
         >
           <div className="mb-2 flex items-center justify-between gap-2">
             <span className="text-xs font-semibold">Уведомления</span>
-            {unread > 0 ? (
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                className="h-7 text-xs"
-                disabled={readAll.isPending}
-                onClick={() => void readAll.mutate()}
-              >
-                Прочитать все
-              </Button>
-            ) : null}
+            <div className="flex items-center gap-1">
+              <Link href="/notifications" className="text-xs text-primary hover:underline" onClick={() => setOpen(false)}>
+                Все
+              </Link>
+              {unread > 0 ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 text-xs"
+                  disabled={readAll.isPending}
+                  onClick={() => void readAll.mutate()}
+                >
+                  Очистить
+                </Button>
+              ) : null}
+            </div>
           </div>
           <div className="max-h-[24rem] space-y-1 overflow-y-auto text-xs">
             {q.isLoading ? (

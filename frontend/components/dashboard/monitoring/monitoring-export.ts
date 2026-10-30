@@ -16,7 +16,7 @@ export async function exportMonitoringXlsx(
   const px = `sales-monitoring-${tenantSlug}-${applied.year}-${String(applied.month).padStart(2, "0")}`;
   await exportSheetsToXlsx(px, [
     {
-      name: "Summary",
+      name: "Сводка",
       rows: [
         ["Показатель", "Значение"],
         ["Заказы", snap.summary?.orders_count ?? ""],

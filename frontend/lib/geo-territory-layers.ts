@@ -11,9 +11,9 @@ export const TERRITORY_LAYER_COLORS: Record<TerritoryLayer, string> = {
 };
 
 export const DEFAULT_LAYER_LABELS: Record<TerritoryLayer, string> = {
-  zona: "Zona",
-  oblast: "Oblast",
-  gorod: "Gorod"
+  zona: "Зона",
+  oblast: "Область",
+  gorod: "Город"
 };
 
 /** Daraxt chuqurligi → qatlam (3 darajali Zona/Oblast/Gorod). */

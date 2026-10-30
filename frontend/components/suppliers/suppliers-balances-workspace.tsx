@@ -16,6 +16,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useUserTablePrefs } from "@/hooks/use-user-table-prefs";
 import { api } from "@/lib/api";
+import { usePermissions } from "@/lib/use-permissions";
 import { useAuthStore, useAuthStoreHydrated, useEffectiveRole } from "@/lib/auth-store";
 import { isAdminOrOperatorLikeRole } from "@/lib/distribution-roles";
 import { downloadXlsxSheet } from "@/lib/download-xlsx";
@@ -73,6 +74,7 @@ function parseBalAmount(v: string): number {
 
 export function SuppliersBalancesWorkspace() {
   const tenantSlug = useAuthStore((s) => s.tenantSlug);
+  const canExport = usePermissions().has("suppliers.balansy.export");
   const hydrated = useAuthStoreHydrated();
   const role = useEffectiveRole();
   const qc = useQueryClient();
@@ -325,17 +327,19 @@ export function SuppliersBalancesWorkspace() {
             </Button>
           </div>
           <div className="flex shrink-0 flex-wrap items-center gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              disabled={exporting}
-              className="h-9 gap-1 border-green-600/40 text-green-700 hover:bg-green-50 dark:text-green-400 dark:hover:bg-green-950/30"
-              onClick={() => void exportXlsx()}
-            >
-              <Download className="size-3.5" />
-              {exporting ? "…" : "Excel"}
-            </Button>
+            {canExport ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={exporting}
+                className="h-9 gap-1 border-green-600/40 text-green-700 hover:bg-green-50 dark:text-green-400 dark:hover:bg-green-950/30"
+                onClick={() => void exportXlsx()}
+              >
+                <Download className="size-3.5" />
+                {exporting ? "…" : "Excel"}
+              </Button>
+            ) : null}
             <Button type="button" variant="outline" size="icon" className="h-9 w-9" title="Обновить" onClick={() => void listQ.refetch()}>
               <RefreshCw className={cn("size-4", listQ.isFetching && "animate-spin")} />
             </Button>

@@ -6,8 +6,10 @@ import '../../core/notifications/mobile_local_notification_service.dart';
 import '../../features/auth/auth_provider.dart';
 import '../../routing/app_router.dart';
 import 'app_update_dialog.dart';
+import 'app_update_info.dart';
 
 /// Login/bootstrap va sinхрон tugagach versiya dialogi + bildirishnoma.
+/// Bir vaqtda faqat bitta yangilash oynasi (ustma-ust ochilmasin).
 class AppUpdateListener extends ConsumerStatefulWidget {
   final Widget child;
 
@@ -19,6 +21,10 @@ class AppUpdateListener extends ConsumerStatefulWidget {
 
 class _AppUpdateListenerState extends ConsumerState<AppUpdateListener>
     with WidgetsBindingObserver {
+  /// Sync flag — postFrame dan oldin qo‘yiladi (race yo‘q).
+  bool _dialogLocked = false;
+  AppUpdateInfo? _lockedFor;
+
   @override
   void initState() {
     super.initState();
@@ -44,8 +50,10 @@ class _AppUpdateListenerState extends ConsumerState<AppUpdateListener>
       return;
     }
     if (!MobileLocalNotificationService.isAppUpdatePayload(payload)) return;
+    // Dialog allaqachon ochiq — qayta ochilmasin.
+    if (_dialogLocked || isAppUpdateDialogInFlight) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
+      if (!mounted || _dialogLocked || isAppUpdateDialogInFlight) return;
       ref.read(authStateProvider.notifier).openAppUpdateFromNotification();
     });
   }
@@ -55,11 +63,41 @@ class _AppUpdateListenerState extends ConsumerState<AppUpdateListener>
     if (state == AppLifecycleState.resumed) {
       WidgetsBinding.instance.addPostFrameCallback((_) async {
         if (!mounted) return;
-        // Versiya keshini har resume da tozalamaymiz — PackageInfo kechiksa
-        // 0.0.0 → soxta majburiy yangilash chiqardi.
+        if (_dialogLocked || isAppUpdateDialogInFlight) return;
         await ref.read(authStateProvider.notifier).resumeDeferredAppUpdate();
       });
     }
+  }
+
+  void _scheduleDialog(AppUpdateInfo info, {required bool afterSync}) {
+    if (_dialogLocked || isAppUpdateDialogInFlight) return;
+    if (_lockedFor == info) return;
+
+    // Sync band qilish — bir nechta listen / postFrame race’ini to‘xtatadi.
+    _dialogLocked = true;
+    _lockedFor = info;
+
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) {
+        _dialogLocked = false;
+        _lockedFor = null;
+        return;
+      }
+      var proceed = !info.required;
+      try {
+        proceed = await showAppUpdateDialog(
+          info,
+          blocking: info.required,
+          afterSync: afterSync,
+        );
+      } finally {
+        _dialogLocked = false;
+        _lockedFor = null;
+      }
+
+      if (!mounted) return;
+      ref.read(authStateProvider.notifier).resolveAppUpdateGate(proceed: proceed);
+    });
   }
 
   @override
@@ -68,22 +106,7 @@ class _AppUpdateListenerState extends ConsumerState<AppUpdateListener>
       final info = next.pendingAppUpdate;
       if (info == null || !info.hasAction) return;
       if (prev?.pendingAppUpdate == info) return;
-
-      WidgetsBinding.instance.addPostFrameCallback((_) async {
-        if (!mounted) return;
-        final proceed = await showAppUpdateDialog(
-          info,
-          blocking: info.required,
-          afterSync: next.appUpdateAfterSync,
-        );
-
-        if (!mounted) return;
-
-        // «Позже» (proceed=true, optional) — qayta bildirishnoma spam qilmasin.
-        // Bildirishnoma faqat fon/kechiktirilgan yangilashda yuboriladi.
-
-        ref.read(authStateProvider.notifier).resolveAppUpdateGate(proceed: proceed);
-      });
+      _scheduleDialog(info, afterSync: next.appUpdateAfterSync);
     });
 
     return widget.child;

@@ -5,7 +5,8 @@ import { cn } from "@/lib/utils";
 
 const SALES_DATE_TYPE_OPTIONS: Array<{ value: SalesDateType; label: string }> = [
   { value: "order_date", label: "Дата заявки" },
-  { value: "shipment_date", label: "Дата отгрузки" }
+  { value: "shipment_date", label: "Дата отгрузки" },
+  { value: "delivery_date", label: "Дата доставки" }
 ];
 
 export function SalesDateTypeFieldset({

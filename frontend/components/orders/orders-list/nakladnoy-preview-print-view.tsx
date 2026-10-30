@@ -1,6 +1,10 @@
 "use client";
 
 import { NakladnoyPreview520Body } from "@/components/orders/orders-list/nakladnoy-preview-520-body";
+import {
+  NAKLADNOY_PAPER_MARGIN_MM,
+  NakladnoyPagedGrid
+} from "@/components/orders/orders-list/nakladnoy-paged-grid";
 import { NakladnoyPreviewGrid } from "@/components/orders/orders-list/nakladnoy-preview-grid";
 import type { BulkExportTemplateDef } from "@/lib/bulk-export-templates";
 import { resolveNakladnoyPrintLayout } from "@/lib/nakladnoy-print-layout";
@@ -37,6 +41,7 @@ export function NakladnoyPreviewPrintView({ preview, template, onClose }: Props)
 
   const pageSize =
     layout.orientation === "landscape" ? "A4 landscape" : "A4 portrait";
+  const paged = preview.pages.some((p) => p.grid?.pageBreakAfterRows);
 
   const content = (
     <div
@@ -47,7 +52,7 @@ export function NakladnoyPreviewPrintView({ preview, template, onClose }: Props)
       <style>{`
         @page {
           size: ${pageSize};
-          margin: 8mm;
+          margin: ${NAKLADNOY_PAPER_MARGIN_MM}mm;
         }
         @media print {
           html, body {
@@ -76,6 +81,11 @@ export function NakladnoyPreviewPrintView({ preview, template, onClose }: Props)
           .nakladnoy-print-sheet {
             break-inside: avoid;
             page-break-inside: avoid;
+          }
+          .nakladnoy-print-sheet.nakladnoy-print-sheet-paged {
+            break-inside: auto;
+            page-break-inside: auto;
+            margin-top: 0 !important;
           }
           .nakladnoy-print-sheet + .nakladnoy-print-sheet {
             break-before: page;
@@ -132,7 +142,7 @@ export function NakladnoyPreviewPrintView({ preview, template, onClose }: Props)
         </span>
       </div>
 
-      <header className="mb-2 text-left">
+      <header className={cn("mb-2 text-left", paged && "nakladnoy-print-no-print")}>
         <h1 className="text-sm font-bold leading-tight">{preview.label}</h1>
         <p className="text-[10px] text-neutral-600">
           {new Date().toLocaleString("ru-RU")}
@@ -143,10 +153,19 @@ export function NakladnoyPreviewPrintView({ preview, template, onClose }: Props)
       {preview.pages.map((page, pi) => (
         <section
           key={`${page.sheetName}-${pi}`}
-          className={cn("nakladnoy-print-sheet", pi > 0 && "mt-4")}
+          className={cn(
+            "nakladnoy-print-sheet",
+            page.grid?.pageBreakAfterRows && "nakladnoy-print-sheet-paged",
+            pi > 0 && "mt-4"
+          )}
         >
           {preview.pages.length > 1 ? (
-            <h2 className="mb-1 border-b border-neutral-400 pb-0.5 text-xs font-semibold">
+            <h2
+              className={cn(
+                "mb-1 border-b border-neutral-400 pb-0.5 text-xs font-semibold",
+                page.grid?.pageBreakAfterRows && "nakladnoy-print-no-print"
+              )}
+            >
               {page.sheetName}
             </h2>
           ) : null}
@@ -159,6 +178,8 @@ export function NakladnoyPreviewPrintView({ preview, template, onClose }: Props)
           >
             {page.kind === "structured-520" && page.loading520 ? (
               <NakladnoyPreview520Body data={page.loading520} />
+            ) : page.kind === "grid" && page.grid?.pageBreakAfterRows ? (
+              <NakladnoyPagedGrid grid={page.grid} orientation={layout.orientation} showPaperLabels />
             ) : page.kind === "grid" && page.grid ? (
               <NakladnoyPreviewGrid
                 rows={page.grid.rows}

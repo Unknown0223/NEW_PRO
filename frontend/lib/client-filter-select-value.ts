@@ -77,3 +77,16 @@ export function appendStringListParam(params: URLSearchParams, key: string, raw:
   if (items.length === 1) params.set(key, items[0]!);
   else params.set(`${key}s`, items.join(","));
 }
+
+/** Explicit singular/plural keys (category → categories, not categorys). */
+export function appendNamedStringListParam(
+  params: URLSearchParams,
+  singleKey: string,
+  multiKey: string,
+  raw: string
+): void {
+  const items = splitMultiFilterValues(raw);
+  if (items.length === 0) return;
+  if (items.length === 1) params.set(singleKey, items[0]!);
+  else params.set(multiKey, items.join(","));
+}

@@ -26,21 +26,40 @@ jobs:
           ref: ${{ github.event_name == 'workflow_dispatch' && inputs.ref || github.ref }}
 
       - name: Deploy backend (Railway staging)
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          RAILWAY_SERVICE_ID: ${{ secrets.RAILWAY_SERVICE_ID }}
         run: |
-          echo "Deploy staging backend from ref: ${{ github.sha }}"
-          echo "Set RAILWAY_TOKEN + RAILWAY_SERVICE_ID in GitHub staging environment."
-          echo "Suggested: railway up --service backend --environment staging"
+          if [ -z "$RAILWAY_TOKEN" ] || [ -z "$RAILWAY_SERVICE_ID" ]; then
+            echo "RAILWAY_TOKEN yoki RAILWAY_SERVICE_ID yo'q — staging backend deploy qilinmadi."
+            echo "Echo bilan yashil hisoblanmaydi. Secretlar qo'yilguncha workflow yiqiladi."
+            exit 1
+          fi
+          echo "Token bor, lekin bu workflow hali haqiqiy railway up chaqirmaydi."
+          echo "Noto'g'ri service ga yuklash xavfli. Deploy skripti alohida ulanadi."
+          exit 1
 
       - name: Deploy frontend (Railway staging)
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          RAILWAY_FRONTEND_SERVICE_ID: ${{ secrets.RAILWAY_FRONTEND_SERVICE_ID }}
         run: |
-          echo "Deploy staging frontend from ref: ${{ github.sha }}"
-          echo "Suggested: railway up --service frontend --environment staging"
+          if [ -z "$RAILWAY_TOKEN" ] || [ -z "$RAILWAY_FRONTEND_SERVICE_ID" ]; then
+            echo "RAILWAY_TOKEN yoki RAILWAY_FRONTEND_SERVICE_ID yo'q — staging frontend deploy qilinmadi."
+            exit 1
+          fi
+          echo "Token bor, lekin frontend railway up hali ulanmagan."
+          exit 1
 
       - name: Run migrations
         if: ${{ !inputs.skip_migrations }}
         env:
           DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
         run: |
+          if [ -z "$DATABASE_URL" ]; then
+            echo "STAGING_DATABASE_URL yo'q — migratsiya o'tkazib yuborilmadi, workflow yiqildi."
+            exit 1
+          fi
           cd backend
           npm ci
           npx prisma migrate deploy
@@ -49,11 +68,11 @@ jobs:
         env:
           STAGING_HEALTH_URL: ${{ vars.STAGING_HEALTH_URL }}
         run: |
-          if [ -n "$STAGING_HEALTH_URL" ]; then
-            curl -sf "$STAGING_HEALTH_URL" | head -c 500
-          else
-            echo "STAGING_HEALTH_URL not configured — skip smoke"
+          if [ -z "$STAGING_HEALTH_URL" ]; then
+            echo "STAGING_HEALTH_URL yo'q — smoke tekshiruvsiz yashil bo'lib bo'lmaydi."
+            exit 1
           fi
+          curl -sf "$STAGING_HEALTH_URL" | head -c 500
 
       - name: Rollback hint
         if: failure()

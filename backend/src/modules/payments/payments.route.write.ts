@@ -1,6 +1,8 @@
 import type { FastifyInstance } from "fastify";
 import {
   batchConfirmPaymentsBodySchema,
+  batchRejectPaymentsBodySchema,
+  batchReturnPaymentsBodySchema,
   createOrderCashInBodySchema,
   createPaymentBodySchema,
   parseOptPositiveInt,
@@ -33,7 +35,9 @@ import {
   listPaymentsForClient,
   listPaymentsForOrder,
   rejectPendingPayment,
+  rejectPendingPaymentsBatch,
   returnPaymentToExpeditor,
+  returnPaymentsToExpeditorBatch,
   updatePayment
 } from "./payments.service";
 import {
@@ -63,7 +67,7 @@ export async function registerPaymentWriteRoutes(app: FastifyInstance) {
           request,
           400,
           "ValidationError",
-          "Invalid request body",
+          "Некорректные данные запроса",
           zodValidationExtras(parsed.error)
         );
       }
@@ -84,13 +88,22 @@ export async function registerPaymentWriteRoutes(app: FastifyInstance) {
         if (msg === "AGENT_OUT_OF_SCOPE") return sendApiError(reply, request, 403, "AgentOutOfScope");
         if (msg === "NOT_FOUND") return sendApiError(reply, request, 404, "NotFound");
         if (msg === "PAYMENT_VOIDED") return sendApiError(reply, request, 409, "PaymentVoided");
-        if (msg === "EMPTY_PATCH") return sendApiError(reply, request, 400, "ValidationError", "Empty patch");
+        if (msg === "EMPTY_PATCH") return sendApiError(reply, request, 400, "ValidationError", "Нет данных для изменения");
         if (msg === "BAD_AMOUNT") return sendApiError(reply, request, 400, "BadAmount");
         if (msg === "BAD_PAYMENT_TYPE") return sendApiError(reply, request, 400, "BadPaymentType");
         if (msg === "BAD_CASH_DESK") return sendApiError(reply, request, 400, "BadCashDesk");
         if (msg === "BAD_PAID_AT") return sendApiError(reply, request, 400, "BadPaidAt");
         if (msg === "BAD_ORDER") return sendApiError(reply, request, 400, "BadOrder");
         if (msg === "BAD_EXPEDITOR") return sendApiError(reply, request, 400, "BadExpeditor");
+        if (msg === "EXPEDITOR_NOT_ON_SLOT") {
+          return sendApiError(
+            reply,
+            request,
+            403,
+            "ExpeditorNotOnSlot",
+            "Экспедитор не назначен на рабочее место — назначение запрещено"
+          );
+        }
         if (msg === "BAD_EXPEDITOR_SCOPE") return sendApiError(reply, request, 400, "BadExpeditorScope");
         if (msg === "BAD_LEDGER_AGENT") return sendApiError(reply, request, 400, "BadLedgerAgent");
         if (msg === "ORDER_LOCKED_BY_ALLOCATIONS") {
@@ -182,7 +195,7 @@ export async function registerPaymentWriteRoutes(app: FastifyInstance) {
           request,
           400,
           "ValidationError",
-          "Invalid request body",
+          "Некорректные данные запроса",
           zodValidationExtras(parsed.error)
         );
       }
@@ -225,7 +238,7 @@ export async function registerPaymentWriteRoutes(app: FastifyInstance) {
           request,
           400,
           "ValidationError",
-          "Invalid request body",
+          "Некорректные данные запроса",
           zodValidationExtras(parsed.error)
         );
       }
@@ -269,7 +282,7 @@ export async function registerPaymentWriteRoutes(app: FastifyInstance) {
           request,
           400,
           "ValidationError",
-          "Invalid request body",
+          "Некорректные данные запроса",
           zodValidationExtras(parsed.error)
         );
       }
@@ -315,7 +328,7 @@ export async function registerPaymentWriteRoutes(app: FastifyInstance) {
           request,
           400,
           "ValidationError",
-          "Invalid request body",
+          "Некорректные данные запроса",
           zodValidationExtras(parsed.error)
         );
       }
@@ -327,6 +340,75 @@ export async function registerPaymentWriteRoutes(app: FastifyInstance) {
           request.tenant!.id,
           parsed.data.ids,
           actorUserIdOrNull(request)
+        );
+        return reply.send(result);
+      } catch (e) {
+        if (isDocumentEditPeriodLockedError(e)) return sendDocumentEditPeriodLocked(reply, request);
+        throw e;
+      }
+    }
+  );
+
+  app.post(
+    "/api/:slug/payments/batch-reject",
+    { preHandler: [jwtAccessVerify, requireRoles(...catalogRoles)], ...writeApiRateLimitRouteOpts },
+    async (request, reply) => {
+      if (!ensureTenantContext(request, reply)) return;
+      const parsed = batchRejectPaymentsBodySchema.safeParse(request.body ?? {});
+      if (!parsed.success) {
+        return sendApiError(
+          reply,
+          request,
+          400,
+          "ValidationError",
+          "Некорректные данные запроса",
+          zodValidationExtras(parsed.error)
+        );
+      }
+      try {
+        for (const paymentId of parsed.data.ids) {
+          await assertDocWritableById(request, "payments", paymentId);
+        }
+        const result = await rejectPendingPaymentsBatch(
+          request.tenant!.id,
+          parsed.data.ids,
+          actorUserIdOrNull(request),
+          parsed.data.reason ?? null
+        );
+        return reply.send(result);
+      } catch (e) {
+        if (isDocumentEditPeriodLockedError(e)) return sendDocumentEditPeriodLocked(reply, request);
+        throw e;
+      }
+    }
+  );
+
+  app.post(
+    "/api/:slug/payments/batch-return-to-expeditor",
+    { preHandler: [jwtAccessVerify, requireRoles(...catalogRoles)], ...writeApiRateLimitRouteOpts },
+    async (request, reply) => {
+      if (!ensureTenantContext(request, reply)) return;
+      const parsed = batchReturnPaymentsBodySchema.safeParse(request.body ?? {});
+      if (!parsed.success) {
+        return sendApiError(
+          reply,
+          request,
+          400,
+          "ValidationError",
+          "Некорректные данные запроса",
+          zodValidationExtras(parsed.error)
+        );
+      }
+      try {
+        for (const paymentId of parsed.data.ids) {
+          await assertDocWritableById(request, "payments", paymentId);
+        }
+        const result = await returnPaymentsToExpeditorBatch(
+          request.tenant!.id,
+          parsed.data.ids,
+          actorUserIdOrNull(request),
+          parsed.data.reason ?? null,
+          parsed.data.duration_minutes ?? null
         );
         return reply.send(result);
       } catch (e) {

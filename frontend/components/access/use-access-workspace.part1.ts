@@ -117,7 +117,7 @@ export function useAccessWorkspacePart1({ tenantSlug }: { tenantSlug: string }) 
     /** «Операции/кассы…» — chapda `dimensions`; ikki og‘ir GET kerak emas (terminaldagi 120+ ms). */
     enabled: Boolean(tenantSlug) && tab === "users",
     queryFn: async () => {
-      const p = new URLSearchParams();
+      const p = new URLSearchParams({ include_access_manage: "true" });
       if (search.trim()) p.set("search", search.trim());
       /** `is_active` yo‘q — backend barcha foydalanuvchilarni bitta so‘rovda qaytaradi; filtr — clientda. */
       const { data } = await api.get<{ data: AccessUserRow[] }>(

@@ -29,6 +29,8 @@ import {
 } from "./returns-enhanced.service";
 import { acceptSalesReturn, rejectSalesReturn } from "./returns-enhanced.accept";
 import { acceptDailyReturnWaybill } from "./returns-daily-waybills";
+import { ensureAnyPermission } from "../access/ensure-any-permission";
+import { returnCreatePermission } from "../orders/order-create-permissions";
 const catalogRoles = ADMIN_AND_OPERATOR_LIKE_ROLES;
 
 const priceTypeOptional = z.string().trim().min(1).max(128).optional().nullable();
@@ -41,6 +43,8 @@ const createBody = z.object({
   refund_amount: z.number().positive().nullable().optional(),
   note: z.string().max(2000).optional().nullable(),
   refusal_reason_ref: z.string().trim().max(128).optional().nullable(),
+  /** Ixtiyoriy vazvrat ID (har qanday matn); bo‘sh → avto R-… */
+  number: z.string().trim().min(1).max(48).optional().nullable(),
   lines: z
     .array(
       z.object({
@@ -127,7 +131,7 @@ function sendReturnNotInterchangeable(reply: FastifyReply, request: FastifyReque
     request,
     400,
     "ReturnNotInterchangeable",
-    "Mahsulot faol interchangeable guruhda emas yoki tanlangan narx turi guruh bilan mos emas. Katalogda guruhni tekshiring.",
+    "Товар не входит в активную группу взаимозаменяемых товаров или выбранный тип цены не соответствует группе. Проверьте группу в каталоге.",
     pid != null ? { product_id: pid } : undefined
   );
 }
@@ -176,6 +180,7 @@ export async function registerSalesReturnWriteRoutes(app: FastifyInstance) {
           zodValidationExtras(parsed.error)
         );
       }
+      if (!(await ensureAnyPermission(request, reply, [returnCreatePermission(parsed.data.order_id)]))) return;
       try {
         await assertDocWritableByDate(request, "returns", new Date());
         const data = await createPeriodReturn(request.tenant!.id, parsed.data, actorUserIdOrNull(request));
@@ -384,6 +389,7 @@ export async function registerSalesReturnWriteRoutes(app: FastifyInstance) {
           zodValidationExtras(parsed.error)
         );
       }
+      if (!(await ensureAnyPermission(request, reply, [returnCreatePermission(parsed.data.order_id)]))) return;
       try {
         await assertDocWritableByDate(request, "returns", new Date());
         const row = await createSalesReturn(request.tenant!.id, parsed.data, actorUserIdOrNull(request));
@@ -400,6 +406,14 @@ export async function registerSalesReturnWriteRoutes(app: FastifyInstance) {
         if (msg === "EMPTY_LINES") return sendApiError(reply, request, 400, "EmptyLines");
         if (msg === "REFUND_NEEDS_CLIENT") return sendApiError(reply, request, 400, "RefundNeedsClient");
         if (msg === "RETURN_NOT_INTERCHANGEABLE") return sendReturnNotInterchangeable(reply, request, e);
+        if (
+          typeof e === "object" &&
+          e != null &&
+          "code" in e &&
+          (e as { code?: string }).code === "P2002"
+        ) {
+          return sendApiError(reply, request, 409, "DuplicateReturnNumber");
+        }
         throw e;
       }
     }

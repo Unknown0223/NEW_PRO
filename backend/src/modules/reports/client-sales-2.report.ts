@@ -75,7 +75,7 @@ export async function getClientSales2Report(tenantId: number, f: ClientSales2Fil
         SELECT
           COALESCE(SUM(oi.total), 0)::numeric(15,2) AS item_amount,
           COALESCE(SUM(oi.qty), 0)::numeric(15,3) AS item_qty,
-          COALESCE(SUM(oi.qty), 0)::numeric(15,3) AS item_volume,
+          COALESCE(SUM(oi.qty * COALESCE(p.volume_m3, 0)), 0)::numeric(15,6) AS item_volume,
           COUNT(*)::int AS item_count
         FROM order_items oi
         JOIN products p ON p.id = oi.product_id
@@ -134,7 +134,7 @@ export async function getClientSales2Report(tenantId: number, f: ClientSales2Fil
         SELECT
           COALESCE(SUM(oi.total), 0)::numeric(15,2) AS item_amount,
           COALESCE(SUM(oi.qty), 0)::numeric(15,3) AS item_qty,
-          COALESCE(SUM(oi.qty), 0)::numeric(15,3) AS item_volume,
+          COALESCE(SUM(oi.qty * COALESCE(p.volume_m3, 0)), 0)::numeric(15,6) AS item_volume,
           COUNT(*)::int AS item_count
         FROM order_items oi
         JOIN products p ON p.id = oi.product_id
@@ -188,7 +188,7 @@ export async function getClientSales2Report(tenantId: number, f: ClientSales2Fil
         SELECT
           COALESCE(SUM(oi.total), 0)::numeric(15,2) AS item_amount,
           COALESCE(SUM(oi.qty), 0)::numeric(15,3) AS item_qty,
-          COALESCE(SUM(oi.qty), 0)::numeric(15,3) AS item_volume,
+          COALESCE(SUM(oi.qty * COALESCE(p.volume_m3, 0)), 0)::numeric(15,6) AS item_volume,
           COUNT(*)::int AS item_count
         FROM order_items oi
         JOIN products p ON p.id = oi.product_id
@@ -230,9 +230,63 @@ export async function getClientSales2Report(tenantId: number, f: ClientSales2Fil
       COUNT(DISTINCT c.id)::bigint AS okb
     FROM clients c
     WHERE ${clientScopeSql}
+      AND c.is_active = true
+      AND c.merged_into_client_id IS NULL
     GROUP BY c.agent_id
   `;
   const okbMap = new Map(okbRows.map((r) => [String(r.agent_id ?? 0), Number(r.okb)]));
+
+  const categoryOkbRows = await prisma.$queryRaw<Array<{ category: string; okb: bigint }>>`
+    SELECT COALESCE(NULLIF(c.category, ''), '—') AS category, COUNT(*)::bigint AS okb
+    FROM clients c
+    WHERE ${clientScopeSql}
+      AND c.is_active = true
+      AND c.merged_into_client_id IS NULL
+    GROUP BY 1
+  `;
+  const categoryAkbRows = await prisma.$queryRaw<Array<{ category: string; akb: bigint; amount: Prisma.Decimal }>>`
+    WITH status_logs AS (
+      SELECT
+        sl.order_id,
+        MIN(CASE WHEN sl.to_status = 'delivering' THEN sl.created_at END) AS shipped_at,
+        MIN(CASE WHEN sl.to_status = 'delivered' THEN sl.created_at END) AS delivered_at
+      FROM order_status_logs sl
+      GROUP BY sl.order_id
+    ),
+    filtered_orders AS (
+      SELECT o.client_id, COALESCE(NULLIF(c.category, ''), '—') AS category, COALESCE(it.item_amount, 0)::numeric(15,2) AS amount
+      FROM orders o
+      JOIN clients c ON c.id = o.client_id
+      LEFT JOIN status_logs sl ON sl.order_id = o.id
+      LEFT JOIN LATERAL (
+        SELECT COUNT(*)::int AS item_count,
+          COALESCE(SUM(oi.total), 0)::numeric(15,2) AS item_amount
+        FROM order_items oi
+        JOIN products p ON p.id = oi.product_id
+        WHERE oi.order_id = o.id
+        ${itemSql}
+      ) it ON true
+      WHERE ${whereSql}
+        AND c.is_active = true
+        AND c.merged_into_client_id IS NULL
+        ${hasItemFilter ? Prisma.sql`AND COALESCE(it.item_count, 0) > 0` : Prisma.empty}
+    )
+    SELECT category, COUNT(DISTINCT client_id)::bigint AS akb, COALESCE(SUM(amount), 0)::numeric(15,2) AS amount
+    FROM filtered_orders
+    GROUP BY category
+  `;
+  const akbByCategory = new Map(categoryAkbRows.map((r) => [r.category, { akb: Number(r.akb), amount: r.amount.toString() }]));
+  const categorySummary = categoryOkbRows.map((r) => ({
+    category: r.category,
+    okb: Number(r.okb),
+    akb: akbByCategory.get(r.category)?.akb ?? 0,
+    amount: akbByCategory.get(r.category)?.amount ?? "0"
+  }));
+  for (const row of categoryAkbRows) {
+    if (!categorySummary.some((x) => x.category === row.category)) {
+      categorySummary.push({ category: row.category, okb: 0, akb: Number(row.akb), amount: row.amount.toString() });
+    }
+  }
 
   return {
     clients: listRows.map((r) => ({
@@ -248,6 +302,7 @@ export async function getClientSales2Report(tenantId: number, f: ClientSales2Fil
       territory: r.territory ?? "—",
       phone: r.phone ?? ""
     })),
+    category_summary: categorySummary,
     agents_summary: agentRows.map((r) => {
       const okb = okbMap.get(String(r.agent_id ?? 0)) ?? 0;
       const akb = Number(r.akb ?? 0n);

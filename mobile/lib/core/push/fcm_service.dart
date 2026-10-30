@@ -80,13 +80,17 @@ class OfflineFlushService {
           failed++;
           continue;
         }
+        final clientId = item['client_id'] as int;
+        final createdAt = DateTime.tryParse(item['created_at']?.toString() ?? '');
         await _mobileApi.enqueueOrder(
           _slug,
-          clientId: item['client_id'] as int,
+          clientId: clientId,
           warehouseId: warehouseId,
           items: items,
           priceType: item['price_type']?.toString(),
           comment: item['comment']?.toString(),
+          visit: await _db.findVisitGeoForClient(clientId, at: createdAt),
+          createdAt: createdAt,
         );
 
         await _db.markQueueItemSent(item['id'] as int);

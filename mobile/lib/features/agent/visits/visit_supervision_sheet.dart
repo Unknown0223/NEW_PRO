@@ -33,19 +33,19 @@ class _VisitSupervisionSheetState extends State<VisitSupervisionSheet> {
   List<({String key, String label})> get _items {
     final s = widget.supervision;
     final out = <({String key, String label})>[];
-    if (s.checkReceiptFaces) out.add((key: 'receipt', label: 'Chek yuzlari'));
-    if (s.checkMerchandising) out.add((key: 'merch', label: 'Merchandising'));
-    if (s.checkDefaultPrice) out.add((key: 'price', label: 'Narx'));
-    if (s.checkMotivation) out.add((key: 'motivation', label: 'Motivatsiya'));
-    if (s.checkStock) out.add((key: 'stock', label: 'Ombor'));
-    if (s.checkSales) out.add((key: 'sales', label: 'Sotuvlar'));
+    if (s.checkReceiptFaces) out.add((key: 'receipt', label: 'Лица чека'));
+    if (s.checkMerchandising) out.add((key: 'merch', label: 'Мерчендайзинг'));
+    if (s.checkDefaultPrice) out.add((key: 'price', label: 'Цена по умолчанию'));
+    if (s.checkMotivation) out.add((key: 'motivation', label: 'Мотивация'));
+    if (s.checkStock) out.add((key: 'stock', label: 'Запас'));
+    if (s.checkSales) out.add((key: 'sales', label: 'Продажи'));
     return out;
   }
 
   @override
   Widget build(BuildContext context) {
     if (_items.isEmpty) {
-      return const Padding(padding: EdgeInsets.all(24), child: Text('Audit checklist yoqilmagan'));
+      return const Padding(padding: EdgeInsets.all(24), child: Text('Чек-лист аудита не включён'));
     }
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
@@ -53,7 +53,7 @@ class _VisitSupervisionSheetState extends State<VisitSupervisionSheet> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const Text('Audit checklist', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+          const Text('Чек-лист аудита', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
           const SizedBox(height: 12),
           ..._items.map(
             (e) => CheckboxListTile(
@@ -67,7 +67,7 @@ class _VisitSupervisionSheetState extends State<VisitSupervisionSheet> {
           const SizedBox(height: 8),
           FilledButton(
             onPressed: () => Navigator.pop(context, Map<String, bool>.from(_checks)),
-            child: const Text('Saqlash'),
+            child: const Text('Сохранить'),
           ),
         ],
       ),

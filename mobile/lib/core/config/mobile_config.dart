@@ -163,16 +163,16 @@ class PhotoConfig {
 
   const PhotoConfig({
     this.requiredForOrder = false,
-    this.jpegQuality = 92,
-    this.maxWidthPx = 4032,
-    this.maxHeightPx = 4032,
+    this.jpegQuality = 75,
+    this.maxWidthPx = 1600,
+    this.maxHeightPx = 1600,
   });
 
   factory PhotoConfig.fromJson(Map<String, dynamic> j) => PhotoConfig(
         requiredForOrder: j['required_for_order'] ?? false,
-        jpegQuality: (j['jpeg_quality'] as num?)?.toInt() ?? 80,
-        maxWidthPx: (j['max_width_px'] as num?)?.toInt() ?? 1280,
-        maxHeightPx: (j['max_height_px'] as num?)?.toInt() ?? 1280,
+        jpegQuality: (j['jpeg_quality'] as num?)?.toInt() ?? 75,
+        maxWidthPx: (j['max_width_px'] as num?)?.toInt() ?? 1600,
+        maxHeightPx: (j['max_height_px'] as num?)?.toInt() ?? 1600,
       );
 }
 
@@ -183,6 +183,14 @@ class MiscConfig {
   final bool requireShipmentDate;
   final bool allowExchangeRequest;
   final List<String> disallowedPaymentMethodCodes;
+  /// Agent: buyurtma yuborishdan oldin Face ID / PIN.
+  final bool biometricConfirmForOrderSubmit;
+  /// Agent: to'lov qabul qilishdan oldin Face ID / PIN.
+  final bool biometricConfirmForPaymentAccept;
+  final bool faceVerificationEnabled;
+  final bool faceVerificationDailyLogin;
+  final int faceVerificationMaxRandomOrdersPerDay;
+  final bool faceVerificationOnTerritoryCheck;
 
   const MiscConfig({
     this.visitStartEndEnabled = true,
@@ -191,6 +199,12 @@ class MiscConfig {
     this.requireShipmentDate = false,
     this.allowExchangeRequest = false,
     this.disallowedPaymentMethodCodes = const [],
+    this.biometricConfirmForOrderSubmit = false,
+    this.biometricConfirmForPaymentAccept = false,
+    this.faceVerificationEnabled = false,
+    this.faceVerificationDailyLogin = true,
+    this.faceVerificationMaxRandomOrdersPerDay = 5,
+    this.faceVerificationOnTerritoryCheck = true,
   });
 
   factory MiscConfig.fromJson(Map<String, dynamic> j) => MiscConfig(
@@ -204,6 +218,18 @@ class MiscConfig {
                 .where((s) => s.isNotEmpty)
                 .toList() ??
             const [],
+        biometricConfirmForOrderSubmit:
+            j['biometric_confirm_for_order_submit'] ?? false,
+        biometricConfirmForPaymentAccept:
+            j['biometric_confirm_for_payment_accept'] ?? false,
+        faceVerificationEnabled: j['face_verification_enabled'] ?? false,
+        faceVerificationDailyLogin: j['face_verification_daily_login'] ?? true,
+        faceVerificationMaxRandomOrdersPerDay: () {
+          final n = (j['face_verification_max_random_orders_per_day'] as num?)?.toInt() ?? 5;
+          return n.clamp(0, 5);
+        }(),
+        faceVerificationOnTerritoryCheck:
+            j['face_verification_on_territory_check'] ?? true,
       );
 }
 
@@ -301,7 +327,7 @@ class ExpeditorConfig {
     this.fingerprintRequiredForShipmentConfirm = false,
     this.deliveryPaymentMethodStrict = false,
     this.requirePhotoReportBeforeVisit = false,
-    this.currencySymbol = "so'm",
+    this.currencySymbol = 'сум',
     this.allowedPaymentMethodIds = const [],
     this.allowedTradeDirectionIds = const [],
   });
@@ -313,7 +339,7 @@ class ExpeditorConfig {
         fingerprintRequiredForShipmentConfirm: j['fingerprint_required_for_shipment_confirm'] ?? false,
         deliveryPaymentMethodStrict: j['delivery_payment_method_strict'] ?? false,
         requirePhotoReportBeforeVisit: j['require_photo_report_before_visit'] ?? false,
-        currencySymbol: j['currency_symbol']?.toString() ?? "so'm",
+        currencySymbol: j['currency_symbol']?.toString() ?? 'сум',
         allowedPaymentMethodIds: (j['allowed_payment_method_ids'] as List?)
                 ?.map((e) => e.toString())
                 .toList() ??

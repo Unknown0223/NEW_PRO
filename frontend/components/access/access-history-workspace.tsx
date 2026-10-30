@@ -16,6 +16,7 @@ import {
   Search
 } from "lucide-react";
 import { api } from "@/lib/api";
+import { usePermissions } from "@/lib/use-permissions";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { DateRangePopover, formatDateRangeButton, localYmd } from "@/components/ui/date-range-popover";
@@ -176,6 +177,7 @@ function TableSkeletonRows() {
 }
 
 export function AccessHistoryWorkspace({ tenantSlug }: { tenantSlug: string }) {
+  const canExport = usePermissions().has("access.upravlenie.export");
   const def = useMemo(() => defaultDateRange(), []);
   const [draftActionType, setDraftActionType] = useState("");
   const [actionType, setActionType] = useState("");
@@ -556,7 +558,7 @@ export function AccessHistoryWorkspace({ tenantSlug }: { tenantSlug: string }) {
                 type="button"
                 variant="outline"
                 size="sm"
-                className={`${tplControl40} w-[100px] gap-1 border-[#CBD5E1] text-xs`}
+                className={cn(`${tplControl40} w-[100px] gap-1 border-[#CBD5E1] text-xs`, !canExport && "hidden")}
                 disabled={q.isFetching || exportBusy !== null}
                 onClick={() => void exportFile("xlsx")}
               >
@@ -568,7 +570,10 @@ export function AccessHistoryWorkspace({ tenantSlug }: { tenantSlug: string }) {
               </Button>
               <button
                 type="button"
-                className="hidden text-[10px] text-muted-foreground underline-offset-2 hover:text-[#00897B] hover:underline disabled:cursor-not-allowed disabled:opacity-40 sm:inline"
+                className={cn(
+                  "hidden text-[10px] text-muted-foreground underline-offset-2 hover:text-[#00897B] hover:underline disabled:cursor-not-allowed disabled:opacity-40",
+                  canExport && "sm:inline"
+                )}
                 disabled={q.isFetching || exportBusy !== null}
                 title="Выгрузка CSV"
                 onClick={() => void exportFile("csv")}

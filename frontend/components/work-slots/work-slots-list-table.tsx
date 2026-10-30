@@ -1,45 +1,48 @@
 "use client";
 
-import { useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { Eye, Pencil, UserRound } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { TableRowActionGroup } from "@/components/data-table/table-row-actions";
+import {
+  Eye,
+  LayoutGrid,
+  MonitorSmartphone,
+  Pencil,
+  Shield,
+  Smartphone,
+  Tags,
+  Truck,
+  UserRound,
+  Users,
+  Warehouse
+} from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { AgentIconButton } from "@/components/staff/agent-workspace-template-ui";
+import { StaffFaceAvatar } from "@/components/staff/staff-face-avatar";
+import { formatMaxSessionsLabel } from "@/lib/max-sessions";
 import type { WorkSlotListItem } from "@/lib/work-slots-types";
 import {
-  WORK_SLOTS_COLUMN_LABEL_BY_ID,
   formatSlotDate,
+  formatSlotBranches,
   slotTypeLabel,
+  slotWorkplaceConfigTabs,
+  type SlotWorkplaceConfigTabId,
   type WorkSlotsColumnId
 } from "./work-slots-utils";
 import { SlotBadge } from "./slot-badge";
+import { WorkSlotsTerritoryOverflowCell } from "./work-slots-territory-overflow-cell";
 
-type Props = {
-  rows: WorkSlotListItem[];
-  visibleColumnOrder: readonly string[];
-  resolveTerritoryLabel?: (raw: string) => string;
-  selectedIds: Set<number>;
-  onToggleRow: (id: number, checked: boolean) => void;
-  onTogglePage: (checked: boolean) => void;
-  onEdit: (id: number) => void;
-  onAssign: (id: number) => void;
-  embedded?: boolean;
-};
-
-function cellTerritory(raw: string | null | undefined, resolve?: (s: string) => string) {
-  const t = raw?.trim();
-  if (!t) return "—";
-  return resolve ? resolve(t) : t;
-}
-
-function renderCell(
+/** Ustun qiymati — Agents/Expeditors jadval uslubida. */
+export function renderWorkSlotDataCell(
   slot: WorkSlotListItem,
   colId: string,
-  resolveTerritoryLabel: Props["resolveTerritoryLabel"],
-  router: ReturnType<typeof useRouter>
+  opts: {
+    resolveTerritoryLabel?: (raw: string) => string;
+    onOpenDetail?: (id: number) => void;
+    onOpenSessions?: (slot: WorkSlotListItem) => void;
+    tenantSlug?: string;
+  } = {}
 ) {
   const id = colId as WorkSlotsColumnId;
+  const resolve = opts.resolveTerritoryLabel;
   switch (id) {
     case "code":
       return (
@@ -47,171 +50,167 @@ function renderCell(
           type="button"
           className="text-left hover:opacity-80"
           title="Подробнее"
-          onClick={() => router.push(`/work-slots/${slot.id}`)}
+          onClick={() => opts.onOpenDetail?.(slot.id)}
         >
           <SlotBadge code={slot.slot_code} />
         </button>
       );
     case "label":
-      return <span className="block max-w-[10rem] truncate">{slot.label ?? "—"}</span>;
+      return <span className="block max-w-[12rem] truncate">{slot.label ?? "—"}</span>;
     case "employee":
-      return slot.active_user_name ? (
-        <div>
-          <div>{slot.active_user_name}</div>
-          {slot.active_since ? (
-            <div className="text-[10px] text-muted-foreground">{formatSlotDate(slot.active_since)}</div>
+      return slot.active_user_name && slot.active_user_id ? (
+        <div className="flex min-w-0 items-center gap-2.5">
+          {opts.tenantSlug ? (
+            <StaffFaceAvatar
+              tenantSlug={opts.tenantSlug}
+              userId={slot.active_user_face_user_id ?? slot.active_user_id}
+              initials={slot.active_user_name
+                .split(/\s+/)
+                .filter(Boolean)
+                .slice(0, 2)
+                .map((p) => p[0] ?? "")
+                .join("")}
+              alt={slot.active_user_name}
+              size="sm"
+              hasPhoto={slot.active_user_has_face_reference === true}
+            />
           ) : null}
+          <div className="min-w-0">
+            <div className="truncate font-medium text-slate-800">{slot.active_user_name}</div>
+            {slot.active_since ? (
+              <div className="text-[10px] text-muted-foreground">{formatSlotDate(slot.active_since)}</div>
+            ) : null}
+          </div>
         </div>
       ) : (
         <span className="italic text-muted-foreground">Пусто</span>
       );
     case "territory_zone":
-      return cellTerritory(slot.active_territory_zone, resolveTerritoryLabel);
+      return <WorkSlotsTerritoryOverflowCell raw={slot.active_territory_zone} resolve={resolve} />;
     case "territory_oblast":
-      return cellTerritory(slot.active_territory_oblast, resolveTerritoryLabel);
+      return <WorkSlotsTerritoryOverflowCell raw={slot.active_territory_oblast} resolve={resolve} />;
     case "territory_city":
-      return cellTerritory(slot.active_territory_city, resolveTerritoryLabel);
+      return <WorkSlotsTerritoryOverflowCell raw={slot.active_territory_city} resolve={resolve} />;
     case "warehouse":
-      return <span className="block max-w-[8rem] truncate">{slot.active_warehouse_name ?? "—"}</span>;
+      return (
+        <span className="block max-w-[10rem] truncate">{slot.active_warehouse_name ?? "—"}</span>
+      );
     case "cash_desk":
-      return <span className="block max-w-[8rem] truncate">{slot.active_cash_desk_names ?? "—"}</span>;
+      return (
+        <span className="block max-w-[10rem] truncate">{slot.active_cash_desk_names ?? "—"}</span>
+      );
+    case "active_sessions": {
+      if (!slot.active_user_id) return <span className="text-muted-foreground">—</span>;
+      const n = slot.active_user_active_session_count ?? 0;
+      return (
+        <button
+          type="button"
+          className="tabular-nums text-teal-700 hover:underline"
+          title="Активные сессии"
+          onClick={() => opts.onOpenSessions?.(slot)}
+        >
+          {n}
+        </button>
+      );
+    }
+    case "max_sessions": {
+      if (!slot.active_user_id) return <span className="text-muted-foreground">—</span>;
+      return (
+        <button
+          type="button"
+          className="tabular-nums text-slate-800 hover:underline"
+          title="Лимит сессий"
+          onClick={() => opts.onOpenSessions?.(slot)}
+        >
+          {formatMaxSessionsLabel(slot.active_user_max_sessions)}
+        </button>
+      );
+    }
     case "branch":
-      return slot.branch_code ?? "—";
+      return <span className="text-slate-700">{formatSlotBranches(slot)}</span>;
     case "role":
-      return slotTypeLabel(slot.slot_type);
+      return <span className="text-slate-600">{slotTypeLabel(slot.slot_type)}</span>;
+    case "status":
+      return slot.is_active ? (
+        <Badge variant="outline" className="border-emerald-200 bg-emerald-50 text-[10px] text-emerald-800">
+          Активно
+        </Badge>
+      ) : (
+        <Badge variant="secondary" className="text-[10px]">
+          Неактивно
+        </Badge>
+      );
     default:
       return "—";
   }
 }
 
-export function WorkSlotsListTable({
-  rows,
-  visibleColumnOrder,
-  resolveTerritoryLabel,
-  selectedIds,
-  onToggleRow,
-  onTogglePage,
-  onEdit,
-  onAssign,
-  embedded = false
-}: Props) {
+const SECTION_ICON: Record<
+  SlotWorkplaceConfigTabId,
+  typeof LayoutGrid
+> = {
+  main: LayoutGrid,
+  prices: Tags,
+  limits: Shield,
+  mobile: Smartphone,
+  expeditor: Truck,
+  skladchik: Warehouse,
+  team: Users
+};
+
+type RowActionsProps = {
+  slot: WorkSlotListItem;
+  /** Konfiguratsiya bo‘limini ochish (main / prices / limits / mobile / …) */
+  onOpenSection: (section: SlotWorkplaceConfigTabId) => void;
+  onEdit: () => void;
+  onAssign: () => void;
+  onOpenSessions?: () => void;
+};
+
+/**
+ * Har konfiguratsiya bo‘limi — alohida ikon (tabli modal yo‘q).
+ */
+export function WorkSlotRowActions({ slot, onOpenSection, onEdit, onAssign, onOpenSessions }: RowActionsProps) {
   const router = useRouter();
-  const headerCbRef = useRef<HTMLInputElement>(null);
-  const colCount = visibleColumnOrder.length + 2;
-
-  const allOnPageSelected = rows.length > 0 && rows.every((r) => selectedIds.has(r.id));
-  const someOnPageSelected = rows.some((r) => selectedIds.has(r.id));
-
-  useEffect(() => {
-    const el = headerCbRef.current;
-    if (!el) return;
-    el.indeterminate = someOnPageSelected && !allOnPageSelected;
-  }, [someOnPageSelected, allOnPageSelected]);
-
-  const table = (
-    <div className="overflow-x-auto">
-      <table className="w-full min-w-[900px] text-xs">
-        <thead className="app-table-thead">
-          <tr>
-            <th className="w-10 whitespace-nowrap px-2 py-2 text-left">
-              <input
-                ref={headerCbRef}
-                type="checkbox"
-                className="size-4 rounded border-input accent-primary"
-                checked={allOnPageSelected}
-                onChange={(e) => onTogglePage(e.target.checked)}
-                aria-label="Выбрать все на странице"
-              />
-            </th>
-            {visibleColumnOrder.map((colId) => (
-              <th key={colId} className="whitespace-nowrap px-2 py-2 text-left">
-                {WORK_SLOTS_COLUMN_LABEL_BY_ID.get(colId) ?? colId}
-              </th>
-            ))}
-            <th className="w-[9rem] min-w-[9rem] whitespace-nowrap px-2 py-2 text-right">
-              Действия
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.length === 0 ? (
-            <tr>
-              <td colSpan={colCount} className="px-3 py-10 text-center text-muted-foreground">
-                Нет данных
-              </td>
-            </tr>
-          ) : (
-            rows.map((slot) => (
-              <tr
-                key={slot.id}
-                className={`border-t border-border/60 transition-colors even:bg-muted/20 hover:bg-muted/30 ${!slot.is_active ? "opacity-55" : ""} ${selectedIds.has(slot.id) ? "bg-primary/5" : ""}`}
-              >
-                <td className="px-2 py-2">
-                  <input
-                    type="checkbox"
-                    className="size-4 rounded border-input accent-primary"
-                    checked={selectedIds.has(slot.id)}
-                    onChange={(e) => onToggleRow(slot.id, e.target.checked)}
-                    aria-label={`Выбрать ${slot.slot_code}`}
-                  />
-                </td>
-                {visibleColumnOrder.map((colId) => (
-                  <td key={colId} className="max-w-[10rem] truncate px-2 py-2">
-                    {renderCell(slot, colId, resolveTerritoryLabel, router)}
-                  </td>
-                ))}
-                <td className="w-[9rem] min-w-[9rem] px-2 py-2 text-right">
-                  <TableRowActionGroup className="justify-end" ariaLabel="Действия">
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon-sm"
-                      className="text-muted-foreground hover:text-foreground"
-                      title="Подробнее"
-                      aria-label="Подробнее"
-                      onClick={() => router.push(`/work-slots/${slot.id}`)}
-                    >
-                      <Eye className="size-3.5" aria-hidden />
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="icon-sm"
-                      className="text-muted-foreground hover:text-foreground"
-                      title="Редактировать"
-                      aria-label="Редактировать"
-                      onClick={() => onEdit(slot.id)}
-                    >
-                      <Pencil className="size-3.5" aria-hidden />
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon-sm"
-                      className="text-muted-foreground hover:text-foreground"
-                      title="Сменить сотрудника"
-                      aria-label="Сменить сотрудника"
-                      onClick={() => onAssign(slot.id)}
-                    >
-                      <UserRound className="size-3.5" aria-hidden />
-                    </Button>
-                  </TableRowActionGroup>
-                </td>
-              </tr>
-            ))
-          )}
-        </tbody>
-      </table>
-    </div>
-  );
-
-  if (embedded) return table;
+  const sections = slotWorkplaceConfigTabs(slot.slot_type);
 
   return (
-    <div className="orders-hub-section orders-hub-section--table mt-4">
-      <Card className="overflow-hidden rounded-none border-0 bg-transparent shadow-none hover:shadow-none">
-        <CardContent className="p-0">{table}</CardContent>
-      </Card>
+    <div className="flex items-center justify-end gap-0.5">
+      {sections.map((s) => {
+        const Icon = SECTION_ICON[s.id] ?? LayoutGrid;
+        return (
+          <AgentIconButton key={s.id} title={s.label} onClick={() => onOpenSection(s.id)}>
+            <Icon
+              className={
+                s.id === "mobile"
+                  ? "h-4 w-4 text-teal-600"
+                  : s.id === "limits"
+                    ? "h-4 w-4 text-slate-600"
+                    : s.id === "prices"
+                      ? "h-4 w-4 text-amber-600"
+                      : "h-4 w-4"
+              }
+            />
+          </AgentIconButton>
+        );
+      })}
+      {slot.active_user_id && onOpenSessions ? (
+        <AgentIconButton title="Активные сессии" onClick={onOpenSessions}>
+          <MonitorSmartphone className="h-4 w-4 text-teal-700" />
+        </AgentIconButton>
+      ) : null}
+      <AgentIconButton
+        title="Подробнее / история"
+        onClick={() => router.push(`/work-slots/${slot.id}`)}
+      >
+        <Eye className="h-4 w-4" />
+      </AgentIconButton>
+      <AgentIconButton title="Редактировать" onClick={onEdit}>
+        <Pencil className="h-4 w-4 text-amber-600" />
+      </AgentIconButton>
+      <AgentIconButton title="Сменить сотрудника" onClick={onAssign}>
+        <UserRound className="h-4 w-4" />
+      </AgentIconButton>
     </div>
   );
 }

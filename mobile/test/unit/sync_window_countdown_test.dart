@@ -41,12 +41,23 @@ void main() {
       expect(left!.inHours, 7);
     });
 
-    test('overnight 22:00–06:00 at 05:00 — ends today 06:00', () {
-      const sync = SyncConfig(allowedWindowFrom: '22:00', allowedWindowTo: '06:00');
-      final now = DateTime(2026, 6, 14, 5, 0);
+    test('outside custom window does not fall back to default end countdown', () {
+      const sync = SyncConfig(allowedWindowFrom: '01:00', allowedWindowTo: '17:30');
+      final now = DateTime(2026, 6, 14, 20, 33);
+      expect(isSyncAllowedNow(sync, now), isFalse);
+      expect(timeUntilSyncWindowEnd(sync, now), isNull);
+      final untilStart = timeUntilSyncWindowStart(sync, now);
+      expect(untilStart, isNotNull);
+      expect(untilStart!.inHours, greaterThanOrEqualTo(4));
+    });
+
+    test('at 17:30:30 still allowed and end countdown within same minute', () {
+      const sync = SyncConfig(allowedWindowFrom: '01:00', allowedWindowTo: '17:30');
+      final now = DateTime(2026, 6, 14, 17, 30, 30);
+      expect(isSyncAllowedNow(sync, now), isTrue);
       final left = timeUntilSyncWindowEnd(sync, now);
       expect(left, isNotNull);
-      expect(left!.inHours, 1);
+      expect(left!.inSeconds, lessThan(60));
     });
   });
 }

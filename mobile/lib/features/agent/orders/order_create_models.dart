@@ -29,7 +29,7 @@ List<OrderCategoryGroup> groupProductsByCategory(
   for (final p in products) {
     final cat = p['category'];
     int? catId;
-    String catName = 'Boshqa';
+    String catName = 'Прочее';
     if (cat is Map) {
       catId = (cat['id'] as num?)?.toInt();
       final n = cat['name']?.toString().trim();
@@ -58,7 +58,7 @@ void sortProductList(List<Map<String, dynamic>> products, {required bool alphabe
 }
 
 String productQuantityLabel(Map<String, dynamic> product, double qty, {required bool showBoxes}) {
-  final unit = product['unit']?.toString().trim() ?? 'dona';
+  final unit = product['unit']?.toString().trim() ?? 'шт.';
   if (!showBoxes || qty <= 0) return unit;
   final perBox = (product['units_per_box'] as num?)?.toDouble() ??
       (product['pack_size'] as num?)?.toDouble() ??
@@ -66,7 +66,7 @@ String productQuantityLabel(Map<String, dynamic> product, double qty, {required 
   if (perBox == null || perBox <= 0) return unit;
   final boxes = qty / perBox;
   final boxStr = boxes == boxes.roundToDouble() ? boxes.toInt().toString() : boxes.toStringAsFixed(1);
-  return '$boxStr quti';
+  return '$boxStr кор.';
 }
 
 String formatOrderMoney(double v) => formatMoneySpaced(v);

@@ -95,14 +95,49 @@ export function calcExpectedDiscountSum(
   return Number(raw.toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP));
 }
 
+/**
+ * Ogohlantirish faqat: skidka qoidasi zakazga mos, lekin qo‘llanmadi
+ * (kassa yo‘q, agent «Без скидки», stack/bonus to‘siq, boshqa kamchilik).
+ * Mos qoida yo‘q yoki skidka muvaffaqiyatli — alert yo‘q.
+ */
+export function decideDiscountAlert(input: {
+  discountApplied: boolean;
+  hasWinningRule: boolean;
+  cashDeskOk: boolean;
+  applyDiscount: boolean;
+  bonusBlocksDiscount: boolean;
+  discountPct: number | null;
+  expectedSum: number;
+}): DiscountAlertResolution {
+  const empty: DiscountAlertResolution = { alert: null, discountPct: null, expectedSum: 0 };
+  if (input.discountApplied) return empty;
+  if (!input.hasWinningRule) return empty;
+
+  const base = {
+    discountPct: input.discountPct,
+    expectedSum: input.expectedSum
+  };
+  if (!input.cashDeskOk) {
+    return { alert: "cash_desk_missing", ...base };
+  }
+  // Agent skidkani o‘chirgan — mos qoida bor edi.
+  if (!input.applyDiscount) {
+    return { alert: "not_applied", ...base };
+  }
+  if (input.bonusBlocksDiscount) {
+    return { alert: "bonus_required", ...base };
+  }
+  return { alert: "not_applied", ...base };
+}
+
 export async function resolveDiscountAlert(
   tx: Prisma.TransactionClient,
   input: DiscountAlertEvalInput
 ): Promise<DiscountAlertResolution> {
-  const empty = { alert: null, discountPct: null, expectedSum: 0 };
+  const empty: DiscountAlertResolution = { alert: null, discountPct: null, expectedSum: 0 };
   if (input.orderType !== "order") return empty;
-  if (input.applyDiscount === false) return empty;
-  if (input.discountSum.gt(0)) return empty;
+
+  const discountApplied = input.discountSum.gt(0);
 
   const discountRules = await loadDiscountRulesForOrder(tx, input.tenantId);
   const usedRuleIds =
@@ -166,23 +201,22 @@ export async function resolveDiscountAlert(
         accepts_discount_payments: true
       }
     })) > 0;
-  if (!cashDeskOk) {
-    return { alert: "cash_desk_missing", discountPct: pct, expectedSum };
-  }
-
-  if (!winning) {
-    return { alert: "not_applied", discountPct: pct, expectedSum };
-  }
 
   const bonusApplied = input.appliedAutoBonusRuleIds.some((id) => {
     const rule = discountRules.find((r) => r.id === id);
     return rule?.type !== "discount";
   });
-  if (bonusApplied && input.stackPolicy.mode !== "all") {
-    return { alert: "bonus_required", discountPct: pct, expectedSum };
-  }
+  const bonusBlocksDiscount = bonusApplied && input.stackPolicy.mode !== "all";
 
-  return { alert: "not_applied", discountPct: pct, expectedSum };
+  return decideDiscountAlert({
+    discountApplied,
+    hasWinningRule: winning != null && pct != null && pct > 0,
+    cashDeskOk,
+    applyDiscount: input.applyDiscount,
+    bonusBlocksDiscount,
+    discountPct: pct,
+    expectedSum
+  });
 }
 
 export async function resolveDiscountAlertForCreate(

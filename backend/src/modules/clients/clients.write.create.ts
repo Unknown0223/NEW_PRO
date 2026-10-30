@@ -1,24 +1,11 @@
-import { Prisma } from "@prisma/client";
 import { prisma } from "../../config/database";
 import { isValidPhoneNumber, normalizePhoneNumber } from "../../domain/phone-number";
 import { tenantIdFrom } from "../../domain/tenant-id";
-import {
-  applyTerritoryAutoAssignAfterAddressChange,
-  clientUpdateTouchesAddress
-} from "../work-slots/work-slots.territory-auto";
-import type { AgentAssignmentPatch, ContactPersonSlot } from "./clients.types";
-import { normalizePhoneDigits } from "./clients.types";
-import { CONTACT_SLOTS, contactPersonsToJson } from "./clients.helpers";
-import {
-  replaceClientAgentAssignments,
-  syncAssignmentSlotOneWithClientRow
-} from "./clients.agent-assignments";
+import { applyTerritoryAutoAssignAfterAddressChange } from "../work-slots/work-slots.territory-auto";
 import { appendClientAuditLog } from "./clients.audit";
-import type { ClientDetailRow } from "./clients.detail";
-import { getClientDetail } from "./clients.detail";
-
+import { applyTerritoryHintsToClientInput } from "./clients.territory-sync";
 import type { CreateClientMinimalInput } from "./clients.write.types";
-import { parseOptionalLatitude, parseOptionalLongitude } from "./clients.write.helpers";
+import { throwIfClientUniqueConflicts } from "./clients.write.uniques";
 
 export async function createClientMinimal(
   tenantIdRaw: number,
@@ -41,36 +28,32 @@ export async function createClientMinimal(
     phoneNormalized = normalizePhoneNumber(rawPhone);
   }
 
-  const duplicateWhere: Prisma.ClientWhereInput[] = [
-    {
-      tenant_id: tenantId,
-      merged_into_client_id: null,
-      name: { equals: name, mode: "insensitive" }
-    }
-  ];
-  if (phoneNormalized) {
-    duplicateWhere.push({
-      tenant_id: tenantId,
-      merged_into_client_id: null,
-      phone_normalized: phoneNormalized
-    });
-  }
-  const duplicate = await prisma.client.findFirst({
-    where: { OR: duplicateWhere },
-    select: { id: true, name: true, phone: true }
-  });
-  if (duplicate) {
-    if (phoneNormalized && duplicate.phone && normalizePhoneNumber(duplicate.phone) === phoneNormalized) {
-      throw new Error("DUPLICATE_PHONE");
-    }
-    throw new Error("DUPLICATE_NAME");
-  }
-
   const str = (v: string | null | undefined) => {
     if (v == null) return null;
     const t = String(v).trim();
     return t === "" ? null : t;
   };
+
+  const hinted = await applyTerritoryHintsToClientInput(tenantId, {
+    city: str(input.city),
+    region: str(input.region),
+    zone: str(input.zone)
+  });
+  const region = hinted.region;
+  const zone = hinted.zone;
+  const city = hinted.city;
+
+  await throwIfClientUniqueConflicts(tenantId, {
+    name,
+    phone,
+    phone_normalized: phoneNormalized,
+    inn: input.inn,
+    client_code: input.client_code,
+    client_pinfl: input.client_pinfl,
+    region,
+    zone,
+    city
+  });
 
   const row = await prisma.client.create({
     data: {
@@ -80,15 +63,16 @@ export async function createClientMinimal(
       phone_normalized: phoneNormalized,
       category: str(input.category),
       client_type_code: str(input.client_type_code),
-      region: str(input.region),
+      region,
       district: str(input.district),
-      city: str(input.city),
+      city,
       neighborhood: str(input.neighborhood),
-      zone: str(input.zone),
+      zone,
       client_format: str(input.client_format),
       sales_channel: str(input.sales_channel),
       product_category_ref: str(input.product_category_ref),
-      logistics_service: str(input.logistics_service)
+      logistics_service: str(input.logistics_service),
+      ...(input.is_active === true || input.is_active === false ? { is_active: input.is_active } : {})
     }
   });
 
@@ -96,11 +80,11 @@ export async function createClientMinimal(
   for (const [k, v] of Object.entries({
     category: str(input.category),
     client_type_code: str(input.client_type_code),
-    region: str(input.region),
+    region,
     district: str(input.district),
-    city: str(input.city),
+    city,
     neighborhood: str(input.neighborhood),
-    zone: str(input.zone),
+    zone,
     client_format: str(input.client_format),
     sales_channel: str(input.sales_channel),
     product_category_ref: str(input.product_category_ref),
@@ -112,11 +96,8 @@ export async function createClientMinimal(
   await appendClientAuditLog(tenantId, row.id, actorUserId, "client.create", detail);
 
   const hasAddress =
-    str(input.region) != null ||
-    str(input.city) != null ||
-    str(input.district) != null ||
-    str(input.zone) != null;
-  if (hasAddress) {
+    region != null || city != null || str(input.district) != null || zone != null;
+  if (hasAddress && !input.skipTerritoryAutoAssign) {
     await applyTerritoryAutoAssignAfterAddressChange(tenantId, row.id);
   }
 

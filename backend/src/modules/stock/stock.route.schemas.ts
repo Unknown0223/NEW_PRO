@@ -154,7 +154,7 @@ export const correctionWorkspaceQuerySchema = z
     (q) =>
       (q.catalog_group_id != null && q.category_id == null) ||
       (q.catalog_group_id == null && q.category_id != null),
-    { message: "Exactly one of catalog_group_id or category_id is required" }
+    { message: "Укажите ровно одно из полей: catalog_group_id или category_id" }
   );
 
 type StockImportMultipartOk = {

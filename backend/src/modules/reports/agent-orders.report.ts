@@ -21,7 +21,9 @@ export async function getAgentOrdersReport(
   const scopedActor = actor ? await enrichScopedReportActor(tenantId, actor) : undefined;
   const whereSql = buildFilterSql(tenantId, f, scopedActor);
 
-  const summary = await prisma.$queryRaw<Array<{ status: string; amount: Prisma.Decimal; qty: bigint; akb: bigint }>>`
+  const summary = await prisma.$queryRaw<
+    Array<{ status: string; amount: Prisma.Decimal; qty: bigint; volume: Prisma.Decimal; akb: bigint }>
+  >`
     WITH status_logs AS (
       SELECT
         sl.order_id,
@@ -29,31 +31,50 @@ export async function getAgentOrdersReport(
         MIN(CASE WHEN sl.to_status = 'delivered' THEN sl.created_at END) AS delivered_at
       FROM order_status_logs sl
       GROUP BY sl.order_id
+    ),
+    item_totals AS (
+      SELECT oi.order_id, COALESCE(SUM(oi.qty), 0)::numeric(15,3) AS qty_sum
+      FROM order_items oi
+      GROUP BY oi.order_id
+    ),
+    base AS (
+      SELECT o.id, o.status, o.client_id, o.total_sum, COALESCE(it.qty_sum, 0) AS qty_sum
+      FROM orders o
+      LEFT JOIN users u ON u.id = o.agent_id
+      LEFT JOIN clients c ON c.id = o.client_id
+      LEFT JOIN status_logs sl ON sl.order_id = o.id
+      LEFT JOIN item_totals it ON it.order_id = o.id
+      WHERE ${whereSql}
     )
     SELECT
-      o.status,
-      COALESCE(SUM(o.total_sum), 0)::numeric(15,2) AS amount,
-      COUNT(DISTINCT o.id)::bigint AS qty,
-      COUNT(DISTINCT o.client_id)::bigint AS akb
-    FROM orders o
-    LEFT JOIN users u ON u.id = o.agent_id
-    LEFT JOIN clients c ON c.id = o.client_id
-    LEFT JOIN status_logs sl ON sl.order_id = o.id
-    WHERE ${whereSql}
-    GROUP BY o.status
+      'all'::text AS status,
+      COALESCE(SUM(total_sum), 0)::numeric(15,2) AS amount,
+      COUNT(DISTINCT id)::bigint AS qty,
+      COALESCE(SUM(qty_sum), 0)::numeric(18,6) AS volume,
+      COUNT(DISTINCT client_id)::bigint AS akb
+    FROM base
+    UNION ALL
+    SELECT
+      status,
+      COALESCE(SUM(total_sum), 0)::numeric(15,2),
+      COUNT(DISTINCT id)::bigint,
+      COALESCE(SUM(qty_sum), 0)::numeric(18,6),
+      COUNT(DISTINCT client_id)::bigint
+    FROM base
+    GROUP BY status
   `;
 
   const summaryMap = new Map(summary.map((s) => [s.status, s]));
   const kpiOrder = ["all", "new", "cancelled", "confirmed", "delivering", "delivered", "return_processing", "returned"];
   const statusCards = kpiOrder.map((status) => {
-    if (status === "all") {
-      const amount = summary.reduce((a, x) => a.plus(x.amount), new Prisma.Decimal(0));
-      const qty = summary.reduce((a, x) => a + Number(x.qty), 0);
-      const akb = summary.reduce((a, x) => a + Number(x.akb), 0);
-      return { status, amount: amount.toString(), qty, akb };
-    }
     const s = summaryMap.get(status);
-    return { status, amount: (s?.amount ?? new Prisma.Decimal(0)).toString(), qty: Number(s?.qty ?? 0n), akb: Number(s?.akb ?? 0n) };
+    return {
+      status,
+      amount: (s?.amount ?? new Prisma.Decimal(0)).toString(),
+      qty: Number(s?.qty ?? 0n),
+      volume: (s?.volume ?? new Prisma.Decimal(0)).toString(),
+      akb: Number(s?.akb ?? 0n)
+    };
   });
 
   const byAgent = await prisma.$queryRaw<

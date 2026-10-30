@@ -10,6 +10,7 @@ import { cn } from "@/lib/utils";
 import { emptyAgentSlot, toggleWeekday, VISIT_DAYS } from "./client-edit-form.utils";
 import { Caption, FieldHint, SpravochnikAdminLink, agentAssignmentsFieldHint } from "./client-edit-form-ui";
 import { YandexCoordinatePicker } from "./yandex-coordinate-picker";
+import { ClientProfilePhotoField } from "@/components/clients/client-profile-photo-card";
 import type { ClientEditFormVm } from "./hooks/use-client-edit-form";
 
 export function ClientEditFormMainTab({ vm }: { vm: ClientEditFormVm }) {
@@ -36,6 +37,7 @@ export function ClientEditFormMainTab({ vm }: { vm: ClientEditFormVm }) {
     city, onCitySelect,
     zone, onZoneSelect,
     terrOpts, cascadedCityOpts, cascadedZoneOpts,
+    creatorScoped,
     street, setStreet,
     houseNumber, setHouseNumber,
     apartment, setApartment,
@@ -66,6 +68,14 @@ export function ClientEditFormMainTab({ vm }: { vm: ClientEditFormVm }) {
   return (
         <div className="grid gap-6 xl:grid-cols-[minmax(0,1.15fr)_minmax(0,0.95fr)] xl:gap-8">
           <div className="flex flex-col gap-6">
+            {vm.canProfilePhoto && vm.tenantSlug ? (
+              <ClientProfilePhotoField
+                tenantSlug={vm.tenantSlug}
+                clientId={vm.isCreateMode ? undefined : vm.effectiveClientId}
+                draft={vm.profilePhotoDraft}
+                onDraft={vm.setProfilePhotoDraft}
+              />
+            ) : null}
             <section className="rounded-lg border bg-card p-4 shadow-sm sm:p-5">
               <Caption variant="write">Ввод с клавиатуры</Caption>
               <p className="mt-1 text-xs text-muted-foreground">
@@ -226,10 +236,21 @@ export function ClientEditFormMainTab({ vm }: { vm: ClientEditFormVm }) {
             <section className="rounded-lg border bg-card p-4 shadow-sm sm:p-5">
               <Caption>Адрес (детально, необязательно)</Caption>
               <p className="mt-1 text-xs text-muted-foreground">
-                Список задаётся в{" "}
-                <SpravochnikAdminLink href="/settings/spravochnik/client-lists#ref-city">справочниках клиента</SpravochnikAdminLink>
-                ; значения из существующих клиентов тоже попадают в список. При выборе города область и зона подставляются из дерева
-                территорий (если оно настроено).
+                {creatorScoped ? (
+                  <>
+                    Список области / города / зоны — по территориям, привязанным к вам (можно выбрать любой из
+                    нескольких). Текущее значение клиента всегда доступно.
+                  </>
+                ) : (
+                  <>
+                    Список задаётся в{" "}
+                    <SpravochnikAdminLink href="/settings/spravochnik/client-lists#ref-city">
+                      справочниках клиента
+                    </SpravochnikAdminLink>
+                    ; значения из существующих клиентов тоже попадают в список. При выборе города область и зона
+                    подставляются из дерева территорий (если оно настроено).
+                  </>
+                )}
               </p>
               <div className="mt-4 grid gap-3 sm:grid-cols-2">
                 <div className="grid gap-1.5">
@@ -338,13 +359,13 @@ export function ClientEditFormMainTab({ vm }: { vm: ClientEditFormVm }) {
             <section className="rounded-lg border bg-card p-4 shadow-sm sm:p-5">
               <Caption variant="write">Карта</Caption>
               <p className="mt-1 text-xs text-muted-foreground">
-                Kartada nuqtani bevosita bosib tanlashingiz mumkin. Qidiruv maydoni Telegram/Google/Yandex linki, lat/lon juftligi
-                yoki oddiy manzil matnini qabul qiladi.
+                Точку можно выбрать, просто нажав на карту. Поле поиска принимает ссылку Telegram/Google/Yandex, пару
+                координат lat/lon или обычный адрес.
               </p>
               <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-stretch">
                 <Input
                   className={cn(inputCls, "sm:flex-1")}
-                  placeholder="Manzil yoki lokatsiya (41.31, 69.27 | Google/Telegram link)"
+                  placeholder="Адрес или локация (41.31, 69.27 | ссылка Google/Telegram)"
                   value={mapSearchText}
                   onChange={(e) => setMapSearchText(e.target.value)}
                   disabled={mutation.isPending || mapSearchPending}
@@ -361,7 +382,7 @@ export function ClientEditFormMainTab({ vm }: { vm: ClientEditFormVm }) {
                   disabled={mutation.isPending || mapSearchPending || !mapSearchText.trim()}
                   onClick={() => void handleMapSearch()}
                 >
-                  {mapSearchPending ? "Qidirilmoqda..." : "Topish / Qo‘llash"}
+                  {mapSearchPending ? "Поиск…" : "Найти / Применить"}
                 </Button>
               </div>
               {mapSearchNotice ? <p className="mt-2 text-xs text-amber-600">{mapSearchNotice}</p> : null}
@@ -374,7 +395,7 @@ export function ClientEditFormMainTab({ vm }: { vm: ClientEditFormVm }) {
                 />
                 {!mapOk ? (
                   <div className="pointer-events-none absolute bottom-2 left-2 right-2 rounded-md bg-background/95 px-2 py-1.5 text-center text-[11px] text-muted-foreground shadow-sm ring-1 ring-border/60">
-                    Nuqtani xaritadan bosing yoki yuqoridagi maydonga koordinata/link/manzil qo‘ying
+                    Нажмите точку на карте или вставьте координаты/ссылку/адрес в поле выше
                   </div>
                 ) : null}
               </div>
@@ -443,9 +464,10 @@ export function ClientEditFormMainTab({ vm }: { vm: ClientEditFormVm }) {
               </p>
               {territoryAgentPickerCtxQ.data?.territory_matched ? (
                 <p className="mt-2 text-xs text-muted-foreground">
-                  Списки агента и доставщика ограничены территорией по адресу (область / город / зона) или точке на
-                  карте — только пользователи, привязанные к этой территории в разделе территорий; уже выбранные в
-                  командах остаются в списке.
+                  {territoryAgentPickerCtxQ.data.agent_ids.length > 0 ||
+                  (territoryAgentPickerCtxQ.data.expeditor_ids?.length ?? 0) > 0
+                    ? "Списки агента и доставщика ограничены территорией по адресу (зона / область / город) и рабочим местам: только сотрудники, привязанные к этой территории; уже выбранные в командах остаются в списке."
+                    : "По адресу территория выбрана, но на рабочих местах (или в «Территории») нет привязанных агентов/доставщиков для этой зоны/области/города. Список пуст — сначала привяжите сотрудника к территории, либо очистите адресный фильтр."}
                 </p>
               ) : null}
               {(() => {

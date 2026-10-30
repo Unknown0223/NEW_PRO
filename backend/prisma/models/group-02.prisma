@@ -268,9 +268,12 @@ model Client {
   allow_consignment_with_debt Boolean           @default(true)
   /// Oxirgi agent tashrif vaqti (`agent_visits` check-in bilan yangilanadi, hisobot keshi).
   last_visit_at         DateTime?
+  /// Bitta doimiy profil rasmi (ombor kaliti yoki https). Foto hisobot emas.
+  profile_photo_url     String?                 @db.Text
   agent_visits          AgentVisit[]
   client_refusals       ClientRefusal[]
   agent_assignments     ClientAgentAssignment[]
+  tenant_tasks          TenantTask[]
   audit_logs            ClientAuditLog[]
   client_balances                ClientBalance[]
   client_opening_balance_entries ClientOpeningBalanceEntry[]

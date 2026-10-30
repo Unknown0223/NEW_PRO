@@ -21,6 +21,9 @@ export async function getTransfers(
   if (status) extraParts.push(Prisma.sql`t.status = ${status}`);
   if (srcWh != null) extraParts.push(Prisma.sql`t.source_warehouse_id = ${srcWh}`);
   if (dstWh != null) extraParts.push(Prisma.sql`t.destination_warehouse_id = ${dstWh}`);
+  if (options.kind === "branch" || options.kind === "warehouse") {
+    extraParts.push(Prisma.sql`t.kind = ${options.kind}`);
+  }
 
   const whereClause =
     extraParts.length > 0
@@ -37,6 +40,7 @@ export async function getTransfers(
       id: number;
       number: string;
       status: string;
+      kind: string;
       source_warehouse_id: number;
       source_warehouse_name: string;
       destination_warehouse_id: number;
@@ -57,7 +61,7 @@ export async function getTransfers(
     }[]
   >(
     Prisma.sql`
-      SELECT t.id, t.number, t.status,
+      SELECT t.id, t.number, t.status, t.kind,
              t.source_warehouse_id, t.destination_warehouse_id,
              t.comment, t.planned_date, t.started_at, t.received_at, t.created_at,
              t.created_by_user_id, t.received_by_user_id,
@@ -92,6 +96,7 @@ export async function getTransfers(
     id: r.id,
     number: r.number,
     status: r.status,
+    kind: r.kind,
     source_warehouse_id: r.source_warehouse_id,
     source_warehouse_name: r.source_warehouse_name,
     destination_warehouse_id: r.destination_warehouse_id,

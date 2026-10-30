@@ -223,6 +223,9 @@ export function getAllowedNextStatuses(
  */
 export const ORDER_STATUSES_EXCLUDED_FROM_CREDIT_EXPOSURE = ["cancelled", "returned"] as const;
 
+/** Dashboard / savdo fakt: «Отменён» = zakaz yo‘q. Qaytgan ham savdoga kirmaydi. */
+export const ORDER_STATUSES_EXCLUDED_FROM_SALES = ORDER_STATUSES_EXCLUDED_FROM_CREDIT_EXPOSURE;
+
 /**
  * Debitor qarz — **faqat savdo zakazi** (`order_type === "order"`) va **faqat** `delivered`.
  */

@@ -6,6 +6,7 @@ import { appendTenantAuditEvent, AuditEntityType } from "../../lib/tenant-audit"
 type AssertTransferRow = {
   id: number;
   status: string;
+  kind: string;
   source_warehouse_id: number;
   destination_warehouse_id: number;
 };
@@ -15,7 +16,7 @@ export async function assertTransferExists(
   id: number
 ): Promise<AssertTransferRow> {
   const rows = await prisma.$queryRaw<AssertTransferRow[]>`
-    SELECT id, status, source_warehouse_id, destination_warehouse_id
+    SELECT id, status, kind, source_warehouse_id, destination_warehouse_id
     FROM warehouse_transfers
     WHERE id = ${id} AND tenant_id = ${tenantId}
   `;

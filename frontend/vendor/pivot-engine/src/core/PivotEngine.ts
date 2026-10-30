@@ -31,7 +31,7 @@ import { SortEngine } from "./SortEngine.js";
 import { getPivotStrings } from "../i18n/index.js";
 export { DEFAULT_PIVOT_CONFIG, DEFAULT_PIVOT_OPTIONS } from "./defaults.js";
 
-type ColSpec = { colKey: string; colParts: string[] };
+type ColSpec = { colKey: string; colParts: string[]; columnSubtotal?: boolean };
 
 type ResultCacheEntry = {
   key: string;
@@ -215,7 +215,10 @@ export class PivotEngine {
 
     this.incrementalContext = { configHash, filteredData: workingData, dataHash };
 
-    let colSpecs = this.buildColSpecs(workingData, config, enrichedFields);
+    let colSpecs = this.withColumnSubtotals(
+      this.buildColSpecs(workingData, config, enrichedFields),
+      config
+    );
     colSpecs = this.sortEngine.sortColSpecs(colSpecs, config.options.sortBy, config);
     const headers = this.buildHeaders(colSpecs, config, enrichedFields);
     const onRows = valuesOnRows(config.options);
@@ -266,12 +269,14 @@ export class PivotEngine {
               )
             : undefined;
 
-        const cells = onRows
-          ? this.buildEmptyLabelCells(colSpecs, config, rowLabel)
-          : this.buildCellsForData(groupData, colSpecs, config, enrichedFields, groupKey);
+        // values-on-rows: faqat metrika bola qatorlari bo‘lsa ota bo‘sh;
+        // viloyat→agent kabi o‘lcham otasi — guruh summasi ko‘rinsin (— emas).
+        const cells =
+          onRows && measureChildren
+            ? this.buildEmptyLabelCells(colSpecs, config, rowLabel)
+            : this.buildCellsForData(groupData, colSpecs, config, enrichedFields, groupKey);
 
-        const subtotal =
-          config.options.showSubtotals && config.rows.length > 1
+        const subtotal = this.wantRowSubtotals(config)
             ? this.buildSubtotalRow(groupData, colSpecs, config, enrichedFields, rowLabel, groupKey)
             : undefined;
 
@@ -294,7 +299,9 @@ export class PivotEngine {
     rows = this.sortEngine.sortRows(rows, config.options.sortBy, config);
 
     const columnTotals =
-      config.options.showColumnTotals && config.columns.length > 0
+      config.options.showColumnTotals &&
+      !config.options.showGrandTotal &&
+      config.columns.length > 0
         ? this.buildColumnTotals(workingData, colSpecs, config, enrichedFields)
         : undefined;
 
@@ -665,7 +672,9 @@ export class PivotEngine {
       };
     }
 
-    const cubeValues = this.cube.getValues(rowGroupKey, colCubeKey, valueDef.fieldId);
+    const cubeValues = spec.columnSubtotal
+      ? []
+      : this.cube.getValues(rowGroupKey, colCubeKey, valueDef.fieldId);
     const rawValues =
       cubeValues.length > 0
         ? cubeValues
@@ -715,7 +724,9 @@ export class PivotEngine {
       const colKey = valuesOnRows(config.options)
         ? spec.colKey
         : (spec.colKey.split("__")[0] ?? spec.colKey);
-      subset = data.filter((row) => this.rowMatchesColKey(row, config.columns, colKey));
+      subset = data.filter((row) =>
+        this.rowMatchesColKey(row, config.columns, colKey, Boolean(spec.columnSubtotal))
+      );
     }
     return this.extractNumericValues(subset, fieldId);
   }
@@ -723,16 +734,81 @@ export class PivotEngine {
   private rowMatchesColKey(
     row: Record<string, unknown>,
     colFields: string[],
-    colKey: string
+    colKey: string,
+    partial = false
   ): boolean {
     const parts = splitGroupKey(colKey);
-    return colFields.every((field, i) => String(row[field] ?? "N/A") === parts[i]);
+    const fields = partial ? colFields.slice(0, parts.length) : colFields;
+    return fields.every((field, i) => String(row[field] ?? "N/A") === (parts[i] ?? "N/A"));
+  }
+
+  private wantRowSubtotals(config: PivotConfig): boolean {
+    if (!config.options.showSubtotals || config.rows.length < 2) return false;
+    const scope = config.options.subtotalScope ?? "both";
+    return scope === "both" || scope === "rows";
+  }
+
+  private withColumnSubtotals(specs: ColSpec[], config: PivotConfig): ColSpec[] {
+    const scope = config.options.subtotalScope ?? "both";
+    const on =
+      config.options.showSubtotals &&
+      (scope === "both" || scope === "columns") &&
+      config.columns.length > 1 &&
+      specs.length > 0;
+    if (!on) return specs;
+    const onRows = valuesOnRows(config.options);
+    const label = getPivotStrings().engine.subtotal;
+    const out: ColSpec[] = [];
+    let i = 0;
+    while (i < specs.length) {
+      const parent = specs[i].colParts[0] ?? "";
+      let j = i;
+      while (j < specs.length && (specs[j].colParts[0] ?? "") === parent) j++;
+      const group = specs.slice(i, j);
+      out.push(...group);
+      if (onRows) {
+        const parts = [...group[0].colParts];
+        for (let d = 1; d < config.columns.length; d++) parts[d] = label;
+        out.push({
+          colKey: parent,
+          colParts: parts.slice(0, config.columns.length),
+          columnSubtotal: true
+        });
+      } else {
+        const seen = new Set<string>();
+        for (const spec of group) {
+          const fieldId = spec.colKey.split("__").slice(1).join("__");
+          if (!fieldId || seen.has(fieldId)) continue;
+          seen.add(fieldId);
+          const parts = [parent];
+          for (let d = 1; d < config.columns.length; d++) parts.push(label);
+          const valueLabel = spec.colParts[spec.colParts.length - 1] ?? fieldId;
+          out.push({
+            colKey: `${parent}__${fieldId}`,
+            colParts: [...parts, valueLabel],
+            columnSubtotal: true
+          });
+        }
+      }
+      i = j;
+    }
+    return out;
   }
 
   private extractNumericValues(data: Record<string, unknown>[], fieldId: string): number[] {
-    return data
-      .map((r) => r[fieldId])
-      .filter((v): v is number => typeof v === "number" && Number.isFinite(v));
+    const out: number[] = [];
+    for (const r of data) {
+      const v = r[fieldId];
+      if (typeof v === "number" && Number.isFinite(v)) {
+        out.push(v);
+        continue;
+      }
+      if (typeof v === "string") {
+        const n = Number(v.trim());
+        if (Number.isFinite(n)) out.push(n);
+      }
+    }
+    return out;
   }
 
   private buildFlatRow(
@@ -788,10 +864,11 @@ export class PivotEngine {
             )
           : undefined;
 
-      const cells = onRows
-        ? this.buildEmptyLabelCells(colSpecs, config, rowLabel)
-        : this.buildCellsForData(groupData, colSpecs, config, fields, rowGroupKey);
-      if (!onRows && cells[0]) {
+      const cells =
+        onRows && measureChildren
+          ? this.buildEmptyLabelCells(colSpecs, config, rowLabel)
+          : this.buildCellsForData(groupData, colSpecs, config, fields, rowGroupKey);
+      if (cells[0] && !(onRows && measureChildren)) {
         cells[0] = {
           ...cells[0],
           value: rowLabel,
@@ -804,12 +881,18 @@ export class PivotEngine {
         ? this.buildChildRows(groupData, config, fields, colSpecs, depth + 1, rowGroupKey)
         : measureChildren;
 
+      const subtotal =
+        this.wantRowSubtotals(config) && !isLeaf
+          ? this.buildSubtotalRow(groupData, colSpecs, config, fields, rowLabel, rowGroupKey)
+          : undefined;
+
       result.push({
         key: rowGroupKey,
         depth,
         cells,
         parentKey: parentRowGroupKey,
         children,
+        subtotal,
         isExpanded: Boolean(children?.length)
       });
     }
@@ -825,19 +908,13 @@ export class PivotEngine {
     parentLabel: string,
     rowGroupKey: string
   ): PivotTotalRow {
-    const onRows = valuesOnRows(config.options);
-    const cells = onRows
-      ? this.buildEmptyLabelCells(
-          colSpecs,
-          config,
-          getPivotStrings().engine.subtotalInline(parentLabel)
-        )
-      : this.buildCellsForData(data, colSpecs, config, fields, rowGroupKey);
-    if (!onRows && cells[0]) {
+    const label = getPivotStrings().engine.subtotalInline(parentLabel);
+    const cells = this.buildCellsForData(data, colSpecs, config, fields, rowGroupKey);
+    if (cells[0]) {
       cells[0] = {
         ...cells[0],
-        value: getPivotStrings().engine.subtotalInline(parentLabel),
-        formatted: getPivotStrings().engine.subtotalInline(parentLabel),
+        value: label,
+        formatted: label,
         isEmpty: false
       };
     }

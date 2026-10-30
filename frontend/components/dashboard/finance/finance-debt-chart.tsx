@@ -28,8 +28,8 @@ export function FinanceDebtChart({ debtRatioPct }: { debtRatioPct: number }) {
   return (
     <section className="finance-motion-slide h-full rounded-2xl bg-card p-5 shadow-sm ring-1 ring-slate-200/70">
       <FinanceSectionHeader
-        title="По долгу"
-        subtitle="Соотношение оплаченного и задолженности"
+        title="Доля неоплаченного долга"
+        subtitle="Остаток доставленных заказов относительно чистых продаж за период"
       />
       <div className="grid min-h-[320px] grid-cols-1 items-center gap-6 lg:grid-cols-[minmax(220px,280px),minmax(0,1fr)] xl:grid-cols-1 2xl:grid-cols-[minmax(220px,280px),minmax(0,1fr)]">
         <div
@@ -37,13 +37,13 @@ export function FinanceDebtChart({ debtRatioPct }: { debtRatioPct: number }) {
           style={{ background: gradient }}
         >
           <div className="flex h-full w-full flex-col items-center justify-center rounded-full bg-card text-center ring-1 ring-slate-100">
-            <span className="text-sm font-semibold text-slate-500">Оплачено</span>
-            <strong className="text-4xl font-black text-emerald-600">{fmtFinancePercent(paid)}</strong>
+            <span className="text-sm font-semibold text-slate-500">Долг от продаж</span>
+            <strong className="text-4xl font-black text-rose-600">{fmtFinancePercent(debt)}</strong>
           </div>
         </div>
         <div className="space-y-3">
-          <RatioLine label="Оплачено" value={paid} color="bg-emerald-500" />
-          <RatioLine label="Долг" value={debt} color="bg-red-500" />
+          <RatioLine label="Покрыто продажами" value={paid} color="bg-emerald-500" />
+          <RatioLine label="Неоплаченный долг" value={debt} color="bg-red-500" />
         </div>
       </div>
     </section>

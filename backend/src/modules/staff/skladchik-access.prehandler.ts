@@ -2,6 +2,7 @@ import type { FastifyReply, FastifyRequest } from "fastify";
 import { prisma } from "../../config/database";
 import { sendApiError } from "../../lib/api-error";
 import { getAccessUser } from "../auth/auth.prehandlers";
+import { resolveUserPermissionKeys } from "../access/rbac.service";
 import {
   sanitizeWarehouseStaffEntitlements,
   SKLADCHIK_ENTITLEMENT_KEYS,
@@ -22,17 +23,33 @@ async function loadSkladchikEntitlementsJson(
   );
 }
 
+async function userHasAnyPermission(
+  request: FastifyRequest,
+  permissionKeys: readonly string[] | undefined
+): Promise<boolean> {
+  if (!permissionKeys || permissionKeys.length === 0) return false;
+  const u = getAccessUser(request);
+  if (u.role === "admin") return true;
+  const uid = Number.parseInt(u.sub, 10);
+  if (!Number.isFinite(uid) || uid <= 0) return false;
+  const effective = await resolveUserPermissionKeys(u.tenantId, uid, u.role);
+  return permissionKeys.some((k) => effective.has(k));
+}
+
 /**
  * Rol `allowedRoles` ichida bo‘lsa — o‘tadi.
+ * Aks holda Dostup `permissionKeys` dan biri bo‘lsa — o‘tadi (Access grant).
  * Aks holda faqat `skladchik` va berilgan entitlement `true` bo‘lsa — o‘tadi.
  */
 export function requireRolesOrSkladchikEntitlement(
   allowedRoles: readonly string[],
-  entitlement: SkladchikEntitlementKey
+  entitlement: SkladchikEntitlementKey,
+  permissionKeys?: readonly string[]
 ) {
   return async (request: FastifyRequest, reply: FastifyReply): Promise<void> => {
     const u = getAccessUser(request);
     if (allowedRoles.includes(u.role)) return;
+    if (await userHasAnyPermission(request, permissionKeys)) return;
     if (u.role !== "skladchik") {
       void sendApiError(reply, request, 403, "ForbiddenRole");
       return;
@@ -55,14 +72,16 @@ export function requireRolesOrSkladchikEntitlement(
   };
 }
 
-/** `allowedRoles` dan biri yoki skladchik + `anyOf` dan kamida bittasi `true`. */
+/** `allowedRoles` dan biri, Dostup permission, yoki skladchik + `anyOf` dan kamida bittasi `true`. */
 export function requireRolesOrSkladchikAnyEntitlement(
   allowedRoles: readonly string[],
-  anyOf: readonly SkladchikEntitlementKey[]
+  anyOf: readonly SkladchikEntitlementKey[],
+  permissionKeys?: readonly string[]
 ) {
   return async (request: FastifyRequest, reply: FastifyReply): Promise<void> => {
     const u = getAccessUser(request);
     if (allowedRoles.includes(u.role)) return;
+    if (await userHasAnyPermission(request, permissionKeys)) return;
     if (u.role !== "skladchik") {
       void sendApiError(reply, request, 403, "ForbiddenRole");
       return;
@@ -154,3 +173,27 @@ export const SKLADCHIK_ORDER_META_ANY: SkladchikEntitlementKey[] = [
 ];
 
 export const SKLADCHIK_ALL_ENTITLEMENT_KEYS: readonly SkladchikEntitlementKey[] = SKLADCHIK_ENTITLEMENT_KEYS;
+
+/** Ombor katalogi (filtrlar) — Dostupda ombor bo‘limidan kamida bitta view. */
+export const WAREHOUSE_DIRECTORY_VIEW_PERMISSIONS = [
+  "warehouse.sklady.view",
+  "warehouse.ostatki.view",
+  "warehouse.ostatki_na_datu.view",
+  "warehouse.rekomendovannyy_zapas.view",
+  "warehouse.materialnyy_otchet.view",
+  "warehouse.postuplenie.view",
+  "warehouse.peremeshchenie.view",
+  "warehouse.bloki.view",
+  "warehouse.korrektirovka.view"
+] as const;
+
+export const STOCK_BALANCES_VIEW_PERMISSIONS = [
+  "warehouse.ostatki.view",
+  "warehouse.ostatki_tovarov.view"
+] as const;
+
+export const STOCK_BALANCES_EXPORT_PERMISSIONS = [
+  "warehouse.ostatki.copy",
+  "warehouse.ostatki.view",
+  "warehouse.ostatki_tovarov.view"
+] as const;

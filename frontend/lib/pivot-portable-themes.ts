@@ -47,7 +47,7 @@ export const PORTABLE_PIVOT_THEMES: PortablePivotTheme[] = [
   {
     id: "portable-default",
     packageThemeId: "default",
-    label: "Default",
+    label: "Стандартная",
     cssVars: toPg({
       "--pivot-border": "#e4e4e7",
       "--pivot-surface": "#ffffff",
@@ -59,7 +59,7 @@ export const PORTABLE_PIVOT_THEMES: PortablePivotTheme[] = [
   {
     id: "portable-striped",
     packageThemeId: "striped",
-    label: "Striped",
+    label: "Полосатая",
     cssVars: toPg({
       "--pivot-border": "#d4d4d8",
       "--pivot-surface": "#fafafa",
@@ -72,7 +72,7 @@ export const PORTABLE_PIVOT_THEMES: PortablePivotTheme[] = [
   {
     id: "portable-compact",
     packageThemeId: "compact",
-    label: "Compact",
+    label: "Компактная",
     cssVars: toPg({
       "--pivot-border": "#e4e4e7",
       "--pivot-surface": "#ffffff",
@@ -85,7 +85,7 @@ export const PORTABLE_PIVOT_THEMES: PortablePivotTheme[] = [
   {
     id: "portable-heatmap",
     packageThemeId: "heatmap",
-    label: "Heatmap",
+    label: "Тепловая карта",
     cssVars: toPg({
       "--pivot-border": "#e2e8f0",
       "--pivot-surface": "#ffffff",

@@ -63,3 +63,38 @@ export function diffMobileConfigDraft(
 export function countMobileConfigPatchSections(patch: AgentMobileConfigDraft): number {
   return SECTION_KEYS.filter((k) => patch[k] != null).length;
 }
+
+function mergeFieldMap(
+  base: Record<string, boolean> | undefined,
+  patch: Record<string, boolean> | undefined
+): Record<string, boolean> | undefined {
+  if (!patch) return base;
+  return { ...base, ...patch };
+}
+
+/** Saqlangan konfiguratsiya ustiga faqat patch kalitlari. */
+export function mergeMobileConfigDraft(
+  base: AgentMobileConfigDraft,
+  patch: AgentMobileConfigDraft
+): AgentMobileConfigDraft {
+  const out: AgentMobileConfigDraft = { ...base, schema_version: base.schema_version ?? patch.schema_version ?? 1 };
+  for (const key of SECTION_KEYS) {
+    const sectionPatch = patch[key] as Record<string, unknown> | undefined;
+    if (!sectionPatch) continue;
+    const sectionBase = (base[key] ?? {}) as Record<string, unknown>;
+    const merged: Record<string, unknown> = { ...sectionBase };
+    for (const [k, v] of Object.entries(sectionPatch)) {
+      if (v === undefined) continue;
+      if ((k === "fields_visible" || k === "fields_required") && v && typeof v === "object") {
+        merged[k] = mergeFieldMap(
+          sectionBase[k] as Record<string, boolean> | undefined,
+          v as Record<string, boolean>
+        );
+      } else {
+        merged[k] = v;
+      }
+    }
+    (out as Record<string, unknown>)[key] = merged;
+  }
+  return out;
+}

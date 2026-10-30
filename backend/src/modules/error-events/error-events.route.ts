@@ -15,7 +15,7 @@ import {
 const adminRoles = ["admin"] as const;
 
 const mobileIngestSchema = z.object({
-  message: z.string().min(1).max(500),
+  message: z.string().min(1).max(8000),
   error_code: z.string().max(128).optional(),
   request_id: z.string().max(64).optional(),
   path: z.string().max(255).optional(),

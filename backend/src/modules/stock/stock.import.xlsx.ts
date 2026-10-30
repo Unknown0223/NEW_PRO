@@ -26,7 +26,7 @@ export async function importStockReceiptFromXlsx(
   await workbook.xlsx.load(Buffer.from(buffer) as never);
   const sheet = workbook.worksheets[0];
   if (!sheet) {
-    return { applied: 0, errors: ["Varaq topilmadi"], warnings: [] };
+    return { applied: 0, errors: ["Лист не найден"], warnings: [] };
   }
 
   const headerRow = sheet.getRow(1);
@@ -53,7 +53,7 @@ export async function importStockReceiptFromXlsx(
     return {
       applied: 0,
       errors: [
-        "Birinchi qatorda majburiy ustunlar: Ombor (ID yoki nomi), Miqdor; SKU yoki Shtrix kod ustuni kerak. Yoki «Поступление» shabloni: «Количество прихода», «Код товара»."
+        "В первой строке обязательны столбцы «Ombor (ID yoki nomi)» и «Miqdor», а также столбец SKU или штрихкода. Либо используйте шаблон «Поступление»: «Количество прихода», «Код товара»."
       ],
       warnings: []
     };
@@ -61,7 +61,7 @@ export async function importStockReceiptFromXlsx(
   if (!colIndexByKey.sku && !colIndexByKey.barcode) {
     return {
       applied: 0,
-      errors: ["«Tovar smart kodi (SKU)» yoki «Shtrix kod» ustunlaridan kamida bittasi bo‘lishi kerak"],
+      errors: ["Нужен хотя бы один из столбцов «Tovar smart kodi (SKU)» или «Shtrix kod»"],
       warnings: []
     };
   }
@@ -87,44 +87,44 @@ export async function importStockReceiptFromXlsx(
 
     const qty = parseQtyCell(qtyCell);
     if (qty == null || qty <= 0) {
-      errors.push(`Qator ${r}: miqdor noto‘g‘ri yoki bo‘sh`);
+      errors.push(`Строка ${r}: количество неверное или пустое`);
       continue;
     }
 
     const whId = await resolveWarehouseId(tenantId, whCell);
     if (whId == null) {
-      errors.push(`Qator ${r}: ombor topilmadi («${whCell}»)`);
+      errors.push(`Строка ${r}: склад не найден («${whCell}»)`);
       continue;
     }
 
     if (!skuCell && !bcCell) {
-      errors.push(`Qator ${r}: SKU yoki shtrix kod kerak`);
+      errors.push(`Строка ${r}: нужен SKU или штрихкод`);
       continue;
     }
 
     const product = await resolveProductForImport(tenantId, skuCell, bcCell);
     if (!product) {
-      errors.push(`Qator ${r}: mahsulot topilmadi (SKU: «${skuCell}», shtrix: «${bcCell}»)`);
+      errors.push(`Строка ${r}: товар не найден (SKU: «${skuCell}», штрихкод: «${bcCell}»)`);
       continue;
     }
 
     if (nameCell) {
       if (product.name.trim().toLowerCase() !== nameCell.trim().toLowerCase()) {
         warnings.push(
-          `Qator ${r}: «Tovar nomi» jadvaldagi nom bilan mos kelmaydi (SKU ${product.sku}, kutilgan tekshiruv)`
+          `Строка ${r}: «Tovar nomi» не совпадает с названием в справочнике (SKU ${product.sku}, контрольная проверка)`
         );
       }
     }
     if (bcCell && product.barcode && product.barcode.trim() !== bcCell.trim()) {
       warnings.push(
-        `Qator ${r}: shtrix kod ustuni bazadagi kod bilan mos emas (SKU ${product.sku})`
+        `Строка ${r}: штрихкод в файле не совпадает со штрихкодом в базе (SKU ${product.sku})`
       );
     }
 
     if (dateCell) {
       const { iso, raw } = parseDateCellForWarn(dateCell);
       if (raw && !iso) {
-        warnings.push(`Qator ${r}: sanani o‘qib bo‘lmadi («${raw}»), kirim baribir qo‘llanadi`);
+        warnings.push(`Строка ${r}: не удалось прочитать дату («${raw}»), приход всё равно будет проведён`);
       }
     }
 
@@ -140,7 +140,7 @@ export async function importStockReceiptFromXlsx(
       );
       applied += 1;
     } catch (e) {
-      errors.push(`Qator ${r}: ${e instanceof Error ? e.message : "xato"}`);
+      errors.push(`Строка ${r}: ${e instanceof Error ? e.message : "ошибка"}`);
     }
   }
 

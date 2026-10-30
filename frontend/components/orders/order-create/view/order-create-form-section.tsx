@@ -63,6 +63,7 @@ export function OrderCreateFormSection({ vm }: { vm: OrderCreateVm }) {
     warehouseId,
     agentId,
     applyBonus,
+    applyDiscount,
     orderComment,
     requestTypeRef,
     orderNotePreset,
@@ -87,6 +88,8 @@ export function OrderCreateFormSection({ vm }: { vm: OrderCreateVm }) {
     isExchangeFlow,
     headerClientAgentLocked,
     loadingLists,
+    lockedAgentLabel,
+    lockedWarehouseLabel,
     mutation,
     orderClientPickerScopeIds,
     orderIsConsignment,
@@ -108,6 +111,7 @@ export function OrderCreateFormSection({ vm }: { vm: OrderCreateVm }) {
     resetFlowAfterClientChange,
     setAgentId,
     setApplyBonus,
+    setApplyDiscount,
     setClientId,
     setConsignmentDueDate,
     setConsignmentDueOpen,
@@ -159,15 +163,15 @@ export function OrderCreateFormSection({ vm }: { vm: OrderCreateVm }) {
           {!isPolkiSheet ? (
           <>
           <div className="mb-4 flex flex-col gap-1 sm:flex-row sm:items-baseline sm:justify-between">
-            <h2 className="text-sm font-semibold text-foreground">Buyurtma ma&apos;lumotlari</h2>
+            <h2 className="text-sm font-semibold text-foreground">Данные заказа</h2>
             <p className="text-xs text-muted-foreground">
-              Tartib: klient → ombor → narx / bonus → mahsulotlar
+              Порядок: клиент → склад → цена / бонус → товары
             </p>
           </div>
 
           <div className="mb-6 grid grid-cols-1 gap-4 lg:grid-cols-2">
             <div className="space-y-2" data-oc-error="client">
-              <Label htmlFor="oc-client">Klient</Label>
+              <Label htmlFor="oc-client">Клиент</Label>
               <PolkiClientSearchSelect
                 id="oc-client"
                 data-testid="order-create-client"
@@ -175,7 +179,7 @@ export function OrderCreateFormSection({ vm }: { vm: OrderCreateVm }) {
                 value={clientId}
                 selectedLabel={polkiSelectedClientLabel}
                 eligibleClientIds={orderClientPickerScopeIds}
-                placeholder="Klientni tanlang"
+                placeholder="Выберите клиента"
                 className="w-full"
                 disabled={mutation.isPending || loadingLists || headerClientAgentLocked}
                 onValueChange={(id) => {
@@ -194,21 +198,21 @@ export function OrderCreateFormSection({ vm }: { vm: OrderCreateVm }) {
               />
               {headerClientAgentLocked ? (
                 <p className="text-[11px] text-muted-foreground">
-                  Tahrirda klient o‘zgartirilmaydi.
+                  При редактировании клиента изменить нельзя.
                 </p>
               ) : null}
             </div>
             <div className="space-y-2">
-              <Label htmlFor="oc-order-date">Buyurtma sanasi</Label>
+              <Label htmlFor="oc-order-date">Дата заказа</Label>
               <Input
                 id="oc-order-date"
                 readOnly
                 className={cn(fieldClass, "cursor-default bg-muted/40")}
-                value={orderOpenedAt.toLocaleString("uz-UZ", { dateStyle: "medium", timeStyle: "short" })}
+                value={orderOpenedAt.toLocaleString("ru-RU", { dateStyle: "medium", timeStyle: "short" })}
               />
               <p className="text-[11px] text-muted-foreground">
-                Tarixiy narxlar — pastroqdagi{" "}
-                <span className="font-medium text-foreground">«Старые цены»</span> belgisidan.
+                Исторические цены — через флажок{" "}
+                <span className="font-medium text-foreground">«Старые цены»</span> ниже.
               </p>
             </div>
           </div>
@@ -216,38 +220,60 @@ export function OrderCreateFormSection({ vm }: { vm: OrderCreateVm }) {
           <div className="grid min-h-[520px] grid-cols-1 gap-6 xl:min-h-[calc(100vh-18rem)] xl:grid-cols-12 xl:gap-5">
             {/* Chap: zakaz maydonlari + narx turi */}
             <div className="space-y-4 xl:col-span-4 xl:border-r xl:border-border/70 xl:pr-5">
-              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Zakaz</p>
+              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Заказ</p>
               <div className="space-y-2" data-oc-error="warehouse">
                 <Label htmlFor="oc-warehouse">
-                  {isPolkiSheet ? "Sklad qaytarish (qaytarish ombori)" : "Ombor"}
+                  {isPolkiSheet ? "Склад возврата" : "Склад"}
                 </Label>
+                {headerClientAgentLocked ? (
+                  <>
+                    <Input
+                      id="oc-warehouse"
+                      readOnly
+                      className={cn(fieldClass, "cursor-default bg-muted/40")}
+                      value={lockedWarehouseLabel || warehouseId || "—"}
+                      aria-label="Склад"
+                    />
+                    <p className="text-[11px] text-muted-foreground">
+                      При редактировании склад изменить нельзя.
+                    </p>
+                  </>
+                ) : (
+                  <>
                 <FilterSelect
                   id="oc-warehouse"
                   data-testid="order-create-warehouse"
                   className={fieldClass}
-                  emptyLabel={isPolkiSheet ? "Qaytarish omborini tanlang" : "Omborni tanlang"}
-                  aria-label={isPolkiSheet ? "Qaytarish ombori" : "Ombor"}
+                  emptyLabel={isPolkiSheet ? "Выберите склад возврата" : "Выберите склад"}
+                  aria-label={isPolkiSheet ? "Склад возврата" : "Склад"}
                   value={warehouseId}
                   onChange={(e) => {
+                    if (headerClientAgentLocked) return;
                     setSelectionNotice(null);
                     setWarehouseId(e.target.value);
                   }}
-                  disabled={mutation.isPending || loadingLists || !canPickWarehouse}
+                  disabled={
+                    mutation.isPending ||
+                    loadingLists ||
+                    !canPickWarehouse
+                  }
                 >
                   {warehouses.map((w) => (
                     <option key={w.id} value={String(w.id)}>
                       {w.name}
-                      {w.stock_purpose === "return" ? " · return" : ""}
+                      {w.stock_purpose === "return" ? " · возврат" : ""}
                     </option>
                   ))}
                 </FilterSelect>
                 {!canPickWarehouse ? (
-                  <p className="text-[11px] text-muted-foreground">Avval klientni tanlang.</p>
+                  <p className="text-[11px] text-muted-foreground">Сначала выберите клиента.</p>
                 ) : null}
+                  </>
+                )}
               </div>
               {isPolkiFree ? (
                 <div className="space-y-1">
-                  <Label className="text-xs text-muted-foreground">Davr</Label>
+                  <Label className="text-xs text-muted-foreground">Период</Label>
                   <button
                     type="button"
                     className={cn(
@@ -272,34 +298,43 @@ export function OrderCreateFormSection({ vm }: { vm: OrderCreateVm }) {
                 </div>
               ) : null}
               <div className="space-y-2" data-oc-error="agent">
-                <Label htmlFor="oc-agent">Agent{requiresAgentAndPayment ? " *" : ""}</Label>
+                <Label htmlFor="oc-agent">Агент{requiresAgentAndPayment ? " *" : ""}</Label>
+                {headerClientAgentLocked ? (
+                  <>
+                    <Input
+                      id="oc-agent"
+                      readOnly
+                      className={cn(fieldClass, "cursor-default bg-muted/40")}
+                      value={lockedAgentLabel || "—"}
+                      aria-label="Агент"
+                    />
+                    <p className="text-[11px] text-muted-foreground">
+                      При редактировании агента изменить нельзя.
+                    </p>
+                  </>
+                ) : (
+                  <>
                 <FilterSearchableSelect
                   id="oc-agent"
                   className={fieldClass}
-                  emptyLabel={requiresAgentAndPayment ? "Agentni tanlang" : "Agent (ixtiyoriy)"}
+                  emptyLabel={requiresAgentAndPayment ? "Выберите агента" : "Агент (необязательно)"}
                   value={agentId}
                   options={agentFilterOptions}
                   onValueChange={(v) => {
-                    if (headerClientAgentLocked) return;
                     setSelectionNotice(null);
                     setAgentId(v);
                   }}
                   disabled={
                     mutation.isPending ||
                     loadingLists ||
-                    !canPickWarehouse ||
-                    headerClientAgentLocked
+                    !canPickWarehouse
                   }
-                  searchPlaceholder="Qidiruv: login, ism"
-                  emptyMessage="Mos agent topilmadi"
+                  searchPlaceholder="Поиск: логин, имя"
+                  emptyMessage="Подходящий агент не найден"
                   minPopoverWidth={320}
                   includeEmptyOption={!requiresAgentAndPayment || !agentId.trim()}
                 />
-                {headerClientAgentLocked ? (
-                  <p className="text-[11px] text-muted-foreground">
-                    Tahrirda agent o‘zgartirilmaydi.
-                  </p>
-                ) : clientId.trim() ? (
+                {clientId.trim() ? (
                   <OrderCreateAgentLockHint
                     assignments={clientAssignmentsForLock}
                     selectedAgentId={
@@ -309,19 +344,25 @@ export function OrderCreateFormSection({ vm }: { vm: OrderCreateVm }) {
                     }
                   />
                 ) : null}
+                  </>
+                )}
               </div>
               {requiresAgentAndPayment && showOrderPaymentMethodSelector ? (
                 <div className="space-y-2" data-oc-error="payment">
-                  <Label htmlFor="oc-pay-method">To‘lov usuli</Label>
+                  <Label htmlFor="oc-pay-method">Способ оплаты</Label>
                   <FilterSelect
                     id="oc-pay-method"
                     data-testid="order-create-payment-method"
                     className={fieldClass}
-                    emptyLabel="Usulni tanlang"
-                    aria-label="To‘lov usuli"
+                    emptyLabel="Выберите способ"
+                    aria-label="Способ оплаты"
                     value={paymentMethodRef}
                     onChange={(e) => setPaymentMethodRef(e.target.value)}
-                    disabled={mutation.isPending || loadingLists || !canPickWarehouse}
+                    disabled={
+                      mutation.isPending ||
+                      loadingLists ||
+                      (!canPickWarehouse && !headerClientAgentLocked)
+                    }
                   >
                     {paymentMethodSelectOptions.map((e) => (
                       <option key={e.id} value={e.id}>
@@ -331,49 +372,53 @@ export function OrderCreateFormSection({ vm }: { vm: OrderCreateVm }) {
                   </FilterSelect>
                   {paymentMethodSelectOptions.length === 0 ? (
                     <p className="text-[11px] text-muted-foreground">
-                      Sozlamalarda «To‘lov usullari» bo‘sh —{" "}
+                      В настройках список «Способы оплаты» пуст — добавьте способы в разделе{" "}
                       <Link className="underline" href="/settings">
-                        sozlamalar
-                      </Link>{" "}
-                      bo‘limida usullarni qo‘shing.
+                        настроек
+                      </Link>
+                      .
                     </p>
                   ) : null}
                 </div>
               ) : null}
               {!isPolkiSheet ? (
                 <div className="space-y-2">
-                  <Label htmlFor="oc-exp">Ekspeditor</Label>
+                  <Label htmlFor="oc-exp">Экспедитор</Label>
                   <FilterSearchableSelect
                     id="oc-exp"
                     className={fieldClass}
-                    emptyLabel="Avtobog‘lash"
+                    emptyLabel="Автопривязка"
                     value={expeditorUserId}
                     options={expeditorFilterOptions}
                     onValueChange={(v) => {
                       setSelectionNotice(null);
                       setExpeditorUserId(v);
                     }}
-                    disabled={mutation.isPending || createCtxQ.isPending || !canPickPricingAndExpeditor}
-                    searchPlaceholder="Qidiruv: ID, login, FIO"
-                    emptyMessage="Topilmadi"
+                    disabled={
+                      mutation.isPending ||
+                      createCtxQ.isPending ||
+                      (!canPickPricingAndExpeditor && !headerClientAgentLocked)
+                    }
+                    searchPlaceholder="Поиск: ID, логин, ФИО"
+                    emptyMessage="Не найдено"
                     minPopoverWidth={280}
                   />
-                  {!canPickPricingAndExpeditor ? (
-                    <p className="text-[11px] text-muted-foreground">Ombor tanlang — keyin ochiladi.</p>
+                  {!canPickPricingAndExpeditor && !headerClientAgentLocked ? (
+                    <p className="text-[11px] text-muted-foreground">Выберите склад — затем поле станет доступно.</p>
                   ) : null}
                 </div>
               ) : null}
 
               <div className="space-y-3" data-oc-error="price">
-                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Narx turi</p>
+                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Тип цены</p>
                 <div
                   className={cn(
                     "max-h-[min(52vh,420px)] space-y-2 overflow-y-auto rounded-lg border border-border bg-muted/10 p-3",
-                    !canPickPricingAndExpeditor && "opacity-60",
+                    !canPickPricingAndExpeditor && !headerClientAgentLocked && "opacity-60",
                     errorTarget === "price" && localError && "ring-2 ring-destructive/50"
                   )}
                   role="radiogroup"
-                  aria-label="Narx turi"
+                  aria-label="Тип цены"
                   aria-invalid={errorTarget === "price" && Boolean(localError)}
                 >
                   {(createCtxQ.data?.price_types?.length ? createCtxQ.data.price_types : ["retail"]).map((t) => (
@@ -394,7 +439,9 @@ export function OrderCreateFormSection({ vm }: { vm: OrderCreateVm }) {
                           setPriceType(t);
                         }}
                         disabled={
-                          mutation.isPending || createCtxQ.isPending || !canPickPricingAndExpeditor
+                          mutation.isPending ||
+                          createCtxQ.isPending ||
+                          (!canPickPricingAndExpeditor && !headerClientAgentLocked)
                         }
                       />
                       <span className="font-medium capitalize">{priceTypeDisplayLabel(t, priceTypeLabels)}</span>
@@ -407,7 +454,10 @@ export function OrderCreateFormSection({ vm }: { vm: OrderCreateVm }) {
                     className="size-3.5 rounded border-input"
                     checked={oldPricesEnabled}
                     onChange={(e) => oldPrices.onOldPricesCheckboxChange(e.target.checked)}
-                    disabled={mutation.isPending || !canPickPricingAndExpeditor}
+                    disabled={
+                      mutation.isPending ||
+                      (!canPickPricingAndExpeditor && !headerClientAgentLocked)
+                    }
                   />
                   Старые цены
                   {oldPricesEnabled && priceAsOf ? (
@@ -433,15 +483,15 @@ export function OrderCreateFormSection({ vm }: { vm: OrderCreateVm }) {
                       disabled={mutation.isPending}
                     />
                     <span>
-                      Konsignatsiya zakazi
+                      Заказ на консигнацию
                       <span className="mt-0.5 block text-[11px] text-muted-foreground">
-                        Agent limiti va «Консигнация» sozlamalariga bog‘liq. Agent majburiy.
+                        Зависит от лимита агента и настроек «Консигнация». Агент обязателен.
                       </span>
                     </span>
                   </label>
                   {orderIsConsignment ? (
                     <div className="space-y-1 pl-6">
-                      <Label className="text-xs text-muted-foreground">To‘lash muddati (ixtiyoriy)</Label>
+                      <Label className="text-xs text-muted-foreground">Срок оплаты (необязательно)</Label>
                       <button
                         ref={consignmentDueAnchorRef}
                         type="button"
@@ -457,7 +507,7 @@ export function OrderCreateFormSection({ vm }: { vm: OrderCreateVm }) {
                       >
                         <CalendarDays className="h-4 w-4 shrink-0 text-muted-foreground" />
                         <span className="truncate text-sm">
-                          {formatRuDateButton(consignmentDueDate) || "kk.oo.yyyy"}
+                          {formatRuDateButton(consignmentDueDate) || "дд.мм.гггг"}
                         </span>
                       </button>
                       <DatePickerPopover
@@ -466,7 +516,7 @@ export function OrderCreateFormSection({ vm }: { vm: OrderCreateVm }) {
                         anchorRef={consignmentDueAnchorRef}
                         value={consignmentDueDate}
                         onChange={setConsignmentDueDate}
-                        footerLabels={{ clear: "Tozalash", today: "Bugun", close: "Yopish" }}
+                        footerLabels={{ clear: "Очистить", today: "Сегодня", close: "Закрыть" }}
                       />
                     </div>
                   ) : null}
@@ -475,36 +525,56 @@ export function OrderCreateFormSection({ vm }: { vm: OrderCreateVm }) {
 
               {!isPolkiSheet ? (
                 <div className="space-y-2">
-                  <Label htmlFor="oc-bonus-mode">Bonus turi</Label>
+                  <Label htmlFor="oc-bonus-mode">Тип бонуса</Label>
                   <select
                     id="oc-bonus-mode"
                     className={fieldClass}
                     value={applyBonus ? "auto" : "off"}
                     onChange={(e) => setApplyBonus(e.target.value === "auto")}
-                    disabled={mutation.isPending || !canPickPricingAndExpeditor}
+                    disabled={
+                      mutation.isPending ||
+                      (!canPickPricingAndExpeditor && !headerClientAgentLocked)
+                    }
                   >
-                    <option value="auto">Avto (bonus qoidalarini qo‘llash)</option>
-                    <option value="off">O‘chirilgan</option>
+                    <option value="auto">Авто (применять правила бонусов)</option>
+                    <option value="off">Выключено</option>
                   </select>
                 </div>
               ) : null}
-              <div className="space-y-2">
-                <Label htmlFor="oc-discount-mode">Skidka turi</Label>
-                <select id="oc-discount-mode" className={fieldClass} disabled title="API — keyinroq">
-                  <option value="auto">Avto</option>
-                </select>
-                <p className="text-[11px] text-muted-foreground">
-                  {isPolkiSheet
-                    ? "Skidka turi — namunadagi kabi joy; API keyin ulashadi."
-                    : "Chiziq / foiz skidkalari keyin ulashadi; hozir narx turi va bonus holati ishlatiladi."}
-                </p>
-              </div>
+              {isPolkiSheet ? (
+                <div className="space-y-2">
+                  <Label htmlFor="oc-discount-mode">Тип скидки</Label>
+                  <select id="oc-discount-mode" className={fieldClass} disabled title="API — позже">
+                    <option value="auto">Авто</option>
+                  </select>
+                  <p className="text-[11px] text-muted-foreground">
+                    Тип скидки — место зарезервировано, как в образце; API подключится позже.
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <Label htmlFor="oc-discount-mode">Тип скидки</Label>
+                  <select
+                    id="oc-discount-mode"
+                    className={fieldClass}
+                    value={applyDiscount ? "auto" : "off"}
+                    onChange={(e) => setApplyDiscount(e.target.value === "auto")}
+                    disabled={
+                      mutation.isPending ||
+                      (!canPickPricingAndExpeditor && !headerClientAgentLocked)
+                    }
+                  >
+                    <option value="auto">Авто (применять правила скидок)</option>
+                    <option value="off">Выключено</option>
+                  </select>
+                </div>
+              )}
             </div>
 
             {/* O‘ng: mahsulot kategoriyasi filtri */}
             <div className="min-w-0 space-y-3 xl:col-span-8 xl:border-l xl:border-border/70 xl:pl-5 xl:flex xl:flex-col">
               <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                Mahsulot kategoriyalari
+                Категории товаров
               </p>
               <div
                 className={cn(
@@ -517,29 +587,29 @@ export function OrderCreateFormSection({ vm }: { vm: OrderCreateVm }) {
                   <p className="text-xs text-muted-foreground">
                     {useSplitOrderCatalog && canPickProducts && createCtxQ.isError ? (
                       <span className="text-destructive">
-                        Katalog yuklanmadi. Sahifani yangilang yoki qayta urinib ko‘ring.
+                        Каталог не загрузился. Обновите страницу или повторите попытку.
                       </span>
                     ) : useSplitOrderCatalog &&
                       canPickProducts &&
                       (createCtxQ.isPlaceholderData || (createCtxQ.isPending && !createCtxQ.data)) ? (
-                      "Katalog agent bo‘yicha yangilanmoqda…"
+                      "Обновление каталога по агенту…"
                     ) : isPolkiSheet ? (
                       !canPickProducts
-                        ? "Avval klientni tanlang (va zakaz rejimida zakazni ham)."
-                        : "Klient va ombordan keyin davr yoki zakazni tanlang — keyin kategoriyalar."
+                        ? "Сначала выберите клиента (а в режиме заказа — и заказ)."
+                        : "После клиента и склада выберите период или заказ — затем появятся категории."
                     ) : !canPickProducts ? (
-                      "Avval klient va omborni tanlang."
+                      "Сначала выберите клиента и склад."
                     ) : (
-                      "Avval agentni tanlang — shu agentga bog‘langan mahsulot kategoriyalari paydo bo‘ladi."
+                      "Сначала выберите агента — появятся категории товаров, привязанных к нему."
                     )}
                   </p>
                 ) : categoriesWithWarehouseSellableStock == null ? (
-                  <p className="text-xs text-muted-foreground">Ombor qoldiqlari (Fakt, Bron) yuklanmoqda…</p>
+                  <p className="text-xs text-muted-foreground">Загрузка складских остатков (факт, бронь)…</p>
                 ) : categoriesWithWarehouseSellableStock.length === 0 ? (
                   <p className="text-xs text-muted-foreground">
                     {stockQ.isError
-                      ? "Qoldiqlarni yuklab bo‘lmadi — kategoriya ro‘yxini filtrlash mumkin emas."
-                      : "Bu omborda katalog bo‘yicha Mavjud (fakt − bron) miqdori 0 dan yuqori bo‘lgan mahsulot yo‘q."}
+                      ? "Не удалось загрузить остатки — фильтрация списка категорий недоступна."
+                      : "На этом складе нет товаров каталога с доступным количеством (факт − бронь) больше 0."}
                   </p>
                 ) : (
                   <div className="flex flex-wrap gap-2">
@@ -555,7 +625,7 @@ export function OrderCreateFormSection({ vm }: { vm: OrderCreateVm }) {
                       )}
                     >
                       {!categoryFilterActive ? <Check className="size-3 shrink-0" aria-hidden /> : null}
-                      Barchasi
+                      Все
                     </button>
                     {categoriesWithWarehouseSellableStock.map((c) => {
                       const active = categoryFilterSet.has(c.id);
@@ -965,7 +1035,7 @@ export function OrderCreateFormSection({ vm }: { vm: OrderCreateVm }) {
           {!isPolkiSheet ? (
           <div className="mt-6 space-y-4 border-t border-border/70 pt-5">
             <p className="text-xs text-muted-foreground">
-              Spravochniklar:{" "}
+              Справочники:{" "}
               <Link href="/settings/reasons/request-types" className="text-primary underline-offset-2 hover:underline">
                 причины заявок
               </Link>
@@ -977,14 +1047,14 @@ export function OrderCreateFormSection({ vm }: { vm: OrderCreateVm }) {
             </p>
             {requestTypeOptions.length > 0 ? (
               <div className="space-y-1.5">
-                <Label>Заявка / yetkazib berish turi</Label>
+                <Label>Тип заявки / доставки</Label>
                 <Select
                   key={`rt-${refSelectKey}`}
                   value={requestTypeRef || undefined}
                   onValueChange={(v) => setRequestTypeRef(v === "__none__" ? "" : v)}
                 >
                   <SelectTrigger id="oc-request-type" className="max-w-md">
-                    <SelectValue placeholder="Tanlash ixtiyoriy" />
+                    <SelectValue placeholder="Выбор необязателен" />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="__none__">—</SelectItem>
@@ -999,14 +1069,14 @@ export function OrderCreateFormSection({ vm }: { vm: OrderCreateVm }) {
             ) : null}
             {orderNoteOptions.length > 0 ? (
               <div className="space-y-1.5">
-                <Label>Tayyor izoh shabloni</Label>
+                <Label>Шаблон примечания</Label>
                 <Select
                   key={`on-${refSelectKey}`}
                   value={orderNotePreset || undefined}
                   onValueChange={(v) => setOrderNotePreset(v === "__none__" ? "" : v)}
                 >
                   <SelectTrigger id="oc-order-note-preset" className="max-w-md">
-                    <SelectValue placeholder="Shablon tanlang (ixtiyoriy)" />
+                    <SelectValue placeholder="Выберите шаблон (необязательно)" />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="__none__">—</SelectItem>
@@ -1019,7 +1089,7 @@ export function OrderCreateFormSection({ vm }: { vm: OrderCreateVm }) {
                 </Select>
               </div>
             ) : null}
-            <Label htmlFor="oc-comment">Izoh (ichki)</Label>
+            <Label htmlFor="oc-comment">Комментарий (внутренний)</Label>
             <textarea
               id="oc-comment"
               rows={3}
@@ -1030,7 +1100,7 @@ export function OrderCreateFormSection({ vm }: { vm: OrderCreateVm }) {
               value={orderComment}
               onChange={(e) => setOrderComment(e.target.value)}
               disabled={mutation.isPending || !canPickPricingAndExpeditor}
-              placeholder="Buyurtma bo‘yicha eslatma…"
+              placeholder="Примечание к заказу…"
               maxLength={4000}
             />
           </div>
@@ -1120,16 +1190,16 @@ export function OrderCreateFormSection({ vm }: { vm: OrderCreateVm }) {
                 </>
               ) : (
                 <>
-                  <span className="font-medium text-foreground">Mijoz moliyasi: </span>
-                  balans{" "}
+                  <span className="font-medium text-foreground">Финансы клиента: </span>
+                  баланс{" "}
                   <span className="font-mono tabular-nums text-foreground">
                     {formatNumberGrouped(clientSummaryQ.data.account_balance, { maxFractionDigits: 2 })}
                   </span>
-                  {" · "}kredit limiti{" "}
+                  {" · "}кредитный лимит{" "}
                   <span className="font-mono tabular-nums text-foreground">
                     {formatNumberGrouped(clientSummaryQ.data.credit_limit, { maxFractionDigits: 2 })}
                   </span>
-                  {" · "}ochiq zakazlar{" "}
+                  {" · "}открытые заказы{" "}
                   <span className="font-mono tabular-nums text-foreground">
                     {formatNumberGrouped(clientSummaryQ.data.open_orders_total, { maxFractionDigits: 2 })}
                   </span>

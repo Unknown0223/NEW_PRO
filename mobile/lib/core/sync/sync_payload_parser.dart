@@ -74,6 +74,7 @@ List<Map<String, dynamic>> _parseClients(dynamic raw) {
       if (_nonEmpty(j['contract_number'])) 'contract_number': j['contract_number'],
       if (_nonEmpty(j['notes'])) 'notes': j['notes'],
       if (_nonEmpty(j['visit_date'])) 'visit_date': j['visit_date'],
+      if (_nonEmpty(j['photo_url'])) 'photo_url': j['photo_url'].toString().trim(),
     };
     out.add(row);
   }

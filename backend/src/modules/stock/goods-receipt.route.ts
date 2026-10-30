@@ -34,9 +34,12 @@ const receiptReadEntitlements = ["receipt_list", "receipt_add", "receipt_change"
 const receiptWriteEntitlements = ["receipt_add", "receipt_change", "receipt_confirm"] as const;
 
 const listQuerySchema = z.object({
-  warehouse_id: z.coerce.number().int().positive().optional(),
-  supplier_id: z.coerce.number().int().positive().optional(),
-  status: z.string().max(32).optional(),
+  warehouse_id: z.string().optional(),
+  warehouse_ids: z.string().optional(),
+  supplier_id: z.string().optional(),
+  supplier_ids: z.string().optional(),
+  status: z.string().max(200).optional(),
+  statuses: z.string().max(200).optional(),
   date_from: z.string().optional(),
   date_to: z.string().optional(),
   q: z.string().optional().default(""),
@@ -51,6 +54,30 @@ const listQuerySchema = z.object({
     .optional()
     .default(false)
 });
+
+function parsePositiveIntList(...raws: (string | undefined)[]): number[] {
+  const out: number[] = [];
+  for (const raw of raws) {
+    if (!raw?.trim()) continue;
+    for (const part of raw.split(/[,|]+/)) {
+      const n = Number.parseInt(part.trim(), 10);
+      if (Number.isFinite(n) && n > 0) out.push(n);
+    }
+  }
+  return [...new Set(out)];
+}
+
+function parseStatusList(...raws: (string | undefined)[]): string[] {
+  const out: string[] = [];
+  for (const raw of raws) {
+    if (!raw?.trim()) continue;
+    for (const part of raw.split(/[,|]+/)) {
+      const s = part.trim();
+      if (s) out.push(s);
+    }
+  }
+  return [...new Set(out)];
+}
 
 const lineSchema = z.object({
   product_id: z.number().int().positive(),
@@ -96,10 +123,25 @@ export async function registerGoodsReceiptRoutes(app: FastifyInstance) {
         );
       }
       const q = parsed.data;
+      const warehouseIds = parsePositiveIntList(q.warehouse_ids, q.warehouse_id);
+      const supplierIds = parsePositiveIntList(q.supplier_ids, q.supplier_id);
+      const statusList = parseStatusList(q.statuses, q.status);
       const result = await listGoodsReceipts(request.tenant!.id, {
-        warehouse_id: q.warehouse_id,
-        supplier_id: q.supplier_id,
-        status: q.status,
+        ...(warehouseIds.length === 1
+          ? { warehouse_id: warehouseIds[0] }
+          : warehouseIds.length > 1
+            ? { warehouse_ids: warehouseIds }
+            : {}),
+        ...(supplierIds.length === 1
+          ? { supplier_id: supplierIds[0] }
+          : supplierIds.length > 1
+            ? { supplier_ids: supplierIds }
+            : {}),
+        ...(statusList.length === 1
+          ? { status: statusList[0] }
+          : statusList.length > 1
+            ? { statuses: statusList }
+            : {}),
         date_from: q.date_from,
         date_to: q.date_to,
         search: q.q,

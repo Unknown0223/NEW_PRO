@@ -9,6 +9,7 @@ import '../../../core/auth/session.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/ui/agent_ui.dart';
+import '../../agent/clients/client_photo_report_flow.dart';
 import 'expeditor_photo_flow.dart';
 
 /// Ekspeditor — mijoz fotohisoboti (agentnikidek). Vizit kartasi ichida
@@ -144,15 +145,9 @@ class _ExpeditorPhotoSectionState extends ConsumerState<ExpeditorPhotoSection> {
     );
   }
 
-  /// Foto faqat olingan kunida ko'rinadi (ertasiga eskisi ko'rinmaydi).
+  /// Foto faqat olingan ish kuni (work region) da ko'rinadi.
   bool _isToday(ClientPhotoReport p) {
-    final dt = DateTime.tryParse(p.createdAt);
-    if (dt == null) return false;
-    final local = dt.toLocal();
-    final now = DateTime.now();
-    return local.year == now.year &&
-        local.month == now.month &&
-        local.day == now.day;
+    return photoReportsForToday([p]).isNotEmpty;
   }
 
   @override
@@ -207,6 +202,7 @@ class _ExpeditorPhotoSectionState extends ConsumerState<ExpeditorPhotoSection> {
                     return SizedBox(
                       width: 150,
                       child: _PhotoTile(
+                        key: ValueKey(p.id),
                         clientId: widget.clientId,
                         photo: p,
                         onView: () => _view(p),
@@ -264,6 +260,7 @@ class _PhotoTile extends ConsumerStatefulWidget {
   final VoidCallback onDelete;
 
   const _PhotoTile({
+    super.key,
     required this.clientId,
     required this.photo,
     required this.onView,
@@ -326,7 +323,8 @@ class _PhotoTileState extends ConsumerState<_PhotoTile> {
   @override
   Widget build(BuildContext context) {
     final hasImage = (_imageUrl ?? '').trim().isNotEmpty;
-    return Card(
+    return RepaintBoundary(
+      child: Card(
       margin: EdgeInsets.zero,
       clipBehavior: Clip.antiAlias,
       child: Stack(
@@ -373,6 +371,7 @@ class _PhotoTileState extends ConsumerState<_PhotoTile> {
             ),
           ),
         ],
+      ),
       ),
     );
   }

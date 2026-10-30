@@ -17,11 +17,11 @@ export default function SalesChannelsSettingsPage() {
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h1 className="text-lg font-semibold">Канал продаж</h1>
         <Link href="/settings/company" className="text-sm text-primary underline-offset-4 hover:underline">
-          ← Sozlamalar
+          ← Настройки
         </Link>
       </div>
       <p className="text-sm text-muted-foreground">
-        Mijoz kartasidagi «Savdo kanali» va filtrlarda shu yerda kiritilgan qiymatlar (kod yoki nom) ko‘rinadi.
+        В поле «Канал продаж» карточки клиента и в фильтрах отображаются значения (код или название), введённые здесь.
       </p>
       <SalesChannelsWorkspace tenantSlug={tenantSlug} />
     </div>

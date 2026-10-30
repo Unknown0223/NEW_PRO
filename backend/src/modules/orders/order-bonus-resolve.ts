@@ -15,6 +15,7 @@ import {
   loadAvailableQtyByProductId,
   materializeQtyPeeks,
   materializeGiftSplits,
+  capGiftSplitsToEarned,
   roundMoney,
   type BonusLineDraft,
   type OrderAgentBonusContext,
@@ -273,13 +274,28 @@ export async function resolveOrderBonusesForCreate(
 
     const chosenQty = chosen.filter((s) => s.kind === "qty");
     if (chosenQty.length > 0) {
+      const peeksWithoutSplits: QtyBonusPeek[] = [];
+      const splitRulesDone = new Set<number>();
       for (const s of chosenQty) {
-        const splits = qtyBonusGiftSplits.get(s.peek.rule.id);
+        const ruleId = s.peek.rule.id;
+        const splits = qtyBonusGiftSplits.get(ruleId);
         if (splits && splits.size > 0) {
-          bonusParts.push(...(await materializeGiftSplits(tenantId, splits)));
+          // Bir qoida uchun bir nechta peek bo‘lsa ham gift_lines bir marta qo‘llanadi.
+          if (splitRulesDone.has(ruleId)) continue;
+          splitRulesDone.add(ruleId);
+          const earned = chosenQty
+            .filter((x) => x.peek.rule.id === ruleId)
+            .reduce((sum, x) => sum + x.peek.bonusQty, 0);
+          const capped = capGiftSplitsToEarned(splits, earned);
+          if (capped.size > 0) {
+            bonusParts.push(...(await materializeGiftSplits(tenantId, capped)));
+          }
         } else {
-          bonusParts.push(...(await materializeQtyPeeks(tenantId, [s.peek])));
+          peeksWithoutSplits.push(s.peek);
         }
+      }
+      if (peeksWithoutSplits.length > 0) {
+        bonusParts.push(...(await materializeQtyPeeks(tenantId, peeksWithoutSplits)));
       }
     }
   }

@@ -1,3 +1,5 @@
+"use client";
+
 import dynamic from "next/dynamic";
 
 const VirtualPivotReportBuilder = dynamic(
@@ -6,7 +8,7 @@ const VirtualPivotReportBuilder = dynamic(
   {
     ssr: false,
     loading: () => (
-      <p className="p-4 text-sm text-muted-foreground">Pivot konstruktor yuklanmoqda…</p>
+      <p className="p-4 text-sm text-muted-foreground">Загрузка конструктора сводных таблиц…</p>
     )
   }
 );

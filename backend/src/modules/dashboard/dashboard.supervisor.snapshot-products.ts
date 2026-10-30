@@ -168,7 +168,7 @@ export async function loadSupervisorProductAnalyticsBlocks(
           COUNT(DISTINCT o.id)::bigint AS orders
         FROM orders o
         JOIN users u ON u.id = o.agent_id
-        JOIN users ua ON ua.id = o.agent_id
+        JOIN users ua ON ua.id = o.agent_id AND lower(ua.role) = 'agent'
         JOIN clients c ON c.id = o.client_id
         JOIN order_items oi ON oi.order_id = o.id
         JOIN products p ON p.id = oi.product_id
@@ -187,7 +187,7 @@ export async function loadSupervisorProductAnalyticsBlocks(
           COUNT(DISTINCT o.id)::bigint AS orders
         FROM orders o
         JOIN users u ON u.id = o.agent_id
-        JOIN users us ON us.id = u.supervisor_user_id
+        JOIN users us ON us.id = u.supervisor_user_id AND lower(us.role) = 'supervisor'
         JOIN clients c ON c.id = o.client_id
         JOIN order_items oi ON oi.order_id = o.id
         JOIN products p ON p.id = oi.product_id
@@ -207,7 +207,7 @@ export async function loadSupervisorProductAnalyticsBlocks(
           COUNT(DISTINCT o.id)::bigint AS orders
         FROM orders o
         JOIN users u ON u.id = o.agent_id
-        JOIN users ua ON ua.id = o.agent_id
+        JOIN users ua ON ua.id = o.agent_id AND lower(ua.role) = 'agent'
         JOIN clients c ON c.id = o.client_id
         JOIN order_items oi ON oi.order_id = o.id
         JOIN products p ON p.id = oi.product_id
@@ -226,7 +226,7 @@ export async function loadSupervisorProductAnalyticsBlocks(
           COUNT(DISTINCT o.id)::bigint AS orders
         FROM orders o
         JOIN users u ON u.id = o.agent_id
-        JOIN users us ON us.id = u.supervisor_user_id
+        JOIN users us ON us.id = u.supervisor_user_id AND lower(us.role) = 'supervisor'
         JOIN clients c ON c.id = o.client_id
         JOIN order_items oi ON oi.order_id = o.id
         JOIN products p ON p.id = oi.product_id
@@ -246,7 +246,7 @@ export async function loadSupervisorProductAnalyticsBlocks(
           COUNT(DISTINCT o.id)::bigint AS orders
         FROM orders o
         JOIN users u ON u.id = o.agent_id
-        JOIN users ua ON ua.id = o.agent_id
+        JOIN users ua ON ua.id = o.agent_id AND lower(ua.role) = 'agent'
         JOIN clients c ON c.id = o.client_id
         JOIN order_items oi ON oi.order_id = o.id
         JOIN products p ON p.id = oi.product_id
@@ -265,7 +265,7 @@ export async function loadSupervisorProductAnalyticsBlocks(
           COUNT(DISTINCT o.id)::bigint AS orders
         FROM orders o
         JOIN users u ON u.id = o.agent_id
-        JOIN users us ON us.id = u.supervisor_user_id
+        JOIN users us ON us.id = u.supervisor_user_id AND lower(us.role) = 'supervisor'
         JOIN clients c ON c.id = o.client_id
         JOIN order_items oi ON oi.order_id = o.id
         JOIN products p ON p.id = oi.product_id

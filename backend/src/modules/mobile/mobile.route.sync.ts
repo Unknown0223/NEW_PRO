@@ -52,7 +52,7 @@ export async function registerMobileSyncRoutes(app: FastifyInstance) {
       }
       const lastSyncAt = parseDateLike(parsed.data.last_sync_at);
       if (lastSyncAt === undefined) {
-        return sendApiError(reply, request, 400, "ValidationError", "Invalid date format", {
+        return sendApiError(reply, request, 400, "ValidationError", "Неверный формат даты", {
           field: "last_sync_at"
         });
       }
@@ -94,7 +94,7 @@ export async function registerMobileSyncRoutes(app: FastifyInstance) {
       }
       const lastSyncAt = parseDateLike(parsed.data.last_sync_at);
       if (lastSyncAt === undefined) {
-        return sendApiError(reply, request, 400, "ValidationError", "Invalid date format", {
+        return sendApiError(reply, request, 400, "ValidationError", "Неверный формат даты", {
           field: "last_sync_at"
         });
       }

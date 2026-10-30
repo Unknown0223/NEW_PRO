@@ -59,15 +59,15 @@ describe("getUserFacingError", () => {
       headers: {},
       config: {} as never
     };
-    expect(getUserFacingError(e)).toContain("Sessiya");
+    expect(getUserFacingError(e)).toContain("Сессия");
   });
 
   it("409 DuplicateName / NameExists / SkuExists / BarcodeExists", () => {
     const cases: Array<{ error: string; expect: string }> = [
-      { error: "DuplicateName", expect: "nomdagi" },
-      { error: "NameExists", expect: "nomdagi" },
+      { error: "DuplicateName", expect: "названием" },
+      { error: "NameExists", expect: "названием" },
       { error: "SkuExists", expect: "SKU" },
-      { error: "BarcodeExists", expect: "shtrixkod" }
+      { error: "BarcodeExists", expect: "штрихкод" }
     ];
     for (const c of cases) {
       const e = new AxiosError("fail");
@@ -137,6 +137,18 @@ describe("getUserFacingError", () => {
   it("friendly message when server is unreachable", () => {
     const e = new AxiosError("Network Error", "ERR_NETWORK");
     expect(getUserFacingError(e)).toContain("Нет связи с сервером");
+  });
+
+  it("403 ExpeditorNotOnSlot without message", () => {
+    const e = new AxiosError("fail");
+    e.response = {
+      status: 403,
+      data: { error: "ExpeditorNotOnSlot" },
+      statusText: "Forbidden",
+      headers: {},
+      config: {} as never
+    };
+    expect(getUserFacingError(e)).toContain("Доставщик");
   });
 });
 

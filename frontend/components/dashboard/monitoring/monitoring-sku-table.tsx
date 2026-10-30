@@ -49,7 +49,7 @@ export function MonitoringSkuTable({
         <p className="py-8 text-center text-sm text-slate-500">Нет продаж по SKU за период</p>
       ) : (
       <div className={cn(tableWrap, "max-h-[min(600px,70vh)]")}>
-        <table className="w-full min-w-[1280px] table-fixed border-collapse text-xs sm:text-sm">
+        <table className="w-full min-w-[720px] table-fixed border-collapse text-xs sm:text-sm">
           <thead className={theadSticky}>
             <tr>
               {visibleColumnOrder.map((id) => {

@@ -10,6 +10,9 @@ import {
 } from "@/components/bonus-rules/bonus-rule-product-category-tree";
 import { BonusRuleTemplateCheckbox } from "@/components/bonus-rules/bonus-rule-form-fields";
 import { STALE } from "@/lib/query-stale";
+import {
+  bonusRuleColumnFooter
+} from "@/components/bonus-rules/bonus-rule-category-scope.logic";
 
 function ProductTreeColumn({
   title,
@@ -28,7 +31,8 @@ function ProductTreeColumn({
   allSelected,
   someSelected,
   onSelectAll,
-  lockedView = false
+  lockedView = false,
+  unusedSelection = false
 }: {
   title: string;
   tenantSlug: string;
@@ -47,6 +51,7 @@ function ProductTreeColumn({
   someSelected?: boolean;
   onSelectAll?: (checked: boolean) => void;
   lockedView?: boolean;
+  unusedSelection?: boolean;
 }) {
   const [search, setSearch] = useState("");
   const deferredSearch = useDeferredValue(search);
@@ -103,10 +108,13 @@ function ProductTreeColumn({
         />
       </div>
       <div className="border-t border-border/80 px-3 py-1.5 text-[11px] text-muted-foreground">
-        Выбрано: {selectedIds.length}
-        {selectionDisabled ? (
-          <span className="ml-1 text-amber-800/90 dark:text-amber-200/80">(не сохраняется)</span>
-        ) : null}
+        {bonusRuleColumnFooter({
+          productCount: selectedIds.length,
+          categoryCount: onlyByCategory ? selectedCategoryIds?.length ?? 0 : 0,
+          categoryMode: Boolean(onlyByCategory),
+          locked: lockedView,
+          unused: unusedSelection
+        })}
       </div>
       </div>
     </div>
@@ -196,11 +204,12 @@ export function BonusRuleProductDualPanels({
           onSelectedCategoryIdsChange={onSelectedCategoryIdsChange}
           formDisabled={formDisabled}
           selectionDisabled={!triggerPickEnabled || lockedView}
+          unusedSelection={!triggerPickEnabled && !lockedView}
           selectionHint={
             lockedView
-              ? "Правило заблокировано — только выбранные категории и товары. Нажмите ▶, чтобы развернуть список."
+              ? "Правило заблокировано — выбранная категория включает все товары внутри. Нажмите ▶, чтобы развернуть список."
               : onlyByCategory
-              ? "Отметьте категории (флажок у названия) и при необходимости отдельные SKU слева."
+              ? "Отметьте категорию — все товары внутри участвуют в бонусе. Отдельные SKU выбирать не нужно."
               : !onlyByAssortment
                 ? "Оба ограничения выключены — триггером считаются все товары. Включите «Только ассортимент» или «Категория», чтобы ограничить по SKU/категории."
                 : undefined

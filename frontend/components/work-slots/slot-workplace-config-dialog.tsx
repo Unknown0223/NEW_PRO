@@ -1,7 +1,16 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
+import {
+  LayoutGrid,
+  Shield,
+  Smartphone,
+  Tags,
+  Truck,
+  Users,
+  Warehouse
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -14,38 +23,63 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { FilterSelect } from "@/components/ui/filter-select";
+import { StaffPositionSelect } from "@/components/staff/staff-position-select";
 import { SlotEntitlementsEditor } from "@/components/work-slots/slot-entitlements-editor";
 import {
   SlotExpeditorRulesEditor,
   parseExpeditorAssignmentRules
 } from "@/components/work-slots/slot-expeditor-rules-editor";
 import { SlotSkladchikEntitlementsEditor } from "@/components/work-slots/slot-skladchik-entitlements-editor";
+import { SlotSupervisorTeamEditor } from "@/components/work-slots/slot-supervisor-team-editor";
+import { AgentTemplateModal } from "@/components/staff/agent-workspace-template-ui";
+import {
+  AgentConfigurationsDialog,
+  type AgentConfigDialogRow
+} from "@/components/staff/agent-configurations-dialog";
 import type { AgentEntitlementSavePayload } from "@/components/staff/agent-restrictions-dialog";
 import type { ExpeditorAssignmentRules } from "@/components/staff/expeditors-workspace";
 import { api } from "@/lib/api";
 import { apiFetch } from "@/lib/api-client";
+import {
+  mergeSlotEntitlementsForEditor,
+  parseSlotEntitlements
+} from "@/lib/slot-entitlements-merge";
 import { cn } from "@/lib/utils";
 import { priceTypeOptionsFromResponse, type PriceTypeOption } from "@/lib/price-type-label";
 import { STALE } from "@/lib/query-stale";
+import {
+  UNLIMITED_MAX_SESSIONS,
+  isUnlimitedMaxSessions
+} from "@/lib/max-sessions";
 import type { WorkSlotListItem, WorkSlotType } from "@/lib/work-slots-types";
 import {
   slotWorkplaceConfigTabs,
+  type SlotWorkplaceConfigTab,
   type SlotWorkplaceConfigTabId
 } from "@/components/work-slots/work-slots-utils";
 
 type PickerOpt = { id: number; name: string };
 type TradeDirection = { id: number; name: string; code: string | null };
 
-type ConfigTab = SlotWorkplaceConfigTabId;
+const TAB_ICONS: Record<SlotWorkplaceConfigTab["icon"], ReactNode> = {
+  layout: <LayoutGrid className="h-4 w-4 shrink-0" />,
+  tags: <Tags className="h-4 w-4 shrink-0" />,
+  shield: <Shield className="h-4 w-4 shrink-0" />,
+  smartphone: <Smartphone className="h-4 w-4 shrink-0" />,
+  truck: <Truck className="h-4 w-4 shrink-0" />,
+  warehouse: <Warehouse className="h-4 w-4 shrink-0" />,
+  users: <Users className="h-4 w-4 shrink-0" />
+};
 
 type Props = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   tenant: string;
+  /** Bitta bo‘lim — chap tab menyu yo‘q */
+  section: SlotWorkplaceConfigTabId;
   slotId?: number | null;
   bulkMode?: boolean;
   slotIds?: number[];
-  /** Как у агентов: «Выбрано агентов: N» */
   bulkSummary?: string;
   slotType?: WorkSlotType;
   warehouses: PickerOpt[];
@@ -55,47 +89,39 @@ type Props = {
 function parseEntitlements(
   raw: WorkSlotListItem["entitlements"] | undefined
 ): AgentEntitlementSavePayload {
-  if (!raw || typeof raw !== "object") return { price_types: [], product_rules: [] };
-  const price_types = Array.isArray(raw.price_types)
-    ? raw.price_types.filter((x): x is string => typeof x === "string")
-    : [];
-  const product_rules = Array.isArray(raw.product_rules)
-    ? (raw.product_rules as AgentEntitlementSavePayload["product_rules"])
-    : [];
-  return { price_types, product_rules };
+  return parseSlotEntitlements(raw);
 }
 
 type FormState = {
   directionId: string;
   returnWarehouseId: string;
+  /** Occupant User — write-through via work-slots PATCH (not WorkSlot columns). */
+  position: string;
+  appAccess: boolean;
+  maxSessions: string;
   priceType: string;
   priceTypes: string[];
-  consignment: boolean;
-  consignmentLimit: string;
-  consignmentIgnoreDebt: boolean;
-  closeDay: string;
-  closeHour: string;
-  closeMinute: string;
   entitlements: AgentEntitlementSavePayload;
   skladchikEntitlements: Record<string, boolean>;
   expeditorRules: ExpeditorAssignmentRules;
+  superviseeAgentSlotIds: number[];
 };
+
+const EMPTY_SLOT_IDS: number[] = [];
 
 function emptyForm(): FormState {
   return {
     directionId: "",
     returnWarehouseId: "",
+    position: "",
+    appAccess: true,
+    maxSessions: "1",
     priceType: "",
     priceTypes: [],
-    consignment: false,
-    consignmentLimit: "",
-    consignmentIgnoreDebt: false,
-    closeDay: "25",
-    closeHour: "0",
-    closeMinute: "0",
     entitlements: { price_types: [], product_rules: [] },
     skladchikEntitlements: {},
-    expeditorRules: {}
+    expeditorRules: {},
+    superviseeAgentSlotIds: []
   };
 }
 
@@ -103,17 +129,18 @@ function formFromSlot(d: WorkSlotListItem): FormState {
   return {
     directionId: d.direction_id != null ? String(d.direction_id) : "",
     returnWarehouseId: d.return_warehouse_id != null ? String(d.return_warehouse_id) : "",
+    position: d.active_user_position ?? "",
+    appAccess: d.active_user_app_access ?? true,
+    maxSessions:
+      d.active_user_max_sessions != null ? String(d.active_user_max_sessions) : "1",
     priceType: d.price_type ?? "",
     priceTypes: d.price_types ?? [],
-    consignment: d.consignment,
-    consignmentLimit: d.consignment_limit_amount ?? "",
-    consignmentIgnoreDebt: d.consignment_ignore_previous_months_debt,
-    closeDay: String(d.consignment_close_day ?? 25),
-    closeHour: String(d.consignment_close_hour ?? 0),
-    closeMinute: String(d.consignment_close_minute ?? 0),
     entitlements: parseEntitlements(d.entitlements),
     skladchikEntitlements: d.warehouse_staff_entitlements ?? {},
-    expeditorRules: parseExpeditorAssignmentRules(d.expeditor_assignment_rules)
+    expeditorRules: parseExpeditorAssignmentRules(d.expeditor_assignment_rules),
+    superviseeAgentSlotIds: Array.isArray(d.supervisee_agent_slot_ids)
+      ? d.supervisee_agent_slot_ids.filter((id) => Number.isFinite(id) && id > 0)
+      : []
   };
 }
 
@@ -121,9 +148,10 @@ export function SlotWorkplaceConfigDialog({
   open,
   onOpenChange,
   tenant,
+  section,
   slotId = null,
   bulkMode = false,
-  slotIds = [],
+  slotIds = EMPTY_SLOT_IDS,
   bulkSummary,
   slotType: slotTypeProp,
   warehouses,
@@ -132,24 +160,32 @@ export function SlotWorkplaceConfigDialog({
   const [slot, setSlot] = useState<WorkSlotListItem | null>(null);
   const [form, setForm] = useState<FormState>(emptyForm);
   const [baseline, setBaseline] = useState<FormState>(emptyForm);
-  const [tab, setTab] = useState<ConfigTab>("main");
-  const [restrictionsOpen, setRestrictionsOpen] = useState(false);
+  const [mobileSaving, setMobileSaving] = useState(false);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [limitsMixed, setLimitsMixed] = useState(false);
+  /** Editor faqat slot entitlements yuklangandan keyin ochiladi — aks holda belgilar bo‘sh ko‘rinadi. */
+  const [limitsHydrated, setLimitsHydrated] = useState(false);
 
   const effectiveSlotType: WorkSlotType | undefined = bulkMode
     ? slotTypeProp
     : (slot?.slot_type as WorkSlotType | undefined);
 
-  const tabs = useMemo(
-    () => slotWorkplaceConfigTabs(effectiveSlotType),
-    [effectiveSlotType]
-  );
+  const sectionMeta = useMemo(() => {
+    const tabs = slotWorkplaceConfigTabs(effectiveSlotType);
+    return (
+      tabs.find((t) => t.id === section) ?? {
+        id: section,
+        label: section,
+        icon: "layout" as const
+      }
+    );
+  }, [effectiveSlotType, section]);
 
   const tradeDirectionsQ = useQuery({
     queryKey: ["trade-directions", tenant, "slot-config"],
-    enabled: open && Boolean(tenant),
+    enabled: open && Boolean(tenant) && section === "main",
     staleTime: STALE.reference,
     queryFn: async () => {
       const { data } = await api.get<{ data: TradeDirection[] }>(
@@ -161,7 +197,7 @@ export function SlotWorkplaceConfigDialog({
 
   const priceTypesQ = useQuery({
     queryKey: ["price-types", tenant, "slot-config"],
-    enabled: open && Boolean(tenant),
+    enabled: open && Boolean(tenant) && (section === "prices" || section === "limits"),
     staleTime: STALE.reference,
     queryFn: async () => {
       const { data } = await api.get<{ data: string[]; options?: PriceTypeOption[] }>(
@@ -170,6 +206,40 @@ export function SlotWorkplaceConfigDialog({
       return priceTypeOptionsFromResponse(data);
     }
   });
+
+  const paymentMethodsQ = useQuery({
+    queryKey: ["settings-profile-pay", tenant, "slot-mobile"],
+    enabled: open && Boolean(tenant) && section === "mobile",
+    staleTime: STALE.reference,
+    queryFn: async () => {
+      const { data } = await api.get<{
+        references?: {
+          payment_method_entries?: Array<{
+            id: string;
+            name: string;
+            code?: string | null;
+            active?: boolean;
+          }>;
+        };
+      }>(`/api/${tenant}/settings/profile`);
+      return data.references?.payment_method_entries ?? [];
+    }
+  });
+
+  const mobileAgentRow = useMemo((): AgentConfigDialogRow | null => {
+    if (!slot) return null;
+    const ent =
+      slot.entitlements && typeof slot.entitlements === "object"
+        ? (slot.entitlements as AgentConfigDialogRow["agent_entitlements"])
+        : {};
+    return {
+      id: slot.id,
+      fio: slot.label ?? slot.slot_code,
+      code: slot.slot_code,
+      login: slot.slot_code,
+      agent_entitlements: ent
+    };
+  }, [slot]);
 
   const ptLabel = useMemo(() => {
     const map = Object.fromEntries((priceTypesQ.data ?? []).map((o) => [o.id, o.label]));
@@ -181,6 +251,44 @@ export function SlotWorkplaceConfigDialog({
     setBaseline(next);
   }, []);
 
+  const slotIdsKey = slotIds.join(",");
+
+  const loadBulkLimits = useCallback(async () => {
+    const ids = slotIdsKey
+      ? slotIdsKey
+          .split(",")
+          .map((s) => Number.parseInt(s, 10))
+          .filter((n) => Number.isFinite(n) && n > 0)
+      : [];
+    if (!tenant || ids.length === 0) {
+      applyForm(emptyForm());
+      setLimitsMixed(false);
+      setLimitsHydrated(true);
+      return;
+    }
+    setLoading(true);
+    setLimitsHydrated(false);
+    setError(null);
+    try {
+      const ents = await Promise.all(
+        ids.map(async (id) => {
+          const res = await apiFetch<{ data: WorkSlotListItem }>(`/api/${tenant}/work-slots/${id}`);
+          return parseEntitlements(res.data.entitlements);
+        })
+      );
+      const { merged, mixed } = mergeSlotEntitlementsForEditor(ents);
+      applyForm({ ...emptyForm(), entitlements: merged });
+      setLimitsMixed(mixed);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Ошибка загрузки");
+      applyForm(emptyForm());
+      setLimitsMixed(false);
+    } finally {
+      setLoading(false);
+      setLimitsHydrated(true);
+    }
+  }, [tenant, slotIdsKey, applyForm]);
+
   const load = useCallback(async () => {
     if (!tenant || !slotId || bulkMode) return;
     setLoading(true);
@@ -190,30 +298,36 @@ export function SlotWorkplaceConfigDialog({
       const d = res.data;
       setSlot(d);
       applyForm(formFromSlot(d));
-      setTab("main");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Ошибка загрузки");
     } finally {
       setLoading(false);
+      setLimitsHydrated(true);
     }
   }, [tenant, slotId, bulkMode, applyForm]);
 
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      setLimitsHydrated(false);
+      setLimitsMixed(false);
+      return;
+    }
     setError(null);
-    setTab("main");
     if (bulkMode) {
       setSlot(null);
+      if (section === "limits") {
+        void loadBulkLimits();
+        return;
+      }
+      setLimitsMixed(false);
       applyForm(emptyForm());
       setLoading(false);
       return;
     }
+    setLimitsMixed(false);
+    if (section === "limits") setLimitsHydrated(false);
     if (slotId) void load();
-  }, [open, bulkMode, slotId, load, applyForm]);
-
-  useEffect(() => {
-    if (!tabs.some((t) => t.id === tab)) setTab("main");
-  }, [tabs, tab]);
+  }, [open, bulkMode, slotId, section, load, loadBulkLimits, applyForm]);
 
   const togglePriceType = (key: string) => {
     setForm((prev) => ({
@@ -227,29 +341,41 @@ export function SlotWorkplaceConfigDialog({
   const dirty = useMemo(() => JSON.stringify(form) !== JSON.stringify(baseline), [form, baseline]);
 
   const buildConfigBody = (): Record<string, unknown> => {
-    const body: Record<string, unknown> = {
-      direction_id: form.directionId.trim() ? Number.parseInt(form.directionId.trim(), 10) : null,
-      return_warehouse_id: form.returnWarehouseId.trim()
-        ? Number.parseInt(form.returnWarehouseId.trim(), 10)
-        : null
-    };
-
-    // Agentga xos: narx, mahsulot cheklovi — konsignatsiya alohida sahifada.
-    if (effectiveSlotType === "agent") {
-      body.price_type = form.priceType.trim() || null;
-      body.price_types = form.priceTypes;
-      body.entitlements = {
-        price_types: form.entitlements.price_types,
-        product_rules: form.entitlements.product_rules
+    if (section === "main") {
+      const ms = Number.parseInt(form.maxSessions, 10);
+      const body: Record<string, unknown> = {
+        direction_id: form.directionId.trim() ? Number.parseInt(form.directionId.trim(), 10) : null,
+        return_warehouse_id: form.returnWarehouseId.trim()
+          ? Number.parseInt(form.returnWarehouseId.trim(), 10)
+          : null
+      };
+      // Occupant fields: backend writes to active User (no WorkSlot columns).
+      // Bulk: applies to each selected slot that has an active occupant.
+      body.position = form.position.trim() || null;
+      body.app_access = form.appAccess;
+      body.max_sessions = Number.isFinite(ms) && isUnlimitedMaxSessions(ms)
+        ? UNLIMITED_MAX_SESSIONS
+        : Number.isFinite(ms) && ms >= 1
+          ? ms
+          : 1;
+      return body;
+    }
+    if (section === "prices") {
+      return {
+        price_type: form.priceType.trim() || null,
+        price_types: form.priceTypes
       };
     }
-    if (effectiveSlotType === "skladchik") {
-      body.warehouse_staff_entitlements = form.skladchikEntitlements;
+    if (section === "skladchik") {
+      return { warehouse_staff_entitlements: form.skladchikEntitlements };
     }
-    if (effectiveSlotType === "expeditor") {
-      body.expeditor_assignment_rules = form.expeditorRules;
+    if (section === "expeditor") {
+      return { expeditor_assignment_rules: form.expeditorRules };
     }
-    return body;
+    if (section === "team") {
+      return { supervisee_agent_slot_ids: form.superviseeAgentSlotIds };
+    }
+    return {};
   };
 
   const handleReset = () => {
@@ -275,22 +401,10 @@ export function SlotWorkplaceConfigDialog({
         });
       } else {
         if (!slotId) return;
-        const patch = { ...config };
-        if (effectiveSlotType === "agent") {
-          const mergedEnt =
-            slot?.entitlements && typeof slot.entitlements === "object"
-              ? {
-                  ...slot.entitlements,
-                  price_types: form.entitlements.price_types,
-                  product_rules: form.entitlements.product_rules
-                }
-              : config.entitlements;
-          patch.entitlements = mergedEnt;
-        }
         await apiFetch(`/api/${tenant}/work-slots/${slotId}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(patch)
+          body: JSON.stringify(config)
         });
       }
       onOpenChange(false);
@@ -302,11 +416,12 @@ export function SlotWorkplaceConfigDialog({
     }
   };
 
+  const titleBase = sectionMeta.label;
   const title = bulkMode
-    ? "Групповая конфигурация"
+    ? `Группа · ${titleBase}`
     : slot
-      ? `Конфигурация: ${slot.slot_code}`
-      : "Конфигурация места";
+      ? `${titleBase}: ${slot.slot_code}`
+      : titleBase;
 
   const summaryLine = bulkMode
     ? (bulkSummary ?? `Выбрано мест: ${slotIds.length}`)
@@ -316,8 +431,133 @@ export function SlotWorkplaceConfigDialog({
         ? "Место свободно"
         : null;
 
+  /** Mobil — to‘liq sozlamalar oynasi (oraliq modal yo‘q). */
+  if (section === "mobile") {
+    const mobileReady = bulkMode || mobileAgentRow != null;
+    const mobileVariant = effectiveSlotType === "supervisor" ? "supervisor" : "agent";
+    return (
+      <AgentConfigurationsDialog
+        open={open && !loading && mobileReady}
+        agent={bulkMode ? null : mobileAgentRow}
+        bulkMode={bulkMode}
+        bulkSummary={bulkSummary ?? (slot ? `${titleBase}: ${slot.slot_code}` : undefined)}
+        saving={mobileSaving || loading}
+        paymentMethodEntries={paymentMethodsQ.data}
+        variant={mobileVariant}
+        onClose={() => onOpenChange(false)}
+        onSave={async (ent, opts) => {
+          setMobileSaving(true);
+          try {
+            const mobile_config = (ent as { mobile_config?: unknown }).mobile_config;
+            if (bulkMode) {
+              if (!slotIds.length) throw new Error("Не выбраны места");
+              await apiFetch(`/api/${tenant}/work-slots/bulk`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  slot_ids: slotIds,
+                  mobile_config_mode: opts?.replaceMobileConfig ? "replace" : "merge",
+                  entitlements: { mobile_config }
+                })
+              });
+            } else {
+              if (!slotId || !slot) return;
+              const mergedEnt = {
+                ...(typeof slot.entitlements === "object" && slot.entitlements
+                  ? slot.entitlements
+                  : {}),
+                mobile_config
+              };
+              await apiFetch(`/api/${tenant}/work-slots/${slotId}`, {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ entitlements: mergedEnt })
+              });
+            }
+            onOpenChange(false);
+            onSaved();
+          } finally {
+            setMobileSaving(false);
+          }
+        }}
+      />
+    );
+  }
+
+  /** Cheklovlar — to‘liq SlotEntitlementsEditor. */
+  if (section === "limits") {
+    if (!open) return null;
+    const limitsReady = limitsHydrated && !loading;
+    if (!limitsReady) {
+      return (
+        <AgentTemplateModal
+          title={bulkMode ? "Групповые ограничения" : "Ограничения места"}
+          onClose={() => onOpenChange(false)}
+          width="max-w-3xl"
+        >
+          {error ? (
+            <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+              {error}
+            </p>
+          ) : (
+            <p className="py-10 text-center text-sm text-slate-500">
+              Загрузка сохранённых ограничений…
+            </p>
+          )}
+        </AgentTemplateModal>
+      );
+    }
+    return (
+      <SlotEntitlementsEditor
+        open={open}
+        tenant={tenant}
+        initial={form.entitlements}
+        priceTypes={(priceTypesQ.data ?? []).map((o) => o.id)}
+        priceTypeLabels={Object.fromEntries((priceTypesQ.data ?? []).map((o) => [o.id, o.label]))}
+        bulkMode={bulkMode}
+        bulkCount={slotIds.length}
+        bulkLabel={bulkSummary ?? (slot ? slot.slot_code : undefined)}
+        mixedHint={limitsMixed}
+        loadError={error}
+        onClose={() => onOpenChange(false)}
+        onSave={async (next) => {
+          const body = {
+            entitlements: {
+              ...(slot?.entitlements && typeof slot.entitlements === "object"
+                ? slot.entitlements
+                : {}),
+              price_types: next.price_types,
+              product_rules: next.product_rules
+            }
+          };
+          if (bulkMode) {
+            await apiFetch(`/api/${tenant}/work-slots/bulk`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                slot_ids: slotIds,
+                entitlements: {
+                  price_types: next.price_types,
+                  product_rules: next.product_rules
+                }
+              })
+            });
+          } else if (slotId) {
+            await apiFetch(`/api/${tenant}/work-slots/${slotId}`, {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(body)
+            });
+          }
+          onOpenChange(false);
+          onSaved();
+        }}
+      />
+    );
+  }
+
   const panel = (() => {
-    switch (tab) {
+    switch (section) {
       case "main":
         return (
           <div className="space-y-5 text-[13px]">
@@ -352,6 +592,70 @@ export function SlotWorkplaceConfigDialog({
                   </option>
                 ))}
               </FilterSelect>
+            </div>
+            <div className="space-y-3 rounded-lg border border-border/70 bg-muted/20 p-3">
+              <p className="text-xs text-muted-foreground">
+                Должность, доступ к приложению и лимит сессий — у активного сотрудника на этом
+                месте (сохраняется в карточку пользователя). Код места — в списке слотов.
+              </p>
+              {!bulkMode && !slot?.active_user_id ? (
+                <p className="text-xs text-amber-800">
+                  Место свободно — поля сотрудника применятся после назначения.
+                </p>
+              ) : null}
+              <div className="space-y-2">
+                <Label>Должность</Label>
+                <StaffPositionSelect
+                  tenantSlug={tenant}
+                  value={form.position}
+                  onChange={(v) => setForm((p) => ({ ...p, position: v }))}
+                  className="h-10 w-full rounded-md border border-input bg-background px-2 text-sm"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-2">
+                  <Label>Макс. сессий</Label>
+                  <Input
+                    type="text"
+                    inputMode="numeric"
+                    value={form.maxSessions === "0" ? "∞" : form.maxSessions}
+                    disabled={form.maxSessions === "0"}
+                    onChange={(e) =>
+                      setForm((p) => ({
+                        ...p,
+                        maxSessions: e.target.value.replace(/\D/g, "")
+                      }))
+                    }
+                    className="h-10"
+                  />
+                  <label className="flex cursor-pointer items-center gap-2 text-xs text-muted-foreground">
+                    <input
+                      type="checkbox"
+                      className="accent-teal-600"
+                      checked={form.maxSessions === "0"}
+                      onChange={(e) =>
+                        setForm((p) => ({
+                          ...p,
+                          maxSessions: e.target.checked ? "0" : "1"
+                        }))
+                      }
+                    />
+                    Неограниченно
+                  </label>
+                </div>
+                <div className="space-y-2">
+                  <Label>Доступ к приложению</Label>
+                  <label className="flex h-10 items-center gap-2 rounded-md border border-input bg-background px-3 text-sm">
+                    <input
+                      type="checkbox"
+                      className="accent-teal-600"
+                      checked={form.appAccess}
+                      onChange={(e) => setForm((p) => ({ ...p, appAccess: e.target.checked }))}
+                    />
+                    {form.appAccess ? "Вкл" : "Выкл"}
+                  </label>
+                </div>
+              </div>
             </div>
           </div>
         );
@@ -395,35 +699,6 @@ export function SlotWorkplaceConfigDialog({
             </div>
           </div>
         );
-      case "limits":
-        return (
-          <div className="space-y-4 text-[13px]">
-            <p className="text-xs leading-relaxed text-muted-foreground">
-              Типы цен в entitlements и продуктовые правила — на уровне рабочего места (как раньше
-              «Ограничения» у агента). Консигнация и лимит — в разделе{" "}
-              <a href="/settings/spravochnik/consignment" className="font-medium text-teal-700 underline">
-                Пользователи → Консигнация
-              </a>
-              .
-            </p>
-            <div className="rounded-lg border border-border/70 bg-muted/15 p-4">
-              <p className="mb-3 text-sm text-foreground">
-                Выбрано:{" "}
-                <span className="font-semibold text-teal-700">
-                  {form.entitlements.price_types.length}
-                </span>{" "}
-                типов цен ·{" "}
-                <span className="font-semibold text-teal-700">
-                  {form.entitlements.product_rules.length}
-                </span>{" "}
-                правил по продуктам
-              </p>
-              <Button type="button" variant="outline" size="sm" onClick={() => setRestrictionsOpen(true)}>
-                Редактировать ограничения
-              </Button>
-            </div>
-          </div>
-        );
       case "skladchik":
         return (
           <SlotSkladchikEntitlementsEditor
@@ -439,114 +714,86 @@ export function SlotWorkplaceConfigDialog({
             onChange={(v) => setForm((p) => ({ ...p, expeditorRules: v }))}
           />
         );
+      case "team":
+        return (
+          <SlotSupervisorTeamEditor
+            tenant={tenant}
+            value={form.superviseeAgentSlotIds}
+            onChange={(v) => setForm((p) => ({ ...p, superviseeAgentSlotIds: v }))}
+          />
+        );
       default:
         return null;
     }
   })();
 
   return (
-    <>
-      <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="max-h-[92vh] max-w-4xl gap-0 overflow-hidden p-0 sm:max-w-4xl">
-          <DialogHeader className="border-b border-border/70 bg-muted/10 px-6 py-3.5 pr-12 sm:px-8">
-            <DialogTitle className="font-sans text-[15px] font-normal leading-snug tracking-tight text-foreground/85 sm:text-base">
-              {title}
-            </DialogTitle>
-            {summaryLine ? (
-              <p className="mt-1 text-xs text-muted-foreground">{summaryLine}</p>
-            ) : null}
-            {bulkMode ? (
-              <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-                Показаны стандартные настройки. При сохранении значения применятся ко всем выбранным
-                рабочим местам.
-                {dirty ? (
-                  <span className="mt-1 block font-medium text-teal-700 dark:text-teal-300">
-                    Есть изменения для применения
-                  </span>
-                ) : null}
-              </p>
-            ) : null}
-            {error ? (
-              <div
-                role="alert"
-                className="mt-2 rounded-md border border-red-500/40 bg-red-50 px-3 py-2 text-xs leading-relaxed text-red-800 dark:bg-red-950/40 dark:text-red-200"
-              >
-                {error}
-              </div>
-            ) : null}
-            <DialogDescription className="sr-only">
-              Конфигурация рабочего места: цены, ограничения, консигнация
-            </DialogDescription>
-          </DialogHeader>
-
-          {loading ? (
-            <p className="px-8 py-12 text-sm text-muted-foreground">Загрузка…</p>
-          ) : (
-            <div className="flex min-h-0 max-h-[min(65vh,640px)] gap-0">
-              <nav className="w-[13.5rem] shrink-0 overflow-y-auto border-r border-border/70 bg-muted/90 p-2 dark:bg-muted/40">
-                {tabs.map((t) => (
-                  <button
-                    key={t.id}
-                    type="button"
-                    onClick={() => setTab(t.id)}
-                    className={cn(
-                      "mb-0.5 w-full rounded-md px-2.5 py-2 text-left text-[12px] font-medium leading-snug transition-colors",
-                      tab === t.id
-                        ? "bg-teal-600 text-white shadow-sm dark:bg-teal-600"
-                        : "text-foreground/90 hover:bg-card/70 dark:hover:bg-muted/60"
-                    )}
-                  >
-                    {t.label}
-                  </button>
-                ))}
-              </nav>
-              <div className="min-h-0 flex-1 overflow-y-auto bg-background px-6 py-4 sm:px-8">
-                {panel}
-              </div>
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent
+        className={cn(
+          "max-h-[92vh] gap-0 overflow-hidden p-0",
+          section === "main" || section === "prices" ? "max-w-lg sm:max-w-lg" : "max-w-3xl sm:max-w-3xl"
+        )}
+      >
+        <DialogHeader className="border-b border-border/70 bg-muted/10 px-6 py-3.5 pr-12 sm:px-8">
+          <DialogTitle className="flex items-center gap-2.5 font-sans text-[15px] font-normal leading-snug tracking-tight text-foreground/85 sm:text-base">
+            <span className="grid h-8 w-8 place-items-center rounded-full border border-teal-200 bg-teal-50 text-teal-700">
+              {TAB_ICONS[sectionMeta.icon]}
+            </span>
+            {title}
+          </DialogTitle>
+          {summaryLine ? (
+            <p className="mt-1 text-xs text-muted-foreground">{summaryLine}</p>
+          ) : null}
+          {bulkMode ? (
+            <p className="mt-1 text-xs text-muted-foreground">
+              Значения применятся ко всем выбранным местам.
+              {dirty ? (
+                <span className="mt-1 block font-medium text-teal-700">Есть изменения</span>
+              ) : null}
+            </p>
+          ) : null}
+          {error ? (
+            <div
+              role="alert"
+              className="mt-2 rounded-md border border-red-500/40 bg-red-50 px-3 py-2 text-xs text-red-800"
+            >
+              {error}
             </div>
-          )}
+          ) : null}
+          <DialogDescription className="sr-only">{titleBase}</DialogDescription>
+        </DialogHeader>
 
-          <DialogFooter className="mx-0 mb-0 flex flex-row flex-wrap items-center justify-between gap-3 border-t border-border/70 bg-muted/10 px-6 py-4 sm:px-8">
-            <Button
-              type="button"
-              variant="outline"
-              className="shrink-0 border-red-500/70 text-red-600 hover:bg-red-50 dark:border-red-400/60 dark:text-red-400 dark:hover:bg-red-950/40"
-              onClick={handleReset}
-              disabled={saving || loading}
-            >
-              Сбросить настройки
-            </Button>
-            <Button
-              type="button"
-              className="shrink-0 bg-teal-600 text-white hover:bg-teal-700 dark:bg-teal-600 dark:hover:bg-teal-500"
-              disabled={
-                saving ||
-                loading ||
-                (bulkMode ? slotIds.length === 0 || !dirty : !slotId)
-              }
-              onClick={() => void submit()}
-            >
-              {saving ? "…" : bulkMode ? "Применить к выбранным" : "Сохранить"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        {loading ? (
+          <p className="px-8 py-12 text-sm text-muted-foreground">Загрузка…</p>
+        ) : (
+          <div className="min-h-0 max-h-[min(65vh,640px)] overflow-y-auto bg-background px-6 py-4 sm:px-8">
+            {panel}
+          </div>
+        )}
 
-      <SlotEntitlementsEditor
-        open={restrictionsOpen}
-        tenant={tenant}
-        initial={form.entitlements}
-        priceTypes={(priceTypesQ.data ?? []).map((o) => o.id)}
-        priceTypeLabels={Object.fromEntries((priceTypesQ.data ?? []).map((o) => [o.id, o.label]))}
-        bulkMode={bulkMode}
-        bulkCount={slotIds.length}
-        bulkLabel={bulkSummary}
-        onClose={() => setRestrictionsOpen(false)}
-        onSave={(next) => {
-          setForm((p) => ({ ...p, entitlements: next, priceTypes: next.price_types }));
-          setRestrictionsOpen(false);
-        }}
-      />
-    </>
+        <DialogFooter className="mx-0 mb-0 flex flex-row flex-wrap items-center justify-between gap-3 border-t border-border/70 bg-muted/10 px-6 py-4 sm:px-8">
+          <Button
+            type="button"
+            variant="outline"
+            className="shrink-0 border-red-500/70 text-red-600 hover:bg-red-50"
+            onClick={handleReset}
+            disabled={saving || loading}
+          >
+            Сбросить
+          </Button>
+          <Button
+            type="button"
+            className="shrink-0 bg-teal-600 text-white hover:bg-teal-700"
+            disabled={
+              saving || loading || (bulkMode ? slotIds.length === 0 || !dirty : !slotId)
+            }
+            onClick={() => void submit()}
+          >
+            {saving ? "…" : bulkMode ? "Применить к выбранным" : "Сохранить"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

@@ -68,13 +68,22 @@ class SyncBottomSheet extends ConsumerWidget {
               _SyncRow(
                 icon: Icons.cloud_download_outlined,
                 title: 'Полная синхронизация',
+                subtitle: 'Каталог, заказы и обмен с сервером',
                 onTap: () => _run(context, ref, full: true),
               ),
               const Divider(height: 1, color: AppColors.borderLight),
               _SyncRow(
                 icon: Icons.sync,
                 title: 'Обычная синхронизация',
+                subtitle: 'Изменения с последней синхронизации',
                 onTap: () => _run(context, ref, full: false),
+              ),
+              const Divider(height: 1, color: AppColors.borderLight),
+              _SyncRow(
+                icon: Icons.photo_library_outlined,
+                title: 'Синхронизация фото',
+                subtitle: 'Накопленные фото — без ограничения по времени',
+                onTap: () => _runPhotos(context),
               ),
             ],
           ),
@@ -84,33 +93,63 @@ class SyncBottomSheet extends ConsumerWidget {
   }
 
   void _run(BuildContext context, WidgetRef ref, {required bool full}) {
+    // Sheet dispose qiladi — WidgetRef ishlatilmasin; container ildiz Scope dan olinadi.
+    final container = ProviderScope.containerOf(context);
     Navigator.pop(context);
-    unawaited(startManualSync(context, ref, full: full));
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      unawaited(startManualSyncWithContainer(container, full: full));
+    });
+  }
+
+  void _runPhotos(BuildContext context) {
+    final container = ProviderScope.containerOf(context);
+    Navigator.pop(context);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      unawaited(startPhotoSyncWithContainer(container));
+    });
   }
 }
 
 class _SyncRow extends StatelessWidget {
   final IconData icon;
   final String title;
+  final String? subtitle;
   final VoidCallback onTap;
 
-  const _SyncRow({required this.icon, required this.title, required this.onTap});
+  const _SyncRow({
+    required this.icon,
+    required this.title,
+    this.subtitle,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
     return InkWell(
       onTap: onTap,
-      child: SizedBox(
-        height: 58,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20),
-          child: Row(
-            children: [
-              Icon(icon, color: AppColors.teal700, size: 24),
-              const SizedBox(width: 12),
-              Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
-            ],
-          ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+        child: Row(
+          children: [
+            Icon(icon, color: AppColors.teal700, size: 24),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+                  if (subtitle != null)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 2),
+                      child: Text(
+                        subtitle!,
+                        style: AppTypography.caption.copyWith(color: AppColors.textMuted),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ],
         ),
       ),
     );

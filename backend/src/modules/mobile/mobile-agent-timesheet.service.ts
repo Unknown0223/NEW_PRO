@@ -164,7 +164,7 @@ export async function getMobileAgentTimesheet(
 
   const cells = row?.cells ?? [];
   const days: MobileTimesheetDay[] = cells.map((c) => {
-    const sales = salesByDay.get(c.date) ?? 0;
+    const sales = c.net_sales ?? salesByDay.get(c.date) ?? 0;
     const visitCount = visitsByDay.get(c.date) ?? 0;
     const minutes = minutesByDay.get(c.date) ?? 0;
     const countStatus = c.date <= today;
@@ -200,7 +200,7 @@ export async function getMobileAgentTimesheet(
     totals.worked_minutes_total += minutes;
 
     const history = auditByDate.get(c.date) ?? [];
-    const latestComment = history.find((h) => h.comment)?.comment ?? null;
+    const latestComment = c.comment ?? history.find((h) => h.comment)?.comment ?? null;
 
     return {
       day: c.day,

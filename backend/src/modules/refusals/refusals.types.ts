@@ -20,6 +20,7 @@ export type ListClientRefusalsQuery = {
   date_from?: string;
   date_to?: string;
   agent_id?: number;
+  agent_ids?: number[];
   refusal_reason_ref?: string;
   client_category?: string;
   zone?: string;

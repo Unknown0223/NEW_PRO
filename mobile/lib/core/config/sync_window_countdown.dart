@@ -20,10 +20,13 @@ int? _parseHmMinutes(String hm) {
   return h * 60 + m;
 }
 
-DateTime? _todayAtHm(String hm, DateTime nowLocal) {
+DateTime? _todayAtHm(String hm, DateTime nowLocal, {bool endOfMinute = false}) {
   final mins = _parseHmMinutes(hm);
   if (mins == null) return null;
-  return DateTime(nowLocal.year, nowLocal.month, nowLocal.day).add(Duration(minutes: mins));
+  final base = DateTime(nowLocal.year, nowLocal.month, nowLocal.day).add(Duration(minutes: mins));
+  if (!endOfMinute) return base;
+  // Siyosat daqiqani inkluziv hisoblaydi (17:30:00–17:30:59 ruxsat) — taymer ham shu bilan mos.
+  return base.add(const Duration(minutes: 1)).subtract(const Duration(milliseconds: 1));
 }
 
 /// Sinхron oynasi tugashiga qolgan vaqt (oyna ichida).
@@ -60,7 +63,7 @@ DateTime? _syncWindowEndDateTime({
   required int? fromM,
   required int toM,
 }) {
-  final endToday = _todayAtHm(toHm, nowLocal);
+  final endToday = _todayAtHm(toHm, nowLocal, endOfMinute: true);
   if (endToday == null) return null;
   final nowM = syncWindowMinutesOfDay(nowLocal);
 
@@ -190,8 +193,8 @@ class _SyncWindowCountdownStripState extends State<SyncWindowCountdownStrip> {
       _refresh();
       return;
     }
-    // Har soniyada qayta hisob — oyna tugagach «qayta yoqilish»ga o‘tish kechikmasin.
-    _refreshTimer = Timer(const Duration(seconds: 1), () {
+    // Har 30s da soat bilan sinxron; soniyalik UI — _CountdownTicker.
+    _refreshTimer = Timer(const Duration(seconds: 30), () {
       if (!mounted) return;
       _refresh();
     });
@@ -204,55 +207,88 @@ class _SyncWindowCountdownStripState extends State<SyncWindowCountdownStrip> {
     final cfg = effectiveSyncConfig(widget.syncConfig);
     final end = timeUntilSyncWindowEnd(cfg, nowLocal);
     final start = timeUntilSyncWindowStart(cfg, nowLocal);
+
+    late final bool nextShow;
+    late final Duration nextTick;
+    late final String nextLabel;
+    late final bool nextIsWindowEnd;
+    late final String nextWindowKey;
+
     if (end != null) {
-      _tick = end;
-      _label = S.syncWindowEndsIn;
-      _isWindowEnd = true;
-      _windowKey = cfg.allowedWindowTo?.trim() ?? 'eod';
-      _show = true;
+      nextTick = end;
+      nextLabel = S.syncWindowEndsIn;
+      nextIsWindowEnd = true;
+      nextWindowKey = cfg.allowedWindowTo?.trim() ?? 'eod';
+      nextShow = true;
       if (!_permissionAsked) {
         _permissionAsked = true;
         unawaited(MobileLocalNotificationService.instance.ensureNotificationPermission());
       }
     } else if (start != null) {
-      _tick = start;
-      _label = S.syncWindowStartsIn;
-      _isWindowEnd = false;
-      _windowKey = cfg.allowedWindowFrom?.trim() ?? 'start';
-      _show = true;
+      nextTick = start;
+      nextLabel = S.syncWindowStartsIn;
+      nextIsWindowEnd = false;
+      nextWindowKey = cfg.allowedWindowFrom?.trim() ?? 'start';
+      nextShow = true;
     } else {
-      // Oyna 24/7 yoki hisob bo‘lmadi — default oynaga qaytamiz.
-      final fallbackEnd = timeUntilSyncWindowEnd(
-        const SyncConfig(
-          allowedWindowFrom: kDefaultSyncWindowFrom,
-          allowedWindowTo: kDefaultSyncWindowTo,
-        ),
-        nowLocal,
-      );
-      final fallbackStart = timeUntilSyncWindowStart(
-        const SyncConfig(
-          allowedWindowFrom: kDefaultSyncWindowFrom,
-          allowedWindowTo: kDefaultSyncWindowTo,
-        ),
-        nowLocal,
-      );
-      if (fallbackEnd != null) {
-        _tick = fallbackEnd;
-        _label = S.syncWindowEndsIn;
-        _isWindowEnd = true;
-        _windowKey = kDefaultSyncWindowTo;
-        _show = true;
-      } else if (fallbackStart != null) {
-        _tick = fallbackStart;
-        _label = S.syncWindowStartsIn;
-        _isWindowEnd = false;
-        _windowKey = kDefaultSyncWindowFrom;
-        _show = true;
+      // Maxsus oyna sozlangan, lekin hisob chiqmadi — default 06–22 ga «yolg‘on»
+      // до откл. ko‘rsatilmasin (masalan 01:00–17:30 tashqarida bo‘lsa).
+      if (syncWindowConfigured(widget.syncConfig)) {
+        nextShow = false;
+        nextTick = Duration.zero;
+        nextLabel = _label;
+        nextIsWindowEnd = _isWindowEnd;
+        nextWindowKey = _windowKey;
       } else {
-        _show = false;
+        final fallbackEnd = timeUntilSyncWindowEnd(
+          const SyncConfig(
+            allowedWindowFrom: kDefaultSyncWindowFrom,
+            allowedWindowTo: kDefaultSyncWindowTo,
+          ),
+          nowLocal,
+        );
+        final fallbackStart = timeUntilSyncWindowStart(
+          const SyncConfig(
+            allowedWindowFrom: kDefaultSyncWindowFrom,
+            allowedWindowTo: kDefaultSyncWindowTo,
+          ),
+          nowLocal,
+        );
+        if (fallbackEnd != null) {
+          nextTick = fallbackEnd;
+          nextLabel = S.syncWindowEndsIn;
+          nextIsWindowEnd = true;
+          nextWindowKey = kDefaultSyncWindowTo;
+          nextShow = true;
+        } else if (fallbackStart != null) {
+          nextTick = fallbackStart;
+          nextLabel = S.syncWindowStartsIn;
+          nextIsWindowEnd = false;
+          nextWindowKey = kDefaultSyncWindowFrom;
+          nextShow = true;
+        } else {
+          nextShow = false;
+          nextTick = Duration.zero;
+          nextLabel = _label;
+          nextIsWindowEnd = _isWindowEnd;
+          nextWindowKey = _windowKey;
+        }
       }
     }
-    if (mounted) setState(() {});
+
+    final changed = nextShow != _show ||
+        nextIsWindowEnd != _isWindowEnd ||
+        nextLabel != _label ||
+        nextWindowKey != _windowKey ||
+        (nextShow && (nextTick.inSeconds - _tick.inSeconds).abs() > 2);
+
+    _tick = nextTick;
+    _label = nextLabel;
+    _isWindowEnd = nextIsWindowEnd;
+    _windowKey = nextWindowKey;
+    _show = nextShow;
+
+    if (changed && mounted) setState(() {});
     _scheduleRefresh();
   }
 

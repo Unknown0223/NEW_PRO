@@ -1,5 +1,6 @@
 export {
   mobileCreateClientBodySchema,
+  mobileCreateSupervisorClientBodySchema,
   mobileCreateOrderBodySchema,
   mobileEnqueueBodySchema,
   mobileOrderBonusPreviewBodySchema,

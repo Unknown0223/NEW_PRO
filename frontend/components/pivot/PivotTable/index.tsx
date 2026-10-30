@@ -28,7 +28,7 @@ import { resolveClassicLabels } from "./PivotRow";
 import { PivotCell } from "./PivotCell";
 import { cn } from "@/lib/utils";
 import { resolveLayoutForm } from "@/lib/pivot-layout-form";
-import { flattenPivotRowsLocal, type LocalFlatPivotRowItem } from "@/lib/pivot-flatten";
+import { flattenPivotRowsLocal, maxVisibleRowDimCount, type LocalFlatPivotRowItem } from "@/lib/pivot-flatten";
 import {
   flatColumnIdsFromConfig,
   headerDragActivated,
@@ -40,7 +40,7 @@ import {
 import {
   buildPivotColumnKeys,
   computeSelectionStats,
-  copyPivotSelection,
+  copyPivotTableOrSelection,
   extractValueColumnKeys,
   getSelectionVisual,
   getSpanSelectionVisual,
@@ -402,6 +402,12 @@ export const PivotTable = forwardRef<PivotTableHandle, Props>(function PivotTabl
       ),
     [data.rows, data.grandTotal, data.columnTotals, expandedRows, isClassic, config.rows.length]
   );
+
+  /** Expand chuqurligiga qarab faqat kerakli row-dim ustunlari (bo‘sh kataklar yo‘qoladi). */
+  const visibleRowDimCount = useMemo(() => {
+    if (!useRowDimColumns) return config.rows.length;
+    return maxVisibleRowDimCount(flatRows, config.rows.length);
+  }, [useRowDimColumns, flatRows, config.rows.length]);
   const fieldLabel = useMemo(() => {
     const map = new Map((fields ?? []).map((f) => [f.id, f.label]));
     return (id: string) => map.get(id) ?? id;
@@ -432,8 +438,13 @@ export const PivotTable = forwardRef<PivotTableHandle, Props>(function PivotTabl
 
   const columnKeys = useMemo(() => {
     const valueKeys = extractValueColumnKeys(flatRows, data.rows);
-    return buildPivotColumnKeys(valueKeys, config.rows.length, Boolean(hasRowLabel), useRowDimColumns);
-  }, [flatRows, data.rows, config.rows.length, hasRowLabel, useRowDimColumns]);
+    return buildPivotColumnKeys(
+      valueKeys,
+      useRowDimColumns ? visibleRowDimCount : config.rows.length,
+      Boolean(hasRowLabel),
+      useRowDimColumns
+    );
+  }, [flatRows, data.rows, config.rows.length, hasRowLabel, useRowDimColumns, visibleRowDimCount]);
 
   /** Data keys + empty buffer keys so selection/copy spans the whole sheet. */
   const selectionColumnKeys = useMemo(
@@ -581,7 +592,7 @@ export const PivotTable = forwardRef<PivotTableHandle, Props>(function PivotTabl
   const totalScrollRows = flatRows.length + EMPTY_SHEET_ROWS;
   const virtualEnabled = totalScrollRows > VIRTUAL_THRESHOLD;
 
-  const rowDimCount = useRowDimColumns ? config.rows.length : hasRowLabel ? 1 : 0;
+  const rowDimCount = useRowDimColumns ? visibleRowDimCount : hasRowLabel ? 1 : 0;
 
   const colIndexByKey = useMemo(() => {
     const map = new Map<string, number>();
@@ -598,9 +609,46 @@ export const PivotTable = forwardRef<PivotTableHandle, Props>(function PivotTabl
     [useRowDimColumns, config]
   );
 
+  const copyHeaderLabels = useMemo(() => {
+    const dataKeys = selectionColumnKeys.filter((k) => !k.startsWith("__empty_"));
+    const labels: string[] = [];
+    for (const key of dataKeys) {
+      const dim = /^__row_dim_(\d+)__$/.exec(key);
+      if (dim) {
+        const idx = Number(dim[1]);
+        labels.push(fieldLabel(config.rows[idx] ?? "") || `Dim ${idx + 1}`);
+        continue;
+      }
+      if (key === "__row_label__") {
+        labels.push(rowLabelHeaderCaption);
+        continue;
+      }
+      const leaf = data.headers[data.headers.length - 1]?.find((h) => h.key === key);
+      if (leaf) {
+        labels.push(headerCaptionLabel(leaf, leaf.key.split("|").pop()));
+        continue;
+      }
+      labels.push(fieldLabel(key) || key);
+    }
+    return labels;
+  }, [
+    selectionColumnKeys,
+    config.rows,
+    fieldLabel,
+    rowLabelHeaderCaption,
+    data.headers,
+    headerCaptionLabel
+  ]);
+
   const copySelection = useCallback(async () => {
-    return copyPivotSelection(flatRows, selectionColumnKeys, selectionRef.current, copyOpts);
-  }, [flatRows, selectionColumnKeys, copyOpts]);
+    const result = await copyPivotTableOrSelection(
+      flatRows,
+      selectionColumnKeys,
+      selectionRef.current,
+      { ...copyOpts, headerLabels: copyHeaderLabels }
+    );
+    return result !== false;
+  }, [flatRows, selectionColumnKeys, copyOpts, copyHeaderLabels]);
 
   const clearSelection = useCallback(() => {
     setSelection(null);
@@ -634,12 +682,12 @@ export const PivotTable = forwardRef<PivotTableHandle, Props>(function PivotTabl
         return;
       }
       if (!(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== "c") return;
-      if (!selectionRef.current) return;
       const active = document.activeElement as HTMLElement | null;
       if (active) {
         const tag = active.tagName;
         if (tag === "INPUT" || tag === "TEXTAREA" || active.isContentEditable) return;
       }
+      // Belgilash bo‘lmasa ham to‘liq jadvalni nusxalash
       e.preventDefault();
       void copySelection();
     };
@@ -933,7 +981,7 @@ export const PivotTable = forwardRef<PivotTableHandle, Props>(function PivotTabl
                   {headerSheetRowNumber(0)}
                 </th>
                   {useRowDimColumns
-                  ? config.rows.map((fieldId, i) => {
+                  ? config.rows.slice(0, visibleRowDimCount).map((fieldId, i) => {
                       const dimKey = `__row_dim_${i}__`;
                       const dimW = measuredWidths[dimKey] ?? defaultColWidth;
                       const drag = headerDragProps("rows", fieldId);
@@ -1028,7 +1076,7 @@ export const PivotTable = forwardRef<PivotTableHandle, Props>(function PivotTabl
                   </th>
                   {li === 0 &&
                     (useRowDimColumns
-                      ? config.rows.map((fieldId, i) => {
+                      ? config.rows.slice(0, visibleRowDimCount).map((fieldId, i) => {
                           const dimKey = `__row_dim_${i}__`;
                           const dimW = measuredWidths[dimKey] ?? defaultColWidth;
                           const drag = headerDragProps("rows", fieldId);
@@ -1602,6 +1650,7 @@ function VirtualFlatRow({
         conditionalFormats={rules}
         customizeCell={customizeCell}
         config={config}
+        displayRowFieldCount={rowDimCount}
         rowKey={item.rowKey}
         cellStyle={cellStyle}
         onSortLabel={onSort ? () => config.rows[item.depth] && onSort(config.rows[item.depth]!) : undefined}

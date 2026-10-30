@@ -722,8 +722,8 @@ export function ClientDetailView({ tenantSlug, clientId }: Props) {
                       {formatNumberGrouped(data.account_balance, { maxFractionDigits: 2 })}
                     </span>
                     <p className="text-[10px] leading-snug text-muted-foreground">
-                      Ledger + yetkazilgan, to‘lanmagan zakazlar (eng yomon ko‘rinish, «Балансы клиентов» bilan
-                      mos).
+                      Леджер + доставленные, неоплаченные заказы (худший вариант, совпадает с «Балансы
+                      клиентов»).
                     </p>
                   </div>
                 )
@@ -773,7 +773,7 @@ export function ClientDetailView({ tenantSlug, clientId }: Props) {
                       {formatNumberGrouped(data.open_orders_total, { maxFractionDigits: 2 })}
                     </span>
                     <p className="text-[10px] text-muted-foreground">
-                      Barcha ochiq konveyor zakazlar (bekor/vozvratdan tashqari) — kredit tekshiruvi.
+                      Все открытые заказы в работе (кроме отменённых и возвратов) — проверка кредита.
                     </p>
                   </div>
                 )

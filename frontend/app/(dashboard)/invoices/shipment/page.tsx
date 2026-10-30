@@ -8,6 +8,7 @@ import { CalendarDays, ChevronLeft, ChevronRight, Filter, RotateCcw, Search, Set
 import { cn } from "@/lib/utils";
 import { useAuthStore, useAuthStoreHydrated } from "@/lib/auth-store";
 import { api } from "@/lib/api";
+import { useDebouncedSearchCommit } from "@/lib/use-debounced-search-commit";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo, useRef, useState } from "react";
 
@@ -35,6 +36,7 @@ export default function ShipmentInvoicesPage() {
   const [expeditor, setExpeditor] = useState("all");
   const [status, setStatus] = useState("delivering");
   const [search, setSearch] = useState("");
+  useDebouncedSearchCommit(searchDraft, setSearch);
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [dateRangeOpen, setDateRangeOpen] = useState(false);

@@ -33,7 +33,8 @@ import {
 import { defaultAgentMobileDraft, defaultSupervisorMobileDraft } from "@/components/staff/agent-mobile-config-defaults-draft";
 import {
   countMobileConfigPatchSections,
-  diffMobileConfigDraft
+  diffMobileConfigDraft,
+  mergeMobileConfigDraft
 } from "@/components/staff/agent-mobile-config-diff";
 import { messageFromAgentsBulkError } from "@/lib/agents-bulk-errors";
 import {
@@ -102,7 +103,7 @@ function filterPaymentItemsBySearch(
 const CONFIG_TABS = [
   { id: "client", label: "Клиент" },
   { id: "gps", label: "GPS" },
-  { id: "outlet", label: "План Outlet" },
+  { id: "outlet", label: "План торговых точек" },
   { id: "route", label: "Маршрут" },
   { id: "product_list", label: "Список товаров" },
   { id: "photo", label: "Фото" },
@@ -139,11 +140,13 @@ function ConfigSectionTitle({ children }: { children: ReactNode }) {
 function ConfigCheckRow({
   checked,
   onChange,
-  label
+  label,
+  hint
 }: {
   checked: boolean;
   onChange: (v: boolean) => void;
   label: string;
+  hint?: string;
 }) {
   return (
     <label
@@ -158,7 +161,10 @@ function ConfigCheckRow({
         checked={checked}
         onChange={(e) => onChange(e.target.checked)}
       />
-      <span className="select-none text-[13px] leading-snug text-foreground/95">{label}</span>
+      <span className="select-none text-[13px] leading-snug text-foreground/95">
+        {label}
+        {hint ? <span className="mt-0.5 block text-xs text-muted-foreground">{hint}</span> : null}
+      </span>
     </label>
   );
 }
@@ -210,7 +216,10 @@ type Props = {
   open: boolean;
   agent: AgentConfigDialogRow | null;
   onClose: () => void;
-  onSave: (agentEntitlements: AgentConfigDialogRow["agent_entitlements"]) => Promise<void>;
+  onSave: (
+    agentEntitlements: AgentConfigDialogRow["agent_entitlements"],
+    opts?: { replaceMobileConfig?: boolean }
+  ) => Promise<void>;
   saving?: boolean;
   /** Ro‘yxat bo‘lmasa, to‘lov tanlovlari bo‘sh + qisqa izoh */
   paymentMethodEntries?: AgentConfigPaymentMethodEntry[];
@@ -315,8 +324,8 @@ export function AgentConfigurationsDialog({
   );
 
   const patchPreview = useMemo(
-    () => (bulkMode ? diffMobileConfigDraft(baselineDraft, draft) : null),
-    [bulkMode, baselineDraft, draft]
+    () => diffMobileConfigDraft(baselineDraft, draft),
+    [baselineDraft, draft]
   );
   const patchSectionCount = patchPreview ? countMobileConfigPatchSections(patchPreview) : 0;
 
@@ -331,24 +340,33 @@ export function AgentConfigurationsDialog({
     setDraft(baselineDraft);
   };
 
-  const handleSave = async () => {
+  const handleSave = async (mode: "full" | "changed") => {
     setLocalSaveError(null);
     try {
-      if (bulkMode) {
-        const patch = diffMobileConfigDraft(baselineDraft, draft);
+      const withWindow: AgentMobileConfigDraft =
+        mode === "full"
+          ? {
+              ...draft,
+              sync: {
+                ...draft.sync,
+                allowed_window_from: effectiveSyncWindowFrom(draft.sync?.allowed_window_from),
+                allowed_window_to: effectiveSyncWindowTo(draft.sync?.allowed_window_to)
+              }
+            }
+          : draft;
+      if (mode === "changed") {
+        const patch = diffMobileConfigDraft(baselineDraft, withWindow);
         if (!patch) {
           setLocalSaveError("Нет изменений для сохранения. Отредактируйте хотя бы одно поле.");
           return;
         }
-        await onSave({ mobile_config: patch });
+        const mobile_config = bulkMode ? patch : mergeMobileConfigDraft(baselineDraft, patch);
+        await onSave({ mobile_config }, { replaceMobileConfig: false });
         onClose();
         return;
       }
-      const prev = agent!.agent_entitlements ?? {};
-      await onSave({
-        ...prev,
-        mobile_config: draft
-      });
+      const prev = bulkMode ? {} : (agent!.agent_entitlements ?? {});
+      await onSave({ ...prev, mobile_config: withWindow }, { replaceMobileConfig: true });
       onClose();
     } catch (err) {
       setLocalSaveError(
@@ -385,6 +403,11 @@ export function AgentConfigurationsDialog({
                       setDraft((d) => setDraftPath(d, "client", (c) => ({ ...c, [k]: v })))
                     }
                     label={label}
+                    hint={
+                      k === "require_new_client_approval"
+                        ? "Вкл — новый клиент сразу активен и привязан к агенту. Выкл — создаётся неактивным (ждёт подтверждения оператора); агент всё равно привязывается. При активации агент получает уведомление."
+                        : undefined
+                    }
                   />
                 ))}
               </div>
@@ -535,7 +558,7 @@ export function AgentConfigurationsDialog({
               />
             </div>
             <ConfigTextField
-              label="Версия плана Outlet"
+              label="Версия плана торговых точек"
               hint="Идентификатор версии плана для мобильного приложения"
               value={draft.outlet?.plan_version ?? ""}
               onChange={(e) =>
@@ -668,7 +691,7 @@ export function AgentConfigurationsDialog({
               <div className="space-y-4 max-w-md">
                 <ConfigTextField
                   label="Максимальная ширина (px)"
-                  hint="Рекомендуется 4032 — полное разрешение камеры (файл до 10 МБ)"
+                  hint="Рекомендуется 1600 — фотоотчёт читается, файл ~140 КБ"
                   type="number"
                   value={draft.photo?.max_width_px ?? ""}
                   onChange={(e) =>
@@ -682,7 +705,7 @@ export function AgentConfigurationsDialog({
                 />
                 <ConfigTextField
                   label="Максимальная высота (px)"
-                  hint="Рекомендуется 4032 — обычно совпадает с шириной"
+                  hint="Рекомендуется 1600 — обычно совпадает с шириной"
                   type="number"
                   value={draft.photo?.max_height_px ?? ""}
                   onChange={(e) =>
@@ -696,7 +719,7 @@ export function AgentConfigurationsDialog({
                 />
                 <ConfigTextField
                   label="Качество JPEG (1–100)"
-                  hint="Обычно 92–100. Лимит файла — 10 МБ (Android / iOS)"
+                  hint="Рекомендуется 75. Выше — файл катта, пользы почти нет"
                   type="number"
                   value={draft.photo?.jpeg_quality ?? ""}
                   onChange={(e) =>
@@ -760,6 +783,67 @@ export function AgentConfigurationsDialog({
                     }
                     label="Разрешить создание заявки на обмен"
                   />
+                  <ConfigCheckRow
+                    checked={Boolean(draft.misc?.biometric_confirm_for_order_submit)}
+                    onChange={(v) =>
+                      setDraft((d) =>
+                        setDraftPath(d, "misc", (m) => ({
+                          ...m,
+                          biometric_confirm_for_order_submit: v
+                        }))
+                      )
+                    }
+                    label="Face ID / отпечаток при отправке заказа"
+                  />
+                  <ConfigCheckRow
+                    checked={Boolean(draft.misc?.biometric_confirm_for_payment_accept)}
+                    onChange={(v) =>
+                      setDraft((d) =>
+                        setDraftPath(d, "misc", (m) => ({
+                          ...m,
+                          biometric_confirm_for_payment_accept: v
+                        }))
+                      )
+                    }
+                    label="Face ID / отпечаток при приёме оплаты"
+                  />
+                  <ConfigCheckRow
+                    checked={Boolean(draft.misc?.face_verification_enabled)}
+                    onChange={(v) =>
+                      setDraft((d) =>
+                        setDraftPath(d, "misc", (m) => ({ ...m, face_verification_enabled: v }))
+                      )
+                    }
+                    label="Проверка лица (селфи на сервере)"
+                  />
+                  {draft.misc?.face_verification_enabled ? (
+                    <>
+                      <ConfigCheckRow
+                        checked={draft.misc?.face_verification_daily_login !== false}
+                        onChange={(v) =>
+                          setDraft((d) =>
+                            setDraftPath(d, "misc", (m) => ({
+                              ...m,
+                              face_verification_daily_login: v
+                            }))
+                          )
+                        }
+                        label="Ежедневно при входе в приложение"
+                      />
+                      <ConfigCheckRow
+                        checked={draft.misc?.face_verification_on_territory_check !== false}
+                        onChange={(v) =>
+                          setDraft((d) =>
+                            setDraftPath(d, "misc", (m) => ({
+                              ...m,
+                              face_verification_on_territory_check: v
+                            }))
+                          )
+                        }
+                        label="Супервайзер: при проверке на территории"
+                      />
+                    </>
+                  ) : null}
                 </>
               ) : null}
             </div>
@@ -866,7 +950,7 @@ export function AgentConfigurationsDialog({
                   <span className="text-[13px] font-medium text-foreground">С</span>
                   <TimePickerField
                     aria-label="Время начала синхронизации"
-                    value={windowFrom}
+                    value={windowFrom.trim() ? windowFrom : summaryFrom}
                     placeholder={summaryFrom}
                     onChange={(next) =>
                       setDraft((d) =>
@@ -882,7 +966,7 @@ export function AgentConfigurationsDialog({
                   <span className="text-[13px] font-medium text-foreground">По</span>
                   <TimePickerField
                     aria-label="Время окончания синхронизации"
-                    value={windowTo}
+                    value={windowTo.trim() ? windowTo : summaryTo}
                     placeholder={summaryTo}
                     onChange={(next) =>
                       setDraft((d) =>
@@ -1243,14 +1327,27 @@ export function AgentConfigurationsDialog({
           >
             Сбросить настройки
           </Button>
-          <Button
-            type="button"
-            className="shrink-0 bg-teal-600 text-white hover:bg-teal-700 dark:bg-teal-600 dark:hover:bg-teal-500"
-            onClick={() => void handleSave()}
-            disabled={saving || (bulkMode && patchSectionCount === 0)}
-          >
-            {bulkMode ? "Применить к выбранным" : "Сохранить"}
-          </Button>
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              className="shrink-0"
+              onClick={() => void handleSave("changed")}
+              disabled={saving || patchSectionCount === 0}
+              title="Записывает только поля, которые вы изменили в этом окне"
+            >
+              {saving ? "Сохранение…" : "Сохранить только изменённое"}
+            </Button>
+            <Button
+              type="button"
+              className="shrink-0 bg-teal-600 text-white hover:bg-teal-700 dark:bg-teal-600 dark:hover:bg-teal-500"
+              onClick={() => void handleSave("full")}
+              disabled={saving}
+              title="Записывает всю конфигурацию как на экране и заменяет остальные настройки"
+            >
+              {saving ? "Сохранение…" : bulkMode ? "Применить всё к выбранным" : "Сохранить всё"}
+            </Button>
+          </div>
         </DialogFooter>
       </DialogContent>
     </Dialog>

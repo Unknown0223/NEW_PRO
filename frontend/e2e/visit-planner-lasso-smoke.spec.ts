@@ -86,8 +86,8 @@ test.describe("Visit planner lasso (kursor bilan chizish)", () => {
     await expect(canvas).toBeVisible();
     await expect(canvas).not.toHaveClass(/vp-active/);
 
-    // Lasso asbobini yoqamiz (tagidagi tooltip: "Probel bosib chizing")
-    await page.locator('.vp-tool[title="Probel bosib chizing"]').click();
+    // Lasso asbobini yoqamiz (tagidagi tooltip: "Удерживайте пробел и рисуйте")
+    await page.locator('.vp-tool[title="Удерживайте пробел и рисуйте"]').click();
     await expect(canvas).toHaveClass(/vp-active/);
 
     // Xarita hududida ko'pburchak chizamiz

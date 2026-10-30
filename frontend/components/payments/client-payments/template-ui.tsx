@@ -111,7 +111,7 @@ export function TransferChannelBadge({
         "inline-block rounded px-1.5 py-0.5 text-[10px] font-medium",
         manual ? "bg-amber-50 text-amber-800" : "bg-indigo-50 text-indigo-800"
       )}
-      title={manual ? "Qo‘lda kiritilgan перечисление" : "Bank / 1C / Excel orqali"}
+      title={manual ? "Перечисление, введённое вручную" : "Через банк / 1С / Excel"}
     >
       {manual ? "Вручную" : "1С / банк"}
     </span>

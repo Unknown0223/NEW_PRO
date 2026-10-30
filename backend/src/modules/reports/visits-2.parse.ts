@@ -1,12 +1,11 @@
+import { monthToDateYmd } from "../../lib/month-to-date";
 import type { Visits2Filters } from "./visits-2.types";
 import { intList, intListUnique, strList } from "./visits-2.helpers";
 
 export function parseVisits2Query(q: Record<string, string | undefined>): Visits2Filters {
   const page = Math.max(1, Number.parseInt(q.page ?? "1", 10) || 1);
   const limit = Math.min(200, Math.max(1, Number.parseInt(q.limit ?? "50", 10) || 50));
-  const today = new Date();
-  const defaultFrom = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().slice(0, 10);
-  const defaultTo = new Date(today.getFullYear(), today.getMonth() + 1, 0).toISOString().slice(0, 10);
+  const { from: defaultFrom, to: defaultTo } = monthToDateYmd();
   const from = (q.from ?? "").trim() || defaultFrom;
   const to = (q.to ?? "").trim() || defaultTo;
   const sortByRaw = (q.sort_by ?? "client_name").trim();

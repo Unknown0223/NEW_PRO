@@ -7,6 +7,7 @@ import { DateRangePopover, formatDateRangeButton } from "@/components/ui/date-ra
 import { filterPanelSelectClassName } from "@/components/ui/filter-select";
 import { Label } from "@/components/ui/label";
 import { api } from "@/lib/api";
+import { usePermissions } from "@/lib/use-permissions";
 import { useAuthStore, useAuthStoreHydrated } from "@/lib/auth-store";
 import { downloadXlsxWorkbook } from "@/lib/download-xlsx";
 import { formatNumberGrouped } from "@/lib/format-numbers";
@@ -120,12 +121,12 @@ function cashFlowToCsv(payload: CashFlowPayload): string {
     ["Период", `${payload.date_from} — ${payload.date_to}`].join(sep),
     ["Касса", payload.cash_desk.name].join(sep),
     "",
-    ["Приход Terminal", payload.payment_type_breakdown.period_income.terminal].join(sep),
-    ["Приход Naqd", payload.payment_type_breakdown.period_income.cash].join(sep),
-    ["Доля Terminal %", String(payload.payment_type_breakdown.terminal_share_pct ?? "")].join(sep),
-    ["Доля Naqd %", String(payload.payment_type_breakdown.cash_share_pct ?? "")].join(sep),
+    ["Приход (терминал)", payload.payment_type_breakdown.period_income.terminal].join(sep),
+    ["Приход (наличные)", payload.payment_type_breakdown.period_income.cash].join(sep),
+    ["Доля терминала %", String(payload.payment_type_breakdown.terminal_share_pct ?? "")].join(sep),
+    ["Доля наличных %", String(payload.payment_type_breakdown.cash_share_pct ?? "")].join(sep),
     "",
-    ["Статья", "Terminal", "Naqd", "Итого"].join(sep)
+    ["Статья", "Терминал", "Наличные", "Итого"].join(sep)
   ];
   for (const r of payload.table.rows) {
     lines.push([r.label, r.terminal, r.cash, r.total].join(sep));
@@ -145,23 +146,23 @@ async function cashFlowToXlsx(payload: CashFlowPayload): Promise<void> {
     ["Касса", deskLabel],
     ["", ""],
     ["Остаток на начало (итого)", payload.summary.opening.total],
-    ["  Terminal", payload.summary.opening.terminal],
-    ["  Naqd", payload.summary.opening.cash],
+    ["  Терминал", payload.summary.opening.terminal],
+    ["  Наличные", payload.summary.opening.cash],
     ["", ""],
     ["Приход (итого)", payload.summary.income.total],
-    ["  Terminal", payload.summary.income.terminal],
-    ["  Naqd", payload.summary.income.cash],
+    ["  Терминал", payload.summary.income.terminal],
+    ["  Наличные", payload.summary.income.cash],
     ["", ""],
     ["Расход (итого)", payload.summary.expense.total],
-    ["  Terminal", payload.summary.expense.terminal],
-    ["  Naqd", payload.summary.expense.cash],
+    ["  Терминал", payload.summary.expense.terminal],
+    ["  Наличные", payload.summary.expense.cash],
     ["", ""],
     ["Остаток на конец (итого)", payload.summary.closing.total],
-    ["  Terminal", payload.summary.closing.terminal],
-    ["  Naqd", payload.summary.closing.cash],
+    ["  Терминал", payload.summary.closing.terminal],
+    ["  Наличные", payload.summary.closing.cash],
     ["", ""],
-    ["Доля Terminal в приходе, %", payload.payment_type_breakdown.terminal_share_pct ?? "—"],
-    ["Доля Naqd в приходе, %", payload.payment_type_breakdown.cash_share_pct ?? "—"]
+    ["Доля терминала в приходе, %", payload.payment_type_breakdown.terminal_share_pct ?? "—"],
+    ["Доля наличных в приходе, %", payload.payment_type_breakdown.cash_share_pct ?? "—"]
   ];
   const tableRows: (string | number)[][] = [];
   for (const r of payload.table.rows) {
@@ -174,7 +175,7 @@ async function cashFlowToXlsx(payload: CashFlowPayload): Promise<void> {
     { name: "Сводка", headers: ["Показатель", "Значение"], rows: summaryKv, colWidths: [32, 22] },
     {
       name: "ДДС таблица",
-      headers: ["Статья", "Terminal", "Naqd", "Итого"],
+      headers: ["Статья", "Терминал", "Наличные", "Итого"],
       rows: tableRows,
       colWidths: [36, 14, 14, 14]
     }
@@ -199,6 +200,7 @@ function childRowSourceLink(key: string): string | null {
 }
 
 export function CashFlowWorkspace() {
+  const canExport = usePermissions().has("cash.otchety.export");
   const tenantSlug = useAuthStore((s) => s.tenantSlug);
   const hydrated = useAuthStoreHydrated();
   const router = useRouter();
@@ -376,7 +378,7 @@ export function CashFlowWorkspace() {
       <PageHeader
         className="border-b border-border pb-4 dark:border-border/70"
         title={<span className="text-slate-900 dark:text-foreground">Движение денежных средств</span>}
-        description="Фильтр: from, to, cash_desk_id или cashbox_id (код кассы, напр. asosiy_kassa). Остаток на начало — сумма подтверждённых движений по кассе до периода; приход/расход — в периоде; закрытие = начало + приход − расход (по Terminal и Naqd отдельно)."
+        description="Фильтр: from, to, cash_desk_id или cashbox_id (код кассы, напр. asosiy_kassa). Остаток на начало — сумма подтверждённых движений по кассе до периода; приход/расход — в периоде; закрытие = начало + приход − расход (по терминалу и наличным отдельно)."
       />
 
       <div className={cn(panelClass, "p-4 sm:p-5")}>
@@ -513,14 +515,14 @@ export function CashFlowWorkspace() {
                     <div className="flex justify-between gap-2 text-muted-foreground">
                       <span className="inline-flex items-center gap-1">
                         <CreditCard className="size-3 opacity-70" />
-                        Terminal
+                        Терминал
                       </span>
                       <span className="tabular-nums">
                         {formatNumberGrouped(payload.summary.opening.terminal, { minFractionDigits: 0, maxFractionDigits: 0 })}
                       </span>
                     </div>
                     <div className="flex justify-between gap-2 text-muted-foreground">
-                      <span>Naqd</span>
+                      <span>Наличные</span>
                       <span className="tabular-nums">
                         {formatNumberGrouped(payload.summary.opening.cash, { minFractionDigits: 0, maxFractionDigits: 0 })}
                       </span>
@@ -552,14 +554,14 @@ export function CashFlowWorkspace() {
                     <div className="flex justify-between gap-2 text-emerald-900/75 dark:text-emerald-200/80">
                       <span className="inline-flex items-center gap-1">
                         <CreditCard className="size-3 opacity-70" />
-                        Terminal
+                        Терминал
                       </span>
                       <span className="tabular-nums">
                         {formatNumberGrouped(payload.summary.income.terminal, { minFractionDigits: 0, maxFractionDigits: 0 })}
                       </span>
                     </div>
                     <div className="flex justify-between gap-2 text-emerald-900/75 dark:text-emerald-200/80">
-                      <span>Naqd</span>
+                      <span>Наличные</span>
                       <span className="tabular-nums">
                         {formatNumberGrouped(payload.summary.income.cash, { minFractionDigits: 0, maxFractionDigits: 0 })}
                       </span>
@@ -582,14 +584,14 @@ export function CashFlowWorkspace() {
                     <div className="flex justify-between gap-2 text-rose-900/75 dark:text-rose-200/80">
                       <span className="inline-flex items-center gap-1">
                         <CreditCard className="size-3 opacity-70" />
-                        Terminal
+                        Терминал
                       </span>
                       <span className="tabular-nums">
                         {formatNumberGrouped(payload.summary.expense.terminal, { minFractionDigits: 0, maxFractionDigits: 0 })}
                       </span>
                     </div>
                     <div className="flex justify-between gap-2 text-rose-900/75 dark:text-rose-200/80">
-                      <span>Naqd</span>
+                      <span>Наличные</span>
                       <span className="tabular-nums">
                         {formatNumberGrouped(payload.summary.expense.cash, { minFractionDigits: 0, maxFractionDigits: 0 })}
                       </span>
@@ -612,14 +614,14 @@ export function CashFlowWorkspace() {
                     <div className="flex justify-between gap-2 text-muted-foreground">
                       <span className="inline-flex items-center gap-1">
                         <CreditCard className="size-3 opacity-70" />
-                        Terminal
+                        Терминал
                       </span>
                       <span className="tabular-nums">
                         {formatNumberGrouped(payload.summary.closing.terminal, { minFractionDigits: 0, maxFractionDigits: 0 })}
                       </span>
                     </div>
                     <div className="flex justify-between gap-2 text-muted-foreground">
-                      <span>Naqd</span>
+                      <span>Наличные</span>
                       <span className="tabular-nums">
                         {formatNumberGrouped(payload.summary.closing.cash, { minFractionDigits: 0, maxFractionDigits: 0 })}
                       </span>
@@ -632,14 +634,14 @@ export function CashFlowWorkspace() {
 
           <div className="space-y-2">
             <p className="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-muted-foreground">
-              Приход за период: Terminal / Naqd
+              Приход за период: терминал / наличные
             </p>
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="rounded-lg border border-border bg-card p-4 shadow-sm dark:border-border dark:bg-card">
                 <div className="flex items-center justify-between gap-2">
                   <span className="inline-flex items-center gap-2 text-sm font-medium text-slate-800 dark:text-foreground">
                     <CreditCard className="size-4 text-blue-600 dark:text-blue-400" />
-                    Terminal
+                    Терминал
                   </span>
                   {payload.payment_type_breakdown.terminal_share_pct != null ? (
                     <span className="text-xs font-semibold tabular-nums text-blue-600 dark:text-blue-400">
@@ -658,7 +660,7 @@ export function CashFlowWorkspace() {
               </div>
               <div className="rounded-lg border border-border bg-card p-4 shadow-sm dark:border-border dark:bg-card">
                 <div className="flex items-center justify-between gap-2">
-                  <span className="text-sm font-medium text-slate-800 dark:text-foreground">Naqd</span>
+                  <span className="text-sm font-medium text-slate-800 dark:text-foreground">Наличные</span>
                   {payload.payment_type_breakdown.cash_share_pct != null ? (
                     <span className="text-xs font-semibold tabular-nums text-teal-700 dark:text-teal-400">
                       {payload.payment_type_breakdown.cash_share_pct}%
@@ -687,12 +689,12 @@ export function CashFlowWorkspace() {
                   <div
                     className="h-full bg-blue-600 transition-[width] dark:bg-blue-500"
                     style={{ width: `${wT}%` }}
-                    title={`Terminal ${wT.toFixed(1)}%`}
+                    title={`Терминал ${wT.toFixed(1)}%`}
                   />
                   <div
                     className="h-full bg-teal-500 transition-[width] dark:bg-teal-600"
                     style={{ width: `${wC}%` }}
-                    title={`Naqd ${wC.toFixed(1)}%`}
+                    title={`Наличные ${wC.toFixed(1)}%`}
                   />
                 </div>
               );
@@ -733,7 +735,7 @@ export function CashFlowWorkspace() {
                   <RefreshCw className="size-4" />
                 </Button>
               </div>
-              <div className="flex items-center gap-1">
+              <div className={cn("flex items-center gap-1", !canExport && "hidden")}>
                 <Button
                   type="button"
                   size="sm"
@@ -761,8 +763,8 @@ export function CashFlowWorkspace() {
                 <thead>
                   <tr className="border-b border-border bg-muted text-left text-xs font-semibold uppercase tracking-wide text-slate-600 dark:border-border dark:bg-muted/50 dark:text-muted-foreground">
                       <th className="px-3 py-2.5">Статья движения денежных средств</th>
-                      <th className="px-3 py-2.5 text-right tabular-nums">Terminal</th>
-                      <th className="px-3 py-2.5 text-right tabular-nums">Naqd</th>
+                      <th className="px-3 py-2.5 text-right tabular-nums">Терминал</th>
+                      <th className="px-3 py-2.5 text-right tabular-nums">Наличные</th>
                       <th className="px-3 py-2.5 text-right tabular-nums">Общий итог</th>
                     </tr>
                   </thead>
@@ -845,11 +847,11 @@ export function CashFlowWorkspace() {
 
           <details className="rounded-lg border border-border bg-muted/80 px-3 py-2 text-xs dark:border-border dark:bg-muted/30">
             <summary className="cursor-pointer list-none font-medium text-slate-700 dark:text-foreground [&::-webkit-details-marker]:hidden">
-              Дополнительно: ledger и источники данных
+              Дополнительно: журнал проводок и источники данных
             </summary>
             <div className="mt-3 space-y-3 text-slate-600 dark:text-muted-foreground">
               <div>
-                <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-muted-foreground">Ledger</p>
+                <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-muted-foreground">Журнал проводок</p>
                 <p>{payload.ledger.formula}</p>
                 <p className="mt-1">{payload.ledger.closing_equals}</p>
               </div>

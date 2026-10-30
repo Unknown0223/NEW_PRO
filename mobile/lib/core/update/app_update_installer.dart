@@ -108,7 +108,7 @@ class AppUpdateInstaller {
         }
         throw AppUpdateSignatureException(
           e.message ??
-              'Yangilash imkonsiz: telefoningizdagi ilova boshqa kalit bilan o‘rnatilgan.',
+              'Обновление невозможно: приложение на телефоне установлено с другим ключом подписи.',
           apkPath: apkPath,
         );
       }

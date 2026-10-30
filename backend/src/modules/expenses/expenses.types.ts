@@ -2,6 +2,8 @@ export type ExpenseListQuery = {
   page: number;
   limit: number;
   status?: string;
+  /** Bir nechta status */
+  statuses?: string[];
   expense_type?: string;
   agent_id?: number | null;
   warehouse_id?: number | null;
@@ -33,6 +35,11 @@ export type ExpenseListRow = {
   deleted_by_user_id: number | null;
   deleted_by_name: string | null;
   delete_reason_ref: string | null;
+  cash_desk_id: number | null;
+  employee_user_id: number | null;
+  /** manual | payroll_advance | payroll_salary */
+  source_type: string;
+  source_id: number | null;
 };
 
 export type CreateExpenseInput = {

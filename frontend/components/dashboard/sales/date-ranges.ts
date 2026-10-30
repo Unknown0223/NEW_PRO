@@ -1,8 +1,8 @@
+import { monthToDateRange } from "@/components/dashboard/shared/date-ranges";
 import type { SalesFilterDraft } from "@/components/dashboard/sales/types";
 
 export function defaultSalesDraft(supervisorId = ""): SalesFilterDraft {
-  const to = new Date().toISOString().slice(0, 10);
-  const from = new Date(Date.now() - 29 * 86400000).toISOString().slice(0, 10);
+  const { from, to } = monthToDateRange();
   return {
     date_type: "shipment_date",
     from,

@@ -54,6 +54,12 @@ export function buildCorsOrigin(): FastifyCorsOptions["origin"] {
       return;
     }
 
+    // Lokal: Windows Hyper-V 3000-ni band qilishi mumkin — localhost boshqa port ham ruxsat.
+    if (!isProduction && isLocalhostOrigin(origin)) {
+      callback(null, true);
+      return;
+    }
+
     logCorsRejected(origin, "not_in_allowlist");
     callback(new Error(`CORS: origin not allowed: ${origin}`), false);
   };

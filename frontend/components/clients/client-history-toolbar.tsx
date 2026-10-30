@@ -55,7 +55,7 @@ export function ClientHistoryToolbar({
         )}
       >
         <Clock className={size === "sm" ? "h-3.5 w-3.5" : "h-4 w-4"} />
-        Timeline
+        История
       </button>
       {model ? (
         <ClientHistoryModal open={open} onClose={() => setOpen(false)} model={model} />

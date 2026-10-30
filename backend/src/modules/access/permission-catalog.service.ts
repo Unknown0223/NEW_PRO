@@ -2,7 +2,7 @@ import { prisma } from "../../config/database";
 import { LEGACY_PERMISSION_METADATA } from "./legacy-permission-labels";
 import { catalogParentPathLabel } from "./permission-catalog-parent";
 import { DEFAULT_PERMISSION_METADATA } from "./permission-catalog";
-import { buildStructuredPermissionCatalog, extractAction } from "./permission-model";
+import { buildStructuredPermissionCatalog, extractAction, permissionDisplayDescription } from "./permission-model";
 
 function truncStr(s: string | null | undefined, max: number): string | null {
   if (s == null) return null;
@@ -49,6 +49,9 @@ export async function syncDefaultPermissionMetadata(tenantId: number) {
   for (const [key, meta] of Object.entries(LEGACY_PERMISSION_METADATA)) {
     if (!merged.has(key)) merged.set(key, { ...meta, action: extractAction(key) });
   }
+  for (const [key, meta] of merged) {
+    meta.description = permissionDisplayDescription(key, meta.description);
+  }
 
   const entries = [...merged.entries()];
   const chunkSize = 16;
@@ -93,7 +96,7 @@ export async function getPermissionCatalogGrouped(tenantId: number): Promise<Per
     section: r.section,
     action: r.action ?? null,
     description: r.description,
-    parent_path: catalogParentPathLabel(r.module, r.section)
+    parent_path: catalogParentPathLabel(r.module, r.section, r.key)
   }));
 
   const moduleMap = new Map<string, Map<string | null, PermissionCatalogNode[]>>();

@@ -37,7 +37,7 @@ export const dataTableStickyActionsTdSingle =
 export function TableRowActionGroup({
   children,
   className,
-  ariaLabel = "Amallar"
+  ariaLabel = "Действия"
 }: {
   children: ReactNode;
   className?: string;

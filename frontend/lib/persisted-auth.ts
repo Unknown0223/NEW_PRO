@@ -25,7 +25,7 @@ export function readPersistedAuth(): {
     const s = parsed.state;
     return {
       accessToken: s?.accessToken ?? null,
-      refreshToken: s?.refreshToken ?? null,
+      refreshToken: null,
       tenantSlug: s?.tenantSlug ?? null
     };
   } catch {

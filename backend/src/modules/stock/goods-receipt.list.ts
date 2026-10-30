@@ -9,8 +9,11 @@ export async function listGoodsReceipts(
   tenantId: number,
   q: {
     warehouse_id?: number;
+    warehouse_ids?: number[];
     supplier_id?: number;
+    supplier_ids?: number[];
     status?: string;
+    statuses?: string[];
     date_from?: string;
     date_to?: string;
     search?: string;
@@ -26,9 +29,27 @@ export async function listGoodsReceipts(
   } else {
     where.deleted_at = null;
   }
-  if (q.warehouse_id != null && q.warehouse_id > 0) where.warehouse_id = q.warehouse_id;
-  if (q.supplier_id != null && q.supplier_id > 0) where.supplier_id = q.supplier_id;
-  if (q.status?.trim()) where.status = q.status.trim();
+  const whIds = [
+    ...(q.warehouse_ids ?? []).filter((n) => Number.isFinite(n) && n > 0),
+    ...(q.warehouse_id != null && q.warehouse_id > 0 ? [q.warehouse_id] : [])
+  ];
+  const uniqWh = [...new Set(whIds)];
+  if (uniqWh.length === 1) where.warehouse_id = uniqWh[0];
+  else if (uniqWh.length > 1) where.warehouse_id = { in: uniqWh };
+  const supIds = [
+    ...(q.supplier_ids ?? []).filter((n) => Number.isFinite(n) && n > 0),
+    ...(q.supplier_id != null && q.supplier_id > 0 ? [q.supplier_id] : [])
+  ];
+  const uniqSup = [...new Set(supIds)];
+  if (uniqSup.length === 1) where.supplier_id = uniqSup[0];
+  else if (uniqSup.length > 1) where.supplier_id = { in: uniqSup };
+  const statuses = [
+    ...(q.statuses ?? []).map((s) => String(s).trim()).filter(Boolean),
+    ...(q.status?.trim() ? [q.status.trim()] : [])
+  ];
+  const uniqSt = [...new Set(statuses)];
+  if (uniqSt.length === 1) where.status = uniqSt[0];
+  else if (uniqSt.length > 1) where.status = { in: uniqSt };
   if (q.date_from?.trim() || q.date_to?.trim()) {
     const range: Prisma.DateTimeFilter = {};
     if (q.date_from?.trim()) range.gte = new Date(q.date_from.trim());

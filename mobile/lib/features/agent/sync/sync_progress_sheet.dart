@@ -125,7 +125,7 @@ class _SyncStepRow extends StatelessWidget {
   }
 }
 
-class _StepIcon extends StatefulWidget {
+class _StepIcon extends StatelessWidget {
   final IconData icon;
   final Color color;
   final bool pulse;
@@ -133,43 +133,17 @@ class _StepIcon extends StatefulWidget {
   const _StepIcon({required this.icon, required this.color, required this.pulse});
 
   @override
-  State<_StepIcon> createState() => _StepIconState();
-}
-
-class _StepIconState extends State<_StepIcon> with SingleTickerProviderStateMixin {
-  late final AnimationController _ctrl;
-
-  @override
-  void initState() {
-    super.initState();
-    _ctrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 900))
-      ..repeat(reverse: true);
-    if (!widget.pulse) _ctrl.stop();
-  }
-
-  @override
-  void didUpdateWidget(covariant _StepIcon oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (widget.pulse && !_ctrl.isAnimating) {
-      _ctrl.repeat(reverse: true);
-    } else if (!widget.pulse) {
-      _ctrl.stop();
-    }
-  }
-
-  @override
-  void dispose() {
-    _ctrl.dispose();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
-    final child = Icon(widget.icon, size: 18, color: widget.color);
-    if (!widget.pulse) return child;
-    return FadeTransition(
-      opacity: Tween(begin: 0.55, end: 1.0).animate(_ctrl),
-      child: child,
-    );
+    if (pulse) {
+      return SizedBox(
+        width: 18,
+        height: 18,
+        child: CircularProgressIndicator(
+          strokeWidth: 2,
+          color: color,
+        ),
+      );
+    }
+    return Icon(icon, size: 18, color: color);
   }
 }

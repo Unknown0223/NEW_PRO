@@ -3,6 +3,7 @@
 import { PageHeader } from "@/components/dashboard/page-header";
 import { PageShell } from "@/components/dashboard/page-shell";
 import { Button } from "@/components/ui/button";
+import { useAppConfirm } from "@/components/ui/app-confirm-dialog";
 import { DatePickerPopover, formatRuDateButton, localYmd } from "@/components/ui/date-picker-popover";
 import { DateRangePopover, formatDateRangeButton } from "@/components/ui/date-range-popover";
 import {
@@ -121,9 +122,11 @@ function saveErrorFields(e: unknown): Record<string, string> {
 export function CurrencyRatesWorkspace() {
   const tenantSlug = useAuthStore((s) => s.tenantSlug);
   const hydrated = useAuthStoreHydrated();
+  const { confirm, dialog: confirmDialog } = useAppConfirm();
   const { has } = usePermissions();
   const canWrite =
     has("cash.kurs_valyuty.create") || has("cash.kurs_valyuty.update");
+  const canExport = has("cash.kurs_valyuty.export");
   const qc = useQueryClient();
   const init = useMemo(() => monthRange(), []);
   const [from, setFrom] = useState(init.from);
@@ -405,10 +408,12 @@ export function CurrencyRatesWorkspace() {
           </Button>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Button type="button" variant="outline" size="sm" className="h-10 gap-1" onClick={() => void exportXlsx()}>
-            <Download className="size-4" />
-            Excel
-          </Button>
+          {canExport ? (
+            <Button type="button" variant="outline" size="sm" className="h-10 gap-1" onClick={() => void exportXlsx()}>
+              <Download className="size-4" />
+              Excel
+            </Button>
+          ) : null}
           {canWrite ? (
             <Button
               type="button"
@@ -496,9 +501,16 @@ export function CurrencyRatesWorkspace() {
                           aria-label="Удалить"
                           disabled={deleteMut.isPending}
                           onClick={() => {
-                            if (!window.confirm(`Удалить курс ${r.base_currency}/${r.quote_currency} на ${r.rate_date}?`))
-                              return;
-                            deleteMut.mutate(r.id);
+                            void (async () => {
+                              const ok = await confirm({
+                                title: "Удалить",
+                                message: `Удалить курс ${r.base_currency}/${r.quote_currency} на ${r.rate_date}?`,
+                                confirmLabel: "Да",
+                                cancelLabel: "Нет",
+                                destructive: true
+                              });
+                              if (ok) deleteMut.mutate(r.id);
+                            })();
                           }}
                         >
                           <Trash2 className="size-4" />
@@ -647,7 +659,7 @@ export function CurrencyRatesWorkspace() {
             </div>
             <div className="space-y-1">
               <Label>Источник</Label>
-              <Input value={formSource} onChange={(e) => setFormSource(e.target.value)} placeholder="manual, CBU…" />
+              <Input value={formSource} onChange={(e) => setFormSource(e.target.value)} placeholder="вручную, ЦБ…" />
               {pickZodLeaf(formFieldErrs, "source") ? (
                 <p className="text-xs text-destructive">{pickZodLeaf(formFieldErrs, "source")}</p>
               ) : null}
@@ -680,6 +692,7 @@ export function CurrencyRatesWorkspace() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      {confirmDialog}
     </PageShell>
   );
 }

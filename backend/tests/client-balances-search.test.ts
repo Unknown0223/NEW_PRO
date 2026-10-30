@@ -23,12 +23,9 @@ describe("client-display-id", () => {
 });
 
 describe("buildClientBalanceSearchOrClause", () => {
-  it("tashqi kod — client_code va ichki id", () => {
-    const parts = buildClientBalanceSearchOrClause("ur_29411");
-    expect(parts).toEqual([
-      { client_code: { equals: "ur_29411", mode: "insensitive" } },
-      { id: 29411 }
-    ]);
+  it("tashqi kod — faqat client_code", () => {
+    const parts = buildClientBalanceSearchOrClause("j3_7629");
+    expect(parts).toEqual([{ client_code: { equals: "j3_7629", mode: "insensitive" } }]);
   });
 
   it("raqamli qidiruv — faqat aniq mijoz id", () => {

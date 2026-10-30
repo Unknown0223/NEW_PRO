@@ -46,7 +46,7 @@ export async function registerBonusRuleReadRoutes(app: FastifyInstance) {
             request,
             400,
             "WrongType",
-            "Faqat miqdor (qty) turidagi qoida"
+            "Доступно только для правил по количеству (qty)"
           );
         }
         return sendApiError(
@@ -54,7 +54,7 @@ export async function registerBonusRuleReadRoutes(app: FastifyInstance) {
           request,
           400,
           "NoConditions",
-          "Shartlar yoki buy_qty/free_qty yo‘q"
+          "Нет условий или buy_qty/free_qty"
         );
       }
       return reply.send(result);

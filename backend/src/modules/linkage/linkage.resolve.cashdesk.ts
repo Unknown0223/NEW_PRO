@@ -1,6 +1,5 @@
-import { Prisma } from "@prisma/client";
 import { prisma } from "../../config/database";
-import { env } from "../../config/env";
+import { collectWarehouseIdsForUsers } from "./linkage.warehouse-ids";
 
 export async function resolveByCashDesk(
   tenantId: number,
@@ -13,13 +12,28 @@ export async function resolveByCashDesk(
   expeditor_ids: Set<number>;
   product_ids: Set<number>;
 }> {
-  const [cashDesk, links, clientsByPayments] = await Promise.all([
+  const [cashDesk, links, slotOccupants, clientsByPayments] = await Promise.all([
     prisma.cashDesk.findFirst({
       where: { id: selectedCashDeskId, tenant_id: tenantId, is_active: true },
       select: { id: true }
     }),
     prisma.cashDeskUserLink.findMany({
       where: { cash_desk_id: selectedCashDeskId },
+      select: { user_id: true, user: { select: { role: true, id: true } } }
+    }),
+    prisma.slotUserLink.findMany({
+      where: {
+        tenant_id: tenantId,
+        ended_at: null,
+        slot: {
+          tenant_id: tenantId,
+          deleted_at: null,
+          OR: [
+            { cash_desk_id: selectedCashDeskId },
+            { cash_desk_ids: { has: selectedCashDeskId } }
+          ]
+        }
+      },
       select: { user_id: true, user: { select: { role: true, id: true } } }
     }),
     prisma.payment.findMany({
@@ -38,21 +52,19 @@ export async function resolveByCashDesk(
       product_ids: new Set<number>()
     };
   }
-  const userIds = links.map((r) => r.user_id);
-  const agentIds = links.filter((r) => r.user.role === "agent").map((r) => r.user.id);
+  const userIds = [...new Set([...links.map((r) => r.user_id), ...slotOccupants.map((r) => r.user_id)])];
+  const agentIds = [
+    ...links.filter((r) => r.user.role === "agent").map((r) => r.user.id),
+    ...slotOccupants.filter((r) => r.user.role === "agent").map((r) => r.user.id)
+  ];
   const uniqueAgentIds = [...new Set(agentIds)];
-  const expeditor_ids = new Set<number>(
-    links.filter((r) => r.user.role === "expeditor").map((r) => r.user.id)
-  );
+  const expeditor_ids = new Set<number>([
+    ...links.filter((r) => r.user.role === "expeditor").map((r) => r.user.id),
+    ...slotOccupants.filter((r) => r.user.role === "expeditor").map((r) => r.user.id)
+  ]);
 
-  const [whLinks, clientsPrimary, clientsSlots, expFromSlots, expFromOrders] = await Promise.all([
-    userIds.length
-      ? prisma.warehouseUserLink.findMany({
-          where: { user_id: { in: userIds }, warehouse: { tenant_id: tenantId, is_active: true } },
-          distinct: ["warehouse_id"],
-          select: { warehouse_id: true }
-        })
-      : Promise.resolve([]),
+  const [extraWh, clientsPrimary, clientsSlots, expFromSlots, expFromOrders] = await Promise.all([
+    userIds.length ? collectWarehouseIdsForUsers(tenantId, userIds) : Promise.resolve([] as number[]),
     uniqueAgentIds.length
       ? prisma.client.findMany({
           where: { tenant_id: tenantId, merged_into_client_id: null, agent_id: { in: uniqueAgentIds } },
@@ -91,7 +103,7 @@ export async function resolveByCashDesk(
   return {
     client_ids,
     agent_ids: new Set<number>(uniqueAgentIds),
-    warehouse_ids: new Set<number>(whLinks.map((r) => r.warehouse_id)),
+    warehouse_ids: new Set<number>(extraWh),
     cash_desk_ids: new Set<number>([selectedCashDeskId]),
     expeditor_ids,
     product_ids: new Set<number>()

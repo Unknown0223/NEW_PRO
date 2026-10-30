@@ -1,4 +1,5 @@
 import type { FastifyInstance } from "fastify";
+import fp from "fastify-plugin";
 import { z } from "zod";
 import { sendApiError, zodValidationExtras } from "../../lib/api-error";
 import {
@@ -7,22 +8,60 @@ import {
 } from "../../lib/document-edit-lock.http";
 import {
   assertDocWritableByDate,
-  assertDocWritableById
+  assertDocWritableById,
+  assertDocsWritableByIds
 } from "../../lib/document-edit-lock.request";
+import { writeApiRateLimitRouteOpts } from "../../lib/rate-limit-config";
 import { ensureTenantContext } from "../../lib/tenant-context";
 import { actorUserIdOrNull } from "../../lib/request-actor";
-import { ADMIN_AND_OPERATOR_LIKE_ROLES } from "../../lib/tenant-user-roles";
-import { getAccessUser, jwtAccessVerify, requireRoles } from "../auth/auth.prehandlers";
+import { getAccessUser, jwtAccessVerify, requireAnyPermission } from "../auth/auth.prehandlers";
 import { enrichScopedReportActor } from "../access/access-agent-scope";
 import {
   createOpeningBalance,
   deleteOpeningBalance,
+  deleteOpeningBalancesBatch,
   listOpeningBalances,
   restoreOpeningBalance,
+  restoreOpeningBalancesBatch,
   type OpeningBalanceListQuery
 } from "./opening-balances.service";
+import {
+  buildOpeningBalanceImportTemplateBuffer,
+  importOpeningBalancesFromBuffer
+} from "./opening-balances.import.xlsx";
 
-const catalogRoles = ADMIN_AND_OPERATOR_LIKE_ROLES;
+async function readOpeningBalanceImportBuffer(
+  request: import("fastify").FastifyRequest
+): Promise<{ ok: true; buf: Buffer } | { ok: false; error: "NoFile" | "EmptyFile" }> {
+  const file = await request.file();
+  if (!file) return { ok: false, error: "NoFile" };
+  const buf = await file.toBuffer();
+  if (buf.length === 0) return { ok: false, error: "EmptyFile" };
+  return { ok: true, buf };
+}
+
+/** Ko‘rish — Access kaliti (SVR ham). */
+const openingViewPre = [
+  jwtAccessVerify,
+  requireAnyPermission([
+    "cash.nachalnye_balansy.view",
+    "cash.nachalnye_balansy_klientov.view",
+    "cash.nachalnye_balansy_klientov.spisok_nachalnye_balansy"
+  ])
+] as const;
+const openingWritePre = [
+  jwtAccessVerify,
+  requireAnyPermission([
+    "cash.nachalnye_balansy.create",
+    "cash.nachalnye_balansy.update",
+    "cash.nachalnye_balansy.void",
+    "cash.nachalnye_balansy.restore"
+  ])
+] as const;
+const openingImportPre = [
+  jwtAccessVerify,
+  requireAnyPermission(["cash.nachalnye_balansy.create", "cash.nachalnye_balansy.update"])
+] as const;
 
 const createBody = z.object({
   client_id: z.number().int().positive(),
@@ -78,6 +117,7 @@ function parseListQuery(q: Record<string, string | undefined>): OpeningBalanceLi
   const payment_type = q.payment_type?.trim() || undefined;
   const trade_direction = q.trade_direction?.trim() || undefined;
   const search = q.search?.trim() || undefined;
+  const territory_region = q.territory_region?.trim() || undefined;
   const date_from = q.date_from?.trim() || undefined;
   const date_to = q.date_to?.trim() || undefined;
 
@@ -107,14 +147,15 @@ function parseListQuery(q: Record<string, string | undefined>): OpeningBalanceLi
     ...(balance_type ? { balance_type } : {}),
     ...(amount_min !== undefined ? { amount_min } : {}),
     ...(amount_max !== undefined ? { amount_max } : {}),
-    ...(search ? { search } : {})
+    ...(search ? { search } : {}),
+    ...(territory_region ? { territory_region } : {})
   };
 }
 
-export async function registerOpeningBalanceRoutes(app: FastifyInstance) {
+export async function openingBalanceRoutes(app: FastifyInstance) {
   app.get(
     "/api/:slug/opening-balances",
-    { preHandler: [jwtAccessVerify, requireRoles(...catalogRoles)] },
+    { preHandler: [...openingViewPre] },
     async (request, reply) => {
       if (!ensureTenantContext(request, reply)) return;
       const q = request.query as Record<string, string | undefined>;
@@ -130,7 +171,7 @@ export async function registerOpeningBalanceRoutes(app: FastifyInstance) {
 
   app.post(
     "/api/:slug/opening-balances",
-    { preHandler: [jwtAccessVerify, requireRoles(...catalogRoles)] },
+    { preHandler: [...openingWritePre] },
     async (request, reply) => {
       if (!ensureTenantContext(request, reply)) return;
       const parsed = createBody.safeParse(request.body);
@@ -154,6 +195,7 @@ export async function registerOpeningBalanceRoutes(app: FastifyInstance) {
         if (isDocumentEditPeriodLockedError(e)) return sendDocumentEditPeriodLocked(reply, request);
         const msg = e instanceof Error ? e.message : "";
         if (msg === "BAD_CLIENT") return sendApiError(reply, request, 400, "BadClient");
+        if (msg === "BAD_CLIENT_AGENT") return sendApiError(reply, request, 400, "BadClientAgent");
         if (msg === "BAD_AMOUNT") return sendApiError(reply, request, 400, "BadAmount");
         if (msg === "BAD_PAYMENT_TYPE") return sendApiError(reply, request, 400, "BadPaymentType");
         if (msg === "BAD_BALANCE_TYPE") return sendApiError(reply, request, 400, "BadBalanceType");
@@ -163,9 +205,101 @@ export async function registerOpeningBalanceRoutes(app: FastifyInstance) {
     }
   );
 
+  app.post(
+    "/api/:slug/opening-balances/bulk",
+    { preHandler: [...openingWritePre], ...writeApiRateLimitRouteOpts },
+    async (request, reply) => {
+      if (!ensureTenantContext(request, reply)) return;
+      const parsed = z
+        .object({
+          ids: z.array(z.number().int().positive()).min(1).max(200),
+          action: z.enum(["archive", "restore"]),
+          delete_reason_ref: z.string().max(128).optional().nullable()
+        })
+        .safeParse(request.body ?? {});
+      if (!parsed.success) {
+        return sendApiError(
+          reply,
+          request,
+          400,
+          "ValidationError",
+          "Некорректные данные запроса",
+          zodValidationExtras(parsed.error)
+        );
+      }
+      try {
+        await assertDocsWritableByIds(request, "opening_balances", parsed.data.ids);
+        const result =
+          parsed.data.action === "archive"
+            ? await deleteOpeningBalancesBatch(
+                request.tenant!.id,
+                parsed.data.ids,
+                actorUserIdOrNull(request),
+                parsed.data.delete_reason_ref?.trim() || "Удаление выбранных"
+              )
+            : await restoreOpeningBalancesBatch(
+                request.tenant!.id,
+                parsed.data.ids,
+                actorUserIdOrNull(request)
+              );
+        return reply.send({ data: result });
+      } catch (e) {
+        if (isDocumentEditPeriodLockedError(e)) return sendDocumentEditPeriodLocked(reply, request);
+        throw e;
+      }
+    }
+  );
+
+  app.get(
+    "/api/:slug/opening-balances/import-template",
+    { preHandler: [...openingImportPre] },
+    async (request, reply) => {
+      if (!ensureTenantContext(request, reply)) return;
+      const buf = buildOpeningBalanceImportTemplateBuffer();
+      reply.header("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+      reply.header(
+        "Content-Disposition",
+        'attachment; filename="nachalnye-balansy-shablon.xlsx"'
+      );
+      return reply.send(buf);
+    }
+  );
+
+  app.post(
+    "/api/:slug/opening-balances/import.xlsx",
+    { preHandler: [...openingImportPre] },
+    async (request, reply) => {
+      if (!ensureTenantContext(request, reply)) return;
+      const read = await readOpeningBalanceImportBuffer(request);
+      if (!read.ok) {
+        if (read.error === "NoFile") return sendApiError(reply, request, 400, "NoFile");
+        return sendApiError(reply, request, 400, "EmptyFile");
+      }
+      const q = request.query as Record<string, string | undefined>;
+      const defaultPay = (q.payment_type?.trim() || "Наличные").slice(0, 64);
+      try {
+        const result = await importOpeningBalancesFromBuffer(
+          request.tenant!.id,
+          read.buf,
+          actorUserIdOrNull(request),
+          defaultPay
+        );
+        return reply.send({ data: result });
+      } catch (e) {
+        if (isDocumentEditPeriodLockedError(e)) return sendDocumentEditPeriodLocked(reply, request);
+        const msg = e instanceof Error ? e.message : "";
+        if (msg === "EMPTY_FILE") return sendApiError(reply, request, 400, "EmptyFile");
+        if (msg === "BAD_HEADERS") return sendApiError(reply, request, 400, "BadHeaders");
+        if (msg === "EMPTY_ROWS") return sendApiError(reply, request, 400, "EmptyRows");
+        if (msg === "TOO_MANY_ROWS") return sendApiError(reply, request, 400, "TooManyRows");
+        throw e;
+      }
+    }
+  );
+
   app.delete(
-    "/api/:slug/opening-balances/:id",
-    { preHandler: [jwtAccessVerify, requireRoles(...catalogRoles)] },
+    "/api/:slug/opening-balances/:id(\\d+)",
+    { preHandler: [...openingWritePre] },
     async (request, reply) => {
       if (!ensureTenantContext(request, reply)) return;
       const id = Number.parseInt((request.params as { id: string }).id, 10);
@@ -195,8 +329,8 @@ export async function registerOpeningBalanceRoutes(app: FastifyInstance) {
   );
 
   app.post(
-    "/api/:slug/opening-balances/:id/restore",
-    { preHandler: [jwtAccessVerify, requireRoles(...catalogRoles)] },
+    "/api/:slug/opening-balances/:id(\\d+)/restore",
+    { preHandler: [...openingWritePre] },
     async (request, reply) => {
       if (!ensureTenantContext(request, reply)) return;
       const id = Number.parseInt((request.params as { id: string }).id, 10);
@@ -217,3 +351,7 @@ export async function registerOpeningBalanceRoutes(app: FastifyInstance) {
     }
   );
 }
+
+export const registerOpeningBalanceRoutes = fp(openingBalanceRoutes, {
+  name: "opening-balances-routes"
+});

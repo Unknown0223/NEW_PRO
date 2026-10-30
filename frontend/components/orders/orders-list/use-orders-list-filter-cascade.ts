@@ -60,7 +60,8 @@ export function useOrdersListFilterCascade({
   useEffect(() => {
     const z = normTrim(filterDraft.client_zone);
     if (!z || zoneKeys.size === 0) return;
-    if (!zoneKeys.has(z)) {
+    const zParts = z.split(",").map((s) => s.trim()).filter(Boolean);
+    if (zParts.some((p) => !zoneKeys.has(p))) {
       setFilterDraft((d) => ({ ...d, client_zone: "", client_region: "", client_city: "" }));
     }
   }, [zoneKeys, filterDraft.client_zone, setFilterDraft]);
@@ -68,7 +69,8 @@ export function useOrdersListFilterCascade({
   useEffect(() => {
     const r = normTrim(filterDraft.client_region);
     if (!r || regionKeys.size === 0) return;
-    if (!regionKeys.has(r)) {
+    const rParts = r.split(",").map((s) => s.trim()).filter(Boolean);
+    if (rParts.some((p) => !regionKeys.has(p))) {
       setFilterDraft((d) => ({ ...d, client_region: "", client_city: "" }));
     }
   }, [regionKeys, filterDraft.client_region, setFilterDraft]);
@@ -76,7 +78,8 @@ export function useOrdersListFilterCascade({
   useEffect(() => {
     const c = normTrim(filterDraft.client_city);
     if (!c || cityKeys.size === 0) return;
-    if (!cityKeys.has(c)) {
+    const cParts = c.split(",").map((s) => s.trim()).filter(Boolean);
+    if (cParts.some((p) => !cityKeys.has(p))) {
       setFilterDraft((d) => ({ ...d, client_city: "" }));
     }
   }, [cityKeys, filterDraft.client_city, setFilterDraft]);
@@ -84,7 +87,8 @@ export function useOrdersListFilterCascade({
   useEffect(() => {
     const pid = filterDraft.product_id.trim();
     if (!pid) return;
-    if (!productIdsInCategory.has(pid)) {
+    const parts = pid.split(",").map((s) => s.trim()).filter(Boolean);
+    if (parts.some((p) => !productIdsInCategory.has(p))) {
       setFilterDraft((d) => ({ ...d, product_id: "" }));
     }
   }, [productIdsInCategory, filterDraft.product_id, setFilterDraft]);

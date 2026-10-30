@@ -49,9 +49,9 @@ describe("buildReturnFilterExplanation — qarzdorlik + davr", () => {
       delivered_in_period: 12,
       delivered_after_filter: 12
     }));
-    expect(text).toContain("7 kun");
-    expect(text).toContain("12 ta");
-    expect(text).toContain("Balans 0 hisobga olinmaydi");
+    expect(text).toContain("7 дн.");
+    expect(text).toContain("12 шт.");
+    expect(text).toContain("Баланс 0 не учитывается");
   });
 
   it("davr + balans 0: davrda zakaz bor, 0 yo‘q — bo‘sh", () => {
@@ -67,8 +67,8 @@ describe("buildReturnFilterExplanation — qarzdorlik + davr", () => {
       delivered_in_period: 12,
       delivered_after_filter: 0
     }));
-    expect(text).toContain("balans 0");
-    expect(text).toContain("12 ta yetkazilgan zakaz");
+    expect(text).toContain("баланс 0");
+    expect(text).toContain("Доставленных заказов за период: 12");
   });
 
   it("log qadamlari", () => {
@@ -83,7 +83,7 @@ describe("buildReturnFilterExplanation — qarzdorlik + davr", () => {
       delivered_in_period: 3,
       delivered_after_filter: 0
     }));
-    expect(log.some((l) => l.includes("Balans 0: tanlangan davr ichida topilmadi"))).toBe(true);
-    expect(log.some((l) => l.includes("Davr ichida yetkazilgan zakazlar: 3"))).toBe(true);
+    expect(log.some((l) => l.includes("Баланс 0: в выбранном периоде не найден"))).toBe(true);
+    expect(log.some((l) => l.includes("Доставлено заказов за период: 3"))).toBe(true);
   });
 });

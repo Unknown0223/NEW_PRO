@@ -67,6 +67,9 @@ export type MigrationIdMaps = {
   accessLog: Map<number, number>;
   stockUpload: Map<number, number>;
   reportBuilderSavedConfig: Map<number, number>;
+  bonusStrategy: Map<number, number>;
+  bankTransferInbox: Map<number, number>;
+  bankTransferInboxEvent: Map<number, number>;
 };
 
 export function emptyIdMaps(): MigrationIdMaps {
@@ -137,6 +140,9 @@ export function emptyIdMaps(): MigrationIdMaps {
     userActivityEvent: new Map(),
     accessLog: new Map(),
     stockUpload: new Map(),
-    reportBuilderSavedConfig: new Map()
+    reportBuilderSavedConfig: new Map(),
+    bonusStrategy: new Map(),
+    bankTransferInbox: new Map(),
+    bankTransferInboxEvent: new Map()
   };
 }

@@ -60,11 +60,52 @@ export function dashToNull(v: string): string | null {
 export function metaAgentPhones(ctx: WarehouseAggregateContext): string {
   const phones = ctx.orders
     .map((o) => {
+      const direct = o.agentPhone?.trim();
+      if (direct) return direct;
       const m = /(\+?\d[\d\s\-()]{8,})/.exec(o.agentLine);
       return m?.[1]?.trim() ?? "";
     })
     .filter(Boolean);
   return [...new Set(phones)].join(", ");
+}
+
+type MetaKind = "requestDate" | "shipDate" | "phone" | "agents" | "territory" | "expeditor";
+
+function classifyMetaLabel(text: string): MetaKind | null {
+  const l = text.toLowerCase();
+  if (l.includes("дата") && l.includes("заяв")) return "requestDate";
+  if (l.includes("дата") && (l.includes("отгруз") || l.includes("загруз"))) return "shipDate";
+  if (l.includes("телефон")) return "phone";
+  if (l.includes("агент")) return "agents";
+  if (l.includes("территор")) return "territory";
+  if (l.includes("экспедитор") || l.includes("водитель")) return "expeditor";
+  return null;
+}
+
+/** «Дата заявки: 25.05.2026» — qiymat shu katakka yoziladi, qo‘shni ustun emas. */
+function hasInlineMetaValue(text: string): boolean {
+  return /^[^:]{2,48}:\s*\S/.test(text.trim());
+}
+
+function metaKindValue(
+  kind: MetaKind,
+  ctx: WarehouseAggregateContext,
+  merged: WarehouseAggregateContext["merged"]
+): string | null {
+  switch (kind) {
+    case "requestDate":
+      return fmtDate(merged.createdAt);
+    case "shipDate":
+      return merged.dateTo ? fmtDate(merged.dateTo) : "—";
+    case "phone":
+      return dashToNull(metaAgentPhones(ctx));
+    case "agents":
+      return dashToNull(ctx.agentLabels.join(", ") || merged.agentLine);
+    case "territory":
+      return dashToNull(ctx.territoryLabels.join(", ") || merged.territory || "—");
+    case "expeditor":
+      return dashToNull(ctx.expeditorLabels.join(", ") || merged.expeditorLine);
+  }
 }
 
 /** Matritsa / ro‘yxat — 2–6 qator meta (qiymat odatda 3–4 ustunda). */
@@ -89,22 +130,26 @@ export function fillExpeditorMetaBlock(
     );
   }
 
+  const seen = new Set<string>();
   for (let r = 2; r <= 6; r++) {
-    const label = cellStr(sheet.getCell(r, 1).value) || cellStr(sheet.getCell(r, 2).value);
-    const l = label.toLowerCase();
-    if (l.includes("дата") && l.includes("заяв")) {
-      setCell(sheet, r, valueCol, fmtDate(merged.createdAt));
-    } else if (l.includes("дата") && (l.includes("отгруз") || l.includes("загруз"))) {
-      setCell(sheet, r, valueCol, merged.dateTo ? fmtDate(merged.dateTo) : "—");
-    } else if (l.includes("агент")) {
-      setCell(sheet, r, valueCol, dashToNull(ctx.agentLabels.join(", ") || merged.agentLine));
-    } else if (l.includes("территор")) {
-      setCell(sheet, r, valueCol, dashToNull(ctx.territoryLabels.join(", ") || merged.territory || "—"));
-    } else if (l.includes("телефон")) {
-      setCell(sheet, r, valueCol, dashToNull(metaAgentPhones(ctx)));
-    } else if (l.includes("экспедитор") || l.includes("водитель")) {
-      setCell(sheet, r, valueCol, dashToNull(ctx.expeditorLabels.join(", ") || merged.expeditorLine));
+    for (let c = 1; c <= 8; c++) {
+      const cell = sheet.getCell(r, c);
+      const master = cell.isMerged && cell.master ? cell.master : cell;
+      const key = `${master.row}:${master.col}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      const text = cellStr(master.value);
+      const kind = classifyMetaLabel(text);
+      if (!kind || !hasInlineMetaValue(text)) continue;
+      const label = text.split(":")[0]!.trim();
+      const value = metaKindValue(kind, ctx, merged) ?? "—";
+      setCell(sheet, r, c, `${label}: ${value}`);
     }
+
+    const label = cellStr(sheet.getCell(r, 1).value) || cellStr(sheet.getCell(r, 2).value);
+    const kind = classifyMetaLabel(label);
+    if (!kind || hasInlineMetaValue(label)) continue;
+    setCell(sheet, r, valueCol, metaKindValue(kind, ctx, merged));
   }
 }
 

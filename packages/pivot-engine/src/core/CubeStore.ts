@@ -61,6 +61,7 @@ export function hashAggregationConfig(config: PivotConfig): string {
     filters: config.filters,
     calculatedMeasures: config.calculatedMeasures ?? [],
     showSubtotals: config.options.showSubtotals,
+    subtotalScope: config.options.subtotalScope ?? "both",
     showGrandTotal: config.options.showGrandTotal,
     showColumnTotals: config.options.showColumnTotals,
     drillDown: config.options.drillDown,

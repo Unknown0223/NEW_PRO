@@ -525,7 +525,7 @@ class _RecentDaysCard extends StatelessWidget {
             const Padding(
               padding: EdgeInsets.symmetric(vertical: 8),
               child: Text(
-                'Маълумот йўқ',
+                'Нет данных',
                 style: TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.w700,

@@ -11,15 +11,18 @@ import {
   resolveAllowedAgentIdsForActor
 } from "../access/access-agent-scope";
 import { DIRECTORY_READ_ROLES, getAccessUser, jwtAccessVerify, requireRoles } from "../auth/auth.prehandlers";
+import { ensureAnyPermission } from "../access/ensure-any-permission";
 import {
   getAgentRouteDay,
   listAgentLocationPings,
   listAgentRouteDays,
   recordAgentLocationPing,
+  recordAgentLocationPingsBatch,
   recordAgentVisitCheckin,
   upsertAgentRouteDay
 } from "./field.service";
 import { createClientRefusal } from "../refusals/refusals.service";
+import { assertFieldVisitPolicy, fieldVisitPolicyError } from "../mobile/mobile-field-visit.guard";
 
 const locationPingPostRoles = [...MOBILE_FIELD_ROLE_NAMES, ...ADMIN_AND_OPERATOR_LIKE_ROLES] as const;
 
@@ -113,10 +116,12 @@ export async function registerFieldRoutes(app: FastifyInstance) {
     const viewer = getAccessUser(request);
     let agentId: number;
     // Agent va ekspeditor o'z visit check-in'ini o'zi yaratadi (agent_id = self).
+    let selfFieldCheckin = false;
     if (viewer.role === "agent" || viewer.role === "expeditor") {
       const self = parseUserId(request);
       if (!self) return sendApiError(reply, request, 400, "BadUser");
       agentId = self;
+      selfFieldCheckin = true;
       if (body.agent_id != null && body.agent_id !== self) {
         return sendApiError(reply, request, 403, "Forbidden");
       }
@@ -124,8 +129,16 @@ export async function registerFieldRoutes(app: FastifyInstance) {
       if (body.agent_id == null) return sendApiError(reply, request, 400, "AgentIdRequired");
       agentId = body.agent_id;
     }
-    if (!(await assertAgentInScope(request, reply, agentId))) return;
+    // Agent/ekspeditor o‘z vizitini yozadi: Dostup «bound agents» bo‘sh bo‘lsa ham
+    // AGENT_OUT_OF_SCOPE bo‘lmasin (dastavchik «Начать визит»).
+    if (!selfFieldCheckin && !(await assertAgentInScope(request, reply, agentId))) return;
+    const reasonRef = body.refusal_reason_ref?.trim();
     try {
+      if (selfFieldCheckin && body.client_id != null) {
+        await assertFieldVisitPolicy(tenantId, agentId, viewer.role, {
+          clientId: body.client_id, latitude: body.latitude ?? null, longitude: body.longitude ?? null, refusal: Boolean(reasonRef)
+        });
+      }
       const data = await recordAgentVisitCheckin(tenantId, agentId, {
         client_id: body.client_id ?? null,
         latitude: body.latitude ?? null,
@@ -133,7 +146,6 @@ export async function registerFieldRoutes(app: FastifyInstance) {
         notes: body.notes ?? null
       });
       let refusal = null;
-      const reasonRef = body.refusal_reason_ref?.trim();
       if (reasonRef && body.client_id != null) {
         refusal = await createClientRefusal(tenantId, agentId, {
           client_id: body.client_id,
@@ -147,6 +159,8 @@ export async function registerFieldRoutes(app: FastifyInstance) {
       if (msg === "AgentNotFound") return sendApiError(reply, request, 400, "AgentNotFound");
       if (msg === "ClientNotFound") return sendApiError(reply, request, 404, "ClientNotFound");
       if (msg === "ReasonRequired") return sendApiError(reply, request, 400, "ReasonRequired");
+      const visitErr = fieldVisitPolicyError(msg);
+      if (visitErr) return sendApiError(reply, request, visitErr.status, visitErr.code, visitErr.text);
       throw e;
     }
   });
@@ -161,6 +175,10 @@ export async function registerFieldRoutes(app: FastifyInstance) {
         latitude: z.number().finite().gte(-90).lte(90),
         longitude: z.number().finite().gte(-180).lte(180),
         accuracy_meters: z.number().finite().positive().max(5000).optional().nullable(),
+        battery_pct: z.number().finite().min(0).max(100).optional().nullable(),
+        network_type: z.string().trim().max(16).optional().nullable(),
+        /** Oflayn yig‘ilgan ping — client UTC ISO. */
+        recorded_at: z.string().min(10).optional().nullable(),
         agent_id: z.number().int().positive().optional()
       })
       .parse(request.body);
@@ -185,18 +203,98 @@ export async function registerFieldRoutes(app: FastifyInstance) {
         return sendApiError(reply, request, 400, "AgentIdRequired");
       }
     }
+    const selfId = parseUserId(request);
     const selfPing =
-      viewer.role === "supervisor" &&
-      body.agent_id == null &&
-      agentId === parseUserId(request);
+      agentId === selfId &&
+      (viewer.role === "agent" ||
+        viewer.role === "expeditor" ||
+        (viewer.role === "supervisor" && body.agent_id == null));
     if (!selfPing && !(await assertAgentInScope(request, reply, agentId))) return;
     try {
+      const recordedAt =
+        body.recorded_at != null && body.recorded_at.trim()
+          ? new Date(body.recorded_at)
+          : null;
       const data = await recordAgentLocationPing(tenantId, agentId, {
         latitude: body.latitude,
         longitude: body.longitude,
-        accuracy_meters: body.accuracy_meters
+        accuracy_meters: body.accuracy_meters,
+        battery_pct: body.battery_pct,
+        network_type: body.network_type,
+        recorded_at: recordedAt
       });
       return reply.status(201).send({ data });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "";
+      if (msg === "AgentNotFound") return sendApiError(reply, request, 400, "AgentNotFound");
+      throw e;
+    }
+  });
+
+  /** Oflayn GPS navbati — bir so‘rovda ko‘p ping. */
+  app.post("/api/:slug/agent-locations/batch", {
+    preHandler: [jwtAccessVerify, requireRoles(...locationPingPostRoles)]
+  }, async (request, reply) => {
+    if (!ensureTenantContext(request, reply)) return;
+    const tenantId = request.tenant!.id;
+    const body = z
+      .object({
+        pings: z
+          .array(
+            z.object({
+              latitude: z.number().finite().gte(-90).lte(90),
+              longitude: z.number().finite().gte(-180).lte(180),
+              accuracy_meters: z.number().finite().positive().max(5000).optional().nullable(),
+              battery_pct: z.number().finite().min(0).max(100).optional().nullable(),
+              network_type: z.string().trim().max(16).optional().nullable(),
+              recorded_at: z.string().min(10).optional().nullable()
+            })
+          )
+          .min(1)
+          .max(200),
+        agent_id: z.number().int().positive().optional()
+      })
+      .parse(request.body);
+
+    const viewer = getAccessUser(request);
+    let agentId: number;
+    if (viewer.role === "agent" || viewer.role === "expeditor") {
+      const self = parseUserId(request);
+      if (!self) return sendApiError(reply, request, 400, "BadUser");
+      agentId = self;
+      if (body.agent_id != null && body.agent_id !== self) {
+        return sendApiError(reply, request, 403, "Forbidden");
+      }
+    } else if (viewer.role === "supervisor" && body.agent_id == null) {
+      const self = parseUserId(request);
+      if (!self) return sendApiError(reply, request, 400, "BadUser");
+      agentId = self;
+    } else if (body.agent_id != null) {
+      agentId = body.agent_id;
+    } else {
+      return sendApiError(reply, request, 400, "AgentIdRequired");
+    }
+
+    const selfId = parseUserId(request);
+    const selfPing =
+      agentId === selfId &&
+      (viewer.role === "agent" || viewer.role === "expeditor" || viewer.role === "supervisor");
+    if (!selfPing && !(await assertAgentInScope(request, reply, agentId))) return;
+
+    try {
+      const result = await recordAgentLocationPingsBatch(
+        tenantId,
+        agentId,
+        body.pings.map((p) => ({
+          latitude: p.latitude,
+          longitude: p.longitude,
+          accuracy_meters: p.accuracy_meters,
+          battery_pct: p.battery_pct,
+          network_type: p.network_type,
+          recorded_at: p.recorded_at ? new Date(p.recorded_at) : null
+        }))
+      );
+      return reply.status(201).send({ data: result });
     } catch (e) {
       const msg = e instanceof Error ? e.message : "";
       if (msg === "AgentNotFound") return sendApiError(reply, request, 400, "AgentNotFound");
@@ -282,6 +380,10 @@ export async function registerFieldRoutes(app: FastifyInstance) {
         notes: z.string().max(2000).nullable().optional()
       })
       .parse(request.body);
+    const viewer = getAccessUser(request);
+    const selfRoute =
+      body.agent_id === parseUserId(request) && (viewer.role === "agent" || viewer.role === "expeditor");
+    if (!selfRoute && !(await ensureAnyPermission(request, reply, ["gps.marshrut.update"]))) return;
     if (!(await assertAgentInScope(request, reply, body.agent_id))) return;
     try {
       const row = await upsertAgentRouteDay(tenantId, body);

@@ -1,7 +1,5 @@
-"use client";
-
-import { WorkdaysWorkspace } from "@/components/workdays/workdays-workspace";
+import { redirect } from "next/navigation";
 
 export default function UsersWorkdaysPage() {
-  return <WorkdaysWorkspace />;
+  redirect("/tabel/workdays");
 }

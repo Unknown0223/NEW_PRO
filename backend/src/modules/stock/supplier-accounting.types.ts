@@ -15,8 +15,11 @@ export type SupplierPaymentSortKey =
 
 export type ListSupplierPaymentsOpts = {
   supplier_id?: number;
+  supplier_ids?: number[];
   cash_desk_id?: number;
+  cash_desk_ids?: number[];
   payment_method?: string | null;
+  payment_methods?: string[];
   paid_from?: Date | null;
   paid_to?: Date | null;
   amount_from?: number | null;

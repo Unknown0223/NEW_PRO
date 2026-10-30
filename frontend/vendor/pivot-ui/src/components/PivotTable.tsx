@@ -250,9 +250,15 @@ function FlatRow({
     <tr className="hover:bg-zinc-50">
       {labelCell && (
         <td
-          className="cursor-pointer border-b px-3 py-1.5 font-medium"
+          className={cn(
+            "border-b px-3 py-1.5 font-medium",
+            hasChildren && "cursor-pointer"
+          )}
           style={{ paddingLeft: `${12 + depth * 16}px` }}
-          onClick={() => config.rows[depth] && onSort?.(config.rows[depth])}
+          title={hasChildren ? (expanded ? "Свернуть" : "Развернуть") : undefined}
+          onClick={() => {
+            if (hasChildren) onToggleRow(item.rowKey);
+          }}
         >
           <div className="flex items-center gap-1">
             {hasChildren ? (

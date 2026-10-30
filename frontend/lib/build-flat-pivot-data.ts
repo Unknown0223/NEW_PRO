@@ -6,6 +6,7 @@ import {
   formatValue,
   getActiveSliceFilters,
   getPivotStrings,
+  type FieldFormat,
   type PivotCell,
   type PivotConfig,
   type PivotData,
@@ -14,6 +15,7 @@ import {
   type PivotRow,
   type PivotTotalRow
 } from "@salec/pivot-engine";
+import { getFieldFormatOverride } from "@/lib/pivot-config-extras";
 import { formatPivotMemberLabel } from "@/lib/pivot-member-labels";
 
 /** Flat jadval ustun tartibi: rows → columns → values (takrorlarsiz). Report filters — ustun emas. */
@@ -36,18 +38,25 @@ export function getFlatColumnFieldIds(config: PivotConfig): string[] {
 function formatCellValue(
   raw: unknown,
   field: PivotField | undefined,
-  showCurrency: boolean
+  showCurrency: boolean,
+  formatOverride?: FieldFormat
 ): { value: number | string | null; rawValue: number | null; formatted: string; isEmpty: boolean } {
+  const effectiveFormat = formatOverride ?? field?.format;
   if (raw == null || raw === "") {
-    return { value: null, rawValue: null, formatted: "(blank)", isEmpty: true };
+    return {
+      value: null,
+      rawValue: null,
+      formatted: effectiveFormat?.nullDisplay || "(blank)",
+      isEmpty: true
+    };
   }
-  if (field?.dataType === "number" || field?.dataType === "currency") {
+  if (field?.dataType === "number" || field?.dataType === "currency" || effectiveFormat) {
     const n = typeof raw === "number" ? raw : Number(raw);
-    if (Number.isFinite(n)) {
+    if (Number.isFinite(n) && (field?.dataType === "number" || field?.dataType === "currency" || typeof raw === "number")) {
       return {
         value: n,
         rawValue: n,
-        formatted: formatValue(n, field.format, { showCurrency }),
+        formatted: formatValue(n, effectiveFormat, { showCurrency }),
         isEmpty: false
       };
     }
@@ -58,14 +67,19 @@ function formatCellValue(
       return {
         value: d.toISOString(),
         rawValue: null,
-        formatted: formatValue(d, field?.format ?? { type: "date" }, { showCurrency }),
+        formatted: formatValue(d, effectiveFormat ?? { type: "date" }, { showCurrency }),
         isEmpty: false
       };
     }
   }
   const s = String(raw).trim();
   if (!s) {
-    return { value: null, rawValue: null, formatted: "(blank)", isEmpty: true };
+    return {
+      value: null,
+      rawValue: null,
+      formatted: effectiveFormat?.nullDisplay || "(blank)",
+      isEmpty: true
+    };
   }
   return {
     value: s,
@@ -139,7 +153,12 @@ export function buildFlatPivotData(
     const row = workingData[index]!;
     const cells: PivotCell[] = columnIds.map((id) => {
       const field = fieldMap.get(id);
-      const { value, rawValue, formatted, isEmpty } = formatCellValue(row[id], field, showCurrency);
+      const { value, rawValue, formatted, isEmpty } = formatCellValue(
+        row[id],
+        field,
+        showCurrency,
+        getFieldFormatOverride(config, id)
+      );
       return { columnKey: id, value, rawValue, formatted, isEmpty };
     });
     rows.push({ key: `flat-${index}`, depth: 0, cells });
@@ -263,7 +282,12 @@ export async function buildFlatPivotDataAsync(
     const row = workingData[index]!;
     const cells: PivotCell[] = columnIds.map((id) => {
       const field = fieldMap.get(id);
-      const { value, rawValue, formatted, isEmpty } = formatCellValue(row[id], field, showCurrency);
+      const { value, rawValue, formatted, isEmpty } = formatCellValue(
+        row[id],
+        field,
+        showCurrency,
+        getFieldFormatOverride(config, id)
+      );
       return { columnKey: id, value, rawValue, formatted, isEmpty };
     });
     rows.push({ key: `flat-${index}`, depth: 0, cells });

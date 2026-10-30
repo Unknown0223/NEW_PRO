@@ -15,6 +15,8 @@ export type ClientSales2Filters = {
   day_visit_iso?: number[];
   agent_ids?: number[];
   agent_id?: number;
+  /** Supervayzer: mijoz o‘z agentining `supervisor_user_id` orqali. */
+  supervisor_ids?: number[];
   price_types?: string[];
   price_type?: string;
   order_types?: string[];

@@ -41,7 +41,7 @@ const ROLE_DEFAULT_RU_NAMES: Record<string, string> = {
  * «Состав ролей по умолчанию» uchun tenant `roles` qatorlarini kafolatlaydi.
  * Avvalgi tenantlarda RBAC migratsiyasi bo‘lmagan bo‘lsa ham ro‘yxat to‘ldiriladi.
  */
-/** `users.role` → `user_roles` (Access matritsasi va `me-permissions` uchun). */
+/** `users.role` → `user_roles` (Access matritsasi va `me-permissions` uchun). Qo‘shimcha paketlarni o‘chirmaydi. */
 export async function syncTenantUserRolesFromProfile(tenantId: number): Promise<number> {
   const users = await prisma.user.findMany({
     where: { tenant_id: tenantId, is_active: true },
@@ -52,8 +52,12 @@ export async function syncTenantUserRolesFromProfile(tenantId: number): Promise<
     const roleKey = u.role?.trim();
     if (!roleKey) continue;
     const role = await ensureRoleByKey(tenantId, roleKey);
-    await prisma.userRole.deleteMany({ where: { user_id: u.id } });
-    await prisma.userRole.create({ data: { user_id: u.id, role_id: role.id } });
+    const existing = await prisma.userRole.findUnique({
+      where: { user_id_role_id: { user_id: u.id, role_id: role.id } }
+    });
+    if (!existing) {
+      await prisma.userRole.create({ data: { user_id: u.id, role_id: role.id } });
+    }
     linked += 1;
   }
   return linked;

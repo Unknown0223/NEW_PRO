@@ -194,7 +194,7 @@ export function OrderInfoCard({
               variant="ghost"
               size="icon"
               className="size-8 shrink-0"
-              title="Nusxa"
+              title="Копировать"
               onClick={() => void navigator.clipboard.writeText(gpsText)}
             >
               <Copy className="size-3.5" aria-hidden />

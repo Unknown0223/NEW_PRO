@@ -169,7 +169,7 @@ export function DashboardSalesMonitoring() {
       ) : !tenantSlug ? (
         <p className="text-sm text-destructive">Сессия не найдена.</p>
       ) : (
-        <div className="flex flex-col gap-6">
+        <div className="flex min-w-0 flex-col gap-6">
           <TableColumnSettingsDialog
             open={branchColumnsOpen}
             onOpenChange={setBranchColumnsOpen}

@@ -335,4 +335,72 @@ describe.skipIf(!dbReady)("work-slots API (database)", () => {
     expect(res.status).toBe(400);
     expect(res.body.error).toBe("LockReasonRequired");
   });
+
+  it("PATCH multi warehouse_ids / cash_desk_ids / territories persists and filters", async () => {
+    const token = await adminToken();
+    const tenant = await prisma.tenant.findUniqueOrThrow({ where: { slug: "test1" } });
+    const warehouses = await prisma.warehouse.findMany({
+      where: { tenant_id: tenant.id },
+      select: { id: true },
+      take: 2,
+      orderBy: { id: "asc" }
+    });
+    const cashDesks = await prisma.cashDesk.findMany({
+      where: { tenant_id: tenant.id },
+      select: { id: true },
+      take: 2,
+      orderBy: { id: "asc" }
+    });
+    expect(warehouses.length).toBeGreaterThanOrEqual(2);
+    expect(cashDesks.length).toBeGreaterThanOrEqual(2);
+
+    const code = `MLT-${Date.now()}`.slice(0, 20);
+    const createRes = await request(app.server)
+      .post("/api/test1/work-slots")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ slot_code: code, label: "Multi bind test", slot_type: "agent" });
+    expect(createRes.status).toBe(201);
+    const slotId = createRes.body.data.id as number;
+
+    const whIds = warehouses.map((w) => w.id);
+    const cashIds = cashDesks.map((c) => c.id);
+    const territories = ["FV / ANDIJON / ASAKA", "FV / ANDIJON / BALIQCHI"];
+
+    const patchRes = await request(app.server)
+      .patch(`/api/test1/work-slots/${slotId}`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({
+        warehouse_ids: whIds,
+        cash_desk_ids: cashIds,
+        territories
+      });
+    expect(patchRes.status).toBe(200);
+
+    const detail = await request(app.server)
+      .get(`/api/test1/work-slots/${slotId}`)
+      .set("Authorization", `Bearer ${token}`);
+    expect(detail.status).toBe(200);
+    expect(detail.body.data.active_warehouse_ids).toEqual(whIds);
+    expect(detail.body.data.active_warehouse_id).toBe(whIds[0]);
+    expect(detail.body.data.active_cash_desk_ids).toEqual(cashIds);
+    expect(detail.body.data.active_cash_desk_id).toBe(cashIds[0]);
+    expect(detail.body.data.active_territories).toEqual(territories);
+
+    const db = await prisma.workSlot.findUniqueOrThrow({
+      where: { id: slotId },
+      select: { warehouse_ids: true, cash_desk_ids: true, territories: true, warehouse_id: true }
+    });
+    expect(db.warehouse_ids).toEqual(whIds);
+    expect(db.cash_desk_ids).toEqual(cashIds);
+    expect(db.territories).toEqual(territories);
+    expect(db.warehouse_id).toBe(whIds[0]);
+
+    const filtered = await request(app.server)
+      .get(`/api/test1/work-slots?warehouse_ids=${whIds[1]}&limit=100`)
+      .set("Authorization", `Bearer ${token}`);
+    expect(filtered.status).toBe(200);
+    expect(filtered.body.data.some((r: { id: number }) => r.id === slotId)).toBe(true);
+
+    await prisma.workSlot.delete({ where: { id: slotId } }).catch(() => undefined);
+  });
 });

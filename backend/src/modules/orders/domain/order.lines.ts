@@ -5,8 +5,13 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "../../../config/database";
 import { appendTenantAuditEvent, AuditEntityType } from "../../../lib/tenant-audit";
 import { emitOrderUpdated } from "../../../lib/order-event-bus";
-import { invalidateStock } from "../../../lib/redis-cache";
+import { invalidateOrdersListCache, invalidateStock } from "../../../lib/redis-cache";
 import { getProductPrice } from "../../products/product-prices.service";
+import { resolveStoredPaymentMethodRef } from "../../tenant-settings/finance-refs";
+import {
+  loadPaymentMethodEntriesForResolve,
+  loadPriceTypeEntriesForResolve
+} from "../../tenant-settings/tenant-settings.service";
 import { parseBonusStackPolicy } from "../bonus-stack-policy";
 import { buildAppliedBonusRulesSnapshotForOrder } from "../order-bonus-snapshot.persist";
 import {
@@ -32,6 +37,7 @@ import {
   enrichOrderDetailRow,
   parseBonusGiftSelectionsJson,
   roundOrderMoney,
+  validateBonusGiftLines,
   validateBonusGiftOverrides
 } from "./order.detail-mappers";
 import { assertOrderLinesCreditAndPayments } from "./order.lines-guards";
@@ -105,14 +111,28 @@ export async function updateOrderLines(
   const priorSelections = parseBonusGiftSelectionsJson(
     (existing as { bonus_gift_selections?: Prisma.JsonValue | null }).bonus_gift_selections ?? null
   );
+  const orderedIdsForGifts = input.items.map((i) => i.product_id);
   const bodyGiftOverrides =
     input.bonus_gift_overrides?.length ?
-      await validateBonusGiftOverrides(tenantId, input.bonus_gift_overrides)
+      await validateBonusGiftOverrides(tenantId, input.bonus_gift_overrides, orderedIdsForGifts)
     : new Map<number, number>();
   const giftSelectionMap = new Map(priorSelections);
   for (const [k, v] of bodyGiftOverrides) giftSelectionMap.set(k, v);
 
-  // Agent doim qulflangan. Ombor / to‘lov usuli — faqat «new» da o‘zgartiriladi.
+  const validatedGiftSplits =
+    input.bonus_gift_lines?.length ?
+      await validateBonusGiftLines(tenantId, input.bonus_gift_lines, orderedIdsForGifts)
+    : new Map<number, Map<number, number>>();
+
+  // Gift lines bo‘lsa — birinchi mahsulotni selection sifatida ham saqlaymiz (swap UI).
+  for (const [ruleId, lines] of validatedGiftSplits) {
+    const firstPid = lines.keys().next().value;
+    if (typeof firstPid === "number" && firstPid > 0) {
+      giftSelectionMap.set(ruleId, firstPid);
+    }
+  }
+
+  // Agent, ombor doim qulflangan. To‘lov usuli — faqat «new» da o‘zgartiriladi.
   if (input.agent_id !== undefined && !sameNullableId(input.agent_id, existing.agent_id)) {
     throw new Error("ORDER_HEADER_LOCKED");
   }
@@ -121,10 +141,9 @@ export async function updateOrderLines(
   const existingPm =
     (existing as { payment_method_ref?: string | null }).payment_method_ref?.trim() || null;
 
-  let warehouseId = existing.warehouse_id;
+  const warehouseId = existing.warehouse_id;
   if (input.warehouse_id !== undefined && !sameNullableId(input.warehouse_id, existing.warehouse_id)) {
-    if (!isNewStatus) throw new Error("ORDER_HEADER_LOCKED");
-    warehouseId = input.warehouse_id;
+    throw new Error("ORDER_HEADER_LOCKED");
   }
 
   let nextPaymentMethodRef = existingPm;
@@ -135,11 +154,34 @@ export async function updateOrderLines(
         ? null
         : (input.payment_method_ref ?? "").trim().slice(0, 64) || null;
   }
-  const warehouseChanged = !sameNullableId(warehouseId, existing.warehouse_id);
-  const paymentChanged = !samePaymentRef(nextPaymentMethodRef, existingPm);
 
   const agentId = existing.agent_id;
-  const priceType = (input.price_type ?? "").trim() || "retail";
+  const existingPriceType = existing.price_type?.trim() || null;
+  const patchPriceType = (input.price_type ?? "").trim();
+  const priceType = patchPriceType || existingPriceType || "retail";
+  const priceTypeChanged = patchPriceType !== "" && patchPriceType !== existingPriceType;
+
+  if (isNewStatus && patchPriceType) {
+    const [priceTypeEntries, paymentMethodEntries] = await Promise.all([
+      loadPriceTypeEntriesForResolve(tenantId),
+      loadPaymentMethodEntriesForResolve(tenantId)
+    ]);
+    const derived = resolveStoredPaymentMethodRef({
+      paymentMethodRef: nextPaymentMethodRef,
+      priceType: patchPriceType,
+      priceTypeEntries,
+      paymentMethodEntries,
+      preferPriceType: true
+    });
+    if (derived && !samePaymentRef(derived, nextPaymentMethodRef)) {
+      nextPaymentMethodRef = derived;
+    } else if (!nextPaymentMethodRef && derived) {
+      nextPaymentMethodRef = derived;
+    }
+  }
+
+  const warehouseChanged = !sameNullableId(warehouseId, existing.warehouse_id);
+  const paymentChanged = !samePaymentRef(nextPaymentMethodRef, existingPm);
 
   const existingOrderType = normalizeOrderType(existing.order_type ?? "order");
 
@@ -263,11 +305,16 @@ export async function updateOrderLines(
         stackPolicy,
         usedRuleIds,
         giftSelectionMap,
-        new Map<number, ReadonlyMap<number, number>>(),
+        validatedGiftSplits,
         warehouseId,
         { referenceAt: existing.created_at, excludeOrderId: orderId },
         orderAgentForBonus,
-        { applyDiscount, applyBonusLines: applyBonus, is_consignment: existing.is_consignment === true }
+        {
+          applyDiscount,
+          applyBonusLines: applyBonus,
+          is_consignment: existing.is_consignment === true,
+          strategy_selections: input.bonus_strategy_selections
+        }
       );
       paidAfterDisc = resolved.lines;
       paidTotal = resolved.total;
@@ -331,15 +378,6 @@ export async function updateOrderLines(
     const prevBonusAlert = (existing as { bonus_alert?: string | null }).bonus_alert ?? null;
 
     let discountAlert = discountRes.alert;
-    // Tahrirlashda soxta «not_applied» qo‘ymaymiz (oldingi alert yo‘q va kutilgan skidka ham yo‘q).
-    if (
-      prevDiscountAlert == null &&
-      discountAlert === "not_applied" &&
-      (discountRes.expectedSum <= 0 || discountRes.discountPct == null)
-    ) {
-      discountAlert = null;
-    }
-
     if (discountAlert != null) {
       linesComment = mergeOrderAutoComments(linesComment, [
         buildDiscountAlertComment(discountAlert, {
@@ -454,6 +492,7 @@ export async function updateOrderLines(
       data: {
         ...(warehouseChanged ? { warehouse_id: warehouseId, warehouse_block_id: null } : {}),
         ...(paymentChanged ? { payment_method_ref: nextPaymentMethodRef } : {}),
+        ...(priceTypeChanged ? { price_type: patchPriceType.slice(0, 128) } : {}),
         total_sum: paidTotal,
         bonus_sum: bonusSum,
         discount_sum: discountSum,
@@ -521,6 +560,7 @@ export async function updateOrderLines(
   });
 
   emitOrderUpdated(tenantId, orderId);
+  void invalidateOrdersListCache(tenantId);
   if (warehouseId != null) {
     void invalidateStock(tenantId, warehouseId);
   }

@@ -87,7 +87,7 @@ export async function registerOrderCatalogRoutes(app: FastifyInstance) {
       const q = request.query as Record<string, string | undefined>;
       const asOf = (q.as_of ?? q.date ?? "").trim();
       if (!/^\d{4}-\d{2}-\d{2}$/.test(asOf)) {
-        return sendApiError(reply, request, 400, "BadQuery", "as_of (YYYY-MM-DD) majburiy");
+        return sendApiError(reply, request, 400, "BadQuery", "Требуется as_of (YYYY-MM-DD)");
       }
       const priceType = (q.price_type ?? "retail").trim() || "retail";
       const rawIds = (q.product_ids ?? "").trim();
@@ -98,10 +98,10 @@ export async function registerOrderCatalogRoutes(app: FastifyInstance) {
             .filter((n) => Number.isFinite(n) && n > 0)
         : [];
       if (productIds.length === 0) {
-        return sendApiError(reply, request, 400, "BadQuery", "product_ids majburiy");
+        return sendApiError(reply, request, 400, "BadQuery", "Требуется product_ids");
       }
       if (productIds.length > 5000) {
-        return sendApiError(reply, request, 400, "BadQuery", "product_ids max 5000");
+        return sendApiError(reply, request, 400, "BadQuery", "product_ids: максимум 5000");
       }
       try {
         const currency = await getTenantDefaultCurrencyCode(request.tenant!.id);
@@ -116,7 +116,7 @@ export async function registerOrderCatalogRoutes(app: FastifyInstance) {
       } catch (e) {
         const msg = e instanceof Error ? e.message : "";
         if (msg === "BAD_AS_OF" || msg === "VALIDATION") {
-          return sendApiError(reply, request, 400, "ValidationError", "as_of yoki price_type noto‘g‘ri");
+          return sendApiError(reply, request, 400, "ValidationError", "Некорректный as_of или price_type");
         }
         throw e;
       }
@@ -158,7 +158,7 @@ export async function registerOrderCatalogRoutes(app: FastifyInstance) {
         const code = e instanceof Error ? e.message : "";
         if (code === "BAD_CLIENT") return sendApiError(reply, request, 400, "BadClient");
         if (code === "BAD_ORDER" || code === "ORDER_NOT_DELIVERED") {
-          return sendApiError(reply, request, 400, "BadOrder", "Barcha manba zakazlar yetkazilgan (delivered) bo'lishi kerak.");
+          return sendApiError(reply, request, 400, "BadOrder", "Все исходные заказы должны быть доставлены (delivered).");
         }
         throw e;
       }

@@ -1,6 +1,7 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
+import { DateTimePickerField } from "@/components/ui/datetime-popover";
 import {
   Dialog,
   DialogContent,
@@ -140,7 +141,9 @@ export function EditPaymentDialog({
     enabled: Boolean(tenantSlug) && hydrated && open,
     staleTime: STALE.reference,
     queryFn: async () => {
-      const { data } = await api.get<{ data: StaffPick[] }>(`/api/${tenantSlug}/expeditors?is_active=true`);
+      const { data } = await api.get<{ data: StaffPick[] }>(
+        `/api/${tenantSlug}/expeditors?picker=1&for_new_work=1`
+      );
       return data.data;
     }
   });
@@ -233,14 +236,14 @@ export function EditPaymentDialog({
     if (!cashDeskId.trim()) return;
     if (!filteredCashDesks.some((d) => String(d.id) === cashDeskId.trim())) {
       setCashDeskId("");
-      setSelectionNotice("Kassa tanlovi yangilandi: mos bo‘lmagan qiymat olib tashlandi.");
+      setSelectionNotice("Выбор кассы обновлён: неподходящее значение удалено.");
     }
   }, [cashDeskId, filteredCashDesks]);
   useEffect(() => {
     if (!expeditorUserId.trim()) return;
     if (!filteredExpeditors.some((d) => String(d.id) === expeditorUserId.trim())) {
       setExpeditorUserId("");
-      setSelectionNotice("Dastavchi tanlovi yangilandi: mos bo‘lmagan qiymat olib tashlandi.");
+      setSelectionNotice("Выбор доставщика обновлён: неподходящее значение удалено.");
     }
   }, [expeditorUserId, filteredExpeditors]);
 
@@ -283,17 +286,17 @@ export function EditPaymentDialog({
       const code = ax.response?.data?.error;
       if (code === "OrderLockedByAllocations") {
         setFieldErrs({});
-        setFormErr("Taqsimlashlar bor — zakaz raqamini o‘zgartirib bo‘lmaydi.");
+        setFormErr("Есть распределения — номер заказа изменить нельзя.");
         return;
       }
       if (code === "BadExpeditorScope") {
         setFieldErrs({});
-        setFormErr("Zakaz bog‘langan to‘lovda ekskpeditorni shu yerda o‘zgartirish mumkin emas.");
+        setFormErr("В оплате, привязанной к заказу, экспедитора здесь изменить нельзя.");
         return;
       }
       if (code === "PaymentVoided") {
         setFieldErrs({});
-        setFormErr("To‘lov bekor qilingan (arxiv) — tahrirlanmaydi.");
+        setFormErr("Оплата отменена (архив) — редактирование недоступно.");
         return;
       }
       if (isAxiosError(e)) {
@@ -307,40 +310,40 @@ export function EditPaymentDialog({
           setFormErr(
             line
               ? withApiSupportLine(line, e)
-              : withApiSupportLine(getUserFacingError(e, "To‘lovni tahrirlab bo‘lmadi."), e)
+              : withApiSupportLine(getUserFacingError(e, "Не удалось изменить оплату."), e)
           );
           return;
         }
       }
       setFieldErrs({});
-      setFormErr(getUserFacingError(e, "To‘lovni tahrirlab bo‘lmadi."));
+      setFormErr(getUserFacingError(e, "Не удалось изменить оплату."));
     }
   });
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        className="max-h-[min(92vh,880px)] w-full max-w-lg gap-4 overflow-y-auto p-5 sm:p-6"
+        className="max-h-[min(92vh,880px)] w-full gap-0 overflow-hidden p-0 sm:max-w-xl"
         data-testid="edit-payment-dialog"
       >
-        <DialogHeader>
-          <DialogTitle>To‘lovni tahrirlash</DialogTitle>
+        <DialogHeader className="border-b border-[#d7ebe9] bg-[#f3fbfa] px-5 py-4">
+          <DialogTitle className="text-[#0f6e68]">Редактирование оплаты</DialogTitle>
           <DialogDescription>
-            Summa, usul, kassa, sana, izoh va (mavjud bo‘lsa) zakaz. Ombor yoki mijoz o‘zgarmaydi.
+            Сумма, способ, касса, дата и комментарий. Клиент не меняется.
           </DialogDescription>
         </DialogHeader>
 
         {detailQ.isLoading ? (
-          <p className="text-sm text-muted-foreground">Yuklanmoqda…</p>
+          <p className="text-sm text-muted-foreground">Загрузка…</p>
         ) : detailQ.isError ? (
           <p className="text-sm text-destructive">
-            {getUserFacingError(detailQ.error, "Ma’lumot yuklanmadi.")}
+            {getUserFacingError(detailQ.error, "Не удалось загрузить данные.")}
           </p>
         ) : isVoided ? (
-          <p className="text-sm text-destructive">Bu to‘lov arxivlangan — tahrirlash mumkin emas.</p>
+          <p className="text-sm text-destructive">Эта оплата в архиве — редактирование недоступно.</p>
         ) : (
           <form
-            className="space-y-4"
+            className="space-y-3 overflow-y-auto px-5 py-4"
             onSubmit={(e) => {
               e.preventDefault();
               setFormErr(null);
@@ -354,7 +357,7 @@ export function EditPaymentDialog({
               </p>
             ) : null}
             <div className="space-y-1.5">
-              <Label htmlFor="ep-amount">Summa</Label>
+              <Label htmlFor="ep-amount">Сумма</Label>
               <GroupedNumberInput
                 id="ep-amount"
                 className={controlClass}
@@ -370,11 +373,11 @@ export function EditPaymentDialog({
               ) : null}
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="ep-type">To‘lov usuli</Label>
+              <Label htmlFor="ep-type">Способ оплаты</Label>
               <FilterSelect
                 id="ep-type"
                 className={controlClass}
-                aria-label="To‘lov usuli"
+                aria-label="Способ оплаты"
                 value={paymentType}
                 onChange={(e) => setPaymentType(e.target.value)}
                 disabled={patchMut.isPending}
@@ -393,11 +396,11 @@ export function EditPaymentDialog({
               ) : null}
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="ep-desk">Kassa</Label>
+              <Label htmlFor="ep-desk">Касса</Label>
               <FilterSelect
                 id="ep-desk"
                 className={controlClass}
-                aria-label="Kassa"
+                aria-label="Касса"
                 value={cashDeskId}
                 onChange={(e) => setCashDeskId(e.target.value)}
                 disabled={patchMut.isPending}
@@ -416,14 +419,13 @@ export function EditPaymentDialog({
               ) : null}
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="ep-paid">To‘lov sanasi / vaqti</Label>
-              <Input
+              <Label htmlFor="ep-paid">Дата / время оплаты</Label>
+              <DateTimePickerField
                 id="ep-paid"
-                type="datetime-local"
-                className={controlClass}
                 value={paidAtLocal}
-                onChange={(e) => setPaidAtLocal(e.target.value)}
+                onChange={setPaidAtLocal}
                 disabled={patchMut.isPending}
+                timePlacement="side"
               />
               {fieldErrs.paid_at ? (
                 <p className="text-xs text-destructive" role="alert">
@@ -432,12 +434,12 @@ export function EditPaymentDialog({
               ) : null}
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="ep-order">Zakaz ID (bo‘sh — zakazsiz)</Label>
+              <Label htmlFor="ep-order">ID заказа (пусто — без заказа)</Label>
               <Input
                 id="ep-order"
                 className={controlClass}
                 inputMode="numeric"
-                placeholder="Masalan: 1204"
+                placeholder="Например: 1204"
                 value={orderId}
                 onChange={(e) => setOrderId(e.target.value.replace(/\D/g, ""))}
                 disabled={patchMut.isPending}
@@ -450,11 +452,11 @@ export function EditPaymentDialog({
             </div>
             {showExpeditor ? (
               <div className="space-y-1.5">
-                <Label htmlFor="ep-ex">Ekspeditor</Label>
+                <Label htmlFor="ep-ex">Экспедитор</Label>
                 <FilterSelect
                   id="ep-ex"
                   className={controlClass}
-                  aria-label="Ekspeditor"
+                  aria-label="Экспедитор"
                   value={expeditorUserId}
                   onChange={(e) => setExpeditorUserId(e.target.value)}
                   disabled={patchMut.isPending}
@@ -474,10 +476,10 @@ export function EditPaymentDialog({
               </div>
             ) : null}
             <div className="space-y-1.5">
-              <Label htmlFor="ep-note">Izoh</Label>
-              <Input
+              <Label htmlFor="ep-note">Комментарий</Label>
+              <textarea
                 id="ep-note"
-                className={controlClass}
+                className="min-h-20 w-full rounded-md border border-input px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-[#1aa096]/40"
                 value={note}
                 onChange={(e) => setNote(e.target.value)}
                 disabled={patchMut.isPending}
@@ -493,12 +495,12 @@ export function EditPaymentDialog({
                 {formErr}
               </p>
             ) : null}
-            <div className="flex justify-end gap-2 pt-2">
+            <div className="flex justify-end gap-2 border-t bg-[#fafbfc] px-5 py-3 -mx-5 -mb-4">
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={patchMut.isPending}>
-                Bekor
+                Отмена
               </Button>
-              <Button type="submit" disabled={patchMut.isPending} className="bg-teal-600 text-white hover:bg-teal-700">
-                {patchMut.isPending ? "Saqlanmoqda…" : "Saqlash"}
+              <Button type="submit" disabled={patchMut.isPending} className="bg-[#1aa096] text-white hover:bg-[#158a81]">
+                {patchMut.isPending ? "Сохранение…" : "Сохранить"}
               </Button>
             </div>
           </form>

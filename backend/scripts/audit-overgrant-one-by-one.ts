@@ -46,7 +46,8 @@ const GRANT_PROBE_KEYS = [
   "warehouse.sklady.view",
   "warehouse.sklady.create",
   "warehouse.sklady.update",
-  "warehouse.sklady.delete",
+  "warehouse.sklady.deactivate",
+  "warehouse.sklady.activate",
   "warehouse.sklady.history",
   // warehouse companions / siblings
   "warehouse.view",
@@ -78,11 +79,11 @@ const GRANT_PROBE_KEYS = [
   "clients.view",
   "orders.zakaz.view",
   "orders.view",
-  "orders.zakaz.create",
-  "orders.obmen_i_otkaz.view",
+  "orders.sozdanie.create",
+  "orders.otkazy.view",
   "dashboard.prodazhi.view",
   "dashboard.plan_fakt.view",
-  "gps.gps.view"
+  "gps.agenty.view"
 ] as const;
 
 /** Frontend NAV_PERM mirror (nav-permission-keys.ts). */
@@ -95,15 +96,16 @@ const NAV_PERM = {
   cashPayments: ["cash.oplaty_klientov.view"],
   cashReports: ["cash.otchety.view"],
   cashReportsOrOrders: ["cash.otchety.view"],
+  cashClientBalances: ["cash.balansy_klientov.view", "cash.balansy.view"],
   staffAgent: ["staff.agent.view", "staff.agent.spisok_agentov", "staff.agent.prosmotr_agenta"],
   staffSkladchik: ["staff.skladchik.view"],
   staffConsignment: ["staff.konsignatsiya.view"],
   clients: ["clients.klient.view", "clients.view"],
   clientsRetailStock: ["warehouse.ostatki.view"],
-  visitPlanner: ["gps.gps.view", "gps.dostup_k_gps"],
+  visitPlanner: ["gps.agenty.view", "gps.dostup_k_gps"],
   ordersView: ["orders.zakaz.view", "orders.view"],
-  ordersCreate: ["orders.zakaz.create", "orders.create"],
-  exchangeCreateNav: ["orders.obmen_i_otkaz.create"],
+  ordersCreate: ["orders.sozdanie.create", "orders.create"],
+  exchangeCreateNav: ["orders.obmen.create"],
   planFaktMonitoring: ["dashboard.plan_fakt.view", "dashboard.plan_fakt"],
   salesDash: ["dashboard.prodazhi.view", "dashboard.prodazhi"]
 } as const;
@@ -189,6 +191,15 @@ const CAP_FLAGS: CapFlag[] = [
     trueWhen: (k) => hasAny(k, NAV_PERM.cashReports)
   },
   {
+    id: "nav.cash.clientBalances",
+    label: "Sidebar: Балансы клиентов",
+    okForGrant: (g) =>
+      g === "cash.balansy_klientov.view" ||
+      g === "cash.balansy.view" ||
+      g.startsWith("cash.balansy_klientov."),
+    trueWhen: (k) => hasAny(k, NAV_PERM.cashClientBalances)
+  },
+  {
     id: "nav.cash.reportWithOrders",
     label: "Sidebar: one cash-report item (cash.otchety only)",
     okForGrant: (g) => g === "cash.otchety.view" || g.startsWith("cash.otchety."),
@@ -234,7 +245,7 @@ const CAP_FLAGS: CapFlag[] = [
   {
     id: "nav.visitPlanner",
     label: "Sidebar: Visit planner (GPS keys)",
-    okForGrant: (g) => g === "gps.gps.view" || g === "gps.dostup_k_gps",
+    okForGrant: (g) => g === "gps.agenty.view" || g === "gps.dostup_k_gps",
     trueWhen: (k) => hasAny(k, NAV_PERM.visitPlanner)
   },
   {
@@ -258,13 +269,13 @@ const CAP_FLAGS: CapFlag[] = [
   {
     id: "nav.orders.create",
     label: "Sidebar: Создать заказ",
-    okForGrant: (g) => g === "orders.zakaz.create" || g === "orders.create",
+    okForGrant: (g) => g === "orders.sozdanie.create" || g === "orders.create",
     trueWhen: (k) => hasAny(k, NAV_PERM.ordersCreate)
   },
   {
     id: "nav.exchange.createOrView",
     label: "Sidebar: Обмен create-entry (create only)",
-    okForGrant: (g) => g === "orders.obmen_i_otkaz.create",
+    okForGrant: (g) => g === "orders.obmen.create",
     trueWhen: (k) => hasAny(k, NAV_PERM.exchangeCreateNav)
   },
   {

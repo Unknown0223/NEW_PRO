@@ -163,7 +163,7 @@ export function ClientMapFiltersPanel({
         searchPlaceholder="Поиск зоны"
         values={draft.zones}
         options={zoneOptions}
-        onChange={(zones) => onDraftChange({ zones })}
+        onChange={(zones) => onDraftChange({ zones, regions: [], cities: [] })}
       />
 
       <ClientMapSearchableMultiSelect
@@ -172,7 +172,7 @@ export function ClientMapFiltersPanel({
         searchPlaceholder="Поиск области"
         values={draft.regions}
         options={regionOptions}
-        onChange={(regions) => onDraftChange({ regions })}
+        onChange={(regions) => onDraftChange({ regions, cities: [] })}
       />
 
       <ClientMapSearchableMultiSelect

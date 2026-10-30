@@ -1,6 +1,6 @@
 "use client";
 
-import { useAuthStore, useEffectiveRole } from "@/lib/auth-store";
+import { useAuthStore, useAuthStoreHydrated, useEffectiveRole } from "@/lib/auth-store";
 import { api } from "@/lib/api";
 import { getAppTimezone, setAppTimezone } from "@/lib/app-timezone";
 import { formatUtcOffsetLabel } from "@/lib/iana-timezones";
@@ -67,8 +67,9 @@ type Props = {
 export function TenantSidebarClock({ className, compact = true, tone = "sidebar" }: Props) {
   const tenantSlug = useAuthStore((s) => s.tenantSlug);
   const accessToken = useAuthStore((s) => s.accessToken);
+  const hydrated = useAuthStoreHydrated();
   const role = useEffectiveRole();
-  const isAdmin = role === "admin";
+  const isAdmin = hydrated && role === "admin";
 
   const { data: timezone } = useQuery({
     queryKey: ["settings", "profile", "timezone-clock", tenantSlug],
@@ -97,7 +98,7 @@ export function TenantSidebarClock({ className, compact = true, tone = "sidebar"
   const { time, offsetLabel } = now
     ? formatParts(now, tz)
     : { time: "--:--:--", offsetLabel: "" };
-  const title = now ? `Tenant vaqti · ${tz} · ${offsetLabel}` : "Tenant vaqti";
+  const title = now ? `Время компании · ${tz} · ${offsetLabel}` : "Время компании";
 
   const body = (
     <span
@@ -127,8 +128,8 @@ export function TenantSidebarClock({ className, compact = true, tone = "sidebar"
             ? "hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground"
             : "hover:bg-muted hover:text-foreground"
         )}
-        title={`${title} — sozlash`}
-        aria-label="Vaqt mintaqasini sozlash"
+        title={`${title} — настроить`}
+        aria-label="Настроить часовой пояс"
       >
         {body}
       </Link>

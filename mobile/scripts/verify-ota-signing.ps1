@@ -1,5 +1,4 @@
-# Sales Arena — OTA imzo kaliti tekshiruvi (PC dan mustaqil).
-# Build/deploy oldidan: bir xil SHA-1 ekanini tasdiqlaydi.
+# Sales Arena OTA signing key check (same SHA-1 on every PC).
 param(
   [string]$MobileDir = ""
 )
@@ -18,10 +17,10 @@ Write-Host "=== OTA signing verify ===" -ForegroundColor Cyan
 Write-Host "Mobile: $MobileDir"
 
 if (-not (Test-Path $Jks)) {
-  throw "salesdoc-ota.jks YO‘Q: $Jks — git pull qiling, kalitni qayta yaratmang."
+  throw "salesdoc-ota.jks missing: $Jks - git pull, do not recreate the key."
 }
 if (-not (Test-Path $Props)) {
-  throw "key.properties YO‘Q: $Props — git pull qiling."
+  throw "key.properties missing: $Props - git pull."
 }
 if (Test-Path $Pin) {
   $pinLine = (Get-Content $Pin | Where-Object { $_ -match '^[0-9A-Fa-f]{40}$' } | Select-Object -First 1)
@@ -37,18 +36,18 @@ if (-not $javaHome -or -not (Test-Path (Join-Path $javaHome "bin\keytool.exe")))
 }
 $keytool = if ($javaHome) { Join-Path $javaHome "bin\keytool.exe" } else { "keytool" }
 if (-not (Get-Command $keytool -ErrorAction SilentlyContinue) -and -not (Test-Path $keytool)) {
-  throw "keytool topilmadi. JAVA_HOME ni sozlang."
+  throw "keytool not found. Set JAVA_HOME."
 }
 
 $out = & $keytool -list -v -keystore $Jks -storepass android -alias androiddebugkey 2>&1 | Out-String
 $m = [regex]::Match($out, "SHA1:\s*([0-9A-Fa-f:]+)")
 if (-not $m.Success) {
-  throw "keytool SHA1 o‘qilmadi. Alias/parol noto‘g‘ri bo‘lishi mumkin."
+  throw "keytool SHA1 failed. Alias/password may be wrong."
 }
 $sha1 = ($m.Groups[1].Value -replace ":", "").ToUpperInvariant()
 Write-Host "SHA-1: $sha1"
 if ($sha1 -ne $Expected.ToUpperInvariant()) {
-  throw "NOTO‘G‘RI KALIT! kutilgan=$Expected hozirgi=$sha1 — salesdoc-ota.jks ni almashtirmang."
+  throw "WRONG KEY expected=$Expected actual=$sha1 - do not replace salesdoc-ota.jks"
 }
 
-Write-Host "OK — OTA kalit pinned (PC o‘zgarsa ham shu)." -ForegroundColor Green
+Write-Host "OK - OTA key pinned (same on every PC)." -ForegroundColor Green

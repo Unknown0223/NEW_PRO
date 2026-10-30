@@ -79,7 +79,7 @@ export async function importProductCategories(
           pendingParents.push({ newId: existing.id, parentOld });
         }
       } else {
-        warnings.push(`product_categories: dublikat — o‘tkazib yuborildi (id=${oldId}).`);
+        warnings.push(`product_categories: дубликат — пропущено (id=${oldId}).`);
       }
       continue;
     }
@@ -94,7 +94,7 @@ export async function importProductCategories(
   for (const { newId, parentOld } of pendingParents) {
     const parentNew = maps.productCategory.get(parentOld);
     if (parentNew == null) {
-      warnings.push(`product_categories: parent_id=${parentOld} topilmadi (id=${newId}).`);
+      warnings.push(`product_categories: parent_id=${parentOld} не найден (id=${newId}).`);
       continue;
     }
     await delegateOf(tx, "productCategory").update({

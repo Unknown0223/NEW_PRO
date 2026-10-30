@@ -3,6 +3,7 @@ import { prisma } from "../../config/database";
 import { appendTenantAuditEvent, AuditEntityType } from "../../lib/tenant-audit";
 import type { ExpenseListRow } from "./expenses.types";
 import { assertTenantAccess, enrichExpense, resolveNames } from "./expenses.shared";
+import { assertNotPayrollExpense } from "./expenses.payroll-guard";
 
 export async function deleteExpense(
   tenantId: number,
@@ -17,6 +18,7 @@ export async function deleteExpense(
   });
   if (!existing) throw new Error("NOT_FOUND");
   if (existing.deleted_at != null) throw new Error("ALREADY_VOIDED");
+  assertNotPayrollExpense(existing);
   if (existing.status !== "draft") throw new Error("CANNOT_DELETE_NON_DRAFT");
 
   const note =
@@ -55,6 +57,7 @@ export async function restoreExpense(
   });
   if (!existing) throw new Error("NOT_FOUND");
   if (existing.deleted_at == null) throw new Error("NOT_VOIDED");
+  assertNotPayrollExpense(existing);
   if (existing.status !== "draft") throw new Error("CANNOT_RESTORE_NON_DRAFT");
 
   await prisma.expense.update({
@@ -87,6 +90,7 @@ export async function approveExpense(
     });
     if (!existing) throw new Error("NOT_FOUND");
     if (existing.deleted_at != null) throw new Error("VOIDED");
+    assertNotPayrollExpense(existing);
     if (existing.status !== "draft") throw new Error("ALREADY_PROCESSED");
 
     return tx.expense.update({
@@ -136,6 +140,7 @@ export async function rejectExpense(
     });
     if (!existing) throw new Error("NOT_FOUND");
     if (existing.deleted_at != null) throw new Error("VOIDED");
+    assertNotPayrollExpense(existing);
     if (existing.status !== "draft") throw new Error("ALREADY_PROCESSED");
 
     return tx.expense.update({

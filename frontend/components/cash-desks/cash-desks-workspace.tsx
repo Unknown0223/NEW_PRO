@@ -117,19 +117,22 @@ function emptyCashLinkSets() {
 
 type Props = {
   tenantSlug: string;
-  /** Добавить / редактировать (cash.kassa.create) */
-  canWrite: boolean;
+  /** Добавить (cash.kassa.create) */
+  canCreate: boolean;
+  /** Редактировать (cash.kassa.update) */
+  canUpdate: boolean;
   /** История смен — иконка часов (cash.kassa.history) */
   canHistory?: boolean;
-  /** Открыть/закрыть кассу (cash.kassa.status) */
+  /** Открыть/закрыть смену (cash.kassa.status) */
   canStatus?: boolean;
-  /** Excel выгрузка */
+  /** Excel выгрузка (cash.kassa.export) */
   canExport?: boolean;
 };
 
 export function CashDesksWorkspace({
   tenantSlug,
-  canWrite,
+  canCreate,
+  canUpdate,
   canHistory = false,
   canStatus = false,
   canExport = false
@@ -283,7 +286,7 @@ export function CashDesksWorkspace({
                 <Button type="button" variant="outline" size="sm" onClick={() => setColumnOpen(true)}>
                   Столбцы
                 </Button>
-                {canWrite ? (
+                {canCreate ? (
                   <Button type="button" size="sm" onClick={() => setFormOpen(true)}>
                     Добавить
                   </Button>
@@ -435,7 +438,7 @@ export function CashDesksWorkspace({
                       </td>
                     ))}
                     <td className="px-2 py-2 text-right">
-                      {canHistory || canWrite ? (
+                      {canHistory || canUpdate ? (
                         <div className="flex justify-end gap-0.5">
                           {canHistory ? (
                             <Button
@@ -448,7 +451,7 @@ export function CashDesksWorkspace({
                               <Clock className="size-4" />
                             </Button>
                           ) : null}
-                          {canWrite ? (
+                          {canUpdate ? (
                             <Button
                               type="button"
                               variant="ghost"
@@ -506,7 +509,7 @@ export function CashDesksWorkspace({
         open={formOpen || editing != null}
         initial={editing}
         pickers={pickersQ.data}
-        canWrite={canWrite}
+        canWrite={editing != null ? canUpdate : canCreate}
         onClose={() => {
           setFormOpen(false);
           setEditing(null);
@@ -515,7 +518,7 @@ export function CashDesksWorkspace({
       <CashDeskShiftsDialog
         tenantSlug={tenantSlug}
         desk={shiftDesk}
-        canWrite={canWrite}
+        canWrite={canStatus}
         onClose={() => setShiftDesk(null)}
       />
     </>
@@ -821,12 +824,12 @@ function CashDeskFormDialog({
           setSaveBanner(
             hint
               ? withApiSupportLine(hint, e)
-              : withApiSupportLine(getUserFacingError(e, "Saqlab bo‘lmadi."), e)
+              : withApiSupportLine(getUserFacingError(e, "Не удалось сохранить."), e)
           );
           return;
         }
       }
-      setSaveBanner(getUserFacingError(e, "Saqlab bo‘lmadi."));
+      setSaveBanner(getUserFacingError(e, "Не удалось сохранить."));
     }
   });
 

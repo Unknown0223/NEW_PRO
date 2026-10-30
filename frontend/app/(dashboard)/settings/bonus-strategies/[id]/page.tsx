@@ -28,7 +28,7 @@ export default function EditBonusStrategyPage() {
   if (!Number.isInteger(id) || id < 1) {
     return (
       <PageShell>
-        <p className="text-sm text-destructive">Неверный id</p>
+        <p className="text-sm text-destructive">Неверный ID</p>
       </PageShell>
     );
   }

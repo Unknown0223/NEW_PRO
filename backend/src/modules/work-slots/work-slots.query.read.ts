@@ -1,8 +1,92 @@
 import type { Prisma } from "@prisma/client";
 import { prisma } from "../../config/database";
+import { toFio } from "../staff/staff.shared.helpers";
 import type { SlotHistoryRow, WorkSlotRow } from "./work-slots.types";
-import { mapSlotRow, slotInclude } from "./work-slots.query.helpers";
+import {
+  mapSlotRow,
+  slotInclude,
+  type SlotNameLookups,
+  type SlotRowSource
+} from "./work-slots.query.helpers";
 import { buildListWhere, type ListWorkSlotsFilters } from "./work-slots.query.filters";
+import {
+  effectiveCashDeskIds,
+  effectiveWarehouseIds
+} from "./work-slots.multi-bindings";
+
+async function loadSlotNameLookups(
+  tenantId: number,
+  rows: SlotRowSource[]
+): Promise<SlotNameLookups> {
+  const warehouseIds = new Set<number>();
+  const cashDeskIds = new Set<number>();
+  for (const row of rows) {
+    for (const id of effectiveWarehouseIds(row)) warehouseIds.add(id);
+    for (const id of effectiveCashDeskIds(row)) cashDeskIds.add(id);
+  }
+  const [warehouses, cashDesks, tenantRow] = await Promise.all([
+    warehouseIds.size > 0
+      ? prisma.warehouse.findMany({
+          where: { tenant_id: tenantId, id: { in: [...warehouseIds] } },
+          select: { id: true, name: true }
+        })
+      : Promise.resolve([]),
+    cashDeskIds.size > 0
+      ? prisma.cashDesk.findMany({
+          where: { tenant_id: tenantId, id: { in: [...cashDeskIds] } },
+          select: { id: true, name: true }
+        })
+      : Promise.resolve([]),
+    prisma.tenant.findUnique({
+      where: { id: tenantId },
+      select: { settings: true }
+    })
+  ]);
+
+  let territoryNodes: Array<{ name?: string; active?: boolean; children?: unknown[] }> | null = null;
+  try {
+    const { asRecord } = await import("../tenant-settings/tenant-settings.shared");
+    const { referencesWithResolvedTerritoryNodes } = await import("../tenant-settings/tenant-settings.service");
+    const { territoryNodesFromUnknown } = await import("../tenant-settings/tenant-settings.refs");
+    const settings = asRecord(tenantRow?.settings);
+    const refInner = asRecord(settings.references);
+    const refT = referencesWithResolvedTerritoryNodes(refInner);
+    territoryNodes = territoryNodesFromUnknown(refT.territory_nodes);
+  } catch {
+    territoryNodes = null;
+  }
+
+  return {
+    warehouseNames: new Map(warehouses.map((w) => [w.id, w.name])),
+    cashDeskNames: new Map(cashDesks.map((c) => [c.id, c.name])),
+    territoryNodes
+  };
+}
+
+async function attachActiveSessionCounts(tenantId: number, data: WorkSlotRow[]): Promise<void> {
+  const userIds = [
+    ...new Set(data.map((r) => r.active_user_id).filter((id): id is number => id != null && id > 0))
+  ];
+  for (const row of data) {
+    row.active_user_active_session_count = 0;
+  }
+  if (userIds.length === 0) return;
+  const sessionCounts = await prisma.refreshToken.groupBy({
+    by: ["user_id"],
+    where: {
+      tenant_id: tenantId,
+      user_id: { in: userIds },
+      revoked_at: null,
+      expires_at: { gt: new Date() }
+    },
+    _count: { _all: true }
+  });
+  const sessMap = new Map(sessionCounts.map((s) => [s.user_id, s._count._all]));
+  for (const row of data) {
+    if (row.active_user_id == null) continue;
+    row.active_user_active_session_count = sessMap.get(row.active_user_id) ?? 0;
+  }
+}
 
 export async function listWorkSlots(
   tenantId: number,
@@ -25,7 +109,32 @@ export async function listWorkSlots(
     prisma.workSlot.count({ where })
   ]);
 
-  return { data: rows.map(mapSlotRow), total };
+  const lookups = await loadSlotNameLookups(tenantId, rows as SlotRowSource[]);
+  const data = rows.map((r) => mapSlotRow(r as SlotRowSource, lookups));
+  await attachActiveSessionCounts(tenantId, data);
+  const activeUserIds = [
+    ...new Set(data.map((r) => r.active_user_id).filter((id): id is number => id != null && id > 0))
+  ];
+  if (activeUserIds.length > 0) {
+    const { REF_KEY, readUiPrefs } = await import("../mobile/mobile-face.shared");
+    const users = await prisma.user.findMany({
+      where: { tenant_id: tenantId, id: { in: activeUserIds } },
+      select: { id: true, ui_preferences: true }
+    });
+    const faceByUser = new Map<number, boolean>();
+    for (const u of users) {
+      const key = readUiPrefs(u.ui_preferences)[REF_KEY];
+      faceByUser.set(u.id, typeof key === "string" && key.length > 0);
+    }
+    for (const row of data) {
+      if (row.active_user_id == null) continue;
+      const has = faceByUser.get(row.active_user_id) === true;
+      row.active_user_has_face_reference = has;
+      row.active_user_face_user_id = has ? row.active_user_id : null;
+    }
+  }
+
+  return { data, total };
 }
 
 export async function getWorkSlotDetail(tenantId: number, slotId: number): Promise<WorkSlotRow | null> {
@@ -33,7 +142,17 @@ export async function getWorkSlotDetail(tenantId: number, slotId: number): Promi
     where: { id: slotId, tenant_id: tenantId },
     include: slotInclude
   });
-  return row ? mapSlotRow(row) : null;
+  if (!row) return null;
+  const lookups = await loadSlotNameLookups(tenantId, [row as SlotRowSource]);
+  const mapped = mapSlotRow(row as SlotRowSource, lookups);
+  await attachActiveSessionCounts(tenantId, [mapped]);
+  if (mapped.active_user_id != null) {
+    const { getFaceReferenceMeta } = await import("../mobile/mobile-face.service");
+    const face = await getFaceReferenceMeta(tenantId, mapped.active_user_id);
+    mapped.active_user_has_face_reference = face.has_reference;
+    mapped.active_user_face_user_id = face.has_reference ? mapped.active_user_id : null;
+  }
+  return mapped;
 }
 
 export async function getSlotHistory(
@@ -73,10 +192,10 @@ export async function getSlotHistory(
     userIds.size > 0
       ? await prisma.user.findMany({
           where: { id: { in: [...userIds] } },
-          select: { id: true, name: true }
+          select: { id: true, name: true, first_name: true, last_name: true, middle_name: true }
         })
       : [];
-  const nameById = new Map(users.map((u) => [u.id, u.name]));
+  const nameById = new Map(users.map((u) => [u.id, toFio(u)]));
 
   return {
     data: entries.map((e) => ({
@@ -138,7 +257,7 @@ export async function listSlotDebtCollectors(
 
   const users = await prisma.user.findMany({
     where: { tenant_id: tenantId, id: { in: [...userIds] }, role: "agent" },
-    select: { id: true, name: true, is_active: true }
+    select: { id: true, name: true, first_name: true, last_name: true, middle_name: true, is_active: true }
   });
 
   const activeLinks = await prisma.slotUserLink.findMany({
@@ -160,7 +279,7 @@ export async function listSlotDebtCollectors(
     if (!unpaid.gt(0.01)) continue;
     out.push({
       user_id: u.id,
-      name: u.name?.trim() || `#${u.id}`,
+      name: toFio(u) || `#${u.id}`,
       is_active: u.is_active,
       on_active_slot: onSlot.has(u.id),
       unpaid: unpaid.toString()
@@ -174,6 +293,8 @@ export async function listSlotDebtCollectors(
 export type ActiveWorkSlotInfo = {
   slot_id: number;
   slot_code: string;
+  /** Joydagi barcha hudud satrlari (multi). */
+  territories: string[];
   consignment: boolean;
   consignment_limit_amount: import("@prisma/client").Prisma.Decimal | null;
   consignment_ignore_previous_months_debt: boolean;
@@ -195,6 +316,8 @@ export async function loadActiveWorkSlotsByUserIds(
         select: {
           id: true,
           slot_code: true,
+          territory: true,
+          territories: true,
           consignment: true,
           consignment_limit_amount: true,
           consignment_ignore_previous_months_debt: true,
@@ -207,9 +330,16 @@ export async function loadActiveWorkSlotsByUserIds(
   });
   const map = new Map<number, ActiveWorkSlotInfo>();
   for (const l of links) {
+    const fromArr = Array.isArray(l.slot.territories)
+      ? l.slot.territories.map((t) => String(t).trim()).filter(Boolean)
+      : [];
+    const primary = l.slot.territory?.trim() || null;
+    const territories =
+      fromArr.length > 0 ? fromArr : primary ? [primary] : [];
     map.set(l.user_id, {
       slot_id: l.slot.id,
       slot_code: l.slot.slot_code,
+      territories,
       consignment: l.slot.consignment,
       consignment_limit_amount: l.slot.consignment_limit_amount,
       consignment_ignore_previous_months_debt: l.slot.consignment_ignore_previous_months_debt,
@@ -244,8 +374,11 @@ export async function getWorkSlotCodeOccupancyWarning(
   if (!slot) return null;
   const link = await prisma.slotUserLink.findFirst({
     where: { slot_id: slot.id, ended_at: null },
-    select: { user_id: true, user: { select: { name: true } } }
+    select: {
+      user_id: true,
+      user: { select: { name: true, first_name: true, last_name: true, middle_name: true } }
+    }
   });
   if (!link || link.user_id === userId) return null;
-  return `Kod «${slot.slot_code}» boshqa xodimga (${link.user.name}) biriktirilgan slotda band`;
+  return `Kod «${slot.slot_code}» boshqa xodimga (${toFio(link.user)}) biriktirilgan slotda band`;
 }

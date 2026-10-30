@@ -6,7 +6,7 @@ import type { SourceTab } from "./expeditor-payment-requests-types";
 const TABS: { key: SourceTab; label: string }[] = [
   { key: "expeditor", label: "Экспедиторы" },
   { key: "collector", label: "Инкассатор" },
-  { key: "van", label: "Van-selling" },
+  { key: "van", label: "Ван-селлинг" },
   { key: "bank", label: "Банковские оплаты" }
 ];
 

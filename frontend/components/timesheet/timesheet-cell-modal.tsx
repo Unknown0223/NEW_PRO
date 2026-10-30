@@ -27,6 +27,8 @@ export type CellTarget = {
   date: string;
   status: AttendanceStatus;
   source: Source;
+  /** Avtomatik holat sababi (agent kunlik normasi). */
+  autoComment?: string;
 };
 
 export function TimesheetCellModal({
@@ -85,6 +87,22 @@ export function TimesheetCellModal({
             <SourceIcon className="size-3" /> {SOURCE_META[target.source].label}
           </span>
         </div>
+
+        {target.autoComment ? (
+          <div
+            className={cn(
+              "rounded-lg border px-3 py-2 text-xs",
+              target.status === "worked"
+                ? "border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-300"
+                : target.status === "absent"
+                  ? "border-rose-200 bg-rose-50 text-rose-800 dark:border-rose-500/20 dark:bg-rose-500/10 dark:text-rose-300"
+                  : "border-border bg-muted/50 text-muted-foreground"
+            )}
+          >
+            <div className="mb-0.5 text-[11px] font-semibold uppercase tracking-wider opacity-80">Причина (авто)</div>
+            {target.autoComment}
+          </div>
+        ) : null}
 
         <div>
           <label className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Рабочее значение</label>

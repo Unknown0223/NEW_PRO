@@ -16,9 +16,9 @@ export default function SkladchikSpravochnikPage() {
   if (role !== "admin") {
     return (
       <div className="space-y-2">
-        <p className="text-sm text-destructive">Skladchiklarni boshqarish faqat administrator uchun.</p>
+        <p className="text-sm text-destructive">Управление кладовщиками доступно только администратору.</p>
         <Link href="/settings/spravochnik" className="text-sm text-primary underline">
-          ← Spravochnik
+          ← Справочник
         </Link>
       </div>
     );

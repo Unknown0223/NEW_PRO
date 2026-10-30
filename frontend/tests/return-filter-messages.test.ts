@@ -16,7 +16,7 @@ describe("polkiReturnEmptyListMessage", () => {
       returnableCount: 0,
       isByOrder: true
     });
-    expect(msg).toBe("Qaytarish filtri: davr ichida balans 0 topilmadi.");
+    expect(msg).toBe("Фильтр возврата: в периоде не найден нулевой баланс.");
   });
 
   it("yetkazilgan bor, filtr tufayli bo‘sh", () => {
@@ -32,6 +32,6 @@ describe("polkiReturnEmptyListMessage", () => {
       returnableCount: 0,
       isByOrder: true
     });
-    expect(msg).toContain("filtr");
+    expect(msg).toContain("фильтр");
   });
 });

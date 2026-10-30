@@ -119,6 +119,25 @@ export function buildClassicPathLabels(row: PivotRow, ancestors: string[], rowFi
 }
 
 /**
+ * Classic/compact: faqat ochilgan chuqurlikkacha row-dim ustunlari.
+ * Yopiq ildiz → 1 ustun; expand → keyingi ustunlar paydo bo‘ladi.
+ */
+export function maxVisibleRowDimCount(
+  flatRows: LocalFlatPivotRowItem[],
+  rowFieldCount: number
+): number {
+  if (rowFieldCount <= 1) return Math.max(1, rowFieldCount);
+  let max = 1;
+  for (const item of flatRows) {
+    if (item.type !== "row") continue;
+    const byDepth = item.depth + 1;
+    const filled = (item.pathLabels ?? []).filter((l) => String(l ?? "").trim() !== "").length;
+    max = Math.max(max, byDepth, filled);
+  }
+  return Math.min(rowFieldCount, Math.max(1, max));
+}
+
+/**
  * Compact / Classic display flatten.
  *
  * Compact (tree + multi-column):

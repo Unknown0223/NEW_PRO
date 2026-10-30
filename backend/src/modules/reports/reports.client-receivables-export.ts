@@ -26,27 +26,27 @@ export async function exportClientReceivablesXlsx(
   const truncated = batch.total > cap;
   const headers = [
     "ID",
-    "Mijoz",
-    "Telefon",
-    "Faol",
-    "Kredit limiti",
-    "Hisob saldosi",
-    "Ochiq zakazlar",
-    "Headroom",
-    "Qoldiq",
-    "Limit oshgan"
+    "Клиент",
+    "Телефон",
+    "Активен",
+    "Кредитный лимит",
+    "Сальдо счёта",
+    "Открытые заказы",
+    "Запас лимита",
+    "Остаток",
+    "Лимит превышен"
   ];
   const rows: (string | number)[][] = batch.data.map((r) => [
     r.client_id,
     r.name,
     r.phone ?? "",
-    r.is_active ? "Ha" : "Yo‘q",
+    r.is_active ? "Да" : "Нет",
     Number.parseFloat(r.credit_limit) || 0,
     Number.parseFloat(r.account_balance) || 0,
     Number.parseFloat(r.outstanding) || 0,
     Number.parseFloat(r.headroom) || 0,
     Number.parseFloat(r.headroom_remaining) || 0,
-    r.over_limit ? "Ha" : "Yo‘q"
+    r.over_limit ? "Да" : "Нет"
   ]);
   const aoa = [headers, ...rows];
   const ws = XLSX.utils.aoa_to_sheet(aoa);
@@ -63,7 +63,7 @@ export async function exportClientReceivablesXlsx(
     { wch: 12 }
   ];
   const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, "Qarzdorlik");
+  XLSX.utils.book_append_sheet(wb, ws, "Задолженность");
   const buffer = XLSX.write(wb, { type: "buffer", bookType: "xlsx" }) as Buffer;
   return { buffer, truncated, total: batch.total };
 }

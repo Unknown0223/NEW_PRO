@@ -24,6 +24,7 @@ export function parseClientSales2Query(q: Record<string, string | undefined>): C
     day_visit_iso: dayVisitIso,
     agent_ids: intList(q.agent_ids),
     agent_id: q.agent_id ? Number.parseInt(q.agent_id, 10) : undefined,
+    supervisor_ids: intList(q.supervisor_ids),
     price_types: strList(q.price_types),
     price_type: q.price_type?.trim() || undefined,
     order_types: strList(q.order_types),

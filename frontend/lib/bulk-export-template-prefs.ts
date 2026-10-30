@@ -194,7 +194,10 @@ export function resolveNakladnoyPrefsForDownload(
     const perTemplate = getNakladnoySettingsForTemplate(store, template.category, template.id);
     return mergeNakladnoyPrefsForTemplate(globalPrefs, perTemplate);
   }
-  return globalPrefs;
+  const mode = getTemplateSettingsMode(template.category, template.id);
+  const settings = normalizeTemplateSettings(mode, store[template.category].templateSettings[template.id]);
+  if (!settings || !("groupBy" in settings)) return globalPrefs;
+  return mergeNakladnoyPrefsForTemplate(globalPrefs, { groupBy: settings.groupBy });
 }
 
 export function resolveWarehouseExportApiBody(

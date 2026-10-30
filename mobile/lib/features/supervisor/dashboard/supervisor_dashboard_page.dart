@@ -17,20 +17,20 @@ class SupervisorDashboardPage extends ConsumerWidget {
     final supervision = policy.supervision;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Dashboard')),
+      appBar: AppBar(title: const Text('Дашборд')),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // Daily summary
-            const Text('Kunlik xulosa', style: AppTypography.headlineSmall),
+            const Text('Сводка за день', style: AppTypography.headlineSmall),
             const SizedBox(height: 12),
             const _SummaryGrid(),
             const SizedBox(height: 20),
 
             // Sales chart placeholder
-            const Text('Sotuvlar dinamikasi', style: AppTypography.titleMedium),
+            const Text('Динамика продаж', style: AppTypography.titleMedium),
             const SizedBox(height: 8),
             Card(
               child: Container(
@@ -42,26 +42,26 @@ class SupervisorDashboardPage extends ConsumerWidget {
             const SizedBox(height: 20),
 
             // Checklist section
-            const Text('Tekshiruv ro\'yxati', style: AppTypography.titleMedium),
+            const Text('Чек-лист проверки', style: AppTypography.titleMedium),
             const SizedBox(height: 8),
             if (policy.hasAnyChecklist && supervision != null) ...[
-              _ChecklistItem('Chek yuzlari', supervision.checkReceiptFaces, Icons.receipt_long),
-              _ChecklistItem('Merchandising', supervision.checkMerchandising, Icons.store),
-              _ChecklistItem('Narx tekshiruv', supervision.checkDefaultPrice, Icons.price_check),
-              _ChecklistItem('Motivatsiya', supervision.checkMotivation, Icons.star),
-              _ChecklistItem('Ombor', supervision.checkStock, Icons.warehouse),
-              _ChecklistItem('Sotuvlar', supervision.checkSales, Icons.trending_up),
+              _ChecklistItem('Чеки', supervision.checkReceiptFaces, Icons.receipt_long),
+              _ChecklistItem('Мерчандайзинг', supervision.checkMerchandising, Icons.store),
+              _ChecklistItem('Проверка цен', supervision.checkDefaultPrice, Icons.price_check),
+              _ChecklistItem('Мотивация', supervision.checkMotivation, Icons.star),
+              _ChecklistItem('Склад', supervision.checkStock, Icons.warehouse),
+              _ChecklistItem('Продажи', supervision.checkSales, Icons.trending_up),
             ] else
               const Card(
                 child: Padding(
                   padding: EdgeInsets.all(16),
-                  child: Text('Checklist sozlanmagan'),
+                  child: Text('Чек-лист не настроен'),
                 ),
               ),
             const SizedBox(height: 20),
 
             // Route agents — serverdan
-            const Text('Agentlar holati', style: AppTypography.titleMedium),
+            const Text('Статус агентов', style: AppTypography.titleMedium),
             const SizedBox(height: 8),
             ref.watch(supervisorAgentLocationsProvider).when(
               data: (pins) {
@@ -69,14 +69,14 @@ class SupervisorDashboardPage extends ConsumerWidget {
                   return const Card(
                     child: Padding(
                       padding: EdgeInsets.all(16),
-                      child: Text('Agentlar GPS ma\'lumoti yo\'q'),
+                      child: Text('Нет GPS-данных агентов'),
                     ),
                   );
                 }
                 return Column(
                   children: pins.take(8).map((p) {
-                    final name = p.agentName ?? 'Agent #${p.agentId}';
-                    final status = p.latitude != null ? 'Yo\'lda' : 'Noma\'lum';
+                    final name = p.agentName ?? 'Агент #${p.agentId}';
+                    final status = p.latitude != null ? 'В пути' : 'Неизвестно';
                     return _AgentStatusCard(
                       name: name,
                       status: status,
@@ -110,11 +110,11 @@ class _SummaryGrid extends ConsumerWidget {
         final orders = kpi['successful_visits'] ?? kpi['visits_with_orders'] ?? 0;
         return Row(
           children: [
-            Expanded(child: _SummaryCard('Reja vizit', '$planned', Icons.location_on, AppColors.supervisorAccent)),
+            Expanded(child: _SummaryCard('План визитов', '$planned', Icons.location_on, AppColors.supervisorAccent)),
             const SizedBox(width: 8),
-            Expanded(child: _SummaryCard('Bajarilish', '$visitPct%', Icons.check_circle, AppColors.success)),
+            Expanded(child: _SummaryCard('Выполнение', '$visitPct%', Icons.check_circle, AppColors.success)),
             const SizedBox(width: 8),
-            Expanded(child: _SummaryCard('Muvaffaqiyat', '$orders', Icons.shopping_bag, AppColors.info)),
+            Expanded(child: _SummaryCard('Успешные', '$orders', Icons.shopping_bag, AppColors.info)),
           ],
         );
       },
@@ -161,7 +161,7 @@ class _BarChart extends ConsumerWidget {
           final total = double.tryParse(kpi['total_sales_sum']?.toString() ?? '') ?? 0;
           return Center(
             child: Text(
-              total > 0 ? 'Jami savdo: $total' : 'Bugun savdo yo\'q',
+              total > 0 ? 'Итого продаж: $total' : 'Сегодня продаж нет',
               style: AppTypography.bodyMedium,
             ),
           );
@@ -202,7 +202,7 @@ class _BarChart extends ConsumerWidget {
         );
       },
       loading: () => const Center(child: CircularProgressIndicator()),
-      error: (_, __) => const Center(child: Text('Ma\'lumot yuklanmadi')),
+      error: (_, __) => const Center(child: Text('Не удалось загрузить данные')),
     );
   }
 }
@@ -239,8 +239,8 @@ class _AgentStatusCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final statusColor = status == 'Yo\'lda' ? AppColors.info :
-      status == 'Vizitda' ? AppColors.primary : AppColors.success;
+    final statusColor = status == 'В пути' ? AppColors.info :
+      status == 'На визите' ? AppColors.primary : AppColors.success;
 
     return Card(
       margin: const EdgeInsets.symmetric(vertical: 3),
@@ -258,9 +258,9 @@ class _AgentStatusCard extends StatelessWidget {
               Text(name, style: const TextStyle(fontWeight: FontWeight.w600)),
               const SizedBox(height: 2),
               Row(children: [
-                Text('Vizit: $visits', style: const TextStyle(fontSize: 11, color: AppColors.textMuted)),
+                Text('Визиты: $visits', style: const TextStyle(fontSize: 11, color: AppColors.textMuted)),
                 const SizedBox(width: 12),
-                Text('Buyurtma: $orders', style: const TextStyle(fontSize: 11, color: AppColors.textMuted)),
+                Text('Заказы: $orders', style: const TextStyle(fontSize: 11, color: AppColors.textMuted)),
               ],),
             ],),
           ),

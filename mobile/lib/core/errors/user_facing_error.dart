@@ -22,8 +22,34 @@ class UserFacingError {
     this.technicalDetail,
   });
 
-  /// Toast / qisqa xabar.
+  /// Toast / qisqa xabar — hech qachon ApiException/DioException matnini ko‘rsatmaydi.
   String get summary => title;
+
+  static String stripTechnical(String raw) {
+    var t = raw
+        .replaceAll(RegExp(r'ApiException\s*\([^)]*\)\s*:?\s*', caseSensitive: false), '')
+        .replaceAll(RegExp(r'\bDioException\b[^\n]*:?\s*', caseSensitive: false), '')
+        .replaceAll(RegExp(r'ForbiddenPermission!?:?\s*', caseSensitive: false), '')
+        .replaceAll(RegExp(r'ForbiddenRole!?:?\s*', caseSensitive: false), '')
+        .replaceAll(RegExp(r'Instance of \w+'), '')
+        .replaceAll(RegExp(r'\s{2,}'), ' ')
+        .replaceAll(RegExp(r'^[:\-—.]+\s*'), '')
+        .trim();
+    if (t.isEmpty || t.length < 3) {
+      return 'Не удалось выполнить операцию. Попробуйте ещё раз.';
+    }
+    return t;
+  }
+
+  /// Qizil banner uchun: tushunarli gap, texnik kod yo‘q.
+  static String toast(Object e, {String? action}) {
+    final u = from(e, context: action);
+    final body = stripTechnical(u.message.trim().isNotEmpty ? u.message : u.title);
+    if (action == null || action.trim().isEmpty) return body;
+    final act = action.trim();
+    if (body.toLowerCase().contains(act.toLowerCase())) return body;
+    return stripTechnical('$act. $body');
+  }
 
   static UserFacingError serverUnreachable({String? context}) {
     return UserFacingError(
@@ -78,16 +104,34 @@ class UserFacingError {
     );
   }
 
-  static UserFacingError fromApi(ApiException e) {
+  static UserFacingError fromApi(ApiException e, {String? context}) {
+    if (e is NetworkException) return serverUnreachable(context: context);
+    final code = e.code;
+    if (e.statusCode == 401 || e is UnauthorizedException) {
+      return const UserFacingError(
+        title: 'Сессия истекла',
+        message: 'Войдите в приложение снова.',
+        steps: ['Выйдите и войдите снова'],
+      );
+    }
+    if (e.statusCode == 403 || code == 'ForbiddenPermission' || code == 'ForbiddenRole') {
+      return UserFacingError(
+        title: 'Нет доступа',
+        message: context ??
+            (code == 'ForbiddenRole'
+                ? 'Это действие недоступно для вашей роли. Обратитесь к администратору.'
+                : 'Нет доступа к этому действию. Обратитесь к администратору.'),
+        steps: const ['Обратитесь к администратору'],
+        technicalDetail: e.statusCode != null ? 'HTTP ${e.statusCode}' : null,
+      );
+    }
     return UserFacingError(
-      title: 'Не удалось выполнить операцию',
-      message: e.message,
+      title: context ?? 'Не удалось выполнить операцию',
+      message: stripTechnical(e.message),
       steps: () {
-        final code = e.statusCode;
-        if (code == 401) return const ['Выйдите и войдите снова'];
-        if (code == 403) return const ['Обратитесь к администратору за доступом'];
-        if (code == 404) return const ['Проверьте код компании и адрес сервера'];
-        if (code != null && code >= 500) {
+        final status = e.statusCode;
+        if (status == 404) return const ['Проверьте данные и повторите'];
+        if (status != null && status >= 500) {
           return const ['Подождите и повторите', 'Если не помогло — сообщите администратору'];
         }
         return const ['Проверьте данные и повторите попытку'];
@@ -146,7 +190,7 @@ class UserFacingError {
       return serverUnreachable(context: context);
     }
     if (e is ApiException) {
-      return fromApi(e);
+      return fromApi(e, context: context);
     }
     if (e is DioException) {
       if (e.type == DioExceptionType.connectionTimeout ||

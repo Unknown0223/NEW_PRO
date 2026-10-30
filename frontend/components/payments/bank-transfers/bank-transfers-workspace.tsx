@@ -656,7 +656,7 @@ export function BankTransfersWorkspace() {
                           className="text-left text-[#063b36] hover:underline"
                           onClick={() => setSelectedClientId(String(c.id))}
                         >
-                          #{c.id} {c.name} · INN {c.inn || "—"} · {c.bank_account || "—"}
+                          #{c.id} {c.name} · ИНН {c.inn || "—"} · {c.bank_account || "—"}
                         </button>
                       </li>
                     ))}
@@ -783,7 +783,7 @@ export function BankTransfersWorkspace() {
               </div>
 
               <details>
-                <summary className="cursor-pointer text-xs text-muted-foreground">Raw</summary>
+                <summary className="cursor-pointer text-xs text-muted-foreground">Исходные данные</summary>
                 <pre className="mt-1 max-h-40 overflow-auto rounded bg-muted/40 p-2 text-[10px]">
                   {JSON.stringify(detail.raw_payload, null, 2)}
                 </pre>

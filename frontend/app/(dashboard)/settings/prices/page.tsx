@@ -53,7 +53,7 @@ export default function PricesOverviewSettingsPage() {
   if (!hydrated) {
     return (
       <PageShell>
-        <p className="text-sm text-muted-foreground">Sessiya...</p>
+        <p className="text-sm text-muted-foreground">Сессия...</p>
       </PageShell>
     );
   }
@@ -62,7 +62,7 @@ export default function PricesOverviewSettingsPage() {
       <PageShell>
         <p className="text-sm text-destructive">
           <Link href="/login" className="underline">
-            Kirish
+            Войти
           </Link>
         </p>
       </PageShell>
@@ -73,20 +73,20 @@ export default function PricesOverviewSettingsPage() {
     <PageShell>
       <PageHeader
         title="Цена"
-        description="Narx turlari bo‘yicha oxirgi yangilanish sanasi. Ommaviy tahrir — «Narxni o‘rnatish» sahifasi."
+        description="Дата последнего обновления по типам цен. Массовое редактирование — на странице «Установка цен»."
         actions={
           <div className="flex flex-wrap gap-2">
             <Link href="/settings/prices/matrix" className={cn(buttonVariants({ size: "sm" }))}>
-              Нarxni o‘rnatish
+              Установка цен
             </Link>
             <Link href="/settings/prices/price-list" className={cn(buttonVariants({ variant: "outline", size: "sm" }))}>
               Прайс-лист
             </Link>
             <Link href="/settings/products/excel" className={cn(buttonVariants({ variant: "secondary", size: "sm" }))}>
-              Excel import
+              Импорт из Excel
             </Link>
             <Link href="/settings" className={cn(buttonVariants({ variant: "outline", size: "sm" }))}>
-              Katalog
+              Каталог
             </Link>
           </div>
         }
@@ -143,11 +143,11 @@ export default function PricesOverviewSettingsPage() {
               ) : rows.length === 0 ? (
                 <tr>
                   <td colSpan={3} className="px-3 py-6 text-center text-muted-foreground">
-                    Ma&apos;lumot yo&apos;q.{" "}
+                    Нет данных.{" "}
                     <Link href="/settings/price-types" className="underline">
-                      Narx turlarini
+                      Настройте типы цен
                     </Link>{" "}
-                    sozlang yoki mahsulot narxlari kiriting.
+                    или введите цены товаров.
                   </td>
                 </tr>
               ) : (
@@ -165,8 +165,8 @@ export default function PricesOverviewSettingsPage() {
 
               <div className="border-t border-border/80 bg-muted/15 px-3 py-3 sm:px-4">
                 <p className="text-xs text-muted-foreground">
-                  «Установить наценку»: foizli narx oshirish keyingi versiyada; hozir Excel import yoki matritsadan
-                  tahrirlang.
+                  «Установить наценку»: процентное повышение цен появится в следующей версии; пока редактируйте
+                  через импорт из Excel или матрицу цен.
                 </p>
               </div>
             </CardContent>

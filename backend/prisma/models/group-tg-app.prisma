@@ -1,0 +1,96 @@
+/// Telegram ilova-boti: mijozlar ulanishi, chat holati, urinishlar jurnali.
+/// Xodimlar `TelegramStaffLink` orqali (umumiy).
+
+model TgClientLink {
+  id            Int       @id @default(autoincrement())
+  tenant_id     Int
+  client_id     Int
+  telegram_id   BigInt
+  /// pending | active | revoked
+  status        String    @default("pending") @db.VarChar(16)
+  phone         String?   @db.VarChar(32)
+  phone_match   Boolean   @default(false)
+  code_id       Int?
+  linked_at     DateTime  @default(now())
+  approved_by   Int?
+  approved_at   DateTime?
+  revoked_by    Int?
+  revoked_at    DateTime?
+  revoke_reason String?   @db.VarChar(200)
+  last_seen_at  DateTime?
+
+  @@unique([tenant_id, client_id, telegram_id])
+  @@index([telegram_id, status])
+  @@index([tenant_id, client_id, status])
+  @@map("tg_client_links")
+}
+
+model TgLinkCode {
+  id                  Int       @id @default(autoincrement())
+  tenant_id           Int
+  client_id           Int
+  /// sha256(tenant:code) — kodning o'zi saqlanmaydi
+  code_hash           String    @unique @db.VarChar(64)
+  /// manual | invoice
+  source              String    @default("manual") @db.VarChar(16)
+  created_by          Int?
+  expires_at          DateTime
+  used_at             DateTime?
+  used_by_telegram_id BigInt?
+  attempts            Int       @default(0)
+  created_at          DateTime  @default(now())
+
+  @@index([tenant_id, client_id])
+  @@map("tg_link_codes")
+}
+
+model TgChat {
+  telegram_id       BigInt    @id
+  tenant_id         Int
+  chat_id           BigInt
+  /// Joriy «ekran» xabari (tahrirlanadi)
+  screen_message_id Int?
+  /// { step, data } — ko'p qadamli kiritish holati
+  state             Json      @default("{}")
+  active_client_id  Int?
+  lang              String    @default("uz") @db.VarChar(4)
+  /// { off: ["order", ...], quiet: [22, 8] }
+  notify_prefs      Json      @default("{}")
+  /// [{ id, at }] — o'chirilishi kerak bo'lgan vaqtinchalik xabarlar
+  junk              Json      @default("[]")
+  blocked_until     DateTime?
+  created_at        DateTime  @default(now())
+  updated_at        DateTime  @updatedAt
+
+  @@index([tenant_id])
+  @@map("tg_chats")
+}
+
+model TgAuthAttempt {
+  id          Int      @id @default(autoincrement())
+  tenant_id   Int
+  telegram_id BigInt
+  /// client_code | client_order | client_phone | staff_login
+  kind        String   @db.VarChar(24)
+  ok          Boolean
+  reason      String?  @db.VarChar(64)
+  client_id   Int?
+  user_id     Int?
+  created_at  DateTime @default(now())
+
+  @@index([telegram_id, created_at])
+  @@index([tenant_id, created_at])
+  @@map("tg_auth_attempts")
+}
+
+model TgNotifyMessage {
+  id          Int      @id @default(autoincrement())
+  telegram_id BigInt
+  /// masalan "order:123" — shu mavzudagi eski xabar almashtiriladi
+  ref_key     String   @db.VarChar(64)
+  message_id  Int
+  sent_at     DateTime @default(now())
+
+  @@unique([telegram_id, ref_key])
+  @@map("tg_notify_messages")
+}

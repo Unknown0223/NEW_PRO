@@ -65,6 +65,23 @@ describe("wdr-slice-adapter", () => {
     expect(detectSavedReportFormat(report)).toBe("wdr");
   });
 
+  it("salecPivotConfig wrapper with empty slice is pivot, not wdr", () => {
+    const saved = {
+      dataSource: { type: "salec-pivot-engine" },
+      slice: {},
+      salecPivotConfig: {
+        rows: ["agent"],
+        columns: [],
+        values: [{ fieldId: "amount", aggregation: "SUM" }],
+        reportFilters: [],
+        filters: [],
+        options: { layoutForm: "classic", compactMode: false }
+      }
+    };
+    expect(isWdrSavedReportConfig(saved)).toBe(false);
+    expect(detectSavedReportFormat(saved)).toBe("pivot");
+  });
+
   it("detectSavedReportFormat — pivot config", () => {
     const pivot = wdrSliceToPivotConfig({ rows: [{ uniqueName: "a" }] });
     expect(detectSavedReportFormat(pivot)).toBe("pivot");

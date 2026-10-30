@@ -25,12 +25,12 @@ export async function importPostupleniya2StockReceiptFromSheet(
 
   const rq = colIndexByKey.receipt_qty;
   if (rq == null) {
-    return { applied: 0, errors: ["«Количество прихода» ustuni topilmadi"], warnings: [] };
+    return { applied: 0, errors: ["Столбец «Количество прихода» не найден"], warnings: [] };
   }
   if (!colIndexByKey.sku && !colIndexByKey.barcode) {
     return {
       applied: 0,
-      errors: ["«Код товара» yoki SKU / shtrix kod ustuni kerak"],
+      errors: ["Нужен столбец «Код товара» либо SKU / штрихкод"],
       warnings: []
     };
   }
@@ -55,7 +55,7 @@ export async function importPostupleniya2StockReceiptFromSheet(
 
     const receiptQty = parseQtyCell(row.getCell(rq));
     if (receiptQty == null || receiptQty <= 0) {
-      errors.push(`Qator ${r}: «Количество прихода» noto‘g‘ri yoki bo‘sh`);
+      errors.push(`Строка ${r}: «Количество прихода» неверное или пустое`);
       continue;
     }
 
@@ -66,7 +66,7 @@ export async function importPostupleniya2StockReceiptFromSheet(
     }
     const qty = receiptQty * blockMul;
     if (!Number.isFinite(qty) || qty <= 0) {
-      errors.push(`Qator ${r}: umumiy miqdor noto‘g‘ri`);
+      errors.push(`Строка ${r}: неверное общее количество`);
       continue;
     }
 
@@ -74,7 +74,7 @@ export async function importPostupleniya2StockReceiptFromSheet(
     if (whCell) {
       whId = await resolveWarehouseId(tenantId, whCell);
       if (whId == null) {
-        errors.push(`Qator ${r}: ombor topilmadi («${whCell}»)`);
+        errors.push(`Строка ${r}: склад не найден («${whCell}»)`);
         continue;
       }
     } else if (defaultWarehouseId != null && defaultWarehouseId > 0) {
@@ -83,41 +83,41 @@ export async function importPostupleniya2StockReceiptFromSheet(
       });
       whId = wh?.id ?? null;
       if (whId == null) {
-        errors.push(`Qator ${r}: tanlangan ombor (import) topilmadi`);
+        errors.push(`Строка ${r}: выбранный для импорта склад не найден`);
         continue;
       }
     } else {
       errors.push(
-        `Qator ${r}: «Склад» ustunini to‘ldiring yoki importdan oldin omborni tanlang (postupleniya shabloni)`
+        `Строка ${r}: заполните столбец «Склад» или выберите склад перед импортом (шаблон «Поступление»)`
       );
       continue;
     }
 
     if (!skuCell && !bcCell) {
-      errors.push(`Qator ${r}: «Код товара» / SKU yoki shtrix kod kerak`);
+      errors.push(`Строка ${r}: нужен «Код товара» / SKU или штрихкод`);
       continue;
     }
 
     const product = await resolveProductForImport(tenantId, skuCell, bcCell);
     if (!product) {
-      errors.push(`Qator ${r}: mahsulot topilmadi (SKU: «${skuCell}», shtrix: «${bcCell}»)`);
+      errors.push(`Строка ${r}: товар не найден (SKU: «${skuCell}», штрихкод: «${bcCell}»)`);
       continue;
     }
 
     if (categoryCell && product.categoryName) {
       if (product.categoryName.trim().toLowerCase() !== categoryCell.trim().toLowerCase()) {
         warnings.push(
-          `Qator ${r}: «Категория» bazadagi kategoriya bilan mos emas (${product.sku})`
+          `Строка ${r}: «Категория» не совпадает с категорией в базе (${product.sku})`
         );
       }
     }
     if (nameCell && product.name.trim().toLowerCase() !== nameCell.trim().toLowerCase()) {
       warnings.push(
-        `Qator ${r}: «Продукт» nomi bazadagi nom bilan mos kelmaydi (${product.sku})`
+        `Строка ${r}: название «Продукт» не совпадает с названием в базе (${product.sku})`
       );
     }
     if (bcCell && product.barcode && product.barcode.trim() !== bcCell.trim()) {
-      warnings.push(`Qator ${r}: shtrix kod bazadagi kod bilan mos emas (${product.sku})`);
+      warnings.push(`Строка ${r}: штрихкод не совпадает со штрихкодом в базе (${product.sku})`);
     }
 
     try {
@@ -132,7 +132,7 @@ export async function importPostupleniya2StockReceiptFromSheet(
       );
       applied += 1;
     } catch (e) {
-      errors.push(`Qator ${r}: ${e instanceof Error ? e.message : "xato"}`);
+      errors.push(`Строка ${r}: ${e instanceof Error ? e.message : "ошибка"}`);
     }
   }
 

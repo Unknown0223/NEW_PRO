@@ -41,4 +41,5 @@ export type CreateOrderTxParams = {
   tempOrderNumber: string;
   isInboundShelfReturn: boolean;
   stackPolicy: BonusStackPolicy;
+  creationChannel: "web" | "mobile";
 };

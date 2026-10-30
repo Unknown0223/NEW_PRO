@@ -72,10 +72,9 @@ export async function hasActiveRefreshSession(tenantId: number, userId: number):
 }
 
 /**
- * Aniq qurilma sessiyasi tirikligini tekshirish.
- * `deviceId` bo'lsa — faqat o'sha qurilma sessiyasi (boshqa qurilmada kirilganda
- * shu qurilma chiqarib yuborilgani aniqlanadi). Aks holda — istalgan faol sessiya
- * (eski access tokenlar bilan orqaga moslik).
+ * Chiqish faqat: hodim o‘zi chiqdi yoki admin webdan sessiyani yopdi
+ * (faol refresh token qolmagan). Qurilma id mos kelmasa ham token qolgan
+ * bo‘lsa — ishlayotgan hodimni chiqarmaymiz.
  */
 export async function hasActiveSessionForDevice(
   tenantId: number,
@@ -93,10 +92,43 @@ export async function hasActiveSessionForDevice(
       expires_at: { gt: new Date() }
     }
   });
-  return n > 0;
+  if (n > 0) return true;
+  return hasActiveRefreshSession(tenantId, userId);
 }
 
-/** Mobil JWT hali amal qilsa ham server sessiyasi yopilgan bo‘lsa — 401. */
+const REFRESH_SLIDE_MS = 30 * 24 * 60 * 60 * 1000;
+
+/** Ilova ochiq ekan — muddat uzayadi (o‘zi chiqmaguncha / admin yopmaguncha). */
+export async function touchActiveRefreshSessions(
+  tenantId: number,
+  userId: number,
+  deviceId?: string | null
+): Promise<void> {
+  if (!Number.isFinite(userId) || userId < 1 || !Number.isFinite(tenantId)) return;
+  const nextExpiry = new Date(Date.now() + REFRESH_SLIDE_MS);
+  const base = {
+    tenant_id: tenantId,
+    user_id: userId,
+    revoked_at: null,
+    expires_at: { gt: new Date() }
+  };
+  const did = deviceId?.trim() || null;
+  if (did) {
+    const r = await prisma.refreshToken.updateMany({
+      where: { ...base, device_id: did },
+      data: { expires_at: nextExpiry }
+    });
+    if (r.count > 0) return;
+  }
+  await prisma.refreshToken.updateMany({
+    where: base,
+    data: { expires_at: nextExpiry }
+  });
+}
+
+/** Mobil JWT hali amal qilsa ham server sessiyasi yopilgan bo‘lsa — 401.
+ * Faqat faol refresh token umuman yo‘q bo‘lganda (admin yoki o‘zi chiqdi).
+ */
 export async function requireActiveMobileSession(request: FastifyRequest, reply: FastifyReply) {
   const user = getAccessUser(request);
   if (!MOBILE_FIELD_ROLES.has(user.role)) return;
@@ -108,7 +140,7 @@ export async function requireActiveMobileSession(request: FastifyRequest, reply:
 
   const active = await hasActiveSessionForDevice(user.tenantId, userId, user.did);
   if (!active) {
-    return sendApiError(reply, request, 401, "SESSION_REVOKED", "Sessiya tugatildi");
+    return sendApiError(reply, request, 401, "SESSION_REVOKED", "Сессия завершена");
   }
 }
 
@@ -128,7 +160,7 @@ export async function requireActiveSessionForNonAdmin(request: FastifyRequest, r
 
   const active = await hasActiveSessionForDevice(user.tenantId, userId, user.did);
   if (!active) {
-    return sendApiError(reply, request, 401, "SESSION_REVOKED", "Sessiya tugatildi");
+    return sendApiError(reply, request, 401, "SESSION_REVOKED", "Сессия завершена");
   }
 }
 

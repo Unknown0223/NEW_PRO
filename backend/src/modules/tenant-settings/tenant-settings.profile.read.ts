@@ -97,14 +97,40 @@ export async function getTenantProfile(tenantId: number): Promise<TenantProfileD
   const refT = referencesWithResolvedTerritoryNodes(ref);
   const territory_nodes = territoryNodesFromUnknown(refT.territory_nodes);
   const territory_tree = territoryTreeFromUnknown(ref.territory_tree);
-  const client_formats = stringArrayFromUnknown(ref.client_formats);
-  const client_type_codes = stringArrayFromUnknown(ref.client_type_codes);
-  const client_categories = stringArrayFromUnknown(ref.client_categories);
+  const client_formats_legacy = stringArrayFromUnknown(ref.client_formats);
+  const client_type_codes_legacy = stringArrayFromUnknown(ref.client_type_codes);
+  const client_categories_legacy = stringArrayFromUnknown(ref.client_categories);
   const currency_entries = resolveCurrencyEntries(ref);
   const payment_method_entries = resolvePaymentMethodEntries(ref, currency_entries);
   const price_type_entries = priceTypeEntriesFromUnknown(ref.price_type_entries);
 
   const refusal_reason_entries = resolveRefusalReasonEntries(ref);
+  const client_format_entries = resolveClientRefEntries(
+    ref,
+    "client_format_entries",
+    client_formats_legacy,
+    "fmt"
+  );
+  const client_type_entries = resolveClientRefEntries(
+    ref,
+    "client_type_entries",
+    client_type_codes_legacy,
+    "typ"
+  );
+  const client_category_entries = resolveClientRefEntries(
+    ref,
+    "client_category_entries",
+    client_categories_legacy,
+    "cat"
+  );
+  // Prefer entries (Sozlamalar spravochnigi) — legacy string massiv bo‘sh qolishi mumkin.
+  const fromFormatEntries = activeValuesFromClientRefEntries(client_format_entries);
+  const fromTypeEntries = activeValuesFromClientRefEntries(client_type_entries);
+  const fromCategoryEntries = activeValuesFromClientRefEntries(client_category_entries);
+  const client_formats = fromFormatEntries.length > 0 ? fromFormatEntries : client_formats_legacy;
+  const client_type_codes = fromTypeEntries.length > 0 ? fromTypeEntries : client_type_codes_legacy;
+  const client_categories =
+    fromCategoryEntries.length > 0 ? fromCategoryEntries : client_categories_legacy;
 
   const [dbSalesLabels, dbTradeLabels] = await Promise.all([
     listActiveSalesChannelLabels(tenantId),
@@ -134,9 +160,9 @@ export async function getTenantProfile(tenantId: number): Promise<TenantProfileD
       client_categories,
       client_type_codes,
       client_formats,
-      client_format_entries: resolveClientRefEntries(ref, "client_format_entries", client_formats, "fmt"),
-      client_type_entries: resolveClientRefEntries(ref, "client_type_entries", client_type_codes, "typ"),
-      client_category_entries: resolveClientRefEntries(ref, "client_category_entries", client_categories, "cat"),
+      client_format_entries,
+      client_type_entries,
+      client_category_entries,
       sales_channels: dbSalesLabels,
       trade_directions: dbTradeLabels,
       client_product_category_refs: stringArrayFromUnknown(ref.client_product_category_refs),

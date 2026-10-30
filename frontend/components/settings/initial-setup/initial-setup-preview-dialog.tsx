@@ -70,7 +70,7 @@ export function InitialSetupPreviewDialog({
       onApplied(message);
       onOpenChange(false);
     } catch (e) {
-      setMsg(getUserFacingError(e, "Import xatosi"));
+      setMsg(getUserFacingError(e, "Ошибка импорта"));
     } finally {
       setBusy(false);
     }
@@ -80,9 +80,9 @@ export function InitialSetupPreviewDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="flex max-h-[90vh] max-w-4xl flex-col gap-0 overflow-hidden p-0">
         <DialogHeader className="border-b px-6 py-4">
-          <DialogTitle>Ko‘rib chiqish — {step.title}</DialogTitle>
+          <DialogTitle>Просмотр — {step.title}</DialogTitle>
           <DialogDescription>
-            {preview.rows.length} qator. Xatolarni jadvalda tuzating, keyin «Qo‘llash».
+            Строк: {preview.rows.length}. Исправьте ошибки в таблице, затем нажмите «Применить».
           </DialogDescription>
         </DialogHeader>
 
@@ -93,7 +93,7 @@ export function InitialSetupPreviewDialog({
             </span>
             {errorCount > 0 ? (
               <span className="inline-flex items-center gap-1 text-destructive">
-                <AlertCircle className="size-3.5" /> Xato: {errorCount}
+                <AlertCircle className="size-3.5" /> Ошибок: {errorCount}
               </span>
             ) : null}
           </div>
@@ -108,7 +108,7 @@ export function InitialSetupPreviewDialog({
                       {col}
                     </th>
                   ))}
-                  <th className="border-b px-2 py-2 text-left font-semibold">Holat</th>
+                  <th className="border-b px-2 py-2 text-left font-semibold">Статус</th>
                 </tr>
               </thead>
               <tbody>
@@ -147,11 +147,11 @@ export function InitialSetupPreviewDialog({
 
         <DialogFooter className="border-t px-6 py-4">
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={busy}>
-            Bekor
+            Отмена
           </Button>
           <Button type="button" onClick={() => void apply()} disabled={busy || hasErrors || !preview.rows.length}>
             {busy ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
-            Qo‘llash
+            Применить
           </Button>
         </DialogFooter>
       </DialogContent>

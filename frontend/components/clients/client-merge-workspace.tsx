@@ -15,6 +15,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { api } from "@/lib/api";
 import { useAuthStore, useAuthStoreHydrated } from "@/lib/auth-store";
 import { getUserFacingError } from "@/lib/error-utils";
+import { usePermissions } from "@/lib/use-permissions";
 import { STALE } from "@/lib/query-stale";
 import { pickCityTerritoryHint } from "@/lib/city-territory-hint";
 import { cn } from "@/lib/utils";
@@ -178,6 +179,11 @@ export function ClientMergeWorkspace() {
   const hydrated = useAuthStoreHydrated();
   const tenantSlug = useAuthStore((s) => s.tenantSlug);
   const qc = useQueryClient();
+  const { has } = usePermissions();
+  const canMerge = has("clients.obedinenie.update");
+  const canSaveGroup = has("clients.obedinenie.create");
+  const canDeleteGroup = has("clients.obedinenie.delete");
+  const canHistory = has("clients.obedinenie.history");
 
   const [mainTab, setMainTab] = useState<MainTab>("fields");
   const [dupPage, setDupPage] = useState(1);
@@ -224,7 +230,7 @@ export function ClientMergeWorkspace() {
     enabled: Boolean(hydrated && tenantSlug),
     staleTime: STALE.reference,
     queryFn: async () => {
-      const { data } = await api.get<{ data: StaffPick[] }>(`/api/${tenantSlug}/agents?is_active=true`);
+      const { data } = await api.get<{ data: StaffPick[] }>(`/api/${tenantSlug}/agents?picker=1`);
       return data.data ?? [];
     }
   });
@@ -539,12 +545,14 @@ export function ClientMergeWorkspace() {
       >
         Сохранённые
       </TabsTrigger>
-      <TabsTrigger
-        value="merged"
-        className="rounded-lg px-4 py-2 text-[13px] font-medium data-[state=inactive]:text-slate-500 data-[state=active]:bg-emerald-600 data-[state=active]:text-white data-[state=active]:shadow-sm"
-      >
-        Объединённые
-      </TabsTrigger>
+      {canHistory ? (
+        <TabsTrigger
+          value="merged"
+          className="rounded-lg px-4 py-2 text-[13px] font-medium data-[state=inactive]:text-slate-500 data-[state=active]:bg-emerald-600 data-[state=active]:text-white data-[state=active]:shadow-sm"
+        >
+          Объединённые
+        </TabsTrigger>
+      ) : null}
     </TabsList>
   );
 
@@ -697,16 +705,18 @@ export function ClientMergeWorkspace() {
                       </TableCell>
                       <TableCell className="text-right">{r.not_merged_count}</TableCell>
                       <TableCell>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          className="text-destructive hover:text-destructive"
-                          onClick={() => deleteSavedMut.mutate(r.id)}
-                          disabled={deleteSavedMut.isPending}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
+                        {canDeleteGroup ? (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="text-destructive hover:text-destructive"
+                            onClick={() => deleteSavedMut.mutate(r.id)}
+                            disabled={deleteSavedMut.isPending}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        ) : null}
                       </TableCell>
                     </TableRow>
                   ))
@@ -803,8 +813,8 @@ export function ClientMergeWorkspace() {
             setCompareOpen(false);
             setActiveGroup(null);
           }}
-          onMerge={runMerge}
-          onSave={saveCurrentGroup}
+          onMerge={canMerge ? runMerge : undefined}
+          onSave={canSaveGroup ? saveCurrentGroup : undefined}
           merging={mergeMutation.isPending}
           saving={saveGroupMut.isPending}
         />

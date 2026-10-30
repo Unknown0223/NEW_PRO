@@ -60,8 +60,7 @@ const TerritoryTreeRows = memo(function TerritoryTreeRows({
   setExpanded,
   selected,
   onToggle,
-  searchQ,
-  subtreeIdsByNodeId
+  searchQ
 }: {
   nodes: readonly TerritoryNode[];
   depth: number;
@@ -70,7 +69,6 @@ const TerritoryTreeRows = memo(function TerritoryTreeRows({
   selected: Set<string>;
   onToggle: (nodeId: string, checked: boolean) => void;
   searchQ: string;
-  subtreeIdsByNodeId: Map<string, readonly string[]>;
 }) {
   return (
     <div className={cn(depth > 0 && "ml-3 border-l border-dashed border-border pl-2")}>
@@ -81,9 +79,7 @@ const TerritoryTreeRows = memo(function TerritoryTreeRows({
         const children = node.children ?? [];
         const hasChildren = children.length > 0;
         const open = expanded.has(node.id);
-        const desc = subtreeIdsByNodeId.get(node.id) ?? [node.id];
-        const allIn = desc.every((id) => selected.has(id));
-        const someIn = desc.some((id) => selected.has(id)) && !allIn;
+        const selfOn = selected.has(node.id);
 
         return (
           <div key={node.id} className="py-0.5">
@@ -112,8 +108,8 @@ const TerritoryTreeRows = memo(function TerritoryTreeRows({
               )}
               <label className="flex min-w-0 flex-1 cursor-pointer items-start gap-2 py-0.5">
                 <IndeterminateCheckbox
-                  checked={allIn}
-                  indeterminate={someIn}
+                  checked={selfOn}
+                  indeterminate={false}
                   onChange={(checked) => onToggle(node.id, checked)}
                 />
                 <span className="min-w-0 text-[13px] font-medium text-slate-800">{node.name}</span>
@@ -128,7 +124,6 @@ const TerritoryTreeRows = memo(function TerritoryTreeRows({
                 selected={selected}
                 onToggle={onToggle}
                 searchQ={searchQ}
-                subtreeIdsByNodeId={subtreeIdsByNodeId}
               />
             ) : null}
           </div>
@@ -241,20 +236,14 @@ export const MonitoringTerritoryTreeFilter = memo(function MonitoringTerritoryTr
     return () => document.removeEventListener("mousedown", onDoc);
   }, [open, closePopover]);
 
-  const onToggle = useCallback(
-    (nodeId: string, checked: boolean) => {
-      const ids = treeIndex.subtreeIdsByNodeId.get(nodeId) ?? [nodeId];
-      setPending((prev) => {
-        const next = new Set(prev);
-        for (const id of ids) {
-          if (checked) next.add(id);
-          else next.delete(id);
-        }
-        return next;
-      });
-    },
-    [treeIndex.subtreeIdsByNodeId]
-  );
+  const onToggle = useCallback((nodeId: string, checked: boolean) => {
+    setPending((prev) => {
+      const next = new Set(prev);
+      if (checked) next.add(nodeId);
+      else next.delete(nodeId);
+      return next;
+    });
+  }, []);
 
   const popover =
     open && mounted ? (
@@ -289,7 +278,6 @@ export const MonitoringTerritoryTreeFilter = memo(function MonitoringTerritoryTr
               selected={pending}
               onToggle={onToggle}
               searchQ={searchQ}
-              subtreeIdsByNodeId={treeIndex.subtreeIdsByNodeId}
             />
           )}
         </div>

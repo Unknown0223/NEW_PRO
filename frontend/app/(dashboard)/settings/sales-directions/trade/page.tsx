@@ -17,12 +17,12 @@ export default function TradeDirectionsSettingsPage() {
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h1 className="text-lg font-semibold">Направление торговли</h1>
         <Link href="/settings/company" className="text-sm text-primary underline-offset-4 hover:underline">
-          ← Sozlamalar
+          ← Настройки
         </Link>
       </div>
       <p className="text-sm text-muted-foreground">
-        Ro‘yxat agent va ekspeditor «Направление торговли» maydonida tanlanadi; mijozlar va bonuslar uchun alohida spravochniklar
-        mavjud.
+        Значения списка выбираются в поле «Направление торговли» у агента и экспедитора; для клиентов и бонусов есть
+        отдельные справочники.
       </p>
       <TradeDirectionsWorkspace tenantSlug={tenantSlug} />
     </div>

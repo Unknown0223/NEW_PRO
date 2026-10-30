@@ -1,7 +1,5 @@
-"use client";
-
-import { TimesheetWorkspace } from "@/components/timesheet/timesheet-workspace";
+import { redirect } from "next/navigation";
 
 export default function UsersTimesheetPage() {
-  return <TimesheetWorkspace />;
+  redirect("/tabel/timesheet");
 }

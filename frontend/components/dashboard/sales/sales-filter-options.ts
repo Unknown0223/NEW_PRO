@@ -152,6 +152,7 @@ export function useSalesFilterOptions(args: {
 
     const cityOptions = (() => {
       const regions = draft.territory_2_list.map((r) => r.trim()).filter(Boolean);
+      const zones = draft.territory_1_list.map((z) => z.trim()).filter(Boolean);
       let rows: string[] = [];
       if (regions.length > 0) {
         const set = new Set<string>();
@@ -159,6 +160,20 @@ export function useSalesFilterOptions(args: {
           for (const c of reportFilters?.territory_3_by_2?.[region] ?? []) set.add(c);
         }
         rows = [...set];
+        if (rows.length === 0) rows = reportFilters?.territory_3 ?? clientRefs?.cities ?? [];
+      } else if (zones.length > 0) {
+        // Zona tanlangan, oblast yo‘q — zona ostidagi barcha oblast shaharlari
+        const regionSet = new Set<string>();
+        for (const z of zones) {
+          for (const r of reportFilters?.regions_by_zone?.[z] ?? reportFilters?.territory_2_by_1?.[z] ?? []) {
+            regionSet.add(r);
+          }
+        }
+        const citySet = new Set<string>();
+        for (const region of regionSet) {
+          for (const c of reportFilters?.territory_3_by_2?.[region] ?? []) citySet.add(c);
+        }
+        rows = [...citySet];
         if (rows.length === 0) rows = reportFilters?.territory_3 ?? clientRefs?.cities ?? [];
       } else {
         const hasReport = (reportFilters?.territory_3?.length ?? 0) > 0;

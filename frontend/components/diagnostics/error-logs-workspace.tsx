@@ -4,6 +4,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { api } from "@/lib/api";
+import { usePermissions } from "@/lib/use-permissions";
+import { cn } from "@/lib/utils";
 import { STALE } from "@/lib/query-stale";
 import { useQuery } from "@tanstack/react-query";
 import { Download, X } from "lucide-react";
@@ -28,6 +30,7 @@ type ErrorRow = {
   apk_version: string | null;
   device_name: string | null;
   module: string | null;
+  payload?: unknown;
 };
 
 type ErrorMeta = {
@@ -64,6 +67,7 @@ function sourceBadge(source: string) {
 }
 
 export function ErrorLogsWorkspace({ tenantSlug }: { tenantSlug: string }) {
+  const canExport = usePermissions().has("diagnostics.error_logs.export");
   const [page, setPage] = useState(1);
   const [userId, setUserId] = useState("");
   const [source, setSource] = useState("");
@@ -124,7 +128,8 @@ export function ErrorLogsWorkspace({ tenantSlug }: { tenantSlug: string }) {
       <div>
         <h1 className="text-xl font-bold tracking-tight">Журнал ошибок</h1>
         <p className="text-sm text-muted-foreground">
-          Только ошибки — мобильное приложение и backend. Диагностика по одному аккаунту.
+          Только ошибки — мобильное приложение и backend. Полный текст, stack и ответ API в карточке
+          события (payload). Синхронизация, пустые дни визита и пустой каталог тоже пишутся сюда.
         </p>
       </div>
 
@@ -159,7 +164,7 @@ export function ErrorLogsWorkspace({ tenantSlug }: { tenantSlug: string }) {
           >
             <option value="">Все</option>
             <option value="mobile">Мобильное приложение</option>
-            <option value="backend">Backend</option>
+            <option value="backend">Сервер</option>
           </select>
         </label>
         <label className="grid gap-1 text-xs font-semibold text-muted-foreground">
@@ -203,7 +208,7 @@ export function ErrorLogsWorkspace({ tenantSlug }: { tenantSlug: string }) {
         <Button
           variant="outline"
           size="sm"
-          className="h-9"
+          className={cn("h-9", !canExport && "hidden")}
           disabled={rows.length === 0}
           onClick={() =>
             downloadCsv(
@@ -238,6 +243,7 @@ export function ErrorLogsWorkspace({ tenantSlug }: { tenantSlug: string }) {
                 <th className="px-3 py-2 font-semibold">Пользователь</th>
                 <th className="px-3 py-2 font-semibold">Код</th>
                 <th className="px-3 py-2 font-semibold">Сообщение</th>
+                <th className="px-3 py-2 font-semibold">Модуль</th>
                 <th className="px-3 py-2 font-semibold">APK</th>
                 <th className="px-3 py-2 font-semibold">request_id</th>
               </tr>
@@ -245,13 +251,13 @@ export function ErrorLogsWorkspace({ tenantSlug }: { tenantSlug: string }) {
             <tbody>
               {listQuery.isLoading ? (
                 <tr>
-                  <td colSpan={7} className="px-3 py-8 text-center text-muted-foreground">
+                  <td colSpan={8} className="px-3 py-8 text-center text-muted-foreground">
                     Загрузка…
                   </td>
                 </tr>
               ) : rows.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-3 py-8 text-center text-muted-foreground">
+                  <td colSpan={8} className="px-3 py-8 text-center text-muted-foreground">
                     Ошибки не найдены
                   </td>
                 </tr>
@@ -265,7 +271,7 @@ export function ErrorLogsWorkspace({ tenantSlug }: { tenantSlug: string }) {
                     <td className="whitespace-nowrap px-3 py-2 font-mono text-xs">{fmt(r.occurred_at)}</td>
                     <td className="px-3 py-2">
                       <Badge variant={sourceBadge(r.source)}>
-                        {r.source === "mobile" ? "Мобильное" : r.source === "backend" ? "Backend" : r.source}
+                        {r.source === "mobile" ? "Мобильное" : r.source === "backend" ? "Сервер" : r.source}
                       </Badge>
                     </td>
                     <td className="max-w-[140px] truncate px-3 py-2 text-xs">
@@ -276,6 +282,7 @@ export function ErrorLogsWorkspace({ tenantSlug }: { tenantSlug: string }) {
                       {r.http_status != null ? ` · ${r.http_status}` : ""}
                     </td>
                     <td className="max-w-[280px] truncate px-3 py-2">{r.message}</td>
+                    <td className="whitespace-nowrap px-3 py-2 font-mono text-xs">{r.module ?? "—"}</td>
                     <td className="whitespace-nowrap px-3 py-2 font-mono text-xs">{r.apk_version ?? "—"}</td>
                     <td className="max-w-[120px] truncate px-3 py-2 font-mono text-[11px] text-muted-foreground">
                       {r.request_id ?? "—"}
@@ -307,7 +314,7 @@ export function ErrorLogsWorkspace({ tenantSlug }: { tenantSlug: string }) {
       </div>
 
       {selectedId != null ? (
-        <div className="fixed inset-y-0 right-0 z-40 flex w-full max-w-md flex-col border-l bg-background shadow-xl">
+        <div className="fixed inset-y-0 right-0 z-40 flex w-full max-w-xl flex-col border-l bg-background shadow-xl">
           <div className="flex items-center justify-between border-b px-4 py-3">
             <div>
               <div className="text-sm font-bold">Ошибка #{selectedId}</div>
@@ -349,17 +356,27 @@ export function ErrorLogsWorkspace({ tenantSlug }: { tenantSlug: string }) {
 }
 
 function ErrorCard({ row, compact }: { row: ErrorRow; compact?: boolean }) {
+  const payloadText =
+    row.payload != null && typeof row.payload === "object"
+      ? JSON.stringify(row.payload, null, 2)
+      : row.payload != null
+        ? String(row.payload)
+        : null;
+
   return (
     <div className={`rounded-lg border p-3 ${compact ? "bg-muted/20" : "bg-card"}`}>
       <div className="mb-1 flex flex-wrap items-center gap-2">
         <Badge variant={sourceBadge(row.source)}>
-          {row.source === "mobile" ? "Мобильное" : row.source === "backend" ? "Backend" : row.source}
+          {row.source === "mobile" ? "Мобильное" : row.source === "backend" ? "Сервер" : row.source}
         </Badge>
         {row.severity === "fatal" ? <Badge variant="destructive">критично</Badge> : null}
         <span className="font-mono text-[11px] text-muted-foreground">{fmt(row.occurred_at)}</span>
       </div>
-      <div className="font-semibold">{row.error_code ?? "ошибка"}{row.http_status != null ? ` · ${row.http_status}` : ""}</div>
-      <p className="mt-1 text-[13px] leading-snug">{row.message}</p>
+      <div className="font-semibold">
+        {row.error_code ?? "ошибка"}
+        {row.http_status != null ? ` · ${row.http_status}` : ""}
+      </div>
+      <p className="mt-1 whitespace-pre-wrap break-words text-[13px] leading-snug">{row.message}</p>
       <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
         <div>
           <dt className="font-semibold">Пользователь</dt>
@@ -371,7 +388,10 @@ function ErrorCard({ row, compact }: { row: ErrorRow; compact?: boolean }) {
         </div>
         <div className="col-span-2">
           <dt className="font-semibold">Путь</dt>
-          <dd className="break-all font-mono">{row.method ? `${row.method} ` : ""}{row.path ?? "—"}</dd>
+          <dd className="break-all font-mono">
+            {row.method ? `${row.method} ` : ""}
+            {row.path ?? "—"}
+          </dd>
         </div>
         <div>
           <dt className="font-semibold">APK / устройство</dt>
@@ -385,6 +405,31 @@ function ErrorCard({ row, compact }: { row: ErrorRow; compact?: boolean }) {
           <dd className="break-all font-mono">{row.request_id ?? "—"}</dd>
         </div>
       </dl>
+      {payloadText ? (
+        <div className="mt-3 space-y-1.5">
+          <div className="flex items-center justify-between gap-2">
+            <div className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
+              Детали (payload)
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-7 px-2 text-[11px]"
+              onClick={() => {
+                void navigator.clipboard.writeText(
+                  [`#${row.id}`, row.error_code, row.message, payloadText].filter(Boolean).join("\n\n")
+                );
+              }}
+            >
+              Копировать
+            </Button>
+          </div>
+          <pre className="max-h-[min(60vh,28rem)] overflow-auto rounded-md bg-muted/50 p-2 font-mono text-[11px] leading-snug whitespace-pre-wrap break-words">
+            {payloadText}
+          </pre>
+        </div>
+      ) : null}
     </div>
   );
 }

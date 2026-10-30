@@ -28,7 +28,7 @@ import type {
   PivotField,
   PivotValuesPosition
 } from "@salec/pivot-engine";
-import { resolveValuesPosition } from "@salec/pivot-engine";
+import { getAggregationLabel, resolveValuesPosition } from "@salec/pivot-engine";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -41,6 +41,7 @@ import {
   PALETTE_PREFIX,
   parsePaletteId,
   parseSortableZoneId,
+  parseDateHierarchyField,
   parseValueSortableId,
   pivotDragOverlayModifiers,
   pivotFieldsCollisionDetection,
@@ -56,6 +57,10 @@ import {
   type PivotBuilderZone,
   type ZoneChipEntry
 } from "@/lib/pivot-fields-dnd";
+import {
+  paletteLabelClickAction,
+  paletteLabelDoubleClickAction
+} from "@/lib/pivot-interaction";
 import { cn } from "@/lib/utils";
 
 type BuilderZone = PivotBuilderZone;
@@ -115,6 +120,8 @@ function usedFieldIds(config: PivotConfig): Set<string> {
 
 function isNumeric(field?: PivotField) {
   if (!field) return false;
+  // Kun/oy/yil — o‘lchov emas: Σ ko‘rsatilmasin
+  if (parseDateHierarchyField(field)) return false;
   if (field.dataType === "number" || field.dataType === "currency") return true;
   /** Bonus miqdori — har doim qiymat (Σ). */
   return field.id === "bonus_qty" || field.id === "block_qty";
@@ -196,6 +203,7 @@ function FlatSortableRow({
     id: `${FLAT_PREFIX}${id}`,
     disabled: !checked
   });
+  const checkedAtPointerDown = useRef(false);
 
   return (
     <div
@@ -214,8 +222,28 @@ function FlatSortableRow({
         className="h-3.5 w-3.5 accent-[#555]"
         checked={checked}
         onChange={(e) => onCheckedChange(e.target.checked)}
+        onClick={(e) => e.stopPropagation()}
       />
-      <span className="min-w-0 flex-1 truncate">{label}</span>
+      <button
+        type="button"
+        className="min-w-0 flex-1 truncate text-left hover:underline"
+        title={checked ? "Двойной клик — убрать из макета" : "Клик — добавить в макет"}
+        onMouseDown={() => {
+          checkedAtPointerDown.current = checked;
+        }}
+        onClick={(e) => {
+          if (e.detail > 1) return;
+          if (paletteLabelClickAction(checked) === "add") onCheckedChange(true);
+        }}
+        onDoubleClick={(e) => {
+          e.preventDefault();
+          if (paletteLabelDoubleClickAction(checkedAtPointerDown.current) === "remove") {
+            onCheckedChange(false);
+          }
+        }}
+      >
+        {label}
+      </button>
       <button
         type="button"
         className={cn(
@@ -334,6 +362,13 @@ function ZoneChip({
         "relative z-[1] flex w-full max-w-full items-center gap-1 rounded-sm px-1.5 py-1 text-[11px]",
         sortableId && "cursor-grab touch-none active:cursor-grabbing"
       )}
+      title={!hideRemove && onRemove ? "Двойной клик — убрать из макета" : undefined}
+      onDoubleClick={(e) => {
+        if (hideRemove || !onRemove) return;
+        e.preventDefault();
+        e.stopPropagation();
+        onRemove();
+      }}
       {...(sortableId ? { ...sortable.attributes, ...sortable.listeners } : {})}
     >
       {sigma ? <span className="shrink-0 font-semibold text-[#555]">Σ</span> : null}
@@ -398,7 +433,7 @@ function ZoneChip({
             "DIFFERENCE"
           ] as AggregationType[]).map((agg) => (
             <option key={agg} value={agg}>
-              {agg}
+              {getAggregationLabel(agg)}
             </option>
           ))}
         </select>
@@ -442,6 +477,7 @@ function PaletteRow({
     data: { fieldId: field.id, type: "palette" }
   });
   const isValueField = isNumeric(field);
+  const checkedAtPointerDown = useRef(false);
 
   return (
     <div
@@ -455,22 +491,49 @@ function PaletteRow({
         opacity: isDragging ? 0.5 : 1,
         background: LIGHT.bg
       }}
+      data-testid={`palette-field-${field.id}`}
+      onMouseDown={() => {
+        checkedAtPointerDown.current = checked;
+      }}
+      onClick={(e) => {
+        if (e.detail > 1) return;
+        const t = e.target as HTMLElement;
+        if (t.closest("input,button[aria-label='Перетащить']")) return;
+        if (paletteLabelClickAction(checked) === "add") onToggle(true);
+      }}
+      onDoubleClick={(e) => {
+        e.preventDefault();
+        const t = e.target as HTMLElement;
+        if (t.closest("input,button[aria-label='Перетащить']")) return;
+        if (paletteLabelDoubleClickAction(checkedAtPointerDown.current) === "remove") {
+          onToggle(false);
+        }
+      }}
     >
       <input
         type="checkbox"
         className="h-3.5 w-3.5 accent-[#555]"
         checked={checked}
         onChange={(e) => onToggle(e.target.checked)}
+        onClick={(e) => e.stopPropagation()}
       />
+      <span
+        className="min-w-0 flex-1 cursor-pointer truncate text-left hover:underline"
+        title={checked ? "Двойной клик — убрать из макета" : "Клик — добавить в макет"}
+      >
+        {displayLabel ?? field.label}
+      </span>
       <button
         ref={setNodeRef}
         type="button"
-        className="flex min-w-0 flex-1 cursor-grab touch-none items-center gap-1.5 truncate text-left active:cursor-grabbing"
+        className="flex shrink-0 cursor-grab touch-none items-center gap-1 px-0.5 active:cursor-grabbing"
+        aria-label="Перетащить"
+        title="Перетащить"
+        onClick={(e) => e.stopPropagation()}
         {...listeners}
         {...attributes}
       >
-        <DragLines className="shrink-0 opacity-70" />
-        <span className="min-w-0 truncate">{displayLabel ?? field.label}</span>
+        <DragLines className="opacity-70" />
       </button>
       {isValueField ? (
         <span
@@ -490,38 +553,65 @@ function DateHierarchyHeader({
   expanded,
   onToggle,
   checkedCount,
-  childCount
+  childCount,
+  onCheckedChange
 }: {
   label: string;
   expanded: boolean;
   onToggle: () => void;
   checkedCount: number;
   childCount: number;
+  onCheckedChange: (next: boolean) => void;
 }) {
+  const allChecked = childCount > 0 && checkedCount === childCount;
+  const someChecked = checkedCount > 0 && checkedCount < childCount;
   return (
-    <button
-      type="button"
-      onClick={onToggle}
-      className="flex w-full items-center gap-1.5 px-2.5 py-1.5 text-left text-[12px] hover:bg-[#f7f7f7]"
+    <div
+      className="flex w-full items-center gap-1.5 px-2.5 py-1.5 text-[12px] hover:bg-[#f7f7f7]"
       style={{
         borderBottom: `1px solid ${LIGHT.borderSoft}`,
         color: LIGHT.text,
         background: LIGHT.bg
       }}
-      aria-expanded={expanded}
     >
-      {expanded ? (
-        <ChevronDown className="h-3.5 w-3.5 shrink-0 text-[#888]" />
-      ) : (
-        <ChevronRight className="h-3.5 w-3.5 shrink-0 text-[#888]" />
-      )}
-      <span className="min-w-0 flex-1 truncate font-medium">{label}</span>
+      <button
+        type="button"
+        onClick={onToggle}
+        className="flex shrink-0 items-center"
+        aria-expanded={expanded}
+        aria-label={expanded ? "Свернуть" : "Развернуть"}
+      >
+        {expanded ? (
+          <ChevronDown className="h-3.5 w-3.5 shrink-0 text-[#888]" />
+        ) : (
+          <ChevronRight className="h-3.5 w-3.5 shrink-0 text-[#888]" />
+        )}
+      </button>
+      <input
+        type="checkbox"
+        className="h-3.5 w-3.5 shrink-0 accent-[#555]"
+        checked={allChecked}
+        ref={(el) => {
+          if (el) el.indeterminate = someChecked;
+        }}
+        onChange={(e) => onCheckedChange(e.target.checked)}
+        onClick={(e) => e.stopPropagation()}
+        title="Выбрать год / месяц / день"
+        aria-label={`${label}: выбрать периоды`}
+      />
+      <button
+        type="button"
+        onClick={onToggle}
+        className="min-w-0 flex-1 truncate text-left font-medium hover:underline"
+      >
+        {label}
+      </button>
       {checkedCount > 0 ? (
         <span className="shrink-0 text-[10px] text-[#888]">
           {checkedCount}/{childCount}
         </span>
       ) : null}
-    </button>
+    </div>
   );
 }
 
@@ -1216,6 +1306,14 @@ export function VirtualPivotFieldsModal({
                             onToggle={() => toggleDateGroup(entry.key, entry.children)}
                             checkedCount={checkedCount}
                             childCount={entry.children.length}
+                            onCheckedChange={(next) => {
+                              for (const { field } of entry.children) {
+                                if (next !== used.has(field.id)) toggleField(field, next);
+                              }
+                              if (next) {
+                                setDateExpandOverrides((prev) => ({ ...prev, [entry.key]: true }));
+                              }
+                            }}
                           />
                           {expanded
                             ? entry.children.map(({ field, partLabel }) => (

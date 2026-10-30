@@ -44,6 +44,8 @@ function rule(over: Partial<BonusRuleRow>): BonusRuleRow {
     scope_agent_user_ids: [],
     scope_branch_codes: [],
     scope_trade_direction_ids: [],
+    scope_restrict_assortment: false,
+    scope_restrict_category: false,
     consignment_mode: "all",
     conditions: [],
     clauses: [],
@@ -55,6 +57,16 @@ describe("order-bonus-context.match-scope", () => {
   it("ruleHasPurchaseScope — product_ids bo‘sh emas", () => {
     expect(ruleHasPurchaseScope(rule({ product_ids: [1] }))).toBe(true);
     expect(ruleHasPurchaseScope(rule({ product_ids: [] }))).toBe(false);
+  });
+
+  it("ruleAggregatesMatchingSkuQty — kategoriya yig‘indi, assortiment yo‘q", async () => {
+    const { ruleAggregatesMatchingSkuQty } = await import(
+      "../src/modules/orders/order-bonus-context.match-scope"
+    );
+    expect(ruleAggregatesMatchingSkuQty(rule({ product_category_ids: [3] }))).toBe(true);
+    expect(
+      ruleAggregatesMatchingSkuQty(rule({ product_ids: [1], product_category_ids: [] }))
+    ).toBe(false);
   });
 
   it("ruleMatchesOrderAgentScope — filial OR agent", () => {

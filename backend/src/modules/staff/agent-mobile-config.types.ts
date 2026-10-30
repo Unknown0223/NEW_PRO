@@ -87,6 +87,18 @@ export type AgentMobileMiscConfig = {
   allow_exchange_request?: boolean;
   /** Payment method entry ids (tenant finance refs) blocked for this agent */
   disallowed_payment_method_codes?: string[];
+  /** Agent: Face ID / PIN before order submit */
+  biometric_confirm_for_order_submit?: boolean;
+  /** Agent: Face ID / PIN before payment acceptance */
+  biometric_confirm_for_payment_accept?: boolean;
+  /** Yuz tasdiqlash: yoqilgan */
+  face_verification_enabled?: boolean;
+  /** Har kuni ilovaga kirishda yuz tasdiqlash */
+  face_verification_daily_login?: boolean;
+  /** Kuniga random buyurtmalarda max tekshiruv (≤5) */
+  face_verification_max_random_orders_per_day?: number;
+  /** SVR: territoriya / mijoz tekshiruvida yuz */
+  face_verification_on_territory_check?: boolean;
 };
 
 export type AgentMobileSyncConfig = {

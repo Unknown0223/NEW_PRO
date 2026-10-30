@@ -7,6 +7,7 @@ export type PolkiPriceTypeEntryRef = {
   kind?: "sale" | "purchase" | string;
   active?: boolean;
   sort_order?: number | null;
+  payment_method_id?: string;
 };
 
 export function polkiPriceTypeKey(e: PolkiPriceTypeEntryRef): string {

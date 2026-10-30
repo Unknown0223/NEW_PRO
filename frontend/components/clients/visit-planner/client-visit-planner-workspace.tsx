@@ -31,18 +31,19 @@ import { clientVisitWeekdays } from "@/lib/client-map-filters";
 import type { ClientRow } from "@/lib/client-types";
 import { getUserFacingError } from "@/lib/error-utils";
 import { STALE } from "@/lib/query-stale";
+import { usePermissions } from "@/lib/use-permissions";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useRef, useState, startTransition } from "react";
 
 type WeekdayDef = { value: number; short: string; name: string };
 const WEEKDAYS: WeekdayDef[] = [
-  { value: 1, short: "Du", name: "Dushanba" },
-  { value: 2, short: "Se", name: "Seshanba" },
-  { value: 3, short: "Ch", name: "Chorshanba" },
-  { value: 4, short: "Pa", name: "Payshanba" },
-  { value: 5, short: "Ju", name: "Juma" },
-  { value: 6, short: "Sh", name: "Shanba" },
-  { value: 7, short: "Ya", name: "Yakshanba" }
+  { value: 1, short: "Пн", name: "Понедельник" },
+  { value: 2, short: "Вт", name: "Вторник" },
+  { value: 3, short: "Ср", name: "Среда" },
+  { value: 4, short: "Чт", name: "Четверг" },
+  { value: 5, short: "Пт", name: "Пятница" },
+  { value: 6, short: "Сб", name: "Суббота" },
+  { value: 7, short: "Вс", name: "Воскресенье" }
 ];
 const weekdayName = (v: number) => WEEKDAYS.find((d) => d.value === v)?.name ?? String(v);
 
@@ -111,7 +112,7 @@ function clientExpeditorName(c: ClientRow): string {
 }
 
 const fmtMoney = (n: number) =>
-  n ? new Intl.NumberFormat("uz-UZ").format(Math.round(n)) + " so‘m" : "Yo‘q";
+  n ? new Intl.NumberFormat("uz-UZ").format(Math.round(n)) + " сум" : "Нет";
 
 type PendingState = {
   agentId: string | null;
@@ -121,6 +122,14 @@ type PendingState = {
   cashDeskId: string | null;
 };
 type AssignKind = "agent" | "days" | "expeditor" | "warehouse" | "cashDesk";
+
+const ASSIGN_PERMISSION: Record<AssignKind, string> = {
+  agent: "clients.vizity_agent.update",
+  days: "clients.vizity_dni.update",
+  expeditor: "clients.vizity_ekspeditor.update",
+  warehouse: "clients.vizity_sklad.update",
+  cashDesk: "clients.vizity_kassa.update"
+};
 
 function zoneBoundaryForClient(c: ClientRow, boundaries: GeoBoundary[]): GeoBoundary | null {
   const lat = c.latitude != null ? parseFloat(c.latitude) : NaN;
@@ -168,6 +177,15 @@ export function ClientVisitPlannerWorkspace() {
   const authHydrated = useAuthStoreHydrated();
   const qc = useQueryClient();
   const bulkPatchMut = useClientBulkPatch(tenantSlug);
+  const perms = usePermissions();
+  const allowed = useMemo(
+    () =>
+      Object.fromEntries(
+        (Object.keys(ASSIGN_PERMISSION) as AssignKind[]).map((k) => [k, perms.has(ASSIGN_PERMISSION[k])])
+      ) as Record<AssignKind, boolean>,
+    [perms]
+  );
+  const canAssign = Object.values(allowed).some(Boolean);
 
   const rootRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -201,7 +219,9 @@ export function ClientVisitPlannerWorkspace() {
     enabled: Boolean(tenantSlug),
     staleTime: STALE.reference,
     queryFn: async () => {
-      const { data } = await api.get<{ data: StaffRow[] }>(`/api/${tenantSlug}/expeditors`);
+      const { data } = await api.get<{ data: StaffRow[] }>(
+        `/api/${tenantSlug}/expeditors?picker=1&for_new_work=1`
+      );
       return staffFromQuery(data).filter((r) => r.is_active);
     }
   });
@@ -428,8 +448,9 @@ export function ClientVisitPlannerWorkspace() {
 
   const openAssign = useCallback(
     (kind: AssignKind) => {
+      if (!allowed[kind]) return;
       if (selectedIds.size === 0) {
-        setFeedback("Avval klientlarni belgilang.");
+        setFeedback("Сначала отметьте клиентов.");
         return;
       }
       const zoneB = commonZoneBoundaryForClients([...selectedIds], clientById, zoneBoundaries);
@@ -441,7 +462,7 @@ export function ClientVisitPlannerWorkspace() {
       }
       setAssignKind(kind);
     },
-    [selectedIds, clientById, zoneBoundaries, pending.warehouseId, pending.cashDeskId]
+    [allowed, selectedIds, clientById, zoneBoundaries, pending.warehouseId, pending.cashDeskId]
   );
 
   const applyPending = useCallback(async () => {
@@ -453,19 +474,18 @@ export function ClientVisitPlannerWorkspace() {
       !pending.warehouseId &&
       !pending.cashDeskId
     ) {
-      setFeedback("Avval agent, sklad, kassa, tashrif kuni yoki dastavchikdan kamida bittasini tanlang.");
+      setFeedback("Сначала выберите хотя бы одно: агента, склад, кассу, день визита или экспедитора.");
       return;
     }
     const slot1: Record<string, unknown> = { slot: 1 };
     const patch: Record<string, unknown> = {};
-    if (pending.agentId) {
-      const id = parseInt(pending.agentId, 10);
-      patch.agent_id = id;
-      slot1.agent_id = id;
-    }
+    if (pending.agentId) slot1.agent_id = parseInt(pending.agentId, 10);
     if (pending.expeditorId) slot1.expeditor_user_id = parseInt(pending.expeditorId, 10);
     if (pending.weekdays) slot1.visit_weekdays = pending.weekdays;
-    if (Object.keys(slot1).length > 1) patch.agent_assignments = [slot1];
+    if (Object.keys(slot1).length > 1) {
+      patch.agent_assignments = [slot1];
+      patch.agent_assignments_merge = true;
+    }
     if (pending.warehouseId) patch.warehouse_id = parseInt(pending.warehouseId, 10);
     if (pending.cashDeskId) patch.cash_desk_id = parseInt(pending.cashDeskId, 10);
 
@@ -475,14 +495,14 @@ export function ClientVisitPlannerWorkspace() {
     try {
       const res = await bulkPatchMut.mutateAsync({ clientIds: selectedArray, patch });
       const batchNote =
-        selectedArray.length > BULK_PATCH_MAX_CLIENTS ? ` (${BULK_PATCH_MAX_CLIENTS} talik paketlarda)` : "";
+        selectedArray.length > BULK_PATCH_MAX_CLIENTS ? ` (пакетами по ${BULK_PATCH_MAX_CLIENTS})` : "";
       setFeedback(
-        `Yangilandi: ${res.updated}${batchNote}${res.failed.length ? `, xato: ${res.failed.length}` : ""}.`
+        `Обновлено: ${res.updated}${batchNote}${res.failed.length ? `, ошибок: ${res.failed.length}` : ""}.`
       );
       resetPending();
       await qc.invalidateQueries({ queryKey: ["clients", tenantSlug, "visit-planner"] });
     } catch (e) {
-      setFeedback(getUserFacingError(e, "O‘zgartirishlarni saqlab bo‘lmadi."));
+      setFeedback(getUserFacingError(e, "Не удалось сохранить изменения."));
     }
   }, [selectedArray, pending, bulkPatchMut, qc, tenantSlug, resetPending, clientById, zoneBoundaries]);
 
@@ -564,13 +584,13 @@ export function ClientVisitPlannerWorkspace() {
     }
     if (ids.length) {
       setSelectedIds((prev) => new Set([...prev, ...ids]));
-      setFeedback(`${ids.length} ta klient lasso orqali belgilandi.`);
+      setFeedback(`Отмечено лассо: ${ids.length} клиентов.`);
     } else {
       const visible = visibleClientsRef.current.length;
       setFeedback(
         visible === 0
-          ? "Xaritada ko‘rinadigan klient yo‘q — avval hududni tanlang yoki filtrlarni tekshiring."
-          : "Chizilgan hudud ichida klient topilmadi — kattaroq maydon chizing."
+          ? "На карте нет видимых клиентов — сначала выберите территорию или проверьте фильтры."
+          : "Внутри нарисованной области клиенты не найдены — нарисуйте область побольше."
       );
     }
     stopLasso();
@@ -654,10 +674,10 @@ export function ClientVisitPlannerWorkspace() {
   const [filtersOpen, setFiltersOpen] = useState(false);
 
   if (!authHydrated) {
-    return <p className="p-6 text-sm text-muted-foreground">Sessiya yuklanmoqda…</p>;
+    return <p className="p-6 text-sm text-muted-foreground">Загрузка сессии…</p>;
   }
   if (!tenantSlug) {
-    return <p className="p-6 text-sm text-destructive">Tenant topilmadi.</p>;
+    return <p className="p-6 text-sm text-destructive">Организация не найдена.</p>;
   }
 
   const infoClient = infoId != null ? clientById.get(infoId) : null;
@@ -729,36 +749,36 @@ export function ClientVisitPlannerWorkspace() {
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Klient, manzil, telefon…"
+              placeholder="Клиент, адрес, телефон…"
             />
           </div>
 
           <div className="vp-top-stats">
             <div className="vp-stat vp-stat-compact">
               <b>{stats.total}</b>
-              <span>jami</span>
+              <span>всего</span>
             </div>
             <div className="vp-stat vp-stat-compact">
               <b>{stats.selected}</b>
-              <span>belgilangan</span>
+              <span>отмечено</span>
             </div>
             <div className="vp-stat vp-stat-compact">
               <b>{stats.visible}</b>
-              <span>ko‘rinmoqda</span>
+              <span>видно</span>
             </div>
             <div className="vp-stat vp-stat-compact">
               <b>{stats.debt}</b>
-              <span>qarzdor</span>
+              <span>должники</span>
             </div>
           </div>
         </div>
 
         <div className="vp-actions">
           <button className="vp-btn vp-mobile" onClick={() => setFiltersOpen((v) => !v)}>
-            Filter
+            Фильтр
           </button>
           <button className="vp-btn" onClick={selectVisible}>
-            Ko‘ringanlarni belgilash
+            Отметить видимых
           </button>
           <button
             className={`vp-btn vp-primary${clickSelectMode ? " vp-active" : ""}`}
@@ -766,15 +786,15 @@ export function ClientVisitPlannerWorkspace() {
               setClickSelectMode((v) => !v);
               setFeedback(
                 !clickSelectMode
-                  ? "Marker bosilganda klient belgilanadi."
-                  : "Marker bosilganda ma’lumot oynasi chiqadi."
+                  ? "При нажатии на маркер клиент будет отмечен."
+                  : "При нажатии на маркер откроется карточка с информацией."
               );
             }}
           >
-            Kursor: {clickSelectMode ? "ON" : "OFF"}
+            Курсор: {clickSelectMode ? "ВКЛ" : "ВЫКЛ"}
           </button>
           <button className="vp-btn vp-danger" onClick={clearSelection}>
-            Tozalash
+            Очистить
           </button>
         </div>
       </div>
@@ -787,8 +807,8 @@ export function ClientVisitPlannerWorkspace() {
               options={agentOptions}
               selected={agentFilter}
               onChange={setAgentFilter}
-              placeholder="Barcha agentlar"
-              searchPlaceholder="Agent qidirish…"
+              placeholder="Все агенты"
+              searchPlaceholder="Поиск агента…"
             />
           </div>
           <div className="vp-fb-field">
@@ -796,8 +816,8 @@ export function ClientVisitPlannerWorkspace() {
               options={expeditorOptions}
               selected={expeditorFilter}
               onChange={setExpeditorFilter}
-              placeholder="Barcha dastavchiklar"
-              searchPlaceholder="Dastavchik qidirish…"
+              placeholder="Все экспедиторы"
+              searchPlaceholder="Поиск экспедитора…"
             />
           </div>
           <div className="vp-fb-field">
@@ -805,8 +825,8 @@ export function ClientVisitPlannerWorkspace() {
               options={branchOptions}
               selected={branchFilter ? [branchFilter] : []}
               onChange={(v) => startTransition(() => setBranchFilter(v[0] ?? ""))}
-              placeholder="Filial tanlang *"
-              searchPlaceholder="Filial qidirish…"
+              placeholder="Выберите филиал *"
+              searchPlaceholder="Поиск филиала…"
               single
             />
           </div>
@@ -815,8 +835,8 @@ export function ClientVisitPlannerWorkspace() {
               options={regionOptions}
               selected={regionFilter}
               onChange={(v) => startTransition(() => setRegionFilter(v))}
-              placeholder="Hudud tanlang *"
-              searchPlaceholder="Viloyat qidirish…"
+              placeholder="Выберите территорию *"
+              searchPlaceholder="Поиск области…"
             />
           </div>
           <div className="vp-fb-field">
@@ -825,9 +845,9 @@ export function ClientVisitPlannerWorkspace() {
               selected={cityFilter}
               onChange={(v) => startTransition(() => setCityFilter(v))}
               placeholder={
-                filterReady ? "Город / shahar" : "Avval filial yoki hudud"
+                filterReady ? "Город" : "Сначала филиал или территория"
               }
-              searchPlaceholder="Shahar qidirish…"
+              searchPlaceholder="Поиск города…"
               disabled={!filterReady || cityOptions.length === 0}
             />
           </div>
@@ -851,10 +871,10 @@ export function ClientVisitPlannerWorkspace() {
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)}
           >
-            <option value="all">Barchasi</option>
-            <option value="active">Aktiv</option>
-            <option value="inactive">Nofaol</option>
-            <option value="debt">Qarzdor</option>
+            <option value="all">Все</option>
+            <option value="active">Активные</option>
+            <option value="inactive">Неактивные</option>
+            <option value="debt">Должники</option>
           </select>
         </div>
       </div>
@@ -862,22 +882,22 @@ export function ClientVisitPlannerWorkspace() {
       {!filterReady ? (
         <div className="vp-hint vp-hint-warn">
           {catalogLoading || adminLoading
-            ? "Hudud ma’lumotlari yuklanmoqda…"
-            : "Avval hudud (viloyat) yoki filialni tanlang — davlat chegaralari va klientlar shundan keyin ko‘rinadi."}
+            ? "Загрузка данных территорий…"
+            : "Сначала выберите территорию (область) или филиал — после этого появятся границы и клиенты."}
         </div>
       ) : isFilterPending ? (
-        <div className="vp-hint">Filtr qo‘llanmoqda…</div>
+        <div className="vp-hint">Применение фильтра…</div>
       ) : null}
 
       {/* Map tools */}
       <div className="vp-tools">
-        <button type="button" className="vp-tool" title="Yaqinlashtirish" onClick={() => controlsRef.current?.zoomIn()}>
+        <button type="button" className="vp-tool" title="Приблизить" onClick={() => controlsRef.current?.zoomIn()}>
           +
         </button>
-        <button type="button" className="vp-tool" title="Uzoqlashtirish" onClick={() => controlsRef.current?.zoomOut()}>
+        <button type="button" className="vp-tool" title="Отдалить" onClick={() => controlsRef.current?.zoomOut()}>
           −
         </button>
-        <button type="button" className="vp-tool" title="Barchasini ko‘rsatish" onClick={() => controlsRef.current?.fitAll()}>
+        <button type="button" className="vp-tool" title="Показать всё" onClick={() => controlsRef.current?.fitAll()}>
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
             <path
               d="M8 3H5a2 2 0 0 0-2 2v3M16 3h3a2 2 0 0 1 2 2v3M8 21H5a2 2 0 0 1-2-2v-3M16 21h3a2 2 0 0 0 2-2v-3"
@@ -889,7 +909,7 @@ export function ClientVisitPlannerWorkspace() {
         </button>
         <button
           className={`vp-tool${lassoActive ? " vp-active" : ""}`}
-          title="Probel bosib chizing"
+          title="Удерживайте пробел и рисуйте"
           onClick={() => (lassoActive ? stopLasso() : startLasso())}
         >
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
@@ -900,7 +920,7 @@ export function ClientVisitPlannerWorkspace() {
       </div>
 
       {lassoActive ? (
-        <div className="vp-hint">Kursor bilan klientlar atrofini chizing — qo‘yib yuborsangiz belgilanadi.</div>
+        <div className="vp-hint">Обведите курсором клиентов — после отпускания кнопки они будут отмечены.</div>
       ) : null}
 
       {/* Bottom sheet */}
@@ -910,52 +930,65 @@ export function ClientVisitPlannerWorkspace() {
             <div className="vp-summary-icon">{selectedIds.size}</div>
             <div>
               <b>{selectedIds.size}</b>
-              <span>ta klient belgilandi</span>
+              <span>клиентов отмечено</span>
             </div>
           </div>
 
           <div className="vp-assign-grid">
-            <button className="vp-assign" onClick={() => openAssign("agent")}>
-              <small>Agent bog‘lash</small>
-              <b>{pending.agentId ? agentLabel(parseInt(pending.agentId, 10)) : "Tanlanmagan"}</b>
-            </button>
-            <button className="vp-assign" onClick={() => openAssign("days")}>
-              <small>Tashrif kunlari</small>
-              <b>{pending.weekdays?.length ? pending.weekdays.map(weekdayName).join(", ") : "Tanlanmagan"}</b>
-            </button>
-            <button className="vp-assign" onClick={() => openAssign("expeditor")}>
-              <small>Dastavchik</small>
-              <b>
-                {pending.expeditorId
-                  ? (expeditorOptions.find((o) => o.value === pending.expeditorId)?.label ?? "—")
-                  : "Tanlanmagan"}
-              </b>
-            </button>
-            <button className="vp-assign" onClick={() => openAssign("warehouse")}>
-              <small>Sklad</small>
-              <b>
-                {pending.warehouseId
-                  ? (warehouseOptions.find((o) => o.value === pending.warehouseId)?.label ?? "—")
-                  : "Tanlanmagan"}
-              </b>
-            </button>
-            <button className="vp-assign" onClick={() => openAssign("cashDesk")}>
-              <small>Kassa</small>
-              <b>
-                {pending.cashDeskId
-                  ? (cashDeskOptions.find((o) => o.value === pending.cashDeskId)?.label ?? "—")
-                  : "Tanlanmagan"}
-              </b>
-            </button>
+            {allowed.agent ? (
+              <button className="vp-assign" onClick={() => openAssign("agent")}>
+                <small>Привязать агента</small>
+                <b>{pending.agentId ? agentLabel(parseInt(pending.agentId, 10)) : "Не выбрано"}</b>
+              </button>
+            ) : null}
+            {allowed.days ? (
+              <button className="vp-assign" onClick={() => openAssign("days")}>
+                <small>Дни визитов</small>
+                <b>{pending.weekdays?.length ? pending.weekdays.map(weekdayName).join(", ") : "Не выбрано"}</b>
+              </button>
+            ) : null}
+            {allowed.expeditor ? (
+              <button className="vp-assign" onClick={() => openAssign("expeditor")}>
+                <small>Экспедитор</small>
+                <b>
+                  {pending.expeditorId
+                    ? (expeditorOptions.find((o) => o.value === pending.expeditorId)?.label ?? "—")
+                    : "Не выбрано"}
+                </b>
+              </button>
+            ) : null}
+            {allowed.warehouse ? (
+              <button className="vp-assign" onClick={() => openAssign("warehouse")}>
+                <small>Склад</small>
+                <b>
+                  {pending.warehouseId
+                    ? (warehouseOptions.find((o) => o.value === pending.warehouseId)?.label ?? "—")
+                    : "Не выбрано"}
+                </b>
+              </button>
+            ) : null}
+            {allowed.cashDesk ? (
+              <button className="vp-assign" onClick={() => openAssign("cashDesk")}>
+                <small>Касса</small>
+                <b>
+                  {pending.cashDeskId
+                    ? (cashDeskOptions.find((o) => o.value === pending.cashDeskId)?.label ?? "—")
+                    : "Не выбрано"}
+                </b>
+              </button>
+            ) : null}
+            {!canAssign ? <small>Нет доступа к назначению — только просмотр.</small> : null}
           </div>
 
           <div className="vp-sheet-actions">
             <button className="vp-btn" onClick={resetPending}>
-              Bekor qilish
+              Отмена
             </button>
-            <button className="vp-btn vp-green" onClick={() => void applyPending()} disabled={bulkPatchMut.isPending}>
-              {bulkPatchMut.isPending ? "Saqlanmoqda…" : "Tanlanganlarga qo‘llash"}
-            </button>
+            {canAssign ? (
+              <button className="vp-btn vp-green" onClick={() => void applyPending()} disabled={bulkPatchMut.isPending}>
+                {bulkPatchMut.isPending ? "Сохранение…" : "Применить к отмеченным"}
+              </button>
+            ) : null}
           </div>
         </div>
       </section>
@@ -972,41 +1005,41 @@ export function ClientVisitPlannerWorkspace() {
           </div>
           <div className="vp-info-body">
             <div className="vp-info-row">
-              <span>Telefon</span>
+              <span>Телефон</span>
               <b>{infoClient.phone || "—"}</b>
             </div>
             <div className="vp-info-row">
-              <span>Agent</span>
+              <span>Агент</span>
               <b>{agentLabel(infoClient.agent_id)}</b>
             </div>
             <div className="vp-info-row">
-              <span>Tashrif kuni</span>
+              <span>День визита</span>
               <b>{clientVisitWeekdays(infoClient).map(weekdayName).join(", ") || "—"}</b>
             </div>
             <div className="vp-info-row">
-              <span>Dastavchik</span>
+              <span>Экспедитор</span>
               <b>{clientExpeditorName(infoClient)}</b>
             </div>
             <div className="vp-info-row">
-              <span>Sklad</span>
+              <span>Склад</span>
               <b>{infoClient.warehouse_name || "—"}</b>
             </div>
             <div className="vp-info-row">
-              <span>Kassa</span>
+              <span>Касса</span>
               <b>{infoClient.cash_desk_name || "—"}</b>
             </div>
             <div className="vp-info-row">
-              <span>Zona</span>
+              <span>Зона</span>
               <b>{infoClient.zone || "—"}</b>
             </div>
             <div className="vp-info-row">
-              <span>Holat</span>
+              <span>Статус</span>
               <b style={{ color: clientColor(infoClient) }}>
-                {isDebtor(infoClient) ? "Qarzdor" : infoClient.is_active ? "Aktiv" : "Nofaol"}
+                {isDebtor(infoClient) ? "Должник" : infoClient.is_active ? "Активен" : "Неактивен"}
               </b>
             </div>
             <div className="vp-info-row">
-              <span>Balans</span>
+              <span>Баланс</span>
               <b>{fmtMoney(clientBalance(infoClient))}</b>
             </div>
             <div className="vp-info-actions">
@@ -1014,7 +1047,7 @@ export function ClientVisitPlannerWorkspace() {
                 className={`vp-btn ${selectedIds.has(infoClient.id) ? "vp-danger" : "vp-primary"}`}
                 onClick={() => toggleSelect(infoClient.id)}
               >
-                {selectedIds.has(infoClient.id) ? "Belgilashdan olish" : "Belgilash"}
+                {selectedIds.has(infoClient.id) ? "Снять отметку" : "Отметить"}
               </button>
               <button
                 className="vp-btn"
@@ -1022,7 +1055,7 @@ export function ClientVisitPlannerWorkspace() {
                   controlsRef.current?.panTo(parseFloat(infoClient.latitude!), parseFloat(infoClient.longitude!), 15)
                 }
               >
-                Markazga olish
+                Центрировать
               </button>
             </div>
           </div>
@@ -1031,13 +1064,13 @@ export function ClientVisitPlannerWorkspace() {
 
       {/* Toast */}
       {clientsQ.isLoading ? (
-        <div className="vp-hint">Klientlar yuklanmoqda…</div>
+        <div className="vp-hint">Загрузка клиентов…</div>
       ) : clientsQ.isError ? (
-        <div className="vp-hint vp-hint-warn">Klientlarni yuklab bo‘lmadi.</div>
+        <div className="vp-hint vp-hint-warn">Не удалось загрузить клиентов.</div>
       ) : clientsWithGps.length === 0 ? (
-        <div className="vp-hint vp-hint-warn">GPS koordinatali klient topilmadi.</div>
+        <div className="vp-hint vp-hint-warn">Клиенты с GPS-координатами не найдены.</div>
       ) : visibleClients.length === 0 ? (
-        <div className="vp-hint vp-hint-warn">Filtrga mos klient yo‘q — filtrlarni kengaytiring.</div>
+        <div className="vp-hint vp-hint-warn">Нет клиентов, подходящих под фильтр, — расширьте фильтры.</div>
       ) : null}
 
       {feedback ? <div className="vp-toast">{feedback}</div> : null}
@@ -1097,18 +1130,18 @@ function AssignDialog({
   const open = kind != null;
   const title =
     kind === "agent"
-      ? "Agentni tanlash"
+      ? "Выбор агента"
       : kind === "expeditor"
-        ? "Dastavchikni tanlash"
+        ? "Выбор экспедитора"
         : kind === "warehouse"
-          ? "Skladni tanlash"
+          ? "Выбор склада"
           : kind === "cashDesk"
-            ? "Kassani tanlash"
-            : "Tashrif kunlarini tanlash";
+            ? "Выбор кассы"
+            : "Выбор дней визитов";
   const desc =
     kind === "days"
-      ? "Bir nechta hafta kunini tanlash mumkin."
-      : `Belgilangan klientlarga (${selectedCount}) bog‘lanadi.`;
+      ? "Можно выбрать несколько дней недели."
+      : `Будет привязано к отмеченным клиентам (${selectedCount}).`;
 
   const options =
     kind === "agent"
@@ -1168,12 +1201,12 @@ function AssignDialog({
               onToggle={(v) => setSingle((prev) => (prev === v ? null : v))}
               searchPlaceholder={
                 kind === "agent"
-                  ? "Agent qidirish…"
+                  ? "Поиск агента…"
                   : kind === "expeditor"
-                    ? "Dastavchik qidirish…"
+                    ? "Поиск экспедитора…"
                     : kind === "warehouse"
-                      ? "Sklad qidirish…"
-                      : "Kassa qidirish…"
+                      ? "Поиск склада…"
+                      : "Поиск кассы…"
               }
               maxHeightClass="max-h-[52vh]"
             />
@@ -1183,18 +1216,18 @@ function AssignDialog({
         <DialogFooter className="gap-2 sm:gap-2">
           {kind !== "days" ? (
             <Button type="button" variant="outline" onClick={() => setSingle(null)}>
-              Tanlovni tozalash
+              Сбросить выбор
             </Button>
           ) : (
             <Button type="button" variant="outline" onClick={() => setDays([])}>
-              Tozalash
+              Очистить
             </Button>
           )}
           <Button type="button" variant="outline" onClick={onClose}>
-            Bekor qilish
+            Отмена
           </Button>
           <Button type="button" onClick={handleApply} className="bg-[#2563eb] hover:bg-[#1d4ed8]">
-            Qo‘shish
+            Добавить
           </Button>
         </DialogFooter>
       </DialogContent>

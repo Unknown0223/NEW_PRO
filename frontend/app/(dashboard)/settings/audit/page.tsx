@@ -7,6 +7,8 @@ import { useAuthStore, useAuthStoreHydrated, useEffectiveRole } from "@/lib/auth
 import { api } from "@/lib/api";
 import { ENTITY_TYPE_LABEL, humanizeAction } from "@/lib/history-labels";
 import { STALE } from "@/lib/query-stale";
+import { usePermissions } from "@/lib/use-permissions";
+import { cn } from "@/lib/utils";
 import { useUserTablePrefs } from "@/hooks/use-user-table-prefs";
 import { useQuery } from "@tanstack/react-query";
 import { ListOrdered } from "lucide-react";
@@ -29,15 +31,16 @@ const AUDIT_ENTITY_TYPE_OPTIONS = Object.entries(ENTITY_TYPE_LABEL).sort((a, b) 
 );
 
 const AUDIT_COLUMN_META = [
-  { id: "created_at", label: "Vaqt" },
-  { id: "actor", label: "Kim" },
-  { id: "object", label: "Obyekt" },
-  { id: "action", label: "Harakat" },
-  { id: "payload", label: "Payload" }
+  { id: "created_at", label: "Время" },
+  { id: "actor", label: "Кто" },
+  { id: "object", label: "Объект" },
+  { id: "action", label: "Действие" },
+  { id: "payload", label: "Данные" }
 ] as const;
 
 export default function AuditJournalPage() {
   const tenantSlug = useAuthStore((s) => s.tenantSlug);
+  const canExport = usePermissions().has("audit.log.export");
   const role = useEffectiveRole();
   const hydrated = useAuthStoreHydrated();
   const [page, setPage] = useState(1);
@@ -86,9 +89,9 @@ export default function AuditJournalPage() {
   if (role !== "admin") {
     return (
       <div className="space-y-2">
-        <p className="text-sm text-muted-foreground">Bu sahifa faqat administrator uchun.</p>
+        <p className="text-sm text-muted-foreground">Эта страница только для администратора.</p>
         <Link href="/settings/company" className="text-sm text-primary underline">
-          Sozlamalar
+          Настройки
         </Link>
       </div>
     );
@@ -100,17 +103,17 @@ export default function AuditJournalPage() {
     <div className="flex w-full min-w-0 max-w-none flex-col gap-6">
       <div>
         <Link href="/settings/company" className="text-sm text-primary underline">
-          ← Kompaniya
+          ← Компания
         </Link>
-        <h1 className="mt-2 text-xl font-semibold tracking-tight">Audit jurnal</h1>
+        <h1 className="mt-2 text-xl font-semibold tracking-tight">Журнал аудита</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Kim, qachon, qaysi obyekt bo‘yicha qanday harakat — yagona jurnal.
+          Кто, когда, по какому объекту и какое действие выполнил — единый журнал.
         </p>
       </div>
 
       <div className="flex flex-wrap items-end gap-3">
         <label className="flex items-center gap-2 text-xs text-muted-foreground">
-          <span>Satr/sahifa</span>
+          <span>Строк на стр.</span>
           <select
             className="h-8 rounded-md border border-input bg-background px-2 text-xs"
             value={tablePrefs.pageSize}
@@ -136,7 +139,7 @@ export default function AuditJournalPage() {
               setPage(1);
             }}
           >
-            <option value="">Barchasi</option>
+            <option value="">Все</option>
             {AUDIT_ENTITY_TYPE_OPTIONS.map(([value, label]) => (
               <option key={value} value={value}>
                 {label} ({value})
@@ -166,7 +169,7 @@ export default function AuditJournalPage() {
             setPage(1);
           }}
         >
-          Tozalash
+          Очистить
         </Button>
         <Button
           type="button"
@@ -176,13 +179,13 @@ export default function AuditJournalPage() {
           onClick={() => setColumnDialogOpen(true)}
         >
           <ListOrdered className="size-3.5" />
-          Ustunlar
+          Столбцы
         </Button>
         <Button
           type="button"
           variant="outline"
           size="sm"
-          className="h-8"
+          className={cn("h-8", !canExport && "hidden")}
           disabled={!tenantSlug || exportBusy}
           onClick={() => {
             void (async () => {
@@ -216,8 +219,8 @@ export default function AuditJournalPage() {
       <TableColumnSettingsDialog
         open={columnDialogOpen}
         onOpenChange={setColumnDialogOpen}
-        title="Ustunlarni boshqarish"
-        description="Ko‘rinadigan ustunlar va tartib. Sizning akkauntingiz uchun saqlanadi."
+        title="Настройка столбцов"
+        description="Видимые столбцы и их порядок. Сохраняется для вашей учётной записи."
         columns={[...AUDIT_COLUMN_META]}
         columnOrder={tablePrefs.columnOrder}
         hiddenColumnIds={tablePrefs.hiddenColumnIds}
@@ -227,7 +230,7 @@ export default function AuditJournalPage() {
       />
 
       {q.isError && (
-        <p className="text-sm text-destructive">Yuklashda xato — tarmoq yoki ruxsatni tekshiring.</p>
+        <p className="text-sm text-destructive">Ошибка загрузки — проверьте сеть или права доступа.</p>
       )}
 
       <div className="overflow-x-auto rounded-lg border border-border">
@@ -294,7 +297,7 @@ export default function AuditJournalPage() {
 
       <div className="flex items-center justify-between gap-2">
         <p className="text-xs text-muted-foreground">
-          Jami: {q.data?.total ?? "—"} · Sahifa {page} / {totalPages}
+          Всего: {q.data?.total ?? "—"} · Стр. {page} / {totalPages}
         </p>
         <div className="flex gap-2">
           <Button
@@ -304,7 +307,7 @@ export default function AuditJournalPage() {
             disabled={page <= 1}
             onClick={() => setPage((p) => Math.max(1, p - 1))}
           >
-            Oldingi
+            Назад
           </Button>
           <Button
             type="button"
@@ -313,7 +316,7 @@ export default function AuditJournalPage() {
             disabled={page >= totalPages}
             onClick={() => setPage((p) => p + 1)}
           >
-            Keyingi
+            Далее
           </Button>
         </div>
       </div>

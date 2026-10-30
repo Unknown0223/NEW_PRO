@@ -1,7 +1,14 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "../../config/database";
 import { env } from "../../config/env";
-import { parseEntitledProductIds } from "./linkage.shared";
+import {
+  collectAllTrueCategoryIds,
+  parseProductEntitlementRules
+} from "./linkage.shared";
+import { collectCashDeskIdsForUsers } from "./linkage.cash-desk-ids";
+import { collectWarehouseIdsForUsers } from "./linkage.warehouse-ids";
+import { resolveIdsPreferBindings } from "./workplace-bindings";
+
 export async function resolveByAgent(
   tenantId: number,
   selectedAgentId: number
@@ -14,8 +21,17 @@ export async function resolveByAgent(
   product_ids: Set<number>;
   product_restricted: boolean;
 }> {
-  const [agentRow, clientsByPrimary, clientsBySlots, whLinks, whByOrders, cashLinks, expByClientSlots, expByOrders] =
-    await Promise.all([
+  const [
+    agentRow,
+    clientsByPrimary,
+    clientsBySlots,
+    extraWh,
+    whByOrders,
+    cashDeskIds,
+    slotEntRow,
+    expByClientSlots,
+    expByOrders
+  ] = await Promise.all([
       prisma.user.findFirst({
         where: { tenant_id: tenantId, id: selectedAgentId, role: "agent", is_active: true },
         select: { id: true, agent_entitlements: true }
@@ -33,20 +49,21 @@ export async function resolveByAgent(
         distinct: ["client_id"],
         select: { client_id: true }
       }),
-      prisma.warehouseUserLink.findMany({
-        where: { user_id: selectedAgentId, warehouse: { tenant_id: tenantId } },
-        distinct: ["warehouse_id"],
-        select: { warehouse_id: true }
-      }),
+      collectWarehouseIdsForUsers(tenantId, [selectedAgentId]),
       prisma.order.findMany({
         where: { tenant_id: tenantId, agent_id: selectedAgentId, warehouse_id: { not: null } },
         distinct: ["warehouse_id"],
         select: { warehouse_id: true }
       }),
-      prisma.cashDeskUserLink.findMany({
-        where: { user_id: selectedAgentId, cash_desk: { tenant_id: tenantId, is_active: true } },
-        distinct: ["cash_desk_id"],
-        select: { cash_desk_id: true }
+      collectCashDeskIdsForUsers(tenantId, [selectedAgentId]),
+      prisma.slotUserLink.findFirst({
+        where: {
+          tenant_id: tenantId,
+          user_id: selectedAgentId,
+          ended_at: null,
+          slot: { tenant_id: tenantId, deleted_at: null }
+        },
+        select: { slot: { select: { entitlements: true } } }
       }),
       prisma.clientAgentAssignment.findMany({
         where: { tenant_id: tenantId, agent_id: selectedAgentId, expeditor_user_id: { not: null } },
@@ -62,11 +79,14 @@ export async function resolveByAgent(
 
   const client_ids = new Set<number>(clientsByPrimary.map((r) => r.id));
   for (const r of clientsBySlots) client_ids.add(r.client_id);
-  const warehouse_ids = new Set<number>(whLinks.map((r) => r.warehouse_id));
-  for (const r of whByOrders) {
-    if (r.warehouse_id != null) warehouse_ids.add(r.warehouse_id);
-  }
-  const cash_desk_ids = new Set<number>(cashLinks.map((r) => r.cash_desk_id));
+  // Joy bog‘lamasi bo‘lsa — tarixdagi omborlar allow-listni kengaytirmasin.
+  const warehouse_ids = new Set<number>(
+    resolveIdsPreferBindings(
+      extraWh,
+      whByOrders.map((r) => r.warehouse_id).filter((id): id is number => id != null)
+    )
+  );
+  const cash_desk_ids = new Set<number>(cashDeskIds);
   const expeditor_ids = new Set<number>();
   for (const r of expByClientSlots) {
     if (r.expeditor_user_id != null) expeditor_ids.add(r.expeditor_user_id);
@@ -87,35 +107,37 @@ export async function resolveByAgent(
     };
   }
 
-  const { ids: entitledProductIds, restricted: product_restricted } = parseEntitledProductIds(
-    agentRow.agent_entitlements
-  );
-  let product_ids = entitledProductIds;
-  if (product_restricted && product_ids.length === 0) {
-    const categoryIds = Array.isArray((agentRow.agent_entitlements as Record<string, unknown>)?.product_rules)
-      ? ((agentRow.agent_entitlements as Record<string, unknown>).product_rules as unknown[])
-          .map((r) =>
-            r != null && typeof r === "object" && !Array.isArray(r)
-              ? Number((r as Record<string, unknown>).category_id)
-              : NaN
-          )
-          .filter((n) => Number.isInteger(n) && n > 0)
-      : [];
-    if (categoryIds.length > 0) {
+  // Work-slot entitlements — manba; user mirror eski bo‘lsa ham product_rules qo‘llansin.
+  const entitlementsSource = slotEntRow?.slot.entitlements ?? agentRow.agent_entitlements;
+  const parsedRules = parseProductEntitlementRules(entitlementsSource);
+  const productIdSet = new Set<number>(parsedRules.productIds);
+  if (parsedRules.allCategoryIds.length > 0) {
+    const categoryRows = await prisma.productCategory.findMany({
+      where: { tenant_id: tenantId },
+      select: { id: true, parent_id: true }
+    });
+    const expandIds = collectAllTrueCategoryIds(
+      parsedRules.allCategoryIds,
+      parsedRules.partialCategoryIds,
+      categoryRows
+    );
+    if (expandIds.length > 0) {
       const rows = await prisma.product.findMany({
-        where: { tenant_id: tenantId, category_id: { in: categoryIds } },
+        where: { tenant_id: tenantId, category_id: { in: expandIds } },
         select: { id: true }
       });
-      product_ids = rows.map((r) => r.id);
+      for (const r of rows) productIdSet.add(r.id);
     }
   }
+  let product_ids = [...productIdSet];
 
   /**
    * Agent katalogi: avvalo `agent_entitlements.product_rules`.
-   * Bo‘sh bo‘lsa — shu agentning savdo zakazlari (`order_type=order`) bo‘yicha sotilgan mahsulotlar.
-   * Shunda create-context `selected_agent_id` bilan butun katalogni yuklamaydi.
+   * Qoidalar bo‘lmasa — shu agentning savdo zakazlari (`order_type=order`) bo‘yicha sotilgan mahsulotlar.
+   * `all: true` + qisman tanlov aralashganda sold-fallback ishlatilmaydi (aks holda
+   * to‘liq belgilangan kategoriyalar yo‘qolardi).
    */
-  if (product_ids.length === 0) {
+  if (product_ids.length === 0 && !parsedRules.restricted) {
     /** Prisma `distinct` + join katta jadvallarda sekin; PG `GROUP BY` + indeks yaxshiroq. */
     const sold = await prisma.$queryRaw<{ product_id: number }[]>(Prisma.sql`
       SELECT oi.product_id AS product_id

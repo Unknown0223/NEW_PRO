@@ -43,10 +43,28 @@ export async function startTransfer(
   )}) AND tenant_id = ${tenantId}`;
 
   const startedAt = new Date();
+  const branchWait = existing.kind === "branch";
+  const nextStatus = branchWait ? "pending_confirm" : "in_transit";
+  if (branchWait) {
+    await prisma.$executeRaw`
+      UPDATE warehouse_transfers
+      SET status = 'pending_confirm', started_at = ${startedAt}
+      WHERE id = ${id} AND tenant_id = ${tenantId} AND status = 'draft'
+    `;
+    await appendTenantAuditEvent({
+      tenantId,
+      actorUserId,
+      entityType: AuditEntityType.stock,
+      entityId: id,
+      action: "transfer_wait_confirm",
+      payload: { line_count: lines.length }
+    });
+    return;
+  }
   await prisma.$transaction(async (tx) => {
     await tx.$executeRaw`
       UPDATE warehouse_transfers
-      SET status = 'in_transit', started_at = ${startedAt}
+      SET status = ${nextStatus}, started_at = ${startedAt}
       WHERE id = ${id} AND tenant_id = ${tenantId} AND status = 'draft'
     `;
 
@@ -105,7 +123,7 @@ export async function receiveTransfer(
   adjustments?: ReceiveAdjustment[] | null
 ): Promise<void> {
   const existing = await assertTransferExists(tenantId, id);
-  if (existing.status !== "in_transit") throw new Error("NOT_IN_TRANSIT");
+  if (existing.status !== "in_transit" && existing.status !== "pending_confirm") throw new Error("NOT_IN_TRANSIT");
 
   const destWarehouseId = Number(existing.destination_warehouse_id);
 
@@ -129,7 +147,28 @@ export async function receiveTransfer(
   }
 
   const receivedAt = new Date();
+  const moveFromSource = existing.status === "pending_confirm";
+  const sourceWarehouseId = Number(existing.source_warehouse_id);
   await prisma.$transaction(async (tx) => {
+    if (moveFromSource) {
+      for (const line of lines) {
+        const delta = new Prisma.Decimal(line.qty);
+        const stock = await tx.$queryRaw<{ id: number; qty: Prisma.Decimal }[]>`
+          SELECT id, qty FROM stock
+          WHERE tenant_id = ${tenantId}
+            AND warehouse_id = ${sourceWarehouseId}
+            AND product_id = ${line.product_id}
+          FOR UPDATE
+        `;
+        const entry = stock[0];
+        if (!entry) throw new Error("STOCK_NOT_FOUND");
+        const afterQty = entry.qty.minus(delta);
+        if (afterQty.lt(0)) throw new Error(`INSUFFICIENT_STOCK:${line.product_id}`);
+        await tx.$executeRaw`
+          UPDATE stock SET qty = ${afterQty}, updated_at = now() WHERE id = ${entry.id}
+        `;
+      }
+    }
     for (const line of lines) {
       const receivedQty = adjMap.has(line.product_id)
         ? new Prisma.Decimal(adjMap.get(line.product_id) ?? 0)
@@ -171,7 +210,7 @@ export async function receiveTransfer(
       SET status = 'received',
           received_at = ${receivedAt},
           received_by_user_id = ${receivedByUserId ?? null}
-      WHERE id = ${id} AND tenant_id = ${tenantId} AND status = 'in_transit'
+      WHERE id = ${id} AND tenant_id = ${tenantId} AND status IN ('in_transit', 'pending_confirm')
     `;
   });
 
@@ -185,6 +224,7 @@ export async function receiveTransfer(
   });
 
   void invalidateStock(tenantId, destWarehouseId);
+  if (moveFromSource) void invalidateStock(tenantId, sourceWarehouseId);
 }
 
 // ---------------------------------------------------------------------------
@@ -199,11 +239,11 @@ export async function cancelTransfer(
   const existing = await assertTransferExists(tenantId, id);
   const currentStatus = existing.status as string;
 
-  if (currentStatus !== "draft" && currentStatus !== "in_transit") {
+  if (currentStatus !== "draft" && currentStatus !== "in_transit" && currentStatus !== "pending_confirm") {
     throw new Error("NOT_CANCELLABLE");
   }
 
-  // If in_transit, restore stock to source warehouse
+  // in_transit: manba ombordan allaqachon yechildi. pending_confirm: balansga tegmagan.
   if (currentStatus === "in_transit") {
     const sourceWarehouseId = Number(existing.source_warehouse_id);
 
@@ -244,16 +284,15 @@ export async function cancelTransfer(
         await tx.$executeRaw`
           UPDATE warehouse_transfers
           SET status = 'cancelled'
-          WHERE id = ${id} AND tenant_id = ${tenantId} AND status = 'in_transit'
+          WHERE id = ${id} AND tenant_id = ${tenantId} AND status IN ('in_transit', 'pending_confirm')
         `;
       });
     }
   } else {
-    // Draft: just update status
     await prisma.$executeRaw`
       UPDATE warehouse_transfers
       SET status = 'cancelled'
-      WHERE id = ${id} AND tenant_id = ${tenantId} AND status = 'draft'
+      WHERE id = ${id} AND tenant_id = ${tenantId} AND status = ${currentStatus}
     `;
   }
 

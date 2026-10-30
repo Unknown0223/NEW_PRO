@@ -402,14 +402,7 @@ class ExpeditorApi {
     }
   }
 
-  ApiException _map(DioException e) {
-    if (e.type == DioExceptionType.connectionError || e.type == DioExceptionType.connectionTimeout) {
-      return const NetworkException();
-    }
-    final code = e.response?.statusCode ?? 0;
-    final msg = e.response?.data?['message']?.toString() ?? e.message ?? 'Xato';
-    return ApiException.fromStatusCode(code, msg);
-  }
+  ApiException _map(DioException e) => mapDioException(e);
 }
 
 final expeditorApiProvider = Provider<ExpeditorApi>((ref) => ExpeditorApi(ref.read(dioProvider)));

@@ -2,11 +2,10 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "../../config/database";
 import { ORDER_STATUSES_OUTSTANDING_RECEIVABLE } from "../orders/order-status";
 import {
+  buildSummaryOverpaymentsByType,
   buildClientWhere,
   buildOrderCreatedLocalDateClause,
-  buildSummaryNetMinusUnpaid,
   loadPaymentNetNormByClient,
-  loadPaymentNetTotalsByTypeGlobally,
   loadTenantPaymentRefs,
   loadUnpaidOrderBalanceRawByPaymentRef,
   parseIsoDateEndUtc,
@@ -16,6 +15,9 @@ import {
   type ClientBalanceListQuery,
   type ClientBalancePaymentTypeSummary
 } from "./client-balances.service";
+import { tashkentDayEndUtc, tashkentDayStartUtc } from "./client-balances.date";
+import { consignmentMatchSql, effectiveDueSql } from "./client-balances.consignment-due";
+import { loadLedgerCardNetByClient } from "./client-balances.ledger";
 
 const LARGE_CLIENT_IDS_CHUNK = 10000;
 const BALANCE_PERF_LOG = process.env.BALANCE_PERF_LOG === "1";
@@ -101,12 +103,25 @@ async function loadConsignmentDebtByClient(
   tenantId: number,
   clientIds: number[],
   orderDateFrom: string | null | undefined,
-  orderDateTo: string | null | undefined
+  orderDateTo: string | null | undefined,
+  dueFrom: string | null | undefined,
+  dueTo: string | null | undefined
 ): Promise<Map<number, ConsignmentDebtAgg>> {
   const map = new Map<number, ConsignmentDebtAgg>();
   if (clientIds.length === 0) return map;
 
   const orderDateClause = buildOrderCreatedLocalDateClause(orderDateFrom, orderDateTo);
+  const dueStart = dueFrom?.trim() ? tashkentDayStartUtc(dueFrom) : null;
+  const dueEnd = dueTo?.trim() ? tashkentDayEndUtc(dueTo) : null;
+  const dueExpr = effectiveDueSql();
+  const dueClause =
+    dueStart && dueEnd
+      ? Prisma.sql`AND ${dueExpr} >= ${dueStart} AND ${dueExpr} <= ${dueEnd}`
+      : dueStart
+        ? Prisma.sql`AND ${dueExpr} >= ${dueStart}`
+        : dueEnd
+          ? Prisma.sql`AND ${dueExpr} <= ${dueEnd}`
+          : Prisma.empty;
 
   const chunkSize = LARGE_CLIENT_IDS_CHUNK;
   for (let i = 0; i < clientIds.length; i += chunkSize) {
@@ -122,20 +137,16 @@ async function loadConsignmentDebtByClient(
       }>
     >`
       WITH cand AS (
-        SELECT o.id, o.client_id, o.total_sum, o.consignment_due_date
+        SELECT o.id, o.client_id, o.total_sum, ${effectiveDueSql()} AS consignment_due_date
         FROM orders o
+        LEFT JOIN users ag ON ag.id = o.agent_id AND ag.tenant_id = o.tenant_id
         WHERE o.tenant_id = ${tenantId}
           AND o.order_type = 'order'
           AND o.status IN (${Prisma.join([...ORDER_STATUSES_OUTSTANDING_RECEIVABLE])})
-          AND (
-            o.is_consignment = true
-            OR EXISTS (
-              SELECT 1 FROM users ag
-              WHERE ag.id = o.agent_id AND ag.tenant_id = o.tenant_id AND ag.consignment = true
-            )
-          )
+          AND ${consignmentMatchSql()}
           AND o.client_id IN (${Prisma.join(chunk)})
           ${orderDateClause}
+          ${dueClause}
       ),
       alloc AS (
         SELECT pa.order_id, SUM(pa.amount)::decimal(15,2) AS allocated
@@ -204,7 +215,7 @@ export async function listConsignmentBalancesReport(
     allow_large_export: q.allow_large_export
   };
 
-  const where = buildClientWhere(tenantId, qConsign, { skipBalanceFilter: true });
+  const where = await buildClientWhere(tenantId, qConsign, { skipBalanceFilter: true });
 
   const allClients = await prisma.client.findMany({
     where,
@@ -216,10 +227,20 @@ export async function listConsignmentBalancesReport(
   const odFrom = q.order_date_from?.trim() || null;
   const odTo = q.order_date_to?.trim() || null;
 
-  const debtMap = await loadConsignmentDebtByClient(tenantId, ids, odFrom, odTo);
+  const debtMap = await loadConsignmentDebtByClient(
+    tenantId,
+    ids,
+    odFrom,
+    odTo,
+    q.consignment_due_from,
+    q.consignment_due_to
+  );
   perf("debt-map-loaded", { debtClients: debtMap.size });
 
   const eligible = ids.filter((id) => debtMap.has(id));
+  const cardNetByClient = await loadLedgerCardNetByClient(tenantId, eligible);
+  let cardNetSum = new Prisma.Decimal(0);
+  for (const id of eligible) cardNetSum = cardNetSum.add(cardNetByClient.get(id) ?? new Prisma.Decimal(0));
 
   eligible.sort((a, b) => {
     const da = debtMap.get(a)?.unpaid ?? new Prisma.Decimal(0);
@@ -240,11 +261,10 @@ export async function listConsignmentBalancesReport(
   const asOfEnd = asOfRaw ? parseIsoDateEndUtc(asOfRaw) : null;
 
   const { labels: sprLabels, entries: pmEntries } = await loadTenantPaymentRefs(tenantId);
-  const [rawUnpaid, netGlobal, pagePayNorm] = await Promise.all([
+  const [rawUnpaid, pagePayNorm] = await Promise.all([
     loadUnpaidOrderBalanceRawByPaymentRef(tenantId, eligible, odFrom, odTo, {
       consignmentOnly: true
     }),
-    loadPaymentNetTotalsByTypeGlobally(tenantId, eligible, asOfEnd, pmEntries),
     loadPaymentNetNormByClient(tenantId, sliceIds, asOfEnd, pmEntries)
   ]);
   perf("payment-sources-loaded", {
@@ -273,15 +293,20 @@ export async function listConsignmentBalancesReport(
         });
   perf("page-clients-loaded", { clients: clients.length });
 
-  const { byClient: unpaidByClientMethod, globalUnpaidNorm } = processUnpaidPayRefRows(
+  const { byClient: unpaidByClientMethod } = processUnpaidPayRefRows(
     rawUnpaid,
     pmEntries,
     sprLabels
   );
-  const paymentByTypeSummary = buildSummaryNetMinusUnpaid(sprLabels, netGlobal, globalUnpaidNorm);
-  const naqdKpi =
-    paymentByTypeSummary.find((x) => /^\s*naqd\s*$/i.test(x.label.trim())) ?? paymentByTypeSummary[0];
-  const cashDebtStr = naqdKpi?.amount ?? totalDebtNeg;
+  // Konsignatsiya — qarz (Общий); tip ustunlari faqat peredoplata uchun (bu yerda 0).
+  const paymentByTypeSummary = buildSummaryOverpaymentsByType(
+    sprLabels,
+    eligible.map((id) => {
+      const unpaid = debtMap.get(id)?.unpaid ?? new Prisma.Decimal(0);
+      return { balance: unpaid.neg() };
+    })
+  );
+  const cashDebtStr = totalDebtNeg;
 
   const orderMap = new Map(clients.map((c) => [c.id, c]));
   const orderedClients = sliceIds.map((id) => orderMap.get(id)!).filter(Boolean);
@@ -304,6 +329,7 @@ export async function listConsignmentBalancesReport(
     }
 
     const unpaid = d.unpaid;
+    const cardNet = cardNetByClient.get(c.id) ?? unpaid.neg();
     return {
       client_id: c.id,
       client_code: c.client_code,
@@ -320,11 +346,12 @@ export async function listConsignmentBalancesReport(
       overdue_days: overdueDays,
       total_debt: d.gross.toString(),
       total_paid: d.allocated.toString(),
-      balance: unpaid.neg().toString(),
+      balance: cardNet.toString(),
       payment_amounts: paymentAmountsNetMinusUnpaid(
         sprLabels,
         pagePayNorm.get(c.id),
-        unpaidByClientMethod.get(c.id)
+        unpaidByClientMethod.get(c.id),
+        cardNet
       )
     };
   });
@@ -335,7 +362,7 @@ export async function listConsignmentBalancesReport(
     page,
     limit,
     summary: {
-      total_debt: totalDebtNeg,
+      total_debt: cardNetSum.toString(),
       cash_debt: cashDebtStr,
       payment_by_type: paymentByTypeSummary
     }

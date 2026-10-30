@@ -27,11 +27,11 @@ const TONE_SOLID = [
 ] as const;
 
 const HELPERS: Record<string, string> = {
-  cash: "cash collection",
-  naqd: "cash collection",
-  transfer: "bank transfer",
-  terminal: "card acquiring",
-  tenge: "foreign cash"
+  cash: "инкассация наличных",
+  naqd: "инкассация наличных",
+  transfer: "банковский перевод",
+  terminal: "эквайринг",
+  tenge: "наличные в валюте"
 };
 
 function helperFor(paymentType: string): string {
@@ -39,7 +39,7 @@ function helperFor(paymentType: string): string {
   for (const [k, v] of Object.entries(HELPERS)) {
     if (key.includes(k)) return v;
   }
-  return "payment channel";
+  return "канал оплаты";
 }
 
 export function FinanceKpiSection({ data }: { data: FinanceDashboardSnapshot }) {
@@ -52,8 +52,8 @@ export function FinanceKpiSection({ data }: { data: FinanceDashboardSnapshot }) 
   return (
     <section className="finance-motion-fade flex h-full flex-col rounded-2xl bg-card p-5 shadow-sm ring-1 ring-slate-200/70">
       <FinanceSectionHeader
-        title="Продажа"
-        subtitle="Агрегация по каналам оплаты"
+        title="Оплаты по способам"
+        subtitle="Сколько денег пришло каждым способом за выбранный период"
       />
       <div className="grid flex-1 auto-rows-fr grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-5">
         {rows.length === 0 ? (
@@ -82,7 +82,7 @@ export function FinanceKpiSection({ data }: { data: FinanceDashboardSnapshot }) 
                   </div>
                   <div className="flex items-center justify-between gap-2">
                     <p className="truncate text-sm font-semibold text-slate-500">{label}</p>
-                    <span className="text-xs font-bold text-slate-400">share</span>
+                    <span className="text-xs font-bold text-slate-400">доля</span>
                   </div>
                   <p className="mt-1 truncate text-[clamp(1.08rem,1.18vw,1.38rem)] font-black tracking-tight text-slate-950">
                     {fmtFinanceMoney(row.amount)}

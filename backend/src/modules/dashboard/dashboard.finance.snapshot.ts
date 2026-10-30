@@ -46,38 +46,41 @@ import {
   financePeriodTruncSql
 } from "./dashboard.finance.period";
 import {
+  expandFinancePaymentFilters,
   financeClientFilterSql,
   financeDateExprByType,
   financeOrderScopeSql
 } from "./dashboard.finance.scope";
+import { loadTerritoryRegionIndex, resolveTerritoryLabel, rollupDebtTerritoryRows } from "./dashboard.territory-rollup";
 
 export async function getFinanceDashboardSnapshot(
   tenantId: number,
   filters: FinanceDashboardFilters
 ): Promise<FinanceDashboardSnapshot> {
-  const snapshotKey = `tenant:${tenantId}:dashboard:finance:${stableJsonStringify(filters)}`;
+  const snapshotKey = `tenant:${tenantId}:dashboard:finance:v2:${stableJsonStringify(filters)}`;
   const cached = await getSnapshotCache<FinanceDashboardSnapshot>(snapshotKey);
   if (cached) return cached;
 
-  const from = new Date(`${filters.from}T00:00:00.000Z`);
-  const to = new Date(`${filters.to}T23:59:59.999Z`);
+  const expanded = await expandFinancePaymentFilters(tenantId, filters);
+  const from = new Date(`${expanded.from}T00:00:00.000Z`);
+  const to = new Date(`${expanded.to}T23:59:59.999Z`);
   const periodGranularity: FinancePeriodGranularity = financePeriodGranularity(from, to);
   const debtPeriodExpr = financePeriodTruncSql(
     periodGranularity,
-    financeDateExprByType(filters.date_type)
+    financeDateExprByType(expanded.date_type)
   );
   const payPeriodExpr = financePeriodTruncSql(
     periodGranularity,
     Prisma.sql`COALESCE(p.paid_at, p.created_at)`
   );
-  const orderScope = financeOrderScopeSql(tenantId, from, to, filters);
-  const orderScopeO2 = financeOrderScopeSql(tenantId, from, to, filters, {
+  const orderScope = financeOrderScopeSql(tenantId, from, to, expanded);
+  const orderScopeO2 = financeOrderScopeSql(tenantId, from, to, expanded, {
     aliases: { order: "o2", user: "u2", client: "c2" }
   });
-  const receivableOrderScope = financeOrderScopeSql(tenantId, from, to, filters, {
+  const receivableOrderScope = financeOrderScopeSql(tenantId, from, to, expanded, {
     onlyReceivableStatuses: true
   });
-  const clientFilter = financeClientFilterSql(tenantId, filters);
+  const clientFilter = financeClientFilterSql(tenantId, expanded);
 
   const [
     salesRows,
@@ -332,11 +335,15 @@ export async function getFinanceDashboardSnapshot(
     share_pct: payGrand.gt(0) ? clampPct(r.amount.div(payGrand).mul(100).toNumber()) : 0
   }));
 
-  const territory_debts: FinanceTerritoryDebtRow[] = territoryRows.map((r) => ({
-    territory: r.territory,
-    debt_sum: r.debt_sum.toString(),
-    debtors_count: Number(r.debtors_count)
-  }));
+  const territoryIndex = await loadTerritoryRegionIndex(tenantId);
+  const territory_debts: FinanceTerritoryDebtRow[] = rollupDebtTerritoryRows(
+    territoryRows.map((r) => ({
+      territory: r.territory,
+      debt_sum: r.debt_sum.toString(),
+      debtors_count: Number(r.debtors_count)
+    })),
+    territoryIndex
+  );
 
   const general_balance: FinanceBalanceBlock = {
     total_balance: (balanceRows[0]?.s ?? new Prisma.Decimal(0)).toString(),
@@ -357,7 +364,7 @@ export async function getFinanceDashboardSnapshot(
     client_name: r.client_name,
     agent_name: r.agent_name,
     supervisor_name: r.supervisor_name,
-    territory: r.territory,
+    territory: resolveTerritoryLabel(r.territory ?? "—", territoryIndex),
     ledger_balance: r.ledger_balance.toString(),
     delivered_debt: r.delivered_debt.toString(),
     effective_balance: r.effective_balance.toString()

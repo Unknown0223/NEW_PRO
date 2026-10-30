@@ -2,9 +2,11 @@
 
 import {
   GROUP_PROCESSING_MENU_ACTIONS,
+  canUseGroupProcessingAction,
   type GroupProcessingActionId
 } from "@/components/clients/group-processing/group-processing-actions";
 import { Button } from "@/components/ui/button";
+import { usePermissions } from "@/lib/use-permissions";
 import {
   Dialog,
   DialogContent,
@@ -22,6 +24,8 @@ type Props = {
 };
 
 export function GroupProcessingPickDialog({ open, onOpenChange, onPick, selectedCount = 0 }: Props) {
+  const { has } = usePermissions();
+  const actions = GROUP_PROCESSING_MENU_ACTIONS.filter((a) => canUseGroupProcessingAction(a.id, has));
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
@@ -42,7 +46,12 @@ export function GroupProcessingPickDialog({ open, onOpenChange, onPick, selected
           </p>
         </DialogHeader>
         <ul className="max-h-[min(70vh,560px)] overflow-y-auto py-1">
-          {GROUP_PROCESSING_MENU_ACTIONS.map((a) => (
+          {actions.length === 0 ? (
+            <li className="px-5 py-4 text-sm text-muted-foreground">
+              Нет доступа к групповым обработкам (Доступ → Клиенты → Групповая обработка).
+            </li>
+          ) : null}
+          {actions.map((a) => (
             <li key={a.id}>
               <button
                 type="button"

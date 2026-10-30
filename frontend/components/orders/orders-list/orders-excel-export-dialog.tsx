@@ -51,7 +51,7 @@ export function OrdersExcelExportDialog({
       });
       onOpenChange(false);
     } catch (e) {
-      setError(getUserFacingError(e, "Excel yuklab bo‘lmadi."));
+      setError(getUserFacingError(e, "Не удалось скачать Excel."));
     } finally {
       setPending(false);
       setProgress(null);
@@ -64,7 +64,7 @@ export function OrdersExcelExportDialog({
         <DialogHeader>
           <DialogTitle>Экспорт в Excel</DialogTitle>
           <DialogDescription>
-            Joriy sahifadagi {orders.length} ta zakaz. Tanlangan formatda yuklab olinadi.
+            Заказов на текущей странице: {orders.length}. Файл будет скачан в выбранном формате.
           </DialogDescription>
         </DialogHeader>
 
@@ -79,7 +79,7 @@ export function OrdersExcelExportDialog({
             <span>
               <span className="block text-sm font-semibold text-foreground">Детальный</span>
               <span className="mt-0.5 block text-xs text-muted-foreground">
-                Zakaz qatori, ostida mahsulotlar (Тип, бонус, miqdor) — jadvaldagi ochilgan ko‘rinish.
+                Строка заказа, под ней товары (тип, бонус, количество) — как в раскрытой таблице.
               </span>
             </span>
           </button>
@@ -93,7 +93,7 @@ export function OrdersExcelExportDialog({
             <span>
               <span className="block text-sm font-semibold text-foreground">Обычный</span>
               <span className="mt-0.5 block text-xs text-muted-foreground">
-                Har bir tovar alohida qator: zakaz ustunlari + mahsulot (zakaz va bonus bilan).
+                Каждый товар — отдельной строкой: столбцы заказа + товар (заказ и бонус).
               </span>
             </span>
           </button>

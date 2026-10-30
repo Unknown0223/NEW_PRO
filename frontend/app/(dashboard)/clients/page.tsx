@@ -9,6 +9,11 @@ import { ClientsTemplateFiltersPanel } from "@/components/clients/clients-templa
 import { GroupProcessingPickDialog } from "@/components/clients/group-processing/group-processing-pick-dialog";
 import {
   GROUP_PROCESSING_IDS_STORAGE_KEY,
+  GROUP_PROCESSING_MENU_ACTIONS,
+  canUseGroupProcessingAction,
+  clientsListSelectedStorageKey,
+  readStoredClientIds,
+  writeStoredClientIds,
   type GroupProcessingActionId
 } from "@/components/clients/group-processing/group-processing-actions";
 import { TableColumnSettingsDialog } from "@/components/data-table/table-column-settings-dialog";
@@ -28,6 +33,7 @@ import {
 import { useUserTablePrefs } from "@/hooks/use-user-table-prefs";
 import { useAuthStore, useAuthStoreHydrated } from "@/lib/auth-store";
 import { decodeAccessTokenUserId } from "@/lib/me-permissions";
+import { usePermissions } from "@/lib/use-permissions";
 import {
   appendClientListFilterParams,
   INITIAL_CLIENT_TOOLBAR_FILTERS,
@@ -37,7 +43,11 @@ import {
 import { CLIENT_IMPORT_MAX_FILE_BYTES } from "@/lib/client-import-limits";
 import { mergeRefOptions } from "@/lib/merge-ref-options";
 import { mergeRefSelectOptions, optionsToValueLabelMap } from "@/lib/ref-select-options";
-import { buildZoneRegionCityCascadeOptions, type ClientRefsTerritoryBundle } from "@/lib/territory-client-filters";
+import { buildZoneRegionCityCascadeOptions, buildTerritoryTreeOnlyCascade, type ClientRefsTerritoryBundle } from "@/lib/territory-client-filters";
+import {
+  joinMultiFilterValues,
+  splitMultiFilterValues
+} from "@/lib/client-filter-select-value";
 import type { TerritoryNode } from "@/lib/territory-tree";
 import { api, apiBaseURL } from "@/lib/api";
 import { STALE } from "@/lib/query-stale";
@@ -47,6 +57,9 @@ import {
   type ClientImportMappingPayload
 } from "@/components/clients/client-import-mapping-dialog";
 import { ClientImportLaunchDialog } from "@/components/clients/client-import-launch-dialog";
+import { ClientImportResultDialog } from "@/components/clients/client-import-result-dialog";
+import { ClientImportReviewDialog } from "@/components/clients/client-import-review-dialog";
+import type { ClientImportDecisionPreviewDto } from "@/components/clients/client-import-result-dialog";
 import { QueryErrorState } from "@/components/common/query-error-state";
 import { getUserFacingError, withApiSupportLine } from "@/lib/error-utils";
 import { humanizeClientImportJobError } from "@/lib/clients-import-errors";
@@ -96,6 +109,8 @@ type ClientImportApiResult = {
   created: number;
   updated?: number;
   errors: string[];
+  needsDecision?: boolean;
+  decisionPreview?: ClientImportDecisionPreviewDto;
   importStats?: {
     totalRows: number;
     processedRows: number;
@@ -169,7 +184,17 @@ export default function ClientsPage() {
   const actorUserId = decodeAccessTokenUserId(accessToken);
   const authHydrated = useAuthStoreHydrated();
   const qc = useQueryClient();
+  const perms = usePermissions();
+  const canImport = perms.has("clients.klient.import");
+  const canGroupProcessing = GROUP_PROCESSING_MENU_ACTIONS.some((a) => canUseGroupProcessingAction(a.id, perms.has));
   const [importMsg, setImportMsg] = useState<string | null>(null);
+  const [importResultOpen, setImportResultOpen] = useState(false);
+  const [importResultErrors, setImportResultErrors] = useState<string[]>([]);
+  const [importNeedsDecision, setImportNeedsDecision] = useState(false);
+  const [importDecisionPreview, setImportDecisionPreview] =
+    useState<ClientImportDecisionPreviewDto | null>(null);
+  const [importReviewOpen, setImportReviewOpen] = useState(false);
+  const [importLastMapping, setImportLastMapping] = useState<ClientImportMappingPayload | null>(null);
   const [importProgress, setImportProgress] = useState<ClientImportProgressState | null>(null);
   const [importMapOpen, setImportMapOpen] = useState(false);
   const [importDialogMode, setImportDialogMode] = useState<"create" | "update">("create");
@@ -189,6 +214,7 @@ export default function ClientsPage() {
   const [columnDialogOpen, setColumnDialogOpen] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(() => new Set());
   const [groupPickOpen, setGroupPickOpen] = useState(false);
+  const [clientsSelectionReady, setClientsSelectionReady] = useState(false);
   const [showSessionLoadingHint, setShowSessionLoadingHint] = useState(false);
   const clientsPrefsMigrated = useRef(false);
 
@@ -203,12 +229,24 @@ export default function ClientsPage() {
     return () => window.clearTimeout(t);
   }, [authHydrated]);
 
+  useEffect(() => {
+    if (!tenantSlug) return;
+    const ids = readStoredClientIds(clientsListSelectedStorageKey(tenantSlug));
+    setSelectedIds(new Set(ids));
+    setClientsSelectionReady(true);
+  }, [tenantSlug]);
+
+  useEffect(() => {
+    if (!clientsSelectionReady || !tenantSlug) return;
+    writeStoredClientIds(clientsListSelectedStorageKey(tenantSlug), selectedIds);
+  }, [selectedIds, clientsSelectionReady, tenantSlug]);
+
   const tablePrefs = useUserTablePrefs({
     tenantSlug,
     tableId: CLIENTS_LIST_TABLE_ID,
     defaultColumnOrder: CLIENT_TABLE_PREF_COLUMN_IDS,
     defaultPageSize: 15,
-    allowedPageSizes: [10, 15, 20, 25, 30, 50, 100, 500],
+    allowedPageSizes: [10, 15, 20, 25, 30, 50, 100, 200, 500],
     defaultHiddenColumnIds: CLIENTS_DEFAULT_HIDDEN_COLUMN_IDS
   });
   useEffect(() => {
@@ -302,6 +340,12 @@ export default function ClientsPage() {
   };
 
   const buildImportSummaryMessage = (data: ClientImportApiResult): string => {
+    if (data.needsDecision) {
+      const p = data.decisionPreview;
+      const valid = p?.validCount ?? 0;
+      const errN = (p?.errorCount ?? 0) + (p?.duplicateCount ?? 0);
+      return `Обнаружены ошибки (${errN}). Корректных строк: ${valid}. Пока ничего не записано — выберите действие.`;
+    }
     const errPart =
       data.errors.length > 0
         ? ` Сообщения сервера (${data.errors.length}): ${data.errors.slice(0, 3).join("; ")}${data.errors.length > 3 ? "…" : ""}`
@@ -406,12 +450,15 @@ export default function ClientsPage() {
   };
 
   const importMut = useMutation({
-    mutationFn: async (payload: { file: File; importMode: "create" | "update" } & ClientImportMappingPayload) => {
-      if (!tenantSlug) throw new Error("TenantRequired");
+    mutationFn: async (
+      payload: { file: File; importMode: "create" | "update"; commitDecision?: "accept_valid" | "reject_all" } & ClientImportMappingPayload
+    ) => {
+      if (!tenantSlug) throw new Error("Организация не выбрана");
       logClientImport("boshlash", {
         fayl: payload.file.name,
         hajmBytes: payload.file.size,
         importMode: payload.importMode,
+        commitDecision: payload.commitDecision ?? null,
         sheetName: payload.sheetName,
         headerRowIndex: payload.headerRowIndex,
         columnMap: payload.columnMap,
@@ -426,6 +473,7 @@ export default function ClientsPage() {
       fd.append("sheetName", payload.sheetName);
       fd.append("headerRowIndex", String(payload.headerRowIndex));
       fd.append("importMode", payload.importMode);
+      if (payload.commitDecision) fd.append("commitDecision", payload.commitDecision);
       if (payload.duplicateKeyFields != null && payload.duplicateKeyFields.length > 0) {
         fd.append("duplicateKeyFields", JSON.stringify(payload.duplicateKeyFields));
       }
@@ -499,13 +547,13 @@ export default function ClientsPage() {
           if (isAxiosError(err)) {
             const st = err.response?.status;
             if (st === 401 || st === 403) {
-              throw new Error("Import status uchun sessiya muddati tugagan. Qayta login qiling.");
+              throw new Error("Сессия истекла при проверке статуса импорта. Войдите в систему заново.");
             }
             if (st === 404) {
-              throw new Error("Import vazifasi topilmadi yoki navbatdan o‘chgan.");
+              throw new Error("Задача импорта не найдена или удалена из очереди.");
             }
             if (st === 503) {
-              throw new Error("Job navbati/Redis vaqtincha mavjud emas.");
+              throw new Error("Очередь задач (Redis) временно недоступна.");
             }
           }
           throw err;
@@ -556,7 +604,7 @@ export default function ClientsPage() {
           attempt >= 8
         ) {
           throw new Error(
-            "Import navbati ishlamayapti: background worker yo‘q. Backend qayta deploy qiling (worker bilan) yoki admin bilan bog‘laning."
+            "Очередь импорта не работает: background worker не запущен. Переразверните backend (вместе с worker) или обратитесь к администратору."
           );
         }
 
@@ -566,7 +614,7 @@ export default function ClientsPage() {
             const bad: ClientImportApiResult = {
               created: 0,
               updated: 0,
-              errors: ["Import yakunlandi, lekin javob formati noto‘g‘ri."]
+              errors: ["Импорт завершён, но формат ответа некорректен."]
             };
             logClientImport("yakun: noto‘g‘ri returnvalue", { jobId, raw: job.returnvalue });
             logClientImportResultAnalysis(bad, { jobId });
@@ -588,21 +636,31 @@ export default function ClientsPage() {
     },
     onSuccess: async (data) => {
       logClientImport("UI onSuccess (tahlil yuqorida mutation yakunida yozilgan bo‘lishi kerak)", {
-        errorsCount: data.errors.length
+        errorsCount: data.errors.length,
+        needsDecision: Boolean(data.needsDecision)
       });
-      await qc.invalidateQueries({ queryKey: ["clients", tenantSlug] });
-      await qc.invalidateQueries({ queryKey: ["clients-references", tenantSlug] });
+      if (!data.needsDecision) {
+        await qc.invalidateQueries({ queryKey: ["clients", tenantSlug] });
+        await qc.invalidateQueries({ queryKey: ["clients-references", tenantSlug] });
+      }
       setImportProgress((prev) =>
         normalizeImportProgress({
           ...prev,
           stage: "done",
           percent: 100,
-          message: "Импорт завершен."
+          message: data.needsDecision ? "Ожидается выбор действия." : "Импорт завершен."
         })
       );
       setImportMsg(buildImportSummaryMessage(data));
+      setImportResultErrors(data.errors ?? []);
+      setImportNeedsDecision(Boolean(data.needsDecision));
+      setImportDecisionPreview(data.decisionPreview ?? null);
+      setImportResultOpen(true);
       setImportMapOpen(false);
-      setImportStagingFile(null);
+      if (!data.needsDecision) {
+        setImportStagingFile(null);
+        setImportLastMapping(null);
+      }
     },
     onError: (e: unknown) => {
       console.error("[clients import] xato", e);
@@ -737,26 +795,34 @@ export default function ClientsPage() {
     };
   }, [refData]);
 
-  const territoryCascade = useMemo(
-    () =>
-      buildZoneRegionCityCascadeOptions(
-        territoryRefsBundle,
-        undefined,
-        profileQ.data?.territory_nodes,
-        {
-          zone: draftToolbar.zoneFilter,
-          region: draftToolbar.regionFilter,
-          city: draftToolbar.cityFilter
-        }
-      ),
-    [
+  const territoryCascade = useMemo(() => {
+    const zones = splitMultiFilterValues(draftToolbar.zoneFilter);
+    const region = draftToolbar.regionFilter;
+    const city = draftToolbar.cityFilter;
+    const nodes = profileQ.data?.territory_nodes;
+    if ((nodes?.length ?? 0) > 0) {
+      return buildTerritoryTreeOnlyCascade(nodes, {
+        zones,
+        regions: splitMultiFilterValues(region)
+      });
+    }
+    return buildZoneRegionCityCascadeOptions(
       territoryRefsBundle,
-      profileQ.data?.territory_nodes,
-      draftToolbar.zoneFilter,
-      draftToolbar.regionFilter,
-      draftToolbar.cityFilter
-    ]
-  );
+      undefined,
+      nodes,
+      {
+        zone: zones.length === 1 ? (zones[0] ?? "") : "",
+        region,
+        city
+      }
+    );
+  }, [
+    territoryRefsBundle,
+    profileQ.data?.territory_nodes,
+    draftToolbar.zoneFilter,
+    draftToolbar.regionFilter,
+    draftToolbar.cityFilter
+  ]);
 
   const clientsTerritoryZoneKeys = useMemo(
     () => new Set(territoryCascade.zones.map((o) => normTrim(o.value))),
@@ -772,27 +838,38 @@ export default function ClientsPage() {
   );
 
   useEffect(() => {
-    const z = normTrim(draftToolbar.zoneFilter);
-    if (!z) return;
-    if (!clientsTerritoryZoneKeys.has(z)) {
-      setDraftToolbar((d) => ({ ...d, zoneFilter: "", regionFilter: "", cityFilter: "" }));
-    }
+    if (clientsTerritoryZoneKeys.size === 0) return;
+    const zones = splitMultiFilterValues(draftToolbar.zoneFilter);
+    if (zones.length === 0) return;
+    const kept = zones.filter((z) => clientsTerritoryZoneKeys.has(normTrim(z)));
+    if (kept.length === zones.length) return;
+    setDraftToolbar((d) => ({
+      ...d,
+      zoneFilter: joinMultiFilterValues(kept),
+      ...(kept.length === 0 ? { regionFilter: "", cityFilter: "" } : {})
+    }));
   }, [clientsTerritoryZoneKeys, draftToolbar.zoneFilter]);
 
   useEffect(() => {
-    const r = normTrim(draftToolbar.regionFilter);
-    if (!r) return;
-    if (!clientsTerritoryRegionKeys.has(r)) {
-      setDraftToolbar((d) => ({ ...d, regionFilter: "", cityFilter: "" }));
-    }
+    if (clientsTerritoryRegionKeys.size === 0) return;
+    const regions = splitMultiFilterValues(draftToolbar.regionFilter);
+    if (regions.length === 0) return;
+    const kept = regions.filter((r) => clientsTerritoryRegionKeys.has(normTrim(r)));
+    if (kept.length === regions.length) return;
+    setDraftToolbar((d) => ({
+      ...d,
+      regionFilter: joinMultiFilterValues(kept),
+      ...(kept.length === 0 ? { cityFilter: "" } : {})
+    }));
   }, [clientsTerritoryRegionKeys, draftToolbar.regionFilter]);
 
   useEffect(() => {
-    const c = normTrim(draftToolbar.cityFilter);
-    if (!c) return;
-    if (!clientsTerritoryCityKeys.has(c)) {
-      setDraftToolbar((d) => ({ ...d, cityFilter: "" }));
-    }
+    if (clientsTerritoryCityKeys.size === 0) return;
+    const cities = splitMultiFilterValues(draftToolbar.cityFilter);
+    if (cities.length === 0) return;
+    const kept = cities.filter((c) => clientsTerritoryCityKeys.has(normTrim(c)));
+    if (kept.length === cities.length) return;
+    setDraftToolbar((d) => ({ ...d, cityFilter: joinMultiFilterValues(kept) }));
   }, [clientsTerritoryCityKeys, draftToolbar.cityFilter]);
 
   useEffect(() => {
@@ -960,7 +1037,7 @@ export default function ClientsPage() {
     queryFn: async () => {
       const { data } = await api.get<{
         data: Array<{ id: number; fio: string; login: string; is_active: boolean }>;
-      }>(`/api/${tenantSlug}/supervisors?is_active=true`);
+      }>(`/api/${tenantSlug}/supervisors?picker=1`);
       return data.data.map((r) => ({ id: r.id, name: r.fio, login: r.login }));
     }
   });
@@ -1119,9 +1196,10 @@ export default function ClientsPage() {
         open={importMapOpen}
         onOpenChange={(next) => {
           setImportMapOpen(next);
-          if (!next) {
+          if (!next && !importNeedsDecision) {
             setImportStagingFile(null);
             setImportProgress(null);
+            setImportLastMapping(null);
           }
         }}
         file={importStagingFile}
@@ -1131,6 +1209,9 @@ export default function ClientsPage() {
         onConfirm={(mappingPayload) => {
           if (!importStagingFile || !tenantSlug) return;
           setImportMsg(null);
+          setImportNeedsDecision(false);
+          setImportDecisionPreview(null);
+          setImportLastMapping(mappingPayload);
           setImportProgress({
             stage: "queued",
             percent: 0,
@@ -1145,6 +1226,53 @@ export default function ClientsPage() {
           {importMsg}
         </p>
       ) : null}
+      <ClientImportResultDialog
+        open={importResultOpen}
+        onOpenChange={(next) => {
+          setImportResultOpen(next);
+          if (!next && !importNeedsDecision) {
+            setImportDecisionPreview(null);
+          }
+        }}
+        summary={importMsg ?? "Импорт завершён."}
+        errors={importResultErrors}
+        needsDecision={importNeedsDecision}
+        decisionPreview={importDecisionPreview}
+        busy={importMut.isPending}
+        onOpenReview={() => setImportReviewOpen(true)}
+        onRejectAll={() => {
+          setImportNeedsDecision(false);
+          setImportResultOpen(false);
+          setImportStagingFile(null);
+          setImportLastMapping(null);
+          setImportDecisionPreview(null);
+          setImportMsg("Импорт отменён — ничего не записано.");
+        }}
+        onAcceptValid={() => {
+          if (!importStagingFile || !importLastMapping) return;
+          setImportProgress({
+            stage: "queued",
+            percent: 0,
+            processedRows: 0,
+            totalRows: 0
+          });
+          importMut.mutate({
+            file: importStagingFile,
+            importMode: importDialogMode,
+            commitDecision: "accept_valid",
+            ...importLastMapping
+          });
+        }}
+      />
+      <ClientImportReviewDialog
+        open={importReviewOpen}
+        onOpenChange={setImportReviewOpen}
+        file={importStagingFile}
+        sheetName={importLastMapping?.sheetName ?? ""}
+        headerRowIndex={importLastMapping?.headerRowIndex ?? 0}
+        columnMap={importLastMapping?.columnMap ?? {}}
+        decisionPreview={importDecisionPreview}
+      />
 
       <div className="shrink-0 px-4 sm:px-6">
       <ClientsTemplateFiltersPanel
@@ -1224,14 +1352,14 @@ export default function ClientsPage() {
               setSearch("");
               setPage(1);
             }}
-            onImportUpdate={() => openImportLaunch("update")}
-            onImportCreate={() => openImportLaunch("create")}
+            onImportUpdate={canImport ? () => openImportLaunch("update") : undefined}
+            onImportCreate={canImport ? () => openImportLaunch("create") : undefined}
             importDisabled={importMut.isPending || !tenantSlug}
-            onGroupProcessing={() => setGroupPickOpen(true)}
+            onGroupProcessing={canGroupProcessing ? () => setGroupPickOpen(true) : undefined}
             groupProcessingDisabled={selectedIds.size === 0}
           />
           <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-border bg-card shadow-sm">
-            <div className="scrollbar-none relative min-h-0 flex-1 overflow-auto overscroll-contain">
+            <div className="scrollbar-none relative min-h-0 flex-1 overflow-auto overscroll-y-contain">
             <ClientsDataTable
               rows={rows}
               visibility={getDefaultColumnVisibility()}
@@ -1286,6 +1414,9 @@ export default function ClientsPage() {
         selectedCount={selectedIds.size}
         onPick={(actionId: GroupProcessingActionId) => {
           const ids = [...selectedIds].slice(0, 5000);
+          if (tenantSlug) {
+            writeStoredClientIds(clientsListSelectedStorageKey(tenantSlug), ids);
+          }
           try {
             sessionStorage.setItem(GROUP_PROCESSING_IDS_STORAGE_KEY, JSON.stringify(ids));
           } catch {

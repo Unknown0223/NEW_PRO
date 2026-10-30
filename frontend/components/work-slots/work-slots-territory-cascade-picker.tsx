@@ -1,13 +1,10 @@
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { MapPin } from "lucide-react";
 import { pickCityTerritoryHint, type CityTerritoryHint } from "@/lib/city-territory-hint";
 import type { RefSelectOption } from "@/lib/ref-select-options";
-import {
-  buildTerritoryTreeOnlyCascade,
-  expandTerritoryTreeDescendants
-} from "@/lib/territory-client-filters";
+import { buildTerritoryTreeOnlyCascade, normalizeWorkSlotTerritoryLists } from "@/lib/territory-client-filters";
 import type { TerritoryNode } from "@/lib/territory-tree";
 import { cn } from "@/lib/utils";
 import {
@@ -161,7 +158,8 @@ export function WorkSlotsTerritoryCascadePicker({
 
 /**
  * Guruhli qayta ishlash: faqat territory_nodes daraxti.
- * Zona → barcha oblast+gorod; oblast → barcha gorod.
+ * Kaskad: zona → oblast opsiyalari; oblast → shahar opsiyalari.
+ * Bolalar avtomatik belgilanmaydi — foydalanuvchi tanlaydi.
  */
 export function WorkSlotsTerritoryBulkPicker({
   zoneList,
@@ -197,52 +195,128 @@ export function WorkSlotsTerritoryBulkPicker({
 }) {
   const hasTree = (territoryNodes?.length ?? 0) > 0;
 
+  /** Zona maydoniga oblast tushib qolgan holatni daraxtga qayta joylashtirish. */
+  const normalizedLists = useMemo(() => {
+    if (!hasTree) {
+      return { zones: zoneList, regions: regionList, cities: cityList };
+    }
+    return normalizeWorkSlotTerritoryLists(
+      { zones: zoneList, regions: regionList, cities: cityList },
+      territoryNodes
+    );
+  }, [hasTree, territoryNodes, zoneList, regionList, cityList]);
+
+  const effectiveZoneList = normalizedLists.zones;
+  const effectiveRegionList = normalizedLists.regions;
+  const effectiveCityList = normalizedLists.cities;
+
   const liveCascade = useMemo(() => {
     if (!hasTree) return cascade;
     return buildTerritoryTreeOnlyCascade(territoryNodes, {
-      zones: zoneList,
-      regions: regionList
+      zones: effectiveZoneList,
+      regions: effectiveRegionList
     });
-  }, [hasTree, territoryNodes, zoneList, regionList, cascade]);
+  }, [hasTree, territoryNodes, effectiveZoneList, effectiveRegionList, cascade]);
+
+  const allowedCityValues = useMemo(
+    () => new Set(liveCascade.cities.map((c) => c.value)),
+    [liveCascade.cities]
+  );
+  const allowedRegionValues = useMemo(
+    () => new Set(liveCascade.regions.map((r) => r.value)),
+    [liveCascade.regions]
+  );
+
+  const prunedRegionList = useMemo(() => {
+    if (!hasTree || effectiveZoneList.length === 0) return effectiveRegionList;
+    return effectiveRegionList.filter((r) => allowedRegionValues.has(r));
+  }, [hasTree, effectiveZoneList.length, effectiveRegionList, allowedRegionValues]);
+
+  const prunedCityList = useMemo(() => {
+    if (!hasTree) return effectiveCityList;
+    if (effectiveRegionList.length === 0 && effectiveZoneList.length === 0) return [];
+    // Oblast tanlanmagan — shaharlar hali tanlanmasin (faqat opsiyalar zona bo‘yicha ko‘rinadi)
+    if (effectiveRegionList.length === 0) return [];
+    return effectiveCityList.filter((c) => allowedCityValues.has(c));
+  }, [hasTree, effectiveCityList, effectiveRegionList.length, effectiveZoneList.length, allowedCityValues]);
+
+  /** Noto‘g‘ri saqlangan/kengaytirilgan tanlovlarni daraxt kaskadiga moslab qisqartirish. */
+  const pruneSigRef = useRef("");
+  useEffect(() => {
+    if (!hasTree || !onCascadeListsChange) return;
+    const sameZones =
+      effectiveZoneList.length === zoneList.length &&
+      effectiveZoneList.every((z, i) => z === zoneList[i]);
+    const sameRegions =
+      prunedRegionList.length === regionList.length &&
+      prunedRegionList.every((r, i) => r === regionList[i]);
+    const sameCities =
+      prunedCityList.length === cityList.length &&
+      prunedCityList.every((c, i) => c === cityList[i]);
+    if (sameZones && sameRegions && sameCities) return;
+    const sig = `${effectiveZoneList.join("|")}::${prunedRegionList.join("|")}::${prunedCityList.join("|")}`;
+    if (sig === pruneSigRef.current) return;
+    pruneSigRef.current = sig;
+    onCascadeListsChange({
+      territoryZoneList: effectiveZoneList,
+      territoryOblastList: prunedRegionList,
+      territoryCityList: prunedCityList
+    });
+  }, [
+    hasTree,
+    onCascadeListsChange,
+    effectiveZoneList,
+    prunedRegionList,
+    prunedCityList,
+    zoneList,
+    regionList,
+    cityList
+  ]);
 
   const handleZoneChange = (nextZones: string[]) => {
     if (!onCascadeListsChange || !hasTree) {
       onZoneListChange(nextZones);
+      if (onCascadeListsChange) {
+        onCascadeListsChange({
+          territoryZoneList: nextZones,
+          territoryOblastList: [],
+          territoryCityList: []
+        });
+      }
       return;
     }
-    if (nextZones.length === 0) {
-      onCascadeListsChange({
-        territoryZoneList: [],
-        territoryOblastList: [],
-        territoryCityList: []
-      });
-      return;
-    }
-    const expanded = expandTerritoryTreeDescendants(territoryNodes, nextZones, []);
     onCascadeListsChange({
       territoryZoneList: nextZones,
-      territoryOblastList: expanded.regions,
-      territoryCityList: expanded.cities
+      territoryOblastList: [],
+      territoryCityList: []
     });
   };
 
   const handleRegionChange = (nextRegions: string[]) => {
     if (!onCascadeListsChange || !hasTree) {
       onRegionListChange(nextRegions);
+      if (onCascadeListsChange) {
+        onCascadeListsChange({
+          territoryOblastList: nextRegions,
+          territoryCityList: []
+        });
+      }
       return;
     }
-    if (nextRegions.length === 0) {
-      onCascadeListsChange({
-        territoryOblastList: [],
-        territoryCityList: []
-      });
-      return;
-    }
-    const expanded = expandTerritoryTreeDescendants(territoryNodes, zoneList, nextRegions);
+    // Oblast o‘zgaganda eski shaharlarni tozalash — yangi oblast ostidan qo‘lda tanlanadi
     onCascadeListsChange({
       territoryOblastList: nextRegions,
-      territoryCityList: expanded.cities
+      territoryCityList: []
     });
+  };
+
+  const handleCityChange = (nextCities: string[]) => {
+    if (!hasTree || effectiveRegionList.length === 0) {
+      onCityListChange(nextCities);
+      return;
+    }
+    const allowed = new Set(liveCascade.cities.map((c) => c.value));
+    onCityListChange(nextCities.filter((c) => allowed.has(c)));
   };
 
   return (
@@ -255,7 +329,7 @@ export function WorkSlotsTerritoryBulkPicker({
           variant="bulk"
           placeholder="Зона (FV…)"
           items={refOptionsToItems(liveCascade.zones)}
-          selectedValues={zoneList}
+          selectedValues={effectiveZoneList}
           onChange={handleZoneChange}
           disabled={disabled}
         />
@@ -268,9 +342,9 @@ export function WorkSlotsTerritoryBulkPicker({
           variant="bulk"
           placeholder="Область"
           items={refOptionsToItems(liveCascade.regions)}
-          selectedValues={regionList}
+          selectedValues={prunedRegionList}
           onChange={handleRegionChange}
-          disabled={disabled || (hasTree && zoneList.length === 0)}
+          disabled={disabled || (hasTree && effectiveZoneList.length === 0)}
         />
       </div>
       <div className="min-w-0 space-y-1">
@@ -281,9 +355,9 @@ export function WorkSlotsTerritoryBulkPicker({
           variant="bulk"
           placeholder="Город (необязательно)"
           items={refOptionsToItems(liveCascade.cities)}
-          selectedValues={cityList}
-          onChange={onCityListChange}
-          disabled={disabled || (hasTree && regionList.length === 0 && zoneList.length === 0)}
+          selectedValues={prunedCityList}
+          onChange={handleCityChange}
+          disabled={disabled || (hasTree && effectiveRegionList.length === 0)}
         />
       </div>
     </div>

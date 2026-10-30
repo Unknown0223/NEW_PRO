@@ -5,7 +5,7 @@ export class ExcelImportTooLargeError extends Error {
 
   constructor() {
     super(
-      `Excel fayl hajmi ${Math.round(env.MULTIPART_EXCEL_MAX_BYTES / (1024 * 1024))} MB dan oshmasligi kerak`
+      `Размер файла Excel не должен превышать ${Math.round(env.MULTIPART_EXCEL_MAX_BYTES / (1024 * 1024))} МБ`
     );
     this.name = "ExcelImportTooLargeError";
   }

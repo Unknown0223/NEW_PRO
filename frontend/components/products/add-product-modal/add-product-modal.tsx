@@ -15,9 +15,9 @@ import { DimensionsStep, MainInfoStep, PackagingStep, buildProductPayload, valid
 import { emptyProductAddForm, productAddDraftKey, type ProductAddForm } from "./types";
 
 const STEPS = [
-  { id: 0, label: "Asosiy", icon: FileText },
-  { id: 1, label: "O'lchamlar", icon: Ruler },
-  { id: 2, label: "Qadoqlash", icon: Box }
+  { id: 0, label: "Основное", icon: FileText },
+  { id: 1, label: "Размеры", icon: Ruler },
+  { id: 2, label: "Упаковка", icon: Box }
 ] as const;
 
 type Props = {
@@ -150,8 +150,8 @@ export function ProductAddModal({ open, onOpenChange, tenantSlug, onDone }: Prop
 
   const saveMut = useMutation({
     mutationFn: async () => {
-      if (!tenantSlug) throw new Error("Tenant topilmadi");
-      if (!validateStep1()) throw new Error("Asosiy maydonlarni to'ldiring");
+      if (!tenantSlug) throw new Error("Организация не найдена");
+      if (!validateStep1()) throw new Error("Заполните основные поля");
 
       const payload = buildProductPayload(form);
       await api.post(`/api/${tenantSlug}/products`, payload);
@@ -165,7 +165,7 @@ export function ProductAddModal({ open, onOpenChange, tenantSlug, onDone }: Prop
       void qc.invalidateQueries({ queryKey: ["products", tenantSlug] });
       onDone();
       onOpenChange(false);
-      setToast(`"${savedName}" muvaffaqiyatli qo'shildi`);
+      setToast(`«${savedName}» успешно добавлен`);
       window.setTimeout(() => setToast(null), 3500);
     },
     onError: (e: unknown) => {
@@ -175,13 +175,13 @@ export function ProductAddModal({ open, onOpenChange, tenantSlug, onDone }: Prop
           const hint = firstValidationUserHint(flat);
           setMsg(
             hint
-              ? withApiSupportLine(`Tekshiruv: ${hint}`, e)
-              : withApiSupportLine(getUserFacingError(e, "Xato"), e)
+              ? withApiSupportLine(`Проверка: ${hint}`, e)
+              : withApiSupportLine(getUserFacingError(e, "Ошибка"), e)
           );
           return;
         }
       }
-      setMsg(getUserFacingError(e, "Saqlashda xato"));
+      setMsg(getUserFacingError(e, "Ошибка сохранения"));
     }
   });
 
@@ -213,14 +213,14 @@ export function ProductAddModal({ open, onOpenChange, tenantSlug, onDone }: Prop
       <div className="animate-add-product-modal relative flex h-full w-full flex-col overflow-hidden bg-white shadow-2xl sm:h-auto sm:max-h-[92vh] sm:w-[700px] sm:rounded-3xl lg:w-[900px] lg:max-w-[95vw]">
         <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4">
           <div>
-            <h2 className="text-lg font-semibold text-slate-900">Mahsulot qo&apos;shish</h2>
+            <h2 className="text-lg font-semibold text-slate-900">Добавление товара</h2>
             <p
               className={cn(
                 "text-xs transition-opacity",
                 draftSaved ? "text-teal-600 opacity-100" : "text-slate-400"
               )}
             >
-              {draftSaved ? "✓ Qoralama saqlandi" : "Ma'lumotlar avtomatik saqlanadi"}
+              {draftSaved ? "✓ Черновик сохранён" : "Данные сохраняются автоматически"}
             </p>
           </div>
           <button
@@ -306,7 +306,7 @@ export function ProductAddModal({ open, onOpenChange, tenantSlug, onDone }: Prop
             onClick={() => onOpenChange(false)}
             className="rounded-xl px-4 py-2.5 text-sm font-medium text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-700"
           >
-            Bekor qilish
+            Отмена
           </button>
           <div className="flex items-center gap-2.5">
             {step > 0 ? (
@@ -315,7 +315,7 @@ export function ProductAddModal({ open, onOpenChange, tenantSlug, onDone }: Prop
                 onClick={() => setStep((s) => s - 1)}
                 className="rounded-xl border border-slate-200 bg-white px-5 py-2.5 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-50"
               >
-                Orqaga
+                Назад
               </button>
             ) : null}
             {step < 2 ? (
@@ -324,7 +324,7 @@ export function ProductAddModal({ open, onOpenChange, tenantSlug, onDone }: Prop
                 onClick={next}
                 className="rounded-xl bg-teal-500 px-6 py-2.5 text-sm font-semibold text-white shadow-lg shadow-teal-500/25 transition-all hover:bg-teal-600 active:scale-[0.98]"
               >
-                Keyingi →
+                Далее →
               </button>
             ) : (
               <button
@@ -333,7 +333,7 @@ export function ProductAddModal({ open, onOpenChange, tenantSlug, onDone }: Prop
                 disabled={saveMut.isPending}
                 className="rounded-xl bg-teal-500 px-6 py-2.5 text-sm font-semibold text-white shadow-lg shadow-teal-500/25 transition-all hover:bg-teal-600 active:scale-[0.98] disabled:opacity-60"
               >
-                {saveMut.isPending ? "Saqlanmoqda…" : "Saqlash"}
+                {saveMut.isPending ? "Сохранение…" : "Сохранить"}
               </button>
             )}
           </div>

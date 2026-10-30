@@ -22,7 +22,7 @@ const listValidationErrors = new Set(["BAD_FROM_DATE", "BAD_TO_DATE", "BAD_BASE"
 const createOrPatchValidationErrors = new Set(["BAD_CURRENCY_CODE", "BAD_RATE_DATE", "BAD_RATE"]);
 
 function sendInvalidId(reply: FastifyReply, request: FastifyRequest) {
-  return sendApiError(reply, request, 400, "ValidationError", "Invalid id", { field: "id" });
+  return sendApiError(reply, request, 400, "ValidationError", "Некорректный ID", { field: "id" });
 }
 
 function sendKnownDomainError(reply: FastifyReply, request: FastifyRequest, message: string): boolean {
@@ -123,7 +123,7 @@ export async function registerCurrencyExchangeRateRoutes(app: FastifyInstance) {
       if (!ensureTenantContext(request, reply)) return;
       const parsed = createBodySchema.safeParse(request.body);
       if (!parsed.success) {
-        return sendApiError(reply, request, 400, "ValidationError", "Invalid request body", zodValidationExtras(parsed.error));
+        return sendApiError(reply, request, 400, "ValidationError", "Некорректные данные запроса", zodValidationExtras(parsed.error));
       }
       try {
         const row = await createCurrencyExchangeRate(
@@ -164,7 +164,7 @@ export async function registerCurrencyExchangeRateRoutes(app: FastifyInstance) {
       }
       const parsed = patchBodySchema.safeParse(request.body);
       if (!parsed.success) {
-        return sendApiError(reply, request, 400, "ValidationError", "Invalid request body", zodValidationExtras(parsed.error));
+        return sendApiError(reply, request, 400, "ValidationError", "Некорректные данные запроса", zodValidationExtras(parsed.error));
       }
       try {
         const row = await patchCurrencyExchangeRate(

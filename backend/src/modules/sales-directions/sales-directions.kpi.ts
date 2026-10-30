@@ -3,9 +3,20 @@ import { prisma } from "../../config/database";
 import { appendTenantAuditEvent } from "../../lib/tenant-audit";
 import type { KpiGroupDetailRow, KpiGroupListRow } from "./sales-directions.kpi.types";
 import { normCode } from "./sales-directions.shared";
+import { loadActiveWorkSlotsByUserIds } from "../work-slots/work-slots.query.read";
+import { assertUniqueKpiProducts } from "./sales-directions.kpi-conflict";
 
 function userFio(u: { name: string }): string {
   return u.name.trim();
+}
+
+async function kpiGroupAgentRows(kpiGroupId: number, agentUserIds: number[]) {
+  const slots = await loadActiveWorkSlotsByUserIds(agentUserIds);
+  return agentUserIds.map((user_id) => ({
+    kpi_group_id: kpiGroupId,
+    user_id,
+    work_slot_id: slots.get(user_id)?.slot_id ?? null
+  }));
 }
 
 export async function listKpiGroups(
@@ -33,9 +44,8 @@ export async function listKpiGroups(
         }
       },
       agents: {
-        take: 3,
         include: {
-          user: { select: { id: true, name: true, code: true } }
+          user: { select: { id: true, name: true, code: true, role: true } }
         }
       },
       _count: { select: { products: true, agents: true } }
@@ -56,7 +66,8 @@ export async function listKpiGroups(
     agents: r.agents.map((x) => ({
       id: x.user.id,
       fio: userFio(x.user),
-      code: x.user.code
+      code: x.user.code,
+      role: x.user.role
     })),
     product_total: r._count.products,
     agent_total: r._count.agents
@@ -97,9 +108,37 @@ async function assertKpiAgentUserIds(tenantId: number, ids: number[]): Promise<v
   if (ids.length === 0) return;
   const uniq = [...new Set(ids)];
   const n = await prisma.user.count({
-    where: { tenant_id: tenantId, id: { in: uniq }, role: "agent" }
+    where: { tenant_id: tenantId, id: { in: uniq }, NOT: { role: "admin" } }
   });
   if (n !== uniq.length) throw new Error("BAD_AGENT_IDS");
+}
+
+const ROLE_LABEL: Record<string, string> = {
+  agent: "Агент",
+  supervisor: "Супервайзер",
+  manager: "Менеджер",
+  regional_manager: "Региональный менеджер",
+  sales_director: "Директор по продажам",
+  director: "Директор",
+  expeditor: "Экспедитор",
+  operator: "Оператор"
+};
+
+/** KPI guruhiga biriktirish: admin dan boshqa barcha faol xodimlar. */
+export async function listKpiMemberOptions(tenantId: number) {
+  const rows = await prisma.user.findMany({
+    where: { tenant_id: tenantId, is_active: true, NOT: { role: "admin" } },
+    select: { id: true, name: true, code: true, role: true },
+    orderBy: [{ role: "asc" }, { name: "asc" }],
+    take: 5000
+  });
+  return rows.map((r) => ({
+    id: r.id,
+    fio: r.name.trim(),
+    code: r.code,
+    role: r.role,
+    role_label: ROLE_LABEL[r.role] ?? r.role
+  }));
 }
 
 export async function createKpiGroup(
@@ -126,6 +165,7 @@ export async function createKpiGroup(
   const agent_user_ids = input.agent_user_ids ?? [];
   await assertKpiProductIds(tenantId, product_ids);
   await assertKpiAgentUserIds(tenantId, agent_user_ids);
+  if (input.is_active !== false) await assertUniqueKpiProducts(tenantId, null, product_ids, agent_user_ids);
 
   const row = await prisma.$transaction(async (tx) => {
     const g = await tx.kpiGroup.create({
@@ -145,7 +185,7 @@ export async function createKpiGroup(
     }
     if (agent_user_ids.length) {
       await tx.kpiGroupAgent.createMany({
-        data: agent_user_ids.map((user_id) => ({ kpi_group_id: g.id, user_id }))
+        data: await kpiGroupAgentRows(g.id, agent_user_ids)
       });
     }
     return g;
@@ -197,6 +237,18 @@ export async function patchKpiGroup(
   if (input.agent_user_ids !== undefined) {
     await assertKpiAgentUserIds(tenantId, input.agent_user_ids);
   }
+  const active = input.is_active ?? existing.is_active;
+  if (active && (input.product_ids !== undefined || input.agent_user_ids !== undefined || input.is_active === true)) {
+    const [curProducts, curUsers] = await Promise.all([
+      input.product_ids !== undefined
+        ? Promise.resolve(input.product_ids)
+        : prisma.kpiGroupProduct.findMany({ where: { kpi_group_id: id }, select: { product_id: true } }).then((r) => r.map((x) => x.product_id)),
+      input.agent_user_ids !== undefined
+        ? Promise.resolve(input.agent_user_ids)
+        : prisma.kpiGroupAgent.findMany({ where: { kpi_group_id: id }, select: { user_id: true } }).then((r) => r.map((x) => x.user_id))
+    ]);
+    await assertUniqueKpiProducts(tenantId, id, curProducts, curUsers);
+  }
 
   await prisma.$transaction(async (tx) => {
     await tx.kpiGroup.update({
@@ -221,7 +273,7 @@ export async function patchKpiGroup(
       await tx.kpiGroupAgent.deleteMany({ where: { kpi_group_id: id } });
       if (input.agent_user_ids.length) {
         await tx.kpiGroupAgent.createMany({
-          data: input.agent_user_ids.map((user_id) => ({ kpi_group_id: id, user_id }))
+          data: await kpiGroupAgentRows(id, input.agent_user_ids)
         });
       }
     }

@@ -4,6 +4,7 @@ import {
   bulkOrderNakladnoyBodySchema,
   bulkOrderStatusBodySchema,
   createOrderBodySchema,
+  orderBonusPreviewBodySchema,
   ordersListQuerySchema,
   patchOrderLinesBodySchema,
   patchOrderMetaBodySchema,
@@ -27,6 +28,7 @@ import {
   SKLADCHIK_ORDER_META_ANY
 } from "../staff/skladchik-access.prehandler";
 import { parseSelectedMastersFromQuery, resolveConstraintScope } from "../linkage/linkage.service";
+import { previewMobileOrderBonus } from "../mobile/mobile-order-bonus-preview.service";
 import { getExchangeSourceAvailability } from "./exchange-source-limits.service";
 import { getOrderCreateCatalogBundle, getOrderCreateContextBundle } from "./order-create-context.service";
 import {
@@ -44,6 +46,60 @@ import {
 const catalogRoles = ADMIN_AND_OPERATOR_LIKE_ROLES;
 
 export async function registerOrderPatchRoutes(app: FastifyInstance) {
+  app.post(
+    "/api/:slug/orders/bonus-preview",
+    { preHandler: [jwtAccessVerify, requireRoles(...catalogRoles)] },
+    async (request, reply) => {
+      if (!ensureTenantContext(request, reply)) return;
+      const parsed = orderBonusPreviewBodySchema.safeParse(request.body ?? {});
+      if (!parsed.success) {
+        return sendApiError(reply, request, 400, "ValidationError", undefined, zodValidationExtras(parsed.error));
+      }
+      try {
+        const data = await previewMobileOrderBonus(
+          request.tenant!.id,
+          parsed.data.agent_id,
+          {
+            client_id: parsed.data.client_id,
+            warehouse_id: parsed.data.warehouse_id,
+            price_type: parsed.data.price_type,
+            items: parsed.data.items,
+            bonus_gift_overrides: parsed.data.bonus_gift_overrides,
+            is_consignment: parsed.data.is_consignment,
+            bonus_strategy_selections: parsed.data.bonus_strategy_selections,
+            exclude_order_id: parsed.data.exclude_order_id
+          }
+        );
+        return reply.send(data);
+      } catch (e) {
+        const msg = getErrorCode(e) ?? "";
+        if (msg === "BAD_CLIENT") return sendApiError(reply, request, 400, "BadClient");
+        if (msg === "BAD_WAREHOUSE") return sendApiError(reply, request, 400, "BadWarehouse");
+        if (msg === "BAD_AGENT") return sendApiError(reply, request, 400, "BadAgent");
+        if (msg === "BAD_PRODUCT") return sendApiError(reply, request, 400, "BadProduct");
+        if (msg === "BAD_QTY") return sendApiError(reply, request, 400, "BadQty");
+        if (msg === "DUPLICATE_PRODUCT") return sendApiError(reply, request, 400, "DuplicateProduct");
+        if (msg === "NO_PRICE") {
+          const ex = e as Error & { product_id?: number; price_type?: string };
+          return sendApiError(reply, request, 400, "NoPrice", undefined, {
+            product_id: ex.product_id,
+            price_type: ex.price_type ?? "retail"
+          });
+        }
+        if (msg === "BAD_BONUS_GIFT_OVERRIDE") {
+          return sendApiError(reply, request, 400, "BadBonusGiftOverride");
+        }
+        if (msg === "STRATEGY_SELECTION_REQUIRED") {
+          return sendApiError(reply, request, 400, "StrategySelectionRequired");
+        }
+        if (msg === "STRATEGY_SELECTION_TOO_MANY") {
+          return sendApiError(reply, request, 400, "StrategySelectionTooMany");
+        }
+        throw e;
+      }
+    }
+  );
+
   app.patch(
     "/api/:slug/orders/:id(\\d+)/meta",
     {
@@ -97,6 +153,15 @@ export async function registerOrderPatchRoutes(app: FastifyInstance) {
           return sendApiError(reply, request, 400, "OrderRequiresPaymentMethod");
         }
         if (msg === "BAD_EXPEDITOR") return sendApiError(reply, request, 400, "BadExpeditor");
+        if (msg === "EXPEDITOR_NOT_ON_SLOT") {
+          return sendApiError(
+            reply,
+            request,
+            403,
+            "ExpeditorNotOnSlot",
+            "Экспедитор не назначен на рабочее место — назначение на заказ запрещено"
+          );
+        }
         if (msg === "ORDER_REQUIRES_WAREHOUSE_FOR_BLOCK") {
           return sendApiError(reply, request, 400, "OrderRequiresWarehouseForBlock");
         }
@@ -208,6 +273,12 @@ export async function registerOrderPatchRoutes(app: FastifyInstance) {
         }
         if (msg === "BAD_BONUS_GIFT_OVERRIDE") {
           return sendApiError(reply, request, 400, "BadBonusGiftOverride");
+        }
+        if (msg === "STRATEGY_SELECTION_REQUIRED") {
+          return sendApiError(reply, request, 400, "StrategySelectionRequired");
+        }
+        if (msg === "STRATEGY_SELECTION_TOO_MANY") {
+          return sendApiError(reply, request, 400, "StrategySelectionTooMany");
         }
         if (msg === "INSUFFICIENT_STOCK") {
           const ex = e as Error & { product_id?: number; available?: string; requested?: string };

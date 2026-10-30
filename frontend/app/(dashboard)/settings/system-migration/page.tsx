@@ -10,10 +10,10 @@ export default function SystemMigrationPage() {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
-          <h1 className="text-lg font-semibold tracking-tight">Tizim migratsiyasi</h1>
+          <h1 className="text-lg font-semibold tracking-tight">Миграция системы</h1>
           <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-            To‘liq zaxira olish va boshqa serverga ko‘chirish. Format v5 — spravochniklar, operatsion tarix,
-            bonus/KPI, RBAC/katalog va mijoz fotolari bitta arxivda.
+            Полная резервная копия и перенос на другой сервер. Формат v5 — справочники, история операций,
+            бонусы/KPI, RBAC/каталог и фото клиентов в одном архиве.
           </p>
         </div>
         <Link href="/settings" className={cn(buttonVariants({ variant: "outline", size: "sm" }))}>

@@ -1,8 +1,9 @@
-import bcrypt from "bcryptjs";
 import { Prisma } from "@prisma/client";
 import { prisma } from "../../config/database";
+import { assertValidMaxSessions, clampAdjustedMaxSessions } from "../../lib/max-sessions";
 import { appendTenantAuditEvent, AuditEntityType } from "../../lib/tenant-audit";
 import { onBulkAppAccessChanged } from "../auth/app-access.service";
+import { syncEmploymentAfterActiveChange } from "./staff.employment-sync";
 import { validateConsignmentCloseSchedule } from "../consignment/consignment-settings";
 import {
   extractMobileConfigFromEntitlementsUnknown,
@@ -10,19 +11,18 @@ import {
   parseMobileConfigV1,
   type AgentMobileConfigV1
 } from "./agent-mobile-config";
-import type { AgentEntitlements, ExpeditorAssignmentRules, StaffRow } from "./staff.shared";
+import type { AgentEntitlements } from "./staff.shared";
+import { normalizeAgentEntitlementsInput, validateAgentEntitlements } from "./staff.shared";
+import { loadActiveWorkSlotsByUserIds } from "../work-slots/work-slots.query";
+import { mirrorSlotConfigToUser } from "../work-slots/work-slots.config-mirror";
+import { assertNoActiveSlotForWorkplaceBulk } from "../work-slots/work-slots.staff-guard";
 import {
-  applyTradeDirectionPatch,
-  assertExpeditorMobileTradeDirections,
-  normalizeAgentEntitlementsInput,
-  normalizePriceTypes,
-  parseEntitlements,
-  parsePriceTypesJson,
-  validateAgentEntitlements,
-  validateExpeditorAssignmentRules
-} from "./staff.shared";
-import { applyAgentPatchInDb } from "./staff.patches.field";
-import { listStaff, type PatchAgentInput } from "./staff.crud";
+  entitlementsSnapshotFromAgentUser,
+  mergeAgentEntitlementsAfterProductListPatch,
+  snapToAgentEntitlements
+} from "./staff.patches.web-agents-bulk.entitlements";
+
+export { mergeAgentEntitlementsAfterProductListPatch } from "./staff.patches.web-agents-bulk.entitlements";
 
 const AGENT_BULK_MAX_IDS = 500;
 
@@ -35,131 +35,6 @@ async function assertTenantAgentIdList(tenantId: number, ids: number[]): Promise
   });
   if (count !== uniq.length) throw new Error("BAD_AGENT_IDS");
   return uniq;
-}
-
-type EntSnap = {
-  price_types: string[];
-  product_rules: NonNullable<AgentEntitlements["product_rules"]>;
-  mobile_config?: AgentMobileConfigV1;
-};
-
-function entitlementsSnapshotFromAgentUser(u: {
-  agent_entitlements: unknown;
-  agent_price_types: unknown;
-  price_type: string | null;
-}): EntSnap {
-  const fromJson =
-    u.agent_entitlements && typeof u.agent_entitlements === "object" && !Array.isArray(u.agent_entitlements)
-      ? (u.agent_entitlements as Record<string, unknown>)
-      : {};
-  const product_rules: NonNullable<AgentEntitlements["product_rules"]> = [];
-  const rulesRaw = fromJson.product_rules;
-  if (Array.isArray(rulesRaw)) {
-    for (const r of rulesRaw) {
-      if (!r || typeof r !== "object") continue;
-      const rec = r as Record<string, unknown>;
-      const cid =
-        typeof rec.category_id === "number" && Number.isInteger(rec.category_id) && rec.category_id > 0
-          ? rec.category_id
-          : 0;
-      if (!cid) continue;
-      const all = Boolean(rec.all);
-      const product_ids = Array.isArray(rec.product_ids)
-        ? rec.product_ids.filter((x): x is number => typeof x === "number" && Number.isInteger(x) && x > 0)
-        : undefined;
-      product_rules.push({ category_id: cid, all, product_ids });
-    }
-  }
-  const jPt = fromJson.price_types;
-  const fromJsonPts =
-    Array.isArray(jPt) && jPt.every((x) => typeof x === "string") ? normalizePriceTypes(jPt as string[]) : [];
-  const colPts = parsePriceTypesJson(u.agent_price_types);
-  const single = u.price_type ? normalizePriceTypes([u.price_type]) : [];
-  const price_types = [...new Set([...fromJsonPts, ...colPts, ...single])];
-  const mobile_config = parseMobileConfigV1(fromJson.mobile_config);
-  return {
-    price_types,
-    product_rules,
-    ...(mobile_config ? { mobile_config } : {})
-  };
-}
-
-function snapToAgentEntitlements(snap: EntSnap): AgentEntitlements {
-  const out: AgentEntitlements = {
-    price_types: snap.price_types,
-    product_rules: snap.product_rules
-  };
-  if (snap.mobile_config) out.mobile_config = snap.mobile_config;
-  return out;
-}
-
-/** Guruh mahsulot/narx patchidan keyin `mobile_config` saqlanadi (regression fix). */
-export function mergeAgentEntitlementsAfterProductListPatch(
-  userRow: { agent_entitlements: unknown; agent_price_types: unknown; price_type: string | null },
-  patch: {
-    mode: "add" | "remove";
-    category_id?: number;
-    product_ids?: number[];
-    price_types?: string[];
-  }
-): AgentEntitlements {
-  let snap = entitlementsSnapshotFromAgentUser(userRow);
-  if (patch.product_ids?.length && patch.category_id != null) {
-    snap = mergeAgentProductRulesPatch(snap, patch.mode, patch.category_id, patch.product_ids);
-  }
-  if (patch.price_types?.length) {
-    snap = mergeEntitlementPriceTypes(snap, patch.mode, patch.price_types);
-  }
-  return snapToAgentEntitlements(snap);
-}
-
-function mergeAgentProductRulesPatch(
-  ent: EntSnap,
-  mode: "add" | "remove",
-  categoryId: number,
-  productIds: number[]
-): EntSnap {
-  const idSet = [...new Set(productIds.filter((x) => x > 0))];
-  const rules = [...ent.product_rules];
-  const idx = rules.findIndex((r) => r.category_id === categoryId);
-  if (mode === "add") {
-    if (!idSet.length) return ent;
-    if (idx < 0) {
-      rules.push({ category_id: categoryId, all: false, product_ids: idSet });
-    } else {
-      const r = rules[idx]!;
-      if (r.all) {
-        rules[idx] = { category_id: categoryId, all: false, product_ids: idSet };
-      } else {
-        const cur = new Set(r.product_ids ?? []);
-        for (const p of idSet) cur.add(p);
-        rules[idx] = { category_id: categoryId, all: false, product_ids: [...cur] };
-      }
-    }
-    return { ...ent, product_rules: rules };
-  }
-  if (idx < 0) return ent;
-  const r = rules[idx]!;
-  if (r.all) {
-    rules.splice(idx, 1);
-    return { ...ent, product_rules: rules };
-  }
-  const rm = new Set(idSet);
-  const next = (r.product_ids ?? []).filter((id) => !rm.has(id));
-  if (next.length === 0) rules.splice(idx, 1);
-  else rules[idx] = { category_id: categoryId, all: false, product_ids: next };
-  return { ...ent, product_rules: rules };
-}
-
-function mergeEntitlementPriceTypes(ent: EntSnap, mode: "add" | "remove", labels: string[]): EntSnap {
-  const norm = [...new Set(labels.map((s) => s.trim()).filter(Boolean))];
-  let pts = [...ent.price_types];
-  if (mode === "add") pts = [...new Set([...pts, ...norm])];
-  else {
-    const rm = new Set(norm);
-    pts = pts.filter((p) => !rm.has(p));
-  }
-  return { ...ent, price_types: pts };
 }
 
 export type BulkAgentsInput =
@@ -183,6 +58,9 @@ export type BulkAgentsInput =
       close_minute: number;
     }
   | { action: "set_app_access"; agent_ids: number[]; app_access: boolean }
+  | { action: "set_is_active"; agent_ids: number[]; is_active: boolean }
+  | { action: "set_filter_visible"; agent_ids: number[]; filter_visible: boolean }
+  | { action: "set_agent_type"; agent_ids: number[]; agent_type: string | null }
   | { action: "revoke_sessions"; agent_ids: number[] }
   | { action: "set_max_sessions"; agent_ids: number[]; max_sessions: number }
   | { action: "adjust_max_sessions"; agent_ids: number[]; delta: number }
@@ -206,6 +84,7 @@ export async function bulkPatchAgents(
   switch (input.action) {
     case "set_agent_entitlements": {
       const ids = await assertTenantAgentIdList(tenantId, input.agent_ids);
+      await assertNoActiveSlotForWorkplaceBulk(ids);
       const normalizedEnt = normalizeAgentEntitlementsInput(input.agent_entitlements);
       const usersForMerge = await prisma.user.findMany({
         where: { tenant_id: tenantId, role: "agent", id: { in: ids } },
@@ -230,6 +109,7 @@ export async function bulkPatchAgents(
     }
     case "patch_product_list": {
       const ids = await assertTenantAgentIdList(tenantId, input.agent_ids);
+      await assertNoActiveSlotForWorkplaceBulk(ids);
       const pids = [...new Set((input.product_ids ?? []).filter((x) => x > 0))];
       const pts = [...new Set((input.price_types ?? []).map((s) => s.trim()).filter(Boolean))];
       if (!pids.length && !pts.length) throw new Error("EMPTY_PRODUCT_PATCH");
@@ -238,15 +118,14 @@ export async function bulkPatchAgents(
         where: { tenant_id: tenantId, role: "agent", id: { in: ids } },
         select: { id: true, agent_entitlements: true, agent_price_types: true, price_type: true }
       });
-      const patches = users.map((u) => {
-        const ent = mergeAgentEntitlementsAfterProductListPatch(u, {
+      const patches = users.map((u) =>
+        mergeAgentEntitlementsAfterProductListPatch(u, {
           mode: input.mode,
           category_id: input.category_id,
           product_ids: pids,
           price_types: pts
-        });
-        return ent;
-      });
+        })
+      );
       await prisma.$transaction(
         users.map((u, i) =>
           prisma.user.update({ where: { id: u.id }, data: { agent_entitlements: patches[i] } })
@@ -257,6 +136,7 @@ export async function bulkPatchAgents(
     }
     case "set_trade_direction": {
       const ids = await assertTenantAgentIdList(tenantId, input.agent_ids);
+      await assertNoActiveSlotForWorkplaceBulk(ids);
       await prisma.user.updateMany({
         where: { tenant_id: tenantId, role: "agent", id: { in: ids } },
         data: { trade_direction_id: input.trade_direction_id }
@@ -269,6 +149,7 @@ export async function bulkPatchAgents(
       if (input.updates.length > AGENT_BULK_MAX_IDS) throw new Error("TOO_MANY_AGENTS");
       const uids = input.updates.map((u) => u.agent_id);
       await assertTenantAgentIdList(tenantId, uids);
+      await assertNoActiveSlotForWorkplaceBulk(uids);
       await prisma.$transaction(
         input.updates.map((u) =>
           prisma.user.update({ where: { id: u.agent_id }, data: { trade_direction_id: u.trade_direction_id } })
@@ -279,6 +160,7 @@ export async function bulkPatchAgents(
     }
     case "set_consignment": {
       const ids = await assertTenantAgentIdList(tenantId, input.agent_ids);
+      await assertNoActiveSlotForWorkplaceBulk(ids);
       await prisma.user.updateMany({
         where: { tenant_id: tenantId, role: "agent", id: { in: ids } },
         data: { consignment: input.consignment, consignment_updated_at: new Date() }
@@ -288,6 +170,7 @@ export async function bulkPatchAgents(
     }
     case "set_consignment_close": {
       const ids = await assertTenantAgentIdList(tenantId, input.agent_ids);
+      await assertNoActiveSlotForWorkplaceBulk(ids);
       const schedule = validateConsignmentCloseSchedule({
         day: input.close_day,
         hour: input.close_hour,
@@ -315,6 +198,38 @@ export async function bulkPatchAgents(
       await auditBulk(ids.length);
       return { updated: ids.length };
     }
+    case "set_is_active": {
+      const ids = await assertTenantAgentIdList(tenantId, input.agent_ids);
+      await prisma.user.updateMany({
+        where: { tenant_id: tenantId, role: "agent", id: { in: ids } },
+        data: { is_active: input.is_active }
+      });
+      await syncEmploymentAfterActiveChange(tenantId, ids, actorUserId);
+      await auditBulk(ids.length, { is_active: input.is_active });
+      return { updated: ids.length };
+    }
+    case "set_filter_visible": {
+      const ids = await assertTenantAgentIdList(tenantId, input.agent_ids);
+      await prisma.user.updateMany({
+        where: { tenant_id: tenantId, role: "agent", id: { in: ids } },
+        data: { filter_visible: input.filter_visible }
+      });
+      await auditBulk(ids.length, { filter_visible: input.filter_visible });
+      return { updated: ids.length };
+    }
+    case "set_agent_type": {
+      const ids = await assertTenantAgentIdList(tenantId, input.agent_ids);
+      const agentType =
+        input.agent_type == null || !String(input.agent_type).trim()
+          ? null
+          : String(input.agent_type).trim().slice(0, 120);
+      await prisma.user.updateMany({
+        where: { tenant_id: tenantId, role: "agent", id: { in: ids } },
+        data: { agent_type: agentType }
+      });
+      await auditBulk(ids.length, { agent_type: agentType });
+      return { updated: ids.length };
+    }
     case "revoke_sessions": {
       const ids = await assertTenantAgentIdList(tenantId, input.agent_ids);
       const now = new Date();
@@ -328,7 +243,7 @@ export async function bulkPatchAgents(
     case "set_max_sessions": {
       const ids = await assertTenantAgentIdList(tenantId, input.agent_ids);
       const n = input.max_sessions;
-      if (!Number.isInteger(n) || n < 1 || n > 99) throw new Error("BAD_MAX_SESSIONS");
+      assertValidMaxSessions(n);
       await prisma.user.updateMany({
         where: { tenant_id: tenantId, role: "agent", id: { in: ids } },
         data: { max_sessions: n }
@@ -346,7 +261,7 @@ export async function bulkPatchAgents(
       });
       await prisma.$transaction(
         rows.map((u) => {
-          const next = Math.min(99, Math.max(1, u.max_sessions + d));
+          const next = clampAdjustedMaxSessions(u.max_sessions, d);
           return prisma.user.update({ where: { id: u.id }, data: { max_sessions: next } });
         })
       );
@@ -362,24 +277,49 @@ export async function bulkPatchAgents(
         where: { tenant_id: tenantId, role: "agent", id: { in: ids } },
         select: { id: true, agent_entitlements: true, agent_price_types: true, price_type: true }
       });
-      const patches = users.map((u) => {
+      const slotByUser = await loadActiveWorkSlotsByUserIds(users.map((u) => u.id));
+      let updated = 0;
+      for (const u of users) {
+        const slotInfo = slotByUser.get(u.id);
+        if (slotInfo) {
+          const slot = await prisma.workSlot.findFirst({
+            where: { id: slotInfo.slot_id, tenant_id: tenantId },
+            select: { id: true, entitlements: true }
+          });
+          if (!slot) continue;
+          const prevEnt =
+            slot.entitlements != null &&
+            typeof slot.entitlements === "object" &&
+            !Array.isArray(slot.entitlements)
+              ? { ...(slot.entitlements as Record<string, unknown>) }
+              : {};
+          const stored = extractMobileConfigFromEntitlementsUnknown(slot.entitlements);
+          const mergedMc = mergeMobileConfigPatch(stored, parsedPatch);
+          const nextEnt = { ...prevEnt, mobile_config: mergedMc };
+          await prisma.$transaction(async (tx) => {
+            await tx.workSlot.update({
+              where: { id: slot.id },
+              data: { entitlements: nextEnt as Prisma.InputJsonValue }
+            });
+            await mirrorSlotConfigToUser(tx, tenantId, slot.id, u.id);
+          });
+          updated += 1;
+          continue;
+        }
         const snap = entitlementsSnapshotFromAgentUser(u);
         const stored = extractMobileConfigFromEntitlementsUnknown(u.agent_entitlements);
         const mergedMc = mergeMobileConfigPatch(stored, parsedPatch);
-        return normalizeAgentEntitlementsInput({
+        const patch = normalizeAgentEntitlementsInput({
           ...snapToAgentEntitlements(snap),
           mobile_config: mergedMc
         });
-      });
-      await prisma.$transaction(
-        users.map((u, i) =>
-          prisma.user.update({ where: { id: u.id }, data: { agent_entitlements: patches[i] } })
-        )
-      );
-      await auditBulk(users.length, {
+        await prisma.user.update({ where: { id: u.id }, data: { agent_entitlements: patch } });
+        updated += 1;
+      }
+      await auditBulk(updated, {
         mobile_config_section_keys: Object.keys(parsedPatch).filter((k) => k !== "schema_version")
       });
-      return { updated: users.length };
+      return { updated };
     }
     default:
       throw new Error("BAD_BULK_ACTION");

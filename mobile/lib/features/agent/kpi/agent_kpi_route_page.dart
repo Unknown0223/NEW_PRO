@@ -97,6 +97,7 @@ class _AgentKpiRoutePageState extends ConsumerState<AgentKpiRoutePage> {
       backgroundColor: AppColors.background,
       appBar: AgentAppBar(
         title: 'KPI · ${tabelMonthTitle(month)}',
+        useShellDrawer: true,
         showBack: false,
         belowTitle: dataAsync.maybeWhen(
           data: (d) => Text(
@@ -363,7 +364,7 @@ class _TodaySalesHero extends StatelessWidget {
                         if (vs != null) ...[
                           const SizedBox(height: 3),
                           Text(
-                            '${vs >= 0 ? '+' : ''}${vs.toStringAsFixed(1)}% vs вчера',
+                            '${vs >= 0 ? '+' : ''}${vs.toStringAsFixed(1)}% к вчерашнему дню',
                             style: TextStyle(
                               color: vs >= 0 ? AppColors.kpiChartGreen : const Color(0xFFFECACA),
                               fontSize: 13.5,

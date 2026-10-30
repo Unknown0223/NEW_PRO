@@ -63,10 +63,10 @@ export function GeoBoundariesWorkspace() {
   }, [lassoDrawActive, clickDrawActive]);
 
   if (!authHydrated) {
-    return <p className="p-6 text-sm text-muted-foreground">Sessiya yuklanmoqda…</p>;
+    return <p className="p-6 text-sm text-muted-foreground">Загрузка сессии…</p>;
   }
   if (!tenantSlug) {
-    return <p className="p-6 text-sm text-destructive">Tenant topilmadi.</p>;
+    return <p className="p-6 text-sm text-destructive">Организация не найдена.</p>;
   }
 
   return (
@@ -106,16 +106,16 @@ export function GeoBoundariesWorkspace() {
         <div className="vp-topbar vp-topbar-compact">
           <div className="vp-actions vp-actions-left">
             <Link href="/settings" className="vp-btn">
-              Sozlamalar
+              Настройки
             </Link>
             <Link href="/settings/territories" className="vp-btn">
-              Territoriya
+              Территория
             </Link>
             <Link href="/settings/branches" className="vp-btn">
-              Filiallar
+              Филиалы
             </Link>
             <Link href="/clients/visit-planner" className="vp-btn vp-primary">
-              Vizitlar
+              Визиты
             </Link>
           </div>
         </div>

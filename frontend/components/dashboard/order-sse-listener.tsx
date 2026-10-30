@@ -2,6 +2,7 @@
 
 import { api, resolveApiOrigin } from "@/lib/api";
 import { useAuthStore } from "@/lib/auth-store";
+import { invalidateLiveDashboardQueries } from "@/lib/dashboard-shared-query-keys";
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef } from "react";
 
@@ -67,6 +68,7 @@ export function OrderSseListener() {
         for (const orderId of orderIds) {
           void qc.invalidateQueries({ queryKey: ["order", slugAtStart, orderId] });
         }
+        invalidateLiveDashboardQueries(qc, slugAtStart);
       };
 
       es.onmessage = (ev) => {

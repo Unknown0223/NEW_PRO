@@ -1,4 +1,9 @@
 import { prisma } from "../../config/database";
+import { resolveStoredPaymentMethodRef } from "../tenant-settings/finance-refs";
+import {
+  loadPaymentMethodEntriesForResolve,
+  loadPriceTypeEntriesForResolve
+} from "../tenant-settings/tenant-settings.service";
 import {
   loadTenantTimezone,
   utcOffsetHoursForTimezone
@@ -121,6 +126,16 @@ export async function enqueueOrder(
 
   const now = new Date();
   const tempNumber = `OFF-${now.getTime()}`;
+  const priceType = (opts?.price_type ?? "").trim() || "retail";
+  const [priceTypeEntries, paymentMethodEntries] = await Promise.all([
+    loadPriceTypeEntriesForResolve(tenantId),
+    loadPaymentMethodEntriesForResolve(tenantId)
+  ]);
+  const paymentMethodRef = resolveStoredPaymentMethodRef({
+    priceType,
+    priceTypeEntries,
+    paymentMethodEntries
+  });
   const order = await prisma.order.create({
     data: {
       tenant_id: tenantId,
@@ -128,10 +143,12 @@ export async function enqueueOrder(
       client_id: clientId,
       agent_id: userId,
       warehouse_id: warehouseId,
+      creation_channel: "mobile",
       status: "pending_sync",
       total_sum: 0,
       bonus_sum: 0,
       comment: opts?.comment?.trim() || null,
+      payment_method_ref: paymentMethodRef,
       created_at: offlineCreatedAt,
       updated_at: now,
       items: {
@@ -149,7 +166,7 @@ export async function enqueueOrder(
           action: "offline_enqueue",
           payload: {
             offline_created_at: offlineCreatedAt.toISOString(),
-            price_type: (opts?.price_type ?? "").trim() || "retail"
+            price_type: priceType
           }
         }
       }
@@ -176,13 +193,25 @@ export async function syncOrders(tenantId: number, userId: number) {
       ...agentScopedOrderWhere(tenantId, userId),
       status: "pending_sync"
     },
-    include: { items: true },
+    include: {
+      items: true,
+      change_logs: {
+        where: { action: "offline_enqueue" },
+        orderBy: { id: "asc" },
+        take: 1
+      }
+    },
     orderBy: { created_at: "asc" }
   });
 
   if (offlineOrders.length === 0) {
     return { synced: 0, results: [] };
   }
+
+  const [priceTypeEntries, paymentMethodEntries] = await Promise.all([
+    loadPriceTypeEntriesForResolve(tenantId),
+    loadPaymentMethodEntriesForResolve(tenantId)
+  ]);
 
   const results: { clientLocalId: number; serverId: number; serverNumber: string }[] = [];
 
@@ -196,9 +225,30 @@ export async function syncOrders(tenantId: number, userId: number) {
       }
 
       const serverNumber = String(order.id);
+      let paymentMethodRef = order.payment_method_ref?.trim() || null;
+      if (!paymentMethodRef) {
+        const payload = order.change_logs[0]?.payload;
+        const pt =
+          payload != null && typeof payload === "object" && !Array.isArray(payload)
+            ? String((payload as Record<string, unknown>).price_type ?? "").trim()
+            : "";
+        paymentMethodRef = resolveStoredPaymentMethodRef({
+          priceType: pt || null,
+          priceTypeEntries,
+          paymentMethodEntries
+        });
+      }
       await tx.order.update({
         where: { id: order.id },
-        data: { number: serverNumber, status: "new", total_sum: totalSum, updated_at: new Date() }
+        data: {
+          number: serverNumber,
+          status: "new",
+          total_sum: totalSum,
+          updated_at: new Date(),
+          ...(paymentMethodRef && !order.payment_method_ref?.trim()
+            ? { payment_method_ref: paymentMethodRef }
+            : {})
+        }
       });
 
       results.push({

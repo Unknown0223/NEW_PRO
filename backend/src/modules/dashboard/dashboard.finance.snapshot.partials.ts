@@ -17,6 +17,7 @@ import {
   financePeriodTruncSql
 } from "./dashboard.finance.period";
 import {
+  expandFinancePaymentFilters,
   financeClientFilterSql,
   financeDateExprByType,
   financeOrderScopeSql
@@ -25,16 +26,17 @@ import {
 export type FinanceDashboardSummaryPayload = Omit<FinanceDashboardSnapshot, "territory_debts" | "clients_debt_list">;
 
 export async function buildFinanceScopes(tenantId: number, filters: FinanceDashboardFilters) {
-  const from = new Date(`${filters.from}T00:00:00.000Z`);
-  const to = new Date(`${filters.to}T23:59:59.999Z`);
-  const orderScope = financeOrderScopeSql(tenantId, from, to, filters);
-  const orderScopeO2 = financeOrderScopeSql(tenantId, from, to, filters, {
+  const expanded = await expandFinancePaymentFilters(tenantId, filters);
+  const from = new Date(`${expanded.from}T00:00:00.000Z`);
+  const to = new Date(`${expanded.to}T23:59:59.999Z`);
+  const orderScope = financeOrderScopeSql(tenantId, from, to, expanded);
+  const orderScopeO2 = financeOrderScopeSql(tenantId, from, to, expanded, {
     aliases: { order: "o2", user: "u2", client: "c2" }
   });
-  const receivableOrderScope = financeOrderScopeSql(tenantId, from, to, filters, {
+  const receivableOrderScope = financeOrderScopeSql(tenantId, from, to, expanded, {
     onlyReceivableStatuses: true
   });
-  const clientFilter = financeClientFilterSql(tenantId, filters);
+  const clientFilter = financeClientFilterSql(tenantId, expanded);
   return { from, to, orderScope, orderScopeO2, receivableOrderScope, clientFilter };
 }
 

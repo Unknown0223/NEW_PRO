@@ -1,25 +1,34 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:geolocator/geolocator.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/api/media_url.dart';
 import '../../../core/api/mobile_api.dart';
 import '../../../core/auth/session.dart';
+import '../../../core/config/agent_cities.dart';
+import '../../../core/config/tenant_refs_provider.dart';
 import '../../../core/database/app_database.dart';
+import '../../../core/gps/gps_tracker.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/config/client_field_policy.dart';
 import '../../../core/clients/agent_client_balance.dart';
 import '../../../core/clients/agent_outlet_filters_provider.dart';
+import '../../../core/clients/client_local_uniques.dart';
+import '../../../core/errors/error_reporter.dart';
+import '../../../core/errors/user_facing_error.dart';
 import '../../../core/format/money_display.dart';
 import '../../../core/config/mobile_config.dart';
 import '../../../core/orders/order_status_labels.dart';
 import '../../../core/ui/agent_ui.dart';
+import '../../../core/utils/client_navigation.dart';
 import '../../../core/utils/external_actions.dart';
 import '../../../core/ui/agent_ui_extended.dart';
+import '../../../core/ui/client_photo_thumb.dart';
+import '../../auth/auth_provider.dart';
 import '../shell/agent_app_bar.dart';
 import '../orders/order_draft_model.dart';
 import '../orders/order_draft_provider.dart';
@@ -79,11 +88,20 @@ class _ClientDetailScreenState extends ConsumerState<ClientDetailScreen> {
     if (mounted) setState(() => _photosLoading = true);
     try {
       final photos = await ref.read(mobileApiProvider).getClientPhotoReports(slug, widget.clientId);
-      if (mounted) setState(() => _photos = photos);
+      // Server todayOnly + ish mintaqasi filtri — kechagi qoldiqlar ko‘rinmasin.
+      if (mounted) setState(() => _photos = photoReportsForToday(photos));
     } catch (e) {
       if (mounted && _photos.isEmpty) {
-        _toast('Фотоотчёты не загрузились: $e');
+        _toast(UserFacingError.toast(e, action: 'Не удалось загрузить фотоотчёты'));
       }
+      ErrorReporter.instance?.reportCaught(
+        e,
+        module: ErrorModules.photos,
+        code: 'PhotoListFailed',
+        message: 'Фотоотчёт: список не загрузился',
+        path: '/mobile/clients/photo-reports',
+        payload: {'client_id': widget.clientId},
+      );
     } finally {
       if (mounted) setState(() => _photosLoading = false);
     }
@@ -91,7 +109,8 @@ class _ClientDetailScreenState extends ConsumerState<ClientDetailScreen> {
 
   void _mergePhotoRow(ClientPhotoReport row) {
     setState(() {
-      _photos = [row, ..._photos.where((p) => p.id != row.id)];
+      final next = [row, ..._photos.where((p) => p.id != row.id)];
+      _photos = photoReportsForToday(next);
     });
   }
 
@@ -192,13 +211,20 @@ class _ClientDetailScreenState extends ConsumerState<ClientDetailScreen> {
       unawaited(_loadPhotos());
     } catch (e) {
       if (mounted) {
-        _toast('Ошибка удаления: $e');
+        _toast(UserFacingError.toast(e, action: 'Не удалось удалить фото'));
       }
     }
   }
 
   void _openCreateOrder() {
     if (!_canCreateOrder || _client == null) return;
+    final session = ref.read(sessionProvider);
+    final clientCfg = session.mobileConfig?.client ?? const ClientConfig();
+    final productList = session.mobileConfig?.productList ?? const ProductListConfig();
+    if (isNewClientBlockedForOrder(_client!, clientCfg, productList)) {
+      _toast(kClientInactiveOrderMessage, accent: AppColors.warning);
+      return;
+    }
     context.push(
       '/orders/create?client_id=${widget.clientId}',
       extra: Map<String, dynamic>.from(_client!),
@@ -275,7 +301,7 @@ class _ClientDetailScreenState extends ConsumerState<ClientDetailScreen> {
     }
   }
 
-  void _openClientLocation(Map<String, dynamic> client) {
+  Future<void> _openClientLocation(Map<String, dynamic> client) async {
     final lat = (client['latitude'] as num?)?.toDouble();
     final lng = (client['longitude'] as num?)?.toDouble();
     final name = client['name']?.toString() ?? 'Клиент';
@@ -283,14 +309,72 @@ class _ClientDetailScreenState extends ConsumerState<ClientDetailScreen> {
       _toast('Координаты не указаны', accent: AppColors.warning);
       return;
     }
-    context.push(
-      '/client-location',
-      extra: {
-        'name': name,
-        'lat': lat,
-        'lng': lng,
+
+    final choice = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: AppColors.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (ctx) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  'Локация',
+                  style: AppTypography.headlineMedium.copyWith(fontWeight: FontWeight.w800),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  name,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTypography.caption.copyWith(color: AppColors.textMuted),
+                ),
+                const SizedBox(height: 12),
+                ListTile(
+                  leading: const Icon(Icons.directions, color: AppColors.agentAccent),
+                  title: const Text('Построить маршрут'),
+                  subtitle: const Text('Yandex / Google — от вашего GPS'),
+                  onTap: () => Navigator.pop(ctx, 'directions'),
+                ),
+                ListTile(
+                  leading: const Icon(Icons.map_outlined, color: AppColors.primary),
+                  title: const Text('Показать на карте'),
+                  subtitle: const Text('В приложении'),
+                  onTap: () => Navigator.pop(ctx, 'map'),
+                ),
+              ],
+            ),
+          ),
+        );
       },
     );
+
+    if (!mounted || choice == null) return;
+    if (choice == 'map') {
+      context.push(
+        '/client-location',
+        extra: {
+          'name': name,
+          'lat': lat,
+          'lng': lng,
+        },
+      );
+      return;
+    }
+
+    final ok = await openDirectionsToClient(
+      latitude: lat,
+      longitude: lng,
+    );
+    if (!ok && mounted) {
+      _toast('Не удалось открыть навигацию', accent: AppColors.warning);
+    }
   }
 
   void _showActionsSheet() {
@@ -327,12 +411,16 @@ class _ClientDetailScreenState extends ConsumerState<ClientDetailScreen> {
       if (slug.isNotEmpty && body.isNotEmpty) {
         await ref.read(mobileApiProvider).patchClient(slug, widget.clientId, body);
       }
-      await AppDatabase().upsertClients([
-        {
-          ...c,
-          for (final entry in body.entries) entry.key: entry.value,
-        },
-      ]);
+      final local = <String, dynamic>{
+        ...c,
+        for (final entry in body.entries)
+          if (entry.key != 'visit_weekdays') entry.key: entry.value,
+      };
+      final wd = body['visit_weekdays'];
+      if (wd is List) {
+        local['visit_weekdays'] = jsonEncode(wd);
+      }
+      await AppDatabase().upsertClients([local]);
       await _load();
       if (mounted) {
         _toast('Клиент сохранён', accent: AppColors.success);
@@ -340,7 +428,7 @@ class _ClientDetailScreenState extends ConsumerState<ClientDetailScreen> {
     } catch (e) {
       await _load();
       if (mounted) {
-        _toast('Ошибка сохранения: $e');
+        _toast(UserFacingError.toast(e, action: 'Не удалось сохранить клиента'));
       }
     }
   }
@@ -365,7 +453,8 @@ class _ClientDetailScreenState extends ConsumerState<ClientDetailScreen> {
     final appBarTitle = clientName.length > 18 ? '${clientName.substring(0, 16)}…' : clientName;
     final clientCfg = config?.client ?? const ClientConfig();
     final detailFields = clientDetailFieldKeys(clientCfg);
-    final todayPhotos = photoReportsForToday(_photos);
+    final headerPhoto = firstClientPhotoUrl(c) ??
+        (_photos.isNotEmpty && _photos.first.imageUrl.trim().isNotEmpty ? _photos.first.imageUrl : null);
     final draft = ref.watch(orderDraftForClientProvider(widget.clientId)).valueOrNull;
     final showBalance = config?.client.showBalance ?? true;
     final agentBalances = ref.watch(clientAgentLedgerBalancesProvider).valueOrNull;
@@ -436,20 +525,34 @@ class _ClientDetailScreenState extends ConsumerState<ClientDetailScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Text(
-                    clientName,
-                    style: AppTypography.titleMedium.copyWith(fontSize: 17, fontWeight: FontWeight.w800),
-                  ),
-                  const SizedBox(height: 4),
-                  if (showBalance)
-                    Text(
-                      balanceText,
-                      style: TextStyle(
-                        fontSize: 22,
-                        fontWeight: FontWeight.w800,
-                        color: colorForClientBalance(balanceAmount ?? 0),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      ClientPhotoThumb(source: headerPhoto, size: 72, radius: 14),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              clientName,
+                              style: AppTypography.titleMedium.copyWith(fontSize: 17, fontWeight: FontWeight.w800),
+                            ),
+                            const SizedBox(height: 4),
+                            if (showBalance)
+                              Text(
+                                balanceText,
+                                style: TextStyle(
+                                  fontSize: 22,
+                                  fontWeight: FontWeight.w800,
+                                  color: colorForClientBalance(balanceAmount ?? 0),
+                                ),
+                              ),
+                          ],
+                        ),
                       ),
-                    ),
+                    ],
+                  ),
                   const SizedBox(height: 10),
                   Row(
                     children: [
@@ -457,7 +560,7 @@ class _ClientDetailScreenState extends ConsumerState<ClientDetailScreen> {
                         child: ElevatedButton.icon(
                           onPressed: () => _callClient(c),
                           icon: const Icon(Icons.phone_rounded, size: 16),
-                          label: const Text('Call'),
+                          label: const Text('Позвонить'),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: AppColors.primary,
                             foregroundColor: Colors.white,
@@ -471,7 +574,7 @@ class _ClientDetailScreenState extends ConsumerState<ClientDetailScreen> {
                         child: ElevatedButton.icon(
                           onPressed: () => _openClientLocation(c),
                           icon: const Icon(Icons.location_on_rounded, size: 16, color: Color(0xFFEF4444)),
-                          label: const Text('Location'),
+                          label: const Text('Локация'),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: const Color(0xFFF1F5F9),
                             foregroundColor: AppColors.textPrimary,
@@ -498,8 +601,8 @@ class _ClientDetailScreenState extends ConsumerState<ClientDetailScreen> {
                         style: AppTypography.bodyMedium.copyWith(fontWeight: FontWeight.w700),
                       ),
                       const Spacer(),
-                      if (!_photoUploading && todayPhotos.isNotEmpty)
-                        _ClientCountBadge('${todayPhotos.length}'),
+                      if (!_photoUploading && _photos.isNotEmpty)
+                        _ClientCountBadge('${_photos.length}'),
                     ],
                   ),
                   const SizedBox(height: 10),
@@ -508,7 +611,7 @@ class _ClientDetailScreenState extends ConsumerState<ClientDetailScreen> {
                       height: 78,
                       child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
                     )
-                  else if (_photosLoading && todayPhotos.isEmpty)
+                  else if (_photosLoading && _photos.isEmpty)
                     const SizedBox(
                       height: 78,
                       child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
@@ -516,7 +619,7 @@ class _ClientDetailScreenState extends ConsumerState<ClientDetailScreen> {
                   else
                     _PhotoReportStrip(
                       clientId: widget.clientId,
-                      photos: todayPhotos,
+                      photos: _photos,
                       onView: _viewPhoto,
                       onReplace: _replacePhoto,
                       onDelete: _deletePhoto,
@@ -703,11 +806,34 @@ class _EditClientSheet extends ConsumerStatefulWidget {
 class _EditClientSheetState extends ConsumerState<_EditClientSheet> {
   final _controllers = <String, TextEditingController>{};
   bool _saving = false;
+  String? _zone;
+  String? _region;
+  String? _city;
+  double? _latitude;
+  double? _longitude;
+  bool _gpsLoading = false;
+  String? _error;
 
   @override
   void initState() {
     super.initState();
     ClientDynamicFormFields.populateFromClient(widget.client, _controllers);
+    _city = widget.client['city']?.toString();
+    _zone = widget.client['zone']?.toString();
+    _region = widget.client['region']?.toString() ?? widget.client['territory']?.toString();
+    final lat = widget.client['latitude'];
+    final lon = widget.client['longitude'];
+    if (lat is num) _latitude = lat.toDouble();
+    if (lon is num) _longitude = lon.toDouble();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _ensureAgentCitiesLoaded());
+  }
+
+  Future<void> _ensureAgentCitiesLoaded() async {
+    if (!mounted) return;
+    if (ref.read(agentCitiesProvider).isNotEmpty) return;
+    try {
+      await ref.read(authStateProvider.notifier).refreshMobileConfig();
+    } catch (_) {}
   }
 
   @override
@@ -718,31 +844,112 @@ class _EditClientSheetState extends ConsumerState<_EditClientSheet> {
     super.dispose();
   }
 
-  Future<void> _save() async {
-    final validation = ClientDynamicFormFields.validate(widget.config, _controllers);
-    if (validation != null) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(validation), backgroundColor: AppColors.error),
-        );
+  bool get _territoryVisible => isClientFieldVisible(widget.config, 'territory');
+
+  bool get _useCityPicker {
+    if (!_territoryVisible) return false;
+    return true;
+  }
+
+  Set<String> get _hiddenFormKeys => _useCityPicker ? const {'territory'} : const {};
+
+  void _applyCitySelection(AgentCityOption? picked) {
+    setState(() {
+      _city = picked?.value;
+      _zone = picked?.zone;
+      _region = picked?.region;
+    });
+  }
+
+  Future<void> _captureGps() async {
+    if (_gpsLoading || !showCoordinatesField(widget.config)) return;
+    setState(() => _gpsLoading = true);
+    try {
+      final attached = await ref.read(gpsTrackerProvider.notifier).attachCurrentPosition();
+      if (!mounted) return;
+      if (!attached.ok || attached.position == null) {
+        setState(() => _error = attached.message);
+        return;
       }
+      setState(() {
+        _latitude = attached.position!.latitude;
+        _longitude = attached.position!.longitude;
+        _error = null;
+      });
+    } finally {
+      if (mounted) setState(() => _gpsLoading = false);
+    }
+  }
+
+  Future<void> _save() async {
+    if (_useCityPicker && (_city == null || _city!.trim().isEmpty)) {
+      setState(() => _error = 'Выберите город');
+      return;
+    }
+    final validation = ClientDynamicFormFields.validate(
+      widget.config,
+      _controllers,
+      hiddenFieldKeys: _hiddenFormKeys,
+    );
+    if (validation != null) {
+      setState(() => _error = validation);
       return;
     }
 
-    setState(() => _saving = true);
+    setState(() {
+      _saving = true;
+      _error = null;
+    });
     try {
-      Position? pos;
-      if (showCoordinatesField(widget.config)) {
-        try {
-          pos = await Geolocator.getCurrentPosition();
-        } catch (_) {}
+      double? lat = _latitude;
+      double? lon = _longitude;
+      if (showCoordinatesField(widget.config) && (lat == null || lon == null)) {
+        final attached = await ref.read(gpsTrackerProvider.notifier).attachCurrentPosition();
+        if (attached.position != null) {
+          lat = attached.position!.latitude;
+          lon = attached.position!.longitude;
+        } else if (isClientFieldRequired(widget.config, 'coordinates')) {
+          if (mounted) setState(() => _error = attached.message);
+          return;
+        }
       }
+
       final body = ClientDynamicFormFields.toApiBody(
         widget.config,
         _controllers,
-        latitude: pos?.latitude,
-        longitude: pos?.longitude,
+        latitude: showCoordinatesField(widget.config) ? lat : null,
+        longitude: showCoordinatesField(widget.config) ? lon : null,
       );
+      if (isClientFieldVisible(widget.config, 'visit_day')) {
+        body['visit_weekdays'] = ClientDynamicFormFields.visitWeekdaysFromControllers(
+          widget.config,
+          _controllers,
+        );
+      }
+      if (_territoryVisible) {
+        if (_zone != null && _zone!.trim().isNotEmpty) body['zone'] = _zone!.trim();
+        if (_region != null && _region!.trim().isNotEmpty) body['region'] = _region!.trim();
+        if (_city != null && _city!.trim().isNotEmpty) body['city'] = _city!.trim();
+      }
+
+      final clientId = (widget.client['id'] as num?)?.toInt();
+      final localDup = findLocalClientDuplicateMessage(
+        await AppDatabase().getAllClients(activeOnly: false),
+        name: body['name']?.toString() ?? _controllers['name']?.text.trim() ?? '',
+        phone: body['phone']?.toString(),
+        inn: body['inn']?.toString(),
+        clientPinfl: body['client_pinfl']?.toString(),
+        clientCode: body['client_code']?.toString(),
+        region: body['region']?.toString() ?? _region,
+        zone: body['zone']?.toString() ?? _zone,
+        city: body['city']?.toString() ?? _city,
+        excludeClientId: clientId,
+      );
+      if (localDup != null) {
+        if (mounted) setState(() => _error = localDup);
+        return;
+      }
+
       if (!mounted) return;
       Navigator.pop(context, body);
     } finally {
@@ -754,6 +961,9 @@ class _EditClientSheetState extends ConsumerState<_EditClientSheet> {
   Widget build(BuildContext context) {
     final media = MediaQuery.of(context);
     final maxHeight = media.size.height * 0.92 - media.viewInsets.bottom;
+    final agentCities = ref.watch(effectiveAgentCitiesProvider);
+    final showCityPicker = _territoryVisible;
+    final showGps = showCoordinatesField(widget.config);
 
     return Padding(
       padding: EdgeInsets.only(bottom: media.viewInsets.bottom),
@@ -780,10 +990,50 @@ class _EditClientSheetState extends ConsumerState<_EditClientSheet> {
               Flexible(
                 child: SingleChildScrollView(
                   padding: const EdgeInsets.fromLTRB(20, 8, 20, 12),
-                  child: ClientDynamicFormFields(
-                    config: widget.config,
-                    controllers: _controllers,
-                    showGpsHint: showCoordinatesField(widget.config),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      ClientDynamicFormFields(
+                        config: widget.config,
+                        controllers: _controllers,
+                        showGpsHint: showGps,
+                        hiddenFieldKeys: showCityPicker ? const {'territory'} : const <String>{},
+                      ),
+                      if (showCityPicker) ...[
+                        const SizedBox(height: 8),
+                        _EditCitySelect(
+                          cities: agentCities,
+                          value: _city,
+                          onChanged: _applyCitySelection,
+                        ),
+                      ],
+                      if (showGps) ...[
+                        const SizedBox(height: 8),
+                        OutlinedButton.icon(
+                          onPressed: _gpsLoading ? null : _captureGps,
+                          icon: _gpsLoading
+                              ? const SizedBox(
+                                  width: 16,
+                                  height: 16,
+                                  child: CircularProgressIndicator(strokeWidth: 2),
+                                )
+                              : const Icon(Icons.gps_fixed),
+                          label: Text(_gpsLoading ? 'GPS…' : 'Обновить GPS'),
+                        ),
+                        if (_latitude != null && _longitude != null)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 8),
+                            child: Text(
+                              'Координаты: ${_latitude!.toStringAsFixed(5)}, ${_longitude!.toStringAsFixed(5)}',
+                              style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
+                            ),
+                          ),
+                      ],
+                      if (_error != null) ...[
+                        const SizedBox(height: 8),
+                        Text(_error!, style: const TextStyle(color: AppColors.error)),
+                      ],
+                    ],
                   ),
                 ),
               ),
@@ -811,6 +1061,51 @@ class _EditClientSheetState extends ConsumerState<_EditClientSheet> {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _EditCitySelect extends StatelessWidget {
+  final List<AgentCityOption> cities;
+  final String? value;
+  final void Function(AgentCityOption?) onChanged;
+
+  const _EditCitySelect({
+    required this.cities,
+    required this.value,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final seen = <String>{};
+    final unique = cities.where((c) => seen.add(c.value)).toList();
+    final options = unique.map((c) => c.value).toList();
+    final labels = {for (final c in unique) c.value: c.label};
+    var selected = value;
+    if (selected != null && !options.contains(selected)) {
+      final byLabel = unique.where((c) => c.label == selected).toList();
+      selected = byLabel.length == 1 ? byLabel.first.value : null;
+    }
+    return DropdownButtonFormField<String>(
+      initialValue: selected,
+      decoration: const InputDecoration(labelText: 'Город *', border: OutlineInputBorder()),
+      items: options
+          .map(
+            (o) => DropdownMenuItem(
+              value: o,
+              child: Text(labels[o] ?? o, overflow: TextOverflow.ellipsis),
+            ),
+          )
+          .toList(),
+      onChanged: (stored) {
+        if (stored == null) {
+          onChanged(null);
+          return;
+        }
+        final picked = unique.where((c) => c.value == stored).toList();
+        onChanged(picked.isNotEmpty ? picked.first : null);
+      },
     );
   }
 }
@@ -1156,10 +1451,10 @@ String? _categoryLine(Map<String, dynamic> client) {
   final category = client['category']?.toString().trim();
   final inn = client['inn']?.toString().trim();
   if (category != null && category.isNotEmpty && inn != null && inn.isNotEmpty) {
-    return 'Категория $category · INN $inn';
+    return 'Категория $category · ИНН $inn';
   }
   if (category != null && category.isNotEmpty) return 'Категория $category';
-  if (inn != null && inn.isNotEmpty) return 'INN $inn';
+  if (inn != null && inn.isNotEmpty) return 'ИНН $inn';
   return null;
 }
 

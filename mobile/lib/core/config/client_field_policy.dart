@@ -106,17 +106,28 @@ String normalizePhoneWithPrefix(ClientConfig client, String raw) {
   return '${client.phonePrefix}$digits';
 }
 
+/// Zakaz/aksiya: nofaol (kutayotgan) mijozni bloklash.
+/// Backend `is_active: true` talab qiladi — UI da oldindan to‘xtatamiz.
 bool isNewClientBlockedForOrder(
   Map<String, dynamic> client,
   ClientConfig clientCfg,
   ProductListConfig productList,
 ) {
-  if (productList.allowSubmitForNewClient) return false;
   final active = client['is_active'];
-  if (active == 0 || active == false) return true;
-  if (clientCfg.requireNewClientApproval && active != 1 && active != true) return true;
+  final inactive = active == 0 || active == false;
+  if (inactive) return true;
+  // allowSubmitForNewClient — faqat aktiv mijozlar uchun (yuqorida nofaol allaqachon blok).
+  if (!productList.allowSubmitForNewClient &&
+      clientCfg.requireNewClientApproval &&
+      active != 1 &&
+      active != true) {
+    return true;
+  }
   return false;
 }
+
+const kClientInactiveOrderMessage =
+    'Клиент неактивен — заказы и акции недоступны до подтверждения оператором';
 
 String clientFieldLabel(String key) => kClientFieldLabelsRu[key] ?? key;
 

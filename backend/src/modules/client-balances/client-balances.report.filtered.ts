@@ -26,21 +26,23 @@ import {
   processUnpaidPayRefRows
 } from "./client-balances.payments.data";
 import {
-  buildSummaryNetMinusUnpaid,
+  buildSummaryOverpaymentsByType,
   compareNumForSort,
   moneySortValueFromPaymentAmounts,
-  normPayTypeKey,
   paymentAmountsNetMinusUnpaid,
   readSortDir
 } from "./client-balances.payments.util";
-import { loadPaymentNetTotalsByTypeGlobally } from "./client-balances.payments.aggregate";
-import { loadBalancesAsOf, loadLastDeliveryByClient, loadLastPaymentByClient } from "./client-balances.ledger";
+import {
+  loadLastDeliveryByClient,
+  loadLastPaymentByClient,
+  loadLedgerCardNetByClient
+} from "./client-balances.ledger";
 import {
   loadDeliveryDebtByClient,
-  loadUnpaidDeliveredOrderDebtRows,
-  mergeLedgerWithUnpaidDelivered
+  loadUnpaidDeliveredOrderDebtRows
 } from "./client-balances.delivery";
 import { mapClientRow, mapDeliveryOrderRow } from "./client-balances.mappers";
+import { loadConsignmentDueByClient } from "./client-balances.consignment-due";
 import type { ClientBalancesReportContext } from "./client-balances.report.context";
 import { loadDebtSplitByClient } from "./client-debt-by-agent";
 
@@ -49,7 +51,7 @@ export async function listClientBalancesReportFiltered(
 ): Promise<ClientBalanceListResponse> {
   const { tenantId, q, perf, page, limit, asOfEnd, odFrom, odTo } = ctx;
   const bfEarly = q.balance_filter?.trim() ?? "";
-  const whereBase = buildClientWhere(tenantId, q, { skipBalanceFilter: true });
+  const whereBase = await buildClientWhere(tenantId, q, { skipBalanceFilter: true });
     const allMinimal = await prisma.client.findMany({
       where: whereBase,
       select: {
@@ -61,67 +63,68 @@ export async function listClientBalancesReportFiltered(
     });
     const baseIds = allMinimal.map((c) => c.id);
     perf("clients-balance-filter.base-loaded", { baseIds: baseIds.length, filter: bfEarly });
-    const [deliveryMap, balAsOfAll] = await Promise.all([
+    const [deliveryMap, cardNetByClient] = await Promise.all([
       loadDeliveryDebtByClient(tenantId, baseIds, odFrom, odTo),
-      asOfEnd && baseIds.length > 0 ? loadBalancesAsOf(tenantId, baseIds, asOfEnd) : Promise.resolve(null)
+      loadLedgerCardNetByClient(tenantId, baseIds, asOfEnd)
     ]);
     perf("clients-balance-filter.derived-loaded", { deliveryMap: deliveryMap.size });
 
-    const ledgerOf = (row: (typeof allMinimal)[number]) =>
-      balAsOfAll?.get(row.id) ?? row.client_balances[0]?.balance ?? new Prisma.Decimal(0);
+    const netOf = (id: number) => cardNetByClient.get(id) ?? new Prisma.Decimal(0);
 
     const eligible = allMinimal.filter((row) => {
-      const l = ledgerOf(row);
-      const unpaid = deliveryMap.get(row.id)?.debt ?? new Prisma.Decimal(0);
-      if (bfEarly === "debt") return l.lt(0) || unpaid.gt(0);
-      return l.gt(0) && unpaid.lte(0);
+      const n = netOf(row.id);
+      if (bfEarly === "debt") return n.lt(0);
+      return n.gt(0);
     });
 
     let sumMerged = new Prisma.Decimal(0);
-    for (const row of eligible) {
-      const l = ledgerOf(row);
-      sumMerged = sumMerged.add(mergeLedgerWithUnpaidDelivered(l, deliveryMap.get(row.id)));
-    }
+    for (const row of eligible) sumMerged = sumMerged.add(netOf(row.id));
     const totalBalanceStr = sumMerged.toString();
 
     const eligibleIds = eligible.map((r) => r.id);
     const { labels: sprLabels, entries: pmEntries } = await loadTenantPaymentRefs(tenantId);
-    const [netGlobalByType, rawUnpaidEligible] = await Promise.all([
-      loadPaymentNetTotalsByTypeGlobally(tenantId, eligibleIds, asOfEnd, pmEntries),
+    const [payNormEligible, rawUnpaidEligible] = await Promise.all([
+      loadPaymentNetNormByClient(tenantId, eligibleIds, asOfEnd, pmEntries),
       loadUnpaidOrderBalanceRawByPaymentRef(tenantId, eligibleIds, odFrom, odTo)
     ]);
-    const { byClient: unpaidByMethod, globalUnpaidNorm } = processUnpaidPayRefRows(
+    const { byClient: unpaidByMethod } = processUnpaidPayRefRows(
       rawUnpaidEligible,
       pmEntries,
       sprLabels
     );
-    const summaryPaymentByType = buildSummaryNetMinusUnpaid(sprLabels, netGlobalByType, globalUnpaidNorm);
+    const summaryPaymentByType = buildSummaryOverpaymentsByType(
+      sprLabels,
+      eligible.map((row) => ({
+        balance: netOf(row.id),
+        payNorm: payNormEligible.get(row.id),
+        unpaidNorm: unpaidByMethod.get(row.id)
+      }))
+    );
 
     const sortBy = q.sort_by?.trim() ?? "";
     const sortDir = readSortDir(q);
     let orderedEligible = eligible;
     if (sortBy === "balance") {
       orderedEligible = [...eligible].sort((a, b) => {
-        const aBal = Number(
-          mergeLedgerWithUnpaidDelivered(ledgerOf(a), deliveryMap.get(a.id)).toString()
-        );
-        const bBal = Number(
-          mergeLedgerWithUnpaidDelivered(ledgerOf(b), deliveryMap.get(b.id)).toString()
-        );
+        const aBal = Number(netOf(a.id).toString());
+        const bBal = Number(netOf(b.id).toString());
         return compareNumForSort(aBal, bBal, sortDir);
       });
     } else if (sortBy.startsWith("pay:")) {
-      const payNormAll = await loadPaymentNetNormByClient(tenantId, eligibleIds, asOfEnd, pmEntries);
       orderedEligible = [...eligible].sort((a, b) => {
+        const aBal = netOf(a.id);
+        const bBal = netOf(b.id);
         const aAmounts = paymentAmountsNetMinusUnpaid(
           sprLabels,
-          payNormAll.get(a.id),
-          unpaidByMethod.get(a.id)
+          payNormEligible.get(a.id),
+          unpaidByMethod.get(a.id),
+          aBal
         );
         const bAmounts = paymentAmountsNetMinusUnpaid(
           sprLabels,
-          payNormAll.get(b.id),
-          unpaidByMethod.get(b.id)
+          payNormEligible.get(b.id),
+          unpaidByMethod.get(b.id),
+          bBal
         );
         const aVal = moneySortValueFromPaymentAmounts(aAmounts, sortBy, sprLabels);
         const bVal = moneySortValueFromPaymentAmounts(bAmounts, sortBy, sprLabels);
@@ -133,7 +136,7 @@ export async function listClientBalancesReportFiltered(
     const sliceRows = orderedEligible.slice((page - 1) * limit, page * limit);
     const sliceIds = sliceRows.map((r) => r.id);
 
-    const [clients, pagePayNorm, lastPays, lastOrds, pageBalAsOf, debtSplits] = await Promise.all([
+    const [clients, pagePayNorm, lastPays, lastOrds, debtSplits, dueByClient] = await Promise.all([
       (async () => {
         if (sliceIds.length === 0) return [];
         return prisma.client.findMany({
@@ -154,25 +157,32 @@ export async function listClientBalancesReportFiltered(
       })(),
       loadPaymentNetNormByClient(tenantId, sliceIds, asOfEnd, pmEntries),
       loadLastPaymentByClient(tenantId, sliceIds, asOfEnd),
-      loadLastDeliveryByClient(tenantId, sliceIds),
-      asOfEnd && sliceIds.length > 0 ? loadBalancesAsOf(tenantId, sliceIds, asOfEnd) : Promise.resolve(null),
-      sliceIds.length > 0 ? loadDebtSplitByClient(tenantId, sliceIds) : Promise.resolve(new Map())
+      loadLastDeliveryByClient(tenantId, sliceIds, asOfEnd),
+      sliceIds.length > 0 ? loadDebtSplitByClient(tenantId, sliceIds) : Promise.resolve(new Map()),
+      sliceIds.length > 0
+        ? loadConsignmentDueByClient(tenantId, sliceIds, q.consignment_due_from, q.consignment_due_to)
+        : Promise.resolve(new Map<number, Date>())
     ]);
     const orderMap = new Map(clients.map((c) => [c.id, c]));
     const orderedClients = sliceIds.map((id) => orderMap.get(id)!).filter(Boolean);
 
     const data: ClientBalanceRow[] = orderedClients.map((c) => {
-      const blend = deliveryMap.get(c.id);
-      const blendPass = blend && blend.debt.gt(0) ? blend : null;
+      const displayBal = netOf(c.id);
       return mapClientRow(
-        c,
-        paymentAmountsNetMinusUnpaid(sprLabels, pagePayNorm.get(c.id), unpaidByMethod.get(c.id)),
+        dueByClient.get(c.id) ? { ...c, license_until: dueByClient.get(c.id)! } : c,
+        paymentAmountsNetMinusUnpaid(
+          sprLabels,
+          pagePayNorm.get(c.id) ?? payNormEligible.get(c.id),
+          unpaidByMethod.get(c.id),
+          displayBal
+        ),
         lastPays.get(c.id),
         lastOrds.get(c.id),
-        pageBalAsOf?.get(c.id) ?? null,
+        netOf(c.id),
         null,
-        blendPass,
-        debtSplits.get(c.id) ?? null
+        null,
+        debtSplits.get(c.id) ?? null,
+        asOfEnd
       );
     });
 

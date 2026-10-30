@@ -105,7 +105,8 @@ export function useSalesQueries({
       sales_dynamics: analytics?.sales_dynamics ?? [],
       refusal_reason_analytics: analytics?.refusal_reason_analytics ?? [],
       territory_analytics: breakdown?.territory_analytics ?? [],
-      agent_analytics: breakdown?.agent_analytics ?? []
+      agent_analytics: breakdown?.agent_analytics ?? [],
+      category_matrix: breakdown?.category_matrix
     };
     return {
       data: merged,

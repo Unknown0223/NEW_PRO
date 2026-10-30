@@ -40,7 +40,7 @@ export function OrderSummaryTiles({
       icon: DollarSign,
       iconBg: "bg-teal-500",
       value: formatNumberGrouped(totalSum, { maxFractionDigits: 2 }),
-      unit: "So'm",
+      unit: "сум",
       label: "Общая сумма"
     }
   ];

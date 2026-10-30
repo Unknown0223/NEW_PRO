@@ -8,11 +8,13 @@ import { buttonVariants } from "@/components/ui/button-variants";
 import { cn } from "@/lib/utils";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import type { WorkSlotListItem } from "@/lib/work-slots-types";
-import { formatSlotDate, slotTypeLabel } from "./work-slots-utils";
+import { formatSlotDate, formatSlotBranches, slotTypeLabel } from "./work-slots-utils";
 import { LockStatusBadge, SlotBadge } from "./slot-badge";
+import { StaffFaceAvatar } from "@/components/staff/staff-face-avatar";
 
 type Props = {
   slot: WorkSlotListItem;
+  tenantSlug?: string;
   resolveTerritoryLabel?: (raw: string) => string;
   expanded: boolean;
   selected?: boolean;
@@ -32,6 +34,7 @@ function terrLabel(raw: string | null | undefined, resolve?: (s: string) => stri
 
 export function WorkSlotCard({
   slot,
+  tenantSlug,
   resolveTerritoryLabel,
   expanded,
   selected = false,
@@ -67,7 +70,7 @@ export function WorkSlotCard({
                 <SlotBadge code={slot.slot_code} />
                 {!slot.is_active ? (
                   <Badge variant="secondary" className="text-[10px]">
-                    Deaktiv
+                    Деактивирован
                   </Badge>
                 ) : null}
                 {slot.is_active ? (
@@ -81,16 +84,33 @@ export function WorkSlotCard({
             {expanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
           </Button>
         </div>
-        <p className="text-sm text-muted-foreground">
-          {slot.active_user_name ? (
+        <p className="flex items-center gap-2.5 text-sm text-muted-foreground">
+          {slot.active_user_name && slot.active_user_id ? (
             <>
-              <span className="text-foreground">{slot.active_user_name}</span>
-              {slot.active_since ? (
-                <span> ({formatSlotDate(slot.active_since)} dan)</span>
+              {tenantSlug ? (
+                <StaffFaceAvatar
+                  tenantSlug={tenantSlug}
+                  userId={slot.active_user_face_user_id ?? slot.active_user_id}
+                  initials={slot.active_user_name
+                    .split(/\s+/)
+                    .filter(Boolean)
+                    .slice(0, 2)
+                    .map((p) => p[0] ?? "")
+                    .join("")}
+                  alt={slot.active_user_name}
+                  size="sm"
+                  hasPhoto={Boolean(slot.active_user_has_face_reference)}
+                />
               ) : null}
+              <span>
+                <span className="text-foreground">{slot.active_user_name}</span>
+                {slot.active_since ? (
+                  <span> (с {formatSlotDate(slot.active_since)})</span>
+                ) : null}
+              </span>
             </>
           ) : (
-            <span className="italic">Bo‘sh</span>
+            <span className="italic">Свободно</span>
           )}
         </p>
         {(slot.active_territory_zone ||
@@ -115,10 +135,14 @@ export function WorkSlotCard({
           </p>
         ) : null}
         <div className="flex flex-wrap gap-1.5">
-          {slot.branch_code ? (
-            <Badge variant="outline" className="text-[10px]">
-              {slot.branch_code}
-            </Badge>
+          {formatSlotBranches(slot) !== "—" ? (
+            formatSlotBranches(slot)
+              .split(", ")
+              .map((code) => (
+                <Badge key={code} variant="outline" className="text-[10px]">
+                  {code}
+                </Badge>
+              ))
           ) : null}
           <Badge variant="secondary" className="text-[10px]">
             {slotTypeLabel(slot.slot_type)}
@@ -127,9 +151,9 @@ export function WorkSlotCard({
       </CardHeader>
       {expanded ? (
         <CardContent className="border-t bg-muted/20 pt-3 text-xs text-muted-foreground">
-          <p>Yaratilgan: {formatSlotDate(slot.created_at)}</p>
-          <p>O‘zgartirilgan: {formatSlotDate(slot.updated_at)}</p>
-          {slot.direction_name ? <p>Yo‘nalish: {slot.direction_name}</p> : null}
+          <p>Создано: {formatSlotDate(slot.created_at)}</p>
+          <p>Изменено: {formatSlotDate(slot.updated_at)}</p>
+          {slot.direction_name ? <p>Направление: {slot.direction_name}</p> : null}
           {slot.active_territory_zone ? (
             <p>Зона: {terrLabel(slot.active_territory_zone, resolveTerritoryLabel)}</p>
           ) : null}
@@ -139,8 +163,8 @@ export function WorkSlotCard({
           {slot.active_territory_city ? (
             <p>Город: {terrLabel(slot.active_territory_city, resolveTerritoryLabel)}</p>
           ) : null}
-          {slot.active_warehouse_name ? <p>Ombor: {slot.active_warehouse_name}</p> : null}
-          {slot.active_cash_desk_names ? <p>Kassa: {slot.active_cash_desk_names}</p> : null}
+          {slot.active_warehouse_name ? <p>Склад: {slot.active_warehouse_name}</p> : null}
+          {slot.active_cash_desk_names ? <p>Касса: {slot.active_cash_desk_names}</p> : null}
         </CardContent>
       ) : null}
       <div className="flex flex-wrap gap-2 border-t bg-card/50 px-4 py-2">
@@ -151,7 +175,7 @@ export function WorkSlotCard({
           Подробнее
         </Link>
         <Button type="button" variant="outline" size="sm" onClick={onEdit}>
-          Tahrirlash
+          Редактировать
         </Button>
         {onConfig ? (
           <Button type="button" variant="outline" size="sm" onClick={onConfig}>
@@ -164,7 +188,7 @@ export function WorkSlotCard({
           </Button>
         ) : null}
         <Button type="button" size="sm" onClick={onAssign}>
-          Almashtirish
+          Заменить
         </Button>
       </div>
     </Card>

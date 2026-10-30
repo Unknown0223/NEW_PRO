@@ -10,6 +10,10 @@ import {
   reportBuilderSafeFieldAlias
 } from "./report-builder.query";
 import type { ReportBuilderConfigPayload, ReportBuilderDatasetRequest, ReportBuilderDatasetResponse } from "./report-builder.types";
+import { backfillEmptyClientTerritoryFromCity } from "../clients/clients.territory-sync";
+
+/** Bir process ichida tenant bo‘yicha bir marta backfill. */
+const territoryBackfillDone = new Set<number>();
 
 function parseUtcDayStart(ymd: string): Date {
   return new Date(`${ymd.slice(0, 10)}T00:00:00.000Z`);
@@ -65,6 +69,14 @@ export async function runReportBuilderDataset(
   filters: ReportBuilderDatasetRequest,
   actor?: ReportActor
 ): Promise<ReportBuilderDatasetResponse> {
+  if (!territoryBackfillDone.has(tenantId)) {
+    try {
+      await backfillEmptyClientTerritoryFromCity(tenantId);
+    } catch {
+      // Report o‘qishni bloklamaymiz — fallback SQL (agent territory) qoladi.
+    }
+    territoryBackfillDone.add(tenantId);
+  }
   const cap = REPORT_BUILDER_DATASET_ROW_CAP;
   const whereCfg = filtersToWhereConfig(filters);
   const whereSql = buildReportBuilderWhereSql(tenantId, whereCfg, actor);

@@ -25,8 +25,12 @@ export type PaymentEditGrantListQuery = {
   date_from?: string;
   date_to?: string;
   status?: "completed" | "deleted" | "restored";
+  /** Bir nechta display status */
+  statuses?: Array<"completed" | "deleted" | "restored">;
   access_user_id?: number;
+  access_user_ids?: number[];
   cancel_reason_ref?: string;
+  cancel_reason_refs?: string[];
   search?: string;
 };
 
@@ -271,13 +275,25 @@ export async function listPaymentEditGrants(
   if (q.date_to?.trim()) {
     andParts.push({ created_at: { lte: parseYmdEnd(q.date_to) } });
   }
-  if (q.status) andParts.push(statusFilterWhere(q.status));
-  if (q.access_user_id != null && q.access_user_id > 0) {
-    andParts.push({ access_user_id: q.access_user_id });
+  if (q.statuses != null && q.statuses.length > 0) {
+    andParts.push({ OR: q.statuses.map((s) => statusFilterWhere(s)) });
+  } else if (q.status) {
+    andParts.push(statusFilterWhere(q.status));
   }
-  if (q.cancel_reason_ref?.trim()) {
-    andParts.push({ cancel_reason_ref: q.cancel_reason_ref.trim() });
-  }
+  const accessIds = [
+    ...(q.access_user_ids ?? []).filter((n) => Number.isFinite(n) && n > 0),
+    ...(q.access_user_id != null && q.access_user_id > 0 ? [q.access_user_id] : [])
+  ];
+  const uniqAccess = [...new Set(accessIds)];
+  if (uniqAccess.length === 1) andParts.push({ access_user_id: uniqAccess[0] });
+  else if (uniqAccess.length > 1) andParts.push({ access_user_id: { in: uniqAccess } });
+  const reasonRefs = [
+    ...(q.cancel_reason_refs ?? []).map((r) => r.trim()).filter(Boolean),
+    ...(q.cancel_reason_ref?.trim() ? [q.cancel_reason_ref.trim()] : [])
+  ];
+  const uniqReasons = [...new Set(reasonRefs)];
+  if (uniqReasons.length === 1) andParts.push({ cancel_reason_ref: uniqReasons[0] });
+  else if (uniqReasons.length > 1) andParts.push({ cancel_reason_ref: { in: uniqReasons } });
   if (q.search?.trim()) {
     const s = q.search.trim();
     const idNum = Number.parseInt(s, 10);

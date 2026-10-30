@@ -76,6 +76,8 @@ model Tenant {
   roles                         Role[]
   permissions                   Permission[]
   user_branch_links             UserBranchLink[]
+  user_staff_links              UserStaffLink[]
+  user_consignment_logs         UserConsignmentLog[]
   user_payment_method_links     UserPaymentMethodLink[]
   user_trade_direction_links    UserTradeDirectionLink[]
   work_slots                    WorkSlot[]
@@ -92,6 +94,20 @@ model Tenant {
   sales_kpi_plan_targets        SalesKpiPlanTarget[]
   job_logs                      JobLog[]
   agent_consignment_month_status AgentConsignmentMonthStatus[]
+  face_verification_logs        FaceVerificationLog[]
+  face_verification_daily_states FaceVerificationDailyState[]
+  attendance_shifts             AttendanceShift[]
+  attendance_locations          AttendanceLocation[]
+  attendance_punches            AttendancePunch[]
+  attendance_day_records        AttendanceDayRecord[]
+  punch_day_codes               PunchDayCode[]
+  staff_absence_requests        StaffAbsenceRequest[]
+  staff_clearance_sheets        StaffClearanceSheet[]
+  attendance_devices            AttendanceDevice[]
+  telegram_staff_links          TelegramStaffLink[]
+  auth_login_events             AuthLoginEvent[]
+  security_login_alerts         SecurityLoginAlert[]
+  security_ip_whitelist         SecurityIpWhitelist[]
 
   @@map("tenants")
 }
@@ -105,6 +121,8 @@ model User {
   password_hash              String
   role                       String
   is_active                  Boolean                 @default(true)
+  /// Nofaol, lekin filtr / qidiruv / dostup ro‘yxatlarida qizil holatda ko‘rinadi
+  filter_visible             Boolean                 @default(false)
   created_at                 DateTime                @default(now())
   updated_at                 DateTime                @updatedAt
   first_name                 String?
@@ -154,6 +172,10 @@ model User {
   ui_preferences             Json                    @default("{}")
   /// Savdo yo‘nalishi (spravochnik) — `trade_direction` matni avtomatik sinxronlanadi
   trade_direction_id         Int?
+  /// Ishga olingan sana (payroll: shu kundan oldin «ishlamagan»)
+  hired_at                   DateTime?
+  /// Bo'shatilgan sana (nofaol qilinganda avtomatik; qayta ishga olinganda tozalanadi)
+  dismissed_at               DateTime?
   agent_route_days           AgentRouteDay[]
   agent_visits               AgentVisit[]
   client_refusals_as_agent   ClientRefusal[]         @relation("ClientRefusalAgent")
@@ -229,6 +251,9 @@ model User {
   user_roles                    UserRole[]
   user_permissions              UserPermission[]
   branch_links                  UserBranchLink[]
+  staff_links                   UserStaffLink[]           @relation("UserStaffLinkViewer")
+  staff_links_as_staff          UserStaffLink[]           @relation("UserStaffLinkStaff")
+  consignment_logs              UserConsignmentLog[]
   payment_method_links          UserPaymentMethodLink[]
   trade_direction_links         UserTradeDirectionLink[]
   slot_user_links               SlotUserLink[]          @relation("SlotUserLinks")
@@ -247,6 +272,20 @@ model User {
   sales_kpi_plan_targets              SalesKpiPlanTarget[] @relation("SalesKpiPlanTargetUser")
   sales_kpi_plan_targets_edited       SalesKpiPlanTarget[] @relation("SalesKpiPlanTargetEditor")
   consignment_month_status            AgentConsignmentMonthStatus[]
+  face_verification_logs              FaceVerificationLog[]       @relation("FaceVerificationLogs")
+  face_verification_daily_states      FaceVerificationDailyState[] @relation("FaceVerificationDailyStates")
+  attendance_punches                  AttendancePunch[]           @relation("AttendancePunchUser")
+  attendance_kiosk_punches            AttendancePunch[]           @relation("AttendancePunchKioskLeader")
+  attendance_reviewed_punches         AttendancePunch[]           @relation("AttendancePunchReviewedBy")
+  attendance_day_records              AttendanceDayRecord[]       @relation("AttendanceDayRecordUser")
+  attendance_day_overrides            AttendanceDayRecord[]       @relation("AttendanceDayRecordOverrideBy")
+  punch_day_codes                     PunchDayCode[]              @relation("PunchDayCodeUser")
+  staff_absence_requests              StaffAbsenceRequest[]       @relation("StaffAbsenceRequestUser")
+  staff_absence_approvals             StaffAbsenceRequest[]       @relation("StaffAbsenceRequestApprovedBy")
+  staff_clearance_sheets              StaffClearanceSheet[]       @relation("StaffClearanceSheetUser")
+  staff_clearance_approvals           StaffClearanceSheet[]       @relation("StaffClearanceSheetApprovedBy")
+  telegram_staff_link                 TelegramStaffLink?
+  auth_login_events                   AuthLoginEvent[]             @relation("AuthLoginEvents")
 
   @@unique([tenant_id, login])
   @@index([tenant_id, role])
@@ -255,6 +294,21 @@ model User {
   @@index([supervisor_user_id])
   @@index([tenant_id, is_active])
   @@map("users")
+}
+
+/// Telegram bot: har bir hodimga bitta Telegram ID (boshqa akkauntdan qayta ro‘yxat yo‘q).
+model TelegramStaffLink {
+  id           Int      @id @default(autoincrement())
+  tenant_id    Int
+  user_id      Int      @unique
+  telegram_id  BigInt   @unique
+  bound_at     DateTime @default(now())
+  last_seen_at DateTime @default(now())
+  tenant       Tenant   @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  user         User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([tenant_id])
+  @@map("telegram_staff_links")
 }
 
 /// Konsignatsiya oyi: avtomatik yopilish va qarzdorlik to‘liq yopilgan sana (agent bo‘yicha).

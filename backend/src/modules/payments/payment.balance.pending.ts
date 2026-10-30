@@ -18,6 +18,7 @@ import {
 
 import { getPaymentDetail, type PaymentDetailPayload } from "./payment.query";
 import { voidPaymentEditGrantsInTx, restorePaymentEditGrantsInTx } from "./payment-edit-grants.service";
+import { notifyClientPayment, soon } from "../tg-app/tg-notify";
 
 
 /**
@@ -52,7 +53,7 @@ export async function confirmPendingPayment(
       data: {
         client_balance_id: bal.id,
         delta: amountDec,
-        note: `To'lov #${p.id} tasdiq (ariza)`,
+        note: `Оплата #${p.id} подтверждена (заявка)`,
         user_id: uid
       }
     });
@@ -79,13 +80,14 @@ export async function confirmPendingPayment(
 
   const pRow = await prisma.payment.findFirst({
     where: { id: paymentId, tenant_id: tenantId },
-    select: { client_id: true }
+    select: { client_id: true, amount: true }
   });
   if (pRow) {
     await appendClientAuditLog(tenantId, pRow.client_id, actorUserId, "client.payment", {
       payment_id: paymentId,
       source: "confirm_pending"
     });
+    soon(() => notifyClientPayment(tenantId, pRow.client_id, pRow.amount, paymentId));
   }
 
   if (uid) {
@@ -250,8 +252,8 @@ export async function returnPaymentToExpeditor(
             client_balance_id: bal.id,
             delta: payment.amount.neg(),
             note: note
-              ? `To'lov #${payment.id} ekspeditorga qaytarildi — ${note}`
-              : `To'lov #${payment.id} ekspeditorga qaytarildi`,
+              ? `Оплата #${payment.id} возвращена экспедитору — ${note}`
+              : `Оплата #${payment.id} возвращена экспедитору`,
             user_id: uid
           }
         });
@@ -322,10 +324,9 @@ export async function returnPaymentToExpeditor(
 
 const BATCH_CONFIRM_CONCURRENCY = 5;
 
-export async function confirmPendingPaymentsBatch(
-  tenantId: number,
+async function runPaymentIdBatch(
   ids: number[],
-  actorUserId: number | null
+  fn: (id: number) => Promise<unknown>
 ): Promise<{ ok: number[]; failed: { id: number; error: string }[] }> {
   const validIds = [...new Set(ids.filter((id) => Number.isFinite(id) && id >= 1))];
   const ok: number[] = [];
@@ -333,9 +334,7 @@ export async function confirmPendingPaymentsBatch(
 
   for (let i = 0; i < validIds.length; i += BATCH_CONFIRM_CONCURRENCY) {
     const chunk = validIds.slice(i, i + BATCH_CONFIRM_CONCURRENCY);
-    const results = await Promise.allSettled(
-      chunk.map((id) => confirmPendingPayment(tenantId, id, actorUserId))
-    );
+    const results = await Promise.allSettled(chunk.map((id) => fn(id)));
     for (let j = 0; j < chunk.length; j++) {
       const id = chunk[j]!;
       const result = results[j]!;
@@ -350,4 +349,33 @@ export async function confirmPendingPaymentsBatch(
     }
   }
   return { ok, failed };
+}
+
+export async function confirmPendingPaymentsBatch(
+  tenantId: number,
+  ids: number[],
+  actorUserId: number | null
+): Promise<{ ok: number[]; failed: { id: number; error: string }[] }> {
+  return runPaymentIdBatch(ids, (id) => confirmPendingPayment(tenantId, id, actorUserId));
+}
+
+export async function rejectPendingPaymentsBatch(
+  tenantId: number,
+  ids: number[],
+  actorUserId: number | null,
+  reason: string | null
+): Promise<{ ok: number[]; failed: { id: number; error: string }[] }> {
+  return runPaymentIdBatch(ids, (id) => rejectPendingPayment(tenantId, id, actorUserId, reason));
+}
+
+export async function returnPaymentsToExpeditorBatch(
+  tenantId: number,
+  ids: number[],
+  actorUserId: number | null,
+  reason: string | null,
+  durationMinutes?: number | null
+): Promise<{ ok: number[]; failed: { id: number; error: string }[] }> {
+  return runPaymentIdBatch(ids, (id) =>
+    returnPaymentToExpeditor(tenantId, id, actorUserId, reason, durationMinutes)
+  );
 }

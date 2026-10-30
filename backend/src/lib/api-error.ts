@@ -3,9 +3,12 @@ import type { ZodError } from "zod";
 import {
   appendErrorEventSafe,
   inferErrorModule,
+  isSessionJournalErrorCode,
   shouldPersistBackendError
 } from "./error-event";
 import { actorUserIdOrNull } from "./request-actor";
+import type { AccessJwtUser } from "../modules/auth/auth.prehandlers";
+import { appendInvalidRefreshJournalSafe } from "./session-error-journal";
 
 type ErrorExtras = Record<string, unknown> | undefined;
 
@@ -35,6 +38,23 @@ function requestPath(request: FastifyRequest): string {
   return raw.slice(0, 255);
 }
 
+function requestUserAgent(request: FastifyRequest): string {
+  const raw = request.headers["user-agent"];
+  return typeof raw === "string" ? raw : "";
+}
+
+function isSalecMobileUserAgent(ua: string): boolean {
+  return /SalecMobile|Dart\/|okhttp|Flutter/i.test(ua);
+}
+
+function tenantIdForErrorLog(request: FastifyRequest): number | null {
+  const fromPlugin = request.tenant?.id;
+  if (fromPlugin != null && fromPlugin > 0) return fromPlugin;
+  const u = request.user as AccessJwtUser | undefined;
+  const n = Number(u?.tenantId);
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+
 function maybeLogBackendError(
   request: FastifyRequest,
   statusCode: number,
@@ -42,14 +62,25 @@ function maybeLogBackendError(
   message?: string
 ): void {
   const path = requestPath(request);
-  if (!shouldPersistBackendError(statusCode, path)) return;
-  const tenantId = request.tenant?.id;
+  if (!shouldPersistBackendError(statusCode, path, error)) return;
+
+  if (error === "INVALID_REFRESH") {
+    appendInvalidRefreshJournalSafe(request, statusCode, message);
+    return;
+  }
+
+  const tenantId = tenantIdForErrorLog(request);
   if (tenantId == null || tenantId < 1) return;
+
+  const ua = requestUserAgent(request);
+  const mobile = isSalecMobileUserAgent(ua);
+  const jwt = request.user as AccessJwtUser | undefined;
+  const deviceId = typeof jwt?.did === "string" && jwt.did.trim() ? jwt.did.trim().slice(0, 128) : null;
 
   appendErrorEventSafe({
     tenantId,
     userId: actorUserIdOrNull(request),
-    source: "backend",
+    source: mobile ? "mobile" : "backend",
     severity: statusCode >= 500 ? "fatal" : "error",
     requestId: request.id,
     httpStatus: statusCode,
@@ -57,8 +88,17 @@ function maybeLogBackendError(
     message: message?.trim() || error,
     path,
     method: request.method,
-    platform: "server",
-    module: inferErrorModule(path)
+    platform: mobile ? "android" : "server",
+    deviceId,
+    module: inferErrorModule(path),
+    payload: isSessionJournalErrorCode(error)
+      ? {
+          login: jwt?.login ?? null,
+          role: jwt?.role ?? null,
+          jwt_did: deviceId,
+          user_agent: ua.slice(0, 255) || null
+        }
+      : undefined
   });
 }
 

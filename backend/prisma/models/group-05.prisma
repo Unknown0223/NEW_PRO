@@ -13,11 +13,15 @@ model KpiGroupProduct {
 model KpiGroupAgent {
   kpi_group_id Int
   user_id      Int
-  kpi_group    KpiGroup @relation(fields: [kpi_group_id], references: [id], onDelete: Cascade)
-  user         User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  /// Faol ishchi o‘rni (dual-write); a'zolik hali user_id bo‘yicha
+  work_slot_id Int?
+  kpi_group    KpiGroup  @relation(fields: [kpi_group_id], references: [id], onDelete: Cascade)
+  user         User      @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  work_slot    WorkSlot? @relation(fields: [work_slot_id], references: [id], onDelete: SetNull)
 
   @@id([kpi_group_id, user_id])
   @@index([user_id])
+  @@index([work_slot_id])
   @@map("kpi_group_agents")
 }
 
@@ -376,6 +380,7 @@ model AgentVisit {
   agent          User      @relation(fields: [agent_id], references: [id], onDelete: Cascade)
   client         Client?   @relation(fields: [client_id], references: [id])
   tenant         Tenant    @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  orders         Order[]
 
   @@index([tenant_id, agent_id])
   @@index([tenant_id, checked_in_at(sort: Desc)])
@@ -415,6 +420,10 @@ model AgentLocationPing {
   latitude        Decimal  @db.Decimal(11, 8)
   longitude       Decimal  @db.Decimal(11, 8)
   accuracy_meters Float?
+  /// Qurilma batareyasi 0–100 (mobil yuboradi)
+  battery_pct     Int?
+  /// Tarmoq: 4G / 3G / WiFi / —
+  network_type    String?  @db.VarChar(16)
   recorded_at     DateTime @default(now())
   agent           User     @relation(fields: [agent_id], references: [id], onDelete: Cascade)
   tenant          Tenant   @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
@@ -436,33 +445,46 @@ model TenantTask {
   due_at             DateTime?
   assignee_user_id   Int?
   created_by_user_id Int?
+  client_id          Int?
+  started_at         DateTime?
+  completed_at       DateTime?
+  cancelled_at       DateTime?
+  result_comment     String?
+  /// Bajarilganda yuborilgan rasmlar (data URL massivi)
+  result_photos      Json?
   created_at         DateTime  @default(now())
   updated_at         DateTime  @updatedAt
   assignee           User?     @relation("TenantTaskAssignee", fields: [assignee_user_id], references: [id])
   created_by         User?     @relation("TenantTaskCreator", fields: [created_by_user_id], references: [id])
+  client             Client?   @relation(fields: [client_id], references: [id], onDelete: SetNull)
   tenant             Tenant    @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
 
   @@index([tenant_id, status])
   @@index([tenant_id, assignee_user_id])
+  @@index([tenant_id, due_at])
   @@map("tenant_tasks")
 }
 
 /// Kunlik marshrut (agent + sana + mijozlar tartibi).
 
 model AgentRouteDay {
-  id         Int      @id @default(autoincrement())
-  tenant_id  Int
-  agent_id   Int
-  route_date DateTime
-  stops      Json     @default("[]")
-  notes      String?
-  created_at DateTime @default(now())
-  updated_at DateTime @updatedAt
-  agent      User     @relation(fields: [agent_id], references: [id], onDelete: Cascade)
-  tenant     Tenant   @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  id           Int       @id @default(autoincrement())
+  tenant_id    Int
+  agent_id     Int
+  /// Marshrut yaratilgandagi ishchi o‘rni (snapshot)
+  work_slot_id Int?
+  route_date   DateTime
+  stops        Json      @default("[]")
+  notes        String?
+  created_at   DateTime  @default(now())
+  updated_at   DateTime  @updatedAt
+  agent        User      @relation(fields: [agent_id], references: [id], onDelete: Cascade)
+  tenant       Tenant    @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  work_slot    WorkSlot? @relation(fields: [work_slot_id], references: [id], onDelete: SetNull)
 
   @@unique([tenant_id, agent_id, route_date])
   @@index([tenant_id, route_date])
+  @@index([work_slot_id])
   @@map("agent_route_days")
 }
 

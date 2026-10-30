@@ -7,7 +7,8 @@ import { AUTH_COOKIE_NAME } from "@/lib/auth-sync";
  * kirgan bo'lsa — supervayzer dashboardiga, aks holda — login sahifasiga.
  * (Asosiy yo'naltirish `middleware.ts` da bajariladi; bu — zaxira.)
  */
-export default function Home() {
-  const authed = cookies().get(AUTH_COOKIE_NAME)?.value === "1";
+export default async function Home() {
+  const jar = await cookies();
+  const authed = jar.get(AUTH_COOKIE_NAME)?.value === "1";
   redirect(authed ? "/dashboard" : "/login");
 }

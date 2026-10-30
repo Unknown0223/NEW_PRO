@@ -1,7 +1,17 @@
 import type { QuickRangeKey } from "@/components/dashboard/shared/quick-range";
 
 function toYmd(d: Date): string {
-  return d.toISOString().slice(0, 10);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+/** Жорий ойнинг 1-санасидан бугунги кунгача (маҳаллий календарь). */
+export function monthToDateRange(now = new Date()): { from: string; to: string } {
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const from = new Date(today.getFullYear(), today.getMonth(), 1);
+  return { from: toYmd(from), to: toYmd(today) };
 }
 
 export function quickRangeToDates(key: QuickRangeKey): { from: string; to: string } | null {

@@ -170,18 +170,33 @@ export function isWdrSavedReportConfig(config: unknown): config is WdrSavedRepor
 } {
   if (!config || typeof config !== "object") return false;
   const c = config as Record<string, unknown>;
-  if (c.slice != null && typeof c.slice === "object") return true;
-  return c.dataSource != null && typeof c.dataSource === "object" && c.slice != null;
+  // SALEC virtual pivot wrapper: salecPivotConfig — haqiqiy manba; bo‘sh slice WDR emas.
+  if (c.salecPivotConfig != null && typeof c.salecPivotConfig === "object") return false;
+  if (c.slice != null && typeof c.slice === "object") {
+    const slice = c.slice as Record<string, unknown>;
+    // Bo‘sh `{}` — faqat wrapper; haqiqiy WDR slice da rows/columns/measures/reportFilters bor.
+    const hasZone =
+      Array.isArray(slice.rows) ||
+      Array.isArray(slice.columns) ||
+      Array.isArray(slice.measures) ||
+      Array.isArray(slice.reportFilters);
+    if (!hasZone && c.dataSource != null) return false;
+    return hasZone || (c.dataSource != null && typeof c.dataSource === "object");
+  }
+  return false;
 }
 
 /** WDR yoki legacy PivotConfig ni aniqlash. */
 export function detectSavedReportFormat(
   config: unknown
 ): "wdr" | "pivot" | "unknown" {
+  if (!config || typeof config !== "object") return "unknown";
+  const c = config as Record<string, unknown>;
+  if (c.salecPivotConfig != null && typeof c.salecPivotConfig === "object") return "pivot";
   if (isWdrSavedReportConfig(config)) return "wdr";
-  if (config && typeof config === "object" && "values" in config && Array.isArray((config as PivotConfig).values)) {
+  if ("values" in c && Array.isArray((config as PivotConfig).values)) {
     return "pivot";
   }
-  if (config && typeof config === "object" && "rowFieldIds" in config) return "unknown";
+  if ("rowFieldIds" in c) return "unknown";
   return "unknown";
 }

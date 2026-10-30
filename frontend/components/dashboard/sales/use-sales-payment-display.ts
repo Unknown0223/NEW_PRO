@@ -8,16 +8,28 @@ function normTrim(s: string): string {
 }
 
 export function useSalesPaymentDisplay(
-  paymentEntries: Array<{ id: string; name: string }> | undefined
+  paymentEntries: Array<{ id: string; name: string; code?: string | null }> | undefined
 ) {
   return useMemo(() => {
     const m = new Map<string, string>();
     for (const p of paymentEntries ?? []) {
       const id = normTrim(String(p.id ?? ""));
       const name = normTrim(String(p.name ?? ""));
-      if (!id) continue;
-      m.set(id, name || id);
-      m.set(id.toLowerCase(), name || id);
+      const code = normTrim(String(p.code ?? ""));
+      if (!name && !id) continue;
+      const label = name || id;
+      if (id) {
+        m.set(id, label);
+        m.set(id.toLowerCase(), label);
+      }
+      if (code) {
+        m.set(code, label);
+        m.set(code.toLowerCase(), label);
+      }
+      if (name) {
+        m.set(name, label);
+        m.set(name.toLowerCase(), label);
+      }
     }
     return (ref: string) => {
       const k = normTrim(ref);

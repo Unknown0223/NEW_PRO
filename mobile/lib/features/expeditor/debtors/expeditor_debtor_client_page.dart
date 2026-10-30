@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -13,12 +11,14 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/time/work_region_time.dart';
 import '../../../core/ui/agent_ui.dart';
+import '../../../core/ui/client_photo_thumb.dart';
 import '../../../core/ui/agent_ui_extended.dart';
 import '../../../core/utils/external_actions.dart';
 import '../../../core/format/money_display.dart';
 import '../../agent/orders/order_create_models.dart' show formatMoneySpaced;
 import '../expeditor_providers.dart';
 import '../shared/balance_by_agent_sheet.dart';
+import '../visits/expeditor_visit_gates.dart';
 
 /// Должники → mijoz kartasi: sarlavha (manzil/mo'ljal/balans) +
 /// «Оплата» / «Возвращенные заказы» tablari + 3-nuqta «Действия клиента» +
@@ -42,17 +42,9 @@ class _ExpeditorDebtorClientPageState
     extends ConsumerState<ExpeditorDebtorClientPage> {
   bool _starting = false;
   bool _visitStarted = false;
-  final Stopwatch _sw = Stopwatch();
-  Timer? _timer;
-  Duration _elapsed = Duration.zero;
+  DateTime? _sessionStart;
 
   Map<String, dynamic> get _seed => widget.seed ?? const {};
-
-  @override
-  void dispose() {
-    _timer?.cancel();
-    super.dispose();
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -149,6 +141,7 @@ class _ExpeditorDebtorClientPageState
         (client['total_balance'] as num?)?.toDouble() ??
         (_seed['balance'] as num?)?.toDouble() ??
         0;
+    final photo = firstClientPhotoUrl(client);
 
     return Padding(
       padding: const EdgeInsets.all(12),
@@ -164,17 +157,7 @@ class _ExpeditorDebtorClientPageState
                   Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Container(
-                        width: 46,
-                        height: 46,
-                        decoration: BoxDecoration(
-                          color: AppColors.surfaceVariant,
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: const Icon(Icons.storefront_outlined,
-                            color: AppColors.textSecondary,),
-                      ),
-                      const SizedBox(width: 12),
+                      ClientPhotoThumb(source: photo, size: 46, radius: 12),
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -279,7 +262,7 @@ class _ExpeditorDebtorClientPageState
             ),
             Expanded(
               child: Text(
-                "${formatMoneySpaced(balance)} So'm",
+                '${formatMoneySpaced(balance)} сум',
                 textAlign: TextAlign.right,
                 style: TextStyle(
                   fontWeight: FontWeight.w800,
@@ -440,19 +423,9 @@ class _ExpeditorDebtorClientPageState
                     color: AppColors.surfaceVariant,
                     borderRadius: BorderRadius.circular(10),
                   ),
-                  child: Text.rich(TextSpan(
-                    text: 'Время сеанса: ',
-                    style: AppTypography.bodyMedium
-                        .copyWith(color: AppColors.textSecondary),
-                    children: [
-                      TextSpan(
-                        text: _fmtDur(_elapsed),
-                        style: const TextStyle(
-                            fontWeight: FontWeight.w800,
-                            color: AppColors.textHeadline,),
-                      ),
-                    ],
-                  ),),
+                  child: _sessionStart == null
+                      ? const SizedBox.shrink()
+                      : ExpeditorSessionClock(startedAt: _sessionStart!),
                 ),
               ),
               const SizedBox(width: 10),
@@ -513,24 +486,38 @@ class _ExpeditorDebtorClientPageState
       );
 
   Future<void> _startVisit(Map<String, dynamic>? detail) async {
+    if (_starting || _visitStarted) return;
     final slug = ref.read(sessionProvider).tenantSlug ?? '';
     if (slug.isEmpty) return;
+    setState(() => _starting = true);
     final client =
         Map<String, dynamic>.from((detail?['client'] as Map?) ?? const {});
-    setState(() => _starting = true);
-
-    double? lat = (client['latitude'] as num?)?.toDouble();
-    double? lng = (client['longitude'] as num?)?.toDouble();
+    final clientLat = (client['latitude'] as num?)?.toDouble();
+    final clientLng = (client['longitude'] as num?)?.toDouble();
     try {
-      final pos =
-          await ref.read(gpsTrackerProvider.notifier).getQuickPosition();
-      if (pos != null) {
-        lat = pos.latitude;
-        lng = pos.longitude;
+      final gate = await ensureExpeditorVisitAllowed(
+        context: context,
+        ref: ref,
+        clientId: widget.clientId,
+        clientLat: clientLat,
+        clientLng: clientLng,
+      );
+      if (!mounted) return;
+      if (!gate.ok) {
+        if (gate.message != null) _toast(gate.message!);
+        return;
       }
-    } catch (_) {}
 
-    try {
+      double? lat = gate.replacePosition ? gate.latitude : clientLat;
+      double? lng = gate.replacePosition ? gate.longitude : clientLng;
+      if (!gate.replacePosition) {
+        final cached = ref.read(gpsTrackerProvider).lastPosition;
+        if (cached != null) {
+          lat = cached.latitude;
+          lng = cached.longitude;
+        }
+      }
+
       await ref.read(fieldApiProvider).createVisit(
             slug,
             clientId: widget.clientId,
@@ -550,17 +537,9 @@ class _ExpeditorDebtorClientPageState
   }
 
   void _beginSession() {
-    _sw
-      ..reset()
-      ..start();
-    _timer?.cancel();
-    _timer = Timer.periodic(const Duration(seconds: 1), (_) {
-      if (!mounted) return;
-      setState(() => _elapsed = _sw.elapsed);
-    });
     setState(() {
+      _sessionStart = DateTime.now();
       _visitStarted = true;
-      _elapsed = Duration.zero;
     });
   }
 
@@ -573,8 +552,6 @@ class _ExpeditorDebtorClientPageState
       confirmColor: AppColors.error,
     );
     if (ok != true) return;
-    _timer?.cancel();
-    _sw.stop();
     if (!mounted) return;
     _toast('Визит завершён', color: AppColors.success);
     setState(() => _visitStarted = false);
@@ -588,8 +565,6 @@ class _ExpeditorDebtorClientPageState
       confirmColor: AppColors.expeditorAccent,
     );
     if (ok != true) return;
-    _timer?.cancel();
-    _sw.stop();
     if (!mounted) return;
     _toast('Визит отменён');
     setState(() => _visitStarted = false);
@@ -653,13 +628,6 @@ class _ExpeditorDebtorClientPageState
         ),
       ),
     );
-  }
-
-  String _fmtDur(Duration d) {
-    final m = d.inMinutes.remainder(60).toString().padLeft(2, '0');
-    final s = d.inSeconds.remainder(60).toString().padLeft(2, '0');
-    final h = d.inHours;
-    return h > 0 ? '${h.toString().padLeft(2, '0')}:$m:$s' : '$m:$s';
   }
 
   void _toast(String msg, {Color color = AppColors.warning}) {
@@ -892,16 +860,16 @@ class _PaymentCard extends StatelessWidget {
   static String _methodLabel(String? type) {
     switch ((type ?? '').trim().toLowerCase()) {
       case 'cash':
-        return 'Naqd';
+        return 'Наличные';
       case 'card':
         return 'Карта';
       case 'terminal':
-        return 'Terminal';
+        return 'Терминал';
       case 'transfer':
       case 'bank':
-        return 'Pereches';
+        return 'Перечисление';
       default:
-        return (type == null || type.isEmpty) ? 'Naqd' : type;
+        return (type == null || type.isEmpty) ? 'Наличные' : type;
     }
   }
 
@@ -1095,7 +1063,7 @@ class _ReturnCard extends StatelessWidget {
                   style: AppTypography.bodyMedium
                       .copyWith(color: AppColors.textMuted),),
               Expanded(
-                child: Text("${formatMoneySpaced(sum)} So'm",
+                child: Text('${formatMoneySpaced(sum)} сум',
                     textAlign: TextAlign.right,
                     style: const TextStyle(
                         fontWeight: FontWeight.w800,

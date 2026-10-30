@@ -13,7 +13,7 @@ export function OrdersHubTopBar() {
     <div
       className="mb-5 flex min-h-11 flex-wrap items-center gap-2 border-b border-border/70 pb-3 md:min-h-12"
       role="navigation"
-      aria-label="Zakazlar tezkor paneli"
+      aria-label="Быстрая панель заказов"
     >
       <div className="flex flex-wrap items-center gap-1">
         <Link
@@ -28,7 +28,7 @@ export function OrdersHubTopBar() {
           className={cn(buttonVariants({ variant: "ghost", size: "sm" }), "text-xs sm:text-sm")}
         >
           <Wallet className="mr-1 size-3.5 opacity-80" aria-hidden />
-          To‘lovlar
+          Оплаты
         </Link>
       </div>
     </div>

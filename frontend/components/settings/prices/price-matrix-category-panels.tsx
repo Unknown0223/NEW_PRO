@@ -50,7 +50,7 @@ export function PriceMatrixCategoryPanels({
   if (needsFilters) {
     return (
       <div className="rounded-lg border border-dashed bg-muted/20 px-4 py-10 text-center text-sm text-muted-foreground">
-        Narx turini tanlang.
+        Выберите тип цены.
       </div>
     );
   }
@@ -58,7 +58,7 @@ export function PriceMatrixCategoryPanels({
   if (needsCategories) {
     return (
       <div className="rounded-lg border border-dashed bg-muted/20 px-4 py-10 text-center text-sm text-muted-foreground">
-        Chapdan kamida bitta kategoriya belgilang — har birining mahsulotlari alohida ko‘rinadi.
+        Отметьте слева хотя бы одну категорию — товары каждой будут показаны отдельно.
       </div>
     );
   }
@@ -66,7 +66,7 @@ export function PriceMatrixCategoryPanels({
   if (isLoading && panels.length === 0) {
     return (
       <div className="rounded-lg border bg-card px-4 py-10 text-center text-sm text-muted-foreground">
-        Yuklanmoqda…
+        Загрузка…
       </div>
     );
   }
@@ -74,7 +74,7 @@ export function PriceMatrixCategoryPanels({
   if (panels.length === 0) {
     return (
       <div className="rounded-lg border border-dashed bg-muted/20 px-4 py-10 text-center text-sm text-muted-foreground">
-        Tanlangan kategoriyalarda mahsulot yo‘q.
+        В выбранных категориях нет товаров.
       </div>
     );
   }
@@ -108,7 +108,7 @@ export function PriceMatrixCategoryPanels({
                 <div className="min-w-0">
                   <h3 className="truncate text-sm font-semibold">{p.label}</h3>
                   <p className="text-xs text-muted-foreground">
-                    {p.rows.length} ta mahsulot · {currency}
+                    Товаров: {p.rows.length} · {currency}
                   </p>
                 </div>
               </div>

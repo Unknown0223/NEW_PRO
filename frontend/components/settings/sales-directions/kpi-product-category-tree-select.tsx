@@ -110,7 +110,7 @@ export function KpiProductCategoryTreeSelect({
 
           <div className="flex shrink-0 items-center justify-between gap-2 border-b border-border/60 bg-muted/15 px-3 py-2">
             <p className="text-[10px] text-muted-foreground">
-              Kategoriya yoki alohida mahsulotni belgilang
+              Отметьте категорию или отдельный товар
             </p>
             <Button
               type="button"

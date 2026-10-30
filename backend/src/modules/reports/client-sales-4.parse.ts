@@ -1,3 +1,4 @@
+import { monthToDateYmd } from "../../lib/month-to-date";
 import type { ClientSales4Filters } from "./client-sales-4.types";
 import { intList, parseOrderTypesParam, strList } from "./client-sales-4.helpers";
 
@@ -10,9 +11,7 @@ export function parseClientSales4Query(q: Record<string, string | undefined>): C
     q.only_with_value === "1" || q.only_with_value === "true" || q.only_with_value === "yes";
   const from = (q.from ?? "").trim();
   const to = (q.to ?? "").trim();
-  const today = new Date();
-  const defaultFrom = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().slice(0, 10);
-  const defaultTo = new Date(today.getFullYear(), today.getMonth() + 1, 0).toISOString().slice(0, 10);
+  const { from: defaultFrom, to: defaultTo } = monthToDateYmd();
   return {
     from: from || defaultFrom,
     to: to || defaultTo,

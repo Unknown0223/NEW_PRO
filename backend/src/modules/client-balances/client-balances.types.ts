@@ -38,7 +38,7 @@ export type ClientBalanceListQuery = {
   territory_zones?: string[];
   /** YYYY-MM-DD — balans harakatlari bo‘yicha shu sanagacha (UTC kun oxiri) yig‘indi */
   balance_as_of?: string;
-  /** Konsignatsiya / litsenziya muddati (client.license_until) oralig‘i */
+  /** Konsignatsiya to‘lov muddati (orders.consignment_due_date) oralig‘i */
   consignment_due_from?: string;
   consignment_due_to?: string;
   /** Agent `User.branch` (filial) */

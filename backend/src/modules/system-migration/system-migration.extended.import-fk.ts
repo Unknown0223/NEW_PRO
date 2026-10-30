@@ -24,19 +24,19 @@ export function missingRequiredFk(
 export function fkSkipWarningUz(specFile: string, field: string): string {
   if (field === "product_id") {
     if (specFile === "product_prices") {
-      return "Mahsulot narxi import qilinmadi: mahsulot topilmadi";
+      return "Цена товара не импортирована: товар не найден";
     }
     if (specFile === "product_price_schedules") {
-      return "Rejalashtirilgan narx import qilinmadi: mahsulot topilmadi";
+      return "Запланированная цена не импортирована: товар не найден";
     }
-    return "Qator import qilinmadi: mahsulot topilmadi";
+    return "Строка не импортирована: товар не найден";
   }
-  if (field === "client_id") return "Qator import qilinmadi: mijoz topilmadi";
-  if (field === "warehouse_id") return "Qator import qilinmadi: ombor topilmadi";
+  if (field === "client_id") return "Строка не импортирована: клиент не найден";
+  if (field === "warehouse_id") return "Строка не импортирована: склад не найден";
   if (field === "user_id" || field.endsWith("_user_id") || field === "agent_id") {
-    return "Qator import qilinmadi: foydalanuvchi topilmadi";
+    return "Строка не импортирована: пользователь не найден";
   }
-  return `${specFile}: ${field} bog‘lanishi topilmadi — qator o‘tkazib yuborildi.`;
+  return `${specFile}: связь ${field} не найдена — строка пропущена.`;
 }
 
 /**

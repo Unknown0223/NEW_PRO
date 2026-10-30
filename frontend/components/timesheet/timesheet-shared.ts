@@ -1,23 +1,54 @@
 import type { LucideIcon } from "lucide-react";
-import { Bot, MapPin, PenLine, Smartphone } from "lucide-react";
+import { Bot, Camera, Clock, FileCheck2, MapPin, PenLine, ShieldCheck, Smartphone, Video } from "lucide-react";
 
 /**
- * Полная модель статусов посещаемости (паритет с прототипом TabelERP):
- *  worked=1 · half_day=0.5 · absent=0 · holiday(выходной) · vacation(отпуск) ·
- *  sick(больничный) · trip(командировка).
+ * Полная модель статусов посещаемости (15 статусов HR Hub + TabelERP).
  */
-export type AttendanceStatus = "worked" | "half_day" | "absent" | "vacation" | "sick" | "holiday" | "trip";
-export type Source = "manual" | "gps" | "mobile_login" | "auto";
+export type AttendanceStatus =
+  | "worked"
+  | "late"
+  | "early_leave"
+  | "half_day"
+  | "absent"
+  | "excused_absent"
+  | "vacation"
+  | "unpaid_leave"
+  | "sick"
+  | "holiday"
+  | "trip"
+  | "overtime"
+  | "weekend_work"
+  | "remote"
+  | "not_started";
 
-/** Легенда / порядок статусов (как в прототипе: 0, 0.5, 1, выходной, отпуск, больничный, командировка). */
+export type Source =
+  | "manual"
+  | "gps"
+  | "mobile_login"
+  | "auto"
+  | "mobile_photo"
+  | "mobile_video"
+  | "kiosk"
+  | "terminal"
+  | "request";
+
+/** Легенда / порядок статусов. */
 export const ATTENDANCE_STATUSES: AttendanceStatus[] = [
   "absent",
   "half_day",
   "worked",
+  "late",
+  "early_leave",
   "holiday",
   "vacation",
+  "unpaid_leave",
   "sick",
-  "trip"
+  "trip",
+  "overtime",
+  "weekend_work",
+  "remote",
+  "excused_absent",
+  "not_started"
 ];
 
 /** «Рабочие» значения для быстрого выбора 0 / 0.5 / 1. */
@@ -31,12 +62,24 @@ export const WORK_STATUS_BY_VALUE: Record<string, AttendanceStatus> = {
 };
 
 /** Специальные статусы (не рабочее значение). */
-export const SPECIAL_STATUSES: AttendanceStatus[] = ["holiday", "vacation", "sick", "trip"];
+export const SPECIAL_STATUSES: AttendanceStatus[] = [
+  "holiday",
+  "vacation",
+  "unpaid_leave",
+  "sick",
+  "trip",
+  "late",
+  "early_leave",
+  "overtime",
+  "weekend_work",
+  "remote",
+  "excused_absent"
+];
 
 /** Вклад статуса в «Итого». */
 export function statusWorkValue(s: AttendanceStatus): number {
-  if (s === "worked") return 1;
-  if (s === "half_day") return 0.5;
+  if (s === "worked" || s === "late" || s === "trip" || s === "overtime" || s === "weekend_work" || s === "remote") return 1;
+  if (s === "half_day" || s === "early_leave") return 0.5;
   return 0;
 }
 
@@ -65,13 +108,29 @@ export function canEditTimesheet(role: string | null | undefined): boolean {
   return Boolean(role && TIMESHEET_EDIT_ROLES.has(role));
 }
 
-export type TimesheetCell = { day: number; date: string; status: AttendanceStatus; source: Source };
+export type TimesheetCell = {
+  day: number;
+  date: string;
+  status: AttendanceStatus;
+  source: Source;
+  /** Avtomatik holat sababi (agent kunlik normasi). */
+  comment?: string;
+  net_sales?: number;
+  norm?: number;
+};
 
 export type TimesheetRow = {
   user_id: number;
   fio: string;
   role: string;
   login: string;
+  /** Smart KOD */
+  code?: string | null;
+  /** Филиал */
+  branch?: string | null;
+  /** Направление */
+  direction?: string | null;
+  supervisor_user_id?: number | null;
   worked_days: number;
   absent_days: number;
   cells: TimesheetCell[];
@@ -171,18 +230,31 @@ export const STATUS_META: Record<AttendanceStatus, StatusMeta> = {
     dot: "bg-purple-500",
     cell: "bg-purple-500 text-white dark:bg-purple-500",
     chipActive: "bg-purple-500 text-white border-purple-500"
-  }
+  },
+  late: { code: "6", short: "ОП", label: "Опоздал", color: "#d97706", dot: "bg-amber-600", cell: "bg-amber-500 text-white", chipActive: "bg-amber-600 text-white border-amber-600" },
+  early_leave: { code: "7", short: "РУ", label: "Ранний уход", color: "#ea580c", dot: "bg-orange-600", cell: "bg-orange-400 text-white", chipActive: "bg-orange-600 text-white border-orange-600" },
+  excused_absent: { code: "8", short: "УП", label: "Уважительная причина", color: "#64748b", dot: "bg-slate-500", cell: "bg-slate-300 text-slate-800", chipActive: "bg-slate-600 text-white border-slate-600" },
+  unpaid_leave: { code: "9", short: "БС", label: "Без содержания", color: "#ca8a04", dot: "bg-yellow-600", cell: "bg-yellow-500 text-white", chipActive: "bg-yellow-600 text-white border-yellow-600" },
+  overtime: { code: "10", short: "СВ", label: "Сверхурочно", color: "#059669", dot: "bg-emerald-600", cell: "bg-emerald-600 text-white", chipActive: "bg-emerald-600 text-white border-emerald-600" },
+  weekend_work: { code: "11", short: "РВ", label: "Работа в выходной", color: "#0284c7", dot: "bg-sky-600", cell: "bg-sky-600 text-white", chipActive: "bg-sky-600 text-white border-sky-600" },
+  remote: { code: "12", short: "УД", label: "Удалённо", color: "#4f46e5", dot: "bg-indigo-600", cell: "bg-indigo-600 text-white", chipActive: "bg-indigo-600 text-white border-indigo-600" },
+  not_started: { code: "13", short: "—", label: "Не начался", color: "#cbd5e1", dot: "bg-slate-300", cell: "bg-slate-100 text-slate-400", chipActive: "bg-slate-400 text-white border-slate-400" }
 };
 
 export function statusMeta(s: AttendanceStatus): StatusMeta {
-  return STATUS_META[s];
+  return STATUS_META[s] ?? STATUS_META.worked;
 }
 
 export const SOURCE_META: Record<Source, { label: string; icon: LucideIcon }> = {
   manual: { label: "Ручной ввод", icon: PenLine },
   gps: { label: "GPS-визит", icon: MapPin },
   mobile_login: { label: "Вход в приложение", icon: Smartphone },
-  auto: { label: "Автоматически", icon: Bot }
+  auto: { label: "Автоматически", icon: Bot },
+  mobile_photo: { label: "Фото-отметка (Face ID)", icon: Camera },
+  mobile_video: { label: "Видео-отметка (3-код)", icon: Video },
+  kiosk: { label: "Киоск бригады", icon: ShieldCheck },
+  terminal: { label: "Терминал Face ID", icon: Clock },
+  request: { label: "По заявке", icon: FileCheck2 }
 };
 
 export const MONTH_NAMES_RU = [
@@ -263,16 +335,42 @@ export function initialsOf(fio: string): string {
     .join("");
 }
 
+/** User.role → qisqa yorliq (filtr chip / select). */
+const TIMESHEET_ROLE_LABELS: Record<string, string> = {
+  admin: "Админ",
+  agent: "Агент",
+  supervisor: "Супервайзер",
+  collector: "Инкассатор",
+  expeditor: "Экспедитор",
+  skladchik: "Складчик",
+  auditor: "Аудитор",
+  operator: "Оператор",
+  director: "Директор",
+  sales_director: "Директор по продажам",
+  manager: "Менеджер",
+  regional_manager: "Региональный менеджер",
+  accountant: "Бухгалтер",
+  warehouse_manager: "Менеджер склада",
+  cashier: "Кассир"
+};
+
+export function timesheetRoleLabel(role: string): string {
+  const key = role.trim().toLowerCase();
+  return TIMESHEET_ROLE_LABELS[key] ?? role;
+}
+
 /** Экспорт матрицы табеля в CSV (разделитель «;», BOM для Excel). mode: коды 0–5 или текст. */
 export function exportTimesheetCsv(month: string, days: number[], rows: TimesheetRow[], mode: "codes" | "labels" = "codes") {
   const dayCols = days.map((d) => String(d).padStart(2, "0"));
-  const head = ["ФИО", "Роль", "Логин", "Итого", ...dayCols];
+  const head = ["ФИО", "Роль", "Smart-код", "Направление", "Филиал", "Итого", ...dayCols];
   const lines = rows.map((r) => {
     const total = r.cells.reduce((acc, c) => acc + statusWorkValue(c.status), 0);
     return [
       r.fio,
-      r.role,
-      r.login,
+      timesheetRoleLabel(r.role),
+      r.code ?? "",
+      r.direction ?? "",
+      r.branch ?? "",
       fmtTotal(total),
       ...r.cells.map((c) => (mode === "codes" ? STATUS_META[c.status].short : STATUS_META[c.status].label))
     ];

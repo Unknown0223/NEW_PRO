@@ -2,6 +2,7 @@
 
 import { DialogHeaderActions } from "@/components/ui/dialog-header-actions";
 import { NakladnoyPreviewPrintView } from "@/components/orders/orders-list/nakladnoy-preview-print-view";
+import { NakladnoyPagedGrid } from "@/components/orders/orders-list/nakladnoy-paged-grid";
 import { NakladnoyPreviewGrid } from "@/components/orders/orders-list/nakladnoy-preview-grid";
 import { NakladnoyPreview520Body } from "@/components/orders/orders-list/nakladnoy-preview-520-body";
 import { Button } from "@/components/ui/button";
@@ -79,7 +80,7 @@ export function OrdersNakladnoyPreviewModal({
       })
       .catch((e: unknown) => {
         if (!cancelled) {
-          setError(e instanceof Error ? e.message : "Xato");
+          setError(e instanceof Error ? e.message : "Ошибка");
         }
       })
       .finally(() => {
@@ -188,12 +189,14 @@ export function OrdersNakladnoyPreviewModal({
               {loading ? (
                 <div className="flex items-center justify-center gap-2 py-16 text-sm text-muted-foreground">
                   <Loader2 className="size-5 animate-spin" />
-                  Yuklanmoqda…
+                  Загрузка…
                 </div>
               ) : error ? (
                 <p className="py-8 text-center text-sm text-destructive">{error}</p>
               ) : page?.kind === "structured-520" && page.loading520 ? (
                 <NakladnoyPreview520Body data={page.loading520} />
+              ) : page?.kind === "grid" && page.grid?.pageBreakAfterRows ? (
+                <NakladnoyPagedGrid grid={page.grid} showPaperLabels />
               ) : page?.kind === "grid" && page.grid ? (
                 <NakladnoyPreviewGrid rows={page.grid.rows} />
               ) : null}

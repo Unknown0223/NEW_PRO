@@ -7,15 +7,16 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 type Props = {
-  params: {
+  params: Promise<{
     section: string;
     item: string;
-  };
+  }>;
 };
 
-export default function SettingsCatalogItemPage({ params }: Props) {
-  const section = settingsSections.find((s) => s.slug === params.section);
-  const item = findSettingsItem(params.section, params.item);
+export default async function SettingsCatalogItemPage({ params }: Props) {
+  const { section: sectionSlug, item: itemSlug } = await params;
+  const section = settingsSections.find((s) => s.slug === sectionSlug);
+  const item = findSettingsItem(sectionSlug, itemSlug);
 
   if (!section || !item) {
     notFound();
@@ -25,38 +26,38 @@ export default function SettingsCatalogItemPage({ params }: Props) {
   const isMappedToExisting = realHref !== item.href;
 
   return (
-    <PageShell className="max-w-3xl">
-      <PageHeader title={item.title} description={`${section.title} bo'limi elementi`} />
+    <PageShell>
+      <PageHeader title={item.title} description={`Элемент раздела «${section.title}»`} />
       <div className="rounded-lg border bg-card p-5">
         <div className="mb-4 flex items-center gap-2">
           {item.status === "planned" ? (
-            <span className="rounded-md bg-muted px-2 py-1 text-xs font-medium text-muted-foreground">Rejalashtirilgan</span>
+            <span className="rounded-md bg-muted px-2 py-1 text-xs font-medium text-muted-foreground">Запланировано</span>
           ) : (
-            <span className="rounded-md bg-emerald-600 px-2 py-1 text-xs font-medium text-white">Mavjud</span>
+            <span className="rounded-md bg-emerald-600 px-2 py-1 text-xs font-medium text-white">Доступно</span>
           )}
           {isMappedToExisting ? (
             <span className="rounded-md border px-2 py-1 text-xs font-medium text-muted-foreground">
-              Joriy sahifaga moslashtirilgan
+              Привязано к текущей странице
             </span>
           ) : null}
         </div>
 
         {isMappedToExisting ? (
           <p className="mb-4 text-sm text-muted-foreground">
-            Bu element hozircha mavjud modulga ulangan. To‘liq alohida sahifa keyin ajratiladi.
+            Этот элемент пока подключён к существующему модулю. Отдельная страница будет выделена позже.
           </p>
         ) : (
           <p className="mb-4 text-sm text-muted-foreground">
-            Bu bo‘lim uchun alohida funksional sahifa hali tayyor emas. Hozircha rejalashtirilgan placeholder.
+            Отдельная функциональная страница для этого раздела ещё не готова. Пока это запланированная заглушка.
           </p>
         )}
 
         <div className="flex flex-wrap gap-2">
           <Link className={cn(buttonVariants({ variant: "default" }))} href={realHref}>
-            {isMappedToExisting ? "Mavjud sahifani ochish" : "Placeholder manzili"}
+            {isMappedToExisting ? "Открыть существующую страницу" : "Адрес заглушки"}
           </Link>
           <Link className={cn(buttonVariants({ variant: "outline" }))} href="/settings">
-            Sozlamalar strukturaga qaytish
+            Вернуться к структуре настроек
           </Link>
         </div>
       </div>

@@ -9,8 +9,10 @@ import '../theme/app_colors.dart';
 import '../theme/app_typography.dart';
 import 'agent_template_form.dart';
 import 'agent_ui.dart';
+import 'client_photo_thumb.dart';
 
 import '../api/api_exceptions.dart';
+import '../errors/user_facing_error.dart';
 
 /// Pul/son maydonlari uchun minglik guruhlash (3 xonadan bo'shliq bilan).
 /// Masalan: `1000000` → `1 000 000`. O'qishga oson bo'lishi uchun.
@@ -56,7 +58,7 @@ class AgentSearchHeader extends StatelessWidget implements PreferredSizeWidget {
     super.key,
     required this.controller,
     required this.onBack,
-    this.hint = 'Qidiruv...',
+    this.hint = 'Поиск...',
   });
 
   @override
@@ -1086,22 +1088,29 @@ class AgentOrderCard extends StatelessWidget {
 
 class AgentDebtorCard extends StatelessWidget {
   final String name;
+  final String? photoUrl;
   final String balance;
   final double? balanceAmount;
   final String? overdue;
   final String? legacyDebt;
   final String? currentDebt;
+  final String? openingDebt;
+  /// Buyurtma/to‘lovlardan yig‘ilgan qarz (boshlang‘ichdan tashqari).
+  final String? enteredDebt;
   final bool debtCollectionOnly;
   final VoidCallback? onTap;
 
   const AgentDebtorCard({
     super.key,
     required this.name,
+    this.photoUrl,
     required this.balance,
     this.balanceAmount,
     this.overdue,
     this.legacyDebt,
     this.currentDebt,
+    this.openingDebt,
+    this.enteredDebt,
     this.debtCollectionOnly = false,
     this.onTap,
   });
@@ -1109,7 +1118,9 @@ class AgentDebtorCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final showSplit = (legacyDebt != null && legacyDebt!.isNotEmpty) ||
-        (currentDebt != null && currentDebt!.isNotEmpty);
+        (currentDebt != null && currentDebt!.isNotEmpty) ||
+        (openingDebt != null && openingDebt!.isNotEmpty) ||
+        (enteredDebt != null && enteredDebt!.isNotEmpty);
     return AgentSurfaceCard(
       padding: const EdgeInsets.all(16),
       margin: const EdgeInsets.only(bottom: 12),
@@ -1119,12 +1130,7 @@ class AgentDebtorCard extends StatelessWidget {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Container(
-              width: 44,
-              height: 44,
-              decoration: BoxDecoration(color: AppColors.surfaceVariant, borderRadius: BorderRadius.circular(12)),
-              child: const Icon(Icons.storefront_outlined, color: AppColors.textSecondary),
-            ),
+            ClientPhotoThumb(source: photoUrl, size: 44, radius: 12),
             const SizedBox(width: 12),
             Expanded(
               child: Column(
@@ -1156,7 +1162,28 @@ class AgentDebtorCard extends StatelessWidget {
                   ],
                   if (showSplit) ...[
                     const SizedBox(height: 6),
-                    if (legacyDebt != null && legacyDebt!.isNotEmpty)
+                    if (openingDebt != null && openingDebt!.isNotEmpty)
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text('Начальный баланс:', style: AppTypography.caption.copyWith(fontWeight: FontWeight.w600)),
+                          Text(openingDebt!, style: AppTypography.caption.copyWith(fontWeight: FontWeight.w800)),
+                        ],
+                      ),
+                    if (enteredDebt != null && enteredDebt!.isNotEmpty) ...[
+                      if (openingDebt != null && openingDebt!.isNotEmpty) const SizedBox(height: 2),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text('Из операций:', style: AppTypography.caption.copyWith(fontWeight: FontWeight.w600)),
+                          Text(enteredDebt!, style: AppTypography.caption.copyWith(fontWeight: FontWeight.w800)),
+                        ],
+                      ),
+                    ],
+                    if (legacyDebt != null && legacyDebt!.isNotEmpty) ...[
+                      if ((openingDebt != null && openingDebt!.isNotEmpty) ||
+                          (enteredDebt != null && enteredDebt!.isNotEmpty))
+                        const SizedBox(height: 2),
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
@@ -1164,6 +1191,7 @@ class AgentDebtorCard extends StatelessWidget {
                           Text(legacyDebt!, style: AppTypography.caption.copyWith(fontWeight: FontWeight.w800)),
                         ],
                       ),
+                    ],
                     if (currentDebt != null && currentDebt!.isNotEmpty) ...[
                       const SizedBox(height: 2),
                       Row(
@@ -1270,7 +1298,7 @@ class AgentExpandableStockGroup extends StatelessWidget {
                       width: double.infinity,
                       padding: const EdgeInsets.all(24),
                       decoration: BoxDecoration(color: AppColors.surfaceReport, borderRadius: BorderRadius.circular(10)),
-                      child: const Text('Bo\'sh', textAlign: TextAlign.center, style: TextStyle(color: AppColors.textMuted, fontWeight: FontWeight.w600)),
+                      child: const Text('Пусто', textAlign: TextAlign.center, style: TextStyle(color: AppColors.textMuted, fontWeight: FontWeight.w600)),
                     )
                   : Container(
                       decoration: BoxDecoration(color: AppColors.surfaceReport, borderRadius: BorderRadius.circular(10)),
@@ -1951,19 +1979,13 @@ class AgentErrorPanel extends StatelessWidget {
   });
 
   bool get _is401 {
-    final s = error.toString();
-    return s.contains('401') || s.contains('Sessiya') || s.contains('Unauthorized');
+    final u = UserFacingError.from(error);
+    return u.title.contains('Сессия') ||
+        error is UnauthorizedException ||
+        (error is ApiException && (error as ApiException).statusCode == 401);
   }
 
-  String get _message {
-    if (error is ApiException) return (error as ApiException).message;
-    final s = error.toString();
-    if (_is401) return 'Sessiya tugadi. Qayta kiring.';
-    if (s.contains('SocketException') || s.contains('NetworkException')) {
-      return 'Internet yoki server bilan bog\'lanib bo\'lmadi';
-    }
-    return 'Ma\'lumot yuklanmadi';
-  }
+  String get _message => UserFacingError.toast(error);
 
   @override
   Widget build(BuildContext context) {
@@ -1986,9 +2008,9 @@ class AgentErrorPanel extends StatelessWidget {
             ),
             const SizedBox(height: 20),
             if (_is401 && onLogin != null)
-              AgentPrimaryButton(label: 'Qayta kirish', height: 44, onPressed: onLogin)
+              AgentPrimaryButton(label: 'Войти снова', height: 44, onPressed: onLogin)
             else if (onRetry != null)
-              AgentPrimaryButton(label: 'Qayta urinish', height: 44, onPressed: onRetry),
+              AgentPrimaryButton(label: 'Повторить', height: 44, onPressed: onRetry),
           ],
         ),
       ),
@@ -2040,7 +2062,7 @@ class AgentClientDetailHeader extends StatelessWidget {
                       const SizedBox(height: 4),
                       Text.rich(
                         TextSpan(
-                          text: 'Umumiy balans: ',
+                          text: 'Общий баланс: ',
                           style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.textMuted),
                           children: [
                             TextSpan(
@@ -2075,9 +2097,9 @@ class AgentClientDetailHeader extends StatelessWidget {
           IntrinsicHeight(
             child: Row(
               children: [
-                Expanded(child: _act(Icons.phone_outlined, 'Qo\'ng\'iroq', onCall)),
+                Expanded(child: _act(Icons.phone_outlined, 'Позвонить', onCall)),
                 const VerticalDivider(width: 1, color: AppColors.borderLight),
-                Expanded(child: _act(Icons.location_on_outlined, 'Lokatsiya', onRoute)),
+                Expanded(child: _act(Icons.location_on_outlined, 'Локация', onRoute)),
               ],
             ),
           ),
@@ -2124,7 +2146,7 @@ class AgentRouteInfoBox extends StatelessWidget {
               Expanded(
                 child: Text.rich(
                   TextSpan(
-                    text: 'Marshrut: ',
+                    text: 'Маршрут: ',
                     style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: AppColors.primary),
                     children: [
                       TextSpan(
@@ -2143,7 +2165,7 @@ class AgentRouteInfoBox extends StatelessWidget {
             children: [
               Icon(Icons.schedule, size: 16, color: AppColors.textMuted),
               SizedBox(width: 8),
-              Expanded(child: Text('Marshrut chizilgan — mijozga biriktirilgan', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.textSecondary))),
+              Expanded(child: Text('Маршрут построен — клиент закреплён', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.textSecondary))),
             ],
           ),
         ],
@@ -2232,7 +2254,7 @@ Future<void> showAgentClientActionsSheet(
             if (editEnabled && onEdit != null)
               actionTile(icon: Icons.edit_outlined, title: 'Редактировать', onTap: onEdit),
             if (supervisionEnabled && onSupervisionChecklist != null)
-              actionTile(icon: Icons.checklist_outlined, title: 'Audit checklist', onTap: onSupervisionChecklist),
+              actionTile(icon: Icons.checklist_outlined, title: 'Чек-лист аудита', onTap: onSupervisionChecklist),
             const SizedBox(height: 8),
           ],
         ),
@@ -2274,7 +2296,7 @@ class AgentOrdersHeroCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'МЕНИНГ ЗАКАЗЛАРИМ',
+            'МОИ ЗАКАЗЫ',
             style: AppTypography.caption.copyWith(
               color: Colors.white.withValues(alpha: 0.85),
               fontWeight: FontWeight.w800,
@@ -2289,9 +2311,9 @@ class AgentOrdersHeroCard extends StatelessWidget {
           const SizedBox(height: 10),
           Row(
             children: [
-              Expanded(child: _stat('Жами', '$totalCount')),
+              Expanded(child: _stat('Всего', '$totalCount')),
               Expanded(child: _stat('В процессе', '$inProgressCount')),
-              Expanded(child: _stat('Қарз', debtLabel)),
+              Expanded(child: _stat('Долг', debtLabel)),
             ],
           ),
         ],

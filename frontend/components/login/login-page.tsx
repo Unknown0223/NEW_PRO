@@ -4,6 +4,7 @@ import "./login.css";
 
 import { SalesArenaLogo } from "@/components/brand/sales-arena-logo";
 import { api } from "@/lib/api";
+import { isWebPanelDeniedRole } from "@/lib/access-web-users";
 import { useAuthStore } from "@/lib/auth-store";
 import { describeDevice, getOrCreateDeviceId } from "@/lib/device-id";
 import { getUserFacingError, withApiSupportLine } from "@/lib/error-utils";
@@ -250,11 +251,15 @@ export function LoginPage() {
   const [showPass, setShowPass] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const [time, setTime] = useState(() => new Date());
+  /** SSR va client vaqti farq qilmasin — faqat mount dan keyin yangilanadi. */
+  const [timeLabel, setTimeLabel] = useState("");
   const sessionEnded = searchParams.get("reason") === "session_ended";
+  const webAccessDenied = searchParams.get("reason") === "web_access_denied";
 
   useEffect(() => {
-    const timer = setInterval(() => setTime(new Date()), 1000);
+    const tick = () => setTimeLabel(new Date().toLocaleTimeString("ru-RU", { hour12: false }));
+    tick();
+    const timer = setInterval(tick, 1000);
     return () => clearInterval(timer);
   }, []);
 
@@ -277,9 +282,24 @@ export function LoginPage() {
         tenantSlug: slug,
         role: data.user?.role as string | undefined
       });
+      const role = data.user?.role as string | undefined;
+      if (role && isWebPanelDeniedRole(role)) {
+        useAuthStore.getState().clearSession();
+        setError(
+          "Этот аккаунт работает только в мобильном приложении. Веб-панель недоступна."
+        );
+        return;
+      }
       const from = searchParams.get("from") ?? "/dashboard";
-      router.replace(from);
-      router.refresh();
+      const dest = from.startsWith("/") ? from : "/dashboard";
+      // Soft router.replace + refresh → «Загрузка…» osilib qoladi (RQ clear + Suspense).
+      // Hard nav: yangi QueryClient + toza bootstrap.
+      try {
+        window.localStorage.removeItem("salec:rq:v1");
+      } catch {
+        /* ignore */
+      }
+      window.location.assign(dest);
     } catch (err: unknown) {
       if (isAxiosError(err)) {
         const st = err.response?.status;
@@ -300,6 +320,12 @@ export function LoginPage() {
         }
         if (st === 403 && body?.error === "APP_ACCESS_DENIED") {
           setError("Доступ к приложению отключён. Обратитесь к администратору.");
+          return;
+        }
+        if (st === 403 && body?.error === "WEB_ACCESS_DENIED") {
+          setError(
+            "Этот аккаунт работает только в мобильном приложении. Веб-панель недоступна."
+          );
           return;
         }
         if (st === 403 && body?.error === "USER_NOT_ON_SLOT") {
@@ -357,7 +383,7 @@ export function LoginPage() {
             <div className="hidden text-right sm:block">
               <div className="text-[10px] uppercase tracking-wider text-slate-500">Время сервера</div>
               <div className="font-mono text-sm font-semibold tabular-nums text-cyan-400">
-                {time.toLocaleTimeString("ru-RU", { hour12: false })}
+                {timeLabel || "—:—:—"}
               </div>
             </div>
           </div>
@@ -428,6 +454,14 @@ export function LoginPage() {
               <div className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
                 <span className="mt-1.5 h-2 w-2 flex-shrink-0 rounded-full bg-amber-500" />
                 <span>Ваша сессия была завершена (администратором или повторным входом). Войдите снова.</span>
+              </div>
+            ) : null}
+            {webAccessDenied ? (
+              <div className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+                <span className="mt-1.5 h-2 w-2 flex-shrink-0 rounded-full bg-amber-500" />
+                <span>
+                  Этот аккаунт работает только в мобильном приложении. Веб-панель недоступна.
+                </span>
               </div>
             ) : null}
 

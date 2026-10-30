@@ -198,7 +198,21 @@ export type CityTerritoryHintDto = {
   district_label: string | null;
 };
 
-function territoryNodeStoredValue(n: TerritoryNodeDto): string {
+/** Daraxt chuqurligi → `clients` ustuni (zona / oblast / shahar); `buildCityTerritoryHints` bilan bir xil qoida. */
+export function territoryColumnDepths(ref: Record<string, unknown> | undefined): {
+  zoneD: number | null;
+  regionD: number;
+  cityD: number;
+} {
+  const nodes = territoryNodesFromUnknown(ref?.territory_nodes);
+  const L = stringArrayFromUnknown(ref?.territory_levels).length;
+  const treeDepth = maxTerritoryDepth(nodes);
+  const regionD = L >= 3 ? 1 : L >= 1 ? 0 : treeDepth >= 3 ? 1 : 0;
+  const cityD = L >= 3 ? 2 : L >= 1 ? 1 : treeDepth >= 3 ? 2 : 1;
+  return { zoneD: regionD >= 1 ? 0 : null, regionD, cityD };
+}
+
+export function territoryNodeStoredValue(n: TerritoryNodeDto): string {
   const name = (n.name ?? "").trim();
   if (!name) return "";
   const codeRaw = (n.code ?? "").trim().toUpperCase();

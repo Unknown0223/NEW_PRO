@@ -3,21 +3,25 @@
 import { OrderSseListener } from "@/components/dashboard/order-sse-listener";
 import { SalesArenaLogo } from "@/components/brand/sales-arena-logo";
 import {
+  ALL_DASHBOARD_NAV_PATHS,
   dashboardClientsNav,
   dashboardHomeNav,
   dashboardInvoicesNav,
   dashboardKassaNav,
   dashboardOrdersNav,
+  dashboardPayrollNav,
   dashboardPlansNav,
   dashboardReportsNav,
   dashboardSidebarLayout,
   dashboardStockNav,
   dashboardSuppliersNav,
+  dashboardTabelNav,
   dashboardUsersNav,
-  flattenMobileNavItems,
+  flattenNavSearchEntries,
   resolvePageBreadcrumb,
   type NavItem
 } from "@/components/dashboard/nav-config";
+import { NAV_PERM } from "@/components/dashboard/nav-permission-keys";
 import { isNavItemAllowed } from "@/lib/nav-route-access";
 import { Button } from "@/components/ui/button";
 import { ClientLucideIcon } from "@/components/ui/client-lucide-icon";
@@ -29,6 +33,7 @@ import { getUserFacingError } from "@/lib/error-utils";
 import {
   ME_PERMISSIONS_REFETCH_INTERVAL_MS,
   ME_PERMISSIONS_STALE_MS,
+  decodeAccessTokenUserId,
   mePermissionKeySet,
   mePermissionsQueryKey,
   normalizeMePermissionKeys
@@ -40,9 +45,13 @@ import { NotificationBell } from "@/components/notifications/notification-bell";
 import { WorkSlotsPendingBell } from "@/components/work-slots/work-slots-pending-bell";
 import { WorkSlotProfileBadge } from "@/components/work-slots/work-slot-profile-badge";
 import { UserMenu } from "@/components/dashboard/user-menu";
+import { SidebarGroupedSection } from "@/components/dashboard/sidebar-grouped-section";
+import { SidebarNavSearch } from "@/components/dashboard/sidebar-nav-search";
+import { MobileNavDrawer } from "@/components/dashboard/mobile-nav-drawer";
 import { TenantSidebarClock } from "@/components/dashboard/tenant-sidebar-clock";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  Banknote,
   BarChart3,
   CalendarRange,
   ChevronDown,
@@ -51,11 +60,14 @@ import {
   LayoutDashboard,
   Loader2,
   Lightbulb,
+  Menu,
   Package,
   Radar,
   Receipt,
   Search,
   Settings,
+  ShieldAlert,
+  Sparkles,
   ShieldCheck,
   ShoppingCart,
   Table2,
@@ -68,7 +80,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 /**
  * Ba'zi ildiz yo‘llar — exact match only.
@@ -83,12 +95,47 @@ const NAV_ACTIVE_EXACT_ONLY = new Set([
   "/reports/gps" // Jadval hisobot ≠ /reports/gps/map (header GPS)
 ]);
 
+/**
+ * Pastki «Настройки» — faqat haqiqiy sozlamalar sahifalarida sariq.
+ * Пользователи/Касса ichidagi `/settings/spravochnik/*`, cash-desks, payroll va h.k. da yoqilmasin.
+ */
+function isSettingsRootNavActive(pathname: string): boolean {
+  const raw = pathname.split("?")[0] ?? "";
+  const path = raw.length > 1 && raw.endsWith("/") ? raw.slice(0, -1) : raw;
+  if (path === "/settings") return true;
+  if (!path.startsWith("/settings/")) return false;
+  if (path.startsWith("/settings/spravochnik")) return false;
+  if (path.startsWith("/settings/cash-desks")) return false;
+  if (path.startsWith("/settings/payroll")) return false;
+  if (path.startsWith("/settings/reasons/task-types")) return false;
+  return true;
+}
+
+function normalizeNavPathname(pathname: string): string {
+  const raw = pathname.split("?")[0] ?? "";
+  return raw.length > 1 && raw.endsWith("/") ? raw.slice(0, -1) : raw;
+}
+
+function pathMatchesNavHref(path: string, hrefPath: string): boolean {
+  return path === hrefPath || path.startsWith(`${hrefPath}/`);
+}
+
 function isNavActive(pathname: string, href: string): boolean {
   const pathOnly = href.split("?")[0] ?? href;
-  if (NAV_ACTIVE_EXACT_ONLY.has(pathOnly)) {
-    return pathname === pathOnly || pathname === `${pathOnly}/`;
+  if (pathOnly === "/settings") {
+    return isSettingsRootNavActive(pathname);
   }
-  return pathname === pathOnly || pathname.startsWith(`${pathOnly}/`);
+  const path = normalizeNavPathname(pathname);
+  if (NAV_ACTIVE_EXACT_ONLY.has(pathOnly)) {
+    return path === pathOnly;
+  }
+  if (!pathMatchesNavHref(path, pathOnly)) return false;
+  // Aniqroq (uzunroq) menyu bandi shu URL ni egallasa — qisqa ota active emas
+  for (const other of ALL_DASHBOARD_NAV_PATHS) {
+    if (other === pathOnly || other.length <= pathOnly.length) continue;
+    if (pathMatchesNavHref(path, other)) return false;
+  }
+  return true;
 }
 
 /** Заявки: `/orders?status=…`, `/returns/new?…` va boshqalar */
@@ -117,7 +164,7 @@ function orderNavItemActive(pathname: string, searchParams: URLSearchParams, hre
   }
 
   if (pathPart === "/settings") {
-    return pathname === "/settings" || pathname.startsWith("/settings/");
+    return isSettingsRootNavActive(pathname);
   }
 
   if (qs) {
@@ -129,7 +176,7 @@ function orderNavItemActive(pathname: string, searchParams: URLSearchParams, hre
     return true;
   }
 
-  return pathname === pathPart || pathname.startsWith(`${pathPart}/`);
+  return isNavActive(pathname, pathPart);
 }
 
 /** Bir xil queryKey uchun eski keshda `Set` ham bo‘lishi mumkin — `string[]` / `Set` → `Set`. */
@@ -207,6 +254,35 @@ function plansNavChildActive(pathname: string): boolean {
   return dashboardPlansNav.items.some((item) => !item.disabled && item.href !== "#" && isNavActive(pathname, item.href));
 }
 
+function payrollNavChildActive(pathname: string): boolean {
+  return dashboardPayrollNav.groups.some((g) =>
+    g.items.some((item) => !item.disabled && item.href !== "#" && isNavActive(pathname, item.href))
+  );
+}
+
+function tabelNavChildActive(pathname: string): boolean {
+  if (pathname === "/users/timesheet" || pathname === "/users/workdays" || pathname.startsWith("/tabel/")) {
+    return true;
+  }
+  return dashboardTabelNav.groups.some((g) =>
+    g.items.some((item) => !item.disabled && item.href !== "#" && isNavActive(pathname, item.href))
+  );
+}
+
+type SidebarSection =
+  | "dashboard"
+  | "clients"
+  | "orders"
+  | "invoices"
+  | "stock"
+  | "suppliers"
+  | "reports"
+  | "plans"
+  | "kassa"
+  | "users"
+  | "tabel"
+  | "payroll";
+
 function placeholderIcon(icon: "plans" | "pivot" | "audit") {
   if (icon === "plans") return CalendarRange;
   if (icon === "pivot") return Table2;
@@ -246,6 +322,8 @@ function linkIcon(href: string) {
   const path = href.split("?")[0] ?? href;
   if (path === "/dashboard") return LayoutDashboard;
   if (path === "/audit") return ShieldCheck;
+  if (path === "/suspicious-logins") return ShieldAlert;
+  if (path === "/assistant") return Sparkles;
   if (path.startsWith("/clients")) return Users;
   if (path.startsWith("/settings/cash-desks")) return Wallet;
   if (path === "/payments") return Wallet;
@@ -268,7 +346,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const hydrated = useAuthStoreHydrated();
   const accessToken = useAuthStore((s) => s.accessToken);
   const { tenantSlug, clearSession } = useAuthStore();
-  const effectiveRole = useEffectiveRole();
+  const persistRole = useEffectiveRole();
+  /**
+   * zustand persist clientda birinchi renderdan oldin to‘lishi mumkin.
+   * SSR esa bo‘sh store — shu qiymatlarni `hydrated` gacha ishlatmaslik kerak,
+   * aks holda Next hydration overlay click/focusni yopadi.
+   */
+  const shellRole = hydrated ? persistRole : null;
+  const shellSlug = hydrated ? tenantSlug : null;
   const qc = useQueryClient();
 
   /** Eski JWT da `tenantSlug` bo‘lmasa — bazadan slugni `/auth/me` orqali store ga yozamiz (404 TenantNotFound oldini). */
@@ -294,7 +379,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   }, [hydrated, accessToken]);
 
   const mePermsQ = useQuery({
-    queryKey: mePermissionsQueryKey(tenantSlug),
+    queryKey: mePermissionsQueryKey(tenantSlug, decodeAccessTokenUserId(accessToken)),
     enabled: Boolean(tenantSlug),
     staleTime: ME_PERMISSIONS_STALE_MS,
     refetchOnWindowFocus: true,
@@ -307,12 +392,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     placeholderData: (prev) => prev
   });
   const permissionKeySet = permissionKeysFromQueryData(mePermsQ.data);
-  const [openSection, setOpenSection] = useState<
-    "dashboard" | "clients" | "orders" | "invoices" | "stock" | "suppliers" | "reports" | "plans" | "kassa" | "users" | null
-  >(null);
+  const [openSection, setOpenSection] = useState<SidebarSection | null>(null);
   const [reportsSettingsOpen, setReportsSettingsOpen] = useState(false);
   const [reportsSearch, setReportsSearch] = useState("");
   const [localHiddenOverride, setLocalHiddenOverride] = useState<Set<string> | null>(null);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const closeMobileNav = useCallback(() => setMobileNavOpen(false), []);
+  useEffect(() => {
+    setMobileNavOpen(false);
+  }, [pathname]);
   const dashboardOpen = openSection === "dashboard";
   const clientsOpen = openSection === "clients";
   const usersOpen = openSection === "users";
@@ -361,6 +449,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       setOpenSection("kassa");
       return;
     }
+    if (payrollNavChildActive(pathname)) {
+      setOpenSection("payroll");
+      return;
+    }
+    if (tabelNavChildActive(pathname)) {
+      setOpenSection("tabel");
+      return;
+    }
     if (usersNavChildActive(pathname)) {
       setOpenSection("users");
       return;
@@ -368,9 +464,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     setOpenSection(null);
   }, [pathname]);
 
-  function toggleSection(
-    section: "dashboard" | "clients" | "orders" | "invoices" | "stock" | "suppliers" | "reports" | "plans" | "kassa" | "users"
-  ) {
+  function toggleSection(section: SidebarSection) {
     setOpenSection((prev) => (prev === section ? null : section));
   }
 
@@ -390,8 +484,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     } catch {
       /* ignore */
     }
-    router.replace("/login");
-    router.refresh();
+    window.location.assign("/login");
   }
 
   /** Sticky jadval sahifalari — viewport to‘liq; qolganlari kontent bo‘yicha */
@@ -417,10 +510,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       new Set(
         dashboardReportsNav.items
           .filter((x) => !x.disabled && x.href !== "#" && x.href !== "/reports/settings")
-          .filter((x) => navItemVisible(x, effectiveRole, permissionKeySet))
+          .filter((x) => navItemVisible(x, shellRole, permissionKeySet))
           .map((x) => x.href)
       ),
-    [effectiveRole, permissionKeySet]
+    [shellRole, permissionKeySet]
   );
 
   const hiddenReportHrefs = useMemo(() => {
@@ -439,28 +532,30 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const reportMenuItems = useMemo(
     () =>
       dashboardReportsNav.items.filter((item) => {
-        if (!navItemVisible(item, effectiveRole, permissionKeySet)) return false;
+        if (!navItemVisible(item, shellRole, permissionKeySet)) return false;
         if (item.href === "/reports/settings") return true;
         return !hiddenReportsCurrent.has(item.href);
       }),
-    [effectiveRole, permissionKeySet, hiddenReportsCurrent]
+    [shellRole, permissionKeySet, hiddenReportsCurrent]
   );
 
-  const mobileItems = flattenMobileNavItems().filter((item) => {
-    if (!navItemVisible(item, effectiveRole, permissionKeySet)) return false;
-    const isReport = item.href === "/reports" || item.href.startsWith("/reports/");
-    if (!isReport) return true;
-    if (item.href === "/reports/settings") return true;
-    return !hiddenReportsCurrent.has(item.href);
-  });
+  const navSearchEntries = useMemo(
+    () =>
+      flattenNavSearchEntries().filter(({ item }) => {
+        if (!navItemVisible(item, shellRole, permissionKeySet)) return false;
+        if (!reportItemHrefSet.has(item.href)) return true;
+        return !hiddenReportsCurrent.has(item.href);
+      }),
+    [shellRole, permissionKeySet, reportItemHrefSet, hiddenReportsCurrent]
+  );
 
   const reportsSettingsItems = useMemo(
     () =>
       dashboardReportsNav.items
         .filter((x) => !x.disabled && x.href !== "#" && x.href !== "/reports/settings")
-        .filter((x) => navItemVisible(x, effectiveRole, permissionKeySet))
+        .filter((x) => navItemVisible(x, shellRole, permissionKeySet))
         .map((x) => ({ href: x.href, label: x.label })),
-    [effectiveRole, permissionKeySet]
+    [shellRole, permissionKeySet]
   );
   const reportsSearchNorm = reportsSearch.trim().toLowerCase();
   const reportsSettingsVisibleItems = useMemo(
@@ -494,23 +589,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     setLocalHiddenOverride((prev) => updater(prev ? new Set(prev) : new Set(hiddenReportHrefs)));
   };
 
-  return (
-    <div className="flex h-dvh w-full overflow-hidden">
-      <OrderSseListener />
-      <aside className="scrollbar-none hidden min-h-0 w-[15.5rem] shrink-0 flex-col overflow-hidden border-r border-sidebar-border bg-sidebar text-sidebar-foreground shadow-[2px_0_12px_rgba(0,0,0,0.06)] md:flex">
-        <div className="border-b border-sidebar-border/80 px-3 py-4">
-          <SalesArenaLogo variant="dark" height={48} className="mb-2.5 w-full max-w-[220px]" />
-          <div className="flex items-center justify-between gap-2">
-            <p className="min-w-0 truncate text-sm font-semibold text-sidebar-foreground" title={tenantSlug ?? undefined}>
-              {tenantSlug ?? "—"}
-            </p>
-            <TenantSidebarClock />
-          </div>
-        </div>
-        <nav className="scrollbar-none flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto overflow-x-hidden p-2 overscroll-contain">
-          {dashboardSidebarLayout.map((entry, idx) => {
+  const openReportsSettings = () => {
+    setReportsSettingsOpen(true);
+    setReportsSearch("");
+    setLocalHiddenOverride(null);
+  };
+
+  const sidebarTree = dashboardSidebarLayout.map((entry, idx) => {
             if (entry.kind === "link") {
-              if (!navItemVisible(entry.item, effectiveRole, permissionKeySet)) return null;
+              if (!navItemVisible(entry.item, shellRole, permissionKeySet)) return null;
               const { href, label, disabled } = entry.item;
               const active = !disabled && href !== "#" && isNavActive(pathname, href);
               const Icon = linkIcon(href);
@@ -560,7 +647,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               if (
                 !navItemsSomeVisible(
                   dashboardOrdersNav.groups.flatMap((g) => g.items),
-                  effectiveRole,
+                  shellRole,
                   permissionKeySet
                 )
               ) {
@@ -591,7 +678,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                     <div className="ml-1 space-y-3 border-l border-sidebar-border/60 py-0.5 pl-2">
                       {dashboardOrdersNav.groups.map((group) => {
                         const visibleItems = group.items.filter((item) =>
-                          navItemVisible(item, effectiveRole, permissionKeySet)
+                          navItemVisible(item, shellRole, permissionKeySet)
                         );
                         if (visibleItems.length === 0) return null;
                         return (
@@ -636,7 +723,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             }
 
             if (entry.kind === "invoices") {
-              if (!navItemsSomeVisible(dashboardInvoicesNav.items, effectiveRole, permissionKeySet)) {
+              if (!navItemsSomeVisible(dashboardInvoicesNav.items, shellRole, permissionKeySet)) {
                 return null;
               }
               return (
@@ -663,7 +750,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   {invoicesOpen && (
                     <ul className="ml-1 flex flex-col gap-0.5 border-l border-sidebar-border/60 py-0.5 pl-2">
                       {dashboardInvoicesNav.items
-                        .filter((item) => navItemVisible(item, effectiveRole, permissionKeySet))
+                        .filter((item) => navItemVisible(item, shellRole, permissionKeySet))
                         .map((item) => {
                           const muted = Boolean(item.disabled || item.href === "#");
                           const active = !muted && isNavActive(pathname, item.href);
@@ -701,7 +788,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             }
 
             if (entry.kind === "clients") {
-              if (!navItemsSomeVisible(dashboardClientsNav.items, effectiveRole, permissionKeySet)) {
+              if (!navItemsSomeVisible(dashboardClientsNav.items, shellRole, permissionKeySet)) {
                 return null;
               }
               return (
@@ -728,7 +815,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   {clientsOpen && (
                     <ul className="ml-1 flex flex-col gap-0.5 border-l border-sidebar-border/60 py-0.5 pl-2">
                       {dashboardClientsNav.items
-                        .filter((item) => navItemVisible(item, effectiveRole, permissionKeySet))
+                        .filter((item) => navItemVisible(item, shellRole, permissionKeySet))
                         .map((item) => {
                         const muted = Boolean(item.disabled || item.href === "#");
                         const active = !muted && isNavActive(pathname, item.href);
@@ -777,7 +864,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
             if (entry.kind === "dashboard") {
               const dashboardItems = dashboardHomeNav.items.filter((item) =>
-                navItemVisible(item, effectiveRole, permissionKeySet)
+                navItemVisible(item, shellRole, permissionKeySet)
               );
               if (dashboardItems.length === 0) return null;
               return (
@@ -834,9 +921,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
             if (entry.kind === "stock") {
               const stockItems = dashboardStockNav.items.filter((item) =>
-                navItemVisible(item, effectiveRole, permissionKeySet)
+                navItemVisible(item, shellRole, permissionKeySet)
               );
-              if (!navItemsSomeVisible(stockItems, effectiveRole, permissionKeySet)) {
+              if (!navItemsSomeVisible(stockItems, shellRole, permissionKeySet)) {
                 return null;
               }
               return (
@@ -893,9 +980,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
             if (entry.kind === "suppliers") {
               const suppliersItems = dashboardSuppliersNav.items.filter((item) =>
-                navItemVisible(item, effectiveRole, permissionKeySet)
+                navItemVisible(item, shellRole, permissionKeySet)
               );
-              if (!navItemsSomeVisible(suppliersItems, effectiveRole, permissionKeySet)) {
+              if (!navItemsSomeVisible(suppliersItems, shellRole, permissionKeySet)) {
                 return null;
               }
               return (
@@ -954,7 +1041,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               if (
                 !navItemsSomeVisible(
                   dashboardKassaNav.groups.flatMap((g) => g.items),
-                  effectiveRole,
+                  shellRole,
                   permissionKeySet
                 )
               ) {
@@ -994,7 +1081,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                     <div className="ml-1 space-y-3 border-l border-sidebar-border/60 py-0.5 pl-2">
                       {dashboardKassaNav.groups.map((group) => {
                         const visibleItems = group.items.filter((item) =>
-                          navItemVisible(item, effectiveRole, permissionKeySet)
+                          navItemVisible(item, shellRole, permissionKeySet)
                         );
                         if (visibleItems.length === 0) return null;
                         return (
@@ -1039,7 +1126,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             }
 
             if (entry.kind === "reports") {
-              if (!navItemsSomeVisible(reportMenuItems, effectiveRole, permissionKeySet)) {
+              if (!navItemsSomeVisible(reportMenuItems, shellRole, permissionKeySet)) {
                 return null;
               }
               return (
@@ -1092,9 +1179,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                                 href={item.href}
                                 className={cn(
                                   "block rounded-lg px-3 py-2 text-[13px] font-medium transition-colors",
-                                  active
-                                    ? "bg-sidebar-primary text-sidebar-primary-foreground shadow-sm"
-                                    : "text-sidebar-foreground/80 hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground"
+                                  item.href.startsWith("/reports/soon/")
+                                    ? "text-amber-300 hover:bg-sidebar-accent/60 hover:text-amber-200"
+                                    : active
+                                      ? "bg-sidebar-primary text-sidebar-primary-foreground shadow-sm"
+                                      : "text-sidebar-foreground/80 hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground"
                                 )}
                               >
                                 {item.label}
@@ -1111,7 +1200,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
             if (entry.kind === "plans") {
               const plansItems = dashboardPlansNav.items.filter((item) =>
-                navItemVisible(item, effectiveRole, permissionKeySet)
+                navItemVisible(item, shellRole, permissionKeySet)
               );
               if (plansItems.length === 0) return null;
               return (
@@ -1161,11 +1250,47 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               );
             }
 
+            if (entry.kind === "tabel") {
+              return (
+                <SidebarGroupedSection
+                  key="tabel"
+                  title={dashboardTabelNav.sectionTitle}
+                  icon={CalendarRange}
+                  groups={dashboardTabelNav.groups}
+                  open={openSection === "tabel"}
+                  active={tabelNavChildActive(pathname)}
+                  onToggle={() => toggleSection("tabel")}
+                  isItemVisible={(item) => navItemVisible(item, shellRole, permissionKeySet)}
+                  isItemActive={(href) =>
+                    isNavActive(pathname, href) ||
+                    (href === "/tabel/timesheet" && pathname === "/users/timesheet") ||
+                    (href === "/tabel/workdays" && pathname === "/users/workdays")
+                  }
+                />
+              );
+            }
+
+            if (entry.kind === "payroll") {
+              return (
+                <SidebarGroupedSection
+                  key="payroll"
+                  title={dashboardPayrollNav.sectionTitle}
+                  icon={Banknote}
+                  groups={dashboardPayrollNav.groups}
+                  open={openSection === "payroll"}
+                  active={payrollNavChildActive(pathname)}
+                  onToggle={() => toggleSection("payroll")}
+                  isItemVisible={(item) => navItemVisible(item, shellRole, permissionKeySet)}
+                  isItemActive={(href) => isNavActive(pathname, href)}
+                />
+              );
+            }
+
             if (entry.kind === "users") {
               if (
                 !navItemsSomeVisible(
                   dashboardUsersNav.groups.flatMap((g) => g.items),
-                  effectiveRole,
+                  shellRole,
                   permissionKeySet
                 )
               ) {
@@ -1205,7 +1330,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                     <div className="ml-1 space-y-3 border-l border-sidebar-border/60 py-0.5 pl-2">
                       {dashboardUsersNav.groups.map((group) => {
                         const visibleItems = group.items.filter((item) =>
-                          navItemVisible(item, effectiveRole, permissionKeySet)
+                          navItemVisible(item, shellRole, permissionKeySet)
                         );
                         if (visibleItems.length === 0) return null;
                         return (
@@ -1250,16 +1375,53 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             }
 
             return null;
-          })}
-        </nav>
+          });
+
+  const sidebarPanel = (
+    <>
+      <div className="border-b border-sidebar-border/80 px-3 py-4">
+        <Link
+          href="/dashboard"
+          title="Дашборд - Супервайзер"
+          aria-label="SalesArena — на главную"
+          className="mb-2.5 block w-full max-w-[220px] rounded-md transition-opacity hover:opacity-85 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring"
+        >
+          <SalesArenaLogo variant="dark" height={48} className="w-full" />
+        </Link>
+        <div className="flex items-center justify-between gap-2">
+          <p className="min-w-0 truncate text-sm font-semibold text-sidebar-foreground" title={shellSlug ?? undefined}>
+            {shellSlug ?? "—"}
+          </p>
+          <TenantSidebarClock />
+        </div>
+      </div>
+      <SidebarNavSearch
+        entries={navSearchEntries}
+        isActive={(href) => orderNavItemActive(pathname, searchParams, href)}
+        onOpenReportsSettings={openReportsSettings}
+        watch={openSection}
+      >
+        {sidebarTree}
+      </SidebarNavSearch>
+    </>
+  );
+
+  return (
+    <div className="flex h-dvh w-full overflow-hidden">
+      <OrderSseListener />
+      <aside className="scrollbar-none hidden min-h-0 w-[15.5rem] shrink-0 flex-col overflow-hidden border-r border-sidebar-border bg-sidebar text-sidebar-foreground shadow-[2px_0_12px_rgba(0,0,0,0.06)] md:flex">
+        {sidebarPanel}
       </aside>
+      <MobileNavDrawer open={mobileNavOpen} onClose={closeMobileNav}>
+        {sidebarPanel}
+      </MobileNavDrawer>
 
       <div
         className={cn(
           "flex min-h-0 min-w-0 flex-1 flex-col",
           isFullHeightWorkspace
             ? "overflow-hidden"
-            : "overflow-y-auto overflow-x-hidden overscroll-contain bg-background"
+            : "overflow-y-auto overflow-x-hidden overscroll-y-contain bg-background"
         )}
       >
         <header className="sticky top-0 z-20 hidden shrink-0 items-center justify-between gap-3 border-b border-border/80 bg-card/95 px-4 py-2 shadow-sm backdrop-blur-md md:flex">
@@ -1277,11 +1439,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 <span className="truncate text-sm font-semibold text-foreground">{breadcrumb.label}</span>
               </div>
             ) : null}
-            {(effectiveRole === "admin" ||
+            {(shellRole === "admin" ||
               permissionKeySet == null ||
-              permissionKeySet.has("gps.gps.view") ||
-              permissionKeySet.has("routes.trek.view") ||
-              permissionKeySet.has("gps.dostup_k_gps")) && (
+              NAV_PERM.gpsMonitoring.some((k) => permissionKeySet.has(k))) && (
               <Link
                 href="/reports/gps/map"
                 className={cn(
@@ -1305,21 +1465,37 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </div>
         </header>
 
-        <header className="sticky top-0 z-10 flex shrink-0 flex-col gap-2 border-b border-border/80 bg-card/95 px-4 py-3 shadow-sm backdrop-blur-md md:hidden">
+        <header className="sticky top-0 z-10 flex shrink-0 flex-col gap-2 border-b border-border/80 bg-card/95 px-3 py-2.5 shadow-sm backdrop-blur-md md:hidden">
           <div className="flex items-center justify-between gap-2">
-            <div className="min-w-0">
-              <SalesArenaLogo variant="light" height={36} className="mb-0.5 max-w-[200px]" />
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              className="h-10 w-10 shrink-0"
+              onClick={() => setMobileNavOpen(true)}
+              aria-label="Открыть меню"
+              aria-expanded={mobileNavOpen}
+            >
+              <Menu className="size-5" />
+            </Button>
+            <div className="min-w-0 flex-1">
+              <Link
+                href="/dashboard"
+                title="Дашборд - Супервайзер"
+                aria-label="SalesArena — на главную"
+                className="mb-0.5 block max-w-[200px] rounded-md transition-opacity hover:opacity-85"
+              >
+                <SalesArenaLogo variant="light" height={36} />
+              </Link>
               <div className="flex items-center justify-between gap-2">
-                <span className="min-w-0 truncate text-sm font-semibold">{tenantSlug ?? "Панель"}</span>
+                <span className="min-w-0 truncate text-sm font-semibold">{shellSlug ?? "Панель"}</span>
                 <TenantSidebarClock tone="header" />
               </div>
             </div>
             <div className="flex items-center gap-2">
-              {(effectiveRole === "admin" ||
+              {(shellRole === "admin" ||
                 permissionKeySet == null ||
-                permissionKeySet.has("gps.gps.view") ||
-                permissionKeySet.has("routes.trek.view") ||
-                permissionKeySet.has("gps.dostup_k_gps")) && (
+                NAV_PERM.gpsMonitoring.some((k) => permissionKeySet.has(k))) && (
                 <Link
                   href="/reports/gps/map"
                   className={cn(
@@ -1338,41 +1514,21 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               </Button>
             </div>
           </div>
-          <nav className="scrollbar-none flex gap-1.5 overflow-x-auto pb-0.5">
-            {mobileItems.map((item) => {
-              const active = orderNavItemActive(pathname, searchParams, item.href);
-              if (item.href === "/reports/settings") {
-                return (
-                  <button
-                    key={`${item.label}-${item.href}`}
-                    type="button"
-                    onClick={() => {
-                      setReportsSettingsOpen(true);
-                      setReportsSearch("");
-                      setLocalHiddenOverride(null);
-                    }}
-                    className="shrink-0 rounded-lg bg-muted px-2.5 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted/80"
-                  >
-                    {item.label}
-                  </button>
-                );
-              }
-              return (
-                <Link
-                  key={`${item.label}-${item.href}`}
-                  href={item.href}
-                  className={cn(
-                    "shrink-0 rounded-lg px-2.5 py-1.5 text-xs font-medium transition-colors",
-                    active
-                      ? "bg-primary text-primary-foreground"
-                      : "bg-muted text-muted-foreground hover:bg-muted/80"
-                  )}
-                >
-                  {item.label}
-                </Link>
-              );
-            })}
-          </nav>
+          {breadcrumb ? (
+            <button
+              type="button"
+              onClick={() => setMobileNavOpen(true)}
+              className="flex min-w-0 items-center gap-1.5 text-left"
+            >
+              {breadcrumb.section ? (
+                <>
+                  <span className="truncate text-xs font-medium text-muted-foreground">{breadcrumb.section}</span>
+                  <ChevronRight className="size-3.5 shrink-0 text-muted-foreground/50" aria-hidden />
+                </>
+              ) : null}
+              <span className="truncate text-sm font-semibold text-foreground">{breadcrumb.label}</span>
+            </button>
+          ) : null}
         </header>
 
         <div
@@ -1387,7 +1543,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             className={cn(
               "flex flex-col",
               isFullHeightWorkspace
-                ? "min-h-0 flex-1 overflow-hidden"
+                ? "min-h-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-y-contain"
                 : "px-2 py-3 sm:px-3 sm:py-5 md:px-4 md:py-6"
             )}
           >
@@ -1457,7 +1613,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                           })
                         }
                       />
-                      <span>{item.label}</span>
+                      <span className={item.href.startsWith("/reports/soon/") ? "text-amber-600" : undefined}>{item.label}</span>
                     </label>
                   );
                 })

@@ -205,6 +205,7 @@ class _SupervisorVisitsPageState extends ConsumerState<SupervisorVisitsPage> wit
                           final session = ref.read(sessionProvider);
                           showSupervisorVisitDetailSheet(
                             context,
+                            ref,
                             row: r,
                             policy: SupervisorConfigPolicy(session.mobileConfig),
                           );

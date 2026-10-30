@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { prisma } from "../../config/database";
 import { sendApiError, zodValidationExtras } from "../../lib/api-error";
+import { resolveTenantSlugAlias } from "../../lib/tenant-slug-alias";
 import { ensureMobileApkLocal, openMobileApkReadable } from "./mobile-apk.service";
 
 const slugQuery = z
@@ -9,10 +10,11 @@ const slugQuery = z
   .min(1)
   .max(64)
   .transform((s) => s.trim())
-  .refine((s) => s.length > 0, { message: "slug required" });
+  .refine((s) => s.length > 0, { message: "Требуется slug" });
 
 /** Public mobile: slug trim + case-insensitive (TenantNotFound kamaytirish). */
-async function findActiveTenantBySlug(slug: string) {
+async function findActiveTenantBySlug(rawSlug: string) {
+  const slug = resolveTenantSlugAlias(rawSlug);
   const exact = await prisma.tenant.findUnique({
     where: { slug },
     select: { id: true, is_active: true, slug: true, settings: true }
@@ -33,7 +35,8 @@ export async function registerMobilePublicRoutes(app: FastifyInstance) {
       .object({
         slug: slugQuery,
         version: z.string().min(1).max(64),
-        platform: z.enum(["android", "ios"]).optional()
+        platform: z.enum(["android", "ios"]).optional(),
+        role: z.enum(["agent", "expeditor", "supervisor"]).optional()
       })
       .safeParse(request.query);
     if (!parsed.success) {
@@ -45,9 +48,14 @@ export async function registerMobilePublicRoutes(app: FastifyInstance) {
     }
     const { getMobileAppReleasePolicy, resolveAppUpdateBlock, enrichAppUpdateBlockUrl, resolveRequestOrigin } =
       await import("./app-release.service");
+    const { applyReleaseRoleGate } = await import("./app-release.roles");
     const policy = await getMobileAppReleasePolicy(row.id);
     const platform = parsed.data.platform ?? "android";
-    let update = resolveAppUpdateBlock(parsed.data.version, policy, platform);
+    let update = applyReleaseRoleGate(
+      resolveAppUpdateBlock(parsed.data.version, policy, platform),
+      policy.target_roles,
+      parsed.data.role
+    );
     update = await enrichAppUpdateBlockUrl(
       update,
       policy,
@@ -70,7 +78,7 @@ export async function registerMobilePublicRoutes(app: FastifyInstance) {
     await ensureMobileApkLocal(row.slug);
     const stream = await openMobileApkReadable(row.slug);
     if (!stream) {
-      return sendApiError(reply, request, 404, "ApkNotFound", "Mobil APK hali yuklanmagan");
+      return sendApiError(reply, request, 404, "ApkNotFound", "Мобильный APK ещё не загружен");
     }
     reply.header("Content-Type", "application/vnd.android.package-archive");
     reply.header("Content-Disposition", 'attachment; filename="salesdoc.apk"');

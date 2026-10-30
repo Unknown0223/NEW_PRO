@@ -1,7 +1,4 @@
 import type { Prisma } from "@prisma/client";
-import { prisma } from "../../config/database";
-import type { SlotHistoryRow, WorkSlotRow } from "./work-slots.types";
-
 
 export type ListWorkSlotsFilters = {
   branch_code?: string;
@@ -38,6 +35,21 @@ export function normPositiveIds(values?: number[]): number[] {
   return [...new Set(values.filter((n) => Number.isFinite(n) && n > 0))];
 }
 
+function territoryContainsOr(terms: string[]): Prisma.WorkSlotWhereInput[] {
+  return terms.flatMap((t) => [
+    { territory: { contains: t, mode: "insensitive" as const } },
+    { territories: { has: t } },
+    {
+      user_links: {
+        some: {
+          ended_at: null,
+          user: { territory: { contains: t, mode: "insensitive" as const } }
+        }
+      }
+    }
+  ]);
+}
+
 export function buildListWhere(tenantId: number, filters: ListWorkSlotsFilters): Prisma.WorkSlotWhereInput {
   const where: Prisma.WorkSlotWhereInput = { tenant_id: tenantId };
 
@@ -46,12 +58,6 @@ export function buildListWhere(tenantId: number, filters: ListWorkSlotsFilters):
   } else {
     where.deleted_at = null;
   }
-
-  const branchCodes = normStrings(
-    filters.branch_codes?.length ? filters.branch_codes : filters.branch_code ? [filters.branch_code] : []
-  );
-  if (branchCodes.length === 1) where.branch_code = branchCodes[0];
-  else if (branchCodes.length > 1) where.branch_code = { in: branchCodes };
 
   if (filters.slot_types?.length) {
     where.slot_type = { in: filters.slot_types };
@@ -71,17 +77,54 @@ export function buildListWhere(tenantId: number, filters: ListWorkSlotsFilters):
   if (directionIds.length === 1) where.direction_id = directionIds[0];
   else if (directionIds.length > 1) where.direction_id = { in: directionIds };
 
-  if (filters.q?.trim()) {
-    const q = filters.q.trim();
-    where.OR = [
-      { slot_code: { contains: q, mode: "insensitive" } },
-      { label: { contains: q, mode: "insensitive" } }
-    ];
-  }
-
   const and: Prisma.WorkSlotWhereInput[] = [];
 
-  const territoryUserAnd: Prisma.UserWhereInput[] = [];
+  if (filters.q?.trim()) {
+    const tokens = filters.q
+      .trim()
+      .split(/\s+/)
+      .map((t) => t.trim())
+      .filter(Boolean)
+      .slice(0, 8);
+    for (const token of tokens) {
+      and.push({
+        OR: [
+          { slot_code: { contains: token, mode: "insensitive" } },
+          { label: { contains: token, mode: "insensitive" } },
+          {
+            user_links: {
+              some: {
+                ended_at: null,
+                user: {
+                  OR: [
+                    { name: { contains: token, mode: "insensitive" } },
+                    { first_name: { contains: token, mode: "insensitive" } },
+                    { last_name: { contains: token, mode: "insensitive" } },
+                    { middle_name: { contains: token, mode: "insensitive" } },
+                    { login: { contains: token, mode: "insensitive" } },
+                    { code: { contains: token, mode: "insensitive" } }
+                  ]
+                }
+              }
+            }
+          }
+        ]
+      });
+    }
+  }
+
+  const branchCodes = normStrings(
+    filters.branch_codes?.length ? filters.branch_codes : filters.branch_code ? [filters.branch_code] : []
+  );
+  if (branchCodes.length > 0) {
+    and.push({
+      OR: [
+        { branch_code: branchCodes.length === 1 ? branchCodes[0]! : { in: branchCodes } },
+        { branch_codes: { hasSome: branchCodes } }
+      ]
+    });
+  }
+
   const territoryZones = normStrings(
     filters.territory_zones?.length
       ? filters.territory_zones
@@ -89,14 +132,6 @@ export function buildListWhere(tenantId: number, filters: ListWorkSlotsFilters):
         ? [filters.territory_zone]
         : []
   );
-  if (territoryZones.length === 1) {
-    territoryUserAnd.push({ territory: { contains: territoryZones[0]!, mode: "insensitive" } });
-  } else if (territoryZones.length > 1) {
-    territoryUserAnd.push({
-      OR: territoryZones.map((z) => ({ territory: { contains: z, mode: "insensitive" as const } }))
-    });
-  }
-
   const territoryOblasts = normStrings(
     filters.territory_oblasts?.length
       ? filters.territory_oblasts
@@ -104,14 +139,6 @@ export function buildListWhere(tenantId: number, filters: ListWorkSlotsFilters):
         ? [filters.territory_oblast]
         : []
   );
-  if (territoryOblasts.length === 1) {
-    territoryUserAnd.push({ territory: { contains: territoryOblasts[0]!, mode: "insensitive" } });
-  } else if (territoryOblasts.length > 1) {
-    territoryUserAnd.push({
-      OR: territoryOblasts.map((z) => ({ territory: { contains: z, mode: "insensitive" as const } }))
-    });
-  }
-
   const territoryCities = normStrings(
     filters.territory_cities?.length
       ? filters.territory_cities
@@ -119,25 +146,29 @@ export function buildListWhere(tenantId: number, filters: ListWorkSlotsFilters):
         ? [filters.territory_city]
         : []
   );
-  if (territoryCities.length === 1) {
-    territoryUserAnd.push({ territory: { contains: territoryCities[0]!, mode: "insensitive" } });
-  } else if (territoryCities.length > 1) {
-    territoryUserAnd.push({
-      OR: territoryCities.map((z) => ({ territory: { contains: z, mode: "insensitive" as const } }))
-    });
-  }
-  if (filters.territory?.trim() && territoryUserAnd.length === 0) {
-    territoryUserAnd.push({ territory: { contains: filters.territory.trim(), mode: "insensitive" } });
-  }
-  if (territoryUserAnd.length > 0) {
+
+  if (territoryZones.length > 0) {
     and.push({
-      user_links: {
-        some: {
-          ended_at: null,
-          user: territoryUserAnd.length === 1 ? territoryUserAnd[0]! : { AND: territoryUserAnd }
-        }
-      }
+      OR: territoryContainsOr(territoryZones)
     });
+  }
+  if (territoryOblasts.length > 0) {
+    and.push({
+      OR: territoryContainsOr(territoryOblasts)
+    });
+  }
+  if (territoryCities.length > 0) {
+    and.push({
+      OR: territoryContainsOr(territoryCities)
+    });
+  }
+  if (
+    filters.territory?.trim() &&
+    territoryZones.length === 0 &&
+    territoryOblasts.length === 0 &&
+    territoryCities.length === 0
+  ) {
+    and.push({ OR: territoryContainsOr([filters.territory.trim()]) });
   }
 
   const warehouseIds = normPositiveIds(
@@ -147,34 +178,25 @@ export function buildListWhere(tenantId: number, filters: ListWorkSlotsFilters):
         ? [filters.warehouse_id]
         : []
   );
-  if (warehouseIds.length === 1) {
-    const wid = warehouseIds[0]!;
+  if (warehouseIds.length > 0) {
     and.push({
-      user_links: {
-        some: {
-          ended_at: null,
-          user: {
-            OR: [
-              { warehouse_id: wid },
-              { warehouse_links: { some: { warehouse_id: wid } } }
-            ]
+      OR: [
+        { warehouse_id: warehouseIds.length === 1 ? warehouseIds[0]! : { in: warehouseIds } },
+        { warehouse_ids: { hasSome: warehouseIds } },
+        {
+          user_links: {
+            some: {
+              ended_at: null,
+              user: {
+                OR: warehouseIds.flatMap((wid) => [
+                  { warehouse_id: wid },
+                  { warehouse_links: { some: { warehouse_id: wid } } }
+                ])
+              }
+            }
           }
         }
-      }
-    });
-  } else if (warehouseIds.length > 1) {
-    and.push({
-      user_links: {
-        some: {
-          ended_at: null,
-          user: {
-            OR: warehouseIds.flatMap((wid) => [
-              { warehouse_id: wid },
-              { warehouse_links: { some: { warehouse_id: wid } } }
-            ])
-          }
-        }
-      }
+      ]
     });
   }
 
@@ -185,28 +207,24 @@ export function buildListWhere(tenantId: number, filters: ListWorkSlotsFilters):
         ? [filters.cash_desk_id]
         : []
   );
-  if (cashDeskIds.length === 1) {
-    const cid = cashDeskIds[0]!;
+  if (cashDeskIds.length > 0) {
     and.push({
-      user_links: {
-        some: {
-          ended_at: null,
-          user: { cash_desk_links: { some: { cash_desk_id: cid } } }
-        }
-      }
-    });
-  } else if (cashDeskIds.length > 1) {
-    and.push({
-      user_links: {
-        some: {
-          ended_at: null,
-          user: {
-            OR: cashDeskIds.map((cid) => ({
-              cash_desk_links: { some: { cash_desk_id: cid } }
-            }))
+      OR: [
+        { cash_desk_id: cashDeskIds.length === 1 ? cashDeskIds[0]! : { in: cashDeskIds } },
+        { cash_desk_ids: { hasSome: cashDeskIds } },
+        {
+          user_links: {
+            some: {
+              ended_at: null,
+              user: {
+                OR: cashDeskIds.map((cid) => ({
+                  cash_desk_links: { some: { cash_desk_id: cid } }
+                }))
+              }
+            }
           }
         }
-      }
+      ]
     });
   }
 

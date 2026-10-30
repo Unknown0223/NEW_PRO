@@ -1,3 +1,4 @@
+import { monthToDateYmd } from "../../lib/month-to-date";
 import type { GpsDeliveryRoutesFilters } from "./gps-delivery-routes.types";
 
 function intList(raw?: string): number[] {
@@ -29,9 +30,7 @@ export function parseGpsDeliveryRoutesQuery(
 ): GpsDeliveryRoutesFilters {
   const page = Math.max(1, Number.parseInt(q.page ?? "1", 10) || 1);
   const limit = Math.min(200, Math.max(1, Number.parseInt(q.limit ?? "10", 10) || 10));
-  const today = new Date();
-  const defaultFrom = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().slice(0, 10);
-  const defaultTo = new Date(today.getFullYear(), today.getMonth() + 1, 0).toISOString().slice(0, 10);
+  const { from: defaultFrom, to: defaultTo } = monthToDateYmd();
   const appRaw = (q.app_users_only ?? "").trim().toLowerCase();
   return {
     from: (q.from ?? "").trim() || defaultFrom,

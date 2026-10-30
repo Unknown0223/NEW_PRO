@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { FileSpreadsheet, Loader2, Search } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
+import { usePermissions } from "@/lib/use-permissions";
 
 export const enterpriseSelectClass =
   "h-10 rounded-xl border border-border bg-muted/50 px-3 text-sm focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20 dark:border-border dark:bg-muted/50";
@@ -68,6 +69,7 @@ export function SupervisorEnterpriseToolbar({
   totalCount?: number;
   children?: ReactNode;
 }) {
+  const canExport = usePermissions().has("dashboard.supervayzer.export");
   return (
     <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
       <div className="flex flex-wrap items-center gap-3">
@@ -97,7 +99,7 @@ export function SupervisorEnterpriseToolbar({
           </div>
         ) : null}
         {children}
-        {onExcel ? (
+        {onExcel && canExport ? (
           <button
             type="button"
             onClick={onExcel}

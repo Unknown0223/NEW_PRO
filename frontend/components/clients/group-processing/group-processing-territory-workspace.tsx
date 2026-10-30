@@ -1,8 +1,8 @@
 "use client";
 
-import { GROUP_PROCESSING_IDS_STORAGE_KEY } from "@/components/clients/group-processing/group-processing-actions";
+import { GROUP_PROCESSING_IDS_STORAGE_KEY, goToClientsKeepingSelection } from "@/components/clients/group-processing/group-processing-actions";
+import { GpMasterApplyButton } from "@/components/clients/group-processing/group-processing-apply-btn";
 import { Button } from "@/components/ui/button";
-import { buttonVariants } from "@/components/ui/button-variants";
 import { Input } from "@/components/ui/input";
 import { api } from "@/lib/api";
 import { useAuthStore } from "@/lib/auth-store";
@@ -21,7 +21,6 @@ import { collectActiveNamesAtDepth } from "@/lib/territory-tree";
 import { cn } from "@/lib/utils";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Save } from "lucide-react";
-import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
@@ -196,12 +195,6 @@ export function GroupProcessingTerritoryWorkspace() {
   const [draftByClient, setDraftByClient] = useState<Record<number, TerritoryDraft>>({});
   const [origByClient, setOrigByClient] = useState<Record<number, TerritoryDraft>>({});
   const [master, setMaster] = useState<TerritoryDraft>(() => emptyTerritory());
-  const [masterApply, setMasterApply] = useState<Record<TerritoryField, boolean>>({
-    zone: false,
-    region: false,
-    city: false,
-    district: false
-  });
   const [showField, setShowField] = useState<ShowField>(() => {
     try {
       const v = localStorage.getItem(SHOW_STORAGE_KEY) as ShowField | null;
@@ -412,27 +405,19 @@ export function GroupProcessingTerritoryWorkspace() {
     });
   };
 
-  const applyMasterToSelected = () => {
+  const applyMasterToSelected = (fields?: TerritoryField[]) => {
+    const keys = fields ?? (["zone", "region", "city", "district"] as TerritoryField[]);
     const targets = selectedIds.size ? selectedIds : new Set(rows.map((r) => r.id));
-    const any =
-      masterApply.zone || masterApply.region || masterApply.city || masterApply.district;
-    if (!any) {
-      setStatusMsg("Avval umumiy qatorda qaysi maydonlarni qo‘llashni belgilang (✓)");
-      return;
-    }
     setDraftByClient((prev) => {
       const next = { ...prev };
       for (const id of targets) {
         const cur = { ...(next[id] ?? emptyTerritory()) };
-        if (masterApply.zone) cur.zone = master.zone;
-        if (masterApply.region) cur.region = master.region;
-        if (masterApply.city) cur.city = master.city;
-        if (masterApply.district) cur.district = master.district;
+        for (const key of keys) cur[key] = master[key];
         next[id] = cur;
       }
       return next;
     });
-    setStatusMsg(`${targets.size} ta klientga umumiy qiymatlar qo‘llandi (saqlash kerak)`);
+    setStatusMsg(`Общие значения применены к ${targets.size} клиентам (нужно сохранить)`);
   };
 
   const toggleSelectAll = (on: boolean) => {
@@ -461,7 +446,7 @@ export function GroupProcessingTerritoryWorkspace() {
 
   const saveMut = useMutation({
     mutationFn: async () => {
-      if (!tenantSlug) throw new Error("No tenant");
+      if (!tenantSlug) throw new Error("Организация не выбрана");
       const targets = selectedIds.size ? [...selectedIds] : rows.map((r) => r.id);
       let skipped = 0;
       const failed: string[] = [];
@@ -488,7 +473,7 @@ export function GroupProcessingTerritoryWorkspace() {
     onSuccess: (res) => {
       void qc.invalidateQueries({ queryKey: ["clients"] });
       if (res.ok > 0 && res.failed.length === 0) {
-        router.push("/clients");
+        goToClientsKeepingSelection(router.push, tenantSlug, seedIds);
         return;
       }
       setOrigByClient((prev) => {
@@ -501,11 +486,11 @@ export function GroupProcessingTerritoryWorkspace() {
       });
       setStatusMsg(
         res.failed.length
-          ? `Saqlandi: ${res.ok}. Xato: ${res.failed.slice(0, 3).join("; ")}`
-          : `Saqlandi: ${res.ok} ta · o‘zgarmagan: ${res.skipped}`
+          ? `Сохранено: ${res.ok}. Ошибки: ${res.failed.slice(0, 3).join("; ")}`
+          : `Сохранено: ${res.ok} · без изменений: ${res.skipped}`
       );
     },
-    onError: (e) => setStatusMsg(getUserFacingError(e, "Saqlashda xato"))
+    onError: (e) => setStatusMsg(getUserFacingError(e, "Ошибка при сохранении"))
   });
 
   const renderTerritorySelects = (
@@ -519,23 +504,12 @@ export function GroupProcessingTerritoryWorkspace() {
     const cities = withCurrentOpts(cascaded.cities, draft.city);
     const districts = showDistrict ? districtOptsFor(draft) : [];
 
-    const masterCheck = (key: TerritoryField) =>
-      opts?.master ? (
-        <label className="mb-1 flex items-center gap-1 text-[10px] text-slate-500">
-          <input
-            type="checkbox"
-            className="size-3.5 accent-blue-600"
-            checked={masterApply[key]}
-            onChange={(e) => setMasterApply((m) => ({ ...m, [key]: e.target.checked }))}
-          />
-          qo‘llash
-        </label>
-      ) : null;
+    const masterBtn = (key: TerritoryField) =>
+      opts?.master ? <GpMasterApplyButton onClick={() => applyMasterToSelected([key])} /> : null;
 
     return (
       <>
         <td className="border-l border-slate-200 px-2 py-2 align-middle">
-          {masterCheck("zone")}
           <select
             className={selectClass}
             value={draft.zone}
@@ -548,9 +522,9 @@ export function GroupProcessingTerritoryWorkspace() {
               </option>
             ))}
           </select>
+          {masterBtn("zone")}
         </td>
         <td className="border-l border-slate-100 px-2 py-2 align-middle">
-          {masterCheck("region")}
           <select
             className={selectClass}
             value={draft.region}
@@ -563,9 +537,9 @@ export function GroupProcessingTerritoryWorkspace() {
               </option>
             ))}
           </select>
+          {masterBtn("region")}
         </td>
         <td className="border-l border-slate-100 px-2 py-2 align-middle">
-          {masterCheck("city")}
           <select
             className={selectClass}
             value={draft.city}
@@ -578,10 +552,10 @@ export function GroupProcessingTerritoryWorkspace() {
               </option>
             ))}
           </select>
+          {masterBtn("city")}
         </td>
         {showDistrict ? (
           <td className="border-l border-slate-100 px-2 py-2 align-middle">
-            {masterCheck("district")}
             <select
               className={selectClass}
               value={draft.district}
@@ -594,6 +568,7 @@ export function GroupProcessingTerritoryWorkspace() {
                 </option>
               ))}
             </select>
+            {masterBtn("district")}
           </td>
         ) : null}
       </>
@@ -618,20 +593,25 @@ export function GroupProcessingTerritoryWorkspace() {
             {dirtyCount > 0 ? (
               <>
                 {" "}
-                · o‘zgargan: <b>{dirtyCount}</b>
+                · изменено: <b>{dirtyCount}</b>
               </>
             ) : null}
           </p>
           <p className="mt-0.5 text-xs text-slate-500">
-            Tanlovlar <b>Настройки → Территории</b> daraxtidan (kaskad). Darajalar:{" "}
+            Значения берутся из дерева <b>Настройки → Территории</b> (каскадно). Уровни:{" "}
             {levelSpecs.map((l) => l.label).join(" → ") || "Зона → Область → Город"}.
           </p>
           {statusMsg ? <p className="mt-1 text-sm text-emerald-700">{statusMsg}</p> : null}
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <Link href="/clients" className={cn(buttonVariants({ variant: "outline", size: "sm" }))}>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => goToClientsKeepingSelection(router.push, tenantSlug, seedIds)}
+          >
             Вернуться обратно
-          </Link>
+          </Button>
           <Button
             type="button"
             size="sm"
@@ -682,7 +662,7 @@ export function GroupProcessingTerritoryWorkspace() {
         ) : !rows.length ? (
           <div className="space-y-2 p-6 text-sm text-muted-foreground">
             <p>Нет клиентов. Сначала выберите клиентов в списке.</p>
-            <Button type="button" variant="outline" size="sm" onClick={() => router.push("/clients")}>
+            <Button type="button" variant="outline" size="sm" onClick={() => goToClientsKeepingSelection(router.push, tenantSlug, seedIds)}>
               К списку клиентов
             </Button>
           </div>
@@ -726,15 +706,7 @@ export function GroupProcessingTerritoryWorkspace() {
                     <span className="text-[11px] font-semibold text-emerald-800">
                       Общая строка (для выбранных)
                     </span>
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="secondary"
-                      className="h-7 text-[11px]"
-                      onClick={applyMasterToSelected}
-                    >
-                      Belgilangan maydonlarni qo‘llash
-                    </Button>
+                    <GpMasterApplyButton all onClick={() => applyMasterToSelected()} />
                   </div>
                 </td>
                 {renderTerritorySelects(master, patchMaster, { master: true })}

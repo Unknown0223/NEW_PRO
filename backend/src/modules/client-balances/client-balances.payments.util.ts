@@ -29,35 +29,126 @@ export function paymentLabelToNormKey(label: string): string {
   return normPayTypeKey(label);
 }
 
+function toDecimal(v: Prisma.Decimal | number | string | null | undefined): Prisma.Decimal {
+  if (v == null) return new Prisma.Decimal(0);
+  if (v instanceof Prisma.Decimal) return v;
+  try {
+    return new Prisma.Decimal(v);
+  } catch {
+    return new Prisma.Decimal(0);
+  }
+}
+
+/**
+ * Tip (to‘lov usuli) ustunlari — «Балансы клиентов» qoidasi:
+ * - Общий ≤ 0 (qarz / nol): tip ustunlari 0; qarz faqat «Общий»da.
+ * - Общий > 0 (предоплата): tip bo‘yicha `max(0, to‘lov − yopilmagan zakaz)`,
+ *   yig‘indi Общий bilan moslashtiriladi (proporsional).
+ */
 export function paymentAmountsNetMinusUnpaid(
   sprLabels: string[],
   netNorm: Map<string, Prisma.Decimal> | undefined,
-  unpaidNorm: Map<string, Prisma.Decimal> | undefined
+  unpaidNorm: Map<string, Prisma.Decimal> | undefined,
+  overallBalance?: Prisma.Decimal | number | string | null
 ): ClientBalancePaymentTypeSummary[] {
-  void unpaidNorm;
   const labels = extendSprLabelsWithDiscountSettlement(sprLabels);
   if (labels.length === 0) return [];
-  const m = netNorm ?? new Map<string, Prisma.Decimal>();
-  return labels.map((l) => {
+
+  const bal = toDecimal(overallBalance);
+  if (bal.lte(0)) {
+    return labels.map((l) => ({ label: l.trim(), amount: "0" }));
+  }
+
+  const pay = netNorm ?? new Map<string, Prisma.Decimal>();
+  const unpaid = unpaidNorm ?? new Map<string, Prisma.Decimal>();
+  const raw: Prisma.Decimal[] = labels.map((l) => {
     const nk = paymentLabelToNormKey(l);
-    const amt = m.get(nk) ?? new Prisma.Decimal(0);
-    return { label: l.trim(), amount: amt.toString() };
+    const net = (pay.get(nk) ?? new Prisma.Decimal(0)).sub(unpaid.get(nk) ?? new Prisma.Decimal(0));
+    return net.gt(0) ? net : new Prisma.Decimal(0);
   });
+
+  let sumRaw = new Prisma.Decimal(0);
+  for (const x of raw) sumRaw = sumRaw.add(x);
+
+  if (sumRaw.lte(0)) {
+    // Tip bo‘yicha surplus yo‘q — butun peredoplatani birinchi usulga qo‘yamiz.
+    return labels.map((l, i) => ({
+      label: l.trim(),
+      amount: i === 0 ? bal.toFixed(2) : "0"
+    }));
+  }
+
+  // Proporsional: tip yig‘indisi = Общий (peredoplata).
+  const scaled = raw.map((x) => x.mul(bal).div(sumRaw));
+  let allocated = new Prisma.Decimal(0);
+  const out: ClientBalancePaymentTypeSummary[] = [];
+  for (let i = 0; i < labels.length; i++) {
+    const isLast = i === labels.length - 1;
+    const amt = isLast ? bal.sub(allocated) : scaled[i]!.toDecimalPlaces(2);
+    if (!isLast) allocated = allocated.add(amt);
+    out.push({ label: labels[i]!.trim(), amount: amt.toFixed(2) });
+  }
+  return out;
 }
 
+/** Filtrlangan mijozlar tip ustunlarining yig‘indisi (har bir kartochka = o‘z ustuni). */
+export function buildSummaryOverpaymentsByType(
+  sprLabels: string[],
+  clients: Array<{
+    balance: Prisma.Decimal | number | string;
+    payNorm?: Map<string, Prisma.Decimal>;
+    unpaidNorm?: Map<string, Prisma.Decimal>;
+  }>
+): ClientBalancePaymentTypeSummary[] {
+  const labels = extendSprLabelsWithDiscountSettlement(sprLabels);
+  if (labels.length === 0) return [];
+  const sums = new Map<string, Prisma.Decimal>();
+  for (const l of labels) sums.set(paymentLabelToNormKey(l), new Prisma.Decimal(0));
+
+  for (const c of clients) {
+    const amounts = paymentAmountsNetMinusUnpaid(sprLabels, c.payNorm, c.unpaidNorm, c.balance);
+    for (const a of amounts) {
+      const nk = paymentLabelToNormKey(a.label);
+      sums.set(nk, (sums.get(nk) ?? new Prisma.Decimal(0)).add(toDecimal(a.amount)));
+    }
+  }
+
+  return labels.map((l) => ({
+    label: l.trim(),
+    amount: (sums.get(paymentLabelToNormKey(l)) ?? new Prisma.Decimal(0)).toFixed(2)
+  }));
+}
+
+/** @deprecated — use buildSummaryOverpaymentsByType (qarz/peredoplata qoidasi). */
 export function buildSummaryNetMinusUnpaid(
   sprLabels: string[],
   netByExactType: Map<string, Prisma.Decimal>,
-  unpaidGlobalNorm: Map<string, Prisma.Decimal>
+  unpaidGlobalNorm: Map<string, Prisma.Decimal>,
+  /** Agar berilsa — faqat peredoplata (Общий>0) qoidasi bilan; aks holda xom to‘lov yig‘indisi. */
+  overallBalanceHint?: Prisma.Decimal | number | string | null
 ): ClientBalancePaymentTypeSummary[] {
-  void unpaidGlobalNorm;
+  if (overallBalanceHint !== undefined) {
+    return paymentAmountsNetMinusUnpaid(
+      sprLabels,
+      (() => {
+        const m = new Map<string, Prisma.Decimal>();
+        for (const [k, v] of netByExactType) {
+          const nk = paymentLabelToNormKey(k);
+          m.set(nk, (m.get(nk) ?? new Prisma.Decimal(0)).add(v));
+        }
+        return m;
+      })(),
+      unpaidGlobalNorm,
+      overallBalanceHint
+    );
+  }
+  // Legacy fallback (konsignatsiya KPI va h.k.) — xom net, qoida yo‘q.
   const labels = extendSprLabelsWithDiscountSettlement(sprLabels);
   if (labels.length === 0) return [];
   const netNorm = new Map<string, Prisma.Decimal>();
   for (const [k, v] of netByExactType) {
     const nk = paymentLabelToNormKey(k);
-    const prev = netNorm.get(nk) ?? new Prisma.Decimal(0);
-    netNorm.set(nk, prev.add(v));
+    netNorm.set(nk, (netNorm.get(nk) ?? new Prisma.Decimal(0)).add(v));
   }
   return labels.map((l) => {
     const nk = paymentLabelToNormKey(l);

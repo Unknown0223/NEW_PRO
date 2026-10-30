@@ -20,6 +20,7 @@ import { PageShell } from "@/components/dashboard/page-shell";
 import { TableColumnSettingsDialog } from "@/components/data-table/table-column-settings-dialog";
 import { TableRowActionGroup } from "@/components/data-table/table-row-actions";
 import { useUserTablePrefs } from "@/hooks/use-user-table-prefs";
+import { usePermissions } from "@/lib/use-permissions";
 import { TableSearchField } from "@/components/ui/table-search-field";
 import { DEFAULT_TABLE_PAGE_SIZES } from "@/lib/table-page-sizes";
 import { getUserFacingError, withApiSupportLine } from "@/lib/error-utils";
@@ -84,7 +85,7 @@ function blockMutationError(err: unknown): string {
     return withApiSupportLine("В одном блоке может быть только один доставщик.", err);
   }
   if (code === "BadGruzchikUser") {
-    return withApiSupportLine("Выберите действующего грузчика (роль «gruzchik»).", err);
+    return withApiSupportLine("Выберите действующего грузчика (роль «Грузчик»).", err);
   }
   if (code === "EmptyName") return withApiSupportLine("Укажите название блока.", err);
   if (status === 404) return withApiSupportLine("Блок не найден.", err);
@@ -329,6 +330,7 @@ type Props = { tenantSlug: string; canWrite: boolean };
 
 export function WarehouseBlocksWorkspace({ tenantSlug, canWrite }: Props) {
   const qc = useQueryClient();
+  const canExport = usePermissions().has("warehouse.bloki.export");
   const [tab, setTab] = useState<"active" | "inactive">("active");
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
@@ -566,9 +568,11 @@ export function WarehouseBlocksWorkspace({ tenantSlug, canWrite }: Props) {
                   setPage(1);
                 }}
               />
-              <Button type="button" variant="outline" size="sm" className="h-9 text-xs" onClick={() => void exportExcel()}>
-                Excel
-              </Button>
+              {canExport ? (
+                <Button type="button" variant="outline" size="sm" className="h-9 text-xs" onClick={() => void exportExcel()}>
+                  Excel
+                </Button>
+              ) : null}
               <Button
                 type="button"
                 variant="ghost"

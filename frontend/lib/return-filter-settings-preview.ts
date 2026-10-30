@@ -14,36 +14,36 @@ export type ReturnFilterSettingsPreview = {
 export function previewReturnFilterSettings(
   s: ReturnFilterSettingsDraft
 ): ReturnFilterSettingsPreview {
-  const unit = s.period_unit === "month" ? "oy" : "kun";
+  const unit = s.period_unit === "month" ? "мес." : "дн.";
   const periodText = `${s.period_value} ${unit}`;
 
   if (s.period_enabled && !s.balance_zero_enabled) {
     return {
-      title: "HOLAT 1 — faqat davr",
-      body: `Oxirgi ${periodText} ichidagi barcha yetkazilgan zakazlar chiqadi. Balans 0 (qarzdorlik/to‘lov) hisobga olinmaydi.`
+      title: "Режим 1 — только период",
+      body: `Выводятся все доставленные заказы за последние ${periodText}. Баланс 0 (задолженность/оплата) не учитывается.`
     };
   }
 
   if (!s.period_enabled && s.balance_zero_enabled) {
     return {
-      title: "HOLAT 2 — faqat balans 0",
+      title: "Режим 2 — только баланс 0",
       body:
-        "Eng oxirgi balans 0 nuqtasidan keyingi zakazlar chiqadi. Agar mijoz hech qachon balans 0 bo‘lmagan bo‘lsa — barcha yetkazilgan zakazlar (eski qarzli mijozlar uchun)."
+        "Выводятся заказы после последней точки нулевого баланса. Если у клиента баланс никогда не был равен 0 — все доставленные заказы (для старых клиентов с долгом)."
     };
   }
 
   if (s.period_enabled && s.balance_zero_enabled) {
     return {
-      title: "HOLAT 3 — davr + balans 0 (eng qattiq)",
-      body: `Avval oxirgi ${periodText} ichida balans 0 qidiriladi. Topilsa — shu nuqtadan keyingi zakazlar. Topilmasa — hech narsa chiqmaydi (davrda zakazlar bo‘lsa ham).`,
+      title: "Режим 3 — период + баланс 0 (самый строгий)",
+      body: `Сначала ищется нулевой баланс за последние ${periodText}. Если найден — выводятся заказы после этой точки. Если не найден — ничего не выводится (даже если в периоде есть заказы).`,
       warning:
-        "Qarzdorlik o‘zi zakazlarni yashirmaydi — muhim jihat: tanlangan davr ichida to‘liq to‘lov bilan balans aynan 0 bo‘lishi kerak."
+        "Сама задолженность заказы не скрывает — важно: в выбранном периоде баланс должен стать ровно 0 за счёт полной оплаты."
     };
   }
 
   return {
-    title: "HOLAT 4 — filtr yo‘q",
-    body: "Barcha yetkazilgan zakazlar chiqadi (eski yopilgan zakazlar ham).",
-    warning: "Noto‘g‘ri qaytarish xavfi yuqori — faqat maxsus holatlar uchun."
+    title: "Режим 4 — без фильтра",
+    body: "Выводятся все доставленные заказы (включая старые закрытые).",
+    warning: "Высокий риск ошибочного возврата — только для особых случаев."
   };
 }

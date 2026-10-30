@@ -25,7 +25,9 @@ import { getUserFacingError, withApiSupportLine } from "@/lib/error-utils";
 import { STALE } from "@/lib/query-stale";
 import type { ClientRefEntry } from "@/lib/client-ref-entries";
 import { legacyStringsToEntries, sortClientRefEntries } from "@/lib/client-ref-entries";
-import { useAuthStore, useAuthStoreHydrated, useEffectiveRole } from "@/lib/auth-store";
+import { useAuthStore, useAuthStoreHydrated } from "@/lib/auth-store";
+import { settingsWriteKeyForRef } from "@/lib/settings-write-keys";
+import { usePermissions } from "@/lib/use-permissions";
 import { cn } from "@/lib/utils";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { isAxiosError } from "axios";
@@ -64,8 +66,7 @@ export function ClientRefSettingsPage({ config }: { config: ClientRefSettingsCon
   const { title, profileRefKey, legacyKey, legacyIdPrefix, showColor } = config;
   const tenantSlug = useAuthStore((s) => s.tenantSlug);
   const hydrated = useAuthStoreHydrated();
-  const role = useEffectiveRole();
-  const isAdmin = role === "admin";
+  const canEdit = usePermissions().has(settingsWriteKeyForRef(profileRefKey));
   const qc = useQueryClient();
 
   const [tab, setTab] = useState<"active" | "inactive">("active");
@@ -138,7 +139,7 @@ export function ClientRefSettingsPage({ config }: { config: ClientRefSettingsCon
 
   const saveMut = useMutation({
     mutationFn: async (next: ClientRefEntry[]) => {
-      if (!tenantSlug) throw new Error("no tenant");
+      if (!tenantSlug) throw new Error("Компания не выбрана");
       await api.patch(`/api/${tenantSlug}/settings/profile`, {
         references: { [profileRefKey]: next }
       });
@@ -147,7 +148,7 @@ export function ClientRefSettingsPage({ config }: { config: ClientRefSettingsCon
       await qc.invalidateQueries({ queryKey: ["settings", "profile", tenantSlug] });
       await qc.invalidateQueries({ queryKey: ["clients-references", tenantSlug] });
       setServerFieldErrs({});
-      setMsg("Saqlandi.");
+      setMsg("Сохранено.");
       setOpen(false);
       resetForm();
     },
@@ -160,14 +161,14 @@ export function ClientRefSettingsPage({ config }: { config: ClientRefSettingsCon
           const top = flat.formErrors.map((s) => s.trim()).find(Boolean);
           const hint = firstValidationUserHint(flat);
           const line = top ?? hint ?? Object.values(per).find((m) => m.trim() !== "");
-          setMsg(line ? withApiSupportLine(line, e) : getUserFacingError(e, "Saqlashda xatolik."));
+          setMsg(line ? withApiSupportLine(line, e) : getUserFacingError(e, "Ошибка при сохранении."));
           return;
         }
         setServerFieldErrs({});
       } else {
         setServerFieldErrs({});
       }
-      setMsg(getUserFacingError(e, "Saqlashda xatolik."));
+      setMsg(getUserFacingError(e, "Ошибка при сохранении."));
     }
   });
 
@@ -223,7 +224,7 @@ export function ClientRefSettingsPage({ config }: { config: ClientRefSettingsCon
   if (!hydrated) {
     return (
       <PageShell>
-        <p className="text-sm text-muted-foreground">Sessiya...</p>
+        <p className="text-sm text-muted-foreground">Загрузка сессии…</p>
       </PageShell>
     );
   }
@@ -232,7 +233,7 @@ export function ClientRefSettingsPage({ config }: { config: ClientRefSettingsCon
       <PageShell>
         <p className="text-sm text-destructive">
           <Link href="/login" className="underline">
-            Kirish
+            Войти
           </Link>
         </p>
       </PageShell>
@@ -243,14 +244,14 @@ export function ClientRefSettingsPage({ config }: { config: ClientRefSettingsCon
     <PageShell>
       <PageHeader
         title={title}
-        description="Активный / не активный, modal orqali qo‘shish va tahrirlash."
+        description="Активные / неактивные записи; добавление и редактирование через модальное окно."
         actions={
           <div className="flex gap-2">
-            <Button size="sm" disabled={!isAdmin} onClick={openAdd}>
+            <Button size="sm" disabled={!canEdit} onClick={openAdd}>
               Добавить
             </Button>
             <Link href="/settings" className={cn(buttonVariants({ variant: "outline", size: "sm" }))}>
-              Katalog
+              Каталог
             </Link>
           </div>
         }
@@ -311,15 +312,15 @@ export function ClientRefSettingsPage({ config }: { config: ClientRefSettingsCon
                     <td className="px-3 py-2">{r.sort_order ?? "—"}</td>
                     <td className="px-3 py-2">{r.comment ?? "—"}</td>
                     <td className="px-3 py-2 text-right">
-                      {isAdmin ? (
-                        <TableRowActionGroup className="justify-end" ariaLabel="Yozuv">
+                      {canEdit ? (
+                        <TableRowActionGroup className="justify-end" ariaLabel="Запись">
                           <Button
                             variant="outline"
                             size="icon-sm"
                             type="button"
                             className="text-muted-foreground hover:text-foreground"
-                            title="Tahrirlash"
-                            aria-label="Tahrirlash"
+                            title="Редактировать"
+                            aria-label="Редактировать"
                             onClick={() => openEdit(r)}
                           >
                             <Pencil className="size-3.5" aria-hidden />
@@ -335,7 +336,7 @@ export function ClientRefSettingsPage({ config }: { config: ClientRefSettingsCon
                       colSpan={showColor ? 6 : 5}
                       className="px-3 py-6 text-center text-muted-foreground"
                     >
-                      Ma&apos;lumot yo&apos;q
+                      Нет данных
                     </td>
                   </tr>
                 ) : null}
@@ -351,7 +352,7 @@ export function ClientRefSettingsPage({ config }: { config: ClientRefSettingsCon
         <DialogContent className="sm:max-w-[520px]" showCloseButton>
           <DialogHeader>
             <DialogTitle>{editId ? "Редактировать" : "Добавить"}</DialogTitle>
-            <DialogDescription>Код: A–Z, 0–9, _ (max 20). Сортировка — faqat son.</DialogDescription>
+            <DialogDescription>Код: A–Z, 0–9, _ (макс. 20). Сортировка — только число.</DialogDescription>
           </DialogHeader>
           <div className="grid gap-3">
             <div className="grid gap-1.5">
@@ -417,7 +418,7 @@ export function ClientRefSettingsPage({ config }: { config: ClientRefSettingsCon
               <span>Активный</span>
               <input type="checkbox" checked={active} onChange={(e) => setActive(e.target.checked)} />
             </label>
-            <Button onClick={submitForm} disabled={saveMut.isPending || !isAdmin}>
+            <Button onClick={submitForm} disabled={saveMut.isPending || !canEdit}>
               {editId ? "Сохранить" : "Добавить"}
             </Button>
           </div>

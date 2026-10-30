@@ -47,12 +47,12 @@ export function PriceMatrixSaveDialog({
         </DialogHeader>
         <p className="text-sm text-muted-foreground">
           {isFuture
-            ? `Narxlar reja bo‘yicha ${whenLabel} da qo‘llanadi. Hozirgi narxlar o‘zgarmaydi.`
-            : "Narxlar darhol saqlanadi va keyingi operatsiyalarga ta’sir qiladi."}
+            ? `Цены будут применены по расписанию: ${whenLabel}. Текущие цены не изменятся.`
+            : "Цены сохранятся сразу и повлияют на последующие операции."}
         </p>
         <dl className="space-y-2 rounded-lg border bg-muted/30 p-3 text-sm">
           <div className="flex justify-between gap-2">
-            <dt className="text-muted-foreground">O‘zgartirilgan pozitsiyalar</dt>
+            <dt className="text-muted-foreground">Изменённые позиции</dt>
             <dd className="font-semibold tabular-nums">{changeCount}</dd>
           </div>
           <div className="flex justify-between gap-2">
@@ -60,8 +60,8 @@ export function PriceMatrixSaveDialog({
             <dd className="font-medium">{whenLabel}</dd>
           </div>
           <div className="flex justify-between gap-2">
-            <dt className="text-muted-foreground">Rejim</dt>
-            <dd className="font-medium">{isFuture ? "Rejalashtirilgan" : "Darhol"}</dd>
+            <dt className="text-muted-foreground">Режим</dt>
+            <dd className="font-medium">{isFuture ? "Запланировано" : "Сразу"}</dd>
           </div>
         </dl>
         <DialogFooter className="gap-2 sm:justify-between">

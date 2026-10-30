@@ -1,0 +1,227 @@
+/// Табель и посещаемость. User/Tenant bilan @relation (Restrict — xodim o‘chirilmasin).
+
+model AttendanceShift {
+  id            Int      @id @default(autoincrement())
+  tenant_id     Int
+  name          String   @db.VarChar(120)
+  /// "08:00"
+  start_time    String   @default("09:00") @db.VarChar(8)
+  /// "17:00"
+  end_time      String   @default("18:00") @db.VarChar(8)
+  break_minutes Int      @default(60)
+  grace_minutes Int      @default(15)
+  /// null bo'lsa barcha rollarga amal qiladi
+  role          String?  @db.VarChar(64)
+  /// null bo'lsa barcha filiallarga amal qiladi
+  branch        String?  @db.VarChar(120)
+  is_default    Boolean  @default(false)
+  is_active     Boolean  @default(true)
+  comment       String?  @db.VarChar(500)
+  created_at    DateTime @default(now())
+  updated_at    DateTime @updatedAt
+  tenant        Tenant   @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+
+  @@index([tenant_id, is_active])
+  @@index([tenant_id, role, branch])
+  @@map("attendance_shifts")
+}
+
+model AttendanceLocation {
+  id                      Int                @id @default(autoincrement())
+  tenant_id               Int
+  name                    String             @db.VarChar(160)
+  address                 String?            @db.VarChar(300)
+  branch                  String?            @db.VarChar(120)
+  lat                     Float
+  lng                     Float
+  radius_m                Int                @default(150)
+  require_comment_outside Boolean            @default(true)
+  is_active               Boolean            @default(true)
+  created_at              DateTime           @default(now())
+  updated_at              DateTime           @updatedAt
+  tenant                  Tenant             @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  punches                 AttendancePunch[]
+  devices                 AttendanceDevice[]
+
+  @@index([tenant_id, is_active])
+  @@index([tenant_id, branch])
+  @@map("attendance_locations")
+}
+
+model AttendancePunch {
+  id               Int                 @id @default(autoincrement())
+  tenant_id        Int
+  user_id          Int
+  work_date        DateTime            @db.Date
+  occurred_at      DateTime            @default(now())
+  /// IN | OUT
+  direction        String              @default("IN") @db.VarChar(16)
+  /// in | estimated_out | out
+  role_in_day      String              @default("in") @db.VarChar(24)
+  /// mobile_photo | mobile_video | kiosk | terminal | gps | manual
+  source           String              @default("mobile_photo") @db.VarChar(32)
+  lat              Float?
+  lng              Float?
+  accuracy_m       Float?
+  outside_geofence Boolean             @default(false)
+  location_id      Int?
+  device_id        Int?
+  kiosk_leader_id  Int?
+  photo_front_key  String?             @db.VarChar(512)
+  photo_back_key   String?             @db.VarChar(512)
+  video_front_key  String?             @db.VarChar(512)
+  video_back_key   String?             @db.VarChar(512)
+  /// simultaneous | sequential
+  capture_mode     String?             @db.VarChar(24)
+  duration_sec     Int?
+  day_code         Int?
+  face_score       Float?
+  liveness_steps   Json                @default("[]")
+  integrity_json   Json                @default("{}")
+  is_valid         Boolean             @default(true)
+  /// auto | pending | approved | rejected
+  review_status    String              @default("auto") @db.VarChar(24)
+  reviewed_by      Int?
+  reviewed_at      DateTime?
+  comment          String?             @db.VarChar(500)
+  media_purged_at  DateTime?
+  created_at       DateTime            @default(now())
+  tenant           Tenant              @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  user             User                @relation("AttendancePunchUser", fields: [user_id], references: [id], onDelete: Restrict)
+  location         AttendanceLocation? @relation(fields: [location_id], references: [id], onDelete: SetNull)
+  device           AttendanceDevice?   @relation(fields: [device_id], references: [id], onDelete: SetNull)
+  kiosk_leader     User?               @relation("AttendancePunchKioskLeader", fields: [kiosk_leader_id], references: [id], onDelete: SetNull)
+  reviewer         User?               @relation("AttendancePunchReviewedBy", fields: [reviewed_by], references: [id], onDelete: SetNull)
+
+  @@index([tenant_id, user_id, work_date])
+  @@index([tenant_id, work_date, is_valid])
+  @@index([tenant_id, review_status])
+  @@index([tenant_id, occurred_at])
+  @@map("attendance_punches")
+}
+
+model AttendanceDayRecord {
+  id                  Int      @id @default(autoincrement())
+  tenant_id           Int
+  user_id             Int
+  work_date           DateTime @db.Date
+  /// worked | late | half_day | absent | vacation | sick | holiday | trip | unpaid_leave | overtime | weekend_work | not_started | early_leave | excused_absent | remote
+  status              String   @default("not_started") @db.VarChar(32)
+  first_in_at         DateTime?
+  last_out_at         DateTime?
+  late_minutes        Int      @default(0)
+  late_excused        Boolean  @default(false)
+  early_leave_minutes Int      @default(0)
+  worked_minutes      Int      @default(0)
+  overtime_minutes    Int      @default(0)
+  source              String   @default("auto") @db.VarChar(32)
+  override_by         Int?
+  override_comment    String?  @db.VarChar(500)
+  created_at          DateTime @default(now())
+  updated_at          DateTime @updatedAt
+  tenant              Tenant   @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  user                User     @relation("AttendanceDayRecordUser", fields: [user_id], references: [id], onDelete: Restrict)
+  override_user       User?    @relation("AttendanceDayRecordOverrideBy", fields: [override_by], references: [id], onDelete: SetNull)
+
+  @@unique([tenant_id, user_id, work_date])
+  @@index([tenant_id, work_date, status])
+  @@map("attendance_day_records")
+}
+
+model PunchDayCode {
+  id         Int      @id @default(autoincrement())
+  tenant_id  Int
+  user_id    Int
+  work_date  DateTime @db.Date
+  code       Int
+  created_at DateTime @default(now())
+  tenant     Tenant   @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  user       User     @relation("PunchDayCodeUser", fields: [user_id], references: [id], onDelete: Restrict)
+
+  @@unique([tenant_id, user_id, work_date])
+  @@index([tenant_id, work_date])
+  @@map("punch_day_codes")
+}
+
+model StaffAbsenceRequest {
+  id               Int       @id @default(autoincrement())
+  tenant_id        Int
+  user_id          Int
+  /// vacation | sick | trip | unpaid_leave | overtime | weekend_work | early_leave
+  type             String    @db.VarChar(32)
+  from_date        DateTime  @db.Date
+  to_date          DateTime  @db.Date
+  hours            Float?
+  reason           String?   @db.VarChar(500)
+  /// pending | approved | rejected
+  status           String    @default("pending") @db.VarChar(24)
+  attachment_key   String?   @db.VarChar(512)
+  approved_by      Int?
+  approved_at      DateTime?
+  decision_comment String?   @db.VarChar(500)
+  created_at       DateTime  @default(now())
+  updated_at       DateTime  @updatedAt
+  tenant           Tenant    @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  user             User      @relation("StaffAbsenceRequestUser", fields: [user_id], references: [id], onDelete: Restrict)
+  approver         User?     @relation("StaffAbsenceRequestApprovedBy", fields: [approved_by], references: [id], onDelete: SetNull)
+
+  @@index([tenant_id, status, from_date])
+  @@index([tenant_id, user_id, from_date])
+  @@map("staff_absence_requests")
+}
+
+model StaffClearanceSheet {
+  id                  Int       @id @default(autoincrement())
+  tenant_id           Int
+  user_id             Int
+  /// open | in_progress | approved | rejected
+  status              String    @default("open") @db.VarChar(24)
+  warehouse_cleared   Boolean   @default(false)
+  cash_cleared        Boolean   @default(false)
+  consignment_cleared Boolean   @default(false)
+  equipment_cleared   Boolean   @default(false)
+  work_slot_cleared   Boolean   @default(false)
+  items_json          Json      @default("[]")
+  comment             String?   @db.VarChar(500)
+  approved_by         Int?
+  approved_at         DateTime?
+  created_at          DateTime  @default(now())
+  updated_at          DateTime  @updatedAt
+  tenant              Tenant    @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  user                User      @relation("StaffClearanceSheetUser", fields: [user_id], references: [id], onDelete: Restrict)
+  approver            User?     @relation("StaffClearanceSheetApprovedBy", fields: [approved_by], references: [id], onDelete: SetNull)
+
+  @@index([tenant_id, status])
+  @@index([tenant_id, user_id])
+  @@map("staff_clearance_sheets")
+}
+
+model AttendanceDevice {
+  id                 Int                 @id @default(autoincrement())
+  tenant_id          Int
+  name               String              @db.VarChar(160)
+  /// hikvision | zkteco | office_link | kiosk
+  vendor             String              @default("hikvision") @db.VarChar(32)
+  serial_no          String?             @db.VarChar(120)
+  branch             String?             @db.VarChar(120)
+  location_id        Int?
+  pairing_code       String?             @db.VarChar(32)
+  device_token_hash  String?             @db.VarChar(128)
+  tunnel_url         String?             @db.VarChar(300)
+  /// pending | online | offline | revoked
+  status             String              @default("pending") @db.VarChar(24)
+  is_confirmed       Boolean             @default(false)
+  last_seen_at       DateTime?
+  synced_faces_count Int                 @default(0)
+  last_sync_at       DateTime?
+  meta               Json                @default("{}")
+  created_at         DateTime            @default(now())
+  updated_at         DateTime            @updatedAt
+  tenant             Tenant              @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  location           AttendanceLocation? @relation(fields: [location_id], references: [id], onDelete: SetNull)
+  punches            AttendancePunch[]
+
+  @@index([tenant_id, status])
+  @@index([pairing_code])
+  @@map("attendance_devices")
+}

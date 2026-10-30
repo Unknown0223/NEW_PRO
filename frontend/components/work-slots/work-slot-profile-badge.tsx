@@ -24,9 +24,9 @@ export function WorkSlotProfileBadge() {
   return (
     <div
       className="flex items-center justify-center gap-1.5 px-2 py-1"
-      title="Sizning ishchi o‘rni kodi (mobil agent-config bilan bir xil)"
+      title="Код вашего рабочего места (совпадает с agent-config в мобильном приложении)"
     >
-      <span className="text-[10px] uppercase tracking-wide text-muted-foreground">Joy</span>
+      <span className="text-[10px] uppercase tracking-wide text-muted-foreground">Место</span>
       <SlotBadge code={code} />
     </div>
   );

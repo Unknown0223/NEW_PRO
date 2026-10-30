@@ -5,25 +5,25 @@
 export const PRODUCT_UNIT_CUSTOM = "__custom__";
 
 export const PRODUCT_UNIT_OPTIONS: ReadonlyArray<{ value: string; label: string }> = [
-  { value: "dona", label: "dona" },
-  { value: "quti", label: "quti" },
-  { value: "blok", label: "blok" },
-  { value: "paket", label: "paket" },
-  { value: "karobka", label: "karobka" },
-  { value: "pachka", label: "pachka" },
-  { value: "rulon", label: "rulon" },
-  { value: "komplekt", label: "komplekt" },
-  { value: "kg", label: "kg" },
-  { value: "g", label: "g" },
-  { value: "tonna", label: "tonna" },
-  { value: "litr", label: "litr" },
-  { value: "ml", label: "ml" },
-  { value: "m", label: "m" },
-  { value: "m2", label: "m²" },
-  { value: "m3", label: "m³" },
-  { value: "qadoq", label: "qadoq" },
-  { value: "bo‘lak", label: "bo‘lak" },
-  { value: PRODUCT_UNIT_CUSTOM, label: "Boshqa (o‘zi yozish)…" }
+  { value: "dona", label: "шт." },
+  { value: "quti", label: "коробка" },
+  { value: "blok", label: "блок" },
+  { value: "paket", label: "пакет" },
+  { value: "karobka", label: "короб" },
+  { value: "pachka", label: "пачка" },
+  { value: "rulon", label: "рулон" },
+  { value: "komplekt", label: "комплект" },
+  { value: "kg", label: "кг" },
+  { value: "g", label: "г" },
+  { value: "tonna", label: "тонна" },
+  { value: "litr", label: "литр" },
+  { value: "ml", label: "мл" },
+  { value: "m", label: "м" },
+  { value: "m2", label: "м²" },
+  { value: "m3", label: "м³" },
+  { value: "qadoq", label: "упаковка" },
+  { value: "bo‘lak", label: "кусок" },
+  { value: PRODUCT_UNIT_CUSTOM, label: "Другое (ввести вручную)…" }
 ];
 
 const STANDARD_VALUES = new Set(

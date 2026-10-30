@@ -66,6 +66,7 @@ export function localValueToDatetimeInput(d: Date): string {
 
 /** «11 Апр. 2024 20:44» — Lalaku-style */
 export function formatRuDateTimeShort(value: string): string {
+  if (!value?.trim()) return "Дата и время";
   const d = parseLocalDateTime(value);
   const day = d.getDate();
   const mon = RU_MONTH_SHORT[d.getMonth()] ?? "";
@@ -76,6 +77,7 @@ export function formatRuDateTimeShort(value: string): string {
 
 /** «11 Апр. 2024» — faqat sana */
 export function formatRuDateShort(value: string): string {
+  if (!value?.trim()) return "Дата";
   const d = parseLocalDateTime(value);
   const day = d.getDate();
   const mon = RU_MONTH_SHORT[d.getMonth()] ?? "";
@@ -103,55 +105,56 @@ function SingleMonthCalendar({
   });
   const matrix = useMemo(() => daysMatrix(year, month), [year, month]);
 
+  const today = new Date();
+  const todayIso = `${today.getFullYear()}-${pad2(today.getMonth() + 1)}-${pad2(today.getDate())}`;
+
   return (
-    <div className="w-[12rem] shrink-0 sm:w-[12.25rem]">
-      <div className="mb-0.5 flex items-center justify-between gap-0.5">
-        <Button
+    <div className="w-[16.5rem] shrink-0">
+      <div className="mb-2 flex items-center justify-between gap-1">
+        <button
           type="button"
-          variant="outline"
-          size="icon-sm"
-          className="h-6 w-6 shrink-0"
+          className="flex h-8 w-8 items-center justify-center rounded-full text-[#1aa096] hover:bg-[#e7f6f5]"
           aria-label="Предыдущий месяц"
           onClick={() => onShiftMonth(-1)}
         >
-          <ChevronLeft className="h-3 w-3" />
-        </Button>
-        <div className="min-w-0 flex-1 truncate px-0.5 text-center text-[0.7rem] font-medium capitalize text-foreground">
+          <ChevronLeft className="h-4 w-4" />
+        </button>
+        <div className="min-w-0 flex-1 truncate text-center text-sm font-semibold capitalize text-foreground">
           {title}
         </div>
-        <Button
+        <button
           type="button"
-          variant="outline"
-          size="icon-sm"
-          className="h-6 w-6 shrink-0"
+          className="flex h-8 w-8 items-center justify-center rounded-full text-[#1aa096] hover:bg-[#e7f6f5]"
           aria-label="Следующий месяц"
           onClick={() => onShiftMonth(1)}
         >
-          <ChevronRight className="h-3 w-3" />
-        </Button>
+          <ChevronRight className="h-4 w-4" />
+        </button>
       </div>
-      <div className="grid grid-cols-7 gap-px text-[0.6rem] text-muted-foreground">
+      <div className="grid grid-cols-7 gap-1 text-[11px] text-muted-foreground">
         {RU_WD.map((w) => (
-          <div key={w} className="py-0.5 text-center font-medium">
+          <div key={w} className="py-1 text-center font-semibold uppercase tracking-wide">
             {w}
           </div>
         ))}
         {matrix.flatMap((row, ri) =>
           row.map((day, ci) => {
             if (day == null) {
-              return <div key={`e-${ri}-${ci}`} className="h-6" />;
+              return <div key={`e-${ri}-${ci}`} className="h-8" />;
             }
             const iso = `${year}-${pad2(month + 1)}-${pad2(day)}`;
             const sel = iso === selectedYmd;
+            const isToday = iso === todayIso;
             return (
               <button
                 key={iso}
                 type="button"
                 onClick={() => onPick(iso)}
                 className={cn(
-                  "flex h-6 items-center justify-center rounded-sm text-[0.65rem] transition-colors",
-                  sel && "bg-primary font-medium text-primary-foreground hover:bg-primary/90",
-                  !sel && "hover:bg-muted"
+                  "flex h-8 items-center justify-center rounded-full text-[13px] transition-colors",
+                  sel && "bg-[#1aa096] font-semibold text-white shadow-sm hover:bg-[#158a81]",
+                  !sel && isToday && "font-semibold text-[#1aa096] ring-1 ring-[#1aa096]/50",
+                  !sel && "hover:bg-[#e7f6f5]"
                 )}
               >
                 {day}
@@ -448,7 +451,7 @@ export function DateTimePickerField({
         ? createPortal(
             <div
               ref={panelRef}
-              className="fixed z-[100] w-max max-w-[min(calc(100vw-1rem),28rem)] rounded-lg border border-border/80 bg-popover p-3 text-popover-foreground shadow-lg ring-1 ring-black/5"
+              className="fixed z-[200] w-max max-w-[min(calc(100vw-1rem),32rem)] rounded-2xl border border-[#d7ebe9] bg-white p-4 text-popover-foreground shadow-xl"
               style={{ top: box.top, left: box.left }}
             >
               <div className={cn("flex gap-3", !dateOnly && timePlacement === "side" ? "items-start" : "items-stretch")}>
@@ -461,7 +464,7 @@ export function DateTimePickerField({
                 />
                 {!dateOnly && quickPresets && quickPresets.length > 0 ? (
                   <div className="flex w-[5.5rem] shrink-0 flex-col gap-1 border-l border-border/60 pl-2">
-                    <span className="text-[10px] font-medium text-muted-foreground">Tez</span>
+                    <span className="text-[10px] font-medium text-muted-foreground">Быстро</span>
                     {quickPresets.map((p) => (
                       <Button
                         key={p.label}

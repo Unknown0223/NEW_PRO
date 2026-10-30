@@ -37,12 +37,14 @@ import type {
   PolkiOrderGroup
 } from "../types";
 import { POLKI_SKIDKA_OPTS } from "../constants";
-import { polkiDefaultsFromOrderRow } from "../view/polki-shelf-return/polki-apply-order-defaults";
+import { polkiDefaultsFromOrderRow, matchPaymentMethodSelectId, paymentMethodIdForPriceType, resolvePriceTypeFromOrder } from "../view/polki-shelf-return/polki-apply-order-defaults";
+import { countPositiveQtyEntries, resolveLockedOrderAgentId } from "../order-edit-header";
 import {
   tradeDirectionLabel,
   tradeDirectionOptionsFromProfile
 } from "../view/polki-shelf-return/polki-trade-direction-options";
 import type { PolkiPriceTypeEntryRef } from "../view/polki-shelf-return/polki-price-type-options";
+import { salePriceTypeOptionsFromProfile } from "../view/polki-shelf-return/polki-price-type-options";
 import { useOldPrices } from "./use-old-prices";
 import { buildPriceTypeLabelMap } from "@/lib/price-type-label";
 import type { OrderDetailRow } from "@/components/orders/order-detail-view";
@@ -63,6 +65,11 @@ import { applyPolkiOrderPieceRebalance } from "../view/polki-shelf-return/polki-
 import { usePolkiAutoBonus } from "./use-polki-auto-bonus";
 import { usePolkiPeresort } from "./use-polki-peresort";
 import { computePolkiDebtHintSum, parsePolkiQty } from "../polki-bonus-balance.logic";
+import {
+  hydrateApplyBonusForNewOrderEdit,
+  shouldConfirmBonusOnWebNewEdit,
+  type OrderBonusPreviewResponse
+} from "../order-edit-bonus-confirm.logic";
 
 const EMPTY_CREATE_PRODUCTS: ProductRow[] = [];
 
@@ -91,7 +98,7 @@ export function useOrderCreate({
   const editOrderId =
     editOrderIdProp != null && editOrderIdProp > 0 ? editOrderIdProp : editOrderIdFromUrl;
   const isEditMode = editOrderId != null && !isPolkiSheet && !isExchangeFlow;
-  const editPrefillDoneRef = useRef(false);
+  const [editHydratedOrderId, setEditHydratedOrderId] = useState<number | null>(null);
   const skipNextWarehouseQtyClearRef = useRef(false);
   /** Tahrirdagi eski rezerv — qoldiq tekshiruviga qo‘shiladi (ombor o‘zgarmaganda). */
   const [editReservedQtyByProduct, setEditReservedQtyByProduct] = useState<Record<number, number>>(
@@ -104,6 +111,13 @@ export function useOrderCreate({
   const [warehouseId, setWarehouseId] = useState("");
   const [agentId, setAgentId] = useState("");
   const [applyBonus, setApplyBonus] = useState(true);
+  const [applyDiscount, setApplyDiscount] = useState(true);
+  const [bonusConfirmOpen, setBonusConfirmOpen] = useState(false);
+  const [bonusPreviewLoading, setBonusPreviewLoading] = useState(false);
+  const [bonusPreviewError, setBonusPreviewError] = useState<string | null>(null);
+  const [bonusPreview, setBonusPreview] = useState<OrderBonusPreviewResponse | null>(
+    null
+  );
   /** Bo‘sh = barcha kategoriyalar; bo‘sh emas = faqat tanlangan id lar */
   const [selectedCategoryIds, setSelectedCategoryIds] = useState<number[]>([]);
   /** Pastdagi katalog tablari: faqat `selectedCategoryIds` bo‘sh emas; jadval faqat shu kategoriya mahsulotlari */
@@ -163,7 +177,7 @@ export function useOrderCreate({
   const [orderNotePreset, setOrderNotePreset] = useState("");
   const [refSelectKey, setRefSelectKey] = useState(0);
   const [productSearch, setProductSearch] = useState("");
-  const [orderOpenedAt] = useState(() => new Date());
+  const [orderOpenedAtNow] = useState(() => new Date());
   const [polkiDateFrom, setPolkiDateFrom] = useState("");
   const [polkiDateTo, setPolkiDateTo] = useState("");
   const polkiRangeAnchorRef = useRef<HTMLElement | null>(null);
@@ -244,13 +258,15 @@ export function useOrderCreate({
   const polkiOrderIdSet = useMemo(() => new Set(polkiOrderIds), [polkiOrderIds]);
 
   useEffect(() => {
+    /** Tahrirda ombor qulflangan — miqdorlarni ombor effektida o‘chirmaymiz. */
+    if (isEditMode) return;
     if (skipNextWarehouseQtyClearRef.current) {
       skipNextWarehouseQtyClearRef.current = false;
       return;
     }
     setQtyByProductId({});
     setBlockByProductId({});
-  }, [warehouseId]);
+  }, [warehouseId, isEditMode]);
 
   useEffect(() => {
     if (!isPolkiSheet) return;
@@ -287,7 +303,7 @@ export function useOrderCreate({
         refusal_reason_entries?: unknown;
         /** Legacy ro‘yxat (kodlar) — payment_method_entries bo‘lmasa fallback. */
         payment_types?: string[];
-        payment_method_entries?: { id: string; name: string; active?: boolean }[];
+        payment_method_entries?: { id: string; name: string; active?: boolean; code?: string | null }[];
         price_type_entries?: Array<{
           id: string;
           name: string;
@@ -295,6 +311,7 @@ export function useOrderCreate({
           kind?: string;
           active?: boolean;
           sort_order?: number | null;
+          payment_method_id?: string;
         }>;
         trade_directions?: string[];
       };
@@ -366,27 +383,27 @@ export function useOrderCreate({
 
   useEffect(() => {
     if (!isEditMode) {
-      editPrefillDoneRef.current = false;
+      if (editHydratedOrderId != null) setEditHydratedOrderId(null);
       return;
     }
-    if (editPrefillDoneRef.current) return;
     if (editOrderQ.isError) {
-      const msg = getUserFacingError(editOrderQ.error, "Zakazni yuklab bo‘lmadi.");
+      const msg = getUserFacingError(editOrderQ.error, "Не удалось загрузить заказ.");
       reportLocalError(msg, null);
       return;
     }
     const row = editOrderQ.data;
     if (!row) return;
     if (row.status !== "new") {
-      editPrefillDoneRef.current = true;
-      reportLocalError("Tahrirlash faqat «Новый» statusidagi zakazlar uchun.", null);
+      if (editHydratedOrderId !== row.id) setEditHydratedOrderId(row.id);
+      reportLocalError("Редактировать можно только заказы в статусе «Новый».", null);
       return;
     }
-    editPrefillDoneRef.current = true;
+    if (editHydratedOrderId === row.id) return;
+
+    skipNextWarehouseQtyClearRef.current = true;
     setEditOrderNumber(row.number?.trim() || `#${row.id}`);
     setClientId(String(row.client_id));
-    setAgentId(row.agent_id != null && row.agent_id > 0 ? String(row.agent_id) : "");
-    skipNextWarehouseQtyClearRef.current = true;
+    setAgentId(resolveLockedOrderAgentId(row, []));
     setWarehouseId(row.warehouse_id != null && row.warehouse_id > 0 ? String(row.warehouse_id) : "");
     setEditSourceWarehouseId(
       row.warehouse_id != null && row.warehouse_id > 0 ? row.warehouse_id : null
@@ -395,13 +412,12 @@ export function useOrderCreate({
     setExpeditorUserId(
       row.expeditor_id != null && row.expeditor_id > 0 ? String(row.expeditor_id) : "__none__"
     );
-    setApplyBonus(Boolean(row.apply_bonus));
+    setApplyBonus(hydrateApplyBonusForNewOrderEdit());
+    setApplyDiscount(true);
     setOrderIsConsignment(Boolean(row.is_consignment));
     setConsignmentDueDate((row.consignment_due_date ?? "").trim().slice(0, 10));
     setRequestTypeRef((row.request_type_ref ?? "").trim());
     setOrderComment((row.comment ?? "").trim());
-    const pt = (row.price_type ?? "").trim();
-    if (pt) setPriceType(pt);
     const qtyMap: Record<number, string> = {};
     const reserved: Record<number, number> = {};
     for (const it of row.items ?? []) {
@@ -416,7 +432,62 @@ export function useOrderCreate({
     setEditReservedQtyByProduct(reserved);
     setSelectionNotice(null);
     setLocalError(null);
-  }, [isEditMode, editOrderQ.data, editOrderQ.isError, editOrderQ.error, reportLocalError]);
+    setEditHydratedOrderId(row.id);
+  }, [isEditMode, editOrderQ.data, editOrderQ.isError, editOrderQ.error, editHydratedOrderId, reportLocalError]);
+
+  /** Qulflangan header maydonlari boshqa effektlar (klient bo‘sh) tomonidan o‘chirilsa — qayta tiklash. */
+  useEffect(() => {
+    if (!isEditMode || !editOrderQ.data) return;
+    const row = editOrderQ.data;
+    if (editHydratedOrderId !== row.id) return;
+    if (!clientId.trim() && row.client_id > 0) setClientId(String(row.client_id));
+    if (!agentId.trim()) {
+      const resolved = resolveLockedOrderAgentId(row, []);
+      if (resolved) setAgentId(resolved);
+    }
+    if (!warehouseId.trim() && row.warehouse_id != null && row.warehouse_id > 0) {
+      setWarehouseId(String(row.warehouse_id));
+    }
+    if (
+      !expeditorUserId.trim() &&
+      row.expeditor_id != null &&
+      row.expeditor_id > 0
+    ) {
+      setExpeditorUserId(String(row.expeditor_id));
+    }
+    if (!paymentMethodRef.trim() && (row.payment_method_ref ?? "").trim()) {
+      setPaymentMethodRef((row.payment_method_ref ?? "").trim());
+    }
+  }, [
+    isEditMode,
+    editOrderQ.data,
+    editHydratedOrderId,
+    clientId,
+    agentId,
+    warehouseId,
+    expeditorUserId,
+    paymentMethodRef
+  ]);
+
+  const editPriceTypeSyncedForOrderId = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (!isEditMode) {
+      editPriceTypeSyncedForOrderId.current = null;
+      return;
+    }
+    if (!editOrderQ.data || !createCtxQ.data) return;
+    const orderId = editOrderQ.data.id;
+    if (editPriceTypeSyncedForOrderId.current === orderId) return;
+    const fallback = createCtxQ.data.price_types ?? [];
+    const entries = (createCtxQ.data.settings_profile?.references?.price_type_entries ??
+      []) as PolkiPriceTypeEntryRef[];
+    const options = salePriceTypeOptionsFromProfile(entries, fallback);
+    if (options.length === 0) return;
+    const resolved = resolvePriceTypeFromOrder(editOrderQ.data, options, entries);
+    if (resolved) setPriceType(resolved);
+    editPriceTypeSyncedForOrderId.current = orderId;
+  }, [isEditMode, editOrderQ.data, createCtxQ.data]);
 
   /** Agent tanlanganda katalog `create-context` javobida ham bor — alohida `create-catalog` chaqirilmasin (2× DB + 2× tarmoq). */
   const useSplitOrderCatalog = requiresAgentForProductCatalog && hasAgentSelected;
@@ -850,6 +921,19 @@ export function useOrderCreate({
   const requiresPaymentMethodForSubmit = requiresAgentAndPayment && showOrderPaymentMethodSelector;
 
   const paymentMethodSelectOptions = useMemo(() => {
+    const injectStored = (
+      out: { id: string; name: string }[],
+      entries: Array<{ id?: string; name?: string; code?: string | null }> | undefined
+    ) => {
+      if (!isEditMode || !editOrderQ.data) return out;
+      const stored = (editOrderQ.data.payment_method_ref ?? "").trim();
+      const label = (editOrderQ.data.payment_method_label ?? "").trim();
+      const mapped = matchPaymentMethodSelectId(stored, out, entries ?? []);
+      if (stored && !mapped && !out.some((e) => e.id === stored)) {
+        out.unshift({ id: stored, name: label || stored });
+      }
+      return out;
+    };
     const raw = ctxProfile?.references?.payment_method_entries;
     if (!Array.isArray(raw) || raw.length === 0) {
       const legacy = ctxProfile?.references?.payment_types;
@@ -857,19 +941,24 @@ export function useOrderCreate({
         const uniq = Array.from(
           new Set(legacy.map((s) => String(s).trim()).filter(Boolean).map((s) => s.slice(0, 64)))
         );
-        return uniq.map((s) => ({ id: s, name: s }));
+        return injectStored(
+          uniq.map((s) => ({ id: s, name: s })),
+          []
+        );
       }
-      // Oxirgi fallback: tenantda umuman sozlanmagan bo‘lsa ham select bo‘sh qolmasin.
-      return [
-        { id: "naqd", name: "Naqd" },
-        { id: "terminal", name: "Terminal" },
-        { id: "perechisleniye", name: "Perechisleniye" }
-      ];
+      return injectStored(
+        [
+          { id: "naqd", name: "Наличные" },
+          { id: "terminal", name: "Терминал" },
+          { id: "perechisleniye", name: "Перечисление" }
+        ],
+        []
+      );
     }
     const out: { id: string; name: string }[] = [];
     for (const e of raw) {
       if (!e || typeof e !== "object") continue;
-      const row = e as { id?: unknown; name?: unknown; active?: boolean };
+      const row = e as { id?: unknown; name?: unknown; active?: boolean; code?: string | null };
       const id =
         typeof row.id === "string"
           ? row.id.trim()
@@ -880,24 +969,79 @@ export function useOrderCreate({
       if (!id || !name || row.active === false) continue;
       out.push({ id, name });
     }
-    return out;
-  }, [ctxProfile]);
+    return injectStored(out, raw);
+  }, [ctxProfile, isEditMode, editOrderQ.data]);
+
+  const applyPriceType = useCallback(
+    (next: string) => {
+      setPriceType(next);
+      const entries = (createCtxQ.data?.settings_profile?.references?.price_type_entries ??
+        []) as PolkiPriceTypeEntryRef[];
+      const pmEntries = ctxProfile?.references?.payment_method_entries ?? [];
+      const mapped = paymentMethodIdForPriceType(
+        next,
+        entries,
+        paymentMethodSelectOptions,
+        pmEntries
+      );
+      if (mapped) setPaymentMethodRef(mapped);
+    },
+    [
+      createCtxQ.data?.settings_profile?.references?.price_type_entries,
+      ctxProfile?.references?.payment_method_entries,
+      paymentMethodSelectOptions
+    ]
+  );
 
   useEffect(() => {
     if (showOrderPaymentMethodSelector) return;
+    if (isEditMode) return;
     if (!paymentMethodRef.trim()) return;
     setPaymentMethodRef("");
-  }, [showOrderPaymentMethodSelector, paymentMethodRef]);
+  }, [showOrderPaymentMethodSelector, paymentMethodRef, isEditMode]);
 
   useEffect(() => {
     if (!showOrderPaymentMethodSelector) return;
     if (!paymentMethodRef.trim()) return;
-    const exists = paymentMethodSelectOptions.some((e) => e.id === paymentMethodRef.trim());
-    if (!exists) {
-      setPaymentMethodRef("");
-      setSelectionNotice("To‘lov usuli tanlovi yangilandi: mos bo‘lmagan qiymat olib tashlandi.");
+    const entries = ctxProfile?.references?.payment_method_entries ?? [];
+    const mapped = matchPaymentMethodSelectId(paymentMethodRef, paymentMethodSelectOptions, entries);
+    if (mapped) {
+      if (mapped !== paymentMethodRef) setPaymentMethodRef(mapped);
+      return;
     }
-  }, [showOrderPaymentMethodSelector, paymentMethodRef, paymentMethodSelectOptions]);
+    if (isEditMode) return;
+    setPaymentMethodRef("");
+    setSelectionNotice("Выбор способа оплаты обновлён: неподходящее значение сброшено.");
+  }, [
+    showOrderPaymentMethodSelector,
+    paymentMethodRef,
+    paymentMethodSelectOptions,
+    ctxProfile?.references?.payment_method_entries,
+    isEditMode
+  ]);
+
+  useEffect(() => {
+    if (!isEditMode) return;
+    const entries = (createCtxQ.data?.settings_profile?.references?.price_type_entries ??
+      []) as PolkiPriceTypeEntryRef[];
+    const mapped = paymentMethodIdForPriceType(
+      priceType,
+      entries,
+      paymentMethodSelectOptions,
+      ctxProfile?.references?.payment_method_entries ?? []
+    );
+    if (!mapped) return;
+    if (!paymentMethodRef.trim() && mapped !== paymentMethodRef) {
+      setPaymentMethodRef(mapped);
+    }
+  }, [
+    isEditMode,
+    priceType,
+    paymentMethodRef,
+    paymentMethodSelectOptions,
+    createCtxQ.data?.settings_profile?.references?.price_type_entries,
+    ctxProfile?.references?.payment_method_entries
+  ]);
 
   const requestTypeOptions = useMemo(
     () => activeRefSelectOptions(ctxProfile?.references?.request_type_entries),
@@ -979,7 +1123,7 @@ export function useOrderCreate({
     priceTypeLabels: oldPricesPriceTypeLabels,
     currentPriceType: priceType,
     orderComment,
-    setPriceType,
+    setPriceType: applyPriceType,
     setOrderComment,
     setLocalError
   });
@@ -1000,7 +1144,7 @@ export function useOrderCreate({
       return [
         {
           id: editOrderQ.data.warehouse_id,
-          name: editOrderQ.data.warehouse_name?.trim() || `Ombor #${editOrderQ.data.warehouse_id}`
+          name: editOrderQ.data.warehouse_name?.trim() || `Склад #${editOrderQ.data.warehouse_id}`
         },
         ...base
       ];
@@ -1067,7 +1211,7 @@ export function useOrderCreate({
       setPolkiOrderIds([]);
       polkiAutoCategoriesOrderRef.current = null;
       setSelectionNotice(
-        "Tanlangan klient kombinatsiyasi cheklovga tushdi: agent/ombor/qabulchi qayta tanlanadi."
+        "Выбранная комбинация для клиента попала под ограничение: агента/склад/экспедитора нужно выбрать заново."
       );
     }
   }, [
@@ -1100,7 +1244,7 @@ export function useOrderCreate({
       setWarehouseId("");
       setQtyByProductId({});
       setBlockByProductId({});
-      setSelectionNotice("Ombor tanlovi yangilandi: mos bo‘lmagan qiymat olib tashlandi.");
+      setSelectionNotice("Выбор склада обновлён: неподходящее значение сброшено.");
     }
   }, [
     warehouseId,
@@ -1116,6 +1260,7 @@ export function useOrderCreate({
     if (!createCtxQ.data) return;
     if (createCtxQ.isPlaceholderData) return;
     if (!expeditorUserId.trim() || expeditorUserId.trim() === "__none__") return;
+    if (isEditMode) return;
     const id = Number.parseInt(expeditorUserId.trim(), 10);
     if (!Number.isFinite(id) || id < 1) {
       setExpeditorUserId("");
@@ -1135,7 +1280,7 @@ export function useOrderCreate({
         available_expeditor_ids: exps.map((e) => e.id)
       });
       setExpeditorUserId("");
-      setSelectionNotice("Dastavchi tanlovi yangilandi: mos bo‘lmagan qiymat olib tashlandi.");
+      setSelectionNotice("Выбор экспедитора обновлён: неподходящее значение сброшено.");
     }
   }, [
     expeditorUserId,
@@ -1145,7 +1290,8 @@ export function useOrderCreate({
     selectedClientExpeditorIds,
     selectedClientExpeditorIdSet,
     debugOrderCreate,
-    createCtxQ.isPlaceholderData
+    createCtxQ.isPlaceholderData,
+    isEditMode
   ]);
 
   useEffect(() => {
@@ -1167,13 +1313,17 @@ export function useOrderCreate({
     const opts = agentUsers.map((u) =>
       orderAgentFilterOption({ id: u.id, name: u.name, login: u.login })
     );
-    if (isEditMode && agentId.trim()) {
-      const aid = Number.parseInt(agentId.trim(), 10);
+    if (isEditMode && editOrderQ.data) {
+      const aid =
+        Number.parseInt(agentId.trim(), 10) ||
+        (editOrderQ.data.agent_id != null && editOrderQ.data.agent_id > 0
+          ? editOrderQ.data.agent_id
+          : NaN);
       if (Number.isFinite(aid) && aid > 0 && !opts.some((o) => o.value === String(aid))) {
         const label =
-          editOrderQ.data?.agent_display?.trim() ||
-          editOrderQ.data?.agent_name?.trim() ||
-          `Agent #${aid}`;
+          editOrderQ.data.agent_display?.trim() ||
+          editOrderQ.data.agent_name?.trim() ||
+          `Агент #${aid}`;
         opts.unshift({
           value: String(aid),
           label,
@@ -1183,6 +1333,13 @@ export function useOrderCreate({
     }
     return opts;
   }, [agentUsers, isEditMode, agentId, editOrderQ.data]);
+
+  useEffect(() => {
+    if (!isEditMode || !editOrderQ.data) return;
+    if (agentId.trim()) return;
+    const resolved = resolveLockedOrderAgentId(editOrderQ.data, agentUsers);
+    if (resolved) setAgentId(resolved);
+  }, [isEditMode, editOrderQ.data, agentUsers, agentId]);
 
   useEffect(() => {
     if (!createCtxQ.data) return;
@@ -1197,7 +1354,7 @@ export function useOrderCreate({
         available_agents_total: agentUsers.length
       });
       setAgentId("");
-      setSelectionNotice("Agent tanlovi yangilandi: mos bo‘lmagan qiymat olib tashlandi.");
+      setSelectionNotice("Выбор агента обновлён: неподходящее значение сброшено.");
     }
   }, [
     agentId,
@@ -1225,8 +1382,19 @@ export function useOrderCreate({
     const rows = filteredExpeditors.map((r) =>
       orderExpeditorFilterOption({ id: r.id, fio: r.fio, login: r.login })
     );
-    return [{ value: "__none__", label: "Ekspeditorsiz", searchText: "ekspeditorsiz без" }, ...rows];
-  }, [filteredExpeditors]);
+    if (isEditMode && expeditorUserId.trim() && expeditorUserId.trim() !== "__none__") {
+      const eid = Number.parseInt(expeditorUserId.trim(), 10);
+      if (Number.isFinite(eid) && eid > 0 && !rows.some((r) => r.value === String(eid))) {
+        const label = editOrderQ.data?.expeditor_display?.trim() || `Экспедитор #${eid}`;
+        rows.unshift({
+          value: String(eid),
+          label,
+          searchText: label.toLowerCase()
+        });
+      }
+    }
+    return [{ value: "__none__", label: "Без экспедитора", searchText: "без экспедитора ekspeditorsiz" }, ...rows];
+  }, [filteredExpeditors, isEditMode, expeditorUserId, editOrderQ.data]);
 
   useEffect(() => {
     if (createCtxQ.isPlaceholderData) return;
@@ -1241,7 +1409,7 @@ export function useOrderCreate({
       previous_agent_id: null
     });
     setAgentId(String(onlyAgentId));
-    setSelectionNotice("Agent klient kartasiga mos ravishda avtomatik tanlandi.");
+    setSelectionNotice("Агент выбран автоматически по карточке клиента.");
   }, [
     createCtxQ.isPlaceholderData,
     agentUsers,
@@ -1700,7 +1868,11 @@ export function useOrderCreate({
       }
       if (!warehouseId) return false;
       const s = stockMap.get(p.id);
-      return availableOrderQty(s) > 0;
+      if (availableOrderQty(s) > 0) return true;
+      const reserved = editReservedQtyByProduct[p.id] ?? 0;
+      const raw = qtyByProductId[p.id];
+      const lineQ = Number.parseFloat(String(raw ?? "").replace(",", "."));
+      return reserved > 0 || (Number.isFinite(lineQ) && lineQ > 0);
     });
     const seen = new Set<number>();
     const deduped: ProductRow[] = [];
@@ -1710,7 +1882,15 @@ export function useOrderCreate({
       deduped.push(p);
     }
     return deduped;
-  }, [products, categoryFilterActive, categoryFilterSet, warehouseId, stockQ.data]);
+  }, [
+    products,
+    categoryFilterActive,
+    categoryFilterSet,
+    warehouseId,
+    stockQ.data,
+    editReservedQtyByProduct,
+    qtyByProductId
+  ]);
 
   /**
    * Tanlangan ombor bo‘yicha: katalog mahsulotlari ichida Mavjud (fakt − bron) > 0 bo‘lgan kategoriyalar.
@@ -1725,10 +1905,16 @@ export function useOrderCreate({
     for (const p of products) {
       const cid = p.category_id;
       if (cid == null || !Number.isFinite(cid)) continue;
-      if (availableOrderQty(stockMap.get(p.id)) > 0) ids.add(cid);
+      if (availableOrderQty(stockMap.get(p.id)) > 0) {
+        ids.add(cid);
+        continue;
+      }
+      const reserved = editReservedQtyByProduct[p.id] ?? 0;
+      const lineQ = Number.parseFloat(String(qtyByProductId[p.id] ?? "").replace(",", "."));
+      if (reserved > 0 || (Number.isFinite(lineQ) && lineQ > 0)) ids.add(cid);
     }
     return ids;
-  }, [products, warehouseId, stockProductIdsKey, stockQ.isSuccess, stockQ.data]);
+  }, [products, warehouseId, stockProductIdsKey, stockQ.isSuccess, stockQ.data, editReservedQtyByProduct, qtyByProductId]);
 
   /** Ombor qoldiqlari kutilganda `null`; tayyor bo‘lsa faqat Mavjud (fakt − bron) > 0 bo‘lgan kategoriyalar; xato bo‘lsa `[]`. */
   const categoriesWithWarehouseSellableStock = useMemo(() => {
@@ -1811,10 +1997,10 @@ export function useOrderCreate({
     }
     for (const [cid, prows] of byId) {
       if (known.has(cid)) continue;
-      out.push({ key: `o-${cid}`, categoryName: `Kategoriya #${cid}`, products: prows });
+      out.push({ key: `o-${cid}`, categoryName: `Категория #${cid}`, products: prows });
     }
     if (uncategorized.length > 0) {
-      out.push({ key: "none", categoryName: "Kategoriyasiz", products: uncategorized });
+      out.push({ key: "none", categoryName: "Без категории", products: uncategorized });
     }
     return out;
   }, [displayProducts, categories]);
@@ -1827,7 +2013,7 @@ export function useOrderCreate({
     }
     const aid = activeCatalogCategoryId ?? selectedCategoryIds[0]!;
     const cat = categories.find((c) => c.id === aid);
-    const name = cat?.name ?? `Kategoriya #${aid}`;
+    const name = cat?.name ?? `Категория #${aid}`;
     const prows = displayProducts.filter((p) => p.category_id === aid);
     return [{ key: `tab-${aid}`, categoryName: name, products: prows }];
   }, [catalogTabMode, displayProductGroups, displayProducts, activeCatalogCategoryId, selectedCategoryIds, categories]);
@@ -1878,11 +2064,16 @@ export function useOrderCreate({
     return names.slice(0, 3);
   }, [catalogProducts, qtyByProductId, priceType, oldPriceByProductId]);
 
-  const selectedItemsCount = catalogProducts.reduce((acc, p) => {
-    const raw = qtyByProductId[p.id];
-    const q = Number.parseFloat((raw ?? "").replace(",", "."));
-    return Number.isFinite(q) && q > 0 ? acc + 1 : acc;
-  }, 0);
+  const selectedItemsCount = (() => {
+    const fromCatalog = catalogProducts.reduce((acc, p) => {
+      const raw = qtyByProductId[p.id];
+      const q = Number.parseFloat((raw ?? "").replace(",", "."));
+      return Number.isFinite(q) && q > 0 ? acc + 1 : acc;
+    }, 0);
+    if (fromCatalog > 0) return fromCatalog;
+    if (isEditMode) return countPositiveQtyEntries(qtyByProductId);
+    return 0;
+  })();
   const selectedTotalQty = useMemo(() => {
     const map = new Map((stockQ.data ?? []).map((s) => [s.product_id, s]));
     let sum = 0;
@@ -1966,6 +2157,32 @@ export function useOrderCreate({
     Boolean(createCtxQ.data) &&
     !createCtxQ.isPlaceholderData;
 
+  const orderOpenedAt = useMemo(() => {
+    if (isEditMode && editOrderQ.data?.created_at) {
+      const d = new Date(editOrderQ.data.created_at);
+      if (!Number.isNaN(d.getTime())) return d;
+    }
+    return orderOpenedAtNow;
+  }, [isEditMode, editOrderQ.data?.created_at, orderOpenedAtNow]);
+
+  const lockedAgentLabel = useMemo(() => {
+    const id = agentId.trim();
+    const fromOpts = id ? agentFilterOptions.find((o) => o.value === id)?.label?.trim() : "";
+    if (fromOpts) return fromOpts;
+    return (
+      editOrderQ.data?.agent_name?.trim() ||
+      editOrderQ.data?.agent_display?.trim() ||
+      ""
+    );
+  }, [agentId, agentFilterOptions, editOrderQ.data]);
+
+  const lockedWarehouseLabel = useMemo(() => {
+    const id = warehouseId.trim();
+    const fromList = id ? warehouses.find((w) => String(w.id) === id)?.name?.trim() : "";
+    if (fromList) return fromList;
+    return editOrderQ.data?.warehouse_name?.trim() || "";
+  }, [warehouseId, warehouses, editOrderQ.data]);
+
   const loadingLists =
     (createCtxQ.isPending && !createCtxQ.data) ||
     (isEditMode && editOrderQ.isLoading && !editOrderQ.data);
@@ -2006,7 +2223,12 @@ export function useOrderCreate({
   }, [isPolkiSheet, polkiUsesAutoBonus, polkiAutoBonusDebtAmount, polkiDebtHintSum]);
 
   const mutation = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (
+      bonusConfirm?: {
+        bonus_gift_lines?: { bonus_rule_id: number; product_id: number; qty: number }[];
+        bonus_strategy_selections?: { strategy_id: number; rule_ids: number[] }[];
+      } | void
+    ) => {
       if (isPolkiSheet) {
         const cid = Number.parseInt(clientId, 10);
         if (!Number.isFinite(cid) || cid < 1) throw new Error("client");
@@ -2337,8 +2559,11 @@ export function useOrderCreate({
       const cid = Number.parseInt(clientId, 10);
       if (!Number.isFinite(cid) || cid < 1) throw new Error("client");
 
-      const wid = Number.parseInt(warehouseId, 10);
-      if (!warehouseId.trim() || !Number.isFinite(wid) || wid < 1) throw new Error("warehouse");
+      const warehouseRaw =
+        warehouseId.trim() ||
+        (isEditMode && editSourceWarehouseId != null ? String(editSourceWarehouseId) : "");
+      const wid = Number.parseInt(warehouseRaw, 10);
+      if (!warehouseRaw.trim() || !Number.isFinite(wid) || wid < 1) throw new Error("warehouse");
 
       const validatedOrderType =
         orderType && (ORDER_TYPE_VALUES as readonly string[]).includes(orderType) ? orderType : "order";
@@ -2364,13 +2589,14 @@ export function useOrderCreate({
         Number.isFinite(wid) &&
         wid === editSourceWarehouseId;
       const qtyAgg = new Map<number, number>();
-      for (const p of catalogProducts) {
-        const raw = qtyByProductId[p.id];
+      for (const [idStr, raw] of Object.entries(qtyByProductId)) {
         if (!raw || !raw.trim()) continue;
+        const productId = Number.parseInt(idStr, 10);
+        if (!Number.isFinite(productId) || productId < 1) continue;
         const q = Number.parseFloat(raw.replace(",", "."));
         if (!Number.isFinite(q) || q < 0) throw new Error("qty");
         if (q === 0) continue;
-        qtyAgg.set(p.id, (qtyAgg.get(p.id) ?? 0) + q);
+        qtyAgg.set(productId, (qtyAgg.get(productId) ?? 0) + q);
       }
       const items: { product_id: number; qty: number }[] = [];
       for (const [productId, totalQ] of Array.from(qtyAgg.entries())) {
@@ -2394,14 +2620,29 @@ export function useOrderCreate({
       }
 
       if (isEditMode && editOrderId != null) {
+        const ptEntries = (createCtxQ.data?.settings_profile?.references?.price_type_entries ??
+          []) as PolkiPriceTypeEntryRef[];
+        const mappedPm = paymentMethodIdForPriceType(
+          priceType,
+          ptEntries,
+          paymentMethodSelectOptions,
+          ctxProfile?.references?.payment_method_entries ?? []
+        );
+        const pmOut = (mappedPm || paymentMethodRef).trim().slice(0, 64);
         const linesBody: Record<string, unknown> = {
-          warehouse_id: wid,
           price_type: priceType.trim() || "retail",
           apply_bonus: applyBonus,
+          apply_discount: applyDiscount,
           items
         };
-        if (validatedOrderType === "order" && showOrderPaymentMethodSelector) {
-          linesBody.payment_method_ref = paymentMethodRef.trim().slice(0, 64);
+        if (bonusConfirm?.bonus_gift_lines?.length) {
+          linesBody.bonus_gift_lines = bonusConfirm.bonus_gift_lines;
+        }
+        if (bonusConfirm?.bonus_strategy_selections?.length) {
+          linesBody.bonus_strategy_selections = bonusConfirm.bonus_strategy_selections;
+        }
+        if (validatedOrderType === "order" && (showOrderPaymentMethodSelector || Boolean(pmOut))) {
+          if (pmOut) linesBody.payment_method_ref = pmOut;
         }
         await api.patch(`/api/${tenantSlug}/orders/${editOrderId}`, linesBody);
 
@@ -2415,6 +2656,23 @@ export function useOrderCreate({
           if (Number.isFinite(eid) && eid > 0) metaBody.expeditor_user_id = eid;
         }
         await api.patch(`/api/${tenantSlug}/orders/${editOrderId}/meta`, metaBody);
+
+        const origCons = Boolean(editOrderQ.data?.is_consignment);
+        const origDue = (editOrderQ.data?.consignment_due_date ?? "").trim().slice(0, 10);
+        const nextDue = orderIsConsignment ? consignmentDueDate.trim().slice(0, 10) : "";
+        if (orderIsConsignment !== origCons || origDue !== nextDue) {
+          const consRes = await api.post<{
+            updated?: number[];
+            failed?: { id: number; error: string }[];
+          }>(`/api/${tenantSlug}/orders/bulk/consignment`, {
+            order_ids: [editOrderId],
+            is_consignment: orderIsConsignment,
+            consignment_due_date: orderIsConsignment ? consignmentDueDate.trim() || null : null
+          });
+          if ((consRes.data.failed ?? []).length > 0) {
+            throw new Error("consignment_patch");
+          }
+        }
         return;
       }
 
@@ -2425,6 +2683,7 @@ export function useOrderCreate({
         price_type: priceType.trim() || "retail",
         order_type: validatedOrderType,
         apply_bonus: applyBonus,
+        apply_discount: applyDiscount,
         comment: commentOut,
         request_type_ref: requestTypeRef.trim() || null,
         items
@@ -2514,6 +2773,9 @@ export function useOrderCreate({
       setConsignmentDueOpen(false);
       setPaymentMethodRef("");
       clearOldPrices();
+      setBonusConfirmOpen(false);
+      setBonusPreview(null);
+      setBonusPreviewError(null);
       onCreated();
     },
     onError: (e: Error) => {
@@ -2595,52 +2857,56 @@ export function useOrderCreate({
         }
       }
       if (e.message === "warehouse") {
-        fail("Omborni tanlash shart.", "warehouse");
+        fail("Выберите склад.", "warehouse");
         return;
       }
       if (e.message === "agent") {
-        fail("Savdo zakazi uchun agentni tanlang.", "agent");
+        fail("Для торгового заказа выберите агента.", "agent");
         return;
       }
       if (e.message === "payment_method") {
-        fail("To‘lov usulini tanlang.", "payment");
+        fail("Выберите способ оплаты.", "payment");
         return;
       }
       if (e.message === "payment_method_empty") {
-        fail("To‘lov usullari ro‘yxati bo‘sh. Agent/dastavchi yoki sozlamalarni tekshiring.", "payment");
+        fail("Список способов оплаты пуст. Проверьте агента/экспедитора или настройки.", "payment");
+        return;
+      }
+      if (e.message === "consignment_patch") {
+        fail("Не удалось сохранить признак консигнации. Проверьте статус.");
         return;
       }
       if (e.message === "client") {
-        fail("Klientni tanlang.", "client");
+        fail("Выберите клиента.", "client");
         return;
       }
       if (e.message === "polki_order") {
-        fail("«Zakaz bo‘yicha» rejimida kamida bitta zakazni tanlang.", "polki-orders");
+        fail("В режиме «По заказу» выберите хотя бы один заказ.", "polki-orders");
         return;
       }
       if (e.message === "polki_missing_order") {
-        fail("Qator uchun zakaz identifikatori yo‘q — qayta yuklang.", "polki-lines");
+        fail("Для строки не указан заказ — обновите страницу.", "polki-lines");
         return;
       }
       if (e.message === "polki_qty_over") {
-        fail("Qaytarish miqdori sotilgan miqdordan oshmasin.", "polki-lines");
+        fail("Количество возврата не должно превышать проданное.", "polki-lines");
         return;
       }
       if (e.message === "polki_over_max") {
-        fail("Qaytarish miqdori zakaz qoldig‘idan oshmasin.", "polki-lines");
+        fail("Количество возврата не должно превышать остаток по заказу.", "polki-lines");
         return;
       }
       if (e.message === "nolines") {
-        fail("Kamida bitta to‘liq qator (mahsulot + miqdor) kerak.", "catalog");
+        fail("Нужна хотя бы одна заполненная строка (товар + количество).", "catalog");
         return;
       }
       if (e.message === "qty") {
-        fail("Barcha qatorlarda miqdor musbat bo‘lsin.", "catalog");
+        fail("Во всех строках количество должно быть положительным.", "catalog");
         return;
       }
       if (e.message === "qty_over_stock") {
         fail(
-          "Miqdor qoldiqdan oshmasin — har bir mahsulot uchun «Qoldiq» ustunidagi miqdordan ko‘p bo‘lmasin.",
+          "Количество не должно превышать остаток — для каждого товара не больше значения в столбце «Остаток».",
           "catalog"
         );
         return;
@@ -2661,7 +2927,7 @@ export function useOrderCreate({
         const msg = d?.message?.trim();
         fail(
           msg ||
-            "Bazada kerakli ustunlar yo‘q (migratsiya qo‘llanmagan). Backend papkasida: npm run db:deploy"
+            "В базе нет нужных столбцов (миграция не применена). В папке backend выполните: npm run db:deploy"
         );
         return;
       }
@@ -2671,53 +2937,60 @@ export function useOrderCreate({
           const hint = firstValidationUserHint(flat);
           fail(
             hint
-              ? withApiSupportLine(`Server tekshiruvi: ${hint}`, e)
-              : withApiSupportLine(getUserFacingError(e, "Server tekshiruvi xatosi."), e)
+              ? withApiSupportLine(`Проверка на сервере: ${hint}`, e)
+              : withApiSupportLine(getUserFacingError(e, "Ошибка проверки на сервере."), e)
           );
         } else {
           fail(
-            `Server tekshiruvi: ${typeof d.details === "string" ? d.details : JSON.stringify(d.details)}`
+            `Проверка на сервере: ${typeof d.details === "string" ? d.details : JSON.stringify(d.details)}`
           );
         }
         return;
       }
       if (code === "BadQty") {
-        fail("Miqdor noto‘g‘ri (musbat son bo‘lsin).", "catalog");
+        fail("Неверное количество (должно быть положительным числом).", "catalog");
         return;
       }
       if (code === "BadWarehouse") {
-        fail("Tanlangan ombor topilmadi.", "warehouse");
+        fail("Выбранный склад не найден.", "warehouse");
         return;
       }
       if (code === "BadAgent") {
-        fail("Tanlangan agent topilmadi yoki faol emas.", "agent");
+        fail("Выбранный агент не найден или неактивен.", "agent");
         return;
       }
       if (code === "OrderRequiresAgent") {
-        fail("Savdo zakazi uchun agent majburiy.", "agent");
+        fail("Для торгового заказа агент обязателен.", "agent");
         return;
       }
       if (code === "AgentNotOnSlot") {
         fail(
           d?.message?.trim() ||
-            "Agent ish joyiga biriktirilmagan — yangi zakaz taqiqlangan (faqat qarz yig‘ish).",
+            "Агент не привязан к рабочему месту — новые заказы запрещены (только сбор долгов).",
           "agent"
         );
         return;
       }
+      if (code === "ExpeditorNotOnSlot") {
+        fail(
+          d?.message?.trim() ||
+            "Экспедитор не привязан к рабочему месту — назначение на заказ запрещено."
+        );
+        return;
+      }
       if (code === "OrderRequiresWarehouse") {
-        fail("Savdo zakazi uchun ombor majburiy.", "warehouse");
+        fail("Для торгового заказа склад обязателен.", "warehouse");
         return;
       }
       if (code === "OrderRequiresPaymentMethod") {
-        fail("To‘lov usuli majburiy.", "payment");
+        fail("Способ оплаты обязателен.", "payment");
         return;
       }
       if (code === "NoRetailPrice" || code === "NoPrice") {
         const id = ax.response?.data?.product_id as number | undefined;
         const pt = (ax.response?.data as { price_type?: string } | undefined)?.price_type ?? "retail";
         fail(
-          id != null ? `Mahsulot #${id} uchun «${pt}» narxi yo‘q.` : `Narx yo‘q («${pt}»).`,
+          id != null ? `Для товара #${id} нет цены «${pt}».` : `Нет цены («${pt}»).`,
           "price"
         );
         return;
@@ -2730,22 +3003,22 @@ export function useOrderCreate({
         };
         fail(
           stockErr?.product_id != null
-            ? `Mahsulot #${stockErr.product_id}: omborda yetarli emas (mavjud ${stockErr.available ?? "—"}, kerak ${stockErr.requested ?? "—"}).`
-            : "Omborda yetarli mahsulot yo‘q.",
+            ? `Товар #${stockErr.product_id}: недостаточно на складе (доступно ${stockErr.available ?? "—"}, требуется ${stockErr.requested ?? "—"}).`
+            : "Недостаточно товара на складе.",
           "catalog"
         );
         return;
       }
       if (code === "BadExpeditor") {
-        fail("Tanlangan ekspeditor topilmadi yoki faol emas.");
+        fail("Выбранный экспедитор не найден или неактивен.");
         return;
       }
       if (code === "BadClient") {
-        fail("Klient topilmadi yoki faol emas.", "client");
+        fail("Клиент не найден или неактивен.", "client");
         return;
       }
       if (code === "BadProduct") {
-        fail("Mahsulot topilmadi yoki faol emas.", "catalog");
+        fail("Товар не найден или неактивен.", "catalog");
         return;
       }
       if (code === "ReturnNotInterchangeable") {
@@ -2753,28 +3026,28 @@ export function useOrderCreate({
         const msg = ax.response?.data?.message;
         const text =
           id != null
-            ? `Mahsulot #${id}: faol interchangeable guruhda emas yoki tanlangan narx turi (${priceType.trim() || "retail"}) mos emas.`
+            ? `Товар #${id}: не входит в активную группу взаимозаменяемости или не подходит выбранный тип цены (${priceType.trim() || "retail"}).`
             : typeof msg === "string" && msg.trim()
               ? msg
-              : "Qaytarish uchun mahsulot interchangeable guruhda emas yoki narx turi mos emas.";
+              : "Товар для возврата не входит в группу взаимозаменяемости или не подходит тип цены.";
         setLocalError(withApiSupportLine(text, e));
         return;
       }
       if (code === "BadOrder") {
-        setLocalError("Zakaz topilmadi yoki qaytarish uchun mos emas.");
+        setLocalError("Заказ не найден или не подходит для возврата.");
         return;
       }
       if (code === "BadOrderClient") {
-        setLocalError("Zakaz bu mijozga tegishli emas yoki topilmadi.");
+        setLocalError("Заказ не принадлежит этому клиенту или не найден.");
         return;
       }
       if (code === "QtyExceedsOrdered") {
-        setLocalError("Qaytarish miqdori sotilgan / buyurtma miqdoridan oshmasin.");
+        setLocalError("Количество возврата не должно превышать проданное / заказанное количество.");
         return;
       }
       if (code === "BonusCashExceeds") {
         setLocalError(
-          "Bonus o‘rniga qaytariladigan naqd summa qolgan bonus qiymatidan oshmasin (dona + summa birgalikda hisoblanadi)."
+          "Сумма денежной компенсации вместо бонуса не должна превышать оставшуюся стоимость бонуса (шт. и сумма считаются вместе)."
         );
         return;
       }
@@ -2783,16 +3056,16 @@ export function useOrderCreate({
         return;
       }
       if (code === "NothingToReturn") {
-        setLocalError("Qaytarish uchun mos pozitsiya yo‘q yoki limit tugagan.");
+        setLocalError("Нет позиций, доступных для возврата, или лимит исчерпан.");
         return;
       }
       if (code === "DuplicateProduct") {
-        setLocalError("Bir xil mahsulotni bir nechta qatorga qo‘shib bo‘lmaydi.");
+        setLocalError("Нельзя добавить один и тот же товар в несколько строк.");
         return;
       }
       if (code === "CreditLimitExceeded" && d) {
         setLocalError(
-          `Kredit limiti yetmaydi. Limit: ${d.credit_limit ?? "—"}, ochiq zakazlar yig‘indisi: ${d.outstanding ?? "—"}, bu zakaz: ${d.order_total ?? "—"}.`
+          `Недостаточно кредитного лимита. Лимит: ${d.credit_limit ?? "—"}, сумма открытых заказов: ${d.outstanding ?? "—"}, этот заказ: ${d.order_total ?? "—"}.`
         );
         return;
       }
@@ -2815,36 +3088,36 @@ export function useOrderCreate({
         return;
       }
       if (code === "ConsignmentRequiresAgent") {
-        setLocalError("Konsignatsiya zakazi uchun agentni tanlang.");
+        setLocalError("Для заказа на консигнацию выберите агента.");
         return;
       }
       if (code === "ConsignmentAgentDisabled") {
-        setLocalError("Bu agent uchun konsignatsiya yoqilmagan (Пользователи → Консигнация).");
+        setLocalError("Для этого агента консигнация не включена (Пользователи → Консигнация).");
         return;
       }
       if (code === "ConsignmentLimitExceeded" && d) {
         setLocalError(
-          `Konsignatsiya limiti yetmaydi. Limit: ${(d as { consignment_limit?: string }).consignment_limit ?? "—"}, ochiq qarz: ${(d as { outstanding?: string }).outstanding ?? "—"}, bu zakaz: ${(d as { order_total?: string }).order_total ?? "—"}.`
+          `Недостаточно лимита консигнации. Лимит: ${(d as { consignment_limit?: string }).consignment_limit ?? "—"}, открытый долг: ${(d as { outstanding?: string }).outstanding ?? "—"}, этот заказ: ${(d as { order_total?: string }).order_total ?? "—"}.`
         );
         return;
       }
       if (code === "BadConsignmentDueDate") {
-        setLocalError("Konsignatsiya muddatini tekshiring (YYYY-MM-DD yoki to‘liq sana).");
+        setLocalError("Проверьте срок консигнации (YYYY-MM-DD или полная дата).");
         return;
       }
       if (code === "OrderNotEditable" || code === "ORDER_NOT_EDITABLE") {
-        fail("Zakaz endi tahrirlanmaydi (status «Новый» emas).");
+        fail("Заказ больше нельзя редактировать (статус не «Новый»).");
         return;
       }
       if (code === "OrderHeaderLocked" || code === "ORDER_HEADER_LOCKED") {
-        fail("Klient va agentni o‘zgartirib bo‘lmaydi. Boshqa maydonlarni saqlang.");
+        fail("Клиента и агента изменить нельзя. Сохраните остальные поля.");
         return;
       }
       if (ax.response?.status === 403) {
-        fail("Zakaz yaratish huquqi yo‘q (faqat admin / operator).");
+        fail("Нет прав на создание заказа (только администратор / оператор).");
         return;
       }
-      fail(getUserFacingError(e, "Xato"));
+      fail(getUserFacingError(e, "Ошибка"));
     }
   });
 
@@ -2897,7 +3170,10 @@ export function useOrderCreate({
             stockReadyForLines &&
             !hasQtyOverStock &&
             !hasMissingPriceForSelected &&
-            (!requiresAgentAndPayment || Boolean(agentId.trim())) &&
+            (!requiresAgentAndPayment ||
+              Boolean(agentId.trim()) ||
+              (isEditMode &&
+                Boolean(editOrderQ.data && resolveLockedOrderAgentId(editOrderQ.data, agentUsers)))) &&
             (!requiresPaymentMethodForSubmit || Boolean(paymentMethodRef.trim()))
         );
 
@@ -2961,13 +3237,14 @@ export function useOrderCreate({
   ]);
 
   useEffect(() => {
+    if (isEditMode) return;
     if (!hasClient) {
       setWarehouseId("");
       setAgentId("");
       setExpeditorUserId("");
       setPaymentMethodRef("");
     }
-  }, [hasClient]);
+  }, [hasClient, isEditMode]);
 
   useEffect(() => {
     if (isPolkiSheet || isExchangeFlow) return;
@@ -3000,6 +3277,129 @@ export function useOrderCreate({
     paymentMethodRef
   ]);
 
+  const needsWebBonusConfirm = shouldConfirmBonusOnWebNewEdit({
+    isEditMode,
+    hasEditOrderId: editOrderId != null,
+    applyBonus,
+    isPolkiSheet,
+    isExchangeFlow
+  });
+
+  const requestSubmit = useCallback(() => {
+    if (!needsWebBonusConfirm) {
+      mutation.mutate(undefined);
+      return;
+    }
+
+    const cid = Number.parseInt(clientId, 10);
+    const warehouseRaw =
+      warehouseId.trim() ||
+      (editSourceWarehouseId != null ? String(editSourceWarehouseId) : "");
+    const wid = Number.parseInt(warehouseRaw, 10);
+    const agentParsed = agentId.trim() ? Number.parseInt(agentId, 10) : NaN;
+    const agent_id = Number.isFinite(agentParsed) && agentParsed > 0 ? agentParsed : null;
+
+    if (!Number.isFinite(cid) || cid < 1) {
+      reportLocalError("Сначала выберите клиента", "client");
+      return;
+    }
+    if (!warehouseRaw.trim() || !Number.isFinite(wid) || wid < 1) {
+      reportLocalError("Сначала выберите склад", "warehouse");
+      return;
+    }
+    if (agent_id == null) {
+      reportLocalError("Агент обязателен", "agent");
+      return;
+    }
+
+    const stockRows = stockQ.data ?? [];
+    const stockMap = new Map(stockRows.map((s) => [s.product_id, s]));
+    const sameWh =
+      editSourceWarehouseId != null && Number.isFinite(wid) && wid === editSourceWarehouseId;
+    const qtyAgg = new Map<number, number>();
+    for (const [idStr, raw] of Object.entries(qtyByProductId)) {
+      if (!raw || !raw.trim()) continue;
+      const productId = Number.parseInt(idStr, 10);
+      if (!Number.isFinite(productId) || productId < 1) continue;
+      const q = Number.parseFloat(raw.replace(",", "."));
+      if (!Number.isFinite(q) || q < 0) {
+        reportLocalError("Неверное количество", "catalog");
+        return;
+      }
+      if (q === 0) continue;
+      qtyAgg.set(productId, (qtyAgg.get(productId) ?? 0) + q);
+    }
+    const items: { product_id: number; qty: number }[] = [];
+    for (const [productId, totalQ] of Array.from(qtyAgg.entries())) {
+      if (totalQ <= 0) continue;
+      let avail = availableOrderQty(stockMap.get(productId));
+      if (sameWh) avail += editReservedQtyByProduct[productId] ?? 0;
+      if (totalQ > avail + 1e-9) {
+        reportLocalError("Недостаточно остатка на складе", "catalog");
+        return;
+      }
+      items.push({ product_id: productId, qty: totalQ });
+    }
+    if (items.length === 0) {
+      reportLocalError("Укажите количество хотя бы для одного товара", "catalog");
+      return;
+    }
+
+    setBonusConfirmOpen(true);
+    setBonusPreview(null);
+    setBonusPreviewError(null);
+    setBonusPreviewLoading(true);
+    void (async () => {
+      try {
+        const { data } = await api.post<OrderBonusPreviewResponse>(
+          `/api/${tenantSlug}/orders/bonus-preview`,
+          {
+            client_id: cid,
+            warehouse_id: wid,
+            agent_id,
+            price_type: priceType.trim() || "retail",
+            items,
+            is_consignment: orderIsConsignment,
+            exclude_order_id: editOrderId
+          }
+        );
+        setBonusPreview(data);
+      } catch (e) {
+        setBonusPreviewError(
+          getUserFacingError(e, "Не удалось получить предпросмотр бонуса. Повторите попытку.")
+        );
+      } finally {
+        setBonusPreviewLoading(false);
+      }
+    })();
+  }, [
+    needsWebBonusConfirm,
+    mutation,
+    clientId,
+    warehouseId,
+    editSourceWarehouseId,
+    agentId,
+    catalogProducts,
+    qtyByProductId,
+    stockQ.data,
+    editReservedQtyByProduct,
+    tenantSlug,
+    priceType,
+    orderIsConsignment,
+    editOrderId,
+    reportLocalError
+  ]);
+
+  const confirmBonusAndSave = useCallback(
+    (payload: {
+      bonus_gift_lines: { bonus_rule_id: number; product_id: number; qty: number }[];
+      bonus_strategy_selections: { strategy_id: number; rule_ids: number[] }[];
+    }) => {
+      mutation.mutate(payload);
+    },
+    [mutation]
+  );
+
   return {
     tenantSlug,
     onCreated,
@@ -3018,6 +3418,7 @@ export function useOrderCreate({
     agentUserIdSet,
     agentUsers,
     applyBonus,
+    applyDiscount,
     blockByProductId,
     canPickPricingAndExpeditor,
     canPickProducts,
@@ -3079,8 +3480,18 @@ export function useOrderCreate({
     lineProblemCountByCategoryId,
     loadingLists,
     localError,
+    lockedAgentLabel,
+    lockedWarehouseLabel,
     missingPriceProductNames,
     mutation,
+    requestSubmit,
+    needsWebBonusConfirm,
+    bonusConfirmOpen,
+    setBonusConfirmOpen,
+    bonusPreview,
+    bonusPreviewLoading,
+    bonusPreviewError,
+    confirmBonusAndSave,
     normalizedType,
     orderClientPickerScopeIds,
     orderComment,
@@ -3180,6 +3591,7 @@ export function useOrderCreate({
     setActiveCatalogCategoryId,
     setAgentId,
     setApplyBonus,
+    setApplyDiscount,
     setBlockByProductId,
     setClientId,
     setConsignmentDueDate,
@@ -3211,7 +3623,7 @@ export function useOrderCreate({
     setPolkiSkidkaType,
     setPolkiTotalQty,
     setPolkiTradeDirection,
-    setPriceType,
+    setPriceType: applyPriceType,
     clearOldPrices,
     setProductSearch,
     setQtyByProductId,

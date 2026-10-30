@@ -58,6 +58,8 @@ export type EntityHistoryDescriptor = {
   activityEntityTypes: string[];
   /** Maxsus per-entity loglar (generic TenantAuditEvent doim qo'shiladi). */
   sources: EntitySource[];
+  /** Bitta entity bir nechta bo'limga tegishli bo'lsa (bonus qoidasi: «Бонусы» yoki «Скидки»). */
+  extraPermissions: string[];
 };
 
 const desc = (
@@ -67,6 +69,7 @@ const desc = (
     audit: string[];
     activity?: string[];
     sources?: EntitySource[];
+    alsoSections?: string[];
   }
 ): EntityHistoryDescriptor => ({
   module,
@@ -75,7 +78,8 @@ const desc = (
   permissionView: `${module}.${section}.view`,
   auditEntityTypes: opts.audit,
   activityEntityTypes: opts.activity ?? opts.audit,
-  sources: opts.sources ?? []
+  sources: opts.sources ?? [],
+  extraPermissions: (opts.alsoSections ?? []).flatMap((s) => [`${module}.${s}.history`, `${module}.${s}.view`])
 });
 
 /** entityType (lowercase) → descriptor. */
@@ -94,13 +98,13 @@ export const ENTITY_HISTORY: Record<string, EntityHistoryDescriptor> = {
   payment: desc("cash", "oplaty_klientov", { audit: ["finance"], activity: ["payment", "finance"] }),
   finance: desc("cash", "otchety", { audit: ["finance"] }),
   // Qaytarishlar: per-return aniq audit (`sales_return` + return id).
-  sales_return: desc("orders", "vozvrat", { audit: ["sales_return"], activity: ["sales_return", "return"] }),
-  return: desc("orders", "vozvrat", { audit: ["sales_return"], activity: ["sales_return", "return"] }),
+  sales_return: desc("invoices", "vozvratnye", { audit: ["sales_return"], activity: ["sales_return", "return"] }),
+  return: desc("invoices", "vozvratnye", { audit: ["sales_return"], activity: ["sales_return", "return"] }),
   work_slot: desc("work_slots", "raboche_mesto", { audit: ["work_slot"] }),
   geo_boundary: desc("settings", "geo_granitsy", { audit: ["geo_boundary"] }),
   territory: desc("settings", "territoriya", { audit: ["territory"] }),
   expense: desc("cash", "rashody_klienta", { audit: ["finance"], activity: ["expense", "finance"] }),
-  report_builder: desc("reports", "otchety", { audit: ["report_builder"] }),
+  report_builder: desc("reports", "konstruktor", { audit: ["report_builder"] }),
   automation_rule: desc("orders", "avtomatizatsiya", { audit: ["automation_rule"] }),
   warehouse_block: desc("warehouse", "sklady", { audit: ["warehouse_block"] }),
   stock_take: desc("warehouse", "inventarizatsiya", { audit: ["stock_take"] }),
@@ -130,8 +134,8 @@ export const ENTITY_HISTORY: Record<string, EntityHistoryDescriptor> = {
     sources: ["accessLog"]
   }),
   currency_rate: desc("settings", "valyuta", { audit: ["currency_rate"] }),
-  bonus_rule: desc("settings", "bonusy_i_skidki", { audit: ["bonus_rule"] }),
-  bonus_strategy: desc("settings", "bonusy_i_skidki", { audit: ["bonus_strategy"] })
+  bonus_rule: desc("settings", "bonusy", { audit: ["bonus_rule"], alsoSections: ["skidki"] }),
+  bonus_strategy: desc("settings", "bonus_strategiya", { audit: ["bonus_strategy"] })
 };
 
 export function resolveEntityHistory(entityType: string): EntityHistoryDescriptor | null {

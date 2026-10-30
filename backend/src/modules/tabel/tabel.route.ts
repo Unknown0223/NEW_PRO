@@ -3,8 +3,11 @@ import { z } from "zod";
 import { sendApiError, zodValidationExtras } from "../../lib/api-error";
 import { ensureTenantContext } from "../../lib/tenant-context";
 import { ADMIN_AND_OPERATOR_LIKE_ROLES } from "../../lib/tenant-user-roles";
-import { jwtAccessVerify, requireRoles } from "../auth/auth.prehandlers";
+import { getAccessUser, jwtAccessVerify, requireRoles } from "../auth/auth.prehandlers";
 import { readTabelAudit } from "./tabel-audit";
+import { getWorkdayAccessStatus } from "./workday-access";
+import { registerTabelHubRoutes } from "./tabel.route.hub";
+import { registerTabelMobileRoutes } from "./tabel.route.mobile";
 import { prisma } from "../../config/database";
 import {
   WD_ROLES,
@@ -12,6 +15,7 @@ import {
   getWorkdaysState,
   removeException,
   removeOverride,
+  saveEnforceRoles,
   saveSchedules,
   upsertOverride,
   type WdRole
@@ -41,6 +45,10 @@ const overrideBody = z.object({
   schedule: scheduleSchema,
   comment: z.string().max(500).optional().default("")
 });
+const enforceAccessBody = z.union([
+  z.object({ roles: z.array(roleEnum).max(WD_ROLES.length) }),
+  z.object({ enabled: z.boolean() })
+]);
 
 function actorLabel(request: FastifyRequest): string {
   const u = request.user as { role?: string; login?: string } | undefined;
@@ -51,6 +59,8 @@ function actorLabel(request: FastifyRequest): string {
 }
 
 export async function registerTabelRoutes(app: FastifyInstance) {
+  await registerTabelHubRoutes(app);
+  await registerTabelMobileRoutes(app);
   // ─────────── Рабочие дни ───────────
   app.get(
     "/api/:slug/workdays",
@@ -58,6 +68,27 @@ export async function registerTabelRoutes(app: FastifyInstance) {
     async (request, reply) => {
       if (!ensureTenantContext(request, reply)) return;
       const data = await getWorkdaysState(request.tenant!.id);
+      return reply.send({ data });
+    }
+  );
+
+  app.get("/api/:slug/me/workday-status", { preHandler: [jwtAccessVerify] }, async (request, reply) => {
+    if (!ensureTenantContext(request, reply)) return;
+    const u = getAccessUser(request);
+    const data = await getWorkdayAccessStatus(request.tenant!.id, u.role, u.sub);
+    return reply.send({ data });
+  });
+
+  app.put(
+    "/api/:slug/workdays/enforce-access",
+    { preHandler: [jwtAccessVerify, requireRoles(...writeRoles)] },
+    async (request, reply) => {
+      if (!ensureTenantContext(request, reply)) return;
+      const parsed = enforceAccessBody.safeParse(request.body);
+      if (!parsed.success)
+        return sendApiError(reply, request, 400, "ValidationError", undefined, zodValidationExtras(parsed.error));
+      const roles = "roles" in parsed.data ? parsed.data.roles : parsed.data.enabled ? [...WD_ROLES] : [];
+      const data = await saveEnforceRoles(request.tenant!.id, actorLabel(request), roles);
       return reply.send({ data });
     }
   );

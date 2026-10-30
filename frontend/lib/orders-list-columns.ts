@@ -98,7 +98,7 @@ const LABELS: Record<(typeof ORDER_LIST_COLUMN_IDS)[number], string> = {
   sales_channel: "Канал продаж",
   agent_trade_direction: "Направление торговли",
   day: "День",
-  request_type_ref: "Примечание",
+  request_type_ref: "Тип накладной",
   created_by: "Кто создал",
   comment: "Комментарий",
   created_by_role: "Роль(кто создал)"
@@ -215,10 +215,9 @@ export function orderListDisplayTotalSum(o: {
 }
 
 function requestSourceLabel(o: OrderListRow): string {
-  if (o.request_type_ref?.trim()) return o.request_type_ref.trim();
   if (o.creation_channel === "mobile") return "Телефон (агент)";
   if (o.creation_channel === "web") return "Веб";
-  return "";
+  return o.request_type_ref?.trim() ?? "";
 }
 
 export function orderListExportCell(o: OrderListRow, colId: string): string {

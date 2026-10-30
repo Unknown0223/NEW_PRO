@@ -12,13 +12,6 @@ import {
 
 type Tx = Prisma.TransactionClient;
 
-function requireMap(maps: MigrationIdMaps, kind: keyof MigrationIdMaps, oldId: unknown, label: string): number | null {
-  if (oldId == null) return null;
-  const mapped = remapId(maps[kind], oldId);
-  if (mapped == null) throw new Error(`MAP_MISSING:${label}:${oldId}`);
-  return mapped;
-}
-
 export async function importFieldActivityTables(
   tx: Tx,
   zip: JSZip,
@@ -37,8 +30,8 @@ export async function importFieldActivityTables(
 
   const refusalData: Prisma.ClientRefusalUncheckedCreateInput[] = [];
   for (const row of refusals) {
-    const clientId = requireMap(maps, "client", row.client_id, "refusal.client_id");
-    const agentId = requireMap(maps, "user", row.agent_id, "refusal.agent_id");
+    const clientId = remapId(maps.client, row.client_id);
+    const agentId = remapId(maps.user, row.agent_id);
     if (clientId == null || agentId == null) continue;
     const data = hydrateDates(stripIdTenant(row), ["created_at"]);
     refusalData.push({
@@ -55,7 +48,7 @@ export async function importFieldActivityTables(
 
   const visitData: Prisma.AgentVisitUncheckedCreateInput[] = [];
   for (const row of visits) {
-    const agentId = requireMap(maps, "user", row.agent_id, "visit.agent_id");
+    const agentId = remapId(maps.user, row.agent_id);
     if (agentId == null) continue;
     const data = hydrateDecimals(
       hydrateDates(stripIdTenant(row), ["checked_in_at", "checked_out_at"]),
@@ -72,7 +65,7 @@ export async function importFieldActivityTables(
 
   const pingData: Prisma.AgentLocationPingUncheckedCreateInput[] = [];
   for (const row of pings) {
-    const agentId = requireMap(maps, "user", row.agent_id, "ping.agent_id");
+    const agentId = remapId(maps.user, row.agent_id);
     if (agentId == null) continue;
     const data = hydrateDecimals(hydrateDates(stripIdTenant(row), ["recorded_at"]), [
       "latitude",
@@ -114,8 +107,8 @@ export async function importFieldActivityTables(
 
   const allocationData: Prisma.PaymentAllocationUncheckedCreateInput[] = [];
   for (const row of allocations) {
-    const paymentId = requireMap(maps, "payment", row.payment_id, "allocation.payment_id");
-    const orderId = requireMap(maps, "order", row.order_id, "allocation.order_id");
+    const paymentId = remapId(maps.payment, row.payment_id);
+    const orderId = remapId(maps.order, row.order_id);
     if (paymentId == null || orderId == null) continue;
     const data = hydrateDecimals(hydrateDates(stripIdTenant(row), ["created_at"]), ["amount"]);
     allocationData.push({

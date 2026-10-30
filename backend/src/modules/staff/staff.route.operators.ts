@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { sendApiError, zodValidationExtras } from "../../lib/api-error";
+import { registerOperatorFilterVisibleRoute } from "./staff.route.operators-filter-visible";
 import { ensureTenantContext } from "../../lib/tenant-context";
 import { actorUserIdOrNull } from "../../lib/request-actor";
 import { DIRECTORY_READ_ROLES, jwtAccessVerify, requireRoles } from "../auth/auth.prehandlers";
@@ -138,7 +139,7 @@ export async function registerStaffOperatorRoutes(app: FastifyInstance) {
       try {
         const row = await createWebStaffPositionPreset(
           request.tenant!.id,
-          parsed.data.label,
+          parsed.data,
           actorUserIdOrNull(request)
         );
         return reply.status(201).send({ data: row });
@@ -146,6 +147,8 @@ export async function registerStaffOperatorRoutes(app: FastifyInstance) {
         const msg = e instanceof Error ? e.message : "";
         if (msg === "NOT_FOUND") return sendApiError(reply, request, 404, "NotFound");
         if (msg === "BAD_LABEL") return sendApiError(reply, request, 400, "BadLabel");
+        if (msg === "BAD_ROLE") return sendApiError(reply, request, 400, "BadRole");
+        if (msg === "DUPLICATE_LABEL") return sendApiError(reply, request, 409, "DuplicateLabel");
         if (msg === "PRESET_LIMIT") return sendApiError(reply, request, 400, "PresetLimit");
         throw e;
       }
@@ -175,10 +178,14 @@ export async function registerStaffOperatorRoutes(app: FastifyInstance) {
         if (msg === "NOT_FOUND") return sendApiError(reply, request, 404, "NotFound");
         if (msg === "BAD_PRESET_ID") return sendApiError(reply, request, 400, "BadPresetId");
         if (msg === "BAD_LABEL") return sendApiError(reply, request, 400, "BadLabel");
+        if (msg === "BAD_ROLE") return sendApiError(reply, request, 400, "BadRole");
+        if (msg === "DUPLICATE_LABEL") return sendApiError(reply, request, 409, "DuplicateLabel");
         throw e;
       }
     }
   );
+
+  registerOperatorFilterVisibleRoute(app);
 
   app.post(
     "/api/:slug/operators/bulk/sessions/revoke",

@@ -112,7 +112,6 @@ async function refreshAccessTokenSingleFlight(): Promise<string | null> {
     const store = useAuthStore.getState();
     const disk = readPersistedAuth();
     const refreshToken = store.refreshToken ?? disk.refreshToken;
-    if (!refreshToken) return null;
     try {
       const { data } = await axios.post<{ accessToken: string; refreshToken: string }>(
         authRefreshAbsoluteUrl(),
@@ -148,7 +147,12 @@ async function refreshAccessTokenSingleFlight(): Promise<string | null> {
   return refreshInFlight;
 }
 
-function redirectToLoginIfBrowser(reason?: "session_ended" | "app_access_denied" | "user_not_on_slot") {
+/** Sahifa yangilanganda HttpOnly cookie orqali access token tiklash. */
+export async function restoreSessionFromCookie(): Promise<string | null> {
+  return refreshAccessTokenSingleFlight();
+}
+
+function redirectToLoginIfBrowser(reason?: "session_ended" | "app_access_denied" | "user_not_on_slot" | "web_access_denied") {
   if (typeof window === "undefined") return;
   const current = `${window.location.pathname}${window.location.search}`;
   const params = new URLSearchParams({ from: current });
@@ -157,6 +161,15 @@ function redirectToLoginIfBrowser(reason?: "session_ended" | "app_access_denied"
   if (!window.location.pathname.startsWith("/login")) {
     window.location.assign(next);
   }
+}
+
+export const DAY_OFF_PATH = "/day-off";
+
+function redirectToDayOffIfBrowser() {
+  if (typeof window === "undefined") return;
+  const path = window.location.pathname;
+  if (path.startsWith(DAY_OFF_PATH) || path.startsWith("/login")) return;
+  window.location.assign(DAY_OFF_PATH);
 }
 
 /** Backend «boshqa qurilmada kirildi / admin tugatdi» signali. */
@@ -168,10 +181,11 @@ function isSessionRevoked(status: number | undefined, body: ApiErrorResponseBody
 function loginDenyReasonFromBody(
   status: number | undefined,
   body: ApiErrorResponseBody
-): "app_access_denied" | "user_not_on_slot" | null {
+): "app_access_denied" | "user_not_on_slot" | "web_access_denied" | null {
   if (status !== 403) return null;
   if (body?.error === "APP_ACCESS_DENIED") return "app_access_denied";
   if (body?.error === "USER_NOT_ON_SLOT") return "user_not_on_slot";
+  if (body?.error === "WEB_ACCESS_DENIED") return "web_access_denied";
   return null;
 }
 
@@ -210,6 +224,21 @@ api.interceptors.request.use(async (config) => {
 api.interceptors.response.use(
   (res) => res,
   async (error: AxiosError<ApiErrorResponseBody>) => {
+    // responseType: "blob" → error body is a Blob; parse JSON so getUserFacingError sees message
+    const rawData = error.response?.data;
+    if (typeof Blob !== "undefined" && rawData instanceof Blob && error.response) {
+      const ct = String(error.response.headers?.["content-type"] ?? "").toLowerCase();
+      if (ct.includes("json") || ct.includes("text") || !ct) {
+        try {
+          const text = await rawData.text();
+          const parsed = JSON.parse(text) as ApiErrorResponseBody;
+          error.response.data = parsed;
+        } catch {
+          /* leave Blob */
+        }
+      }
+    }
+
     const original = error.config as RetryConfig | undefined;
     const status = error.response?.status;
     const body = error.response?.data ?? {};
@@ -255,6 +284,12 @@ api.interceptors.response.use(
       const store = useAuthStore.getState();
       store.clearSession();
       redirectToLoginIfBrowser(accessDeny);
+      return Promise.reject(error);
+    }
+
+    // «Рабочие дни» bo‘yicha dam olish kuni — sessiya saqlanadi, faqat ma’lumot sahifasi ochiq.
+    if (status === 403 && body.error === "WORKDAY_OFF") {
+      redirectToDayOffIfBrowser();
       return Promise.reject(error);
     }
 

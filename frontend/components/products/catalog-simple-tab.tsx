@@ -125,7 +125,7 @@ export function CatalogSimpleTab({
       await qc.invalidateQueries({ queryKey: ["catalog-simple", apiPath, tenantSlug] });
       await qc.invalidateQueries({ queryKey: ["products", tenantSlug] });
     },
-    onError: (e: unknown) => setMsg(getUserFacingError(e, "Saqlashda xato yoki ruxsat yo‘q."))
+    onError: (e: unknown) => setMsg(getUserFacingError(e, "Ошибка сохранения или нет доступа."))
   });
 
   const deactivateMut = useMutation({
@@ -206,14 +206,14 @@ export function CatalogSimpleTab({
                   </td>
                   <td className="px-3 py-2 text-right">
                     {isAdmin ? (
-                      <TableRowActionGroup className="justify-end" ariaLabel="Yozuv">
+                      <TableRowActionGroup className="justify-end" ariaLabel="Запись">
                         <Button
                           type="button"
                           variant="outline"
                           size="icon-sm"
                           className="text-muted-foreground hover:text-foreground"
-                          title="Tahrirlash"
-                          aria-label="Tahrirlash"
+                          title="Редактировать"
+                          aria-label="Редактировать"
                           onClick={() => openEdit(r)}
                         >
                           <Pencil className="size-3.5" aria-hidden />

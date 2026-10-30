@@ -65,9 +65,19 @@ export const EXTENDED_IMPORT_PHASES_0_2: ExtendedTableSpec[][] = [
       fk: {
         direction_id: "tradeDirection",
         warehouse_id: "warehouse",
-        cash_desk_id: "cashDesk"
+        return_warehouse_id: "warehouse",
+        cash_desk_id: "cashDesk",
+        supervisor_user_id: "user",
+        deleted_by_user_id: "user"
       },
-      dates: ["created_at", "updated_at"]
+      // supervisee — partial remap + second-pass (slot→slot)
+      intArrayFk: {
+        warehouse_ids: "warehouse",
+        cash_desk_ids: "cashDesk",
+        supervisee_agent_slot_ids: "workSlot"
+      },
+      decimals: ["consignment_limit_amount"],
+      dates: ["created_at", "updated_at", "deleted_at"]
     },
     {
       file: "roles",

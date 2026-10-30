@@ -164,11 +164,11 @@ export function BalanceDetailOverallModal({
   const total = cards.reduce((s, c) => s + c.amount, 0);
   const agentCount = Math.max(0, cards.filter((c) => c.id !== "main").length);
   const channels = [
-    { label: "Наличные (Naqd)", value: cards.reduce((s, c) => s + c.cash, 0), cls: "text-green-700" },
-    { label: "Перечисление (Pereches)", value: cards.reduce((s, c) => s + c.transfer, 0), cls: "text-blue-700" },
+    { label: "Наличные", value: cards.reduce((s, c) => s + c.cash, 0), cls: "text-green-700" },
+    { label: "Перечисление", value: cards.reduce((s, c) => s + c.transfer, 0), cls: "text-blue-700" },
     { label: "Терминал", value: cards.reduce((s, c) => s + c.terminal, 0), cls: "text-purple-700" },
     {
-      label: "Эски карздан кирим",
+      label: "Поступление по старому долгу",
       value: cards.reduce((s, c) => s + c.oldDebtIncome, 0),
       cls: "text-gray-700"
     }
@@ -191,7 +191,7 @@ export function BalanceDetailOverallModal({
             <div>
               <div className="mb-1 text-[12px] text-teal-200/70">Итоговый баланс клиента (все агенты)</div>
               <div className={`text-[28px] font-bold tabular-nums ${total < 0 ? "text-red-400" : "text-white"}`}>
-                {fmtMoney(total)} So&apos;m
+                {fmtMoney(total)} сум
               </div>
             </div>
             <div className="text-right text-[12px] text-teal-200/70">

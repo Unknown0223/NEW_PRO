@@ -17,9 +17,13 @@ function findHorizontalScrollParent(el: Element | null): HTMLElement | null {
 
 /**
  * Shift + vertikal g‘ildirak → eng yaqin gorizontal scroll konteynerini suradi.
+ * Bloklovchi (passive: false) wheel listener faqat Shift bosilgan paytda ulanadi —
+ * aks holda brauzer har bir scroll/touchpad jestida JS ni kutadi (scroll qotadi, swipe-back ishlamaydi).
  */
 export function ShiftWheelHorizontalScroll() {
   useEffect(() => {
+    let attached = false;
+
     const onWheel = (e: WheelEvent) => {
       if (!e.shiftKey) return;
       const delta = Math.abs(e.deltaY) >= Math.abs(e.deltaX) ? e.deltaY : e.deltaX;
@@ -30,8 +34,34 @@ export function ShiftWheelHorizontalScroll() {
       e.preventDefault();
       scroller.scrollLeft += delta;
     };
-    document.addEventListener("wheel", onWheel, { passive: false, capture: true });
-    return () => document.removeEventListener("wheel", onWheel, { capture: true });
+
+    const attach = () => {
+      if (attached) return;
+      attached = true;
+      document.addEventListener("wheel", onWheel, { passive: false, capture: true });
+    };
+    const detach = () => {
+      if (!attached) return;
+      attached = false;
+      document.removeEventListener("wheel", onWheel, { capture: true });
+    };
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Shift") attach();
+    };
+    const onKeyUp = (e: KeyboardEvent) => {
+      if (e.key === "Shift") detach();
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    window.addEventListener("keyup", onKeyUp);
+    window.addEventListener("blur", detach);
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("keyup", onKeyUp);
+      window.removeEventListener("blur", detach);
+      detach();
+    };
   }, []);
   return null;
 }

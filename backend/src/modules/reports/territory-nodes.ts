@@ -147,28 +147,94 @@ export function mergeTerritoryFilterOptions(
           ])
         ) as Record<string, string[]>);
 
-  const territory_tree = territoryRows.map((x) => ({
-    zone: (x.t1 ?? "").trim(),
-    region: (x.t2 ?? "").trim(),
-    city: (x.t3 ?? "").trim()
-  }));
+  // Settings daraxtidan zona→region→city (filtr opsiyalari to‘liq bo‘lsin)
+  const regionsByZoneFromSettings = territoryFromSettings.territory_2_by_1;
+  const citiesByZoneRegionFromSettings: Record<string, string[]> = {};
+  for (const zoneNode of territoryNodes) {
+    if (zoneNode.active === false) continue;
+    const zone = zoneNode.name.trim();
+    if (!zone) continue;
+    for (const regionNode of zoneNode.children ?? []) {
+      if (regionNode.active === false) continue;
+      const region = regionNode.name.trim();
+      if (!region) continue;
+      const cities = (regionNode.children ?? [])
+        .filter((c) => c.active !== false)
+        .map((c) => c.name.trim())
+        .filter(Boolean)
+        .sort((a, b) => a.localeCompare(b, "ru"));
+      citiesByZoneRegionFromSettings[`${zone}|||${region}`] = cities;
+    }
+  }
 
-  const regions_by_zone = Object.fromEntries(
-    [...zoneRegionMap.entries()].map(([k, v]) => [k, [...v].sort((a, b) => a.localeCompare(b, "ru"))])
-  ) as Record<string, string[]>;
+  const regions_by_zone =
+    Object.keys(regionsByZoneFromSettings).length > 0
+      ? regionsByZoneFromSettings
+      : (Object.fromEntries(
+          [...zoneRegionMap.entries()].map(([k, v]) => [k, [...v].sort((a, b) => a.localeCompare(b, "ru"))])
+        ) as Record<string, string[]>);
 
-  const cities_by_zone_region = Object.fromEntries(
-    [...zoneRegionCityMap.entries()].map(([k, v]) => [k, [...v].sort((a, b) => a.localeCompare(b, "ru"))])
-  ) as Record<string, string[]>;
+  const cities_by_zone_region =
+    Object.keys(citiesByZoneRegionFromSettings).length > 0
+      ? citiesByZoneRegionFromSettings
+      : (Object.fromEntries(
+          [...zoneRegionCityMap.entries()].map(([k, v]) => [k, [...v].sort((a, b) => a.localeCompare(b, "ru"))])
+        ) as Record<string, string[]>);
+
+  // Settings daraxti (prune qilingan) — to‘liq shaharlar; mijoz qatorlari faqat daraxt bo‘sh bo‘lsa
+  const territory_tree =
+    territoryNodes.length > 0
+      ? flattenTerritoryTree(territoryNodes)
+      : territoryRows.map((x) => ({
+          zone: (x.t1 ?? "").trim(),
+          region: (x.t2 ?? "").trim(),
+          city: (x.t3 ?? "").trim()
+        }));
 
   return {
-    territory_1: territoryFromSettings.territory_1.length > 0 ? territoryFromSettings.territory_1 : t1,
-    territory_2: territoryFromSettings.territory_2.length > 0 ? territoryFromSettings.territory_2 : t2,
-    territory_3: territoryFromSettings.territory_3.length > 0 ? territoryFromSettings.territory_3 : t3,
+    territory_1: preferSettingsList(territoryFromSettings.territory_1, t1),
+    territory_2: preferSettingsList(territoryFromSettings.territory_2, t2),
+    territory_3: preferSettingsList(territoryFromSettings.territory_3, t3),
     territory_2_by_1,
     territory_3_by_2,
     territory_tree,
     regions_by_zone,
     cities_by_zone_region
   };
+}
+
+function flattenTerritoryTree(
+  nodes: TerritoryNode[]
+): Array<{ zone: string; region: string; city: string }> {
+  const out: Array<{ zone: string; region: string; city: string }> = [];
+  for (const zoneNode of nodes) {
+    if (zoneNode.active === false) continue;
+    const zone = zoneNode.name.trim();
+    if (!zone) continue;
+    for (const regionNode of zoneNode.children ?? []) {
+      if (regionNode.active === false) continue;
+      const region = regionNode.name.trim();
+      if (!region) continue;
+      const cities = regionNode.children ?? [];
+      if (cities.length === 0) {
+        out.push({ zone, region, city: "" });
+        continue;
+      }
+      for (const cityNode of cities) {
+        if (cityNode.active === false) continue;
+        const city = cityNode.name.trim();
+        if (city) out.push({ zone, region, city });
+      }
+    }
+  }
+  return out;
+}
+
+/**
+ * Filtr opsiyalari: settings daraxti to‘liq (Xorazm 15 shahar).
+ * Mijoz jadvalidagi distinct — faqat daraxt bo‘sh bo‘lganda.
+ */
+function preferSettingsList(fromSettings: string[], fromRows: string[]): string[] {
+  if (fromSettings.length > 0) return fromSettings;
+  return fromRows;
 }

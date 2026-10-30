@@ -10,8 +10,25 @@ export const CLIENT_IMPORT_DUPLICATE_KEY_OPTIONS: { key: string; label: string }
   { key: "city_code", label: "Город (код) — в ключе как город" }
 ];
 
-/** Default: kod + shahar (telefon/INN/PINFL emas). */
-export const DEFAULT_DUPLICATE_KEY_FIELDS = ["client_code", "city"];
+/** Default: telefon / INN / PINFL / kod. */
+export const DEFAULT_DUPLICATE_KEY_FIELDS = [
+  "client_code",
+  "inn",
+  "client_pinfl",
+  "phone"
+];
+
+/** Maslahat: eng ishonchli unikal kalitlar. */
+export const RECOMMENDED_DUPLICATE_KEY_FIELDS = [
+  "client_code",
+  "inn",
+  "client_pinfl",
+  "phone"
+] as const;
+
+export function isClientImportTeamFieldKey(key: string): boolean {
+  return key.startsWith("import_agent_") || key.startsWith("import_expeditor_");
+}
 
 export function buildUpdateApplyFieldOptions(): { key: string; label: string }[] {
   const base: { key: string; label: string }[] = [
@@ -68,4 +85,17 @@ export function buildUpdateApplyFieldOptions(): { key: string; label: string }[]
     );
   }
   return base;
+}
+
+/** Yangilash default: asosiy maydonlar; «Команда» alohida belgilanadi (tasodifan o‘chmasin). */
+export function defaultUpdateApplyFieldKeys(
+  options: { key: string; label: string }[] = buildUpdateApplyFieldOptions()
+): string[] {
+  return options.filter((o) => !isClientImportTeamFieldKey(o.key)).map((o) => o.key);
+}
+
+export function teamUpdateApplyFieldKeys(
+  options: { key: string; label: string }[] = buildUpdateApplyFieldOptions()
+): string[] {
+  return options.filter((o) => isClientImportTeamFieldKey(o.key)).map((o) => o.key);
 }

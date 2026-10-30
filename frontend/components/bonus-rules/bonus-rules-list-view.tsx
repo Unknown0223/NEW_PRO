@@ -16,6 +16,7 @@ import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import { useAuthStore, useAuthStoreHydrated } from "@/lib/auth-store";
 import { api } from "@/lib/api";
+import { usePermissions } from "@/lib/use-permissions";
 import { writeBonusRuleCloneDraft } from "@/lib/bonus-rule-clone-draft";
 import { getUserFacingError } from "@/lib/error-utils";
 import { STALE } from "@/lib/query-stale";
@@ -162,6 +163,11 @@ const DEFAULT_HIDDEN = ["priority", "summary", "active"] as const;
 
 export function BonusRulesListView({ activeOnly, variant = "bonuses" }: Props) {
   const isDiscounts = variant === "discounts";
+  const perms = usePermissions();
+  const section = isDiscounts ? "skidki" : "bonusy";
+  const canExport = perms.has(`settings.${section}.export`);
+  const canCreate = perms.has(`settings.${section}.create`);
+  const canUpdate = perms.has(`settings.${section}.update`);
   const listBase = isDiscounts ? "/settings/discount-rules" : "/settings/bonus-rules";
   const tenantSlug = useAuthStore((s) => s.tenantSlug);
   const authHydrated = useAuthStoreHydrated();
@@ -425,7 +431,7 @@ export function BonusRulesListView({ activeOnly, variant = "bonuses" }: Props) {
               </Button>
             </>
           ) : null}
-          <Link className={cn(buttonVariants({ size: "sm" }))} href={`${listBase}/new`}>
+          <Link className={cn(buttonVariants({ size: "sm" }), !canCreate && "hidden")} href={`${listBase}/new`}>
             {isDiscounts ? "Создать скидку" : "Создать бонус"}
           </Link>
         </div>
@@ -596,7 +602,7 @@ export function BonusRulesListView({ activeOnly, variant = "bonuses" }: Props) {
                     type="button"
                     variant="outline"
                     size="sm"
-                    className="h-9 shrink-0 gap-1"
+                    className={cn("h-9 shrink-0 gap-1", !canExport && "hidden")}
                     onClick={() => exportCsv()}
                     disabled={!rows.length}
                   >
@@ -742,7 +748,7 @@ export function BonusRulesListView({ activeOnly, variant = "bonuses" }: Props) {
                                 <input
                                   type="checkbox"
                                   checked={row.is_active}
-                                  disabled={toggleMut.isPending}
+                                  disabled={toggleMut.isPending || !canUpdate}
                                   onChange={(e) => {
                                     e.stopPropagation();
                                     toggleMut.mutate({ id: row.id, is_active: e.target.checked });
@@ -754,7 +760,7 @@ export function BonusRulesListView({ activeOnly, variant = "bonuses" }: Props) {
                           ))}
                           <td className="px-3 py-2 text-right" onClick={(e) => e.stopPropagation()}>
                             <TableRowActionGroup className="justify-end" ariaLabel="Правило">
-                              {!activeOnly ? (
+                              {!activeOnly && canUpdate ? (
                                 <Button
                                   type="button"
                                   size="icon-sm"
@@ -772,7 +778,7 @@ export function BonusRulesListView({ activeOnly, variant = "bonuses" }: Props) {
                                 type="button"
                                 size="icon-sm"
                                 variant="ghost"
-                                className="text-muted-foreground hover:text-foreground"
+                                className={cn("text-muted-foreground hover:text-foreground", !canCreate && "hidden")}
                                 title="Копировать в форму «Новое правило»"
                                 aria-label="Копировать в форму нового правила"
                                 disabled={!tenantSlug}
@@ -788,7 +794,7 @@ export function BonusRulesListView({ activeOnly, variant = "bonuses" }: Props) {
                                 type="button"
                                 size="icon-sm"
                                 variant="ghost"
-                                className="text-muted-foreground hover:text-foreground"
+                                className={cn("text-muted-foreground hover:text-foreground", !canUpdate && "hidden")}
                                 title="Филиал, агенты, клиенты, направление"
                                 aria-label="Привязка к заказу"
                                 onClick={() => setScopeRule(row)}
@@ -797,7 +803,7 @@ export function BonusRulesListView({ activeOnly, variant = "bonuses" }: Props) {
                               </Button>
                               <HistoryIconButton
                                 module="settings"
-                                section="bonusy_i_skidki"
+                                section={section}
                                 entityType="bonus_rule"
                                 entityId={row.id}
                                 title={`История: ${row.name}`}
@@ -806,7 +812,8 @@ export function BonusRulesListView({ activeOnly, variant = "bonuses" }: Props) {
                                 href={`${listBase}/${row.id}/edit`}
                                 className={cn(
                                   buttonVariants({ variant: "outline", size: "icon-sm" }),
-                                  "text-muted-foreground hover:text-foreground"
+                                  "text-muted-foreground hover:text-foreground",
+                                  !canUpdate && "hidden"
                                 )}
                                 title="Редактировать"
                                 aria-label="Редактировать"
@@ -846,14 +853,16 @@ export function BonusRulesListView({ activeOnly, variant = "bonuses" }: Props) {
             bulkRuleIds={Array.from(selectedIds)}
             onBulkSaved={clearSelection}
           />
-          <BonusRulesBulkToolbar
-            tenantSlug={tenantSlug}
-            selectedIds={selectedIds}
-            selectedRows={selectedRows}
-            activeOnly={activeOnly}
-            onClearSelection={clearSelection}
-            onScopeBulk={() => setBulkScopeOpen(true)}
-          />
+          {canUpdate ? (
+            <BonusRulesBulkToolbar
+              tenantSlug={tenantSlug}
+              selectedIds={selectedIds}
+              selectedRows={selectedRows}
+              activeOnly={activeOnly}
+              onClearSelection={clearSelection}
+              onScopeBulk={() => setBulkScopeOpen(true)}
+            />
+          ) : null}
         </>
       ) : null}
 

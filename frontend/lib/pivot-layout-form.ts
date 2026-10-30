@@ -28,3 +28,10 @@ export function hasFlatSlice(config: PivotConfig): boolean {
     config.reportFilters.length > 0
   );
 }
+
+/** Сохранить: flat da values bo‘sh bo‘lishi mumkin — rows yetarli. */
+export function canSavePivotConfig(config: PivotConfig): boolean {
+  const layout = resolveLayoutForm(config.options);
+  if (layout === "flat") return hasFlatSlice(config);
+  return config.values.length > 0;
+}

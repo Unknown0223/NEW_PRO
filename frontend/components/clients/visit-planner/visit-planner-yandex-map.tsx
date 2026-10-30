@@ -288,7 +288,7 @@ export function VisitPlannerYandexMap({
           }
         });
       })
-      .catch(() => onError?.("Yandex Maps yuklanmadi. Internet yoki API kalitni tekshiring."));
+      .catch(() => onError?.("Не удалось загрузить Yandex Maps. Проверьте интернет или API-ключ."));
 
     return () => {
       cancelled = true;

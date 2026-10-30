@@ -38,7 +38,7 @@ final ordersListProvider = FutureProvider<List<AgentOrderHistoryRow>>((ref) asyn
           id: (o['id'] as num?)?.toInt() ?? 0,
           number: o['number']?.toString(),
           status: o['status']?.toString() ?? 'new',
-          clientName: names[o['client_id']] ?? 'Mijoz #${o['client_id']}',
+          clientName: names[o['client_id']] ?? 'Клиент #${o['client_id']}',
           createdAt: o['created_at']?.toString(),
           totalSum: (o['total'] as num?)?.toDouble() ?? 0,
         ),

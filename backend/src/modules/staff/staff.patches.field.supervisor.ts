@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import bcrypt from "bcryptjs";
 import { Prisma } from "@prisma/client";
 import { prisma } from "../../config/database";
+import { assertValidMaxSessions } from "../../lib/max-sessions";
 import { createCashDeskUserLink } from "../cash-desks/cash-desks.service";
 import { listActiveTradeDirectionLabels } from "../sales-directions/sales-directions.service";
 import { appendTenantAuditEvent, AuditEntityType } from "../../lib/tenant-audit";
@@ -60,6 +61,8 @@ import {
 import { listStaff, type PatchAgentInput, type SessionRowDto } from "./staff.crud";
 import { applyAgentPatchInDb } from "./staff.patches.field.agent";
 import { onAppAccessChanged } from "../auth/app-access.service";
+import { syncEmploymentAfterActiveChange } from "./staff.employment-sync";
+import { assertWorkplaceStaffPatchAllowed } from "../work-slots/work-slots.staff-guard";
 
 export type PatchSupervisorInput = Omit<PatchAgentInput, "supervisor_user_id"> & {
   /** Bu supervisor ostidagi agentlar ro‘yxati (to‘liq almashtirish). */
@@ -103,6 +106,8 @@ export async function patchSupervisor(
   input: PatchSupervisorInput,
   actorUserId: number | null = null
 ): Promise<StaffRow> {
+  await assertWorkplaceStaffPatchAllowed(supervisorId, input as Record<string, unknown>);
+
   const existing = await prisma.user.findFirst({
     where: { id: supervisorId, tenant_id: tenantId, role: "supervisor" }
   });
@@ -165,15 +170,16 @@ export async function patchSupervisor(
   if (input.app_access !== undefined) data.app_access = input.app_access;
   if (input.territory !== undefined) data.territory = input.territory?.trim() || null;
   if (input.is_active !== undefined) data.is_active = input.is_active;
+  if (input.filter_visible !== undefined) data.filter_visible = input.filter_visible;
   if (input.max_sessions !== undefined) {
     const n = input.max_sessions;
-    if (!Number.isInteger(n) || n < 1 || n > 99) throw new Error("BAD_MAX_SESSIONS");
+    assertValidMaxSessions(n);
     data.max_sessions = n;
   }
   if (input.kpi_color !== undefined) data.kpi_color = input.kpi_color?.trim().slice(0, 16) || null;
   if (input.password !== undefined && input.password.trim().length > 0) {
     if (input.password.length < 6) throw new Error("BAD_PASSWORD");
-    data.password_hash = await bcrypt.hash(input.password, 10);
+    data.password_hash = await bcrypt.hash(input.password, 12);
   }
 
   if (input.agent_entitlements !== undefined) {
@@ -212,6 +218,9 @@ export async function patchSupervisor(
 
   if (input.app_access !== undefined) {
     await onAppAccessChanged(tenantId, supervisorId, input.app_access);
+  }
+  if (input.is_active !== undefined) {
+    await syncEmploymentAfterActiveChange(tenantId, [supervisorId], actorUserId);
   }
 
   if (Object.keys(data).length > 0) {

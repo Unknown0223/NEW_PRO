@@ -8,7 +8,7 @@ export async function listClientBalancesReport(
   tenantId: number,
   q: ClientBalanceListQuery
 ): Promise<ClientBalanceListResponse> {
-  const ctx = buildClientBalancesReportContext(tenantId, q);
+  const ctx = await buildClientBalancesReportContext(tenantId, q);
   if (q.view === "clients_delivery") {
     return listClientBalancesReportDelivery(ctx);
   }

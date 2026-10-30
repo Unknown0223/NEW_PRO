@@ -504,7 +504,8 @@ type Props = {
   tenantSlug: string;
   canCreate?: boolean;
   canUpdate?: boolean;
-  canDelete?: boolean;
+  canDeactivate?: boolean;
+  canRestore?: boolean;
   canExport?: boolean;
 };
 
@@ -512,7 +513,8 @@ export function WarehousesWorkspace({
   tenantSlug,
   canCreate = false,
   canUpdate = false,
-  canDelete = false,
+  canDeactivate = false,
+  canRestore = false,
   canExport = false
 }: Props) {
   const qc = useQueryClient();
@@ -525,7 +527,7 @@ export function WarehousesWorkspace({
   const [sortNameDir, setSortNameDir] = useState<"asc" | "desc">("asc");
   const [feedback, setFeedback] = useState<string | null>(null);
   const [deactivateTarget, setDeactivateTarget] = useState<WarehouseRow | null>(null);
-  const showRowActions = canUpdate || canDelete;
+  const showRowActions = canUpdate || canDeactivate || canRestore;
 
   const tablePrefs = useUserTablePrefs({
     tenantSlug,
@@ -842,7 +844,7 @@ export function WarehousesWorkspace({
                               <Pencil className="size-3.5" aria-hidden />
                             </Button>
                           ) : null}
-                          {canDelete && tab === "active" ? (
+                          {canDeactivate && tab === "active" ? (
                             <Button
                               type="button"
                               variant="ghost"
@@ -854,7 +856,7 @@ export function WarehousesWorkspace({
                               <UserMinus className="size-3.5" aria-hidden />
                             </Button>
                           ) : null}
-                          {canUpdate && tab === "inactive" ? (
+                          {canRestore && tab === "inactive" ? (
                             <Button
                               type="button"
                               variant="ghost"

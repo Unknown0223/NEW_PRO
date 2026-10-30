@@ -122,7 +122,7 @@ export async function registerBankTransferInboxRoutes(app: FastifyInstance) {
       if (!ensureTenantContext(request, reply)) return;
       const id = Number.parseInt((request.params as { id: string }).id, 10);
       if (!Number.isFinite(id) || id < 1) {
-        return sendApiError(reply, request, 400, "ValidationError", "Invalid id");
+        return sendApiError(reply, request, 400, "ValidationError", "Некорректный ID");
       }
       const detail = await getBankTransferInboxDetail(request.tenant!.id, id);
       if (!detail) return sendApiError(reply, request, 404, "NotFound");
@@ -142,7 +142,7 @@ export async function registerBankTransferInboxRoutes(app: FastifyInstance) {
           request,
           400,
           "ValidationError",
-          "Invalid body",
+          "Некорректные данные запроса",
           zodValidationExtras(parsed.error)
         );
       }
@@ -167,7 +167,7 @@ export async function registerBankTransferInboxRoutes(app: FastifyInstance) {
           request,
           400,
           "ValidationError",
-          "Invalid body",
+          "Некорректные данные запроса",
           zodValidationExtras(parsed.error)
         );
       }
@@ -252,7 +252,7 @@ export async function registerBankTransferInboxRoutes(app: FastifyInstance) {
           request,
           400,
           "ValidationError",
-          "Invalid request",
+          "Некорректный запрос",
           parsed.success ? undefined : zodValidationExtras(parsed.error)
         );
       }
@@ -291,7 +291,7 @@ export async function registerBankTransferInboxRoutes(app: FastifyInstance) {
           request,
           400,
           "ValidationError",
-          "Invalid request",
+          "Некорректный запрос",
           parsed.success ? undefined : zodValidationExtras(parsed.error)
         );
       }
@@ -320,7 +320,7 @@ export async function registerBankTransferInboxRoutes(app: FastifyInstance) {
       const id = Number.parseInt((request.params as { id: string }).id, 10);
       const parsed = bankTransferCommentBodySchema.safeParse(request.body);
       if (!Number.isFinite(id) || id < 1 || !parsed.success) {
-        return sendApiError(reply, request, 400, "ValidationError", "Invalid request");
+        return sendApiError(reply, request, 400, "ValidationError", "Некорректный запрос");
       }
       try {
         const detail = await commentInboxItem(
@@ -346,7 +346,7 @@ export async function registerBankTransferInboxRoutes(app: FastifyInstance) {
       const id = Number.parseInt((request.params as { id: string }).id, 10);
       const parsed = bankTransferIgnoreBodySchema.safeParse(request.body ?? {});
       if (!Number.isFinite(id) || id < 1 || !parsed.success) {
-        return sendApiError(reply, request, 400, "ValidationError", "Invalid request");
+        return sendApiError(reply, request, 400, "ValidationError", "Некорректный запрос");
       }
       try {
         const detail = await ignoreInboxItem(
@@ -372,7 +372,7 @@ export async function registerBankTransferInboxRoutes(app: FastifyInstance) {
       const id = Number.parseInt((request.params as { id: string }).id, 10);
       const parsed = bankTransferCreatePaymentBodySchema.safeParse(request.body ?? {});
       if (!Number.isFinite(id) || id < 1 || !parsed.success) {
-        return sendApiError(reply, request, 400, "ValidationError", "Invalid request");
+        return sendApiError(reply, request, 400, "ValidationError", "Некорректный запрос");
       }
       try {
         const detail = await createPendingPaymentFromInbox(

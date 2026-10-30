@@ -1,0 +1,7 @@
+docker exec salec-postgres-1 psql -U postgres -d savdo_db -tAc "SELECT 'clients='||count(*) FROM clients;"
+docker exec salec-postgres-1 psql -U postgres -d savdo_db -tAc "SELECT 'orders='||count(*) FROM orders;"
+docker exec salec-postgres-1 psql -U postgres -d savdo_db -tAc "SELECT tablename FROM pg_tables WHERE schemaname='public' AND tablename ILIKE '%payment%' ORDER BY 1;"
+docker exec salec-postgres-1 psql -U postgres -d savdo_db -tAc "SELECT 'photos='||count(*) FROM client_photo_reports;"
+docker exec salec-postgres-1 psql -U postgres -d savdo_db -tAc "SELECT 'users='||count(*) FROM users;"
+docker exec salec-postgres-1 psql -U postgres -d savdo_db -tAc "SELECT 'max_order='||coalesce(max(id),0) FROM orders;"
+docker exec salec-postgres-1 psql -U postgres -d savdo_db -tAc "SELECT 'max_photo='||coalesce(max(id),0) FROM client_photo_reports;"

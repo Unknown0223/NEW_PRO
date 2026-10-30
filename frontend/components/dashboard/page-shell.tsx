@@ -12,6 +12,6 @@ export function PageShell({
   className?: string;
 }) {
   return (
-    <div className={cn("mx-auto w-full max-w-none space-y-5 pb-10", className)}>{children}</div>
+    <div className={cn("mx-auto w-full min-w-0 max-w-none space-y-5 pb-10", className)}>{children}</div>
   );
 }

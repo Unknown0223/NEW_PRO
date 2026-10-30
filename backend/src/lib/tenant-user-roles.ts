@@ -61,9 +61,30 @@ export function isMobileOnlyKomandaRole(role: string): boolean {
   return (MOBILE_ONLY_KOMANDA_ROLES as readonly string[]).includes(role.trim());
 }
 
-/** «Доступ» → «Пользователи» va veb huquq modallari: mobil-only KOMANDA chiqariladi. */
+export function isTenantAdminRole(role: string | null | undefined): boolean {
+  return (role ?? "").trim().toLowerCase() === TENANT_ADMIN_ROLE;
+}
+
+/** «Доступ» ro‘yxatlari / scope / rol filtrlari — admin + mobil-only KOMANDA. */
+export const ACCESS_WEB_USERS_EXCLUDED_ROLES = [...MOBILE_ONLY_KOMANDA_ROLES, TENANT_ADMIN_ROLE] as const;
+
+/**
+ * Veb-panelga kira olmaydigan maydon rollari (faqat mobil ilova).
+ * Van-seller alohida `users.role` emas — odatda `agent`.
+ * Supervisor vebda qoladi.
+ */
+export const WEB_PANEL_DENIED_ROLES = ["agent", "expeditor", "collector"] as const;
+
+export function isWebPanelDeniedRole(role: string | null | undefined): boolean {
+  const r = (role ?? "").trim().toLowerCase();
+  if (!r) return false;
+  if ((WEB_PANEL_DENIED_ROLES as readonly string[]).includes(r)) return true;
+  return r === "vansell" || r === "vanseller" || r === "van_seller";
+}
+
+/** «Доступ»: mobil-only KOMANDA va admin (admin har doim to‘liq ruxsat, cheklovga tushmaydi). */
 export function isExcludedFromAccessWebUsersList(role: string): boolean {
-  return isMobileOnlyKomandaRole(role);
+  return isMobileOnlyKomandaRole(role) || isTenantAdminRole(role);
 }
 
 /**

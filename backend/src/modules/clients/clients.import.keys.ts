@@ -148,8 +148,13 @@ const HEADER_ALIASES: Record<string, string> = {
   контакт: "responsible_person",
   ид_клиента: "client_code",
   id_клиента: "client_code",
-  /** CRM ichki qator ID (Lalaku «Обновление клиентов») */
+  /** CRM / DB ichki qator ID (`clients.id`) — create da upsert, update da majburiy */
   ид: "client_db_id",
+  id: "client_db_id",
+  db_id: "client_db_id",
+  client_id: "client_db_id",
+  client_db_id: "client_db_id",
+  идентификатор: "client_db_id",
   код_клиента: "client_code",
   клиент_код: "client_code",
   код: "client_code",

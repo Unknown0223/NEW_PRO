@@ -9,6 +9,7 @@ import type {
   FinanceTerritoryDebtRow
 } from "./dashboard.finance.types";
 import { buildFinanceScopes } from "./dashboard.finance.snapshot.partials";
+import { loadTerritoryRegionIndex, resolveTerritoryLabel, rollupDebtTerritoryRows } from "./dashboard.territory-rollup";
 
 export type FinanceDashboardDebtsPayload = Pick<
   FinanceDashboardSnapshot,
@@ -26,7 +27,7 @@ export async function getFinanceDashboardDebts(
 ): Promise<FinanceDashboardDebtsPayload> {
   const page = Math.max(1, opts.page ?? 1);
   const limit = Math.min(200, Math.max(1, opts.limit ?? 50));
-  const snapshotKey = `tenant:${tenantId}:dashboard:finance:debts:${stableJsonStringify({ filters, page, limit })}`;
+  const snapshotKey = `tenant:${tenantId}:dashboard:finance:debts:v2:${stableJsonStringify({ filters, page, limit })}`;
   const cached = await getSnapshotCache<FinanceDashboardDebtsPayload>(snapshotKey);
   if (cached) return cached;
 
@@ -137,18 +138,22 @@ export async function getFinanceDashboardDebts(
     `
   ]);
 
-  const territory_debts: FinanceTerritoryDebtRow[] = territoryRows.map((r) => ({
-    territory: r.territory,
-    debt_sum: r.debt_sum.toString(),
-    debtors_count: Number(r.debtors_count)
-  }));
+  const territoryIndex = await loadTerritoryRegionIndex(tenantId);
+  const territory_debts: FinanceTerritoryDebtRow[] = rollupDebtTerritoryRows(
+    territoryRows.map((r) => ({
+      territory: r.territory,
+      debt_sum: r.debt_sum.toString(),
+      debtors_count: Number(r.debtors_count)
+    })),
+    territoryIndex
+  );
 
   const clients_debt_list: FinanceClientDebtRow[] = clientsDebtRows.map((r) => ({
     client_id: r.client_id,
     client_name: r.client_name,
     agent_name: r.agent_name,
     supervisor_name: r.supervisor_name,
-    territory: r.territory,
+    territory: resolveTerritoryLabel(r.territory ?? "—", territoryIndex),
     ledger_balance: decToString(r.ledger_balance),
     delivered_debt: decToString(r.delivered_debt),
     effective_balance: decToString(r.effective_balance)

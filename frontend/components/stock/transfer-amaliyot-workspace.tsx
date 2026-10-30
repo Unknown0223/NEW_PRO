@@ -27,7 +27,7 @@ import { usePermissions } from "@/lib/use-permissions";
 import { cn } from "@/lib/utils";
 import { formatNumberGrouped } from "@/lib/format-numbers";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 type Warehouse = { id: number; name: string };
@@ -87,7 +87,7 @@ function parseQty(s: string): number {
 function blockHint(p: ProductRow): string {
   const qpb = p.qty_per_block;
   if (qpb != null && qpb > 0) {
-    return `${qpb} ${p.unit} / blok`;
+    return `${qpb} ${p.unit} / блок`;
   }
   return "—";
 }
@@ -105,14 +105,17 @@ function parseDec(s: string): number {
 
 export function TransferAmaliyotWorkspace() {
   const router = useRouter();
+  const branchScope = useSearchParams().get("scope") === "branch";
   const tenant = useTenant();
   const hydrated = useAuthStoreHydrated();
   const tenantSlug = useAuthStore((s) => s.tenantSlug);
   const { has } = usePermissions();
-  const canWrite =
-    has("warehouse.peremeshchenie.create") ||
-    has("warehouse.peremeshchenie.transfer") ||
-    has("warehouse.peremeshchenie.update");
+  const canWrite = branchScope
+    ? has("warehouse.peremeshchenie_filial.create")
+    : has("warehouse.peremeshchenie.create") ||
+      has("warehouse.peremeshchenie.transfer") ||
+      has("warehouse.peremeshchenie.update");
+  const [branchByWarehouse, setBranchByWarehouse] = useState<Map<number, string>>(new Map());
 
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
   const [, setAgents] = useState<AgentPick[]>([]);
@@ -164,7 +167,7 @@ export function TransferAmaliyotWorkspace() {
       } catch (e) {
         if (!cancelled) {
           setStockRows([]);
-          setStockError(getUserFacingError(e, "Qoldiq yuklanmadi"));
+          setStockError(getUserFacingError(e, "Не удалось загрузить остатки"));
         }
       } finally {
         if (!cancelled) setLoadStock(false);
@@ -203,10 +206,25 @@ export function TransferAmaliyotWorkspace() {
         const res = await apiFetch<{ data?: Warehouse[] }>(
           `/api/${tenant}/warehouses${qs ? `?${qs}` : ""}`
         );
-        if (!cancelled) setWarehouses(res.data ?? []);
+        const list = res.data ?? [];
+        let branchMap = new Map<number, string>();
+        if (branchScope) {
+          const profile = await apiFetch<{ references?: { branches?: { name?: string; warehouse_ids?: number[] }[] } }>(
+            `/api/${tenant}/settings/profile`
+          );
+          for (const b of profile.references?.branches ?? []) {
+            const name = (b.name ?? "").trim();
+            if (!name) continue;
+            for (const id of b.warehouse_ids ?? []) branchMap.set(id, name);
+          }
+        }
+        if (!cancelled) {
+          setBranchByWarehouse(branchMap);
+          setWarehouses(list);
+        }
       } catch (e) {
         if (!cancelled) {
-          setWhError(getUserFacingError(e, "Omborlar yuklanmadi"));
+          setWhError(getUserFacingError(e, "Не удалось загрузить склады"));
           setWarehouses([]);
         }
       } finally {
@@ -216,14 +234,14 @@ export function TransferAmaliyotWorkspace() {
     return () => {
       cancelled = true;
     };
-  }, [hydrated, tenant, agentFilterId]);
+  }, [hydrated, tenant, agentFilterId, branchScope]);
 
   useEffect(() => {
     if (!hydrated || !tenant) return;
     let cancelled = false;
     (async () => {
       try {
-        const res = await apiFetch<{ data?: AgentPick[] }>(`/api/${tenant}/agents?is_active=true`);
+        const res = await apiFetch<{ data?: AgentPick[] }>(`/api/${tenant}/agents?picker=1`);
         if (!cancelled) setAgents((res.data ?? []).filter((a) => a.is_active));
       } catch {
         if (!cancelled) setAgents([]);
@@ -257,7 +275,7 @@ export function TransferAmaliyotWorkspace() {
         if (!cancelled) setCategories(rows);
       } catch (e) {
         if (!cancelled) {
-          setCatError(getUserFacingError(e, "Kategoriyalar yuklanmadi"));
+          setCatError(getUserFacingError(e, "Не удалось загрузить категории"));
           setCategories([]);
         }
       } finally {
@@ -295,7 +313,7 @@ export function TransferAmaliyotWorkspace() {
         if (!ac.signal.aborted) {
           setProducts([]);
           setDrafts({});
-          setProdError(getUserFacingError(e, "Mahsulotlar yuklanmadi"));
+          setProdError(getUserFacingError(e, "Не удалось загрузить товары"));
         }
       } finally {
         if (!ac.signal.aborted) setLoadProducts(false);
@@ -388,11 +406,11 @@ export function TransferAmaliyotWorkspace() {
     const src = Number.parseInt(sourceId, 10);
     const dst = Number.parseInt(destId, 10);
     if (!Number.isFinite(src) || !Number.isFinite(dst)) {
-      setFormError("Manba va qabul omborini tanlang.");
+      setFormError("Выберите склад-отправитель и склад-получатель.");
       return;
     }
     if (src === dst) {
-      setFormError("Manba va qabul ombori bir xil bo‘lmasligi kerak.");
+      setFormError("Склад-отправитель и склад-получатель не должны совпадать.");
       return;
     }
     const payloadLines: {
@@ -413,7 +431,7 @@ export function TransferAmaliyotWorkspace() {
       });
     }
     if (payloadLines.length === 0) {
-      setFormError("Kamida bitta mahsulot uchun miqdor kiriting (0 dan katta).");
+      setFormError("Укажите количество (больше 0) хотя бы для одного товара.");
       return;
     }
     const eps = 1e-6;
@@ -423,7 +441,7 @@ export function TransferAmaliyotWorkspace() {
       if (line.qty > av + eps) {
         const p = products.find((x) => x.id === line.product_id);
         setFormError(
-          `${p?.sku ?? line.product_id}: ko‘chirish ${line.qty}, mavjud (qoldiq − bron) ${av}. Bron ostidagi miqdor yuborilmaydi.`
+          `${p?.sku ?? line.product_id}: перемещение ${line.qty}, доступно (остаток − бронь) ${av}. Забронированное количество не отправляется.`
         );
         return;
       }
@@ -437,12 +455,13 @@ export function TransferAmaliyotWorkspace() {
           destination_warehouse_id: dst,
           comment: comment.trim() || null,
           planned_date: plannedDate.trim() || null,
+          kind: branchScope ? "branch" : "warehouse",
           lines: payloadLines,
         }),
       });
-      router.push("/stock/transfers");
+      router.push(branchScope ? "/stock/transfers?scope=branch" : "/stock/transfers");
     } catch (err) {
-      setFormError(getUserFacingError(err, "Saqlashda xato"));
+      setFormError(getUserFacingError(err, "Ошибка сохранения"));
     } finally {
       setSubmitting(false);
     }
@@ -455,28 +474,39 @@ export function TransferAmaliyotWorkspace() {
   if (!canWrite) {
     return (
       <div className="space-y-2 p-4">
-        <p className="text-sm text-muted-foreground">Huquqlar yetarli emas.</p>
-        <Link href="/stock/transfers" className="text-sm text-primary underline">
-          Ro‘yxatga qaytish
+        <p className="text-sm text-muted-foreground">Недостаточно прав.</p>
+        <Link href={branchScope ? "/stock/transfers?scope=branch" : "/stock/transfers"} className="text-sm text-primary underline">
+          Вернуться к списку
         </Link>
       </div>
     );
   }
 
   return (
-    <div className="mx-auto w-full max-w-[1600px] space-y-4 pb-6">
+    <div className="w-full space-y-4 pb-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="min-w-0">
-          <h1 className="text-2xl font-bold tracking-tight">О перемещение</h1>
+          <h1 className="text-2xl font-bold tracking-tight">
+            {branchScope ? "Перемещение между филиалами" : "Оформление перемещения"}
+          </h1>
           <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-            Перемещение товаров между складами. Количество не может превышать доступный остаток.
+            {branchScope
+              ? "Сначала документ «Новый», затем «Ожидание подтверждения». Остаток принимающего склада меняется только после подтверждения."
+              : "Перемещение товаров между складами. Количество не может превышать доступный остаток."}
           </p>
+          {branchScope ? (
+            <div className="mt-3 flex flex-wrap gap-2 text-xs">
+              <span className="rounded-full bg-yellow-100 px-2.5 py-1 font-medium text-yellow-900">Новый</span>
+              <span className="rounded-full bg-amber-100 px-2.5 py-1 font-medium text-amber-950">Ожидание</span>
+              <span className="rounded-full bg-green-100 px-2.5 py-1 font-medium text-green-900">На складе после подтверждения</span>
+            </div>
+          ) : null}
         </div>
         <Link
-          href="/stock/transfers"
+          href={branchScope ? "/stock/transfers?scope=branch" : "/stock/transfers"}
           className={cn(buttonVariants({ variant: "outline" }), "shrink-0 self-start sm:self-center")}
         >
-          Jurnalga
+          К журналу
         </Link>
       </div>
 
@@ -491,6 +521,14 @@ export function TransferAmaliyotWorkspace() {
                 )}
               </div>
               {whError && <p className="mt-2 text-sm text-destructive">{whError}</p>}
+              {branchScope && !loadWh && warehouses.length === 0 ? (
+                <p className="mt-2 text-sm text-amber-800">Складов нет. Сначала создайте склад в разделе «Склад».</p>
+              ) : null}
+              {branchScope && !loadWh && warehouses.length > 0 && branchByWarehouse.size === 0 ? (
+                <p className="mt-2 text-sm text-amber-800">
+                  Привяжите склады к филиалам: Настройки → Филиалы → «Склады филиала». Без этого документ не сохранится.
+                </p>
+              ) : null}
               <div className="mt-3 grid gap-3 sm:grid-cols-2">
                 <div className="space-y-1.5">
                   <Label className="text-xs text-muted-foreground">Со склада</Label>
@@ -508,7 +546,9 @@ export function TransferAmaliyotWorkspace() {
                     <SelectContent>
                       {warehouses.map((w) => (
                         <SelectItem key={w.id} value={String(w.id)}>
-                          {w.name}
+                          {branchScope && branchByWarehouse.get(w.id)
+                            ? `${w.name} · ${branchByWarehouse.get(w.id)}`
+                            : w.name}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -523,7 +563,9 @@ export function TransferAmaliyotWorkspace() {
                     <SelectContent>
                       {destOptions.map((w) => (
                         <SelectItem key={w.id} value={String(w.id)}>
-                          {w.name}
+                          {branchScope && branchByWarehouse.get(w.id)
+                            ? `${w.name} · ${branchByWarehouse.get(w.id)}`
+                            : w.name}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -579,7 +621,7 @@ export function TransferAmaliyotWorkspace() {
                   >
                     <div className="border-b border-border bg-muted/20 px-3 py-2">
                       <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                        Kategoriyalar
+                        Категории
                       </p>
                     </div>
                     <div className="max-h-44 overflow-y-auto p-2 md:max-h-none md:flex-1 md:overflow-y-auto">
@@ -588,7 +630,7 @@ export function TransferAmaliyotWorkspace() {
                       ) : categories.length === 0 ? (
                         <p className="px-1 py-2 text-sm text-muted-foreground">Нет активных категорий.</p>
                       ) : (
-                        <nav className="flex flex-col gap-0.5" aria-label="Mahsulot kategoriyalari">
+                        <nav className="flex flex-col gap-0.5" aria-label="Категории товаров">
                           {categories.map((c) => {
                             const active = categoryId === String(c.id);
                             return (
@@ -617,21 +659,21 @@ export function TransferAmaliyotWorkspace() {
                     <div className="flex flex-col gap-2 border-b border-border p-2 sm:flex-row sm:items-center sm:gap-2">
                       <div className="min-w-0 flex-1 space-y-1">
                         <Label htmlFor="row-filter" className="text-xs text-muted-foreground">
-                          Qidiruv
+                          Поиск
                         </Label>
                         <Input
                           id="row-filter"
                           className="h-9"
                           value={rowFilter}
                           onChange={(e) => setRowFilter(e.target.value)}
-                          placeholder="SKU, nom, shtrix…"
+                          placeholder="SKU, название, штрихкод…"
                           disabled={!categoryId || loadProducts}
                         />
                       </div>
                       {categoryId && !loadProducts && products.length > 0 && (
                         <div className="flex shrink-0 flex-wrap items-center gap-2 sm:pt-5">
                           <Button type="button" variant="outline" size="sm" onClick={clearQuantities}>
-                            Miqdorlarni tozalash
+                            Очистить количества
                           </Button>
                           {filteredProducts.length !== products.length && (
                             <span className="text-xs text-muted-foreground whitespace-nowrap">
@@ -655,7 +697,7 @@ export function TransferAmaliyotWorkspace() {
 
                       {categoryId && loadProducts && (
                         <p className="py-6 text-center text-sm text-muted-foreground">
-                          Mahsulotlar Загрузка…
+                          Загрузка товаров…
                         </p>
                       )}
 
@@ -671,18 +713,18 @@ export function TransferAmaliyotWorkspace() {
                             <TableHeader>
                               <TableRow>
                                 <TableHead className="w-10">№</TableHead>
-                                <TableHead className="w-[100px]">Kod</TableHead>
-                                <TableHead>Nomi</TableHead>
-                                <TableHead className="w-28">Blok</TableHead>
+                                <TableHead className="w-[100px]">Код</TableHead>
+                                <TableHead>Наименование</TableHead>
+                                <TableHead className="w-28">Блок</TableHead>
                                 <TableHead className="w-32 text-xs font-normal text-muted-foreground">
-                                  1 blok
+                                  1 блок
                                 </TableHead>
-                                <TableHead className="w-24 text-right">Qoldiq</TableHead>
-                                <TableHead className="w-24 text-right">Bron</TableHead>
-                                <TableHead className="w-24 text-right">Mavjud</TableHead>
-                                <TableHead className="w-28">Ko‘chirish</TableHead>
-                                <TableHead className="w-28">Partiya</TableHead>
-                                <TableHead className="min-w-[120px]">Izoh</TableHead>
+                                <TableHead className="w-24 text-right">Остаток</TableHead>
+                                <TableHead className="w-24 text-right">Бронь</TableHead>
+                                <TableHead className="w-24 text-right">Доступно</TableHead>
+                                <TableHead className="w-28">Переместить</TableHead>
+                                <TableHead className="w-28">Партия</TableHead>
+                                <TableHead className="min-w-[120px]">Комментарий</TableHead>
                               </TableRow>
                             </TableHeader>
                             <TableBody>
@@ -727,8 +769,8 @@ export function TransferAmaliyotWorkspace() {
                                         disabled={p.qty_per_block == null || p.qty_per_block <= 0}
                                         title={
                                           p.qty_per_block != null && p.qty_per_block > 0
-                                            ? "Blok soni — miqdor avto"
-                                            : "Bu mahsulotda blok o‘lchami yo‘q"
+                                            ? "Количество блоков — количество пересчитывается автоматически"
+                                            : "У этого товара не задан размер блока"
                                         }
                                       />
                                     </TableCell>
@@ -751,11 +793,11 @@ export function TransferAmaliyotWorkspace() {
                                         onChange={(e) => updateDraft(p.id, { qty: e.target.value })}
                                         inputMode="decimal"
                                         placeholder="0"
-                                        title={sourceId ? `Maks. ${aDisplay}` : undefined}
+                                        title={sourceId ? `Макс. ${aDisplay}` : undefined}
                                       />
                                       {over && (
                                         <p className="text-[10px] text-destructive mt-0.5">
-                                          Mavjuddan oshiq
+                                          Больше доступного
                                         </p>
                                       )}
                                     </TableCell>
@@ -858,7 +900,7 @@ export function TransferAmaliyotWorkspace() {
 
                 <div className="flex flex-col gap-2 border-t border-border/60 pt-3 sm:flex-row sm:flex-wrap sm:justify-end">
                   <Link
-                    href="/stock/transfers"
+                    href={branchScope ? "/stock/transfers?scope=branch" : "/stock/transfers"}
                     className={cn(
                       buttonVariants({ variant: "outline" }),
                       "h-9 w-full justify-center sm:w-auto"

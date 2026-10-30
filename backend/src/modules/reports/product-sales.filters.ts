@@ -1,6 +1,5 @@
-import { Prisma } from "@prisma/client";
 import { prisma } from "../../config/database";
-import { ORDER_STATUSES, ORDER_TYPES, ORDER_TYPE_LABELS } from "../orders/order-status";
+import { ORDER_STATUSES } from "../orders/order-status";
 import {
   paymentMethodStorageKey,
   priceTypeEntriesFromUnknown,
@@ -11,12 +10,18 @@ import {
 } from "../tenant-settings/finance-refs";
 import type { ReportActor } from "./client-sales-4-report.service";
 import { getRedisForApp } from "../../lib/redis-cache";
-import { mergeTerritoryFilterOptions } from "./territory-nodes";
+import { mergeTerritoryFilterOptions, parseTerritoryNodes } from "./territory-nodes";
 import { KNOWN_ORDER_TYPES, ORDER_STATUS_LABEL_RU, orderTypeLabelRu } from "./product-sales.helpers";
-import { buildScopedAgentWhereForActor } from "../access/access-agent-scope";
+import {
+  filterTerritoryRowsByTerms,
+  pruneTerritoryNodesByTerms,
+  resolveFilterOptionsScope,
+  staffWhereForFilterOptions,
+  warehouseWhereForFilterOptions
+} from "../access/access-filter-options-scope";
 
 export async function getProductSalesReportFilterOptions(tenantId: number, actor?: ReportActor) {
-  const cacheKey = `tenant:${tenantId}:reports:product-sales:filter-options:v2:${actor?.role ?? "none"}:${actor?.userId ?? 0}`;
+  const cacheKey = `tenant:${tenantId}:reports:product-sales:filter-options:v5:${actor?.role ?? "none"}:${actor?.userId ?? 0}`;
   try {
     const redis = await getRedisForApp();
     const cached = await redis.get(cacheKey);
@@ -25,7 +30,7 @@ export async function getProductSalesReportFilterOptions(tenantId: number, actor
     /* ignore */
   }
 
-  const whereAgent = await buildScopedAgentWhereForActor(tenantId, actor);
+  const scope = await resolveFilterOptionsScope(tenantId, actor);
 
   const tenant = await prisma.tenant.findUnique({
     where: { id: tenantId },
@@ -37,12 +42,12 @@ export async function getProductSalesReportFilterOptions(tenantId: number, actor
       : {};
   const currencyEntries = resolveCurrencyEntries(refs);
   const paymentEntries = resolvePaymentMethodEntries(refs, currencyEntries);
-  const settingsPriceTypeEntries = priceTypeEntriesFromUnknown(refs.price_type_entries)
-    .filter((entry) => entry.active !== false && entry.kind === "sale");
+  const settingsPriceTypeEntries = priceTypeEntriesFromUnknown(refs.price_type_entries).filter(
+    (entry) => entry.active !== false && entry.kind === "sale"
+  );
   const price_types = [
     ...new Set(settingsPriceTypeEntries.map((entry) => priceTypeKey(entry).trim()).filter(Boolean))
   ].sort((a, b) => a.localeCompare(b, "ru"));
-  // UI uchun: id — DB kaliti (kod), label — spravochnikdagi nom
   const price_type_options = settingsPriceTypeEntries
     .map((entry) => {
       const id = priceTypeKey(entry).trim();
@@ -74,56 +79,63 @@ export async function getProductSalesReportFilterOptions(tenantId: number, actor
     products,
     warehouses,
     supervisors,
+    selfSupervisorRow,
     tradeDirections,
     paymentTypesDistinct
   ] = await Promise.all([
-      prisma.user.findMany({
-        where: whereAgent,
-        select: { id: true, name: true, code: true },
-        orderBy: { name: "asc" }
-      }),
-      prisma.productCategory.findMany({
-        where: { tenant_id: tenantId, is_active: true },
-        select: { id: true, name: true },
-        orderBy: { name: "asc" }
-      }),
-      prisma.productCatalogGroup.findMany({
-        where: { tenant_id: tenantId },
-        select: { id: true, name: true },
-        orderBy: { name: "asc" }
-      }),
-      prisma.productSegment.findMany({
-        where: { tenant_id: tenantId },
-        select: { id: true, name: true },
-        orderBy: { name: "asc" }
-      }),
-      prisma.productBrand.findMany({
-        where: { tenant_id: tenantId, is_active: true },
-        select: { id: true, name: true, code: true },
-        orderBy: { name: "asc" }
-      }),
-      prisma.product.findMany({
-        where: { tenant_id: tenantId },
-        select: { id: true, name: true, sku: true },
-        orderBy: { name: "asc" },
-        take: 2500
-      }),
-      prisma.warehouse.findMany({
-        where: { tenant_id: tenantId, is_active: true },
-        select: { id: true, name: true, code: true },
-        orderBy: { name: "asc" }
-      }),
-      prisma.user.findMany({
-        where: { tenant_id: tenantId, role: "supervisor", is_active: true },
-        select: { id: true, name: true, code: true },
-        orderBy: { name: "asc" }
-      }),
-      prisma.tradeDirection.findMany({
-        where: { tenant_id: tenantId, is_active: true },
-        select: { id: true, name: true, code: true },
-        orderBy: { sort_order: "asc" }
-      }),
-      prisma.$queryRaw<Array<{ v: string }>>`
+    prisma.user.findMany({
+      where: staffWhereForFilterOptions(tenantId, scope, "agent"),
+      select: { id: true, name: true, code: true },
+      orderBy: { name: "asc" }
+    }),
+    prisma.productCategory.findMany({
+      where: { tenant_id: tenantId, is_active: true },
+      select: { id: true, name: true },
+      orderBy: { name: "asc" }
+    }),
+    prisma.productCatalogGroup.findMany({
+      where: { tenant_id: tenantId },
+      select: { id: true, name: true },
+      orderBy: { name: "asc" }
+    }),
+    prisma.productSegment.findMany({
+      where: { tenant_id: tenantId },
+      select: { id: true, name: true },
+      orderBy: { name: "asc" }
+    }),
+    prisma.productBrand.findMany({
+      where: { tenant_id: tenantId, is_active: true },
+      select: { id: true, name: true, code: true },
+      orderBy: { name: "asc" }
+    }),
+    prisma.product.findMany({
+      where: { tenant_id: tenantId },
+      select: { id: true, name: true, sku: true },
+      orderBy: { name: "asc" },
+      take: 2500
+    }),
+    prisma.warehouse.findMany({
+      where: warehouseWhereForFilterOptions(tenantId, scope),
+      select: { id: true, name: true, code: true },
+      orderBy: { name: "asc" }
+    }),
+    prisma.user.findMany({
+      where: staffWhereForFilterOptions(tenantId, scope, "supervisor"),
+      select: { id: true, name: true, code: true },
+      orderBy: { name: "asc" }
+    }),
+    actor?.userId && actor.role === "supervisor"
+      ? prisma.user.findFirst({
+          where: { id: actor.userId, tenant_id: tenantId, role: "supervisor" },
+          select: { id: true, name: true, code: true }
+        })
+      : Promise.resolve(null),
+    prisma.tradeDirection.findMany({
+      where: { tenant_id: tenantId, is_active: true },
+      select: { id: true, name: true, code: true },
+      orderBy: { sort_order: "asc" }
+    }),
+    prisma.$queryRaw<Array<{ v: string }>>`
         SELECT DISTINCT btrim(pay.payment_type) AS v
         FROM client_payments pay
         WHERE pay.tenant_id = ${tenantId}
@@ -134,14 +146,27 @@ export async function getProductSalesReportFilterOptions(tenantId: number, actor
           AND btrim(pay.payment_type) <> ''
         ORDER BY btrim(pay.payment_type)
       `
-    ]);
+  ]);
 
-  const territoryRows = await prisma.$queryRaw<Array<{ t1: string | null; t2: string | null; t3: string | null }>>`
+  const territoryRowsRaw = await prisma.$queryRaw<
+    Array<{ t1: string | null; t2: string | null; t3: string | null }>
+  >`
     SELECT DISTINCT c.zone AS t1, c.region AS t2, c.city AS t3
     FROM clients c
     WHERE c.tenant_id = ${tenantId}
   `;
-  const territoryOpts = mergeTerritoryFilterOptions(refs, territoryRows);
+  const territoryRows = filterTerritoryRowsByTerms(territoryRowsRaw, scope.territoryTerms);
+  const refsForTerritory =
+    scope.territoryTerms === null
+      ? refs
+      : {
+          ...refs,
+          territory_nodes: pruneTerritoryNodesByTerms(
+            parseTerritoryNodes(refs.territory_nodes),
+            scope.territoryTerms
+          )
+        };
+  const territoryOpts = mergeTerritoryFilterOptions(refsForTerritory, territoryRows);
 
   const payment_type_columns = paymentTypesDistinct.map((r) => {
     const key = (r.v ?? "").trim();
@@ -157,7 +182,13 @@ export async function getProductSalesReportFilterOptions(tenantId: number, actor
     statuses: ORDER_STATUSES.map((s) => ({ id: s, label: ORDER_STATUS_LABEL_RU[s] ?? s })),
     order_types: KNOWN_ORDER_TYPES.map((s) => ({ id: s, label: orderTypeLabelRu(s) })),
     agents: agents.map((a) => ({ id: a.id, name: a.name, code: a.code ?? "" })),
-    supervisors: supervisors.map((s) => ({ id: s.id, name: s.name, code: s.code ?? "" })),
+    supervisors: (() => {
+      const byId = new Map(supervisors.map((s) => [s.id, s]));
+      if (selfSupervisorRow) byId.set(selfSupervisorRow.id, selfSupervisorRow);
+      return [...byId.values()]
+        .sort((a, b) => a.name.localeCompare(b.name, "ru"))
+        .map((s) => ({ id: s.id, name: s.name, code: s.code ?? "" }));
+    })(),
     categories,
     product_groups: groups,
     segments,

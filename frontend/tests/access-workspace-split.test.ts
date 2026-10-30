@@ -38,7 +38,17 @@ describe("access-workspace split", () => {
       { id: 4, role: "auditor" }
     ];
     const filtered = filterAccessWebPanelUsers(rows);
-    expect(filtered.map((r) => r.role)).toEqual(["admin", "supervisor"]);
+    expect(filtered.map((r) => r.role)).toEqual(["supervisor"]);
+  });
+
+  it("isWebPanelDeniedRole blocks field roles from the web panel", async () => {
+    const { isWebPanelDeniedRole } = await import("../lib/access-web-users");
+    expect(isWebPanelDeniedRole("agent")).toBe(true);
+    expect(isWebPanelDeniedRole("expeditor")).toBe(true);
+    expect(isWebPanelDeniedRole("collector")).toBe(true);
+    expect(isWebPanelDeniedRole("vanseller")).toBe(true);
+    expect(isWebPanelDeniedRole("supervisor")).toBe(false);
+    expect(isWebPanelDeniedRole("admin")).toBe(false);
   });
 
   it("granted matrix shows only effective permissions", async () => {
@@ -69,7 +79,7 @@ describe("access-workspace split", () => {
       user_effect: "allow" as const
     };
     const personalOnly = {
-      key: "reports.otchety.view",
+      key: "reports.prodazhi_tovarov.view",
       effective: true,
       from_role: false,
       user_effect: "allow" as const
@@ -83,7 +93,7 @@ describe("access-workspace split", () => {
       denied_permissions: ["dashboard.supervayzer.view"]
     });
     expect(buildRevokeEffectiveAccessPatch(personalOnly)).toEqual({
-      remove_permission_keys: ["reports.otchety.view"]
+      remove_permission_keys: ["reports.prodazhi_tovarov.view"]
     });
     expect(revokeEffectiveAccessButtonLabel(rolePlusAllow)).toBe("Снять");
     expect(revokeEffectiveAccessButtonLabel(personalOnly)).toBe("Открепить");

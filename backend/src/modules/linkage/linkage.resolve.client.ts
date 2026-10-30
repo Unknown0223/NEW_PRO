@@ -2,6 +2,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "../../config/database";
 import { env } from "../../config/env";
 import { mergeAgentsFromClientTerritories } from "./linkage.territory";
+import { collectWarehouseIdsForUsers } from "./linkage.warehouse-ids";
 
 export async function resolveByClient(
   tenantId: number,
@@ -73,19 +74,15 @@ export async function resolveByClient(
   }
 
   if (agentIds.size > 0) {
-    const [whLinks, cashLinks] = await Promise.all([
-      prisma.warehouseUserLink.findMany({
-        where: { user_id: { in: [...agentIds] }, warehouse: { tenant_id: tenantId, is_active: true } },
-        distinct: ["warehouse_id"],
-        select: { warehouse_id: true }
-      }),
+    const [extraWh, cashLinks] = await Promise.all([
+      collectWarehouseIdsForUsers(tenantId, [...agentIds, ...expeditor_ids]),
       prisma.cashDeskUserLink.findMany({
         where: { user_id: { in: [...agentIds] }, cash_desk: { tenant_id: tenantId, is_active: true } },
         distinct: ["cash_desk_id"],
         select: { cash_desk_id: true }
       })
     ]);
-    for (const r of whLinks) warehouse_ids.add(r.warehouse_id);
+    for (const id of extraWh) warehouse_ids.add(id);
     return {
       client_ids: new Set<number>([selectedClientId]),
       agent_ids: agentIds,
@@ -107,6 +104,9 @@ export async function resolveByClient(
       product_ids: new Set<number>()
     };
   }
+
+  const extraWh = await collectWarehouseIdsForUsers(tenantId, [...expeditor_ids]);
+  for (const id of extraWh) warehouse_ids.add(id);
 
   return {
     client_ids: new Set<number>([selectedClientId]),

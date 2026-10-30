@@ -18,3 +18,19 @@ model JobLog {
   @@index([queue_name, finished_at])
   @@map("job_log")
 }
+
+/// Konsignatsiya limiti oylar kesimida: oy davomida o‘rnatilgan oxirgi qiymat (Asia/Tashkent oyi).
+/// `users.consignment_limit_amount` o‘zgarganda DB trigger yozadi; «limitni eski oydan qo‘yish» uchun manba.
+model ConsignmentLimitMonthly {
+  id           Int      @id @default(autoincrement())
+  tenant_id    Int
+  user_id      Int
+  year         Int
+  month        Int
+  limit_amount Decimal? @db.Decimal(15, 2)
+  updated_at   DateTime @default(now())
+
+  @@unique([tenant_id, user_id, year, month])
+  @@index([tenant_id, year, month])
+  @@map("consignment_limit_monthly")
+}

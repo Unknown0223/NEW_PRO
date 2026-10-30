@@ -40,9 +40,9 @@ export function PriceMatrixEffectiveDatetime({ value, onChange, className, disab
         if (!Number.isNaN(d.getTime())) onChange(d);
       }}
       quickPresets={[
-        { label: "Hozir", value: new Date() },
-        { label: "+1 soat", value: addHours(new Date(), 1) },
-        { label: "Ertaga 00:00", value: tomorrowAt(0, 0) }
+        { label: "Сейчас", value: new Date() },
+        { label: "+1 час", value: addHours(new Date(), 1) },
+        { label: "Завтра 00:00", value: tomorrowAt(0, 0) }
       ]}
     />
   );

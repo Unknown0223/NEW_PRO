@@ -2,19 +2,19 @@
 String expeditorStatusLabel(String status) {
   switch (status.trim().toLowerCase()) {
     case 'new':
-      return 'Yangi';
+      return 'Новый';
     case 'confirmed':
-      return 'Tasdiqlangan';
+      return 'Подтверждён';
     case 'picking':
-      return 'Yig\'ilmoqda';
+      return 'Сборка';
     case 'delivering':
-      return 'Yetkazilmoqda';
+      return 'Доставляется';
     case 'delivered':
-      return 'Yetkazildi';
+      return 'Доставлен';
     case 'returned':
-      return 'Qaytarildi';
+      return 'Возвращён';
     case 'cancelled':
-      return 'Bekor qilindi';
+      return 'Отменён';
     default:
       return status;
   }
@@ -23,13 +23,13 @@ String expeditorStatusLabel(String status) {
 String expeditorReturnReasonLabel(String code) {
   switch (code) {
     case 'defective':
-      return 'Nuqsonli mahsulot';
+      return 'Бракованный товар';
     case 'wrong':
-      return 'Noto\'g\'ri mahsulot';
+      return 'Неверный товар';
     case 'excess':
-      return 'Ortiqcha';
+      return 'Излишек';
     case 'other':
-      return 'Boshqa';
+      return 'Другое';
     default:
       return code;
   }
@@ -39,13 +39,13 @@ String expeditorReturnReasonLabel(String code) {
 String expeditorPaymentWorkflowLabel(String status) {
   switch (status.trim().toLowerCase()) {
     case 'pending_confirmation':
-      return 'Tasdiqlanmoqda';
+      return 'На подтверждении';
     case 'confirmed':
-      return 'Tasdiqlandi';
+      return 'Подтверждено';
     case 'rejected':
-      return 'Rad etildi';
+      return 'Отклонено';
     case 'deleted':
-      return 'Bekor qilindi';
+      return 'Отменено';
     default:
       return status;
   }

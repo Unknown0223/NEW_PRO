@@ -179,7 +179,17 @@ export function parseMobileConfigV1(raw: unknown): AgentMobileConfigV1 | undefin
       require_stock_snapshot_for_order: asBool(m.require_stock_snapshot_for_order),
       require_shipment_date: asBool(m.require_shipment_date),
       allow_exchange_request: asBool(m.allow_exchange_request),
-      disallowed_payment_method_codes: disallowed
+      disallowed_payment_method_codes: disallowed,
+      biometric_confirm_for_order_submit: asBool(m.biometric_confirm_for_order_submit),
+      biometric_confirm_for_payment_accept: asBool(m.biometric_confirm_for_payment_accept),
+      face_verification_enabled: asBool(m.face_verification_enabled),
+      face_verification_daily_login: asBool(m.face_verification_daily_login),
+      face_verification_max_random_orders_per_day: (() => {
+        const n = asNum(m.face_verification_max_random_orders_per_day);
+        if (n == null) return undefined;
+        return Math.min(5, Math.max(0, Math.trunc(n)));
+      })(),
+      face_verification_on_territory_check: asBool(m.face_verification_on_territory_check)
     };
     if (!Object.values(misc).some((v) => v !== undefined)) misc = undefined;
   }

@@ -29,24 +29,39 @@ function matchTradeDirectionValue(
   return hit?.value ?? raw;
 }
 
-function resolvePriceTypeFromOrder(
-  order: PolkiOrderPickRow,
+export function resolvePriceTypeFromOrder(
+  order: {
+    price_type?: string | null;
+    payment_method_ref?: string | null;
+    payment_method_label?: string | null;
+  },
   priceTypeOptions: Array<{ key: string; label: string }>,
   priceEntries: PolkiPriceTypeEntryRef[] | undefined
 ): string {
   const candidates = [
     order.price_type?.trim(),
-    order.payment_method_ref?.trim()
+    order.payment_method_ref?.trim(),
+    order.payment_method_label?.trim()
   ].filter(Boolean) as string[];
 
   for (const c of candidates) {
     if (priceTypeOptions.some((p) => p.key === c)) return c;
-    const entry = (priceEntries ?? []).find((e) => e.id === c || e.code === c);
+    const low = c.toLowerCase();
+    const entry = (priceEntries ?? []).find((e) => {
+      const code = (e.code ?? "").trim().toLowerCase();
+      const pmId = (e.payment_method_id ?? "").trim().toLowerCase();
+      return (
+        e.id.toLowerCase() === low ||
+        code === low ||
+        e.name.trim().toLowerCase() === low ||
+        polkiPriceTypeKey(e).toLowerCase() === low ||
+        (pmId !== "" && pmId === low)
+      );
+    });
     if (entry) {
       const key = polkiPriceTypeKey(entry);
       if (priceTypeOptions.some((p) => p.key === key)) return key;
     }
-    const low = c.toLowerCase();
     const byLabel = priceTypeOptions.find(
       (p) => p.key.toLowerCase() === low || p.label.toLowerCase() === low
     );
@@ -54,6 +69,61 @@ function resolvePriceTypeFromOrder(
   }
 
   return priceTypeOptions[0]?.key ?? "retail";
+}
+
+/** Narx turi kaliti → to‘lov usuli select id (Saqlash effektga qaramasdan). */
+export function paymentMethodIdForPriceType(
+  priceType: string,
+  priceEntries: PolkiPriceTypeEntryRef[] | undefined,
+  paymentOptions: Array<{ id: string; name: string }>,
+  paymentEntries: Array<{ id?: string; name?: string; code?: string | null }>
+): string | null {
+  const pt = priceType.trim();
+  if (!pt) return null;
+  const low = pt.toLowerCase();
+  const hit = (priceEntries ?? []).find((e) => {
+    const key = polkiPriceTypeKey(e);
+    const code = (e.code ?? "").trim();
+    return (
+      key === pt ||
+      key.toLowerCase() === low ||
+      e.id.trim().toLowerCase() === low ||
+      e.name.trim().toLowerCase() === low ||
+      (code !== "" && code.toLowerCase() === low)
+    );
+  });
+  const raw = (hit?.payment_method_id ?? "").trim() || (hit ? polkiPriceTypeKey(hit) : pt);
+  return matchPaymentMethodSelectId(raw, paymentOptions, paymentEntries) ?? (raw || null);
+}
+
+export function matchPaymentMethodSelectId(
+  stored: string,
+  options: Array<{ id: string; name: string }>,
+  entries: Array<{ id?: string; name?: string; code?: string | null }>
+): string | null {
+  const t = stored.trim();
+  if (!t) return null;
+  const low = t.toLowerCase();
+  const optHit = options.find(
+    (o) => o.id.toLowerCase() === low || o.name.trim().toLowerCase() === low
+  );
+  if (optHit) return optHit.id;
+  const eHit = entries.find((e) => {
+    const id = String(e.id ?? "").trim();
+    const name = String(e.name ?? "").trim();
+    const code = String(e.code ?? "").trim();
+    return (
+      id.toLowerCase() === low ||
+      name.toLowerCase() === low ||
+      (code !== "" && code.toLowerCase() === low)
+    );
+  });
+  if (eHit) {
+    const id = String(eHit.id ?? "").trim();
+    const opt = options.find((o) => o.id === id);
+    if (opt) return opt.id;
+  }
+  return null;
 }
 
 function resolveSkidkaType(order: PolkiOrderPickRow): "none" | "auto" | "line" {

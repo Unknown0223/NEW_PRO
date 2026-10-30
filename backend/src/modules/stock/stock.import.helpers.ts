@@ -9,7 +9,7 @@ import { applyStockReceipt } from "./stock.movements";
 
 export async function buildStockImportTemplateBuffer(): Promise<Buffer> {
   const workbook = new ExcelJS.Workbook();
-  const sheet = workbook.addWorksheet("Kirim", {
+  const sheet = workbook.addWorksheet("Приход", {
     views: [{ state: "frozen", ySplit: 1 }]
   });
 
@@ -22,10 +22,10 @@ export async function buildStockImportTemplateBuffer(): Promise<Buffer> {
     "Qo'shilish sanasi (ixtiyoriy)"
   ];
   const sample = [
-    "1 yoki Asosiy ombor",
+    "1 или Основной склад",
     "SKU-001",
     "",
-    "Namuna mahsulot",
+    "Пример товара",
     "10",
     "2026-03-30"
   ];
@@ -68,7 +68,7 @@ export async function buildPostupleniya2StockTemplateBuffer(): Promise<Buffer> {
     "Количество прихода",
     "Количество в блоке"
   ];
-  const sample = ["1", "Основной склад", "SKU-001", "Ichimliklar", "Namuna mahsulot", "12000", "10", "1"];
+  const sample = ["1", "Основной склад", "SKU-001", "Напитки", "Пример товара", "12000", "10", "1"];
 
   const hRow = sheet.getRow(1);
   headers.forEach((text, i) => {

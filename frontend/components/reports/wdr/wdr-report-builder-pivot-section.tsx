@@ -405,7 +405,7 @@ export function WdrReportBuilderPivotSection(props: WdrPivotSectionProps) {
               <option value="right">Справа</option>
             </select>
 
-            <label className="self-center text-foreground">Thousands separator</label>
+            <label className="self-center text-foreground">Разделитель тысяч</label>
             <select className="h-8 rounded border border-input bg-background px-2 text-foreground" value={formatThousands} onChange={(e) => setFormatThousands(e.target.value)}>
               <option value="space">(пробел)</option>
               <option value=",">,</option>
@@ -427,7 +427,7 @@ export function WdrReportBuilderPivotSection(props: WdrPivotSectionProps) {
               <option value="4">4</option>
             </select>
 
-            <label className="self-center text-foreground">Negative number format</label>
+            <label className="self-center text-foreground">Формат отрицательных чисел</label>
             <select className="h-8 rounded border border-input bg-background px-2 text-foreground" value={formatNegatives} onChange={(e) => setFormatNegatives(e.target.value)}>
               <option value="-1">-1</option>
               <option value="(1)">(1)</option>
@@ -438,8 +438,8 @@ export function WdrReportBuilderPivotSection(props: WdrPivotSectionProps) {
 
             <label className="self-center text-foreground">Форматировать как проценты</label>
             <select className="h-8 rounded border border-input bg-background px-2 text-foreground" value={formatAsPercent} onChange={(e) => setFormatAsPercent(e.target.value)}>
-              <option value="false">false</option>
-              <option value="true">true</option>
+              <option value="false">Нет</option>
+              <option value="true">Да</option>
             </select>
 
             <label className="self-center text-foreground">Шаблон числа</label>
@@ -529,7 +529,7 @@ export function WdrReportBuilderPivotSection(props: WdrPivotSectionProps) {
             </div>
             {conditionalRules.length === 0 ? (
               <div className="rounded border border-input p-4 text-center text-muted-foreground">
-                <p>There are no active conditions.</p>
+                <p>Нет активных условий.</p>
                 <button
                   type="button"
                   className="mt-3 rounded border border-input px-3 py-1 hover:bg-muted"
@@ -547,7 +547,7 @@ export function WdrReportBuilderPivotSection(props: WdrPivotSectionProps) {
                     ])
                   }
                 >
-                  + Add condition
+                  + Добавить условие
                 </button>
               </div>
             ) : (

@@ -36,11 +36,12 @@ describe("permission-model (CRUD struktura)", () => {
     expect(keys).toContain("clients.klient.deactivate");
   });
 
-  it("yangi bo'limlar mavjud (pivot/audit/finance/automation/work_slots/warehouse to'liq)", () => {
+  it("yangi bo'limlar mavjud (audit/finance/automation/work_slots/warehouse to'liq)", () => {
     const modules = new Set(PERMISSION_SECTIONS.map((s) => s.module));
-    for (const m of ["pivot", "audit", "finance", "automation", "work_slots", "warehouse", "routes"]) {
+    for (const m of ["audit", "finance", "work_slots", "warehouse", "gps", "activity"]) {
       expect(modules.has(m), `module yo'q: ${m}`).toBe(true);
     }
+    expect(PERMISSION_SECTIONS.some((s) => s.module === "orders" && s.section === "avtomatizatsiya")).toBe(true);
     const whSections = PERMISSION_SECTIONS.filter((s) => s.module === "warehouse").map((s) => s.section);
     expect(whSections).toContain("peremeshchenie");
     expect(whSections).toContain("korrektirovka");
@@ -72,6 +73,12 @@ describe("legacy-key-map (eski → yangi)", () => {
     );
   });
 
+  it("cash balanslar → balansy_klientov (otchety emas)", () => {
+    expect(mapLegacyKeyToStructured("cash.otchety.spisok_balansy_klientov")).toBe("cash.balansy_klientov.view");
+    expect(mapLegacyKeyToStructured("cash.otchety.detal_balans_klienta")).toBe("cash.balansy_klientov.view");
+    expect(mapLegacyKeyToStructured("cash.otchety.otchyot_po_prihodam")).toBe("cash.otchety.view");
+  });
+
   it("noma'lum kalit uchun null", () => {
     expect(mapLegacyKeyToStructured("nope")).toBeNull();
   });
@@ -79,15 +86,21 @@ describe("legacy-key-map (eski → yangi)", () => {
 
 describe("route-permission-guard matchRule", () => {
   it("orders write/read to'g'ri kalitга bog'lanadi", () => {
-    expect(matchRule("POST", "/api/:slug/orders")?.anyOf).toContain("orders.zakaz.create");
+    expect(matchRule("POST", "/api/:slug/orders")?.anyOf).toContain("orders.sozdanie.create");
     expect(matchRule("GET", "/api/:slug/orders")?.anyOf).toContain("orders.zakaz.view");
     expect(matchRule("PATCH", "/api/:slug/orders/:id")?.anyOf).toContain("orders.zakaz.update");
-    expect(matchRule("DELETE", "/api/:slug/orders/:id")?.anyOf).toContain("orders.zakaz.delete");
+    expect(matchRule("DELETE", "/api/:slug/orders/:id")).toBeNull();
   });
 
   it("maxsus yo'llar (status/bulk) umumiydan oldin", () => {
-    expect(matchRule("POST", "/api/:slug/orders/:id/status")?.anyOf).toContain("orders.zakaz.status");
+    expect(matchRule("POST", "/api/:slug/orders/:id/status")?.anyOf).toContain("orders.status_delivered.status");
     expect(matchRule("POST", "/api/:slug/orders/bulk/nakladnoy")?.anyOf).toContain("orders.zakaz.copy");
+  });
+
+  it("aniq URL (Fastify 5 fallback) ham :id qoidasiga mos keladi", () => {
+    expect(matchRule("PATCH", "/api/acme/orders/5")?.anyOf).toContain("orders.zakaz.update");
+    expect(matchRule("PATCH", "/api/acme/payments/9")?.anyOf).toContain("cash.oplaty_klientov.update");
+    expect(matchRule("POST", "/api/acme/orders/12/status")?.anyOf).toContain("orders.status_cancelled.status");
   });
 
   it("clients bulk-active → activate/deactivate", () => {
@@ -111,8 +124,10 @@ describe("role-permission-presets", () => {
 
   it("agent — заказы/клиенты create bor, склад yo'q", () => {
     const agent = buildRoleDefaultKeys("agent");
-    expect(agent).toContain("orders.zakaz.create");
+    expect(agent).toContain("orders.sozdanie.create");
     expect(agent).toContain("clients.klient.create");
+    expect(agent).toContain("clients.foto.view");
+    expect(agent).toContain("clients.foto.create");
     expect(agent.some((k) => k.startsWith("warehouse."))).toBe(false);
   });
 
@@ -122,7 +137,8 @@ describe("role-permission-presets", () => {
     expect(op).toContain("clients.klient.view");
     expect(op.some((k) => k.startsWith("cash."))).toBe(false);
     expect(op.some((k) => k.startsWith("warehouse."))).toBe(false);
-    expect(op.some((k) => k.startsWith("staff."))).toBe(false);
+    expect(op.filter((k) => k.startsWith("staff.") && k !== "staff.konsignatsiya.view")).toEqual([]);
+    expect(op).toContain("staff.konsignatsiya.view");
     expect(op.some((k) => k.startsWith("access."))).toBe(false);
     expect(op).not.toContain("access.manage");
   });

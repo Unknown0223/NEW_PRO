@@ -46,7 +46,7 @@ export function ClientAuditHistoryShell({
         className={cn(
           "min-w-0 p-5",
           embedded
-            ? "min-h-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-contain"
+            ? "min-h-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-y-contain"
             : "overflow-visible"
         )}
       >

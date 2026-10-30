@@ -1,5 +1,11 @@
 import type { PivotConfig, PivotField } from "@salec/pivot-engine";
 import { getFlatColumnFieldIds } from "@/lib/build-flat-pivot-data";
+import {
+  capturePreFlatSnapshot,
+  getPivotOptionsExtras,
+  type PreFlatSnapshot
+} from "@/lib/pivot-config-extras";
+import { resolveLayoutForm } from "@/lib/pivot-layout-form";
 
 /** Excel «Плоская» shablonidagi ustunlar (mavjud maydonlar bilan). */
 export const FLAT_SALES_DETAIL_FIELD_IDS = [
@@ -22,6 +28,13 @@ export const FLAT_SALES_DETAIL_FIELD_IDS = [
 /** Flat rejim: barcha tanlangan maydonlar `rows` da (ustun tartibi). */
 export function flattenConfigZones(config: PivotConfig): PivotConfig {
   const ids = getFlatColumnFieldIds(config);
+  const prevLayout = resolveLayoutForm(config.options);
+  const extras = getPivotOptionsExtras(config);
+  const preFlatSnapshot: PreFlatSnapshot | undefined =
+    prevLayout !== "flat"
+      ? capturePreFlatSnapshot(config)
+      : extras.preFlatSnapshot;
+
   return {
     ...config,
     rows: ids,
@@ -33,8 +46,9 @@ export function flattenConfigZones(config: PivotConfig): PivotConfig {
       compactMode: false,
       showGrandTotal: false,
       showSubtotals: false,
-      showColumnTotals: false
-    }
+      showColumnTotals: false,
+      ...(preFlatSnapshot ? { preFlatSnapshot } : {})
+    } as PivotConfig["options"]
   };
 }
 

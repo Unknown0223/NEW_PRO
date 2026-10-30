@@ -22,7 +22,7 @@ export function OrderDetailHeader({
         <Link
           href="/orders"
           className="rounded-lg p-2 text-muted-foreground transition-colors hover:bg-muted"
-          aria-label="Заявки ro'yxatiga"
+          aria-label="К списку заявок"
         >
           <ArrowLeft className="size-5" aria-hidden />
         </Link>

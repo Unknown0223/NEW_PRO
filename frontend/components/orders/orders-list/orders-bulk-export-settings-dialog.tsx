@@ -5,7 +5,8 @@ import {
   NakladnoyTemplateSettingsPanel,
   Warehouse112SettingsPanel,
   Warehouse410SettingsPanel,
-  Warehouse600SettingsPanel
+  Warehouse600SettingsPanel,
+  WarehouseGroupSettingsPanel
 } from "@/components/orders/orders-list/orders-bulk-export-template-settings-panels";
 import {
   getBulkExportCategory,
@@ -21,7 +22,8 @@ import {
   type NakladnoyTemplateSettings,
   type Warehouse112Settings,
   type Warehouse410Settings,
-  type Warehouse600Settings
+  type Warehouse600Settings,
+  type WarehouseGroupSettings
 } from "@/lib/bulk-export-template-settings";
 import {
   type BulkExportCategoryPrefs,
@@ -217,13 +219,23 @@ export function OrdersBulkExportSettingsDialog({
 
                   {expanded && tplMode === "invoice" ? (
                     <InvoiceTemplateSettingsPanel
+                      templateId={id}
                       settings={getSettings(id) as InvoiceTemplateFieldSettings}
+                      onChange={(next) => updateTemplateSettings(id, next)}
+                    />
+                  ) : null}
+
+                  {expanded && tplMode === "warehouse" ? (
+                    <WarehouseGroupSettingsPanel
+                      templateId={id}
+                      settings={getSettings(id) as WarehouseGroupSettings}
                       onChange={(next) => updateTemplateSettings(id, next)}
                     />
                   ) : null}
 
                   {expanded && tplMode === "warehouse-112" ? (
                     <Warehouse112SettingsPanel
+                      templateId={id}
                       settings={getSettings(id) as Warehouse112Settings}
                       onChange={(next) => updateTemplateSettings(id, next)}
                     />
@@ -231,6 +243,7 @@ export function OrdersBulkExportSettingsDialog({
 
                   {expanded && tplMode === "warehouse-410" ? (
                     <Warehouse410SettingsPanel
+                      templateId={id}
                       settings={getSettings(id) as Warehouse410Settings}
                       onChange={(next) => updateTemplateSettings(id, next)}
                     />
@@ -238,6 +251,7 @@ export function OrdersBulkExportSettingsDialog({
 
                   {expanded && tplMode === "warehouse-600" ? (
                     <Warehouse600SettingsPanel
+                      templateId={id}
                       settings={getSettings(id) as Warehouse600Settings}
                       onChange={(next) => updateTemplateSettings(id, next)}
                     />

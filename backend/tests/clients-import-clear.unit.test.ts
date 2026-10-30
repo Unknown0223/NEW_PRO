@@ -10,6 +10,23 @@ function emptyStaffLookup(): ImportStaffLookup {
   return { byId: new Map(), byCode: new Map(), byName: new Map(), byPhone: new Map() };
 }
 
+function staffLookupWithAgent(id: number, code: string): ImportStaffLookup {
+  const user = {
+    id,
+    role: "agent" as const,
+    code,
+    name: code,
+    phone: null,
+    is_active: true
+  };
+  return {
+    byId: new Map([[id, user]]),
+    byCode: new Map([[code.toLowerCase(), [user]]]),
+    byName: new Map(),
+    byPhone: new Map()
+  };
+}
+
 function refResolverWithCategory(codes: Array<{ code: string; name: string }>) {
   const resolver = Object.create(ClientImportRefResolver.prototype) as ClientImportRefResolver;
   Object.assign(resolver, {
@@ -51,7 +68,7 @@ describe("clients import clear-on-empty", () => {
     expect(refResolver.miss.category).toBe(1);
   });
 
-  it("clears mapped agent and days when cells are empty on update", () => {
+  it("update: empty agent/days cells preserve previous team (not full wipe)", () => {
     const warnings: string[] = [];
     const row = ["", ""];
     const colIndexByKey = { import_agent_1: 0, import_agent_1_days: 1 };
@@ -73,20 +90,13 @@ describe("clients import clear-on-empty", () => {
       current
     );
     expect(out.touched).toBe(true);
-    expect(out.updatePatches).toEqual([
-      {
-        slot: 1,
-        agent_id: null,
-        expeditor_user_id: null,
-        expeditor_phone: null,
-        visit_weekdays: []
-      }
-    ]);
+    /** Bo‘sh katak → o‘zgarish yo‘q → updatePatches da yo‘q yoki oldingi qiymat */
+    expect(out.updatePatches).toEqual([]);
     expect(warnings).toHaveLength(0);
   });
 
-  it("clears agent on slot 1 and keeps untouched slot 2", () => {
-    const row = ["---"];
+  it("update: explicit clear token removes agent; untouched slot 2 kept", () => {
+    const row = ["очистить"];
     const colIndexByKey = { import_agent_1: 0 };
     const current = [
       {
@@ -130,6 +140,92 @@ describe("clients import clear-on-empty", () => {
     ]);
   });
 
+  it("update: placeholder --- preserves agent (does not clear)", () => {
+    const row = ["---"];
+    const colIndexByKey = { import_agent_1: 0 };
+    const current = [
+      {
+        slot: 1,
+        agent_id: 42,
+        expeditor_user_id: null,
+        expeditor_phone: null,
+        visit_weekdays: [3]
+      }
+    ];
+    const out = buildAgentAssignmentPatchesFromImportRow(
+      row,
+      colIndexByKey,
+      emptyStaffLookup(),
+      2,
+      () => {},
+      current
+    );
+    expect(out.updatePatches).toEqual([]);
+  });
+
+  it("update: replace only agent 1, keep days and other slots", () => {
+    const lookup = staffLookupWithAgent(99, "A99");
+    const row = ["A99", "---", ""];
+    const colIndexByKey = {
+      import_agent_1: 0,
+      import_agent_1_days: 1,
+      import_agent_2: 2
+    };
+    const current = [
+      {
+        slot: 1,
+        agent_id: 42,
+        expeditor_user_id: null,
+        expeditor_phone: null,
+        visit_weekdays: [3, 5]
+      },
+      {
+        slot: 2,
+        agent_id: 7,
+        expeditor_user_id: null,
+        expeditor_phone: null,
+        visit_weekdays: [1]
+      }
+    ];
+    const out = buildAgentAssignmentPatchesFromImportRow(
+      row,
+      colIndexByKey,
+      lookup,
+      2,
+      () => {},
+      current
+    );
+    expect(out.updatePatches).toEqual([
+      {
+        slot: 1,
+        agent_id: 99,
+        expeditor_user_id: null,
+        expeditor_phone: null,
+        visit_weekdays: [3, 5]
+      },
+      {
+        slot: 2,
+        agent_id: 7,
+        expeditor_user_id: null,
+        expeditor_phone: null,
+        visit_weekdays: [1]
+      }
+    ]);
+  });
+
+  it("create: empty agent cells mean no assignment", () => {
+    const row = ["", ""];
+    const colIndexByKey = { import_agent_1: 0, import_agent_1_days: 1 };
+    const out = buildAgentAssignmentPatchesFromImportRow(
+      row,
+      colIndexByKey,
+      emptyStaffLookup(),
+      2,
+      () => {}
+    );
+    expect(out.createPatches).toEqual([]);
+  });
+
   it("clears agent when code is unknown", () => {
     const warnings: string[] = [];
     const row = ["NO_SUCH_AGENT"];
@@ -160,6 +256,21 @@ describe("clients import clear-on-empty", () => {
         visit_weekdays: []
       }
     ]);
-    expect(warnings.some((w) => w.includes("olib tashlandi"))).toBe(true);
+    expect(warnings.some((w) => w.includes("снят"))).toBe(true);
+  });
+
+  it("create: unknown agent smart code is hard error", () => {
+    const warnings: string[] = [];
+    const out = buildAgentAssignmentPatchesFromImportRow(
+      ["SVR-SMART-01"],
+      { import_agent_1: 0 },
+      emptyStaffLookup(),
+      3,
+      (m) => warnings.push(m)
+    );
+    expect(out.createPatches).toEqual([]);
+    expect(out.hardErrors.some((e) => e.includes("не найдено"))).toBe(true);
+    expect(out.hardErrorFields).toContain("import_agent_1");
+    expect(warnings).toEqual([]);
   });
 });

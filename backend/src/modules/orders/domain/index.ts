@@ -3,6 +3,7 @@ export * from "./order.detail-mappers";
 export * from "./order.query";
 export * from "./order.lifecycle";
 export * from "./order.lines";
+export * from "./order.bulk-bonus-refresh";
 export * from "./order.meta";
 export * from "./order.nakladnoy";
 export * from "./order.create";

@@ -144,6 +144,39 @@ export const GROUP_PROCESSING_ACTIONS: GroupProcessingActionDef[] = [
 
 export const GROUP_PROCESSING_MENU_ACTIONS = GROUP_PROCESSING_ACTIONS.filter((a) => !a.hiddenInMenu);
 
+const ACTIVE_KEYS = ["clients.klient.activate", "clients.klient.deactivate"];
+const MISC_KEYS = [
+  "clients.gr_kategoriya_tovara.update",
+  "clients.gr_kredit_limit.update",
+  "clients.gr_tip_tseny.update",
+  "clients.gr_tegi.update"
+];
+
+/** Доступ → Клиенты → Групповая обработка: amal sahifasi uchun kamida bittasi kerak. */
+export const GROUP_PROCESSING_ACTION_PERMISSIONS: Record<GroupProcessingActionId, readonly string[]> = {
+  team: ["clients.gr_komanda.update"],
+  client_attrs: [...ACTIVE_KEYS, "clients.gr_kategoriya.update", "clients.gr_tip_format.update", "clients.gr_kanal.update"],
+  active: ACTIVE_KEYS,
+  territory: ["clients.gr_territoriya.update"],
+  category: ["clients.gr_kategoriya.update"],
+  type_format: ["clients.gr_tip_format.update"],
+  sales_channel: ["clients.gr_kanal.update"],
+  ops: ["clients.gr_sklad_kassa.update"],
+  warehouse_cash: ["clients.gr_sklad_kassa.update"],
+  allow_order_with_debt: ["clients.gr_dolg.update"],
+  misc: MISC_KEYS,
+  product_category: ["clients.gr_kategoriya_tovara.update"],
+  client_code: ["clients.klient.update"],
+  credit_limit: ["clients.gr_kredit_limit.update"],
+  price_type: ["clients.gr_tip_tseny.update"],
+  tags: ["clients.gr_tegi.update"],
+  map: ["clients.karta.view"]
+};
+
+export function canUseGroupProcessingAction(id: GroupProcessingActionId, has: (key: string) => boolean): boolean {
+  return GROUP_PROCESSING_ACTION_PERMISSIONS[id].some(has);
+}
+
 export const GROUP_PROCESSING_ATTRS_ALIASES = new Set<GroupProcessingActionId>([
   "client_attrs",
   "active",
@@ -172,3 +205,60 @@ export const GROUP_PROCESSING_MISC_ALIASES = new Set<GroupProcessingActionId>([
 ]);
 
 export const GROUP_PROCESSING_IDS_STORAGE_KEY = "salec:group-processing-ids";
+export const CLIENTS_LIST_SELECTED_IDS_KEY = "salec:clients-list-selected-ids";
+
+const MAX_STORED_CLIENT_IDS = 5000;
+
+export function clientsListSelectedStorageKey(tenantSlug: string): string {
+  return `${CLIENTS_LIST_SELECTED_IDS_KEY}:${tenantSlug}`;
+}
+
+export function readStoredClientIds(storageKey: string): number[] {
+  try {
+    if (typeof sessionStorage === "undefined") return [];
+    const raw = sessionStorage.getItem(storageKey);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .map((x) => Number(x))
+      .filter((n) => Number.isFinite(n) && n > 0)
+      .slice(0, MAX_STORED_CLIENT_IDS);
+  } catch {
+    return [];
+  }
+}
+
+export function writeStoredClientIds(storageKey: string, ids: Iterable<number>): void {
+  try {
+    if (typeof sessionStorage === "undefined") return;
+    const list = [
+      ...new Set(
+        [...ids]
+          .map((x) => Number(x))
+          .filter((n) => Number.isFinite(n) && n > 0)
+      )
+    ].slice(0, MAX_STORED_CLIENT_IDS);
+    if (list.length === 0) sessionStorage.removeItem(storageKey);
+    else sessionStorage.setItem(storageKey, JSON.stringify(list));
+  } catch {
+    /* ignore */
+  }
+}
+
+export function rememberClientsListSelection(
+  tenantSlug: string | null | undefined,
+  ids: Iterable<number>
+): void {
+  if (!tenantSlug) return;
+  writeStoredClientIds(clientsListSelectedStorageKey(tenantSlug), ids);
+}
+
+export function goToClientsKeepingSelection(
+  push: (href: string) => void,
+  tenantSlug: string | null | undefined,
+  ids: Iterable<number>
+): void {
+  rememberClientsListSelection(tenantSlug, ids);
+  push("/clients");
+}

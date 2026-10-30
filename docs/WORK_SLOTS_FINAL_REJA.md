@@ -1,6 +1,8 @@
 # FINAL REJA: Пользователи → Рабочее место
 
 **Sana:** 2026-07-19  
+**Yangilanish:** 2026-08-25 — amaliy yakun: [`WORK_SLOTS-YAXSHILASH-YAKUN.md`](./WORK_SLOTS-YAXSHILASH-YAKUN.md)
+
 **Maqsad (sodda):** Joy doimiy qoladi, odam almashadi. Joyga tegishli hamma narsa **Рабочее место**da. Odamga tegishli narsa faqat **Пользователи**da.
 
 ---

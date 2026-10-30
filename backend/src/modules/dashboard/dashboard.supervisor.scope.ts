@@ -7,6 +7,11 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "../../config/database";
 import { env } from "../../config/env";
 import { getRedisForApp } from "../../lib/redis-cache";
+import { expandPaymentMethodFilterValues } from "../tenant-settings/finance-refs";
+import {
+  loadPaymentMethodEntriesForResolve,
+  loadPriceTypeEntriesForResolve
+} from "../tenant-settings/tenant-settings.service";
 import {
   ORDER_STATUSES,
   ORDER_STATUSES_OUTSTANDING_RECEIVABLE
@@ -128,6 +133,9 @@ export type SupervisorVisitRow = {
   not_visited: number;
   visits_with_orders: number;
   visits_without_orders: number;
+  /** Tanlangan kunda agentning buyurtmalar soni (status filtriga mos). */
+  order_count: number;
+  cancelled_count: number;
   gps_visits: number;
   photo_reports: number;
   photo_outlets: number;
@@ -194,6 +202,22 @@ export function parseSupervisorDashboardFilters(
     territory_1_list: csvToStringArray(q.territory_1 ?? q.territory1),
     territory_2_list: csvToStringArray(q.territory_2 ?? q.territory2),
     territory_3_list: csvToStringArray(q.territory_3 ?? q.territory3)
+  };
+}
+
+/** `payment_type` filtr: kod / id / tip sena aliaslarini ham moslashtiradi. */
+export async function expandSupervisorPaymentFilters(
+  tenantId: number,
+  f: SupervisorDashboardFilters
+): Promise<SupervisorDashboardFilters> {
+  if (f.payment_types.length === 0) return f;
+  const [pm, pt] = await Promise.all([
+    loadPaymentMethodEntriesForResolve(tenantId),
+    loadPriceTypeEntriesForResolve(tenantId)
+  ]);
+  return {
+    ...f,
+    payment_types: expandPaymentMethodFilterValues(f.payment_types, pm, pt)
   };
 }
 

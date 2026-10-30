@@ -8,14 +8,15 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 import '../config/mobile_config.dart';
 
-/// Server bilan bir xil — 25 MiB gacha asl kamera fayli.
+/// Server bilan bir xil — 25 MiB gacha (siqilgan fayl ham shu limitda).
 const clientPhotoMaxFileBytes = 25 * 1024 * 1024;
 
 /// Base64 uzunligi (~33% kattaroq).
 const clientPhotoMaxBase64Len = (clientPhotoMaxFileBytes * 4 + 2) ~/ 3;
 
-/// Siqishda rezolyutsiyani pasaytirmaslik uchun yuqori chegara.
-const _noResizeMinSide = 8192;
+/// Fotootchyot: polka/vitrina uchun yetarli, trafik/DB ni yemaydi.
+const clientPhotoReportMaxSide = 1600;
+const clientPhotoReportMaxQuality = 75;
 
 class PhotoResult {
   final String filePath;
@@ -62,13 +63,15 @@ bool _fitsPhotoUploadBytes(int byteLen) {
   return approxB64 <= clientPhotoMaxBase64Len;
 }
 
-int _encodeQuality(PhotoConfig cfg) =>
-    cfg.jpegQuality > 0 ? cfg.jpegQuality.clamp(92, 98) : 95;
+int _encodeQuality(PhotoConfig cfg) {
+  final q = cfg.jpegQuality > 0 ? cfg.jpegQuality : clientPhotoReportMaxQuality;
+  return q.clamp(1, clientPhotoReportMaxQuality);
+}
 
 int _encodeMaxSide(PhotoConfig cfg) {
-  final w = cfg.maxWidthPx > 0 ? cfg.maxWidthPx : 4032;
-  final h = cfg.maxHeightPx > 0 ? cfg.maxHeightPx : 4032;
-  return math.max(w, h);
+  final w = cfg.maxWidthPx > 0 ? cfg.maxWidthPx : clientPhotoReportMaxSide;
+  final h = cfg.maxHeightPx > 0 ? cfg.maxHeightPx : clientPhotoReportMaxSide;
+  return math.min(math.max(w, h), clientPhotoReportMaxSide).clamp(64, clientPhotoReportMaxSide);
 }
 
 Future<List<int>?> _compressJpeg(
@@ -98,42 +101,29 @@ Future<List<int>?> _readRawFile(String filePath) async {
 Future<String> _encodeB64Isolate(List<int> bytes) =>
     compute(_b64FromBytes, bytes);
 
-/// Kamera faylini serverga yuklash uchun base64 — asl sifat saqlanadi, faqat limitdan oshsa siqiladi.
+/// Kamera faylini serverga — doim 1600 px / JPEG ≤75 gacha siqiladi (xom 3–8 MB yuborilmaydi).
 Future<String?> encodeClientPhotoBase64(String filePath, {PhotoConfig? config}) async {
   final cfg = config ?? const PhotoConfig();
   final targetQuality = _encodeQuality(cfg);
   final targetSide = _encodeMaxSide(cfg);
 
-  final rawBytes = await _readRawFile(filePath);
-  if (rawBytes != null && _fitsPhotoUploadBytes(rawBytes.length)) {
-    return _encodeB64Isolate(rawBytes);
-  }
-
-  // Avval faqat JPEG sifatini pasaytiramiz, rezolyutsiyani saqlab.
-  for (var quality = targetQuality; quality >= 88; quality -= 2) {
-    final reencoded = await _compressJpeg(
-      filePath,
-      minSide: _noResizeMinSide,
-      quality: quality,
-    );
-    if (reencoded != null && _fitsPhotoUploadBytes(reencoded.length)) {
-      return _encodeB64Isolate(reencoded);
-    }
-  }
-
-  // Hali ham katta — config chegarasigacha kichraytiramiz.
   var compressed = await _compressJpeg(filePath, minSide: targetSide, quality: targetQuality);
   if (compressed != null && _fitsPhotoUploadBytes(compressed.length)) {
     return _encodeB64Isolate(compressed);
   }
 
-  for (var side = targetSide; side >= 1920; side -= 512) {
-    for (var quality = targetQuality; quality >= 85; quality -= 3) {
+  for (var side = targetSide; side >= 640; side -= 320) {
+    for (var quality = targetQuality; quality >= 55; quality -= 10) {
       compressed = await _compressJpeg(filePath, minSide: side, quality: quality);
       if (compressed != null && _fitsPhotoUploadBytes(compressed.length)) {
         return _encodeB64Isolate(compressed);
       }
     }
+  }
+
+  final rawBytes = await _readRawFile(filePath);
+  if (rawBytes != null && _fitsPhotoUploadBytes(rawBytes.length)) {
+    return _encodeB64Isolate(rawBytes);
   }
 
   return null;

@@ -42,7 +42,9 @@ const listQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(500).optional().default(50),
   search: z.string().optional(),
   is_active: z.enum(["true", "false"]).optional(),
-  include_inactive: z.enum(["true", "false"]).optional()
+  include_inactive: z.enum(["true", "false"]).optional(),
+  /** product-groups kaskadi: kategoriya bo‘yicha (boshqa catalog entitylar ignore) */
+  category_id: z.coerce.number().int().positive().optional()
 });
 
 const simpleBodySchema = z.object({
@@ -74,7 +76,7 @@ const interchangeablePatchSchema = interchangeableBodySchema.partial();
 function parseListQuery(q: Record<string, unknown>) {
   const parsed = listQuerySchema.safeParse(q);
   if (!parsed.success) return null;
-  const { page, limit, search, is_active, include_inactive } = parsed.data;
+  const { page, limit, search, is_active, include_inactive, category_id } = parsed.data;
   let active: boolean | null = null;
   if (is_active === "true") active = true;
   if (is_active === "false") active = false;
@@ -83,7 +85,8 @@ function parseListQuery(q: Record<string, unknown>) {
     limit,
     search: search?.trim() || undefined,
     is_active: active,
-    include_inactive: include_inactive === "true"
+    include_inactive: include_inactive === "true",
+    category_id: category_id != null && category_id > 0 ? category_id : undefined
   };
 }
 

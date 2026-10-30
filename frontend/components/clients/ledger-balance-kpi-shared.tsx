@@ -71,9 +71,9 @@ export function CompactBalanceKpiCard({
               "line-clamp-2 max-w-full shrink-0 break-words text-left text-[12px] font-semibold tabular-nums leading-tight sm:text-[13px]",
               balanceMainTextClass(n)
             )}
-            title={`${formatNumberGrouped(n, LEDGER_KPI_AMOUNT_FMT)} So'm`}
+            title={`${formatNumberGrouped(n, LEDGER_KPI_AMOUNT_FMT)} сум`}
           >
-            {formatNumberGrouped(n, LEDGER_KPI_AMOUNT_FMT)} So&apos;m
+            {formatNumberGrouped(n, LEDGER_KPI_AMOUNT_FMT)} сум
           </p>
           <div className={cn("mt-0.5 h-0.5 w-full shrink-0 rounded-full", balanceRibbonBg(n))} role="presentation" aria-hidden />
           <div className="shrink-0 space-y-px pt-1 text-[9px] leading-tight sm:text-[10px]">
@@ -86,7 +86,7 @@ export function CompactBalanceKpiCard({
                   </span>
                   <span
                     className={cn("shrink-0 text-right tabular-nums font-medium", sublineAmountClass(sn))}
-                    title={`${formatNumberGrouped(sn, LEDGER_KPI_AMOUNT_FMT)} So'm`}
+                    title={`${formatNumberGrouped(sn, LEDGER_KPI_AMOUNT_FMT)} сум`}
                   >
                     {formatNumberGrouped(sn, LEDGER_KPI_AMOUNT_FMT)}
                   </span>
@@ -161,7 +161,7 @@ export function SelectableCompactBalanceKpiCard({
                 balanceMainTextClass(n)
               )}
             >
-              {formatNumberGrouped(n, LEDGER_KPI_AMOUNT_FMT)} So&apos;m
+              {formatNumberGrouped(n, LEDGER_KPI_AMOUNT_FMT)} сум
             </p>
             <div className={cn("mt-0.5 h-0.5 w-full shrink-0 rounded-full", balanceRibbonBg(n))} aria-hidden />
             <div className="shrink-0 space-y-px pt-1 text-[9px] leading-tight sm:text-[10px]">

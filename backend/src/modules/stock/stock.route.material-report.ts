@@ -4,18 +4,30 @@ import { adminRoles, catalogRoles } from "./stock.route.shared";
 import { sendApiError, zodValidationExtras } from "../../lib/api-error";
 import { ensureTenantContext } from "../../lib/tenant-context";
 import { jwtAccessVerify } from "../auth/auth.prehandlers";
-import { requireRolesOrSkladchikEntitlement } from "../staff/skladchik-access.prehandler";
+import {
+  requireRolesOrSkladchikEntitlement,
+  STOCK_BALANCES_VIEW_PERMISSIONS
+} from "../staff/skladchik-access.prehandler";
 import { buildMaterialReportExportBuffer, listMaterialReport } from "./stock.service";
 import {
   materialReportExportQuerySchema,
   materialReportQuerySchema
 } from "./stock.route.schemas";
 
+const MATERIAL_VIEW = [
+  "warehouse.materialnyy_otchet.view",
+  ...STOCK_BALANCES_VIEW_PERMISSIONS
+] as const;
 
 export async function registerStockMaterialReportRoutes(app: FastifyInstance) {
   app.get(
     "/api/:slug/stock/material-report/export",
-    { preHandler: [jwtAccessVerify, requireRolesOrSkladchikEntitlement(catalogRoles, "stock_balance_list")] },
+    {
+      preHandler: [
+        jwtAccessVerify,
+        requireRolesOrSkladchikEntitlement(catalogRoles, "stock_balance_list", MATERIAL_VIEW)
+      ]
+    },
     async (request, reply) => {
       if (!ensureTenantContext(request, reply)) return;
       const parsed = materialReportExportQuerySchema.safeParse(request.query);
@@ -51,7 +63,12 @@ export async function registerStockMaterialReportRoutes(app: FastifyInstance) {
 
   app.get(
     "/api/:slug/stock/material-report",
-    { preHandler: [jwtAccessVerify, requireRolesOrSkladchikEntitlement(catalogRoles, "stock_balance_list")] },
+    {
+      preHandler: [
+        jwtAccessVerify,
+        requireRolesOrSkladchikEntitlement(catalogRoles, "stock_balance_list", MATERIAL_VIEW)
+      ]
+    },
     async (request, reply) => {
       if (!ensureTenantContext(request, reply)) return;
       const parsed = materialReportQuerySchema.safeParse(request.query);

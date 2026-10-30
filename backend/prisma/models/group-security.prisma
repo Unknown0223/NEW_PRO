@@ -1,0 +1,64 @@
+/// Har bir muvaffaqiyatli kirish (web / mobil) — shubhali kirishlarni aniqlash manbai.
+/// `refresh_tokens` refresh paytida eski IP ni nusxalaydi, shuning uchun alohida jurnal.
+model AuthLoginEvent {
+  id          Int      @id @default(autoincrement())
+  tenant_id   Int
+  user_id     Int
+  /// web | mobile
+  platform    String   @db.VarChar(16)
+  device_id   String?  @db.VarChar(64)
+  device_name String?  @db.VarChar(255)
+  ip_address  String?  @db.VarChar(64)
+  user_agent  String?  @db.VarChar(512)
+  created_at  DateTime @default(now())
+  tenant      Tenant   @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  user        User     @relation("AuthLoginEvents", fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([tenant_id, device_id, created_at])
+  @@index([tenant_id, ip_address, created_at])
+  @@index([tenant_id, user_id, created_at])
+  @@map("auth_login_events")
+}
+
+/// «Подозрительные входы»: bitta qurilma / IP dan bir nechta akkaunt, bir vaqtda ikki telefon, yangi qurilma.
+model SecurityLoginAlert {
+  id                  Int       @id @default(autoincrement())
+  tenant_id           Int
+  /// shared_device | concurrent_devices | new_device | shared_ip
+  kind                String    @db.VarChar(32)
+  /// high | medium | low
+  risk                String    @db.VarChar(16)
+  alert_key           String    @db.VarChar(200)
+  user_ids            Int[]
+  details             Json      @default("{}")
+  occurrences         Int       @default(1)
+  /// open | ok | confirmed
+  status              String    @default("open") @db.VarChar(16)
+  first_seen_at       DateTime  @default(now())
+  last_seen_at        DateTime  @default(now())
+  reviewed_by_user_id Int?
+  reviewed_at         DateTime?
+  review_note         String?
+  created_at          DateTime  @default(now())
+  updated_at          DateTime  @updatedAt
+  tenant              Tenant    @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+
+  @@index([tenant_id, status, last_seen_at])
+  @@index([tenant_id, kind, alert_key])
+  @@map("security_login_alerts")
+}
+
+/// Ofis / ishonchli IP lar — «bitta IP dan bir nechta akkaunt» qoidasi ularni hisobga olmaydi.
+model SecurityIpWhitelist {
+  id                 Int      @id @default(autoincrement())
+  tenant_id          Int
+  /// Aniq IP (`213.230.1.5`) yoki IPv4 CIDR (`213.230.1.0/24`)
+  cidr               String   @db.VarChar(64)
+  label              String?  @db.VarChar(255)
+  created_by_user_id Int?
+  created_at         DateTime @default(now())
+  tenant             Tenant   @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+
+  @@unique([tenant_id, cidr])
+  @@map("security_ip_whitelist")
+}

@@ -27,6 +27,7 @@ import { formatGroupedDecimal, formatGroupedInteger } from "@/lib/format-numbers
 import { STALE } from "@/lib/query-stale";
 import { priceTypeOptionsFromResponse, type PriceTypeOption } from "@/lib/price-type-label";
 import { Box, Coins, Package, Search, X } from "lucide-react";
+import { usePermissions } from "@/lib/use-permissions";
 
 type CategoryRow = { id: number; name: string; parent_id: number | null; is_active: boolean };
 
@@ -94,6 +95,7 @@ function goodsReceiptSaveErrorMessage(err: unknown): string {
 }
 
 export function GoodsReceiptNewWorkspace({ tenantSlug }: Props) {
+  const canConfirmReceipt = usePermissions().has("warehouse.postuplenie.status");
   const router = useRouter();
   const searchParams = useSearchParams();
   const qc = useQueryClient();
@@ -1016,6 +1018,7 @@ export function GoodsReceiptNewWorkspace({ tenantSlug }: Props) {
                   ? "Сохранить"
                   : "Создать"}
             </Button>
+            {canConfirmReceipt ? (
             <Button
               type="button"
               disabled={createMut.isPending || updateMut.isPending}
@@ -1027,6 +1030,7 @@ export function GoodsReceiptNewWorkspace({ tenantSlug }: Props) {
                   ? "Сохранить и отправить"
                   : "Создать и отправить"}
             </Button>
+            ) : null}
           </div>
         </section>
       </div>

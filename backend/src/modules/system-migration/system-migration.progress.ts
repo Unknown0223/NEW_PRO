@@ -40,7 +40,7 @@ export function createMigrationImportSession(tenantId: number): MigrationImportS
     progress: {
       stage: "queued",
       percent: 0,
-      message: "Navbatda…",
+      message: "В очереди…",
       updated_at: new Date().toISOString()
     },
     created_at: new Date().toISOString()
@@ -80,7 +80,7 @@ export function completeMigrationImportSession(sessionId: string, result: ApplyB
   s.progress = {
     stage: "done",
     percent: 100,
-    message: "Import yakunlandi",
+    message: "Импорт завершён",
     updated_at: new Date().toISOString()
   };
 }

@@ -12,17 +12,18 @@ void configureApiHostForAndroidEmulator(bool isEmulator) {
 
 String resolveApiBaseUrl() {
   var url = dotenv.env['API_BASE_URL']?.trim();
-  // Release: lokal fallback taqiqlangan — production API
+  // Release: lokal fallback taqiqlangan — production API (Hetzner)
   if (url == null || url.isEmpty) {
     url = kReleaseMode
-        ? 'https://backend-production-3cf2.up.railway.app'
+        ? 'https://api.salesarena.sale'
         : 'http://127.0.0.1:18080';
   }
 
   // Production URL ni hech qachon emulyator localhost ga almashtirmaslik
   final uriCheck = Uri.tryParse(url);
   final isProdHost = uriCheck != null &&
-      uriCheck.host.contains('railway.app');
+      (uriCheck.host.contains('salesarena.sale') ||
+          uriCheck.host.contains('railway.app'));
 
   if (!kIsWeb &&
       Platform.isAndroid &&

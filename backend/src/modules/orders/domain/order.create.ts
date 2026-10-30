@@ -73,6 +73,10 @@ import {
   type OrderDetailRow
 } from "./order.types";
 import { runCreateOrderTransaction } from "./order.create-tx";
+import {
+  resolveOrderCreationChannel,
+  type OrderCreationChannel
+} from "./order.creation-channel";
 import { assertOrderAgentAllowedForActor } from "../../access/access-agent-scope";
 
 export type OrderViewerContext = {
@@ -221,17 +225,18 @@ export async function createOrder(
 
   const validatedGiftOverrides =
     input.bonus_gift_overrides?.length ?
-      await validateBonusGiftOverrides(tenantId, input.bonus_gift_overrides)
+      await validateBonusGiftOverrides(tenantId, input.bonus_gift_overrides, [...orderedProductIds])
     : new Map<number, number>();
 
   const validatedGiftSplits =
     input.bonus_gift_lines?.length ?
-      await validateBonusGiftLines(tenantId, input.bonus_gift_lines)
+      await validateBonusGiftLines(tenantId, input.bonus_gift_lines, [...orderedProductIds])
     : new Map<number, Map<number, number>>();
 
-  const roleNorm = (viewerRole ?? "").toLowerCase();
-  const creationChannel: "web" | "mobile" =
-    roleNorm.includes("agent") || roleNorm.includes("expeditor") ? "mobile" : "web";
+  const creationChannel: OrderCreationChannel = resolveOrderCreationChannel({
+    explicit: input.creation_channel,
+    viewerRole
+  });
 
   const { assertCreateOrderNotRestricted, planAutoConfirmAfterCreate } = await import(
     "../../order-automation/order-automation.apply"
@@ -267,7 +272,8 @@ export async function createOrder(
       validatedGiftSplits,
       tempOrderNumber,
       isInboundShelfReturn,
-      stackPolicy
+      stackPolicy,
+      creationChannel
     })
   );
 

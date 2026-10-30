@@ -41,6 +41,29 @@ describe.skipIf(!dbReady)("daily-kpi day matrix", () => {
     }
   });
 
+  it("GET ?day=&day_to= returns range inside one month; cross-month → 400", async () => {
+    const login = await request(app.server).post("/api/auth/login").send({
+      slug: "test1",
+      login: "admin",
+      password: "secret123"
+    });
+    const token = login.body.accessToken as string;
+
+    const ok = await request(app.server)
+      .get("/api/test1/plans/daily-kpi?day=2026-07-01&day_to=2026-07-31")
+      .set("Authorization", `Bearer ${token}`);
+    expect(ok.status).toBe(200);
+    expect(ok.body.data?.day_from).toBe("2026-07-01");
+    expect(ok.body.data?.day_to).toBe("2026-07-31");
+    expect(ok.body.data?.days_count).toBe(31);
+
+    const cross = await request(app.server)
+      .get("/api/test1/plans/daily-kpi?day=2026-06-30&day_to=2026-07-01")
+      .set("Authorization", `Bearer ${token}`);
+    expect(cross.status).toBe(400);
+    expect(cross.body.error).toBe("ValidationError");
+  });
+
   it("GET without day/month returns 400", async () => {
     const login = await request(app.server).post("/api/auth/login").send({
       slug: "test1",

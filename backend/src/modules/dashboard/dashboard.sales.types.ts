@@ -1,5 +1,5 @@
 export type SalesDashboardFilters = {
-  date_type: "order_date" | "shipment_date";
+  date_type: "order_date" | "shipment_date" | "delivery_date";
   from: string;
   to: string;
   status: string[];
@@ -40,11 +40,22 @@ export type SalesDashboardSnapshot = {
     sales_sum: string;
     share_pct: number;
   }>;
+  price_type_analytics: Array<{ price_type: string; sales_sum: string; share_pct: number }>;
+  debt_aging: {
+    total_debt: string;
+    debtors_count: number;
+    buckets: Array<{
+      key: "d0_7" | "d8_14" | "d15_21" | "d22_30" | "d30_plus";
+      sum: string;
+      share_pct: number;
+    }>;
+  };
   category_performance_table: Array<{
     category: string;
     sales_sum: string;
     sold_qty: string;
     volume: string;
+    bonus_qty: string;
     akb: number;
     share_pct: number;
   }>;
@@ -64,11 +75,24 @@ export type SalesDashboardSnapshot = {
     period: string;
     sales_sum: string;
     orders_count: number;
+    /** `sales_returns` (posted) — shu kuni qabul qilingan vozvratlar summasi. */
+    returns_sum: string;
   }>;
   akb_okb_block: {
     akb: number;
     okb: number;
     coverage_pct: number;
+  };
+  /** ОКБ mijozlari davr bo‘yicha: zakaz / otkaz / natijasiz tashrif / непосещение (kesishmaydi). */
+  risk_zone: {
+    okb: number;
+    with_order: number;
+    with_refusal: number;
+    visited_only: number;
+    not_visited: number;
+    orders_count: number;
+    refusals_count: number;
+    daily: Array<{ date: string; orders: number; refusals: number; not_visited: number }>;
   };
   territory_analytics: Array<{
     territory: string;
@@ -86,4 +110,21 @@ export type SalesDashboardSnapshot = {
     okb: number;
     coverage_pct: number;
   }>;
+  category_matrix?: {
+    categories: string[];
+    by_dimension: {
+      filial: CategoryMatrixRow[];
+      supervisor: CategoryMatrixRow[];
+      agent: CategoryMatrixRow[];
+    };
+  };
+};
+
+export type CategoryMatrixRow = {
+  key: string;
+  name: string;
+  smart_code: string;
+  total: string;
+  akb: number;
+  amounts: Record<string, string>;
 };

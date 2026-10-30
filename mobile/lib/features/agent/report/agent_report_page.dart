@@ -65,6 +65,7 @@ class _AgentReportPageState extends ConsumerState<AgentReportPage> {
       backgroundColor: AppColors.background,
       appBar: AgentAppBar(
         title: 'Отчёты',
+        useShellDrawer: true,
         actions: [
           AgentIconButton(icon: Icons.filter_alt_outlined, showDot: true, onPressed: () => AgentFilterSheet.show(context)),
         ],

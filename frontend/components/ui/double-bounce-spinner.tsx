@@ -13,7 +13,7 @@ type Props = {
 /**
  * Ikki doira «pulse» animatsiyasi — `globals.css`dagi `.spinner-double-bounce*`
  */
-export function DoubleBounceSpinner({ size = 40, className, label = "Yuklanmoqda" }: Props) {
+export function DoubleBounceSpinner({ size = 40, className, label = "Загрузка" }: Props) {
   return (
     <div
       className={cn("spinner-double-bounce", className)}

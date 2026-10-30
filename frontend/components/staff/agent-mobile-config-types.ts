@@ -45,6 +45,12 @@ export type AgentMobileConfigDraft = {
     require_shipment_date?: boolean;
     allow_exchange_request?: boolean;
     disallowed_payment_method_codes?: string[];
+    biometric_confirm_for_order_submit?: boolean;
+    biometric_confirm_for_payment_accept?: boolean;
+    face_verification_enabled?: boolean;
+    face_verification_daily_login?: boolean;
+    face_verification_max_random_orders_per_day?: number;
+    face_verification_on_territory_check?: boolean;
   };
   sync?: {
     mandatory_sync_count?: number | null;

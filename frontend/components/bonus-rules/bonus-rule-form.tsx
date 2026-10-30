@@ -96,7 +96,7 @@ function SumThresholdScopeFields({
   const title = variant === "qty" ? "Порог по количеству" : "Порог по сумме";
   const description =
     variant === "qty"
-      ? "Сравнивается с количеством платных единиц в строках заказа (без бонусных). «Календарный месяц» — накопление по клиенту за месяц (Asia/Tashkent) плюс текущий заказ; отменённые и возвращённые заказы не учитываются. С ассортиментом или категорией считается по каждому SKU отдельно."
+      ? "Сравнивается с количеством платных единиц в строках заказа (без бонусных). «Календарный месяц» — накопление по клиенту за месяц (Asia/Tashkent) плюс текущий заказ; отменённые и возвращённые заказы не учитываются. «Только ассортимент» — каждый SKU отдельно (5+1: 5 и 1 → только с 5). «Категория» — количества разных SKU в категории суммируются (3+1: 1+1+1 → 1)."
       : "Сравнивается с суммой товаров до скидки. «Календарный месяц» — накопление по клиенту за месяц (Asia/Tashkent) плюс текущий заказ; отменённые и возвращённые заказы не учитываются.";
   const monthLabel =
     variant === "qty"
@@ -640,7 +640,7 @@ export function BonusRuleForm({
         ax.response?.data?.error === "ClauseRewardRequired" ||
         (e instanceof Error && e.message === "CLAUSE_REWARD_REQUIRED")
       ) {
-        setLocalError("Камида битта шартда бонус бериш белгилансин (галочка + товар).");
+        setLocalError("Хотя бы в одном условии отметьте выдачу бонуса (галочка + товар).");
         setErrorTarget("products");
         pulseErrorOn("products");
         return;
@@ -649,7 +649,7 @@ export function BonusRuleForm({
         ax.response?.data?.error === "ClauseBonusProductsRequired" ||
         (e instanceof Error && e.message === "CLAUSE_BONUS_PRODUCTS_REQUIRED")
       ) {
-        setLocalError("Бонус бериладиган шартда камида битта бонус-товар танланг.");
+        setLocalError("В условии с бонусом выберите хотя бы один бонусный товар.");
         setErrorTarget("products");
         pulseErrorOn("products");
         return;

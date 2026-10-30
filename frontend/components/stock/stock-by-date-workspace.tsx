@@ -10,49 +10,30 @@ import { FilterSearchableSelect } from "@/components/ui/filter-searchable-select
 import { Input } from "@/components/ui/input";
 import { useUserTablePrefs } from "@/hooks/use-user-table-prefs";
 import { api } from "@/lib/api";
+import { useDebouncedSearchCommit } from "@/lib/use-debounced-search-commit";
 import { STALE } from "@/lib/query-stale";
+import { usePermissions } from "@/lib/use-permissions";
 import { priceTypeOptionsFromResponse, type PriceTypeOption } from "@/lib/price-type-label";
 import { cn } from "@/lib/utils";
 import { useQuery } from "@tanstack/react-query";
 import { Download, LayoutGrid, ListFilter, RefreshCw, Search } from "lucide-react";
 import { useState } from "react";
-
-type WarehouseOpt = { id: number; name: string; stock_purpose: string };
-type CategoryOpt = { id: number; name: string };
-type ProductOpt = { id: number; name: string };
-type PriceTypeOpt = string;
-type Row = {
-  idx: number;
-  product_id: number;
-  sku: string;
-  category_name: string | null;
-  product_name: string;
-  block_name: string | null;
-  qty: string;
-  volume: string;
-  amount: string;
-};
-type Payload = { data: Row[]; total: number; page: number; limit: number };
-
-const TABLE_ID = "stock.by_date.v1";
-const COLS = [
-  { id: "idx", label: "№" },
-  { id: "sku", label: "Код" },
-  { id: "category", label: "Категория" },
-  { id: "name", label: "Названия" },
-  { id: "block", label: "Блок" },
-  { id: "qty", label: "Кол-во" },
-  { id: "volume", label: "Объем" },
-  { id: "amount", label: "Сумма" }
-] as const;
-const ORDER = COLS.map((c) => c.id);
-const NUMERIC = new Set(["idx", "qty", "volume", "amount"]);
-
-function labelOf(id: string): string {
-  return COLS.find((x) => x.id === id)?.label ?? id;
-}
+import {
+  STOCK_BY_DATE_COLS,
+  STOCK_BY_DATE_NUMERIC,
+  STOCK_BY_DATE_ORDER,
+  STOCK_BY_DATE_TABLE_ID,
+  stockByDateColumnLabel,
+  type StockByDateCategoryOpt,
+  type StockByDatePayload,
+  type StockByDatePriceTypeOpt,
+  type StockByDateProductOpt,
+  type StockByDateWarehouseOpt
+} from "./stock-by-date.model";
+import { downloadStockByDateExcel } from "./stock-by-date-export";
 
 export function StockByDateWorkspace({ tenantSlug }: { tenantSlug: string }) {
+  const canExport = usePermissions().has("warehouse.ostatki_na_datu.copy");
   const [date, setDate] = useState(localValueToDatetimeInput(new Date()));
   const [warehouseId, setWarehouseId] = useState("");
   const [categoryId, setCategoryId] = useState("");
@@ -60,6 +41,10 @@ export function StockByDateWorkspace({ tenantSlug }: { tenantSlug: string }) {
   const [priceType, setPriceType] = useState("");
   const [searchDraft, setSearchDraft] = useState("");
   const [q, setQ] = useState("");
+  useDebouncedSearchCommit(searchDraft, (next) => {
+    setQ(next);
+    setPage(1);
+  });
   const [page, setPage] = useState(1);
   const [columnDialogOpen, setColumnDialogOpen] = useState(false);
   const [exporting, setExporting] = useState(false);
@@ -75,8 +60,8 @@ export function StockByDateWorkspace({ tenantSlug }: { tenantSlug: string }) {
 
   const prefs = useUserTablePrefs({
     tenantSlug,
-    tableId: TABLE_ID,
-    defaultColumnOrder: ORDER,
+    tableId: STOCK_BY_DATE_TABLE_ID,
+    defaultColumnOrder: STOCK_BY_DATE_ORDER,
     defaultPageSize: 25,
     allowedPageSizes: [10, 25, 50, 100]
   });
@@ -84,7 +69,7 @@ export function StockByDateWorkspace({ tenantSlug }: { tenantSlug: string }) {
   const warehousesQ = useQuery({
     queryKey: ["warehouses", tenantSlug, "by-date"],
     queryFn: async () => {
-      const { data } = await api.get<{ data: WarehouseOpt[] }>(`/api/${tenantSlug}/warehouses`);
+      const { data } = await api.get<{ data: StockByDateWarehouseOpt[] }>(`/api/${tenantSlug}/warehouses`);
       return data.data.filter((w) => w.stock_purpose === "sales");
     },
     enabled: Boolean(tenantSlug),
@@ -93,7 +78,7 @@ export function StockByDateWorkspace({ tenantSlug }: { tenantSlug: string }) {
   const categoriesQ = useQuery({
     queryKey: ["product-categories", tenantSlug, "by-date"],
     queryFn: async () => {
-      const { data } = await api.get<{ data: CategoryOpt[] }>(`/api/${tenantSlug}/product-categories`);
+      const { data } = await api.get<{ data: StockByDateCategoryOpt[] }>(`/api/${tenantSlug}/product-categories`);
       return data.data;
     },
     enabled: Boolean(tenantSlug),
@@ -102,10 +87,10 @@ export function StockByDateWorkspace({ tenantSlug }: { tenantSlug: string }) {
   const productsQ = useQuery({
     queryKey: ["products", tenantSlug, "by-date"],
     queryFn: async () => {
-      const out: ProductOpt[] = [];
+      const out: StockByDateProductOpt[] = [];
       let p = 1;
       for (;;) {
-        const { data } = await api.get<{ data: ProductOpt[]; total: number }>(
+        const { data } = await api.get<{ data: StockByDateProductOpt[]; total: number }>(
           `/api/${tenantSlug}/products?page=${p}&limit=200&is_active=true`
         );
         out.push(...data.data);
@@ -120,7 +105,7 @@ export function StockByDateWorkspace({ tenantSlug }: { tenantSlug: string }) {
   const priceTypesQ = useQuery({
     queryKey: ["price-types", tenantSlug, "by-date"],
     queryFn: async () => {
-      const { data } = await api.get<{ data: PriceTypeOpt[]; options?: PriceTypeOption[] }>(
+      const { data } = await api.get<{ data: StockByDatePriceTypeOpt[]; options?: PriceTypeOption[] }>(
         `/api/${tenantSlug}/price-types?kind=sale`
       );
       return priceTypeOptionsFromResponse(data);
@@ -153,7 +138,7 @@ export function StockByDateWorkspace({ tenantSlug }: { tenantSlug: string }) {
       if (productId) p.set("product_id", productId);
       if (priceType.trim()) p.set("price_type", priceType.trim());
       if (q.trim()) p.set("q", q.trim());
-      const { data } = await api.get<Payload>(`/api/${tenantSlug}/stock/by-date?${p.toString()}`);
+      const { data } = await api.get<StockByDatePayload>(`/api/${tenantSlug}/stock/by-date?${p.toString()}`);
       return data;
     },
     enabled: Boolean(tenantSlug) && Boolean(warehouseId),
@@ -164,23 +149,7 @@ export function StockByDateWorkspace({ tenantSlug }: { tenantSlug: string }) {
     if (!warehouseId) return;
     setExporting(true);
     try {
-      const p = new URLSearchParams({ date, warehouse_id: warehouseId });
-      if (categoryId) p.set("category_id", categoryId);
-      if (productId) p.set("product_id", productId);
-      if (priceType.trim()) p.set("price_type", priceType.trim());
-      if (q.trim()) p.set("q", q.trim());
-      const res = await api.get(`/api/${tenantSlug}/stock/by-date/export?${p.toString()}`, {
-        responseType: "arraybuffer"
-      });
-      const blob = new Blob([res.data], {
-        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-      });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = "stock-by-date.xlsx";
-      a.click();
-      URL.revokeObjectURL(url);
+      await downloadStockByDateExcel({ tenantSlug, date, warehouseId, categoryId, productId, priceType, q });
     } finally {
       setExporting(false);
     }
@@ -195,7 +164,7 @@ export function StockByDateWorkspace({ tenantSlug }: { tenantSlug: string }) {
 
   return (
     <PageShell>
-      <PageHeader title="Остатки на определенную дату" description="Historical warehouse snapshot на выбранную дату." />
+      <PageHeader title="Остатки на определенную дату" description="Исторический срез остатков склада на выбранную дату." />
 
       <div className="orders-hub-section orders-hub-section--filters orders-hub-section--stack-tight">
         <Card className="rounded-none border-0 bg-transparent shadow-none hover:shadow-none">
@@ -303,7 +272,7 @@ export function StockByDateWorkspace({ tenantSlug }: { tenantSlug: string }) {
         onOpenChange={setColumnDialogOpen}
         title="Управление столбцами"
         description="Видимые столбцы и порядок сохраняются для вашей учётной записи."
-        columns={[...COLS]}
+        columns={[...STOCK_BY_DATE_COLS]}
         columnOrder={prefs.columnOrder}
         hiddenColumnIds={prefs.hiddenColumnIds}
         saving={prefs.saving}
@@ -347,10 +316,12 @@ export function StockByDateWorkspace({ tenantSlug }: { tenantSlug: string }) {
                     }}
                   />
                 </div>
-                <Button type="button" variant="outline" size="sm" className="h-9" disabled={exporting || !warehouseId} onClick={() => void downloadExcel()}>
-                  <Download className="mr-1 size-3.5" />
-                  {exporting ? "…" : "Excel"}
-                </Button>
+                {canExport ? (
+                  <Button type="button" variant="outline" size="sm" className="h-9" disabled={exporting || !warehouseId} onClick={() => void downloadExcel()}>
+                    <Download className="mr-1 size-3.5" />
+                    {exporting ? "…" : "Excel"}
+                  </Button>
+                ) : null}
                 <Button type="button" variant="outline" size="icon" className="h-9 w-9" onClick={() => void listQ.refetch()}>
                   <RefreshCw className={cn("size-4", listQ.isFetching && "animate-spin")} />
                 </Button>
@@ -365,8 +336,8 @@ export function StockByDateWorkspace({ tenantSlug }: { tenantSlug: string }) {
                     <thead className="app-table-thead">
                       <tr className="text-left">
                         {cols.map((colId) => (
-                          <th key={colId} className={cn("px-3 py-2.5 font-semibold", NUMERIC.has(colId) && "text-right")}>
-                            {labelOf(colId)}
+                          <th key={colId} className={cn("px-3 py-2.5 font-semibold", STOCK_BY_DATE_NUMERIC.has(colId) && "text-right")}>
+                            {stockByDateColumnLabel(colId)}
                           </th>
                         ))}
                       </tr>
@@ -392,7 +363,7 @@ export function StockByDateWorkspace({ tenantSlug }: { tenantSlug: string }) {
                                 colId === "volume" ? r.volume :
                                 colId === "amount" ? r.amount : "—";
                               return (
-                                <td key={colId} className={cn("px-3 py-2", NUMERIC.has(colId) && "text-right tabular-nums")}>
+                                <td key={colId} className={cn("px-3 py-2", STOCK_BY_DATE_NUMERIC.has(colId) && "text-right tabular-nums")}>
                                   {v}
                                 </td>
                               );

@@ -34,7 +34,7 @@ const MapView = dynamic(() => import("./map-view"), {
   ssr: false,
   loading: () => (
     <div className="flex h-full items-center justify-center bg-paper text-sm text-ink-soft">
-      Xarita yuklanmoqda…
+      Загрузка карты…
     </div>
   )
 });
@@ -121,6 +121,15 @@ export function GpsMonitoringWorkspace() {
 
   const employees = employeesQ.data?.employees ?? [];
   const supervisors = employeesQ.data?.supervisors ?? [];
+
+  useEffect(() => {
+    if (!selected) return;
+    const row = employees.find((e) => e.id === selected.id);
+    if (row && row.activeOnDate === false) {
+      setSelected(null);
+      setSelectedPointId(null);
+    }
+  }, [employees, selected]);
 
   const dayQ = useQuery({
     queryKey: ["gps-monitoring-day", tenantSlug, selected?.id, dateIso],

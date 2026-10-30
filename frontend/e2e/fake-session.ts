@@ -7,7 +7,6 @@ export const AUTH_STORAGE_KEY = "savdo-auth";
 export const FAKE_ADMIN_SESSION_RAW = JSON.stringify({
   state: {
     accessToken: "e2e-placeholder-token",
-    refreshToken: "e2e-placeholder-refresh",
     tenantSlug: "test1",
     role: "admin"
   },

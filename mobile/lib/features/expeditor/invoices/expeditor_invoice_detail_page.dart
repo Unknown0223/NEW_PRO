@@ -3,10 +3,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
 import '../../../core/api/expeditor_api.dart';
-import '../../../core/auth/biometric_service.dart';
+import '../../../core/auth/biometric_transaction_confirm.dart';
 import '../../../core/auth/session.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
+import '../../../core/ui/agent_ui.dart';
 import '../../agent/shell/agent_app_bar.dart';
 import '../config/expeditor_config_enforcement.dart';
 import '../expeditor_providers.dart';
@@ -25,13 +26,13 @@ class _ExpeditorInvoiceDetailPageState
   bool _busy = false;
 
   Future<void> _confirm(ExpeditorConfigPolicy policy) async {
-    if (policy.fingerprintRequired) {
-      final bio = ref.read(biometricServiceProvider);
-      if (!await bio.isAvailable() ||
-          !await bio.authenticate(reason: 'Подтвердите отгрузку')) {
-        return;
-      }
-    }
+    final ok = await BiometricTransactionConfirm.confirm(
+      ref,
+      context: context,
+      required: policy.fingerprintRequired,
+      reason: 'Подтвердите отгрузку',
+    );
+    if (!ok) return;
     final slug = ref.read(sessionProvider).tenantSlug ?? '';
     if (slug.isEmpty) return;
     setState(() => _busy = true);
@@ -43,13 +44,11 @@ class _ExpeditorInvoiceDetailPageState
       ref.invalidate(expeditorShipmentDocsProvider('shipping'));
       ref.invalidate(expeditorDashboardProvider);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Подтверждено')),);
+        showAgentToast(context, 'Подтверждено', accentColor: AppColors.success);
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('$e'), backgroundColor: AppColors.error),);
+        showAgentToast(context, '$e', accentColor: AppColors.error);
       }
     } finally {
       if (mounted) setState(() => _busy = false);

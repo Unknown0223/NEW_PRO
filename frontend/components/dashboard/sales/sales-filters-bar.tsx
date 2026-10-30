@@ -80,7 +80,7 @@ export function SalesFiltersBar(props: {
     <section className="sales-dashboard-panel sales-motion-slide-up">
       <div className="mb-4 flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
         <div className="min-w-0">
-          <p className="text-xs font-semibold uppercase tracking-[0.22em] text-teal-600">Sales module</p>
+          <p className="text-xs font-semibold uppercase tracking-[0.22em] text-teal-600">Продажи</p>
           <h2 className="text-xl font-bold text-slate-950">Продажи</h2>
           <p className="mt-0.5 text-xs text-slate-500">
             Аналитика продаж: покрытие, структура оплат, территории и эффективность агентов.

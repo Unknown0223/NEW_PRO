@@ -157,3 +157,40 @@ export async function migrateClientsOnVacantSlotAssign(
     assignments_updated: assignResult.count
   };
 }
+
+/** Hali yetkazilmagan savdo zakazlari — joydagi yangi dastavchikka o‘tadi. */
+export const EXPEDITOR_OPEN_ORDER_STATUSES = ["new", "confirmed", "picking", "delivering"] as const;
+
+export function isExpeditorOpenOrderStatus(status: string): boolean {
+  return (EXPEDITOR_OPEN_ORDER_STATUSES as readonly string[]).includes(status);
+}
+
+/**
+ * Dastavchik slotida xodim almashganda: qulflanmagan assignmentlar + ochiq zakazlar.
+ */
+export async function migrateExpeditorAssignmentsOnSlotSwap(
+  tx: Prisma.TransactionClient,
+  tenantId: number,
+  fromUserId: number,
+  toUserId: number
+): Promise<{ assignments_updated: number; orders_updated: number }> {
+  if (fromUserId === toUserId) return { assignments_updated: 0, orders_updated: 0 };
+  const assignResult = await tx.clientAgentAssignment.updateMany({
+    where: {
+      tenant_id: tenantId,
+      expeditor_user_id: fromUserId,
+      lock_type: { notIn: [...LOCK_SKIP] }
+    },
+    data: { expeditor_user_id: toUserId }
+  });
+  const orderResult = await tx.order.updateMany({
+    where: {
+      tenant_id: tenantId,
+      expeditor_user_id: fromUserId,
+      order_type: "order",
+      status: { in: [...EXPEDITOR_OPEN_ORDER_STATUSES] }
+    },
+    data: { expeditor_user_id: toUserId }
+  });
+  return { assignments_updated: assignResult.count, orders_updated: orderResult.count };
+}

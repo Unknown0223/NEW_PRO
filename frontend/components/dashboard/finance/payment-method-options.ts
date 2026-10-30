@@ -31,15 +31,15 @@ export function buildPaymentMethodOptions(
 }
 
 const PAYMENT_LABELS: Record<string, string> = {
-  cash: "Naqd",
-  naqd: "Naqd",
-  naqd_pul: "Naqd",
-  terminal: "Terminal",
-  transfer: "Pereches",
-  perechisleniye: "Pereches",
-  perechis: "Pereches",
-  bank_transfer: "Pereches",
-  tenge: "Tenge"
+  cash: "Наличные",
+  naqd: "Наличные",
+  naqd_pul: "Наличные",
+  terminal: "Терминал",
+  transfer: "Перечисление",
+  perechisleniye: "Перечисление",
+  perechis: "Перечисление",
+  bank_transfer: "Перечисление",
+  tenge: "Тенге"
 };
 
 export function formatPaymentMethodLabel(value: string, fallbackName?: string): string {

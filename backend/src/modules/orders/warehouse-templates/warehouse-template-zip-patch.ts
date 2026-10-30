@@ -138,6 +138,9 @@ function patchSheetXml(xml: string): string {
 
   out = normalizePageSetup(out);
 
+  // ExcelJS row break: max="16838" (xato), Excel standarti — 16383 (oxirgi kolonka indeksi).
+  out = out.replace(/(<brk\b[^>]*\smax=")16838(")/g, "$116383$2");
+
   out = out.replace(XML_INVALID_CHARS, "");
 
   return out;

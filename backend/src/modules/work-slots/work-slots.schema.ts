@@ -1,26 +1,52 @@
 import { z } from "zod";
+import { maxSessionsValueSchema } from "../../lib/max-sessions";
 import { WORK_SLOT_TYPES } from "./work-slots.constants";
 
 export const slotTypeSchema = z.enum(WORK_SLOT_TYPES);
+
+const branchCodesListSchema = z.array(z.string().trim().min(1).max(120)).max(50);
 
 export const createWorkSlotBodySchema = z.object({
   slot_code: z.string().trim().min(1).max(32),
   label: z.string().trim().max(128).nullable().optional(),
   branch_code: z.string().trim().max(120).nullable().optional(),
+  branch_codes: branchCodesListSchema.optional(),
   direction_id: z.number().int().positive().nullable().optional(),
   slot_type: slotTypeSchema.default("agent"),
   is_active: z.boolean().optional(),
   sort_order: z.number().int().optional()
 });
 
-/** Faol xodim (`User`) — zona / ombor / kassa (jadvalda ko‘rinadigan ustunlar). */
+const positiveIdListSchema = z.array(z.number().int().positive()).max(100);
+const territoryListSchema = z.array(z.string().trim().min(1).max(256)).max(200);
+
+/** Faol xodim (`User`) — zona / ombor / kassa + shaxsiy maydonlar (write-through userga). */
 export const activeUserAttrsSchema = z.object({
   territory_zone: z.string().trim().max(128).nullable().optional(),
   territory_oblast: z.string().trim().max(128).nullable().optional(),
   territory_city: z.string().trim().max(128).nullable().optional(),
+  territories: territoryListSchema.nullable().optional(),
   warehouse_id: z.number().int().positive().nullable().optional(),
-  cash_desk_id: z.number().int().positive().nullable().optional()
+  warehouse_ids: positiveIdListSchema.nullable().optional(),
+  cash_desk_id: z.number().int().positive().nullable().optional(),
+  cash_desk_ids: positiveIdListSchema.nullable().optional(),
+  /** Occupant-only: User.position (WorkSlot da saqlanmaydi). */
+  position: z.string().trim().max(120).nullable().optional(),
+  /** Occupant-only: User.app_access */
+  app_access: z.boolean().optional(),
+  /** Occupant-only: User.max_sessions (0 = cheksiz) */
+  max_sessions: maxSessionsValueSchema.optional()
 });
+
+export const maxSessionsBySlotTypeBodySchema = z.object({
+  slot_type: slotTypeSchema,
+  max_sessions: maxSessionsValueSchema
+});
+
+export const revokeWorkSlotSessionsBody = z.union([
+  z.object({ all: z.literal(true) }),
+  z.object({ token_ids: z.array(z.number().int().positive()).min(1) })
+]);
 
 /** Joy konfiguratsiyasi (P0): narx, cheklov, konsignatsiya — manba slotda. */
 export const slotConfigPatchSchema = z.object({
@@ -43,19 +69,25 @@ export const slotConfigPatchSchema = z.object({
   consignment_close_hour: z.number().int().min(0).max(23).optional(),
   consignment_close_minute: z.number().int().min(0).max(59).optional(),
   supervisor_user_id: z.number().int().positive().nullable().optional(),
+  supervisee_agent_slot_ids: z.array(z.number().int().positive()).optional(),
   warehouse_staff_entitlements: z.record(z.string(), z.boolean()).optional(),
   expeditor_assignment_rules: z.record(z.string(), z.unknown()).optional()
 });
 
+const territoryCodesListSchema = z.array(z.string().trim().min(1).max(128)).min(1);
+
 export const patchWorkSlotBodySchema = z
   .object({
-    slot_code: z.string().trim().min(1).max(32).optional(),
     label: z.string().trim().max(128).nullable().optional(),
     branch_code: z.string().trim().max(120).nullable().optional(),
+    branch_codes: branchCodesListSchema.optional(),
     direction_id: z.number().int().positive().nullable().optional(),
     slot_type: slotTypeSchema.optional(),
     is_active: z.boolean().optional(),
-    sort_order: z.number().int().optional()
+    sort_order: z.number().int().optional(),
+    territory_zones: territoryCodesListSchema.optional(),
+    territory_oblasts: territoryCodesListSchema.optional(),
+    territory_cities: territoryCodesListSchema.optional()
   })
   .merge(activeUserAttrsSchema)
   .merge(slotConfigPatchSchema)
@@ -81,12 +113,16 @@ function hasActiveUserAttrs(o: z.infer<typeof activeUserAttrsSchema>): boolean {
     o.territory_zone !== undefined ||
     o.territory_oblast !== undefined ||
     o.territory_city !== undefined ||
+    o.territories !== undefined ||
     o.warehouse_id !== undefined ||
-    o.cash_desk_id !== undefined
+    o.warehouse_ids !== undefined ||
+    o.cash_desk_id !== undefined ||
+    o.cash_desk_ids !== undefined ||
+    o.position !== undefined ||
+    o.app_access !== undefined ||
+    o.max_sessions !== undefined
   );
 }
-
-const territoryCodesListSchema = z.array(z.string().trim().min(1).max(128)).min(1);
 
 function hasSlotConfigFields(o: z.infer<typeof slotConfigPatchSchema>): boolean {
   return (
@@ -101,6 +137,7 @@ function hasSlotConfigFields(o: z.infer<typeof slotConfigPatchSchema>): boolean 
     o.consignment_close_hour !== undefined ||
     o.consignment_close_minute !== undefined ||
     o.supervisor_user_id !== undefined ||
+    o.supervisee_agent_slot_ids !== undefined ||
     o.warehouse_staff_entitlements !== undefined ||
     o.expeditor_assignment_rules !== undefined
   );
@@ -109,12 +146,15 @@ function hasSlotConfigFields(o: z.infer<typeof slotConfigPatchSchema>): boolean 
 export const bulkWorkSlotsBodySchema = z
   .object({
     slot_ids: z.array(z.number().int().positive()).min(1).max(500),
+    /** replace — mobile_config butunlay almashtiriladi; merge — faqat yuborilgan kalitlar. */
+    mobile_config_mode: z.enum(["merge", "replace"]).optional(),
     delete: z.literal(true).optional(),
     unassign: z.literal(true).optional(),
+    revoke_sessions: z.literal(true).optional(),
     is_active: z.boolean().optional(),
     label: z.string().trim().max(128).nullable().optional(),
     branch_code: z.string().trim().max(120).nullable().optional(),
-    branch_codes: z.array(z.string().trim().min(1).max(120)).min(1).optional(),
+    branch_codes: branchCodesListSchema.min(1).optional(),
     direction_id: z.number().int().positive().nullable().optional(),
     slot_type: slotTypeSchema.optional(),
     territory_zones: territoryCodesListSchema.optional(),
@@ -139,8 +179,17 @@ export const bulkWorkSlotsBodySchema = z
   .refine((o) => !(o.delete === true && o.unassign === true), { message: "DeleteUnassignAmbiguous" })
   .refine(
     (o) =>
+      !(
+        o.revoke_sessions === true &&
+        (o.delete === true || o.unassign === true)
+      ),
+    { message: "RevokeSessionsAmbiguous" }
+  )
+  .refine(
+    (o) =>
       o.delete === true ||
       o.unassign === true ||
+      o.revoke_sessions === true ||
       o.is_active !== undefined ||
       o.label !== undefined ||
       o.branch_code !== undefined ||
