@@ -15,6 +15,7 @@ const ORDER_STATUS_SECTIONS: [section: string, labelRu: string][] = [
  */
 export const ORDER_PERMISSION_SECTIONS: PermissionSectionDef[] = [
   { module: "orders", section: "zakaz", labelRu: "Заявки", actions: ["view", "update", "copy", "export", "assign", "history"] },
+  { module: "orders", section: "obnovlenie_bonusa", labelRu: "Обновление бонуса", actions: ["update"], treeSectionRu: ORDER_ZAKAZ_TREE_RU },
   { module: "orders", section: "sozdanie", labelRu: "Создать заказ", actions: ["create"], treeSectionRu: ORDER_ZAKAZ_TREE_RU },
   { module: "orders", section: "vozvrat_polki", labelRu: "Создать возврат с полки", actions: ["create"], treeSectionRu: ORDER_ZAKAZ_TREE_RU },
   {

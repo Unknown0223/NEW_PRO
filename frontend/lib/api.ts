@@ -190,8 +190,16 @@ function loginDenyReasonFromBody(
 }
 
 api.interceptors.request.use(async (config) => {
-  // FormData uchun Content-Type ni o‘chirish shart — aks holda boundary yo‘qoladi va fayl qabul qilinmaydi.
-  if (typeof FormData !== "undefined" && config.data instanceof FormData && config.headers) {
+  const method = String(config.method ?? "get").toLowerCase();
+  const rt = config.responseType;
+  const dropJsonContentType =
+    (typeof FormData !== "undefined" && config.data instanceof FormData) ||
+    method === "get" ||
+    method === "head" ||
+    rt === "blob" ||
+    rt === "arraybuffer";
+  // GET/blob da default application/json ba'zi serverlarni body kutishga majbur qiladi.
+  if (dropJsonContentType && config.headers) {
     const h = config.headers as { delete?: (k: string) => void; set?: (k: string, v: string) => void } &
       Record<string, unknown>;
     if (typeof h.delete === "function") {

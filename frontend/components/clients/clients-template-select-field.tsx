@@ -6,6 +6,7 @@ import {
   splitMultiFilterValues
 } from "@/lib/client-filter-select-value";
 import { cn } from "@/lib/utils";
+import { matchesSearchTokens } from "@/lib/search-text";
 import { Check, ChevronDown, Search, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
@@ -76,8 +77,8 @@ export function ClientsTemplateSelectField({
     const q = search.trim().toLowerCase();
     if (!searchable || !q) return options;
     return options.filter((o) => {
-      const hay = `${o.label} ${o.searchText ?? ""} ${o.value}`.toLowerCase();
-      return hay.includes(q);
+      const hay = `${o.label} ${o.searchText ?? ""} ${o.value}`;
+      return matchesSearchTokens(hay, search);
     });
   }, [options, search, searchable]);
 

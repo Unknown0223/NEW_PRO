@@ -9,10 +9,14 @@ import {
   validateConsignmentCloseSchedule,
   type ConsignmentCloseSchedule
 } from "./consignment-settings";
-import { reconcileTenantConsignmentMonthClosures } from "./consignment-month-closure.service";
+import {
+  reconcileTenantConsignmentMonthClosures,
+  reconcileTenantCurrentAndPreviousClosures
+} from "./consignment-month-closure.service";
 import { notifyConsignmentChanges, snapshotAgentConsignment } from "./consignment.notify";
 import { listAgentConsignmentMonthStatusForMonth } from "./consignment-month-status.repo";
 import { userWhereTradeDirection } from "./consignment-trade-direction";
+import { whereEverySearchToken } from "../../lib/search-tokens";
 
 export type ConsignmentOutstandingOptions = {
   ignorePreviousMonthsDebt: boolean;
@@ -261,6 +265,12 @@ export async function patchConsignmentSettingsForTenant(
     }
   });
 
+  try {
+    await reconcileTenantCurrentAndPreviousClosures(tenantId);
+  } catch (err) {
+    console.error("[consignment] reconcile after settings patch failed:", err);
+  }
+
   return toConsignmentSettings(schedule);
 }
 
@@ -319,14 +329,15 @@ export async function listConsignmentAgents(
   }
   const s = q.search?.trim();
   if (s) {
-    andExtra.push({
-      OR: [
-        { name: { contains: s, mode: "insensitive" } },
-        { code: { contains: s, mode: "insensitive" } },
-        { first_name: { contains: s, mode: "insensitive" } },
-        { last_name: { contains: s, mode: "insensitive" } }
-      ]
-    });
+    const found = whereEverySearchToken(s, (token) => [
+      { name: { contains: token, mode: "insensitive" as const } },
+      { code: { contains: token, mode: "insensitive" as const } },
+      { first_name: { contains: token, mode: "insensitive" as const } },
+      { last_name: { contains: token, mode: "insensitive" as const } },
+      { middle_name: { contains: token, mode: "insensitive" as const } },
+      { login: { contains: token, mode: "insensitive" as const } }
+    ]);
+    if (found) andExtra.push(found);
   }
   if (andExtra.length > 0) where.AND = andExtra;
 

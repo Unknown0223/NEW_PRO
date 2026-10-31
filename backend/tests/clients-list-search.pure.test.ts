@@ -16,6 +16,13 @@ describe("buildClientListSearchOrClause", () => {
     expect(idClauses("29411")).toEqual([{ id: 29411 }]);
   });
 
+  it("to‘liq ism — so‘zlar alohida, tartibdan qat’i nazar", () => {
+    const or = buildClientListSearchOrClause("Ibroximov Hamdam");
+    expect(or).toHaveLength(1);
+    const and = (or[0] as { AND?: unknown[] }).AND;
+    expect(and).toHaveLength(2);
+  });
+
   it("tashqi kod qo‘shimchasi INT4 dan katta bo‘lsa — id sharti yo‘q", () => {
     expect(idClauses("ur_99999999999")).toEqual([]);
     expect(idClauses("ur_29411")).toEqual([{ id: 29411 }]);

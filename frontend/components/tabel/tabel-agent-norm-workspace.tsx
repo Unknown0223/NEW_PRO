@@ -15,8 +15,11 @@ import {
   parseNormSum,
   useAgentNormSettings,
   useSaveAgentNormSettings,
-  type AgentNormOverride
+  type AgentNormOverride,
+  type LeaderMinusMode,
+  type LeaderMinusRule
 } from "@/lib/timesheet/timesheet-norm-api";
+import { TIMESHEET_ROLE_LABELS } from "@/components/timesheet/timesheet-shared";
 
 type Emp = { id: number; fio: string; role: string; login: string; code: string | null; branch: string | null };
 
@@ -32,6 +35,7 @@ type Draft = {
   min_orders: string;
   half_pct: string;
   overrides: AgentNormOverride[];
+  leader_rules: LeaderMinusRule[];
 };
 
 function toDraft(s: {
@@ -42,6 +46,7 @@ function toDraft(s: {
   min_orders?: number;
   half_day_ratio?: number;
   overrides?: AgentNormOverride[];
+  leader_rules?: LeaderMinusRule[];
 }): Draft {
   return {
     enabled: s.enabled,
@@ -50,7 +55,8 @@ function toDraft(s: {
     closed: fmtNormSum(s.closed_amount),
     min_orders: String(s.min_orders ?? 0),
     half_pct: s.half_day_ratio ? String(Math.round(s.half_day_ratio * 100)) : "0",
-    overrides: s.overrides ?? []
+    overrides: s.overrides ?? [],
+    leader_rules: s.leader_rules ?? []
   };
 }
 
@@ -79,6 +85,10 @@ export function TabelAgentNormWorkspace() {
   const [ovFrom, setOvFrom] = useState("");
   const [ovOn, setOvOn] = useState(true);
   const [search, setSearch] = useState("");
+  const [ruleRole, setRuleRole] = useState("supervisor");
+  const [ruleUser, setRuleUser] = useState("");
+  const [ruleN, setRuleN] = useState("3");
+  const [ruleMode, setRuleMode] = useState<LeaderMinusMode>("per_agent");
 
   const empQ = useQueryAgents(tenantSlug);
 
@@ -103,7 +113,8 @@ export function TabelAgentNormWorkspace() {
       closed_amount: closedAmount,
       min_orders: Math.max(0, Number(d.min_orders) || 0),
       half_day_ratio: Math.min(1, Math.max(0, (Number(d.half_pct) || 0) / 100)),
-      overrides: d.overrides
+      overrides: d.overrides,
+      leader_rules: d.leader_rules
     };
   }
 
@@ -147,6 +158,38 @@ export function TabelAgentNormWorkspace() {
       overrides: d.overrides.map((o) => (o.user_id === userId ? { ...o, ...patch } : o))
     });
   }
+
+  function addLeaderRule() {
+    if (!d) return;
+    const threshold = Math.min(31, Math.max(1, Math.floor(Number(ruleN) || 0)));
+    const userId = ruleUser ? Number(ruleUser) : null;
+    const dup = d.leader_rules.some((r) =>
+      userId != null ? r.user_id === userId : r.user_id == null && r.role === ruleRole
+    );
+    if (dup) {
+      setError(userId != null ? "Для этого аккаунта правило уже задано." : "Для этой роли правило уже задано. Можно добавить отдельное правило на аккаунт.");
+      return;
+    }
+    setError(null);
+    setD({
+      ...d,
+      leader_rules: [
+        ...d.leader_rules,
+        {
+          id: `lr-${Date.now().toString(36)}`.slice(0, 40),
+          enabled: true,
+          role: ruleRole,
+          user_id: userId,
+          threshold,
+          mode: ruleMode
+        }
+      ]
+    });
+  }
+
+  const staff = empQ.data ?? [];
+  const roleOptions = Object.entries(TIMESHEET_ROLE_LABELS);
+  const accountsForRole = staff.filter((e) => e.role.trim().toLowerCase() === ruleRole);
 
   const filtered = agents.filter((a) => {
     const qv = search.trim().toLowerCase();
@@ -222,6 +265,118 @@ export function TabelAgentNormWorkspace() {
           <div className="flex items-end text-[11px] text-muted-foreground">
             <CalendarDays className="mr-1 size-3.5" /> 0 = условие выкл.
           </div>
+        </div>
+      </section>
+
+      <section className="rounded-xl border bg-card p-4 shadow-sm">
+        <h2 className="text-sm font-bold">Дополнительное условие: минус руководителю</h2>
+        <p className="mt-1 max-w-3xl text-xs leading-relaxed text-muted-foreground">
+          Считаются дни «0» у агентов, прикреплённых к руководителю. Если условие выполняется, руководителю ставится один минус.
+          День минуса — день, когда набрался порог. Если в этот день минус уже стоит, он переносится на ближайший предыдущий свободный день, и в ячейку пишется комментарий.
+          Ручная отметка в табеле не перезаписывается.
+        </p>
+        <ul className="mt-2 max-w-3xl list-disc space-y-1 pl-4 text-xs text-muted-foreground">
+          <li>
+            <span className="font-semibold text-foreground">По каждому агенту.</span> У одного агента минусов не меньше порога — руководителю один минус.
+            Пример: порог 3, у агентов 2, 1 и 3 минуса — руководителю один минус, потому что третий агент набрал 3. У кого 2 и 1 — минус руководителю не дают.
+          </li>
+          <li>
+            <span className="font-semibold text-foreground">По сумме всех агентов.</span> Минусы всех агентов складываются. Каждые N минусов дают руководителю ещё один минус.
+          </li>
+          <li>
+            Правило на всю роль действует на всех с этой ролью. Правило на конкретный аккаунт важнее правила роли.
+          </li>
+        </ul>
+        {canEdit ? (
+          <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
+            <Field label="Роль">
+              <select className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm" value={ruleRole} onChange={(e) => { setRuleRole(e.target.value); setRuleUser(""); }}>
+                {roleOptions.map(([value, label]) => (
+                  <option key={value} value={value}>{label}</option>
+                ))}
+              </select>
+            </Field>
+            <Field label="Аккаунт">
+              <select className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm" value={ruleUser} onChange={(e) => setRuleUser(e.target.value)}>
+                <option value="">Вся роль</option>
+                {accountsForRole.map((a) => (
+                  <option key={a.id} value={a.id}>{a.fio}</option>
+                ))}
+              </select>
+            </Field>
+            <Field label="Сколько минусов">
+              <Input type="number" min={1} max={31} className="h-9" value={ruleN} onChange={(e) => setRuleN(e.target.value)} />
+            </Field>
+            <Field label="Как считать">
+              <select className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm" value={ruleMode} onChange={(e) => setRuleMode(e.target.value as LeaderMinusMode)}>
+                <option value="per_agent">По каждому агенту</option>
+                <option value="team_sum">По сумме всех агентов</option>
+              </select>
+            </Field>
+            <div className="flex items-end">
+              <Button size="sm" variant="outline" onClick={addLeaderRule}>
+                <Plus className="mr-1 size-3.5" /> Добавить условие
+              </Button>
+            </div>
+          </div>
+        ) : null}
+        <div className="mt-3 overflow-x-auto">
+          <table className="w-full text-left text-xs">
+            <thead className="border-b bg-muted/50 text-[11px] uppercase text-muted-foreground">
+              <tr>
+                <th className="px-2 py-2">Кому</th>
+                <th className="px-2 py-2">Порог</th>
+                <th className="px-2 py-2">Как считать</th>
+                <th className="px-2 py-2">Вкл</th>
+                <th className="px-2 py-2 text-right"> </th>
+              </tr>
+            </thead>
+            <tbody className="divide-y">
+              {d.leader_rules.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="px-2 py-6 text-center text-muted-foreground">
+                    Условие не задано — руководителю минус по агентам не ставится.
+                  </td>
+                </tr>
+              ) : (
+                d.leader_rules.map((r) => {
+                  const person = r.user_id != null ? staff.find((e) => e.id === r.user_id) : null;
+                  return (
+                    <tr key={r.id}>
+                      <td className="px-2 py-2 font-semibold">
+                        {person ? person.fio : TIMESHEET_ROLE_LABELS[r.role] ?? r.role}
+                        <div className="text-[11px] font-normal text-muted-foreground">
+                          {person ? `только этот аккаунт · ${TIMESHEET_ROLE_LABELS[r.role] ?? r.role}` : "вся роль"}
+                        </div>
+                      </td>
+                      <td className="px-2 py-2 font-mono">{r.threshold}</td>
+                      <td className="px-2 py-2">{r.mode === "team_sum" ? "сумма всех агентов" : "каждый агент отдельно"}</td>
+                      <td className="px-2 py-2">
+                        <input
+                          type="checkbox"
+                          disabled={!canEdit}
+                          checked={r.enabled}
+                          onChange={(e) =>
+                            setD({
+                              ...d,
+                              leader_rules: d.leader_rules.map((x) => (x.id === r.id ? { ...x, enabled: e.target.checked } : x))
+                            })
+                          }
+                        />
+                      </td>
+                      <td className="px-2 py-2 text-right">
+                        {canEdit ? (
+                          <Button size="sm" variant="ghost" className="h-7 text-rose-600" onClick={() => setD({ ...d, leader_rules: d.leader_rules.filter((x) => x.id !== r.id) })}>
+                            <Trash2 className="size-3.5" />
+                          </Button>
+                        ) : null}
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
         </div>
       </section>
 

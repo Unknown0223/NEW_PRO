@@ -372,8 +372,20 @@ export function ClientPaymentsWorkspace({ variant = "payments" }: { variant?: Cl
   const payMethodLabels = useMemo(() => {
     const m: Record<string, string> = { "": "Способ оплаты" };
     for (const o of payFilterOpts) m[o.value] = o.label;
+    const entries = profileQ.data?.payment_method_entries;
+    if (Array.isArray(entries)) {
+      for (const e of entries) {
+        if (e?.active === false) continue;
+        const label = String(e.name ?? "").trim();
+        if (!label) continue;
+        for (const k of [e.id, e.code, e.name]) {
+          const key = String(k ?? "").trim();
+          if (key) m[key] = label;
+        }
+      }
+    }
     return m;
-  }, [payFilterOpts]);
+  }, [payFilterOpts, profileQ.data?.payment_method_entries]);
 
   const territoryFilterSpecs = useMemo(
     () => buildClientTerritoryFilterLevels(profileQ.data?.territory_levels),

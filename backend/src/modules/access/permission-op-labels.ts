@@ -18,6 +18,7 @@ export const PERMISSION_OP_LABEL_RU: Record<string, string> = {
   "orders.obmen.create": "Создать обмен",
   "orders.zakaz.view": "Список и просмотр заказов, итог по заказу",
   "orders.zakaz.update": "Изменение заказа (состав, комментарий, бонус)",
+  "orders.obnovlenie_bonusa.update": "Обновление бонуса",
   "orders.zakaz.copy": "Печать и загрузка накладных",
   "orders.zakaz.export": "Выгрузка заказов в Excel (список, выбранные, итог)",
   "orders.zakaz.assign": "Прикрепить / открепить доставщика",

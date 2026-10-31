@@ -364,7 +364,7 @@ export function ClientBalanceDetailWorkspace({
           headers: headersGeneral,
           rows: exportData.rows.map((r) => [
             formatLedgerExcelDate(r.sort_at),
-            r.type_code,
+            r.type_label,
             generalDebtPositive(r) || "",
             generalPaymentPositive(r) || "",
             formatLedgerPaymentMethodCell(r),
@@ -382,8 +382,8 @@ export function ClientBalanceDetailWorkspace({
           headers: headersDetailed,
           rows: exportData.rows.map((r) => [
             formatLedgerExcelDate(r.sort_at),
-            r.type_code,
-            r.operation_type_code,
+            r.type_label,
+            r.type_label,
             r.order_kind_label ?? "",
             consignmentDaNet(r.is_consignment),
             parseAmount(r.debt_amount ?? "0") || "",

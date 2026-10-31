@@ -15,6 +15,7 @@
 
 import {
   STATUS_META,
+  cellTimeHint,
   fmtTotal,
   statusWorkValue,
   timesheetRoleLabel,
@@ -109,12 +110,12 @@ export async function buildTimesheetXlsx(
   wb.creator = "SALEC";
   wb.created = new Date();
   const ws = wb.addWorksheet(`Табель ${month}`.slice(0, 31), {
-    views: [{ state: "frozen", xSplit: 6, ySplit: 1, topLeftCell: "G2" }],
+    views: [{ state: "frozen", xSplit: 8, ySplit: 1, topLeftCell: "I2" }],
     properties: { defaultRowHeight: 16 }
   });
 
   const dayCols = days.map((d) => String(d).padStart(2, "0"));
-  const headers = ["ФИО", "Роль", "Smart-код", "Направление", "Филиал", "Итого", ...dayCols];
+  const headers = ["ФИО", "Роль", "Smart-код", "Направление", "Филиал", "Итого", "Опоздание мин", "Ранний уход мин", ...dayCols];
 
   const headerRow = ws.getRow(1);
   headerRow.height = 22;
@@ -136,15 +137,19 @@ export async function buildTimesheetXlsx(
     row.getCell(4).value = r.direction ?? "";
     row.getCell(5).value = r.branch ?? "";
     row.getCell(6).value = fmtTotal(total);
-    for (let i = 1; i <= 6; i++) {
+    row.getCell(7).value = r.late_minutes ?? 0;
+    row.getCell(8).value = r.early_leave_minutes ?? 0;
+    for (let i = 1; i <= 8; i++) {
       row.getCell(i).font = { size: 11, name: "Calibri" };
       row.getCell(i).alignment = { vertical: "middle" };
     }
     row.getCell(6).alignment = { horizontal: "center", vertical: "middle" };
     row.getCell(6).font = { size: 11, name: "Calibri", bold: true };
+    row.getCell(7).alignment = { horizontal: "center", vertical: "middle" };
+    row.getCell(8).alignment = { horizontal: "center", vertical: "middle" };
 
     r.cells.forEach((c, cIdx) => {
-      const cell = row.getCell(7 + cIdx);
+      const cell = row.getCell(9 + cIdx);
       const meta = STATUS_META[c.status];
       // В обоих режимах ячейка = символ из UI-табеля (STATUS_META.short):
       // рабочие значения (1 / 0.5 / 0) — числом (удобно для формул),
@@ -165,6 +170,8 @@ export async function buildTimesheetXlsx(
         const userNote = comments?.[`${r.fio}:${c.date}`]?.trim();
         const parts: string[] = [];
         if (isLetter) parts.push(meta.label);
+        const timeNote = cellTimeHint(c);
+        if (timeNote) parts.push(timeNote);
         if (userNote) parts.push(userNote);
         if (parts.length > 0) {
           cell.note = {
@@ -182,7 +189,9 @@ export async function buildTimesheetXlsx(
   ws.getColumn(4).width = 18;
   ws.getColumn(5).width = 14;
   ws.getColumn(6).width = 8;
-  for (let i = 0; i < dayCols.length; i++) ws.getColumn(7 + i).width = 5;
+  ws.getColumn(7).width = 14;
+  ws.getColumn(8).width = 16;
+  for (let i = 0; i < dayCols.length; i++) ws.getColumn(9 + i).width = 5;
 
   return (await wb.xlsx.writeBuffer()) as ArrayBuffer;
 }

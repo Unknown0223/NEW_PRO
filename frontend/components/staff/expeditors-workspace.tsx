@@ -19,6 +19,7 @@ import { TableColumnSettingsDialog } from "@/components/data-table/table-column-
 import { useUserTablePrefs } from "@/hooks/use-user-table-prefs";
 import { DEFAULT_TABLE_PAGE_SIZES } from "@/lib/table-page-sizes";
 import { messageFromStaffCreateError } from "@/lib/staff-api-errors";
+import { matchesSearchTokens } from "@/lib/search-text";
 import { KeyRound, Pencil, UserMinus } from "lucide-react";
 import { StaffFaceReferencePanel } from "@/components/staff/staff-face-reference-panel";
 import { WorkplaceMovedNotice } from "@/components/staff/workplace-moved-notice";
@@ -320,18 +321,18 @@ export function ExpeditorsWorkspace({ tenantSlug }: Props) {
     const q = search.trim().toLowerCase();
     if (!q) return src;
     return src.filter((r) =>
-      [
-        r.fio,
-        r.login,
-        r.phone ?? "",
-        r.code ?? "",
-        r.branch ?? "",
-        r.warehouse ?? "",
-        ...(r.price_types ?? [])
-      ]
-        .join(" ")
-        .toLowerCase()
-        .includes(q)
+      matchesSearchTokens(
+        [
+          r.fio,
+          r.login,
+          r.phone ?? "",
+          r.code ?? "",
+          r.branch ?? "",
+          r.warehouse ?? "",
+          ...(r.price_types ?? [])
+        ].join(" "),
+        search
+      )
     );
   }, [listQ.data, search]);
 

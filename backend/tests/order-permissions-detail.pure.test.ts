@@ -24,6 +24,7 @@ describe("Заявки — Доступ katalogi", () => {
       "orders.zakaz.update",
       "orders.zakaz.export",
       "orders.zakaz.history",
+      "orders.obnovlenie_bonusa.update",
       "orders.sozdanie.create",
       "orders.vozvrat_polki.create",
       "orders.vozvrat_po_zakazu.create",
@@ -71,6 +72,7 @@ describe("Заявки — Доступ katalogi", () => {
 
   it("rol presetlari yangi yaratish kalitlarini oladi", () => {
     const operator = buildRoleDefaultKeys("operator");
+    expect(operator).toContain("orders.obnovlenie_bonusa.update");
     expect(operator).toContain("orders.sozdanie.create");
     expect(operator).toContain("orders.vozvrat_po_zakazu.create");
     expect(operator).not.toContain("orders.obmen.create");

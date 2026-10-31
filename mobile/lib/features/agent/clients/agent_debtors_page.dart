@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 
 import '../../../core/api/mobile_api.dart';
 import '../../../core/auth/session.dart';
+import '../../../core/clients/agent_outlet_filters_provider.dart';
 import '../../../core/l10n/app_strings_ru.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/ui/agent_ui.dart';
@@ -34,6 +35,12 @@ class AgentDebtorsPage extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final debtorsAsync = ref.watch(debtorsProvider);
+    final ledger = ref.watch(clientAgentLedgerBalancesProvider).valueOrNull;
+
+    double shownBalance(DebtorClient c) {
+      if (ledger == null) return c.balance;
+      return ledger[c.id] ?? 0;
+    }
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -50,7 +57,10 @@ class AgentDebtorsPage extends ConsumerWidget {
           if (rows.isEmpty) {
             return RefreshIndicator(
               color: AppColors.primary,
-              onRefresh: () async => ref.invalidate(debtorsProvider),
+              onRefresh: () async {
+                ref.invalidate(debtorsProvider);
+                ref.invalidate(clientAgentLedgerBalancesProvider);
+              },
               child: ListView(
                 physics: const AlwaysScrollableScrollPhysics(),
                 children: [
@@ -62,10 +72,14 @@ class AgentDebtorsPage extends ConsumerWidget {
               ),
             );
           }
-          final total = rows.fold<double>(0, (s, c) => s + c.balance.abs());
+          final visible = rows.where((c) => shownBalance(c) < -0.01).toList();
+          final total = visible.fold<double>(0, (s, c) => s + shownBalance(c).abs());
           return RefreshIndicator(
             color: AppColors.primary,
-            onRefresh: () async => ref.invalidate(debtorsProvider),
+            onRefresh: () async {
+              ref.invalidate(debtorsProvider);
+              ref.invalidate(clientAgentLedgerBalancesProvider);
+            },
             child: ListView(
               padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
               children: [
@@ -76,24 +90,19 @@ class AgentDebtorsPage extends ConsumerWidget {
                 Padding(
                   padding: const EdgeInsets.only(bottom: 8, left: 4, top: 4),
                   child: Text(
-                    'Найдено: ${rows.length}',
+                    'Найдено: ${visible.length}',
                     style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.textSecondary),
                   ),
                 ),
-                ...rows.map((c) {
-                  final fromOps = c.balance.abs() - c.openingDebt;
+                ...visible.map((c) {
+                  final balance = shownBalance(c);
                   return AgentDebtorCard(
                     name: c.name,
                     photoUrl: c.photoUrl,
-                    balance: _formatBalance(c.balance),
-                    balanceAmount: c.balance,
+                    balance: _formatBalance(balance),
+                    balanceAmount: balance,
                     overdue: _formatOverdue(c.overdueAt),
                     openingDebt: c.openingDebt > 0.01 ? _formatBalance(c.openingDebt) : null,
-                    enteredDebt: c.openingDebt > 0.01 && fromOps > 0.01
-                        ? _formatBalance(fromOps)
-                        : null,
-                    legacyDebt: c.legacyDebt > 0.01 ? _formatBalance(c.legacyDebt) : null,
-                    currentDebt: c.currentDebt > 0.01 ? _formatBalance(c.currentDebt) : null,
                     debtCollectionOnly: c.debtCollectionOnly,
                     onTap: () => context.push('/clients/${c.id}'),
                   );

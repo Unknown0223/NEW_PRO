@@ -17,6 +17,23 @@ export type AgentNormOverride = {
   half_day_ratio?: number;
 };
 
+/** Rahbar minusini qanday hisoblash. */
+export type LeaderMinusMode = "per_agent" | "team_sum";
+
+/**
+ * Biriktirilgan agentlarning «0» kunlari rahbarga minus beradi.
+ * `user_id` bo‘lsa — faqat shu akkaunt; bo‘lmasa — butun rol.
+ */
+export type LeaderMinusRule = {
+  id: string;
+  enabled: boolean;
+  role: string;
+  user_id: number | null;
+  /** Nechta minus (0) bo‘lsa rahbarga bitta minus. */
+  threshold: number;
+  mode: LeaderMinusMode;
+};
+
 export type AgentNormConfig = {
   enabled: boolean;
   start_date: string;
@@ -27,6 +44,7 @@ export type AgentNormConfig = {
   /** 0 — o‘chiq; 0.5 — norma 50% bo‘lsa yarim kun. */
   half_day_ratio: number;
   overrides: AgentNormOverride[];
+  leader_rules: LeaderMinusRule[];
 };
 
 export const DEFAULT_AGENT_NORM: AgentNormConfig = {
@@ -36,7 +54,8 @@ export const DEFAULT_AGENT_NORM: AgentNormConfig = {
   closed_amount: 650_000,
   min_orders: 0,
   half_day_ratio: 0,
-  overrides: []
+  overrides: [],
+  leader_rules: []
 };
 
 function asObj(v: unknown): Record<string, unknown> {
@@ -80,6 +99,31 @@ function parseOneOverride(raw: unknown): AgentNormOverride | null {
   return out;
 }
 
+export function parseLeaderMinusRules(raw: unknown): LeaderMinusRule[] {
+  if (!Array.isArray(raw)) return [];
+  const out: LeaderMinusRule[] = [];
+  const seen = new Set<string>();
+  for (const item of raw) {
+    const o = asObj(item);
+    const role = typeof o.role === "string" ? o.role.trim().toLowerCase() : "";
+    if (!role || role.length > 40) continue;
+    const threshold = nonNegInt(o.threshold, 0);
+    if (threshold < 1 || threshold > 31) continue;
+    const mode: LeaderMinusMode = o.mode === "team_sum" ? "team_sum" : "per_agent";
+    const uidRaw = typeof o.user_id === "number" ? o.user_id : o.user_id == null || o.user_id === "" ? null : Number(o.user_id);
+    const user_id = uidRaw != null && Number.isInteger(uidRaw) && uidRaw > 0 ? uidRaw : null;
+    const idRaw = typeof o.id === "string" ? o.id.trim() : "";
+    const id = (idRaw || `lr-${role}-${user_id ?? "role"}-${mode}-${threshold}`).slice(0, 40);
+    const key = user_id != null ? `u:${user_id}` : `r:${role}`;
+    if (seen.has(key) || seen.has(id)) continue;
+    seen.add(key);
+    seen.add(id);
+    out.push({ id, enabled: o.enabled !== false, role, user_id, threshold, mode });
+    if (out.length >= 50) break;
+  }
+  return out;
+}
+
 export function parseAgentNormOverrides(raw: unknown): AgentNormOverride[] {
   if (!Array.isArray(raw)) return [];
   const seen = new Set<number>();
@@ -104,7 +148,8 @@ export function resolveAgentNormConfig(cfg: AgentNormConfig, userId: number): Ag
     closed_amount: o.closed_amount ?? cfg.closed_amount,
     min_orders: o.min_orders ?? cfg.min_orders,
     half_day_ratio: o.half_day_ratio ?? cfg.half_day_ratio,
-    overrides: []
+    overrides: [],
+    leader_rules: cfg.leader_rules
   };
 }
 
@@ -131,7 +176,8 @@ export function parseAgentNormConfig(settings: Prisma.JsonValue | null | undefin
     closed_amount: positiveNum(raw.closed_amount, DEFAULT_AGENT_NORM.closed_amount),
     min_orders: nonNegInt(raw.min_orders, DEFAULT_AGENT_NORM.min_orders),
     half_day_ratio: ratio01(raw.half_day_ratio, DEFAULT_AGENT_NORM.half_day_ratio),
-    overrides: parseAgentNormOverrides(raw.overrides)
+    overrides: parseAgentNormOverrides(raw.overrides),
+    leader_rules: parseLeaderMinusRules(raw.leader_rules)
   };
 }
 
@@ -140,7 +186,7 @@ function fmtRuYmd(ymd: string): string {
   return `${d}.${m}.${y}`;
 }
 
-function fmtPct(ratio: number): string {
+export function fmtPct(ratio: number): string {
   return ratio > 0 ? `${Math.round(ratio * 100)}%` : "выкл";
 }
 
@@ -171,6 +217,7 @@ export function summarizeAgentNorm(cfg: AgentNormConfig): string {
   if (cfg.min_orders > 0) extra.push(`мин. ${cfg.min_orders} зак.`);
   if (cfg.half_day_ratio > 0) extra.push(`полдня от ${fmtPct(cfg.half_day_ratio)}`);
   if (cfg.overrides.length > 0) extra.push(`особые: ${summarizeOverrides(cfg.overrides)}`);
+  if (cfg.leader_rules.length > 0) extra.push(`минус руководителя: ${cfg.leader_rules.length}`);
   const base = `Включено с ${fmtRuYmd(cfg.start_date)} · открыта ${fmtSum(cfg.open_amount)} · закрыта ${fmtSum(cfg.closed_amount)} сум`;
   return extra.length ? `${base} · ${extra.join(" · ")}` : base;
 }
@@ -199,166 +246,35 @@ export function describeAgentNormChanges(prev: AgentNormConfig, next: AgentNormC
   if (overridesKey(prev.overrides) !== overridesKey(next.overrides)) {
     out.push(`Особые условия агентов: ${summarizeOverrides(prev.overrides)} → ${summarizeOverrides(next.overrides)}`);
   }
+  if (leaderRulesKey(prev.leader_rules) !== leaderRulesKey(next.leader_rules)) {
+    out.push(`Минус руководителя: ${summarizeLeaderRules(prev.leader_rules)} → ${summarizeLeaderRules(next.leader_rules)}`);
+  }
   return out;
 }
 
-export type AgentDaySales = {
-  /** Shu kuni olingan barcha zakazlar summasi. */
-  gross: number;
-  /** Bekor qilingan (otkaz) zakazlar summasi. */
-  refused: number;
-  /** To‘liq yoki qisman qaytarilgan (vozvrat) summa. */
-  returned: number;
-  orders: number;
-};
-
-export function agentDayNet(s: AgentDaySales | undefined): number {
-  if (!s) return 0;
-  return Math.max(0, s.gross - s.refused - s.returned);
+function leaderRulesKey(list: LeaderMinusRule[]): string {
+  return JSON.stringify(
+    [...list]
+      .map((r) => [r.role, r.user_id ?? 0, r.enabled, r.threshold, r.mode])
+      .sort((a, b) => String(a[0]).localeCompare(String(b[0])) || Number(a[1]) - Number(b[1]))
+  );
 }
+
+function summarizeLeaderRules(list: LeaderMinusRule[]): string {
+  if (list.length === 0) return "нет";
+  return list
+    .map((r) => {
+      const who = r.user_id != null ? `аккаунт ${r.user_id}` : `роль ${r.role}`;
+      const how = r.mode === "team_sum" ? "сумма агентов" : "каждый агент";
+      return `${r.enabled ? "вкл" : "выкл"} ${who}, ${how}, порог ${r.threshold}`;
+    })
+    .join("; ");
+}
+
 
 export function fmtSum(n: number): string {
   return Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, " ");
 }
 
-function salesPart(s: AgentDaySales | undefined): string {
-  if (!s || s.orders === 0) return "заказов нет";
-  const net = agentDayNet(s);
-  if (s.refused <= 0 && s.returned <= 0) return `заказы ${fmtSum(net)} сум`;
-  const parts = [`заказы ${fmtSum(s.gross)}`];
-  if (s.refused > 0) parts.push(`отказ ${fmtSum(s.refused)}`);
-  if (s.returned > 0) parts.push(`возврат ${fmtSum(s.returned)}`);
-  return `${parts.join(" − ")} = ${fmtSum(net)} сум`;
-}
-
-function normPart(norm: number, consignmentOpen: boolean): string {
-  return `норма ${fmtSum(norm)} сум (консигнация ${consignmentOpen ? "открыта" : "закрыта"})`;
-}
-
-export type NormDay = {
-  date: string;
-  status: AttendanceStatus;
-  source: AttendanceSource;
-  /** Qo‘lda belgilangan kun — avtomatika tegmaydi. */
-  manual: boolean;
-  off_employment?: boolean;
-  comment?: string;
-  net_sales?: number;
-  norm?: number;
-};
-
-export type ApplyAgentNormOptions = {
-  cfg: AgentNormConfig;
-  /** Tenant mahalliy bugungi sana — undan keyingi kunlar hisoblanmaydi. */
-  today: string;
-  isWorkingDay: (ymd: string) => boolean;
-  /** Oydagi grafik bo‘yicha ish kunlari soni — dam olish kunlari shu songacha qo‘shiladi. */
-  planDays: number;
-  sales: (ymd: string) => AgentDaySales | undefined;
-  consignmentOpen: (ymd: string) => boolean;
-};
-
-function statusValue(status: AttendanceStatus): number {
-  if (status === "worked") return 1;
-  if (status === "half_day") return 0.5;
-  return 0;
-}
-
-function dayQualifies(s: AgentDaySales | undefined, threshold: number, minOrders: number): boolean {
-  if (s == null || s.orders === 0) return false;
-  if (minOrders > 0 && s.orders < minOrders) return false;
-  return agentDayNet(s) >= threshold;
-}
-
-function extraFailNote(s: AgentDaySales | undefined, minOrders: number): string {
-  if (minOrders > 0 && (s == null || s.orders < minOrders)) {
-    return ` Нужно минимум ${minOrders} заказ(ов).`;
-  }
-  return "";
-}
-
-/** Agent oyi kunlariga normani qo‘llaydi (joyida o‘zgartiradi). */
-export function applyAgentNormToDays(days: NormDay[], o: ApplyAgentNormOptions): void {
-  if (!o.cfg.enabled) return;
-  const minOrders = o.cfg.min_orders;
-  const halfRatio = o.cfg.half_day_ratio;
-  const weekendMet: NormDay[] = [];
-  for (const d of days) {
-    if (d.manual || d.off_employment || d.date < o.cfg.start_date || d.date > o.today) continue;
-    const open = o.consignmentOpen(d.date);
-    const norm = open ? o.cfg.open_amount : o.cfg.closed_amount;
-    const s = o.sales(d.date);
-    const net = agentDayNet(s);
-    const met = dayQualifies(s, norm, minOrders);
-    const half = !met && halfRatio > 0 && dayQualifies(s, norm * halfRatio, minOrders);
-    const info = `${salesPart(s)}, ${normPart(norm, open)}`;
-    const todayNote = d.date === o.today ? " День ещё не завершён." : "";
-    d.net_sales = net;
-    d.norm = norm;
-    d.source = "auto";
-    if (o.isWorkingDay(d.date)) {
-      if (met) {
-        d.status = "worked";
-        d.comment = `Норма выполнена: ${info}.`;
-      } else if (half) {
-        d.status = "half_day";
-        d.comment = `Норма выполнена частично (полдня от ${fmtPct(halfRatio)}): ${info}.`;
-      } else {
-        d.status = "absent";
-        d.comment = `Норма не выполнена: ${info}, не хватает ${fmtSum(Math.max(0, norm - net))} сум.${extraFailNote(s, minOrders)} Фикса за день не начисляется.${todayNote}`;
-      }
-      continue;
-    }
-    if (met) {
-      d.status = "worked";
-      d.comment = `Выходной день, норма выполнена: ${info}.`;
-      weekendMet.push(d);
-    } else {
-      d.status = "holiday";
-      d.comment = s && s.orders > 0 ? `Выходной день: ${info} — норма не выполнена.` : "Выходной день.";
-    }
-  }
-  if (weekendMet.length === 0) return;
-
-  const weekendSet = new Set(weekendMet);
-  let total = 0;
-  for (const d of days) if (d.date <= o.today && !weekendSet.has(d)) total += statusValue(d.status);
-  for (const d of weekendMet) {
-    if (total + 1 <= o.planDays) {
-      total += 1;
-      d.comment = `${d.comment} Засчитан как рабочий день.`;
-      continue;
-    }
-    d.status = "holiday";
-    d.comment = `${d.comment} Не засчитан: рабочих дней в месяце ${o.planDays}, лимит уже набран.`;
-  }
-}
-
-/**
- * Konsignatsiya tarixidan kun bo‘yicha holat: kun davomida biror payt yoqilgan bo‘lsa — ochiq.
- * `logs` — `changed_at` bo‘yicha o‘sish tartibida, `ymd` tenant mahalliy sanasi.
- */
-export function consignmentOpenDays(
-  logs: Array<{ ymd: string; enabled: boolean }>,
-  days: string[],
-  fallback: boolean
-): Set<string> {
-  const out = new Set<string>();
-  if (days.length === 0) return out;
-  if (logs.length === 0) {
-    if (fallback) for (const d of days) out.add(d);
-    return out;
-  }
-  let i = 0;
-  let state = !logs[0]!.enabled;
-  for (const day of days) {
-    while (i < logs.length && logs[i]!.ymd < day) state = logs[i++]!.enabled;
-    let open = state;
-    while (i < logs.length && logs[i]!.ymd === day) {
-      state = logs[i++]!.enabled;
-      if (state) open = true;
-    }
-    if (open) out.add(day);
-  }
-  return out;
-}
+export type { AgentDaySales, ApplyAgentNormOptions, NormDay } from "./timesheet.agent-norm.apply";
+export { agentDayNet, applyAgentNormToDays, consignmentOpenDays } from "./timesheet.agent-norm.apply";

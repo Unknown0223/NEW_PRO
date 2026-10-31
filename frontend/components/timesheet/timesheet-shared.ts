@@ -92,6 +92,24 @@ export function fmtTotal(t: number): string {
   return t % 1 ? t.toFixed(1) : String(t);
 }
 
+/** Kechikish, erta ketish va qo‘shimcha soat — katak sarlavhasi. */
+export function cellTimeHint(cell: {
+  late_minutes?: number;
+  late_excused?: boolean;
+  early_leave_minutes?: number;
+  overtime_minutes?: number;
+  worked_minutes?: number;
+}): string {
+  const parts: string[] = [];
+  if ((cell.late_minutes ?? 0) > 0) {
+    parts.push(`опоздание ${cell.late_minutes} мин${cell.late_excused ? " · прощено" : ""}`);
+  }
+  if ((cell.early_leave_minutes ?? 0) > 0) parts.push(`ранний уход ${cell.early_leave_minutes} мин`);
+  if ((cell.overtime_minutes ?? 0) > 0) parts.push(`переработка ${cell.overtime_minutes} мин`);
+  if ((cell.worked_minutes ?? 0) > 0) parts.push(`на месте ${cell.worked_minutes} мин`);
+  return parts.join("\n");
+}
+
 /** Роли, которым backend разрешает редактировать табель (ADMIN_AND_OPERATOR_LIKE_ROLES). */
 export const TIMESHEET_EDIT_ROLES = new Set([
   "admin",
@@ -117,6 +135,13 @@ export type TimesheetCell = {
   comment?: string;
   net_sales?: number;
   norm?: number;
+  late_minutes?: number;
+  late_excused?: boolean;
+  early_leave_minutes?: number;
+  worked_minutes?: number;
+  overtime_minutes?: number;
+  first_in_at?: string | null;
+  last_out_at?: string | null;
 };
 
 export type TimesheetRow = {
@@ -133,6 +158,10 @@ export type TimesheetRow = {
   supervisor_user_id?: number | null;
   worked_days: number;
   absent_days: number;
+  late_minutes?: number;
+  late_unexcused_days?: number;
+  early_leave_minutes?: number;
+  overtime_hours?: number;
   cells: TimesheetCell[];
   /** Slotdan chiqish sanasi — shu kundan keyin tahrir bloklangan. */
   slot_left_at?: string | null;
@@ -183,7 +212,7 @@ export const STATUS_META: Record<AttendanceStatus, StatusMeta> = {
     label: "Полдня",
     color: "#5eead4",
     dot: "bg-teal-300",
-    cell: "bg-teal-200 text-teal-900 dark:bg-teal-400/80 dark:text-teal-950",
+    cell: "bg-[#99f6e4] text-teal-950",
     chipActive: "bg-[#0e8c7a] text-white border-[#0e8c7a]"
   },
   absent: {
@@ -192,7 +221,7 @@ export const STATUS_META: Record<AttendanceStatus, StatusMeta> = {
     label: "Отсутствовал",
     color: "#94a3b8",
     dot: "bg-slate-400",
-    cell: "bg-slate-200 text-slate-600 dark:bg-slate-700/60 dark:text-slate-300",
+    cell: "bg-[#e2e8f0] text-slate-700",
     chipActive: "bg-[#0e8c7a] text-white border-[#0e8c7a]"
   },
   holiday: {
@@ -238,7 +267,7 @@ export const STATUS_META: Record<AttendanceStatus, StatusMeta> = {
   overtime: { code: "10", short: "СВ", label: "Сверхурочно", color: "#059669", dot: "bg-emerald-600", cell: "bg-emerald-600 text-white", chipActive: "bg-emerald-600 text-white border-emerald-600" },
   weekend_work: { code: "11", short: "РВ", label: "Работа в выходной", color: "#0284c7", dot: "bg-sky-600", cell: "bg-sky-600 text-white", chipActive: "bg-sky-600 text-white border-sky-600" },
   remote: { code: "12", short: "УД", label: "Удалённо", color: "#4f46e5", dot: "bg-indigo-600", cell: "bg-indigo-600 text-white", chipActive: "bg-indigo-600 text-white border-indigo-600" },
-  not_started: { code: "13", short: "—", label: "Не начался", color: "#cbd5e1", dot: "bg-slate-300", cell: "bg-slate-100 text-slate-400", chipActive: "bg-slate-400 text-white border-slate-400" }
+  not_started: { code: "13", short: "—", label: "Не начался", color: "#cbd5e1", dot: "bg-slate-300", cell: "bg-[#f1f5f9] text-slate-600 ring-1 ring-inset ring-slate-300", chipActive: "bg-slate-400 text-white border-slate-400" }
 };
 
 export function statusMeta(s: AttendanceStatus): StatusMeta {
@@ -336,7 +365,7 @@ export function initialsOf(fio: string): string {
 }
 
 /** User.role → qisqa yorliq (filtr chip / select). */
-const TIMESHEET_ROLE_LABELS: Record<string, string> = {
+export const TIMESHEET_ROLE_LABELS: Record<string, string> = {
   admin: "Админ",
   agent: "Агент",
   supervisor: "Супервайзер",

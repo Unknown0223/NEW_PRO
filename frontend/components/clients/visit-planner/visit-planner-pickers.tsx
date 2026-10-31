@@ -1,6 +1,7 @@
 "use client";
 
 import { Input } from "@/components/ui/input";
+import { matchesSearchTokens } from "@/lib/search-text";
 import { cn } from "@/lib/utils";
 import { ChevronDown, Search } from "lucide-react";
 import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
@@ -49,8 +50,8 @@ export function SearchablePickList({
     const q = search.trim().toLowerCase();
     if (!q) return options;
     return options.filter((o) => {
-      const hay = `${o.label} ${o.subtitle ?? ""} ${o.searchText ?? ""} ${o.value}`.toLowerCase();
-      return hay.includes(q);
+      const hay = `${o.label} ${o.subtitle ?? ""} ${o.searchText ?? ""} ${o.value}`;
+      return matchesSearchTokens(hay, search);
     });
   }, [options, search]);
 

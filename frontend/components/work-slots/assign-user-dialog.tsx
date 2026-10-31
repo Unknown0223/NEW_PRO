@@ -283,9 +283,6 @@ export function AssignUserDialog({ open, onOpenChange, tenant, slotId, onAssigne
                 <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-200 bg-card px-3 py-2 text-xs">
                   <span className="text-slate-600">
                     Клиентов: ~{checklist.clients_affected_estimate}
-                    {checklist.locked_clients_skipped > 0
-                      ? ` (кроме заблокированных: ${checklist.locked_clients_skipped})`
-                      : ""}
                   </span>
                   <span className="font-medium text-teal-700">
                     {checkedCount}/{CHECK_ITEMS.length}

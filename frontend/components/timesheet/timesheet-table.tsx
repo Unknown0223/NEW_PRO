@@ -4,6 +4,7 @@ import { ArrowDown, ArrowUp, ArrowUpDown, Info } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   WORK_VALUES,
+  cellTimeHint,
   fmtRuDate,
   fmtTotal,
   initialsOf,
@@ -130,6 +131,14 @@ export function TimesheetTable({
               Филиал
             </th>
             <th className="min-w-[54px] border-b border-r bg-muted px-2 py-2 text-center font-semibold">Итого</th>
+            <th className="min-w-[64px] border-b border-r bg-muted px-1 py-2 text-center text-[10px] font-semibold leading-tight" title="Сумма минут опоздания за месяц">
+              Опозд.
+              <div className="font-normal text-muted-foreground">мин</div>
+            </th>
+            <th className="min-w-[64px] border-b border-r bg-muted px-1 py-2 text-center text-[10px] font-semibold leading-tight" title="Сумма минут раннего ухода за месяц">
+              Ран. уход
+              <div className="font-normal text-muted-foreground">мин</div>
+            </th>
             {days.map((d) => {
               const date = `${month}-${String(d).padStart(2, "0")}`;
               const sun = isSunday(date);
@@ -182,7 +191,7 @@ export function TimesheetTable({
                 )}
               >
                 <td
-                  className="sticky z-20 w-10 border-b border-r bg-card px-0 py-1.5 text-center group-hover:bg-muted/60"
+                  className="sticky z-20 w-10 border-b border-r bg-card px-0 py-1.5 text-center group-hover:bg-muted"
                   style={{ left: STICKY_CHECKBOX }}
                 >
                   <input
@@ -194,7 +203,7 @@ export function TimesheetTable({
                   />
                 </td>
                 <td
-                  className="sticky z-20 border-b border-r bg-card px-3 py-1.5 group-hover:bg-muted/60"
+                  className="sticky z-20 border-b border-r bg-card px-3 py-1.5 group-hover:bg-muted"
                   style={{ left: STICKY_FIO }}
                 >
                   <div className="flex items-center gap-2.5">
@@ -220,7 +229,7 @@ export function TimesheetTable({
                   </div>
                 </td>
                 <td
-                  className="sticky z-20 border-b border-r bg-card px-2 py-1.5 text-[11px] group-hover:bg-muted/60"
+                  className="sticky z-20 border-b border-r bg-card px-2 py-1.5 text-[11px] group-hover:bg-muted"
                   style={{ left: STICKY_ROLE }}
                 >
                   <span
@@ -234,24 +243,41 @@ export function TimesheetTable({
                   </span>
                 </td>
                 <td
-                  className="sticky z-20 border-b border-r bg-card px-2 py-1.5 font-mono text-[11px] group-hover:bg-muted/60"
+                  className="sticky z-20 border-b border-r bg-card px-2 py-1.5 font-mono text-[11px] group-hover:bg-muted"
                   style={{ left: STICKY_CODE }}
                 >
                   {r.code?.trim() || "—"}
                 </td>
                 <td
-                  className="sticky z-20 border-b border-r bg-card px-2 py-1.5 text-[11px] group-hover:bg-muted/60"
+                  className="sticky z-20 border-b border-r bg-card px-2 py-1.5 text-[11px] group-hover:bg-muted"
                   style={{ left: STICKY_DIRECTION }}
                 >
                   {r.direction?.trim() || "—"}
                 </td>
                 <td
-                  className="sticky z-20 border-b border-r bg-card px-2 py-1.5 text-[11px] group-hover:bg-muted/60"
+                  className="sticky z-20 border-b border-r bg-card px-2 py-1.5 text-[11px] group-hover:bg-muted"
                   style={{ left: STICKY_BRANCH }}
                 >
                   {r.branch?.trim() || "—"}
                 </td>
                 <td className="border-b border-r bg-muted/40 text-center font-mono font-bold text-primary">{fmtTotal(workedTotal(r))}</td>
+                <td
+                  className={cn(
+                    "border-b border-r text-center font-mono text-[11px]",
+                    (r.late_minutes ?? 0) > 0 ? "font-semibold text-rose-600" : "text-muted-foreground"
+                  )}
+                  title={(r.late_unexcused_days ?? 0) > 0 ? `Без прощения: ${r.late_unexcused_days} дн.` : undefined}
+                >
+                  {(r.late_minutes ?? 0) > 0 ? r.late_minutes : "—"}
+                </td>
+                <td
+                  className={cn(
+                    "border-b border-r text-center font-mono text-[11px]",
+                    (r.early_leave_minutes ?? 0) > 0 ? "font-semibold text-amber-700 dark:text-amber-400" : "text-muted-foreground"
+                  )}
+                >
+                  {(r.early_leave_minutes ?? 0) > 0 ? r.early_leave_minutes : "—"}
+                </td>
                 {r.cells.map((c) => {
                   const s = effectiveStatus(r.user_id, c);
                   const meta = statusMeta(s);
@@ -265,10 +291,17 @@ export function TimesheetTable({
                   const isSingle = singleDay === c.day;
                   const special = !isWorkStatus(s);
                   const cellEditable = canEdit && !leaveLocked;
+                  const timeHint = cellTimeHint(c);
+                  const minuteMark =
+                    (c.late_minutes ?? 0) > 0
+                      ? `${c.late_minutes}м`
+                      : (c.early_leave_minutes ?? 0) > 0
+                        ? `${c.early_leave_minutes}м`
+                        : "";
 
                   const tdClass = cn(
-                    "border-b border-r p-1 text-center align-middle",
-                    sel ? "bg-primary/10" : !sel && sun ? "bg-blue-50/40 dark:bg-blue-950/20" : "",
+                    "border-b border-r p-0.5 text-center align-middle",
+                    sel ? "bg-primary/15" : !sel && sun ? "bg-blue-50 dark:bg-blue-950" : "bg-card",
                     isSingle && !sel && "bg-primary/[0.06]",
                     changed && "ring-1 ring-inset ring-primary",
                     leaveLocked && "opacity-50"
@@ -354,14 +387,15 @@ export function TimesheetTable({
                         type="button"
                         onClick={() => onCellClick(r, c)}
                         title={`${r.fio} · ${fmtRuDate(c.date)} — ${meta.label}${changed ? " (не сохранено)" : ""}${
-                          c.comment && !changed ? `\n${c.comment}` : ""
-                        }`}
+                          timeHint ? `\n${timeHint}` : ""
+                        }${c.comment && !changed ? `\n${c.comment}` : ""}`}
                         className={cn(
-                          "grid h-8 w-full place-items-center rounded-md font-mono text-[11px] font-bold transition hover:opacity-80",
+                          "flex h-9 w-full flex-col items-center justify-center rounded-md font-mono text-[11px] font-bold leading-none",
                           meta.cell
                         )}
                       >
-                        {meta.short}
+                        <span>{meta.short}</span>
+                        {minuteMark ? <span className="text-[8px] font-semibold opacity-90">{minuteMark}</span> : null}
                       </button>
                     </td>
                   );

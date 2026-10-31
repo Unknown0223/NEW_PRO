@@ -14,7 +14,7 @@ import {
 import { ORDER_STATUSES_OUTSTANDING_RECEIVABLE } from "../orders/order-status";
 import { PAYMENT_COUNTS_FOR_RECEIVABLE_NET } from "../client-balances/client-balances.constants";
 
-import type { AgentBalanceCard, ClientBalanceLedgerResponse, ClientLedgerQuery, UnionRaw } from "./client-balance-ledger.types";
+import type { ClientBalanceLedgerResponse, ClientLedgerQuery } from "./client-balance-ledger.types";
 import {
   buildLedgerAgentSqlClauses,
   buildNetNormFromRows,
@@ -24,7 +24,7 @@ import {
   resolveLedgerAgentFilter,
   territoryLabel
 } from "./client-balance-ledger.helpers";
-import { buildLedgerAgentCards } from "./client-balance-ledger.agents";
+import { attachRemainingDebtLines, buildLedgerAgentCards } from "./client-balance-ledger.agents";
 
 import { fetchClientBalanceLedgerTable } from "./client-balance-ledger.get-table";
 import {
@@ -182,21 +182,22 @@ export async function getClientBalanceLedger(
     LEFT JOIN orders ord ON ord.id = sr.order_id AND ord.tenant_id = ${tenantId}
     WHERE sr.tenant_id = ${tenantId}
       AND sr.client_id = ${clientId}
-      AND sr.status = 'posted'
-      AND COALESCE(sr.refund_amount, 0) > 0
-      AND NOT EXISTS (
-        SELECT 1 FROM client_payments p
-        WHERE p.tenant_id = sr.tenant_id
-          AND p.client_id = sr.client_id
-          AND p.deleted_at IS NULL
-          AND p.entry_kind = 'refund'
-          AND (
-            p.note = ('Возврат · ' || sr.number)
-            OR p.note = ('Vazvrat: ' || sr.number)
-          )
-      )
-      ${returnDateClause}
-      ${returnAgentClause}
+        AND sr.status IN ('pending', 'posted')
+        AND COALESCE(sr.refund_amount, 0) > 0
+        AND NOT EXISTS (
+          SELECT 1 FROM client_payments p
+          WHERE p.tenant_id = sr.tenant_id
+            AND p.client_id = sr.client_id
+            AND p.deleted_at IS NULL
+            AND p.entry_kind = 'refund'
+            AND COALESCE(p.workflow_status, 'confirmed') NOT IN ('pending_confirmation', 'rejected', 'deleted')
+            AND (
+              p.note = ('Возврат · ' || sr.number)
+              OR p.note = ('Vazvrat: ' || sr.number)
+            )
+        )
+        ${returnDateClause}
+        ${returnAgentClause}
       ${kind === "debt" ? Prisma.sql`AND FALSE` : Prisma.empty}
   `;
   const finishedReturnCreditRows = await prisma.$queryRaw<Array<{ payment_type: string; net: Prisma.Decimal }>>`
@@ -282,7 +283,7 @@ export async function getClientBalanceLedger(
       LEFT JOIN orders ord ON ord.id = sr.order_id AND ord.tenant_id = ${tenantId}
       WHERE sr.tenant_id = ${tenantId}
         AND sr.client_id = ${clientId}
-        AND sr.status = 'posted'
+        AND sr.status IN ('pending', 'posted')
         AND COALESCE(sr.refund_amount, 0) > 0
         AND NOT EXISTS (
           SELECT 1 FROM client_payments p
@@ -290,6 +291,7 @@ export async function getClientBalanceLedger(
             AND p.client_id = sr.client_id
             AND p.deleted_at IS NULL
             AND p.entry_kind = 'refund'
+            AND COALESCE(p.workflow_status, 'confirmed') NOT IN ('pending_confirmation', 'rejected', 'deleted')
             AND (
               p.note = ('Возврат · ' || sr.number)
               OR p.note = ('Vazvrat: ' || sr.number)
@@ -333,15 +335,19 @@ export async function getClientBalanceLedger(
     ledgerTotalsByAgentKey.set(k, { gen_debt: r.gen_debt, gen_pay: r.gen_pay });
   }
 
-  const agent_cards_with_ledger_totals: AgentBalanceCard[] = agent_cards.map((c) => {
-    const k = c.agent_id == null ? "null" : String(c.agent_id);
-    const t = ledgerTotalsByAgentKey.get(k);
-    return {
-      ...c,
-      ledger_general_debt_total: t?.gen_debt.toString() ?? "0",
-      ledger_general_payment_total: t?.gen_pay.toString() ?? "0"
-    };
-  });
+  const agent_cards_with_ledger_totals = await attachRemainingDebtLines(
+    tenantId,
+    clientId,
+    agent_cards.map((c) => {
+      const k = c.agent_id == null ? "null" : String(c.agent_id);
+      const t = ledgerTotalsByAgentKey.get(k);
+      return {
+        ...c,
+        ledger_general_debt_total: t?.gen_debt.toString() ?? "0",
+        ledger_general_payment_total: t?.gen_pay.toString() ?? "0"
+      };
+    })
+  );
   const { rows, total } = await fetchClientBalanceLedgerTable({
     tenantId,
     clientId,

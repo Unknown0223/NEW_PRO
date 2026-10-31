@@ -193,7 +193,10 @@ export function DashboardFinance() {
 
               <div className="flex flex-col gap-6">
                 <section className="finance-motion-fade min-w-0">
-                  <FinanceKpiSection data={data} />
+                  <FinanceKpiSection
+                    data={data}
+                    paymentEntries={profileRefs?.payment_method_entries}
+                  />
                 </section>
                 <section className="finance-motion-fade min-w-0" style={{ animationDelay: "80ms" }}>
                   <FinanceBalanceSection data={data} />

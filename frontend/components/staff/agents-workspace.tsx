@@ -20,6 +20,7 @@ import {
 } from "@/components/staff/agents-bulk-edit-dialog";
 import { AgentsFiltersRow } from "@/components/staff/agents-filters-row";
 import { formatPersonDisplayName } from "@/lib/person-display";
+import { matchesSearchTokens } from "@/lib/search-text";
 import { downloadXlsxSheet } from "@/lib/download-xlsx";
 import { activeBranchNamesFromProfile } from "@/lib/branch-options";
 import { useActiveTradeDirectionsCatalog } from "@/hooks/use-active-trade-directions-catalog";
@@ -178,7 +179,12 @@ type Props = { tenantSlug: string };
 
 function buildAgentSearchHaystack(r: AgentRow): string {
   return [
+    formatPersonDisplayName(r),
     r.fio,
+    r.first_name ?? "",
+    r.last_name ?? "",
+    r.middle_name ?? "",
+    r.code ?? "",
     r.login,
     r.phone ?? "",
     r.pinfl ?? "",
@@ -419,7 +425,7 @@ export function AgentsWorkspace({ tenantSlug }: Props) {
     const src = listQ.data ?? [];
     const q = search.trim().toLowerCase();
     if (!q) return src;
-    return src.filter((r) => buildAgentSearchHaystack(r).includes(q));
+    return src.filter((r) => matchesSearchTokens(buildAgentSearchHaystack(r), search));
   }, [listQ.data, search]);
 
   const total = filteredRows.length;

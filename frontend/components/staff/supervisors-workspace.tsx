@@ -22,6 +22,7 @@ import { Pencil, KeyRound, UserMinus } from "lucide-react";
 import { SupervisorFormModal } from "@/components/staff/supervisor-form-modal";
 import { StaffFloatingToast, useStaffFloatingToast } from "@/components/staff/staff-floating-toast";
 import { messageFromStaffCreateError, messageFromSupervisorPatchError } from "@/lib/staff-api-errors";
+import { matchesSearchTokens } from "@/lib/search-text";
 import { AgentIconButton, AgentTemplateConfirmDialog } from "@/components/staff/agent-workspace-template-ui";
 import { StaffBulkFloatingBar } from "@/components/staff/staff-bulk-floating-bar";
 import { StaffPasswordChangeDialog } from "@/components/staff/staff-password-change-dialog";
@@ -280,18 +281,18 @@ export function SupervisorsWorkspace({ tenantSlug, initialCreateOpen = false }: 
     const q = search.trim().toLowerCase();
     if (!q) return src;
     return src.filter((r) =>
-      [
-        r.fio,
-        r.login,
-        r.phone ?? "",
-        r.code ?? "",
-        r.branch ?? "",
-        r.position ?? "",
-        ...r.supervisees.map((s) => `${s.fio} ${s.code ?? ""}`)
-      ]
-        .join(" ")
-        .toLowerCase()
-        .includes(q)
+      matchesSearchTokens(
+        [
+          r.fio,
+          r.login,
+          r.phone ?? "",
+          r.code ?? "",
+          r.branch ?? "",
+          r.position ?? "",
+          ...r.supervisees.map((s) => `${s.fio} ${s.code ?? ""}`)
+        ].join(" "),
+        search
+      )
     );
   }, [listQ.data, search]);
 

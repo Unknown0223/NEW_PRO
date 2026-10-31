@@ -29,25 +29,50 @@ const TONE_SOLID = [
 const HELPERS: Record<string, string> = {
   cash: "инкассация наличных",
   naqd: "инкассация наличных",
+  налич: "инкассация наличных",
   transfer: "банковский перевод",
+  перечисл: "банковский перевод",
   terminal: "эквайринг",
-  tenge: "наличные в валюте"
+  терминал: "эквайринг",
+  пластик: "эквайринг",
+  tenge: "наличные в валюте",
+  тенге: "наличные в валюте"
 };
 
-function helperFor(paymentType: string): string {
-  const key = paymentType.trim().toLowerCase();
+function helperFor(label: string): string {
+  const key = label.trim().toLowerCase();
   for (const [k, v] of Object.entries(HELPERS)) {
     if (key.includes(k)) return v;
   }
   return "канал оплаты";
 }
 
-export function FinanceKpiSection({ data }: { data: FinanceDashboardSnapshot }) {
-  const rows = data.payment_type_analytics;
-  const total = useMemo(
-    () => rows.reduce((s, r) => s + Math.max(0, Number(r.amount)), 0),
-    [rows]
-  );
+type PaymentMethodEntry = { id: string; name: string; code?: string | null };
+
+export function FinanceKpiSection({
+  data,
+  paymentEntries
+}: {
+  data: FinanceDashboardSnapshot;
+  paymentEntries?: PaymentMethodEntry[];
+}) {
+  const rows = useMemo(() => {
+    const byLabel = new Map<string, { amount: number; raw: string }>();
+    for (const row of data.payment_type_analytics) {
+      const label = formatPaymentMethodLabel(row.payment_type, undefined, paymentEntries);
+      const amount = Math.max(0, Number(row.amount));
+      const prev = byLabel.get(label);
+      byLabel.set(label, {
+        amount: (prev?.amount ?? 0) + (Number.isFinite(amount) ? amount : 0),
+        raw: row.payment_type
+      });
+    }
+    return [...byLabel.entries()]
+      .sort((a, b) => b[1].amount - a[1].amount)
+      .map(([label, v]) => ({ label, amount: v.amount, raw: v.raw }));
+  }, [data.payment_type_analytics, paymentEntries]);
+
+  const total = useMemo(() => rows.reduce((s, r) => s + r.amount, 0), [rows]);
 
   return (
     <section className="finance-motion-fade flex h-full flex-col rounded-2xl bg-card p-5 shadow-sm ring-1 ring-slate-200/70">
@@ -62,14 +87,12 @@ export function FinanceKpiSection({ data }: { data: FinanceDashboardSnapshot }) 
           </div>
         ) : (
           rows.map((row, index) => {
-            const amount = Number(row.amount);
-            const pct = total > 0 ? Math.min(100, (amount / total) * 100) : row.share_pct;
+            const pct = total > 0 ? Math.min(100, (row.amount / total) * 100) : 0;
             const gradient = TONE_GRADIENT[index % TONE_GRADIENT.length]!;
             const solid = TONE_SOLID[index % TONE_SOLID.length]!;
-            const label = formatPaymentMethodLabel(row.payment_type);
             return (
               <article
-                key={`${row.payment_type}-${index}`}
+                key={`${row.label}-${index}`}
                 className="finance-motion-fade flex min-h-[168px] flex-col justify-between overflow-hidden rounded-xl bg-muted p-4 ring-1 ring-slate-100"
                 style={{ animationDelay: `${index * 55}ms` }}
               >
@@ -81,14 +104,14 @@ export function FinanceKpiSection({ data }: { data: FinanceDashboardSnapshot }) 
                     </span>
                   </div>
                   <div className="flex items-center justify-between gap-2">
-                    <p className="truncate text-sm font-semibold text-slate-500">{label}</p>
+                    <p className="truncate text-sm font-semibold text-slate-500">{row.label}</p>
                     <span className="text-xs font-bold text-slate-400">доля</span>
                   </div>
                   <p className="mt-1 truncate text-[clamp(1.08rem,1.18vw,1.38rem)] font-black tracking-tight text-slate-950">
                     {fmtFinanceMoney(row.amount)}
                   </p>
                   <p className="mt-2 text-xs font-medium uppercase tracking-wide text-slate-400">
-                    {helperFor(row.payment_type)}
+                    {helperFor(row.label)}
                   </p>
                 </div>
                 <div className="mt-5">

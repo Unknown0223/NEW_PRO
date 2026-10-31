@@ -100,7 +100,7 @@ export function BalanceDetailLedgerTable({
         }
         return row.typeLabel;
       case "opName":
-        return <span className="font-mono text-[11px]">{row.operationName}</span>;
+        return row.operationName || "—";
       case "orderType":
         return row.orderType;
       case "consignment_d":

@@ -1,4 +1,5 @@
 import type { Prisma } from "@prisma/client";
+import { utcInstantForLocalMidnight, ymdInTimeZone } from "../../lib/workday-calendar";
 
 export const DEFAULT_CONSIGNMENT_MONTH_CLOSE_DAY = 25;
 
@@ -120,16 +121,41 @@ export function daysInMonth(year: number, month: number): number {
   return new Date(Date.UTC(year, month, 0)).getUTCDate();
 }
 
-/** Konsignatsiya yopilish vaqti (UTC). */
+export function consignmentYearMonthInTimeZone(
+  now: Date,
+  timeZone: string
+): { year: number; month: number } {
+  const ymd = ymdInTimeZone(now, timeZone);
+  return { year: Number(ymd.slice(0, 4)), month: Number(ymd.slice(5, 7)) };
+}
+
+export function previousConsignmentYearMonth(
+  year: number,
+  month: number
+): { year: number; month: number } {
+  return month === 1 ? { year: year - 1, month: 12 } : { year, month: month - 1 };
+}
+
+function pad2(n: number): string {
+  return String(n).padStart(2, "0");
+}
+
+/**
+ * Yopilish vaqti — tenant ish mintaqasidagi kun/soat (default Toshkent).
+ * `timeZone = "UTC"` eski UTC-only testlar uchun.
+ */
 export function utcConsignmentPeriodCloseAt(
   year: number,
   month: number,
-  schedule: ConsignmentCloseSchedule
+  schedule: ConsignmentCloseSchedule,
+  timeZone: string = "Asia/Tashkent"
 ): Date {
   const day = clampInt(schedule.day, 1, daysInMonth(year, month));
   const hour = clampInt(schedule.hour, 0, 23);
   const minute = clampInt(schedule.minute, 0, 59);
-  return new Date(Date.UTC(year, month - 1, day, hour, minute, 0, 0));
+  const ymd = `${year}-${pad2(month)}-${pad2(day)}`;
+  const midnight = utcInstantForLocalMidnight(ymd, timeZone);
+  return new Date(midnight.getTime() + hour * 3_600_000 + minute * 60_000);
 }
 
 export function utcMonthEndExclusive(year: number, month: number): Date {

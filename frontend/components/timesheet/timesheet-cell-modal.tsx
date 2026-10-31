@@ -29,6 +29,13 @@ export type CellTarget = {
   source: Source;
   /** Avtomatik holat sababi (agent kunlik normasi). */
   autoComment?: string;
+  lateMinutes?: number;
+  lateExcused?: boolean;
+  earlyLeaveMinutes?: number;
+  workedMinutes?: number;
+  overtimeMinutes?: number;
+  firstInAt?: string | null;
+  lastOutAt?: string | null;
 };
 
 export function TimesheetCellModal({
@@ -101,6 +108,23 @@ export function TimesheetCellModal({
           >
             <div className="mb-0.5 text-[11px] font-semibold uppercase tracking-wider opacity-80">Причина (авто)</div>
             {target.autoComment}
+          </div>
+        ) : null}
+
+        {(target.lateMinutes ?? 0) > 0 ||
+        (target.earlyLeaveMinutes ?? 0) > 0 ||
+        (target.workedMinutes ?? 0) > 0 ||
+        target.firstInAt ||
+        target.lastOutAt ? (
+          <div className="grid grid-cols-2 gap-2 rounded-lg border bg-muted/40 px-3 py-2 text-xs">
+            {target.firstInAt ? <Fact label="Приход" value={clock(target.firstInAt)} /> : null}
+            {target.lastOutAt ? <Fact label="Уход" value={clock(target.lastOutAt)} /> : null}
+            {(target.lateMinutes ?? 0) > 0 ? (
+              <Fact label="Опоздание" value={`${target.lateMinutes} мин${target.lateExcused ? " · прощено" : ""}`} />
+            ) : null}
+            {(target.earlyLeaveMinutes ?? 0) > 0 ? <Fact label="Ранний уход" value={`${target.earlyLeaveMinutes} мин`} /> : null}
+            {(target.workedMinutes ?? 0) > 0 ? <Fact label="На месте" value={`${target.workedMinutes} мин`} /> : null}
+            {(target.overtimeMinutes ?? 0) > 0 ? <Fact label="Переработка" value={`${target.overtimeMinutes} мин`} /> : null}
           </div>
         ) : null}
 
@@ -220,6 +244,21 @@ export function TimesheetCellModal({
         </div>
       </DialogContent>
     </Dialog>
+  );
+}
+
+function clock(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso.slice(11, 16);
+  return d.toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" });
+}
+
+function Fact({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{label}</div>
+      <div className="font-medium tabular-nums">{value}</div>
+    </div>
   );
 }
 

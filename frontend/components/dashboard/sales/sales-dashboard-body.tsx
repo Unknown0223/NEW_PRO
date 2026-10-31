@@ -64,50 +64,45 @@ export function SalesDashboardBody({
     </div>
   );
 
+  const breakdownTable =
+    breakdownView === "territory" ? (
+      <SalesDataTable
+        key="territory"
+        title="По территориям"
+        action={viewToggle}
+        data={data.territory_analytics}
+        columns={territoryColumns}
+        rowKey={(r) => r.territory}
+        initialPageSize={10}
+        className="sales-motion-delay-200"
+        onExportXlsx={() => exporters && void exporters.territory()}
+      />
+    ) : (
+      <SalesDataTable
+        key="category"
+        title="По категориям товаров"
+        action={viewToggle}
+        data={data.category_performance_table}
+        columns={categoryColumns}
+        rowKey={(r) => r.category}
+        initialPageSize={10}
+        className="sales-motion-delay-200"
+        onExportXlsx={() => exporters && void exporters.categoryPerformance()}
+      />
+    );
+
   return (
     <div className="space-y-4">
       <SalesMetricsRow data={data} resolvePayment={resolvePayment} />
-
-      <div className="grid gap-4 2xl:grid-cols-[minmax(0,1fr)_480px]">
-        <div ref={analyticsRef} className="space-y-4">
-          <SalesProductAnalytics data={data} />
-          <SalesOrdersRefusalsChart data={data} />
-          <SalesRefusalReasonsBlock data={data} />
-          <SalesTrendAreaChart data={data} />
-        </div>
-
-        <div ref={breakdownRef} className="space-y-4">
-          <SalesPaymentRail data={data} resolvePayment={resolvePayment} />
-          {breakdownView === "territory" ? (
-            <SalesDataTable
-              key="territory"
-              title="По территориям"
-              action={viewToggle}
-              data={data.territory_analytics}
-              columns={territoryColumns}
-              rowKey={(r) => r.territory}
-              initialPageSize={10}
-              compact
-              className="sales-motion-delay-200"
-              onExportXlsx={() => exporters && void exporters.territory()}
-            />
-          ) : (
-            <SalesDataTable
-              key="category"
-              title="По категориям товаров"
-              action={viewToggle}
-              data={data.category_performance_table}
-              columns={categoryColumns}
-              rowKey={(r) => r.category}
-              initialPageSize={10}
-              compact
-              className="sales-motion-delay-200"
-              onExportXlsx={() => exporters && void exporters.categoryPerformance()}
-            />
-          )}
-          <SalesCategoryMatrixTable data={data} className="sales-motion-delay-250" />
-        </div>
+      <div ref={analyticsRef}>
+        <SalesProductAnalytics data={data} />
       </div>
+      <SalesPaymentRail data={data} resolvePayment={resolvePayment} />
+      <div ref={breakdownRef}>{breakdownTable}</div>
+      <SalesOrdersRefusalsChart data={data} />
+      <SalesRefusalReasonsBlock data={data} />
+      <SalesTrendAreaChart data={data} />
+      <SalesCategoryMatrixTable data={data} className="sales-motion-delay-250" />
     </div>
   );
 }

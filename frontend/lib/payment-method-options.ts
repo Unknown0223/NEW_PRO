@@ -89,3 +89,60 @@ export function paymentMethodSelectOptionsWithCurrent(
 export function defaultPaymentTypeValue(opts: PaymentMethodSelectOption[]): string {
   return opts[0]?.value ?? "naqd";
 }
+
+const LEGACY_PAYMENT_DISPLAY: Record<string, string> = {
+  cash: "Наличные",
+  naqd: "Наличные",
+  naqd_pul: "Наличные",
+  terminal: "Терминал",
+  plastik: "Пластик",
+  transfer: "Перечисление",
+  perechisleniye: "Перечисление",
+  perechislenie: "Перечисление",
+  perechis: "Перечисление",
+  bank_transfer: "Перечисление",
+  "o‘tkazma": "Перечисление",
+  otkazma: "Перечисление",
+  tenge: "Тенге",
+  boshqa: "Другое"
+};
+
+function normKey(s: string): string {
+  return String(s ?? "").trim();
+}
+
+/**
+ * Katalogdan id/code/name → ko‘rinadigan **nom** xaritasi.
+ * Kodlar (`001`) UI da chiqmasin — faqat import/pivot da kod qoladi.
+ */
+export function buildPaymentMethodLabelMap(
+  entries: Array<{ id: string; name: string; code?: string | null }> | undefined
+): Map<string, string> {
+  const m = new Map<string, string>();
+  for (const p of entries ?? []) {
+    const id = normKey(String(p.id ?? ""));
+    const name = normKey(String(p.name ?? ""));
+    const code = normKey(String(p.code ?? ""));
+    if (!name && !id) continue;
+    const label = name || id;
+    for (const k of [id, code, name]) {
+      if (!k) continue;
+      m.set(k, label);
+      m.set(k.toLowerCase(), label);
+    }
+  }
+  return m;
+}
+
+/** `payment_type` / `payment_method_ref` ni UI uchun nomga aylantiradi. */
+export function resolvePaymentMethodDisplayLabel(
+  value: string | null | undefined,
+  entries?: Array<{ id: string; name: string; code?: string | null }> | Map<string, string>
+): string {
+  const k = normKey(value ?? "");
+  if (!k || k === "—") return "—";
+  const map = entries instanceof Map ? entries : buildPaymentMethodLabelMap(entries);
+  const fromCatalog = map.get(k) ?? map.get(k.toLowerCase());
+  if (fromCatalog) return fromCatalog;
+  return LEGACY_PAYMENT_DISPLAY[k.toLowerCase()] ?? (k.replace(/[_-]+/g, " ").trim() || "—");
+}

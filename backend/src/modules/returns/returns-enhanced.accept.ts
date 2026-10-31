@@ -74,14 +74,33 @@ export async function acceptSalesReturn(
       });
     }
 
-    // 2) Mijoz balansi (refund) + ledger payment (entry_kind=refund)
+    // 2) Mijoz balansi (refund) + ledger payment. To‘lov vazvrat hujjatiga bog‘lanadi.
     if (refund.gt(0) && ret.client_id != null) {
-      await applyClientReturnRefund(tx, tenantId, ret.client_id, refund, uid, {
+      const linkOrderId = ret.order_id ?? ret.mirror_order_id ?? null;
+      let ledgerAgentId = ret.order?.agent_id ?? null;
+      if (ledgerAgentId == null && linkOrderId != null) {
+        const linked = await tx.order.findFirst({
+          where: { id: linkOrderId, tenant_id: tenantId },
+          select: { agent_id: true }
+        });
+        ledgerAgentId = linked?.agent_id ?? null;
+      }
+      const { paymentId } = await applyClientReturnRefund(tx, tenantId, ret.client_id, refund, uid, {
         returnNumber: ret.number,
-        orderId: ret.order_id,
-        ledgerAgentId: ret.order?.agent_id ?? null,
+        orderId: linkOrderId,
+        ledgerAgentId,
         paidAt: new Date()
       });
+      if (paymentId > 0 && linkOrderId != null) {
+        await tx.paymentAllocation.create({
+          data: {
+            tenant_id: tenantId,
+            payment_id: paymentId,
+            order_id: linkOrderId,
+            amount: refund
+          }
+        });
+      }
     }
 
     // 3) Bonus qarzi

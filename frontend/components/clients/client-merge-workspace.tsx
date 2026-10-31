@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { api } from "@/lib/api";
+import { matchesSearchTokens } from "@/lib/search-text";
 import { useAuthStore, useAuthStoreHydrated } from "@/lib/auth-store";
 import { getUserFacingError } from "@/lib/error-utils";
 import { usePermissions } from "@/lib/use-permissions";
@@ -507,8 +508,8 @@ export function ClientMergeWorkspace() {
     if (!q) return rows;
     return rows.filter((g) => {
       const p0 = g.previews[0];
-      const hay = [p0?.name, p0?.legal_name, p0?.phone, g.key].join(" ").toLowerCase();
-      return hay.includes(q);
+      const hay = [p0?.name, p0?.legal_name, p0?.phone, g.key].join(" ");
+      return matchesSearchTokens(hay, tableRowFilter);
     });
   }, [dupQuery.data?.groups, tableRowFilter]);
 

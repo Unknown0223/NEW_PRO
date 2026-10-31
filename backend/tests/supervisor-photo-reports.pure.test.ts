@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   decodeStoredPhotoContent,
   isInlineHeavyPhotoUrl,
+  isSafeRemotePhotoUrl,
   resolvePhotoUrlForClient,
   supervisorPhotoContentPath
 } from "../src/modules/dashboard/dashboard.supervisor.photo-reports";
@@ -32,5 +33,12 @@ describe("supervisor photo report url helpers", () => {
     const decoded = decodeStoredPhotoContent(`data:image/png;base64,${raw}`);
     expect(decoded?.contentType).toBe("image/png");
     expect(decoded?.buffer.toString("utf8")).toBe("hello");
+  });
+
+  it("allows public https photo hosts and blocks loopback/private", () => {
+    expect(isSafeRemotePhotoUrl("https://cdn.example.com/p.jpg")).toBe(true);
+    expect(isSafeRemotePhotoUrl("http://127.0.0.1/secret")).toBe(false);
+    expect(isSafeRemotePhotoUrl("https://10.0.0.8/p.jpg")).toBe(false);
+    expect(isSafeRemotePhotoUrl("zip://files/client_photos/1.jpg")).toBe(false);
   });
 });

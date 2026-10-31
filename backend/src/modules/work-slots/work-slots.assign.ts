@@ -13,6 +13,11 @@ import {
 } from "./work-slots.config-mirror";
 import { syncUserLinksToWorkSlotTx } from "./work-slots.link-sync";
 import {
+  applyWorkplaceAccessSnapshot,
+  retargetDirectReports,
+  snapshotWorkplaceAccess
+} from "./work-slots.access-transfer";
+import {
   syncAfterAgentSlotOccupancyChange,
   syncSupervisorTeamToUsers
 } from "./work-slots.supervisor-team";
@@ -74,6 +79,11 @@ export async function assignUserToSlot(
       return current;
     }
 
+    const swapping = current != null && current.user_id !== newUserId;
+    const accessSnap = swapping
+      ? await snapshotWorkplaceAccess(tx, tenantId, current.user_id)
+      : null;
+
     if (current) {
       await tx.slotUserLink.update({
         where: { id: current.id },
@@ -92,9 +102,12 @@ export async function assignUserToSlot(
       }
     });
 
-    // Yangi xodim: shaxsiy ekstra ruxsatlar o‘tkazilmaydi — rol standarti + slot config mirror.
+    // Yangi xodimning shaxsiy ekstra ruxsatlari tozalanadi, keyin joy davridagi dostup ko‘chiriladi.
     await resetLeavingUserAccess(tx, tenantId, newUserId);
     await mirrorSlotConfigToUser(tx, tenantId, slotId, newUserId);
+    if (swapping && accessSnap && current) {
+      await applyWorkplaceAccessSnapshot(tx, tenantId, current.user_id, newUserId, accessSnap);
+    }
 
     if (current?.user_id != null && current.user_id !== newUserId) {
       await syncUserLinksToWorkSlotTx(tx, tenantId, current.user_id, null);
@@ -103,8 +116,8 @@ export async function assignUserToSlot(
 
     const auditNoteParts = [
       note?.trim() || null,
-      current
-        ? "Права сотрудников сброшены к стандарту роли (предшественник не копируется)"
+      swapping
+        ? "Доступы периода работы перенесены новому сотруднику; заказы остаются у прежнего"
         : "Права нового сотрудника сброшены к стандарту роли",
       reactivated ? "Сотрудник активирован" : null
     ].filter(Boolean);
@@ -141,6 +154,10 @@ export async function assignUserToSlot(
       }
     } else if (slot.slot_type === "supervisor") {
       await syncSupervisorTeamToUsers(tx, tenantId, slotId);
+    }
+
+    if (swapping && accessSnap?.role === "supervisor" && current) {
+      await retargetDirectReports(tx, tenantId, current.user_id, newUserId);
     }
 
     return link;
@@ -244,40 +261,27 @@ export async function getAssignChecklist(tenantId: number, slotId: number) {
   }
 
   const activeUserId = active?.user_id ?? null;
-  const [clientsAffected, lockedSkipped] = await Promise.all([
-    activeUserId
-      ? slot.slot_type === "expeditor"
-        ? prisma.clientAgentAssignment.count({
-            where: {
-              tenant_id: tenantId,
-              expeditor_user_id: activeUserId
-            }
-          })
-        : prisma.client.count({
-            where: {
-              tenant_id: tenantId,
-              merged_into_client_id: null,
-              agent_id: activeUserId
-            }
-          })
-      : Promise.resolve(0),
-    activeUserId
-      ? prisma.clientAgentAssignment.count({
+  const clientsAffected = activeUserId
+    ? slot.slot_type === "expeditor"
+      ? await prisma.clientAgentAssignment.count({
           where: {
             tenant_id: tenantId,
-            lock_type: { in: ["manual", "contract"] },
-            ...(slot.slot_type === "expeditor"
-              ? { expeditor_user_id: activeUserId }
-              : { agent_id: activeUserId })
+            expeditor_user_id: activeUserId
           }
         })
-      : Promise.resolve(0)
-  ]);
+      : await prisma.client.count({
+          where: {
+            tenant_id: tenantId,
+            merged_into_client_id: null,
+            agent_id: activeUserId
+          }
+        })
+    : 0;
 
   return {
     cash_desk_conflicts,
     clients_affected_estimate: clientsAffected,
-    locked_clients_skipped: lockedSkipped,
+    locked_clients_skipped: 0,
     slot_has_active_user: active != null,
     active_user_id: activeUserId
   };

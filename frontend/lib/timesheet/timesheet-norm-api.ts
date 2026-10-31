@@ -16,6 +16,17 @@ export type AgentNormOverride = {
   half_day_ratio?: number;
 };
 
+export type LeaderMinusMode = "per_agent" | "team_sum";
+
+export type LeaderMinusRule = {
+  id: string;
+  enabled: boolean;
+  role: string;
+  user_id: number | null;
+  threshold: number;
+  mode: LeaderMinusMode;
+};
+
 export type AgentNormSettings = {
   enabled: boolean;
   start_date: string;
@@ -24,6 +35,7 @@ export type AgentNormSettings = {
   min_orders?: number;
   half_day_ratio?: number;
   overrides?: AgentNormOverride[];
+  leader_rules?: LeaderMinusRule[];
   updated_at: string | null;
   updated_by: string | null;
 };
@@ -36,6 +48,7 @@ export type AgentNormSettingsInput = {
   min_orders?: number;
   half_day_ratio?: number;
   overrides?: AgentNormOverride[];
+  leader_rules?: LeaderMinusRule[];
   comment?: string;
 };
 

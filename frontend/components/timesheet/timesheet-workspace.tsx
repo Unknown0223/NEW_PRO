@@ -508,7 +508,14 @@ export function TimesheetWorkspace() {
       date: c.date,
       status: effectiveStatus(r.user_id, c),
       source: c.source,
-      autoComment: c.comment
+      autoComment: c.comment,
+      lateMinutes: c.late_minutes,
+      lateExcused: c.late_excused,
+      earlyLeaveMinutes: c.early_leave_minutes,
+      workedMinutes: c.worked_minutes,
+      overtimeMinutes: c.overtime_minutes,
+      firstInAt: c.first_in_at,
+      lastOutAt: c.last_out_at
     });
   }
 

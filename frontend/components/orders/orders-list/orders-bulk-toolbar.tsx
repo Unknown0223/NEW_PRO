@@ -542,7 +542,7 @@ export function OrdersBulkToolbar(props: OrdersBulkToolbarProps) {
       </button>
       ) : null}
 
-      {newStatusOrderIds.length > 0 && has("orders.zakaz.update") ? (
+      {newStatusOrderIds.length > 0 && (has("orders.zakaz.update") || has("orders.obnovlenie_bonusa.update")) ? (
       <button
         type="button"
         className={toolbarBtn}

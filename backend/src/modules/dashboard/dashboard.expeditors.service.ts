@@ -1,83 +1,31 @@
 ﻿import { Prisma } from "@prisma/client";
 import { prisma } from "../../config/database";
 import {
-  listBranches,
   listExpeditorOptions,
   listRoleOptions,
   loadExpeditorGroup,
   loadStatusBreakdown,
+  loadUnassignedOrdersByFilial,
   rollupExpeditors
 } from "./dashboard.expeditors.groups";
+import { listBranches, loadOrdersBySupervisor, mergeFilialRows } from "./dashboard.expeditors.orders";
+import type {
+  ExpeditorDashboardRow,
+  ExpeditorGroupRow,
+  ExpeditorsDashboardFilters,
+  ExpeditorsDashboardResponse
+} from "./dashboard.expeditors.types";
+
+export type {
+  ExpeditorDashboardRow,
+  ExpeditorGroupRow,
+  ExpeditorStatusRow,
+  ExpeditorsDashboardFilters,
+  ExpeditorsDashboardResponse
+} from "./dashboard.expeditors.types";
 
 /** Pending tasdiqlanmagan to'lovlar hisobga olinmaydi (vedoma bilan bir xil). */
 const PAYMENT_NOT_PENDING = Prisma.sql`COALESCE(p.workflow_status, 'confirmed') <> 'pending_confirmation'`;
-
-export type ExpeditorsDashboardFilters = {
-  /** YYYY-MM-DD */
-  date_from: string;
-  /** YYYY-MM-DD */
-  date_to: string;
-  expeditor_ids: number[];
-  agent_ids: number[];
-  supervisor_ids: number[];
-  branches: string[];
-};
-
-export type ExpeditorDashboardRow = {
-  expeditor_user_id: number;
-  expeditor_name: string;
-  expeditor_code: string | null;
-  total_orders: number;
-  delivered_orders: number;
-  delivered_sum: string;
-  returned_orders: number;
-  returned_sum: string;
-  payments_collected: string;
-  debt: string;
-};
-
-export type ExpeditorsDashboardResponse = {
-  date_from: string;
-  date_to: string;
-  rows: ExpeditorDashboardRow[];
-  totals: {
-    expeditors_count: number;
-    total_orders: number;
-    delivered_orders: number;
-    delivered_sum: string;
-    returned_orders: number;
-    returned_sum: string;
-    payments_collected: string;
-    debt: string;
-  };
-  expeditors: Array<{ id: number; name: string; code: string | null }>;
-  agents: Array<{ id: number; name: string; code: string | null }>;
-  supervisors: Array<{ id: number; name: string; code: string | null }>;
-  branches: string[];
-  by_filial: ExpeditorGroupRow[];
-  by_supervisor: ExpeditorGroupRow[];
-  by_agent: ExpeditorGroupRow[];
-  status_by: Record<"filial" | "supervisor" | "agent" | "expeditor", ExpeditorStatusRow[]>;
-};
-
-export type ExpeditorStatusRow = {
-  name: string;
-  code: string | null;
-  delivered_orders: number;
-  delivered_sum: string;
-  by_status: Record<string, string>;
-  by_status_days: Record<string, number>;
-};
-
-export type ExpeditorGroupRow = {
-  name: string;
-  code: string | null;
-  delivered_orders: number;
-  delivered_sum: string;
-  returned_sum: string;
-  payments_collected: string;
-  debt: string;
-};
 
 function ymd(d: Date): string {
   return d.toISOString().slice(0, 10);
@@ -133,17 +81,16 @@ function orderScope(f: ExpeditorsDashboardFilters): Prisma.Sql {
   if (f.expeditor_ids.length) parts.push(Prisma.sql`AND o.expeditor_user_id IN (${Prisma.join(f.expeditor_ids)})`);
   if (f.agent_ids.length) parts.push(Prisma.sql`AND o.agent_id IN (${Prisma.join(f.agent_ids)})`);
   if (f.branches.length) {
-    parts.push(Prisma.sql`AND EXISTS (
-      SELECT 1 FROM users bx
-      WHERE bx.id = o.expeditor_user_id AND bx.tenant_id = o.tenant_id
-        AND bx.branch IN (${Prisma.join(f.branches)})
-    )`);
+    parts.push(Prisma.sql`AND COALESCE(
+      (SELECT NULLIF(TRIM(bx.branch), '') FROM users bx WHERE bx.id = o.expeditor_user_id AND bx.tenant_id = o.tenant_id),
+      (SELECT NULLIF(TRIM(ax.branch), '') FROM users ax WHERE ax.id = o.agent_id AND ax.tenant_id = o.tenant_id)
+    ) IN (${Prisma.join(f.branches)})`);
   }
   if (f.supervisor_ids.length) {
     parts.push(Prisma.sql`AND EXISTS (
-      SELECT 1 FROM users sx
-      WHERE sx.id = o.expeditor_user_id AND sx.tenant_id = o.tenant_id
-        AND sx.supervisor_user_id IN (${Prisma.join(f.supervisor_ids)})
+      SELECT 1 FROM users ax
+      WHERE ax.id = o.agent_id AND ax.tenant_id = o.tenant_id
+        AND ax.supervisor_user_id IN (${Prisma.join(f.supervisor_ids)})
     )`);
   }
   return parts.length ? Prisma.join(parts, " ") : Prisma.empty;
@@ -182,7 +129,16 @@ export async function getExpeditorsDashboard(
   const userParts = [
     f.expeditor_ids.length ? Prisma.sql`AND u.id IN (${Prisma.join(f.expeditor_ids)})` : null,
     f.branches.length ? Prisma.sql`AND u.branch IN (${Prisma.join(f.branches)})` : null,
-    f.supervisor_ids.length ? Prisma.sql`AND u.supervisor_user_id IN (${Prisma.join(f.supervisor_ids)})` : null
+    f.supervisor_ids.length
+      ? Prisma.sql`AND EXISTS (
+          SELECT 1 FROM orders ox
+          JOIN users ax ON ax.id = ox.agent_id AND ax.tenant_id = ox.tenant_id
+          WHERE ox.expeditor_user_id = u.id AND ox.tenant_id = u.tenant_id
+            AND ox.order_type = 'order'
+            AND ox.created_at >= ${fromUtc} AND ox.created_at <= ${toUtc}
+            AND ax.supervisor_user_id IN (${Prisma.join(f.supervisor_ids)})
+        )`
+      : null
   ].filter((p): p is Prisma.Sql => p != null);
   const userFilter = userParts.length ? Prisma.join(userParts, " ") : Prisma.empty;
 
@@ -344,20 +300,22 @@ export async function getExpeditorsDashboard(
         where: { id: { in: mapped.filter((r) => r.expeditor_user_id > 0).map((r) => r.expeditor_user_id) } },
         select: {
           id: true,
-          branch: true,
-          supervisor: { select: { name: true, code: true } }
+          branch: true
         }
       })
     : [];
   const metaById = new Map(metas.map((m) => [m.id, m]));
-  const by_filial = rollupExpeditors(mapped, (r) => {
-    const branch = metaById.get(r.expeditor_user_id)?.branch?.trim() || "Без филиала";
-    return { name: branch, code: null };
-  });
-  const by_supervisor = rollupExpeditors(mapped, (r) => {
-    const s = metaById.get(r.expeditor_user_id)?.supervisor;
-    return { name: s?.name?.trim() || "Без СВР", code: s?.code ?? null };
-  });
+  const by_filial = mergeFilialRows(
+    rollupExpeditors(
+      mapped.filter((r) => r.expeditor_user_id > 0),
+      (r) => {
+        const branch = metaById.get(r.expeditor_user_id)?.branch?.trim() || "Без филиала";
+        return { name: branch, code: null };
+      }
+    ),
+    await loadUnassignedOrdersByFilial(tenantId, fromUtc, toUtc, expFilter)
+  );
+  const by_supervisor = await loadOrdersBySupervisor(tenantId, fromUtc, toUtc, expFilter);
   const by_agent = await loadExpeditorGroup(tenantId, fromUtc, toUtc, expFilter, "agent");
   const status_by = await loadStatusBreakdown(tenantId, fromUtc, toUtc, expFilter);
 

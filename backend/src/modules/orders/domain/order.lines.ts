@@ -61,12 +61,37 @@ function samePaymentRef(a: string | null | undefined, b: string | null | undefin
   return na === nb;
 }
 
+/** Operator to‘lov qatorini o‘zgartira olmaydi. Bonus yangilash shu qatorlarni qayta yuboradi. */
+export function paidLinesUnchanged(
+  existing: Array<{ product_id: number; qty: unknown }>,
+  incoming: Array<{ product_id: number; qty: unknown }>
+): boolean {
+  const fold = (rows: Array<{ product_id: number; qty: unknown }>) => {
+    const m = new Map<number, number>();
+    for (const r of rows) {
+      const q = typeof r.qty === "number" ? r.qty : Number(String(r.qty).replace(",", "."));
+      if (!Number.isFinite(q) || q <= 0) continue;
+      m.set(r.product_id, (m.get(r.product_id) ?? 0) + q);
+    }
+    return m;
+  };
+  const a = fold(existing);
+  const b = fold(incoming);
+  if (a.size !== b.size) return false;
+  for (const [id, q] of a) {
+    const other = b.get(id);
+    if (other == null || Math.abs(other - q) > 1e-6) return false;
+  }
+  return true;
+}
+
 export async function updateOrderLines(
   tenantId: number,
   orderId: number,
   input: UpdateOrderLinesInput,
   viewerRole?: string,
-  actorUserId?: number | null
+  actorUserId?: number | null,
+  canEditPaidLines?: boolean
 ): Promise<OrderDetailRow> {
   if (!input.items.length) {
     throw new Error("EMPTY_ITEMS");
@@ -82,16 +107,17 @@ export async function updateOrderLines(
     throw new Error("ORDER_NOT_EDITABLE");
   }
 
-  if (viewerRole === "operator") {
-    throw new Error("FORBIDDEN_OPERATOR_ORDER_LINES_EDIT");
-  }
-
   const prevAllItems = await prisma.orderItem.findMany({
     where: { order_id: orderId },
     orderBy: { id: "asc" },
     select: { product_id: true, qty: true, is_bonus: true, exchange_line_kind: true }
   });
   const prevPaidItems = prevAllItems.filter((r) => !r.is_bonus);
+
+  const fullEdit = canEditPaidLines ?? viewerRole !== "operator";
+  if (!fullEdit && !paidLinesUnchanged(prevPaidItems, input.items)) {
+    throw new Error("FORBIDDEN_OPERATOR_ORDER_LINES_EDIT");
+  }
 
   const logUserId =
     actorUserId != null && Number.isFinite(actorUserId) && actorUserId > 0 ? actorUserId : null;

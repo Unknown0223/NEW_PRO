@@ -1,16 +1,16 @@
 import type { Prisma } from "@prisma/client";
-import { isExternalClientCode } from "../../../shared/client-display-id";
+import { isExternalClientCode, parseExternalClientCodeSuffix } from "../../../shared/client-display-id";
 import { isPgInt4Id } from "../../lib/pg-int4";
 
-/** Klientlar ro‘yxati: `search` query — jadvaldagi matn ustunlari + agent / ekspeditor */
-export function buildClientListSearchOrClause(searchRaw: string): Prisma.ClientWhereInput[] {
-  const search = searchRaw.trim();
-  if (!search) return [];
+function clientListSearchClausesForToken(search: string): Prisma.ClientWhereInput[] {
 
   const ins = "insensitive" as const;
 
   if (isExternalClientCode(search)) {
-    return [{ client_code: { equals: search, mode: ins } }];
+    const clauses: Prisma.ClientWhereInput[] = [{ client_code: { equals: search, mode: ins } }];
+    const suffix = parseExternalClientCodeSuffix(search);
+    if (suffix != null && isPgInt4Id(suffix)) clauses.push({ id: suffix });
+    return clauses;
   }
 
   const orClause: Prisma.ClientWhereInput[] = [
@@ -76,4 +76,21 @@ export function buildClientListSearchOrClause(searchRaw: string): Prisma.ClientW
   }
 
   return orClause;
+}
+
+/**
+ * Bir necha so‘z: har biri alohida topsin («Ibroximov Hamdam» = familiya + ism, tartib muhim emas).
+ * Bitta so‘z — avvalgidek bitta OR.
+ * Chaqiruvchi natijani `{ OR: ... }` ga o‘raydi; ko‘p so‘zda ichida AND turadi.
+ */
+export function buildClientListSearchOrClause(searchRaw: string): Prisma.ClientWhereInput[] {
+  const search = searchRaw.trim();
+  if (!search) return [];
+  const tokens = search.split(/\s+/).filter(Boolean);
+  if (tokens.length <= 1) return clientListSearchClausesForToken(search);
+  return [
+    {
+      AND: tokens.map((token) => ({ OR: clientListSearchClausesForToken(token) }))
+    }
+  ];
 }

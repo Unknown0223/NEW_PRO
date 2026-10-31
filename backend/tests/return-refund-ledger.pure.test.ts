@@ -33,7 +33,7 @@ describe("return refund ledger", () => {
       balance_after: null
     };
     const row = mapUnionToLedgerRow(raw);
-    expect(row.type_label).toBe("Возврат (999)");
+    expect(row.type_label).toBe("Возврат");
     expect(row.order_kind_label).toBe("Возврат");
     expect(row.payment_amount).toBe("50000");
     expect(row.comment_primary).toBe("Возврат с полки");

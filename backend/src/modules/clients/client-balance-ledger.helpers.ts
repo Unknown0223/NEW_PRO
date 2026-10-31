@@ -151,19 +151,17 @@ export function mapUnionToLedgerRow(r: UnionRaw): ClientLedgerRow {
     (String(r.entry_kind ?? "") === "refund" || isReturnRefundNote(r.note));
   let type_label: string;
   if (rk === "order") {
-    type_label = `Заказ (${r.order_number ?? r.order_id})`;
+    type_label = "Заказ";
   } else if (returnRefundPayment) {
-    type_label = r.order_number
-      ? `Возврат (${r.order_number})`
-      : `Возврат (${r.payment_id ?? "—"})`;
+    type_label = "Возврат";
   } else if (bonusDebtPayment) {
     type_label = "Долг бонус";
   } else if (discountDebtPayment) {
     type_label = "Долг скидка";
   } else if (String(r.entry_kind ?? "") === "client_expense") {
-    type_label = `Расход (${r.payment_id})`;
+    type_label = "Расход";
   } else {
-    type_label = `Оплата (${r.payment_id})`;
+    type_label = "Оплата";
   }
 
   const type_code: 1 | 2 = rk === "order" ? 1 : 2;

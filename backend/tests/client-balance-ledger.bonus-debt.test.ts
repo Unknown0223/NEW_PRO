@@ -34,7 +34,7 @@ describe("client balance ledger — Долг бонус", () => {
 
   it("plain client_expense stays «Расход»", () => {
     const row = mapUnionToLedgerRow(paymentRow("Обычный расход"));
-    expect(row.type_label).toBe("Расход (99)");
+    expect(row.type_label).toBe("Расход");
     expect(row.comment_primary).toBe("Расход клиента");
   });
 });

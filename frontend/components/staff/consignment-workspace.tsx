@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
+import { matchesSearchTokens } from "@/lib/search-text";
 import { usePermissions } from "@/lib/use-permissions";
 import { STALE } from "@/lib/query-stale";
 import { Button } from "@/components/ui/button";
@@ -308,6 +309,7 @@ export function ConsignmentWorkspace({ tenantSlug }: { tenantSlug: string }) {
         month_close_hour: hour,
         month_close_minute: minute
       });
+      syncClosuresOnNextFetchRef.current = true;
       await qc.invalidateQueries({ queryKey: ["consignment"] });
       setCloseDialogOpen(false);
       setToast(
@@ -367,10 +369,8 @@ export function ConsignmentWorkspace({ tenantSlug }: { tenantSlug: string }) {
       const p = new URLSearchParams();
       p.set("year_month", yearMonth);
       p.set("trade_direction_id", tradeDirectionId);
-      if (syncClosuresOnNextFetchRef.current) {
-        p.set("sync_closures", "1");
-        syncClosuresOnNextFetchRef.current = false;
-      }
+      p.set("sync_closures", "1");
+      syncClosuresOnNextFetchRef.current = false;
       if (consFilter === "yes" || consFilter === "no") p.set("consignment", consFilter);
       if (search.trim()) p.set("search", search.trim());
       if (supervisorSelected.has("__no_sup__")) {
@@ -676,11 +676,8 @@ export function ConsignmentWorkspace({ tenantSlug }: { tenantSlug: string }) {
   const filterRowsInGroup = (groupKey: string, list: ConsignmentAgentApi[]) => {
     const q = (groupSearch[groupKey] ?? "").trim().toLowerCase();
     if (!q) return list;
-    return list.filter(
-      (r) =>
-        (r.work_slot_code ?? "").toLowerCase().includes(q) ||
-        (r.code ?? "").toLowerCase().includes(q) ||
-        r.name.toLowerCase().includes(q)
+    return list.filter((r) =>
+      matchesSearchTokens([r.work_slot_code ?? "", r.code ?? "", r.name].join(" "), groupSearch[groupKey] ?? "")
     );
   };
 

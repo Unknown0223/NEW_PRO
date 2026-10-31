@@ -1,6 +1,6 @@
 import type { ClientBalanceLedgerResponse, ClientLedgerRow } from "@/lib/client-balance-ledger-types";
 import type { BalanceDetailCard, BalanceDetailCustomer, BalanceDetailRow } from "./types";
-import { parseLedgerKpiAmount, resolveCardPaymentSubLines } from "@/lib/ledger-kpi-payment-triple";
+import { parseLedgerKpiAmount } from "@/lib/ledger-kpi-payment-triple";
 
 function paymentMethodLabel(r: ClientLedgerRow): string {
   const pay = (r.payment_type ?? "").trim();
@@ -24,6 +24,13 @@ function parseAmount(s: string | null | undefined): number {
   return parseLedgerKpiAmount(s);
 }
 
+/** «Оплата (1691)» / kod emas — ekranda faqat tur nomi. */
+function ledgerTypeName(label: string | null | undefined): string {
+  const raw = (label ?? "").trim();
+  const stripped = raw.replace(/\s*[\[(][^)\]]+[)\]]\s*$/, "").trim();
+  return stripped || raw || "—";
+}
+
 function cardFromPaymentTypes(
   id: string,
   title: string,
@@ -31,7 +38,9 @@ function cardFromPaymentTypes(
   paymentByType: { label: string; amount: string }[],
   agentId: number | null
 ): BalanceDetailCard {
-  const paymentSubLines = resolveCardPaymentSubLines(paymentByType);
+  const paymentSubLines = paymentByType
+    .map((line) => ({ label: line.label.trim() || "—", amount: parseAmount(line.amount) }))
+    .filter((line) => Math.abs(line.amount) > 0.009);
   let cash = 0;
   let transfer = 0;
   let terminal = 0;
@@ -89,9 +98,9 @@ export function mapLedgerRow(r: ClientLedgerRow, tab: "overall" | "detailed"): B
     key: `${r.row_kind}-${r.order_id ?? ""}-${r.payment_id ?? ""}-${r.sort_at}`,
     raw: r,
     createdAt: r.sort_at,
-    typeLabel: r.type_label,
+    typeLabel: ledgerTypeName(r.type_label),
     docNumber: r.order_number ?? String(r.payment_id ?? r.order_id ?? ""),
-    operationName: r.operation_type_code,
+    operationName: ledgerTypeName(r.type_label),
     orderType:
       r.order_kind_label ??
       (r.entry_kind === "refund" || (r.type_label ?? "").startsWith("Возврат")

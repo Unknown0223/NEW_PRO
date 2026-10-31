@@ -4,10 +4,8 @@ import { prisma } from "../../config/database";
 import { profilePhotoMobileUrl } from "../clients/client-profile-photo.pure";
 import { profilePhotoUrlsByClient, tenantSlug } from "../clients/client-profile-photo.service";
 import type { mobileCreateOrderBodySchema } from "../../contracts/mobile.schemas";
-import {
-  loadDeliveryDebtByClient,
-  mergeLedgerWithUnpaidDelivered
-} from "../client-balances/client-balances.service";
+import { loadDeliveryDebtByClient } from "../client-balances/client-balances.service";
+import { PAYMENT_COUNTS_FOR_RECEIVABLE_NET } from "../client-balances/client-balances.constants";
 import { createOrder } from "../orders/domain/order.create";
 import { loadAvailableQtyByProductId } from "../orders/order-bonus-context.match-gifts";
 import { getOrderCreateContextBundle } from "../orders/order-create-context.service";
@@ -664,14 +662,89 @@ export async function listMobileAgentClientLedgerBalances(tenantId: number, agen
         p.client_id,
         COALESCE(p.ledger_agent_id, ord.agent_id, c.agent_id) AS ledger_agent_id,
         CASE WHEN p.entry_kind = 'client_expense' THEN p.amount ELSE NULL END AS debt_amount,
-        CASE WHEN p.entry_kind = 'payment' THEN p.amount ELSE NULL END AS payment_amount
+        CASE WHEN p.entry_kind IN ('payment', 'refund') THEN p.amount ELSE NULL END AS payment_amount
       FROM client_payments p
       JOIN clients c ON c.id = p.client_id AND c.tenant_id = ${tenantId}
       LEFT JOIN orders ord ON ord.id = p.order_id AND ord.tenant_id = ${tenantId}
       WHERE p.tenant_id = ${tenantId}
         AND p.deleted_at IS NULL
+        ${PAYMENT_COUNTS_FOR_RECEIVABLE_NET}
         AND c.is_active = true
         AND c.merged_into_client_id IS NULL
+        AND (
+          c.agent_id = ${agentUserId}
+          OR EXISTS (
+            SELECT 1 FROM client_agent_assignments caa
+            WHERE caa.client_id = c.id AND caa.agent_id = ${agentUserId}
+          )
+        )
+
+      UNION ALL
+
+      SELECT
+        sr.client_id,
+        COALESCE(ord.agent_id, c.agent_id) AS ledger_agent_id,
+        NULL::decimal(15,2) AS debt_amount,
+        sr.refund_amount AS payment_amount
+      FROM sales_returns sr
+      JOIN clients c ON c.id = sr.client_id AND c.tenant_id = ${tenantId}
+      LEFT JOIN orders ord ON ord.id = sr.order_id AND ord.tenant_id = ${tenantId}
+      WHERE sr.tenant_id = ${tenantId}
+        AND sr.status IN ('pending', 'posted')
+        AND COALESCE(sr.refund_amount, 0) > 0
+        AND c.is_active = true
+        AND c.merged_into_client_id IS NULL
+        AND NOT EXISTS (
+          SELECT 1 FROM client_payments p
+          WHERE p.tenant_id = sr.tenant_id
+            AND p.client_id = sr.client_id
+            AND p.deleted_at IS NULL
+            AND p.entry_kind = 'refund'
+            AND COALESCE(p.workflow_status, 'confirmed') NOT IN ('pending_confirmation', 'rejected', 'deleted')
+            AND (
+              p.note = ('Возврат · ' || sr.number)
+              OR p.note = ('Vazvrat: ' || sr.number)
+            )
+        )
+        AND (
+          c.agent_id = ${agentUserId}
+          OR EXISTS (
+            SELECT 1 FROM client_agent_assignments caa
+            WHERE caa.client_id = c.id AND caa.agent_id = ${agentUserId}
+          )
+        )
+
+      UNION ALL
+
+      SELECT
+        o.client_id,
+        COALESCE(o.agent_id, c.agent_id) AS ledger_agent_id,
+        NULL::decimal(15,2) AS debt_amount,
+        o.total_sum AS payment_amount
+      FROM orders o
+      JOIN clients c ON c.id = o.client_id AND c.tenant_id = ${tenantId}
+      WHERE o.tenant_id = ${tenantId}
+        AND o.order_type IN ('return', 'return_by_order', 'partial_return')
+        AND o.status IN ('delivered', 'returned')
+        AND COALESCE(o.total_sum, 0) > 0
+        AND c.is_active = true
+        AND c.merged_into_client_id IS NULL
+        AND NOT EXISTS (
+          SELECT 1 FROM sales_returns sr
+          WHERE sr.tenant_id = o.tenant_id
+            AND sr.status IN ('pending', 'posted')
+            AND COALESCE(sr.refund_amount, 0) > 0
+            AND (sr.mirror_order_id = o.id OR sr.order_id = o.id)
+        )
+        AND NOT EXISTS (
+          SELECT 1 FROM client_payments p
+          WHERE p.tenant_id = o.tenant_id
+            AND p.client_id = o.client_id
+            AND p.deleted_at IS NULL
+            AND p.entry_kind = 'refund'
+            AND COALESCE(p.workflow_status, 'confirmed') NOT IN ('pending_confirmation', 'rejected', 'deleted')
+            AND p.order_id = o.id
+        )
         AND (
           c.agent_id = ${agentUserId}
           OR EXISTS (
@@ -771,8 +844,7 @@ export async function listMobileAgentDebtors(tenantId: number, userId: number, l
       name: true,
       phone: true,
       client_code: true,
-      agent_id: true,
-      client_balances: { take: 1, select: { balance: true } }
+      agent_id: true
     }
   });
 
@@ -782,21 +854,17 @@ export async function listMobileAgentDebtors(tenantId: number, userId: number, l
   const { loadOpeningDebtByClient } = await import(
     "../opening-balances/opening-balances.debt-by-client"
   );
-  const [deliveryMap, splitMap, openingMap] = await Promise.all([
+  const [deliveryMap, openingMap] = await Promise.all([
     loadDeliveryDebtByClient(tenantId, clientIds),
-    (await import("../client-balances/client-debt-by-agent")).loadDebtSplitByClient(
-      tenantId,
-      clientIds
-    ),
     loadOpeningDebtByClient(tenantId, clientIds)
   ]);
 
   const { pickMobileDebtorsByBalance } = await import("./mobile-debtors-rank");
+  const agentLedger = await listMobileAgentClientLedgerBalances(tenantId, userId);
+  const ledgerByClient = new Map(agentLedger.map((r) => [r.id, r.balance]));
   return pickMobileDebtorsByBalance(
     clients.map((c) => {
-      const ledger = c.client_balances[0]?.balance ?? new Prisma.Decimal(0);
-      const merged = mergeLedgerWithUnpaidDelivered(ledger, deliveryMap.get(c.id));
-      const split = splitMap.get(c.id);
+      const ledgerBal = ledgerByClient.get(c.id) ?? 0;
       const openingRaw = openingMap.get(c.id) ?? new Prisma.Decimal(0);
       const openingDebt = openingRaw.gt(0) ? openingRaw : new Prisma.Decimal(0);
       return {
@@ -804,10 +872,10 @@ export async function listMobileAgentDebtors(tenantId: number, userId: number, l
         name: c.name,
         phone: c.phone,
         client_code: c.client_code,
-        balance: Number(merged),
+        balance: ledgerBal,
         overdue_at: deliveryMap.get(c.id)?.firstDel?.toISOString() ?? null,
-        legacy_debt: Number(split?.legacy_debt ?? 0),
-        current_debt: Number(split?.current_debt ?? 0),
+        legacy_debt: 0,
+        current_debt: ledgerBal < -0.01 ? Math.abs(ledgerBal) : 0,
         opening_debt: Number(openingDebt),
         debt_collection_only: false
       };

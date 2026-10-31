@@ -244,8 +244,9 @@ export function paymentTypesFromMethodEntries(entries: PaymentMethodEntryDto[]):
 }
 
 /**
- * `orders.payment_method_ref` — odatda `payment_method_entries[].id`; to‘lovlar — `payment_type` (kod yoki nom).
- * Vedoma / hisobotda ko‘rsatish uchun katalog bo‘yicha o‘qiladigan nom.
+ * `orders.payment_method_ref` / `client_payments.payment_type` → katalogdagi **nom**.
+ * UI da kod (`001`) ko‘rsatilmasin; kod faqat import / pivot uchun.
+ * Topilmasa xom qiymat qaytadi.
  */
 export function resolvePaymentMethodRefToLabel(
   refRaw: string | null | undefined,
@@ -253,15 +254,8 @@ export function resolvePaymentMethodRefToLabel(
 ): string | null {
   const ref = (refRaw ?? "").trim();
   if (!ref) return null;
-  const active = entries.filter((e) => e.active !== false);
-  const byIdActive = active.find((e) => e.id === ref);
-  if (byIdActive) return byIdActive.name.trim();
-  const byIdAny = entries.find((e) => e.id === ref);
-  if (byIdAny) return byIdAny.name.trim();
-  const byKeyActive = active.find((e) => paymentMethodStorageKey(e) === ref);
-  if (byKeyActive) return byKeyActive.name.trim();
-  const byKeyAny = entries.find((e) => paymentMethodStorageKey(e) === ref);
-  if (byKeyAny) return byKeyAny.name.trim();
+  const hit = findPaymentMethodEntry(ref, entries);
+  if (hit) return hit.name.trim();
   return ref;
 }
 

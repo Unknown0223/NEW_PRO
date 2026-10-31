@@ -22,6 +22,8 @@ import {
   financeDateExprByType,
   financeOrderScopeSql
 } from "./dashboard.finance.scope";
+import { aggregatePaymentsByDisplayLabel } from "./dashboard.payment-labels";
+import { loadPaymentMethodEntriesForResolve } from "../tenant-settings/tenant-settings.service";
 
 export type FinanceDashboardSummaryPayload = Omit<FinanceDashboardSnapshot, "territory_debts" | "clients_debt_list">;
 
@@ -44,7 +46,7 @@ export async function getFinanceDashboardSummary(
   tenantId: number,
   filters: FinanceDashboardFilters
 ): Promise<FinanceDashboardSummaryPayload> {
-  const snapshotKey = `tenant:${tenantId}:dashboard:finance:summary:${stableJsonStringify(filters)}`;
+  const snapshotKey = `tenant:${tenantId}:dashboard:finance:summary:v3-labels:${stableJsonStringify(filters)}`;
   const cached = await getSnapshotCache<FinanceDashboardSummaryPayload>(snapshotKey);
   if (cached) return cached;
 
@@ -226,12 +228,11 @@ export async function getFinanceDashboardSummary(
     order_count: Number(r.order_count)
   }));
 
-  const payGrand = paymentRows.reduce((acc, r) => acc.add(r.amount), new Prisma.Decimal(0));
-  const payment_type_analytics: FinancePaymentTypeRow[] = paymentRows.map((r) => ({
-    payment_type: r.payment_type || "—",
-    amount: r.amount.toString(),
-    share_pct: payGrand.gt(0) ? clampPct(r.amount.div(payGrand).mul(100).toNumber()) : 0
-  }));
+  const pmEntries = await loadPaymentMethodEntriesForResolve(tenantId);
+  const payment_type_analytics: FinancePaymentTypeRow[] = aggregatePaymentsByDisplayLabel(
+    paymentRows,
+    pmEntries
+  );
 
   const general_balance: FinanceBalanceBlock = {
     total_balance: (balanceRows[0]?.s ?? new Prisma.Decimal(0)).toString(),

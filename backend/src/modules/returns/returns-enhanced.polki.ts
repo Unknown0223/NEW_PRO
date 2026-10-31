@@ -42,6 +42,8 @@ export async function createPolkiMirrorZayavka(
     sourceOrderNumber?: string | null;
     /** Hujjatni yaratgan foydalanuvchi — manba kanali (web/mobil) shu orqali aniqlanadi. */
     actorUserId?: number | null;
+    /** Manba zakaz / mijoz agenti — balans kartasida «Без агента» ga tushmasin. */
+    agentId?: number | null;
     /** «Долг скидка» — Заявки da Скидка ustuni + izoh */
     discountDebtAmount?: Prisma.Decimal | null;
     discountDebtNote?: string | null;
@@ -130,6 +132,10 @@ export async function createPolkiMirrorZayavka(
       number: params.number,
       client_id: params.clientId,
       warehouse_id: params.warehouseId,
+      agent_id:
+        params.agentId != null && Number.isFinite(params.agentId) && params.agentId > 0
+          ? params.agentId
+          : null,
       order_type: params.orderType,
       status: "returned",
       total_sum: headerTotal,

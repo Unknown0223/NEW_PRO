@@ -51,13 +51,15 @@ import {
   financeDateExprByType,
   financeOrderScopeSql
 } from "./dashboard.finance.scope";
+import { aggregatePaymentsByDisplayLabel } from "./dashboard.payment-labels";
 import { loadTerritoryRegionIndex, resolveTerritoryLabel, rollupDebtTerritoryRows } from "./dashboard.territory-rollup";
+import { loadPaymentMethodEntriesForResolve } from "../tenant-settings/tenant-settings.service";
 
 export async function getFinanceDashboardSnapshot(
   tenantId: number,
   filters: FinanceDashboardFilters
 ): Promise<FinanceDashboardSnapshot> {
-  const snapshotKey = `tenant:${tenantId}:dashboard:finance:v2:${stableJsonStringify(filters)}`;
+  const snapshotKey = `tenant:${tenantId}:dashboard:finance:v3-labels:${stableJsonStringify(filters)}`;
   const cached = await getSnapshotCache<FinanceDashboardSnapshot>(snapshotKey);
   if (cached) return cached;
 
@@ -328,12 +330,11 @@ export async function getFinanceDashboardSnapshot(
     order_count: Number(r.order_count)
   }));
 
-  const payGrand = paymentRows.reduce((acc, r) => acc.add(r.amount), new Prisma.Decimal(0));
-  const payment_type_analytics: FinancePaymentTypeRow[] = paymentRows.map((r) => ({
-    payment_type: r.payment_type || "—",
-    amount: r.amount.toString(),
-    share_pct: payGrand.gt(0) ? clampPct(r.amount.div(payGrand).mul(100).toNumber()) : 0
-  }));
+  const pmEntries = await loadPaymentMethodEntriesForResolve(tenantId);
+  const payment_type_analytics: FinancePaymentTypeRow[] = aggregatePaymentsByDisplayLabel(
+    paymentRows,
+    pmEntries
+  );
 
   const territoryIndex = await loadTerritoryRegionIndex(tenantId);
   const territory_debts: FinanceTerritoryDebtRow[] = rollupDebtTerritoryRows(

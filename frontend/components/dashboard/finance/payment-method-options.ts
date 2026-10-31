@@ -1,4 +1,5 @@
 import type { useDashboardMeta } from "@/lib/use-dashboard-meta";
+import { resolvePaymentMethodDisplayLabel } from "@/lib/payment-method-options";
 
 type ProfileRefs = NonNullable<ReturnType<typeof useDashboardMeta>["profileRefs"]>;
 type ReportFilters = { payment_methods?: Array<{ id: string; label: string }> };
@@ -30,20 +31,11 @@ export function buildPaymentMethodOptions(
   return legacy;
 }
 
-const PAYMENT_LABELS: Record<string, string> = {
-  cash: "Наличные",
-  naqd: "Наличные",
-  naqd_pul: "Наличные",
-  terminal: "Терминал",
-  transfer: "Перечисление",
-  perechisleniye: "Перечисление",
-  perechis: "Перечисление",
-  bank_transfer: "Перечисление",
-  tenge: "Тенге"
-};
-
-export function formatPaymentMethodLabel(value: string, fallbackName?: string): string {
-  const key = value.trim().toLowerCase();
+export function formatPaymentMethodLabel(
+  value: string,
+  fallbackName?: string,
+  entries?: Array<{ id: string; name: string; code?: string | null }>
+): string {
   if (fallbackName?.trim()) return fallbackName.trim();
-  return PAYMENT_LABELS[key] ?? (value.replace(/[_-]+/g, " ").trim() || "—");
+  return resolvePaymentMethodDisplayLabel(value, entries);
 }

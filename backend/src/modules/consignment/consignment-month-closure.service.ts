@@ -5,8 +5,10 @@ import { notifyUsers } from "../payroll/payroll.notify";
 
 /** Eski oylar birinchi marta sinxronlanganda xabar yog'ilib ketmasligi uchun. */
 const CLOSURE_NOTIFY_WINDOW_MS = 3 * 86400_000;
+import { loadTimezoneFromSettingsJson } from "../tenant-settings/tenant-timezone";
 import {
-  parseConsignmentMonthCloseDay,
+  consignmentYearMonthInTimeZone,
+  previousConsignmentYearMonth,
   resolveAgentConsignmentCloseSchedule,
   utcConsignmentPeriodCloseAt,
   utcDayStart,
@@ -96,9 +98,10 @@ export async function reconcileAgentConsignmentMonthClosure(
   year: number,
   month: number,
   schedule: ConsignmentCloseSchedule,
-  now: Date = new Date()
+  now: Date = new Date(),
+  timeZone?: string
 ): Promise<AgentMonthClosureSnapshot> {
-  const periodCloseAt = utcConsignmentPeriodCloseAt(year, month, schedule);
+  const periodCloseAt = utcConsignmentPeriodCloseAt(year, month, schedule, timeZone);
   const pastCloseDay = now >= periodCloseAt;
 
   const existing = await findAgentConsignmentMonthStatus(tenantId, agentUserId, year, month);
@@ -155,7 +158,8 @@ export async function reconcileAgentConsignmentMonthClosure(
 export async function reconcileTenantConsignmentMonthClosures(
   tenantId: number,
   yearMonth: string,
-  agentIds?: number[]
+  agentIds?: number[],
+  now: Date = new Date()
 ): Promise<void> {
   const tenant = await prisma.tenant.findUnique({
     where: { id: tenantId },
@@ -185,26 +189,43 @@ export async function reconcileTenantConsignmentMonthClosures(
       consignment_close_minute: true
     }
   });
-  const now = new Date();
+  const timeZone = loadTimezoneFromSettingsJson(tenant.settings);
   for (const a of agents) {
     const schedule = resolveAgentConsignmentCloseSchedule(a, tenant.settings);
-    await reconcileAgentConsignmentMonthClosure(tenantId, a.id, year, month, schedule, now);
+    await reconcileAgentConsignmentMonthClosure(tenantId, a.id, year, month, schedule, now, timeZone);
   }
 }
 
-/** Barcha tenantlar — kunlik cron. */
-export async function reconcileAllTenantsConsignmentClosures(now: Date = new Date()): Promise<void> {
-  const year = now.getUTCFullYear();
-  const month = now.getUTCMonth() + 1;
-  const yearMonth = `${year}-${String(month).padStart(2, "0")}`;
+function yearMonthKey(year: number, month: number): string {
+  return `${year}-${String(month).padStart(2, "0")}`;
+}
 
+/** Joriy va oldingi oy (kechikkan cron / TZ chegarasi). */
+export async function reconcileTenantCurrentAndPreviousClosures(
+  tenantId: number,
+  now: Date = new Date()
+): Promise<void> {
+  const tenant = await prisma.tenant.findUnique({
+    where: { id: tenantId },
+    select: { settings: true }
+  });
+  if (!tenant) return;
+  const tz = loadTimezoneFromSettingsJson(tenant.settings);
+  const cur = consignmentYearMonthInTimeZone(now, tz);
+  const prev = previousConsignmentYearMonth(cur.year, cur.month);
+  await reconcileTenantConsignmentMonthClosures(tenantId, yearMonthKey(cur.year, cur.month), undefined, now);
+  await reconcileTenantConsignmentMonthClosures(tenantId, yearMonthKey(prev.year, prev.month), undefined, now);
+}
+
+/** Barcha tenantlar — joriy + oldingi oy. */
+export async function reconcileAllTenantsConsignmentClosures(now: Date = new Date()): Promise<void> {
   const tenants = await prisma.tenant.findMany({
     where: { is_active: true },
     select: { id: true }
   });
 
   for (const t of tenants) {
-    await reconcileTenantConsignmentMonthClosures(t.id, yearMonth).catch((err) => {
+    await reconcileTenantCurrentAndPreviousClosures(t.id, now).catch((err) => {
       console.error(`[consignment-closure-cron] tenant ${t.id}:`, err);
     });
   }

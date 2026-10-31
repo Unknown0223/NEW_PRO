@@ -355,8 +355,20 @@ export function ExpeditorPaymentRequestsWorkspace() {
   const paymentTypeLabelByValue = useMemo(() => {
     const m = new Map<string, string>();
     for (const o of payFilterOpts) m.set(o.value, o.label);
+    const entries = profileQ.data?.payment_method_entries;
+    if (Array.isArray(entries)) {
+      for (const e of entries) {
+        if (e?.active === false) continue;
+        const label = String(e.name ?? "").trim();
+        if (!label) continue;
+        for (const k of [e.id, e.code, e.name]) {
+          const key = String(k ?? "").trim();
+          if (key) m.set(key, label);
+        }
+      }
+    }
     return m;
-  }, [payFilterOpts]);
+  }, [payFilterOpts, profileQ.data?.payment_method_entries]);
 
   const tradeDirectionsCatalog = useActiveTradeDirectionsCatalog(tenantSlug, "epr-workspace");
   const tradeDirectionOptions = tradeDirectionsCatalog.labels;

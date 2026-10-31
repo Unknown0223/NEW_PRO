@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { AxiosError } from "axios";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
+import { matchesSearchTokens } from "@/lib/search-text";
 import { useStaffCrudPermissions } from "@/lib/use-staff-crud-permissions";
 import { firstValidationUserHint, getZodFlattenFromApiErrorBody } from "@/lib/api-validation-details";
 import { withApiSupportLine } from "@/lib/error-utils";
@@ -261,20 +262,20 @@ export function AuditorsWorkspace({ tenantSlug }: Props) {
     const src = listQ.data ?? [];
     if (!q) return src;
     return src.filter((r) =>
-      [
-        r.fio,
-        r.login,
-        r.phone ?? "",
-        r.code ?? "",
-        r.pinfl ?? "",
-        r.branch ?? "",
-        r.position ?? "",
-        r.device_name ?? "",
-        r.territory ?? ""
-      ]
-        .join(" ")
-        .toLowerCase()
-        .includes(q)
+      matchesSearchTokens(
+        [
+          r.fio,
+          r.login,
+          r.phone ?? "",
+          r.code ?? "",
+          r.pinfl ?? "",
+          r.branch ?? "",
+          r.position ?? "",
+          r.device_name ?? "",
+          r.territory ?? ""
+        ].join(" "),
+        search
+      )
     );
   }, [listQ.data, search]);
 

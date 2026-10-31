@@ -253,62 +253,10 @@ export async function listSupervisorAgentPhotoReports(
     limit
   };
 }
-
-export async function fetchSupervisorPhotoImages(
-  tenantId: number,
-  tenantSlug: string,
-  photoIds: number[]
-): Promise<SupervisorPhotoReportImage[]> {
-  const ids = [...new Set(photoIds)].filter((id) => Number.isFinite(id) && id > 0);
-  if (ids.length === 0) return [];
-  // image_url (base64 TEXT) ni select QILMAYMIZ — faqat meta + proxy URL.
-  const rows = await prisma.clientPhotoReport.findMany({
-    where: { tenant_id: tenantId, id: { in: ids.slice(0, 100) }, deleted_at: null },
-    select: { id: true, caption: true, created_at: true }
-  });
-  return rows.map((r) => ({
-    id: r.id,
-    image_url: supervisorPhotoContentPath(tenantSlug, r.id),
-    caption: r.caption,
-    created_at: r.created_at.toISOString()
-  }));
-}
-
-const photoContentCache = new Map<number, { buffer: Buffer; contentType: string }>();
-const PHOTO_CONTENT_CACHE_MAX = 48;
-
-function rememberPhotoContent(photoId: number, buffer: Buffer, contentType: string) {
-  if (photoContentCache.size >= PHOTO_CONTENT_CACHE_MAX) {
-    const oldest = photoContentCache.keys().next().value;
-    if (oldest != null) photoContentCache.delete(oldest);
-  }
-  photoContentCache.set(photoId, { buffer, contentType });
-}
-
-export async function loadSupervisorPhotoContent(
-  tenantId: number,
-  photoId: number
-): Promise<
-  | { kind: "redirect"; url: string }
-  | { kind: "bytes"; buffer: Buffer; contentType: string }
-  | null
-> {
-  const hit = photoContentCache.get(photoId);
-  if (hit) return { kind: "bytes", buffer: hit.buffer, contentType: hit.contentType };
-
-  const row = await prisma.clientPhotoReport.findFirst({
-    where: { id: photoId, tenant_id: tenantId, deleted_at: null },
-    select: { image_url: true, content_purged_at: true }
-  });
-  if (!row || row.content_purged_at != null) return null;
-  const stored = String(row.image_url ?? "").trim();
-  if (!stored) return null;
-  if (/^https?:\/\//i.test(stored) || stored.startsWith("/")) {
-    return { kind: "redirect", url: stored };
-  }
-  const fromStore = await readStoredClientPhoto(stored);
-  const decoded = fromStore ?? decodeStoredPhotoContent(stored);
-  if (!decoded) return null;
-  rememberPhotoContent(photoId, decoded.buffer, decoded.contentType);
-  return { kind: "bytes", buffer: decoded.buffer, contentType: decoded.contentType };
-}
+export {
+  fetchRemotePhotoBytes,
+  fetchSupervisorPhotoImages,
+  isSafeRemotePhotoUrl,
+  loadSupervisorPhotoContent,
+  shrinkPhotoThumb
+} from "./dashboard.supervisor.photo-content";

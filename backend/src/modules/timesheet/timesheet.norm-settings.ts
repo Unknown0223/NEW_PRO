@@ -7,8 +7,10 @@ import {
   parseAgentNormConfig,
   parseAgentNormOverrides,
   summarizeAgentNorm,
+  parseLeaderMinusRules,
   type AgentNormConfig,
-  type AgentNormOverride
+  type AgentNormOverride,
+  type LeaderMinusRule
 } from "./timesheet.agent-norm.pure";
 import { isGpsTrackedRole } from "./timesheet.day-status";
 
@@ -20,6 +22,7 @@ export type AgentNormSaveInput = {
   min_orders?: number;
   half_day_ratio?: number;
   overrides?: AgentNormOverride[];
+  leader_rules?: LeaderMinusRule[];
 };
 
 export type AgentNormSettingsDto = AgentNormConfig & {
@@ -43,6 +46,23 @@ export async function getAgentNormSettings(tenantId: number): Promise<AgentNormS
   const t = await prisma.tenant.findUnique({ where: { id: tenantId }, select: { settings: true } });
   if (!t) throw new Error("NOT_FOUND");
   return { ...parseAgentNormConfig(t.settings), ...readMeta(t.settings) };
+}
+
+async function sanitizeLeaderRules(tenantId: number, list: LeaderMinusRule[]): Promise<LeaderMinusRule[]> {
+  const parsed = parseLeaderMinusRules(list);
+  const ids = parsed.flatMap((r) => (r.user_id != null ? [r.user_id] : []));
+  if (ids.length === 0) return parsed;
+  const users = await prisma.user.findMany({
+    where: { tenant_id: tenantId, id: { in: ids } },
+    select: { id: true, role: true }
+  });
+  const byId = new Map(users.map((u) => [u.id, u.role.trim().toLowerCase()]));
+  return parsed.flatMap((r) => {
+    if (r.user_id == null) return [r];
+    const role = byId.get(r.user_id);
+    if (!role) return [];
+    return [{ ...r, role }];
+  });
 }
 
 async function sanitizeOverrides(tenantId: number, list: AgentNormOverride[]): Promise<AgentNormOverride[]> {
@@ -72,6 +92,8 @@ export async function saveAgentNormSettings(
   if (!t) throw new Error("NOT_FOUND");
   const prev = parseAgentNormConfig(t.settings);
   const overrides = input.overrides !== undefined ? await sanitizeOverrides(tenantId, input.overrides) : prev.overrides;
+  const leaderRules =
+    input.leader_rules !== undefined ? await sanitizeLeaderRules(tenantId, input.leader_rules) : prev.leader_rules;
   const next: AgentNormConfig = {
     enabled: input.enabled,
     start_date: input.start_date,
@@ -80,7 +102,8 @@ export async function saveAgentNormSettings(
     min_orders: input.min_orders !== undefined ? Math.max(0, Math.floor(input.min_orders)) : prev.min_orders,
     half_day_ratio:
       input.half_day_ratio !== undefined ? Math.min(1, Math.max(0, input.half_day_ratio)) : prev.half_day_ratio,
-    overrides
+    overrides,
+    leader_rules: leaderRules
   };
   const changes = describeAgentNormChanges(prev, next);
   if (changes.length === 0) return { ...prev, ...readMeta(t.settings) };

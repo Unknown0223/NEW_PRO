@@ -24,6 +24,17 @@ const overrideBody = z
   })
   .strict();
 
+const leaderRuleBody = z
+  .object({
+    id: z.string().min(1).max(40),
+    enabled: z.boolean(),
+    role: z.string().min(1).max(40),
+    user_id: z.number().int().positive().nullable(),
+    threshold: z.number().int().min(1).max(31),
+    mode: z.enum(["per_agent", "team_sum"])
+  })
+  .strict();
+
 const normBody = z
   .object({
     enabled: z.boolean(),
@@ -33,6 +44,7 @@ const normBody = z
     min_orders: z.number().int().min(0).max(1000).optional(),
     half_day_ratio: z.number().min(0).max(1).optional(),
     overrides: z.array(overrideBody).max(500).optional(),
+    leader_rules: z.array(leaderRuleBody).max(50).optional(),
     comment: z.string().max(500).optional()
   })
   .strict();

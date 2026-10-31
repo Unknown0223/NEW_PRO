@@ -1,6 +1,7 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
+import { matchesSearchTokens } from "@/lib/search-text";
 import {
   Dialog,
   DialogContent,
@@ -343,8 +344,8 @@ export function ClientVisitPlannerWorkspace() {
     const expSet = new Set(expeditorFilter.map((v) => parseInt(v, 10)));
     return clientsForMap.filter((c) => {
       if (q) {
-        const hay = `${c.name} ${c.address ?? ""} ${c.phone ?? ""} ${c.region ?? ""} ${c.city ?? ""}`.toLowerCase();
-        if (!hay.includes(q)) return false;
+        const hay = `${c.name} ${c.address ?? ""} ${c.phone ?? ""} ${c.region ?? ""} ${c.city ?? ""}`;
+        if (!matchesSearchTokens(hay, search)) return false;
       }
       if (statusFilter === "active" && !c.is_active) return false;
       if (statusFilter === "inactive" && c.is_active) return false;

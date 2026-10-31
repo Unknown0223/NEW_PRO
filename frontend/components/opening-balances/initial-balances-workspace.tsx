@@ -19,7 +19,11 @@ import { useAuthStore, useAuthStoreHydrated } from "@/lib/auth-store";
 import type { ClientRow } from "@/lib/client-types";
 import { getUserFacingError } from "@/lib/error-utils";
 import { useUserTablePrefs } from "@/hooks/use-user-table-prefs";
-import { paymentMethodSelectOptions, type ProfilePaymentMethodEntry } from "@/lib/payment-method-options";
+import {
+  paymentMethodSelectOptions,
+  resolvePaymentMethodDisplayLabel,
+  type ProfilePaymentMethodEntry
+} from "@/lib/payment-method-options";
 import { formatNumberGrouped } from "@/lib/format-numbers";
 import type { OpeningBalanceListResponse, OpeningBalanceListRow } from "@/lib/opening-balance-types";
 import { STALE } from "@/lib/query-stale";
@@ -135,7 +139,15 @@ function colHeaderClass(colId: string): string {
   return cn("whitespace-nowrap px-2 py-2.5", colId === "amount" && "text-right");
 }
 
-function OpeningBalanceDataCell({ colId, row }: { colId: string; row: OpeningBalanceListRow }) {
+function OpeningBalanceDataCell({
+  colId,
+  row,
+  paymentEntries
+}: {
+  colId: string;
+  row: OpeningBalanceListRow;
+  paymentEntries?: ProfilePaymentMethodEntry[];
+}) {
   switch (colId) {
     case "created_at":
       return <td className="whitespace-nowrap px-2 py-2 text-xs">{formatDt(row.created_at)}</td>;
@@ -150,7 +162,11 @@ function OpeningBalanceDataCell({ colId, row }: { colId: string; row: OpeningBal
     case "balance_type":
       return <td className="whitespace-nowrap px-2 py-2 text-xs">{row.balance_type_label}</td>;
     case "payment_type":
-      return <td className="whitespace-nowrap px-2 py-2 text-xs">{row.payment_type}</td>;
+      return (
+        <td className="whitespace-nowrap px-2 py-2 text-xs">
+          {resolvePaymentMethodDisplayLabel(row.payment_type, paymentEntries)}
+        </td>
+      );
     case "amount":
       return (
         <td className="whitespace-nowrap px-2 py-2 text-right font-mono text-xs tabular-nums">
@@ -842,7 +858,12 @@ export function InitialBalancesWorkspace() {
                           />
                         </td>
                         {visibleColumnOrder.map((colId) => (
-                          <OpeningBalanceDataCell key={colId} colId={colId} row={r} />
+                          <OpeningBalanceDataCell
+                            key={colId}
+                            colId={colId}
+                            row={r}
+                            paymentEntries={profileQ.data?.payment_method_entries}
+                          />
                         ))}
                         <td className="px-1 py-2">
                           {applied.list_mode === "archive" ? (

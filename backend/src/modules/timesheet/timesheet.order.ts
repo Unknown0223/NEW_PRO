@@ -32,6 +32,16 @@ function byFio(a: TimesheetOrderable, b: TimesheetOrderable): number {
   return a.fio.localeCompare(b.fio, "ru");
 }
 
+function bySales(salesByUser: Map<number, number> | undefined) {
+  return (a: TimesheetOrderable, b: TimesheetOrderable): number => {
+    if (salesByUser) {
+      const diff = (salesByUser.get(b.user_id) ?? 0) - (salesByUser.get(a.user_id) ?? 0);
+      if (diff !== 0) return diff;
+    }
+    return byFio(a, b);
+  };
+}
+
 function departedLast<T extends TimesheetOrderable>(rows: T[]): T[] {
   const active = rows.filter((r) => !r.is_departed);
   const departed = rows.filter((r) => r.is_departed);
@@ -44,7 +54,9 @@ function departedLast<T extends TimesheetOrderable>(rows: T[]): T[] {
  */
 export function orderTimesheetRows<T extends TimesheetOrderable>(
   rows: T[],
-  selectedRoles?: string[]
+  selectedRoles?: string[],
+  /** Agentlar savdo summasi bo‘yicha (kamayish). Berilmasa — FIO. */
+  salesByUser?: Map<number, number>
 ): T[] {
   if (rows.length <= 1) return rows;
 
@@ -78,8 +90,9 @@ export function orderTimesheetRows<T extends TimesheetOrderable>(
   const out: T[] = [];
 
   const svrs = [...supervisors].sort(byFio);
+  const byAgentSales = bySales(salesByUser);
   for (const svr of svrs) {
-    const team = agents.filter((a) => a.supervisor_user_id === svr.user_id).sort(byFio);
+    const team = agents.filter((a) => a.supervisor_user_id === svr.user_id).sort(byAgentSales);
     for (const a of team) {
       usedAgentIds.add(a.user_id);
       out.push(a);
@@ -87,7 +100,7 @@ export function orderTimesheetRows<T extends TimesheetOrderable>(
     out.push(svr);
   }
 
-  const orphanAgents = agents.filter((a) => !usedAgentIds.has(a.user_id)).sort(byFio);
+  const orphanAgents = agents.filter((a) => !usedAgentIds.has(a.user_id)).sort(byAgentSales);
   out.push(...orphanAgents);
 
   const otherSorted = [...others].sort((a, b) => {

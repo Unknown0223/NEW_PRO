@@ -137,8 +137,12 @@ export async function createPeriodReturn(
     tenant_id: tenantId,
     client_id: input.client_id,
     // pending ham hisobga olinadi — qabul kutilayotgan vazvrat takror qaytarishni bloklaydi.
+    // order_id siz davr vazvrati ham shu mahsulot qoldig‘idan ayiriladi.
     status: { in: ["pending", "posted"] },
-    order_id: { in: eligibleOrderIds.length > 0 ? eligibleOrderIds : [-1] }
+    OR: [
+      { order_id: { in: eligibleOrderIds.length > 0 ? eligibleOrderIds : [-1] } },
+      { order_id: null }
+    ]
   };
 
   const alreadyRetMap = new Map<number, number>();
@@ -408,11 +412,25 @@ export async function createPeriodReturn(
       }
     });
 
+    const sourceAgent = input.order_id
+      ? await tx.order.findFirst({
+          where: { id: input.order_id, tenant_id: tenantId },
+          select: { agent_id: true }
+        })
+      : null;
+    const clientAgent =
+      sourceAgent?.agent_id != null
+        ? sourceAgent
+        : await tx.client.findFirst({
+            where: { id: input.client_id, tenant_id: tenantId },
+            select: { agent_id: true }
+          });
     const mirrorOrderId = await createPolkiMirrorZayavka(tx, {
       tenantId,
       number,
       clientId: input.client_id,
       warehouseId,
+      agentId: clientAgent?.agent_id ?? null,
       orderType: mirrorOrderType,
       retLines,
       refundAmount: recalc.refund_amount,

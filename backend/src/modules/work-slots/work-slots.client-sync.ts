@@ -1,8 +1,6 @@
 import type { Prisma } from "@prisma/client";
 
-const LOCK_SKIP = ["manual", "contract"] as const;
-
-/** Slotga agent biriktirilganda `work_slot_id` ni qulflanmagan assignmentlarga yozish. */
+/** Slotga agent biriktirilganda `work_slot_id` ni assignmentlarga yozish (qulf ham joyga yopishadi). */
 export async function linkAgentAssignmentsToWorkSlot(
   tx: Prisma.TransactionClient,
   tenantId: number,
@@ -13,7 +11,6 @@ export async function linkAgentAssignmentsToWorkSlot(
     where: {
       tenant_id: tenantId,
       agent_id: userId,
-      lock_type: { notIn: [...LOCK_SKIP] },
       OR: [{ work_slot_id: null }, { work_slot_id: slotId }]
     },
     data: { work_slot_id: slotId }
@@ -22,7 +19,9 @@ export async function linkAgentAssignmentsToWorkSlot(
 }
 
 /**
- * Agent slotida xodim almashganda: qulflanmagan mijozlar va assignmentlar yangi agentga.
+ * Agent slotida xodim almashganda: barcha mijozlar va assignmentlar yangi agentga.
+ * Qulf (manual/contract) saqlanadi, lekin joy bilan birga yangi xodimga o‘tadi.
+ * Zakazlar `agent_id` si o‘zgarmaydi — tarix eski xodimda qoladi.
  */
 export async function migrateClientsOnAgentSlotSwap(
   tx: Prisma.TransactionClient,
@@ -31,26 +30,10 @@ export async function migrateClientsOnAgentSlotSwap(
   fromUserId: number,
   toUserId: number
 ): Promise<{ clients_updated: number; assignments_updated: number }> {
-  const lockedRows = await tx.clientAgentAssignment.findMany({
-    where: {
-      tenant_id: tenantId,
-      slot: 1,
-      lock_type: { in: [...LOCK_SKIP] },
-      client: {
-        tenant_id: tenantId,
-        agent_id: fromUserId,
-        merged_into_client_id: null
-      }
-    },
-    select: { client_id: true }
-  });
-  const skipClientIds = lockedRows.map((r) => r.client_id);
-
   const clientWhere: Prisma.ClientWhereInput = {
     tenant_id: tenantId,
     agent_id: fromUserId,
-    merged_into_client_id: null,
-    ...(skipClientIds.length > 0 ? { id: { notIn: skipClientIds } } : {})
+    merged_into_client_id: null
   };
 
   const clients = await tx.client.findMany({
@@ -68,8 +51,7 @@ export async function migrateClientsOnAgentSlotSwap(
   const assignResult = await tx.clientAgentAssignment.updateMany({
     where: {
       tenant_id: tenantId,
-      agent_id: fromUserId,
-      lock_type: { notIn: [...LOCK_SKIP] }
+      agent_id: fromUserId
     },
     data: { agent_id: toUserId, work_slot_id: slotId }
   });
@@ -97,8 +79,7 @@ export async function migrateClientsOnVacantSlotAssign(
     where: {
       tenant_id: tenantId,
       work_slot_id: slotId,
-      agent_id: { not: toUserId },
-      lock_type: { notIn: [...LOCK_SKIP] }
+      agent_id: { not: toUserId }
     },
     select: { client_id: true, agent_id: true }
   });
@@ -110,22 +91,7 @@ export async function migrateClientsOnVacantSlotAssign(
 
   const clientIds = [...new Set(slotAssignments.map((r) => r.client_id))];
   const fromAgentIds = [...new Set(slotAssignments.map((r) => r.agent_id).filter((id): id is number => id != null))];
-
-  const lockedRows =
-    fromAgentIds.length > 0
-      ? await tx.clientAgentAssignment.findMany({
-          where: {
-            tenant_id: tenantId,
-            slot: 1,
-            lock_type: { in: [...LOCK_SKIP] },
-            client_id: { in: clientIds },
-            agent_id: { in: fromAgentIds }
-          },
-          select: { client_id: true }
-        })
-      : [];
-  const skipClientIds = new Set(lockedRows.map((r) => r.client_id));
-  const migrateClientIds = clientIds.filter((id) => !skipClientIds.has(id));
+  const migrateClientIds = clientIds;
 
   if (migrateClientIds.length > 0) {
     await tx.client.updateMany({
@@ -143,9 +109,7 @@ export async function migrateClientsOnVacantSlotAssign(
     where: {
       tenant_id: tenantId,
       work_slot_id: slotId,
-      agent_id: { not: toUserId },
-      lock_type: { notIn: [...LOCK_SKIP] },
-      ...(skipClientIds.size > 0 ? { client_id: { notIn: [...skipClientIds] } } : {})
+      agent_id: { not: toUserId }
     },
     data: { agent_id: toUserId, work_slot_id: slotId }
   });
@@ -166,7 +130,8 @@ export function isExpeditorOpenOrderStatus(status: string): boolean {
 }
 
 /**
- * Dastavchik slotida xodim almashganda: qulflanmagan assignmentlar + ochiq zakazlar.
+ * Dastavchik slotida xodim almashganda: barcha assignmentlar (qulf bilan) + ochiq zakazlar.
+ * Yetkazilgan zakazlar eski dastavchikda qoladi.
  */
 export async function migrateExpeditorAssignmentsOnSlotSwap(
   tx: Prisma.TransactionClient,
@@ -178,8 +143,7 @@ export async function migrateExpeditorAssignmentsOnSlotSwap(
   const assignResult = await tx.clientAgentAssignment.updateMany({
     where: {
       tenant_id: tenantId,
-      expeditor_user_id: fromUserId,
-      lock_type: { notIn: [...LOCK_SKIP] }
+      expeditor_user_id: fromUserId
     },
     data: { expeditor_user_id: toUserId }
   });

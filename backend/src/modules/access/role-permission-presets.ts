@@ -96,6 +96,7 @@ const PRESET_BUILDERS: Record<string, () => string[]> = {
     uniq(
       mod("dashboard"),
       secOnly("orders", "zakaz", ["view", "update", "copy", "export", "history"]),
+      secOnly("orders", "obnovlenie_bonusa", ["update"]),
       orderCreate("sozdanie", "vozvrat_polki", "vozvrat_po_zakazu"),
       orderStatus(...ALL_ORDER_STATUS_SLUGS),
       secOnly("invoices", "vozvratnye", ["view"]),

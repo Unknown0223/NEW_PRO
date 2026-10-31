@@ -80,11 +80,25 @@ export async function persistPeriodReturnBatch(
         }
       });
 
+      const sourceAgent = p.orderId
+        ? await tx.order.findFirst({
+            where: { id: p.orderId, tenant_id: tenantId },
+            select: { agent_id: true }
+          })
+        : null;
+      const clientAgent =
+        sourceAgent?.agent_id != null
+          ? sourceAgent
+          : await tx.client.findFirst({
+              where: { id: input.client_id, tenant_id: tenantId },
+              select: { agent_id: true }
+            });
       const mid = await createPolkiMirrorZayavka(tx, {
         tenantId,
         number: p.number,
         clientId: input.client_id,
         warehouseId,
+        agentId: clientAgent?.agent_id ?? null,
         orderType: "return_by_order",
         retLines: p.retLines,
         refundAmount: p.recalc.refund_amount,

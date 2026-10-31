@@ -11,12 +11,12 @@ type Answer = { title: string; lines: string[]; groups?: Group[] };
 type Turn = { role: "user" | "assistant"; text: string; groups?: Group[] };
 
 const HINTS = [
-  "Nechta foydalanuvchi bor?",
-  "Bugungi umumiy holat",
-  "1-oktabrdan 10-oktabrgacha savdo",
-  "Oxirgi buyurtmalar",
-  "Qarzlar ro'yxati",
-  "Mijozlarni ko'rsat"
+  "Boshlang'ich umumiy holat: savdo, qarz, to'lov, rasxod",
+  "Bugungi savdo va ochiq buyurtmalar",
+  "Qarzlar va kassalar",
+  "Oxirgi to'lovlar va rasxodlar",
+  "Ish haqi va avanslar",
+  "Mijozlar, agentlar va mahsulotlar"
 ];
 
 export default function AssistantPage() {
@@ -41,7 +41,7 @@ export default function AssistantPage() {
       const body = [res.data.title, ...res.data.lines].filter(Boolean).join("\n");
       setTurns((prev) => [...prev, { role: "assistant", text: body, groups: res.data.groups }]);
     } catch {
-      setError("Javob olinmadi. LM Studio ochiqligini va qwen3 yuklanganini tekshiring.");
+      setError("Javob olinmadi. Server va AI kalitini tekshiring.");
     } finally {
       setBusy(false);
     }

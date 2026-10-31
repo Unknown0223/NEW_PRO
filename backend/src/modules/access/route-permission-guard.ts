@@ -69,13 +69,13 @@ const ROUTE_PERMISSION_RULES: RoutePermissionRule[] = [
   r(WRITE, /\/orders\/bulk\/(expeditor)$/, "orders.zakaz.assign"),
   r(WRITE, /\/orders\/bulk\/(nakladnoy)/, "orders.zakaz.copy"),
   r(WRITE, /\/orders\/bulk\/(consignment)$/, "orders.drugie_operacii.update"),
-  r(WRITE, /\/orders\/bulk\/(bonus-refresh)$/, "orders.zakaz.update"),
+  r(WRITE, /\/orders\/bulk\/(bonus-refresh)$/, "orders.zakaz.update", "orders.obnovlenie_bonusa.update"),
   r(WRITE, /\/orders\/:id\/status$/, ...ORDER_STATUS_CHANGE_PERMISSIONS),
   r(WRITE, /\/orders\/:id\/milestone-at$/, ORDER_STATUS_DATE_PERMISSION),
-  r(["POST"], /\/orders\/bonus-preview$/, "orders.zakaz.update", ORDER_CREATE_PERMISSION),
+  r(["POST"], /\/orders\/bonus-preview$/, "orders.zakaz.update", "orders.obnovlenie_bonusa.update", ORDER_CREATE_PERMISSION),
   // Yaratish: kamida bitta yaratish kaliti; aniq tur (`order_type`) handlerda tekshiriladi.
   r(["POST"], /\/orders$/, ...ORDER_CREATE_ANY_PERMISSIONS),
-  r(["PUT", "PATCH"], /\/orders\/:id(\/meta)?$/, "orders.zakaz.update"),
+  r(["PUT", "PATCH"], /\/orders\/:id(\/meta)?$/, "orders.zakaz.update", "orders.obnovlenie_bonusa.update"),
   // Yaratish sahifalari ma'lumotlari — «Заявки» ro'yxatini ko'rish ruxsatisiz ham ochiladi.
   r(READ, /\/orders\/(create-context|create-catalog|prices-as-of)$/, "orders.zakaz.view", ...ORDER_CREATE_ANY_PERMISSIONS),
   r(READ, /\/orders\/exchange-source-availability$/, "orders.zakaz.view", ORDER_EXCHANGE_PERMISSION),

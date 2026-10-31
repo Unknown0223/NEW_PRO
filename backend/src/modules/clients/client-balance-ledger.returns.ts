@@ -40,7 +40,7 @@ export function salesReturnRefundLedgerUnionSql(args: {
     LEFT JOIN users cu ON cu.id = COALESCE(sr.accepted_by_user_id, sr.created_by_user_id)
     WHERE sr.tenant_id = ${tenantId}
       AND sr.client_id = ${clientId}
-      AND sr.status = 'posted'
+      AND sr.status IN ('pending', 'posted')
       AND COALESCE(sr.refund_amount, 0) > 0
       AND NOT EXISTS (
         SELECT 1 FROM client_payments p
@@ -48,6 +48,7 @@ export function salesReturnRefundLedgerUnionSql(args: {
           AND p.client_id = sr.client_id
           AND p.deleted_at IS NULL
           AND p.entry_kind = 'refund'
+          AND COALESCE(p.workflow_status, 'confirmed') NOT IN ('pending_confirmation', 'rejected', 'deleted')
           AND (
             p.note = ('Возврат · ' || sr.number)
             OR p.note = ('Vazvrat: ' || sr.number)
@@ -72,7 +73,7 @@ export function salesReturnRefundLedgerCountSql(args: {
     LEFT JOIN orders ord ON ord.id = sr.order_id AND ord.tenant_id = ${tenantId}
     WHERE sr.tenant_id = ${tenantId}
       AND sr.client_id = ${clientId}
-      AND sr.status = 'posted'
+      AND sr.status IN ('pending', 'posted')
       AND COALESCE(sr.refund_amount, 0) > 0
       AND NOT EXISTS (
         SELECT 1 FROM client_payments p
@@ -80,6 +81,7 @@ export function salesReturnRefundLedgerCountSql(args: {
           AND p.client_id = sr.client_id
           AND p.deleted_at IS NULL
           AND p.entry_kind = 'refund'
+          AND COALESCE(p.workflow_status, 'confirmed') NOT IN ('pending_confirmation', 'rejected', 'deleted')
           AND (
             p.note = ('Возврат · ' || sr.number)
             OR p.note = ('Vazvrat: ' || sr.number)
@@ -112,7 +114,7 @@ export function finishedReturnOrderWhereSql(args: {
     AND NOT EXISTS (
       SELECT 1 FROM sales_returns sr
       WHERE sr.tenant_id = o.tenant_id
-        AND sr.status = 'posted'
+        AND sr.status IN ('pending', 'posted')
         AND COALESCE(sr.refund_amount, 0) > 0
         AND (sr.mirror_order_id = o.id OR sr.order_id = o.id)
     )
@@ -122,6 +124,7 @@ export function finishedReturnOrderWhereSql(args: {
         AND p.client_id = o.client_id
         AND p.deleted_at IS NULL
         AND p.entry_kind = 'refund'
+        AND COALESCE(p.workflow_status, 'confirmed') NOT IN ('pending_confirmation', 'rejected', 'deleted')
         AND p.order_id = o.id
     )
     ${dateClause}

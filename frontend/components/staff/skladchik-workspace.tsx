@@ -4,6 +4,7 @@ import type { AxiosError } from "axios";
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
+import { matchesSearchTokens } from "@/lib/search-text";
 import { useStaffCrudPermissions } from "@/lib/use-staff-crud-permissions";
 import { firstMessagePerField, firstValidationUserHint, getZodFlattenFromApiErrorBody } from "@/lib/api-validation-details";
 import { getUserFacingError, withApiSupportLine } from "@/lib/error-utils";
@@ -303,14 +304,11 @@ export function SkladchikWorkspace({ tenantSlug }: Props) {
     const src = listQ.data ?? [];
     const q = search.trim().toLowerCase();
     if (!q) return src;
-    return src.filter(
-      (r) =>
-        r.fio.toLowerCase().includes(q) ||
-        r.login.toLowerCase().includes(q) ||
-        (r.phone ?? "").toLowerCase().includes(q) ||
-        (r.email ?? "").toLowerCase().includes(q) ||
-        (r.code ?? "").toLowerCase().includes(q) ||
-        (r.pinfl ?? "").toLowerCase().includes(q)
+    return src.filter((r) =>
+      matchesSearchTokens(
+        [r.fio, r.login, r.phone ?? "", r.email ?? "", r.code ?? "", r.pinfl ?? ""].join(" "),
+        search
+      )
     );
   }, [listQ.data, search]);
 

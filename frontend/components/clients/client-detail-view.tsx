@@ -27,6 +27,10 @@ import { STALE } from "@/lib/query-stale";
 import { useEffectiveRole } from "@/lib/auth-store";
 import { isAdminOrOperatorLikeRole } from "@/lib/distribution-roles";
 import { ORDER_STATUS_LABELS } from "@/lib/order-status";
+import {
+  resolvePaymentMethodDisplayLabel,
+  type ProfilePaymentMethodEntry
+} from "@/lib/payment-method-options";
 import { optionsToValueLabelMap } from "@/lib/ref-select-options";
 import { cn } from "@/lib/utils";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -283,6 +287,18 @@ export function ClientDetailView({ tenantSlug, clientId }: Props) {
       return body.data;
     },
     enabled: tab === "payments"
+  });
+
+  const paymentMethodsQ = useQuery({
+    queryKey: ["settings", "profile", tenantSlug, "client-detail-payment-methods"],
+    enabled: Boolean(tenantSlug) && tab === "payments",
+    staleTime: STALE.profile,
+    queryFn: async () => {
+      const { data } = await api.get<{
+        references?: { payment_method_entries?: ProfilePaymentMethodEntry[] };
+      }>(`/api/${tenantSlug}/settings/profile`);
+      return data.references?.payment_method_entries ?? [];
+    }
   });
 
   const addMovement = useMutation({
@@ -1016,7 +1032,9 @@ export function ClientDetailView({ tenantSlug, clientId }: Props) {
                       <td className="px-2 py-2 whitespace-nowrap text-muted-foreground">
                         {new Date(p.created_at).toLocaleString()}
                       </td>
-                      <td className="px-2 py-2">{p.payment_type}</td>
+                      <td className="px-2 py-2">
+                        {resolvePaymentMethodDisplayLabel(p.payment_type, paymentMethodsQ.data)}
+                      </td>
                       <td className="px-2 py-2 text-right font-mono tabular-nums">
                         {formatNumberGrouped(p.amount, { maxFractionDigits: 2 })}
                       </td>

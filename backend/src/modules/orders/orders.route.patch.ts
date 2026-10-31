@@ -20,6 +20,7 @@ import { assertDocWritableById } from "../../lib/document-edit-lock.request";
 import { ensureTenantContext } from "../../lib/tenant-context";
 import { sendApiError, zodValidationExtras } from "../../lib/api-error";
 import { ADMIN_AND_OPERATOR_LIKE_ROLES } from "../../lib/tenant-user-roles";
+import { resolveUserPermissionKeys } from "../access/rbac.resolve";
 import { getAccessUser, jwtAccessVerify, requireRoles } from "../auth/auth.prehandlers";
 import {
   requireIfSkladchikThenAnyEntitlement,
@@ -204,12 +205,19 @@ export async function registerOrderPatchRoutes(app: FastifyInstance) {
         const viewer = getAccessUser(request);
         const sub = Number.parseInt(viewer.sub, 10);
         const actorUserId = Number.isFinite(sub) && sub > 0 ? sub : null;
+        const permKeys =
+          actorUserId != null
+            ? await resolveUserPermissionKeys(request.tenant!.id, actorUserId, viewer.role)
+            : new Set<string>();
+        const canEditPaidLines =
+          viewer.role !== "operator" && (viewer.role === "admin" || permKeys.has("orders.zakaz.update"));
         const row = await updateOrderLines(
           request.tenant!.id,
           id,
           parsed.data,
           viewer.role,
-          actorUserId
+          actorUserId,
+          canEditPaidLines
         );
         return reply.send(row);
       } catch (e) {

@@ -1,6 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "../../config/database";
 import { clampPct } from "./dashboard.helpers";
+import { aggregatePaymentsByDisplayLabel } from "./dashboard.payment-labels";
 import { salesClientPaymentWhere } from "./dashboard.sales.scope";
 import type { SalesSnapshotQueryCtx } from "./dashboard.sales.snapshot.types";
 import {
@@ -80,11 +81,14 @@ export async function fetchSalesSnapshotProductBlock(ctx: SalesSnapshotQueryCtx)
   const shareOfTotal = (sum: Prisma.Decimal) =>
     totalSales.gt(0) ? clampPct(sum.div(totalSales).mul(100).toNumber()) : 0;
 
-  const paymentGrand = paymentRows.reduce((acc, r) => acc.add(r.sales_sum), new Prisma.Decimal(0));
-  const payment_method_analytics = paymentRows.map((r) => ({
+  const paymentLabeled = aggregatePaymentsByDisplayLabel(
+    paymentRows.map((r) => ({ payment_type: r.payment_type, amount: r.sales_sum })),
+    pmEntries
+  );
+  const payment_method_analytics = paymentLabeled.map((r) => ({
     payment_type: r.payment_type,
-    sales_sum: r.sales_sum.toString(),
-    share_pct: paymentGrand.gt(0) ? clampPct(r.sales_sum.div(paymentGrand).mul(100).toNumber()) : 0
+    sales_sum: r.amount,
+    share_pct: r.share_pct
   }));
 
   const byPriceType = new Map<string, Prisma.Decimal>();

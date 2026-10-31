@@ -34,14 +34,7 @@ export function BalanceDetailCards({ cards, selectedId, onSelect }: Props) {
       {cards.map((card) => {
         const isSelected = selectedId === card.id;
         const isNegative = card.amount < 0;
-        const subLines =
-          card.paymentSubLines.length > 0
-            ? card.paymentSubLines
-            : [
-                { label: "Наличные", amount: card.cash },
-                { label: "Перечисление", amount: card.transfer },
-                { label: "Терминал", amount: card.terminal }
-              ];
+        const subLines = card.paymentSubLines.filter((line) => Math.abs(line.amount) > 0.009);
 
         return (
           <button

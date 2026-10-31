@@ -4,7 +4,8 @@ import {
   paymentMethodsFromUnknown,
   paymentMethodsSyncedWith1c,
   resolveConfiguredBankTransferPaymentType,
-  paymentMethodStorageKey
+  paymentMethodStorageKey,
+  resolvePaymentMethodRefToLabel
 } from "../src/modules/tenant-settings/finance-refs";
 import {
   parseTransferChannelFromPaymentNote,
@@ -121,6 +122,27 @@ describe("resolveConfiguredBankTransferPaymentType", () => {
       }
     ]);
     expect(resolveConfiguredBankTransferPaymentType(entries)).toBe("Оплата перечислением");
+  });
+});
+
+describe("resolvePaymentMethodRefToLabel", () => {
+  it("maps SalesDoc-style codes 001/002/003 to catalog names", () => {
+    const entries = paymentMethodsFromUnknown([
+      { id: "pm-cash", name: "Наличные", code: "001", currency_code: "UZS", active: true },
+      { id: "pm-term", name: "Терминал", code: "002", currency_code: "UZS", active: true },
+      { id: "pm-tr", name: "Перечисление", code: "003", currency_code: "UZS", active: true }
+    ]);
+    expect(resolvePaymentMethodRefToLabel("001", entries)).toBe("Наличные");
+    expect(resolvePaymentMethodRefToLabel("002", entries)).toBe("Терминал");
+    expect(resolvePaymentMethodRefToLabel("003", entries)).toBe("Перечисление");
+    expect(resolvePaymentMethodRefToLabel("pm-cash", entries)).toBe("Наличные");
+  });
+
+  it("returns raw value when catalog has no match", () => {
+    const entries = paymentMethodsFromUnknown([
+      { id: "pm-1", name: "Наличные", code: "naqd", currency_code: "UZS", active: true }
+    ]);
+    expect(resolvePaymentMethodRefToLabel("999", entries)).toBe("999");
   });
 });
 

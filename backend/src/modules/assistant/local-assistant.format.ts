@@ -1,27 +1,3 @@
-export const ALLOWED = [
-  "/dashboard/stats",
-  "/reports/sales",
-  "/reports/receivables",
-  "/reports/product-sales",
-  "/reports/agent-orders",
-  "/reports/order-trends",
-  "/orders",
-  "/clients",
-  "/users",
-  "/agents",
-  "/products",
-  "/payments"
-];
-
-export const GUIDE =
-  "Avval savolni va oldingi xabarlarni tahlil qil. Keyin faqat JSON: " +
-  "{\"calls\":[{\"path\":\"/orders?page=1&limit=15\"}]}. " +
-  "Bir nechta mavzu bo'lsa, har biriga alohida path qo'y, ko'pi bilan 3 ta. " +
-  "buyurtma=/orders?page=1&limit=15; to'lov=/payments?page=1&limit=15; " +
-  "qarz=/reports/receivables?page=1&limit=30; mijoz=/clients?page=1&limit=15; " +
-  "xodim=/users; mahsulot=/products?page=1&limit=15; savdo=/reports/sales?from=YYYY-MM-DD&to=YYYY-MM-DD; " +
-  "bugun=/dashboard/stats. Agentni so'rasa buyurtma yoki to'lov pathini ol, butun agent ro'yxatini emas. Faqat GET.";
-
 export function money(value: unknown) {
   const n = Number(value || 0);
   return Number.isFinite(n) ? n.toLocaleString("ru-RU") : String(value ?? "");
@@ -180,6 +156,27 @@ export function formatTable(result: unknown, mode: { idOnly: boolean; sumOnly: b
         String(row.status || "")
       ])
     };
+  }
+  if (rows.length && !rows[0].name && !rows[0].client_name && !rows[0].number) {
+    const preferred = ["expense_type", "amount", "status", "expense_date", "title", "code", "fio", "role"];
+    const keys = preferred.filter((key) => key in rows[0]).slice(0, 5);
+    const use = keys.length
+      ? keys
+      : Object.keys(rows[0]).filter((key) => rows[0][key] == null || ["string", "number", "boolean"].includes(typeof rows[0][key])).slice(0, 4);
+    if (use.length) {
+      return {
+        summary: `${data.total ?? rows.length} ta`,
+        columns: use,
+        rows: rows.slice(0, 15).map((row) =>
+          use.map((key) => {
+            const value = row[key];
+            if (value == null || value === "") return "—";
+            if (key === "amount" || key === "total_sum") return money(value);
+            return String(value).slice(0, 48);
+          })
+        )
+      };
+    }
   }
   if (rows[0] && rows[0].name) {
     return {

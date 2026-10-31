@@ -60,6 +60,70 @@ export function splitReturnLinePaidBonus(ln: ReturnLineQty): { paid: number; bon
   return { paid: t, bonus: 0 };
 }
 
+type PriorReturn = {
+  order_id: number | null;
+  lines: ReturnLineQty[];
+};
+
+/**
+ * Davr vazvrati `order_id` siz yoziladi. Shunday qaytarishni hisobga olmasak,
+ * shu bonus yana alohida hujjat bo‘lib qayta tushadi (zakaz ichida ham, alohida ham).
+ * Qoldiqdan oshiq qismi pullik qatorga ag‘darilmaydi.
+ */
+export function attributeUnlinkedReturnsToOrders(
+  items: OrderItemSummary[],
+  returns: PriorReturn[]
+): PriorReturn[] {
+  const linked = returns.filter((r) => r.order_id != null && r.order_id > 0);
+  const orphans = returns.filter((r) => r.order_id == null || r.order_id < 1);
+  if (orphans.length === 0) return returns;
+
+  type Cap = { orderId: number; productId: number; bonus: boolean; left: number };
+  const caps: Cap[] = [];
+  for (const it of items) {
+    const q = Number(it.qty);
+    if (!Number.isFinite(q) || q <= 0 || it.order_id < 1) continue;
+    const hit = caps.find(
+      (c) => c.orderId === it.order_id && c.productId === it.product_id && c.bonus === !!it.is_bonus
+    );
+    if (hit) hit.left += q;
+    else caps.push({ orderId: it.order_id, productId: it.product_id, bonus: !!it.is_bonus, left: q });
+  }
+
+  const synthetic: PriorReturn[] = [];
+  const take = (productId: number, want: number, bonusPool: boolean) => {
+    let left = want;
+    for (const cap of caps) {
+      if (left <= 1e-9) break;
+      if (cap.productId !== productId || cap.bonus !== bonusPool || cap.left <= 1e-9) continue;
+      const use = Math.min(cap.left, left);
+      cap.left -= use;
+      left -= use;
+      synthetic.push({
+        order_id: cap.orderId,
+        lines: [
+          {
+            product_id: productId,
+            qty: use,
+            paid_qty: bonusPool ? 0 : use,
+            bonus_qty: bonusPool ? use : 0
+          }
+        ]
+      });
+    }
+  };
+
+  for (const ret of orphans) {
+    for (const ln of ret.lines) {
+      const { paid, bonus } = splitReturnLinePaidBonus(ln);
+      take(ln.product_id, bonus, true);
+      take(ln.product_id, paid, false);
+    }
+  }
+
+  return [...linked, ...synthetic];
+}
+
 /**
  * Oldingi posted qaytarishlar: pullik va bonus qatorlari alohida «pool»da.
  * Aks holda bitta mahsulot bo‘yicha bonus qaytarilganda pullik qatorlari ham
@@ -67,11 +131,9 @@ export function splitReturnLinePaidBonus(ln: ReturnLineQty): { paid: number; bon
  */
 export function adjustOrderItemsQtyAfterPriorReturns(
   items: OrderItemSummary[],
-  returns: Array<{
-    order_id: number | null;
-    lines: ReturnLineQty[];
-  }>
+  returns: PriorReturn[]
 ): OrderItemSummary[] {
+  const attributed = attributeUnlinkedReturnsToOrders(items, returns);
   const bonusCapacity = new Map<string, number>();
   for (const it of items) {
     if (!it.is_bonus) continue;
@@ -84,7 +146,7 @@ export function adjustOrderItemsQtyAfterPriorReturns(
 
   const alreadyPaid = new Map<string, number>();
   const alreadyBonus = new Map<string, number>();
-  for (const ret of returns) {
+  for (const ret of attributed) {
     const oid = ret.order_id;
     if (oid == null || oid < 1) continue;
     for (const ln of ret.lines) {

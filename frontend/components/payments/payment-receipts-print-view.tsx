@@ -3,6 +3,10 @@
 import type { PaymentListApiRow } from "@/lib/payment-list-types";
 import { formatNumberGrouped } from "@/lib/format-numbers";
 import {
+  resolvePaymentMethodDisplayLabel,
+  type ProfilePaymentMethodEntry
+} from "@/lib/payment-method-options";
+import {
   chunkReceiptRowsByGroup,
   type PaymentReceiptPrintPrefs
 } from "@/lib/payment-receipt-print-prefs";
@@ -23,6 +27,7 @@ type Props = {
   rows: PaymentListApiRow[];
   prefs: PaymentReceiptPrintPrefs;
   onClose: () => void;
+  paymentEntries?: ProfilePaymentMethodEntry[];
 };
 
 function ReceiptKvRow({
@@ -49,7 +54,7 @@ function ReceiptKvRow({
   );
 }
 
-export function PaymentReceiptsPrintView({ rows, prefs, onClose }: Props) {
+export function PaymentReceiptsPrintView({ rows, prefs, onClose, paymentEntries }: Props) {
   const groups = useMemo(() => chunkReceiptRowsByGroup(rows, prefs.groupBy), [rows, prefs.groupBy]);
 
   useEffect(() => {
@@ -146,7 +151,11 @@ export function PaymentReceiptsPrintView({ rows, prefs, onClose }: Props) {
                       {formatNumberGrouped(r.amount, { maxFractionDigits: 2 })} UZS
                     </ReceiptKvRow>
                   ) : null}
-                  {prefs.showMethod ? <ReceiptKvRow label="Способ:">{r.payment_type}</ReceiptKvRow> : null}
+                  {prefs.showMethod ? (
+                    <ReceiptKvRow label="Способ:">
+                      {resolvePaymentMethodDisplayLabel(r.payment_type, paymentEntries)}
+                    </ReceiptKvRow>
+                  ) : null}
                   {prefs.showCashDesk ? (
                     <ReceiptKvRow label="Касса:">{r.cash_desk_name ?? "—"}</ReceiptKvRow>
                   ) : null}

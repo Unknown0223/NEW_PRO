@@ -80,8 +80,8 @@ export async function loadClientReturnsPeriodData(
           where: {
             tenant_id: tenantId,
             client_id: clientId,
-            order_id: { in: orderIds },
-            status: { in: ["pending", "posted"] }
+            status: { in: ["pending", "posted"] },
+            OR: [{ order_id: { in: orderIds } }, { order_id: null }]
           },
           select: {
             order_id: true,
@@ -111,14 +111,20 @@ export async function loadClientReturnsPeriodData(
     }
   }
 
+  const periodProductIds = new Set(items.map((i) => i.product_id));
+  const returnsInWindow = returns.filter((r) => {
+    if (r.order_id != null && orderIds.includes(r.order_id)) return true;
+    return r.lines.some((l) => periodProductIds.has(l.product_id));
+  });
+
   const itemsOut = shrinkLineQtyAfterReturns
-    ? adjustOrderItemsQtyAfterPriorReturns(items, returns)
+    ? adjustOrderItemsQtyAfterPriorReturns(items, returnsInWindow)
     : items;
 
   const orderBalances = orders.map((o) => {
     const orig = items.filter((i) => i.order_id === o.id);
     const rem = itemsOut.filter((i) => i.order_id === o.id);
-    return computeOrderReturnBalance(o.id, orig, rem, returns);
+    return computeOrderReturnBalance(o.id, orig, rem, returnsInWindow);
   });
 
   const openOrderIds = new Set(
@@ -127,11 +133,11 @@ export async function loadClientReturnsPeriodData(
   const openOrders = orders.filter((o) => openOrderIds.has(o.id));
   const openItems = itemsOut.filter((i) => openOrderIds.has(i.order_id));
 
-  const totalReturnedQty = returns.reduce(
+  const totalReturnedQty = returnsInWindow.reduce(
     (a, ret) => a + ret.lines.reduce((b, l) => b + Number(l.qty), 0),
     0
   );
-  const alreadyReturned = returns.reduce(
+  const alreadyReturned = returnsInWindow.reduce(
     (a, r) => a.add(r.refund_amount ?? new Prisma.Decimal(0)),
     new Prisma.Decimal(0)
   );

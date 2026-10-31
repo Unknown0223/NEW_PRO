@@ -2,7 +2,8 @@ import type { FastifyInstance } from "fastify";
 import { prisma } from "../../config/database";
 import { parseDateRange } from "../reports/reports.shared";
 import { dashboardStatsPreHandler } from "../dashboard/dashboard.routes.shared";
-import { ALLOWED, GUIDE, formatTable, money, narrow, type TableGroup } from "./local-assistant.format";
+import { assistantGuide, isOverviewQuestion, overviewPaths, sanitizeCalls, tashkentDay } from "./local-assistant.catalog";
+import { formatTable, money, narrow, type TableGroup } from "./local-assistant.format";
 
 const RETURN_TYPES = ["return", "partial_return", "return_by_order"];
 
@@ -57,14 +58,13 @@ function groupTitle(path: string) {
   if (path.startsWith("/products")) return "Mahsulotlar";
   if (path.includes("/sales")) return "Savdo";
   if (path.includes("stats")) return "Bugungi holat";
+  if (path.startsWith("/expenses")) return "Rasxodlar";
+  if (path.startsWith("/cash-desks")) return "Kassalar";
+  if (path.startsWith("/payroll")) return "Ish haqi";
+  if (path.startsWith("/transfers") || path.startsWith("/stock")) return "Ombor";
+  if (path.includes("finance")) return "Moliya";
+  if (path.includes("income") || path.includes("cash-flow")) return "Pul oqimi";
   return "Ma'lumot";
-}
-
-function tashkentDay(offset = 0) {
-  const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Tashkent" }).format(new Date());
-  const date = new Date(`${today}T12:00:00Z`);
-  date.setUTCDate(date.getUTCDate() + offset);
-  return date.toISOString().slice(0, 10);
 }
 
 function salesPath(question: string) {
@@ -116,10 +116,32 @@ function pathsFor(question: string, fromModel: string[]) {
   if (out.length === 0) {
     for (const path of fromModel.slice(0, 1)) {
       const only = path.split("?")[0] || "";
-      if (ALLOWED.some((prefix) => only === prefix || only.startsWith(`${prefix}/`))) add(path);
+      if (sanitizeCalls([path]).length) add(path);
     }
   }
   return out.slice(0, 2);
+}
+
+function assistantEndpoint(): { url: string; headers: Record<string, string>; model: string; remote: boolean } {
+  const key = process.env.ASSISTANT_API_KEY?.trim();
+  if (key) {
+    const base = (process.env.ASSISTANT_API_BASE || "https://zro.moonmath.ai/v1").replace(/\/$/, "");
+    return {
+      url: `${base}/chat/completions`,
+      remote: true,
+      model: process.env.ASSISTANT_MODEL?.trim() || "glm-5.3-flash",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${key}`
+      }
+    };
+  }
+  return {
+    url: process.env.LMSTUDIO_URL || "http://127.0.0.1:1234/v1/chat/completions",
+    remote: false,
+    model: "qwen3",
+    headers: { "content-type": "application/json" }
+  };
 }
 
 function parseCalls(text: string): string[] {
@@ -163,29 +185,36 @@ export function registerLocalAssistantRoutes(app: FastifyInstance): void {
     const understood = followUp && earlier ? `${earlier}. ${question}` : question;
     const slug = (request.params as { slug: string }).slug;
     const asked = wants(understood);
-    let paths = pathsFor(understood, []);
-    if (!paths.length) {
-      const llm = process.env.LMSTUDIO_URL || "http://127.0.0.1:1234/v1/chat/completions";
+    const today = tashkentDay(0);
+    let paths: string[] = [];
+    if (isOverviewQuestion(understood)) {
+      paths = overviewPaths();
+    } else {
+      const hinted = pathsFor(understood, []);
+      const llm = assistantEndpoint();
       try {
-        const res = await fetch(llm, {
+        const res = await fetch(llm.url, {
           method: "POST",
-          headers: { "content-type": "application/json" },
+          headers: llm.headers,
           body: JSON.stringify({
-            model: "qwen3",
-            temperature: 0.6,
-            max_tokens: 800,
-            chat_template_kwargs: { enable_thinking: true },
+            model: llm.model,
+            temperature: 0.1,
+            max_tokens: 700,
+            ...(llm.remote ? {} : { chat_template_kwargs: { enable_thinking: false } }),
             messages: [
-              { role: "system", content: GUIDE },
+              { role: "system", content: assistantGuide(today) },
               { role: "user", content: understood }
             ]
           })
         });
-        const data = (await res.json()) as { choices?: Array<{ message?: { content?: string } }> };
-        paths = pathsFor(understood, parseCalls(data.choices?.[0]?.message?.content || ""));
+        if (res.ok) {
+          const data = (await res.json()) as { choices?: Array<{ message?: { content?: string } }> };
+          paths = sanitizeCalls(parseCalls(data.choices?.[0]?.message?.content || ""));
+        }
       } catch {
-        return reply.code(503).send({ message: "Lokal model ishlamayapti. LM Studio ochiqligini tekshiring." });
+        paths = [];
       }
+      if (!paths.length) paths = hinted;
     }
     if (!paths.length) {
       return reply.send({ title: "Savol tushunilmadi", lines: ["Qarz, buyurtma, to'lov yoki mijoz haqida aniqroq so'rang."] });

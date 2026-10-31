@@ -429,3 +429,18 @@ describe("work-slots.plan-policy", () => {
     expect(full.share).toBe(1);
   });
 });
+
+describe("workplace access transfer", () => {
+  it("keeps slot keys and fills only the ones the slot does not have", async () => {
+    const { mergeMissingEntitlementKeys } = await import(
+      "../src/modules/work-slots/work-slots.access-transfer"
+    );
+    const merged = mergeMissingEntitlementKeys(
+      { price_types: ["opt"], mobile_config: { a: 1 } },
+      { price_types: ["roz"], payment_methods: ["cash"], mobile_config: { b: 2 } }
+    );
+    expect(merged.price_types).toEqual(["opt"]);
+    expect(merged.mobile_config).toEqual({ a: 1 });
+    expect(merged.payment_methods).toEqual(["cash"]);
+  });
+});

@@ -13,6 +13,7 @@ import {
 import { createPortal } from "react-dom";
 import { ChevronDown, Search } from "lucide-react";
 import { Input } from "@/components/ui/input";
+import { matchesSearchTokens } from "@/lib/search-text";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -186,10 +187,8 @@ export function SearchableMultiSelectPanel<T extends string | number = number>({
     const q = deferredSearch.trim().toLowerCase();
     if (!q) return items;
     return items.filter((i) => {
-      const hay = `${String(i.title)} ${String(i.subtitle ?? "")} ${String(i.searchText ?? "")} ${String(i.id)}`
-        .toLowerCase()
-        .replace(/\s+/g, " ");
-      return hay.includes(q);
+      const hay = `${String(i.title)} ${String(i.subtitle ?? "")} ${String(i.searchText ?? "")} ${String(i.id)}`;
+      return matchesSearchTokens(hay, deferredSearch);
     });
   }, [items, deferredSearch, filterItemsBySearch]);
 

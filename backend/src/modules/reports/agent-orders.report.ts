@@ -12,6 +12,7 @@ import {
 import type { AgentOrdersFilters, TerritoryNode } from "./agent-orders.types";
 import { enrichScopedReportActor } from "../access/access-agent-scope";
 import { buildFilterSql } from "./agent-orders.helpers";
+import { loadWorkplaceMarks, readableAgentName, resolveAgentSmartCode } from "./agent-orders.workplace";
 
 export async function getAgentOrdersReport(
   tenantId: number,
@@ -278,6 +279,7 @@ export async function getAgentOrdersReport(
         agent_id: number | null;
         agent_name: string;
         agent_code: string;
+        replaced: boolean;
         values: Record<string, { amount: string; qty: number; volume: string; akb: number }>;
       }
     >();
@@ -286,8 +288,7 @@ export async function getAgentOrdersReport(
       if (!map.has(key)) {
         map.set(key, {
           agent_id: r.agent_id,
-          agent_name: r.agent_name ?? "—",
-          agent_code: r.agent_code ?? "",
+          ...presentAgent(r.agent_id, r.agent_name, r.agent_code),
           values: {}
         });
       }
@@ -301,12 +302,36 @@ export async function getAgentOrdersReport(
     return { buckets, rows: [...map.values()] };
   };
 
+  const agentIds = [
+    ...byAgent.map((r) => r.agent_id),
+    ...byCategory.map((r) => r.agent_id),
+    ...bySegment.map((r) => r.agent_id)
+  ].filter((id): id is number => id != null);
+  const [marks, people] = await Promise.all([
+    loadWorkplaceMarks(tenantId, agentIds),
+    agentIds.length
+      ? prisma.user.findMany({
+          where: { tenant_id: tenantId, id: { in: [...new Set(agentIds)] } },
+          select: { id: true, name: true, code: true, first_name: true, last_name: true, middle_name: true }
+        })
+      : Promise.resolve([])
+  ]);
+  const personById = new Map(people.map((person) => [person.id, person]));
+  const presentAgent = (agentId: number | null, fallbackName: string | null, fallbackCode: string | null) => {
+    const person = agentId != null ? personById.get(agentId) : undefined;
+    const mark = agentId != null ? marks.get(agentId) : undefined;
+    return {
+      agent_name: person ? readableAgentName(person) : (fallbackName?.trim() || "—"),
+      agent_code: resolveAgentSmartCode(person?.code ?? fallbackCode, mark),
+      replaced: mark?.replaced === true
+    };
+  };
+
   return {
     status_cards: statusCards,
     agent_rows: byAgent.map((r) => ({
       agent_id: r.agent_id,
-      agent_name: r.agent_name ?? "—",
-      agent_code: r.agent_code ?? "",
+      ...presentAgent(r.agent_id, r.agent_name, r.agent_code),
       amount_total: r.amount_total.toString(),
       amount_new: r.amount_new.toString(),
       amount_confirmed: r.amount_confirmed.toString(),

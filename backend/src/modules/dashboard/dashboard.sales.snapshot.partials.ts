@@ -93,7 +93,7 @@ export async function getSalesDashboardAnalytics(
   tenantId: number,
   filters: SalesDashboardFilters
 ): Promise<SalesDashboardAnalyticsPayload> {
-  const snapshotKey = `tenant:${tenantId}:dashboard:sales:analytics:v3:${stableJsonStringify(filters)}`;
+  const snapshotKey = `tenant:${tenantId}:dashboard:sales:analytics:v4-labels:${stableJsonStringify(filters)}`;
   const cached = await getSnapshotCache<SalesDashboardAnalyticsPayload>(snapshotKey);
   if (cached) return cached;
 

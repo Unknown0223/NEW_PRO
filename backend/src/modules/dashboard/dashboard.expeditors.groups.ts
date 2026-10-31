@@ -1,6 +1,6 @@
 ﻿import { Prisma } from "@prisma/client";
 import { prisma } from "../../config/database";
-import type { ExpeditorDashboardRow, ExpeditorGroupRow, ExpeditorStatusRow } from "./dashboard.expeditors.service";
+import type { ExpeditorDashboardRow, ExpeditorGroupRow, ExpeditorStatusRow } from "./dashboard.expeditors.types";
 
 function dec(v: Prisma.Decimal | null | undefined): string {
   return (v ?? new Prisma.Decimal(0)).toFixed(2);
@@ -63,7 +63,7 @@ export async function loadExpeditorGroup(
     kind === "filial"
       ? Prisma.sql`COALESCE(NULLIF(TRIM(e.branch), ''), '—')`
       : kind === "supervisor"
-        ? Prisma.sql`COALESCE(NULLIF(TRIM(s.name), ''), '—')`
+        ? Prisma.sql`COALESCE(NULLIF(TRIM(s.name), ''), 'Без СВР')`
         : Prisma.sql`COALESCE(NULLIF(TRIM(a.name), ''), 'Без агента')`;
   const codeExpr =
     kind === "filial"
@@ -73,7 +73,8 @@ export async function loadExpeditorGroup(
         : Prisma.sql`a.code`;
   const joins =
     kind === "supervisor"
-      ? Prisma.sql`LEFT JOIN users s ON s.id = e.supervisor_user_id`
+      ? Prisma.sql`LEFT JOIN users a ON a.id = o.agent_id AND a.tenant_id = o.tenant_id
+        LEFT JOIN users s ON s.id = a.supervisor_user_id AND s.tenant_id = o.tenant_id AND s.role = 'supervisor'`
       : kind === "agent"
         ? Prisma.sql`LEFT JOIN users a ON a.id = o.agent_id`
         : Prisma.empty;
@@ -155,7 +156,11 @@ export async function loadStatusBreakdown(
     SELECT
       o.expeditor_user_id AS eid,
       o.agent_id AS aid,
-      NULLIF(TRIM(e.branch), '') AS branch,
+      COALESCE(
+        NULLIF(TRIM(e.branch), ''),
+        NULLIF(TRIM(a.branch), ''),
+        NULLIF(TRIM(ws.branch_code), '')
+      ) AS branch,
       NULLIF(TRIM(s.name), '') AS svr_name,
       s.code AS svr_code,
       NULLIF(TRIM(a.name), '') AS agent_name,
@@ -168,8 +173,9 @@ export async function loadStatusBreakdown(
       FLOOR(EXTRACT(EPOCH FROM (NOW() - MIN(o.created_at))) / 86400)::int AS age_days
     FROM orders o
     LEFT JOIN users e ON e.id = o.expeditor_user_id AND e.tenant_id = o.tenant_id
-    LEFT JOIN users s ON s.id = e.supervisor_user_id
-    LEFT JOIN users a ON a.id = o.agent_id
+    LEFT JOIN users a ON a.id = o.agent_id AND a.tenant_id = o.tenant_id
+    LEFT JOIN users s ON s.id = a.supervisor_user_id AND s.tenant_id = o.tenant_id AND s.role = 'supervisor'
+    LEFT JOIN work_slots ws ON ws.id = o.work_slot_id AND ws.tenant_id = o.tenant_id
     WHERE o.tenant_id = ${tenantId}
       AND o.order_type = 'order'
       AND o.status <> 'delivered'
@@ -261,13 +267,57 @@ export async function listRoleOptions(tenantId: number, role: string) {
   return rows.map((r) => ({ id: r.id, name: r.name, code: r.code }));
 }
 
-export async function listBranches(tenantId: number) {
-  const rows = await prisma.user.findMany({
-    where: { tenant_id: tenantId, role: "expeditor", branch: { not: null } },
-    select: { branch: true },
-    distinct: ["branch"]
-  });
-  return [...new Set(rows.map((r) => r.branch?.trim()).filter((b): b is string => Boolean(b)))].sort((a, b) =>
-    a.localeCompare(b, "ru")
-  );
+/** Yetkazuvchisiz zakazlar — filial agent (yoki ish joyi) dan. */
+export async function loadUnassignedOrdersByFilial(
+  tenantId: number,
+  fromUtc: Date,
+  toUtc: Date,
+  expFilter: Prisma.Sql
+): Promise<ExpeditorGroupRow[]> {
+  const rows = await prisma.$queryRaw<
+    Array<{
+      name: string;
+      delivered_orders: bigint | number;
+      delivered_sum: Prisma.Decimal;
+      returned_sum: Prisma.Decimal;
+      debt: Prisma.Decimal;
+    }>
+  >`
+    WITH alloc AS (
+      SELECT pa.order_id, SUM(pa.amount) AS alloc_sum
+      FROM payment_allocations pa
+      JOIN client_payments p ON p.id = pa.payment_id AND p.tenant_id = pa.tenant_id
+      WHERE pa.tenant_id = ${tenantId}
+        AND p.deleted_at IS NULL
+        AND COALESCE(p.workflow_status, 'confirmed') <> 'pending_confirmation'
+      GROUP BY pa.order_id
+    )
+    SELECT
+      COALESCE(NULLIF(TRIM(a.branch), ''), NULLIF(TRIM(ws.branch_code), ''), 'Без филиала') AS name,
+      COUNT(*) FILTER (WHERE o.status = 'delivered') AS delivered_orders,
+      COALESCE(SUM(o.total_sum) FILTER (WHERE o.status = 'delivered'), 0)::numeric(20,2) AS delivered_sum,
+      COALESCE(SUM(o.total_sum) FILTER (WHERE o.status = 'returned'), 0)::numeric(20,2) AS returned_sum,
+      COALESCE(SUM(GREATEST(o.total_sum - COALESCE(al.alloc_sum, 0), 0)) FILTER (WHERE o.status = 'delivered'), 0)::numeric(20,2) AS debt
+    FROM orders o
+    LEFT JOIN users a ON a.id = o.agent_id AND a.tenant_id = o.tenant_id
+    LEFT JOIN work_slots ws ON ws.id = o.work_slot_id AND ws.tenant_id = o.tenant_id
+    LEFT JOIN alloc al ON al.order_id = o.id
+    WHERE o.tenant_id = ${tenantId}
+      AND o.expeditor_user_id IS NULL
+      AND o.order_type = 'order'
+      AND o.created_at >= ${fromUtc} AND o.created_at <= ${toUtc}
+      ${expFilter}
+    GROUP BY 1
+  `;
+  return rows
+    .filter((r) => num(r.delivered_orders) > 0 || Number(r.returned_sum) > 0)
+    .map((r) => ({
+      name: r.name,
+      code: null,
+      delivered_orders: num(r.delivered_orders),
+      delivered_sum: dec(r.delivered_sum),
+      returned_sum: dec(r.returned_sum),
+      payments_collected: "0.00",
+      debt: dec(r.debt)
+    }));
 }

@@ -43,6 +43,7 @@ type AgentOrdersReport = {
     agent_id: number | null;
     agent_name: string;
     agent_code: string;
+    replaced?: boolean;
     amount_total: string;
     amount_new: string;
     amount_confirmed: string;
@@ -82,6 +83,7 @@ type AgentOrdersReport = {
       agent_id: number | null;
       agent_name: string;
       agent_code: string;
+      replaced?: boolean;
       values: Record<string, { amount: string; qty: number; volume: string; akb: number }>;
     }>;
   };
@@ -91,6 +93,7 @@ type AgentOrdersReport = {
       agent_id: number | null;
       agent_name: string;
       agent_code: string;
+      replaced?: boolean;
       values: Record<string, { amount: string; qty: number; volume: string; akb: number }>;
     }>;
   };
@@ -460,7 +463,9 @@ export default function ReportAgentOrdersPage() {
         metricMode={agentMetricMode}
         onMetricModeChange={setAgentMetricMode}
         headers={["Агент", "Код агента", "Общие заказы", "Новый", "Подтвержден к отгрузке", "Отгружен", "Доставлен", "Отменен", "Возвращенные", "В процессе возврата"]}
-        rows={(reportQ.data?.agent_rows ?? []).map((r) => [
+        rows={(reportQ.data?.agent_rows ?? []).map((r) => ({
+          replaced: r.replaced === true,
+          cells: [
           r.agent_name,
           r.agent_code || "—",
           agentMetricMode === "amount" ? money(r.amount_total) : agentMetricMode === "volume" ? money(r.volume_total) : String(agentMetricMode === "qty" ? r.qty_total : r.akb_total),
@@ -495,7 +500,8 @@ export default function ReportAgentOrdersPage() {
             : agentMetricMode === "volume"
               ? money(r.volume_return_processing)
               : String(agentMetricMode === "qty" ? r.qty_return_processing : r.akb_return_processing)
-        ])}
+          ]
+        }))}
       />
 
       <MatrixTable
@@ -587,7 +593,7 @@ function ReportTable({
 }: {
   title: string;
   headers: string[];
-  rows: string[][];
+  rows: Array<{ cells: string[]; replaced?: boolean }>;
   loading: boolean;
   metricMode: MetricMode;
   onMetricModeChange: (next: MetricMode) => void;
@@ -606,7 +612,11 @@ function ReportTable({
           <tbody>
             {loading ? <tr><td className="px-3 py-4 text-muted-foreground" colSpan={headers.length}>Загрузка...</td></tr> : null}
             {!loading && rows.length === 0 ? <tr><td className="px-3 py-4 text-muted-foreground" colSpan={headers.length}>Нет данных</td></tr> : null}
-            {rows.map((r, i) => <tr key={i} className="border-t">{r.map((c, j) => <td key={j} className="px-2 py-2 tabular-nums">{c}</td>)}</tr>)}
+            {rows.map((r, i) => (
+              <tr key={i} className={cn("border-t", r.replaced && "text-red-600")}>
+                {r.cells.map((c, j) => <td key={j} className="px-2 py-2 tabular-nums">{c}</td>)}
+              </tr>
+            ))}
           </tbody>
         </table>
       </div>
@@ -624,7 +634,7 @@ function MatrixTable({
 }: {
   title: string;
   buckets: string[];
-  rows: Array<{ agent_name: string; agent_code: string; values: Record<string, { amount: string; qty: number; volume: string; akb: number }> }>;
+  rows: Array<{ agent_name: string; agent_code: string; replaced?: boolean; values: Record<string, { amount: string; qty: number; volume: string; akb: number }> }>;
   loading: boolean;
   metricMode: MetricMode;
   onMetricModeChange: (next: MetricMode) => void;
@@ -666,7 +676,7 @@ function MatrixTable({
             {loading ? <tr><td className="px-3 py-4 text-muted-foreground" colSpan={2 + buckets.length}>Загрузка...</td></tr> : null}
             {!loading && rows.length === 0 ? <tr><td className="px-3 py-4 text-muted-foreground" colSpan={2 + buckets.length}>Нет данных</td></tr> : null}
             {rows.map((r, i) => (
-              <tr key={i} className="border-t">
+              <tr key={i} className={cn("border-t", r.replaced && "text-red-600")}>
                 <td className="px-2 py-2">{r.agent_name}</td>
                 <td className="px-2 py-2">{r.agent_code || "—"}</td>
                 {buckets.map((b) => {
@@ -685,7 +695,7 @@ function MatrixTable({
             {!loading && rows.length > 0 ? (
               <tr className="border-t bg-muted/30 font-medium">
                 <td className="px-2 py-2">Итого</td>
-                <td className="px-2 py-2">—</td>
+                <td className="px-2 py-2" />
                 {buckets.map((b) => (
                   <td key={b} className="px-2 py-2 text-right tabular-nums">
                     {metricMode === "amount" || metricMode === "volume" ? money(totals[b] ?? 0) : String(Math.round(totals[b] ?? 0))}

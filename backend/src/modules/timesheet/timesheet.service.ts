@@ -11,6 +11,7 @@ import { orderTimesheetRows, parseTimesheetRoleFilter } from "./timesheet.order"
 import { defaultTimesheetDay, employmentYmd, visitDayKeys } from "./timesheet.day-status";
 import { applyAgentNormForUser, loadAgentNormContext } from "./timesheet.agent-norm";
 import type { NormDay } from "./timesheet.agent-norm.pure";
+import { applyLeaderMinusRules } from "./timesheet.leader-minus.pure";
 import { parseWorkdaysState } from "../tabel/workdays.service";
 import {
   ALL_ATTENDANCE_SOURCES,
@@ -493,7 +494,7 @@ export async function listTimesheetMatrix(
   }
 
   const days = Array.from({ length: daysInMonth }, (_, i) => i + 1);
-  const rows: TimesheetRowDto[] = users.map((u) => {
+  const prepared = users.map((u) => {
     const leftAt = leaveByUser.get(u.id) ?? null;
     const isDeparted = departedSet.has(u.id);
     const hiredYmd = employmentYmd(u.hired_at, timeZone);
@@ -536,6 +537,22 @@ export async function listTimesheetMatrix(
       })),
       latenessRules
     );
+    return { u, leftAt, isDeparted, days: withLateAllowance };
+  });
+
+  applyLeaderMinusRules(
+    prepared.map((p) => ({
+      user_id: p.u.id,
+      fio: toFio(p.u),
+      role: p.u.role,
+      supervisor_user_id: p.u.supervisor_user_id ?? null,
+      days: p.days
+    })),
+    normCtx.cfg.leader_rules,
+    todayYmd
+  );
+
+  const rows: TimesheetRowDto[] = prepared.map(({ u, leftAt, isDeparted, days: withLateAllowance }) => {
     let worked = 0;
     let absent = 0;
     let totalLateMin = 0;
@@ -601,7 +618,10 @@ export async function listTimesheetMatrix(
     };
   });
 
-  const ordered = orderTimesheetRows(rows, roleFilter);
+  const salesByUser = new Map(
+    rows.map((r) => [r.user_id, r.cells.reduce((sum, c) => sum + (c.net_sales ?? 0), 0)])
+  );
+  const ordered = orderTimesheetRows(rows, roleFilter, salesByUser);
 
   return { month: input.month, days, rows: ordered, locked };
 }

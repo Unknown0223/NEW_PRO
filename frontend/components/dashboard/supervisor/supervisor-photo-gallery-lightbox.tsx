@@ -44,6 +44,16 @@ const LAYOUT_OPTIONS: { cols: LayoutColumns; label: string; Icon: typeof Square 
 const blobUrlBySrc = new Map<string, string>();
 const failedSrc = new Set<string>();
 const inflightBySrc = new Map<string, Promise<string | null>>();
+const PHOTO_FETCH_TIMEOUT_MS = 20_000;
+const PHOTO_FETCH_MAX_PARALLEL = 6;
+let photoFetchActive = 0;
+const photoFetchWaiters: Array<() => void> = [];
+
+/** Grid va lenta — kichik `thumb=1`. Katta kadr to‘liq fayl. */
+function thumbSrc(src: string): string {
+  if (!src || isPublicOrBlobUrl(src)) return src;
+  return src.includes("?") ? `${src}&thumb=1` : `${src}?thumb=1`;
+}
 
 function isPublicOrBlobUrl(src: string): boolean {
   return (
@@ -52,6 +62,29 @@ function isPublicOrBlobUrl(src: string): boolean {
     src.startsWith("http://") ||
     src.startsWith("https://")
   );
+}
+
+async function withPhotoFetchSlot<T>(fn: () => Promise<T>): Promise<T> {
+  if (photoFetchActive >= PHOTO_FETCH_MAX_PARALLEL) {
+    await new Promise<void>((resolve) => {
+      photoFetchWaiters.push(resolve);
+    });
+  }
+  photoFetchActive += 1;
+  try {
+    return await fn();
+  } finally {
+    photoFetchActive -= 1;
+    photoFetchWaiters.shift()?.();
+  }
+}
+
+function blobFromAxiosData(data: unknown): Blob | null {
+  if (typeof Blob !== "undefined" && data instanceof Blob) return data;
+  if (typeof ArrayBuffer !== "undefined" && data instanceof ArrayBuffer) {
+    return new Blob([data], { type: "image/jpeg" });
+  }
+  return null;
 }
 
 async function loadAuthImageBlobUrl(src: string): Promise<string | null> {
@@ -63,14 +96,15 @@ async function loadAuthImageBlobUrl(src: string): Promise<string | null> {
   const inflight = inflightBySrc.get(src);
   if (inflight) return inflight;
 
-  const promise = (async () => {
+  const promise = withPhotoFetchSlot(async () => {
     try {
       const res = await api.get<Blob>(src, {
         responseType: "blob",
+        timeout: PHOTO_FETCH_TIMEOUT_MS,
         headers: { Accept: "image/jpeg,image/png,image/webp,image/*,*/*" }
       });
-      const blob = res.data;
-      if (!(blob instanceof Blob) || blob.size === 0) {
+      const blob = blobFromAxiosData(res.data);
+      if (!blob || blob.size === 0) {
         failedSrc.add(src);
         return null;
       }
@@ -79,7 +113,9 @@ async function loadAuthImageBlobUrl(src: string): Promise<string | null> {
         failedSrc.add(src);
         return null;
       }
-      const url = URL.createObjectURL(blob);
+      const typed =
+        type && type !== "application/octet-stream" ? blob : new Blob([blob], { type: "image/jpeg" });
+      const url = URL.createObjectURL(typed);
       blobUrlBySrc.set(src, url);
       return url;
     } catch {
@@ -88,7 +124,7 @@ async function loadAuthImageBlobUrl(src: string): Promise<string | null> {
     } finally {
       inflightBySrc.delete(src);
     }
-  })();
+  });
 
   inflightBySrc.set(src, promise);
   return promise;
@@ -188,6 +224,11 @@ function GalleryPhoto({
       decoding="async"
       fetchPriority={priority ? "high" : "low"}
       className={cn(thumb ? "h-full w-full object-cover" : "h-full w-full object-contain")}
+      onError={() => {
+        failedSrc.add(src);
+        setFailed(true);
+        setObjectUrl(null);
+      }}
     />
   );
 }
@@ -259,10 +300,17 @@ export function SupervisorPhotoGalleryLightbox({
     }
   }, [index, maxStart, lastIndex, columns]);
 
-  // Joriy + qo‘shni rasmlarni oldindan yuklash (auth blob).
+  // Lenta/grid: barcha kichik rasmlar. Katta kadr: joriy + qo‘shni.
+  useEffect(() => {
+    if (!open) return;
+    for (const p of photos) {
+      if (p.image_url) void loadAuthImageBlobUrl(thumbSrc(p.image_url));
+    }
+  }, [open, photos]);
+
   useEffect(() => {
     if (!open || gridMode) return;
-    for (let d = -1; d <= 2; d += 1) {
+    for (let d = 0; d <= 1; d += 1) {
       const p = photos[index + d];
       if (p?.image_url) void loadAuthImageBlobUrl(p.image_url);
     }
@@ -287,11 +335,6 @@ export function SupervisorPhotoGalleryLightbox({
     const client = photos[index]?.client_name?.trim();
     return client ? `${range} / ${photos.length} · ${client}` : `${range} / ${photos.length}`;
   }, [index, photos, visibleCount, gridMode]);
-
-  /** Thumbnail: faqat yaqin atrofdagilar (to‘liq 24 ta so‘rov emas). */
-  const thumbLoadRadius = 5;
-  /** Grid: faqat joriy atrofida + scroll paytida lazy. */
-  const gridLoadRadius = 12;
 
   if (!photos.length) return null;
 
@@ -345,9 +388,7 @@ export function SupervisorPhotoGalleryLightbox({
           {gridMode ? (
             <div className="min-h-0 flex-1 overflow-y-auto p-3 sm:p-4">
               <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
-                {photos.map((p, i) => {
-                  const near = Math.abs(i - index) <= gridLoadRadius;
-                  return (
+                {photos.map((p, i) => (
                     <button
                       key={p.id}
                       type="button"
@@ -359,19 +400,16 @@ export function SupervisorPhotoGalleryLightbox({
                       className="group bg-muted/50 relative aspect-[3/4] overflow-hidden rounded-lg ring-1 ring-border transition hover:ring-teal-500/60"
                     >
                       <GalleryPhoto
-                        src={p.image_url}
+                        src={thumbSrc(p.image_url)}
                         alt={p.caption ?? p.client_name ?? `Фото ${p.id}`}
                         thumb
-                        enabled={near}
+                        enabled
                       />
-                      {!near ? (
-                        <span className="absolute inset-0 flex items-center justify-center text-xs font-semibold text-muted-foreground">
-                          {i + 1}
-                        </span>
-                      ) : null}
+                      <span className="pointer-events-none absolute bottom-1 left-1 rounded bg-black/55 px-1 text-[10px] font-semibold text-white">
+                        {i + 1}
+                      </span>
                     </button>
-                  );
-                })}
+                  ))}
               </div>
             </div>
           ) : (
@@ -428,7 +466,6 @@ export function SupervisorPhotoGalleryLightbox({
                       {photos.map((p, i) => {
                         const inView =
                           columns === 1 ? i === index : i >= index && i < index + visibleCount;
-                        const loadThumb = Math.abs(i - index) <= thumbLoadRadius;
                         return (
                           <button
                             key={p.id}
@@ -446,12 +483,7 @@ export function SupervisorPhotoGalleryLightbox({
                             )}
                             title={`${i + 1}`}
                           >
-                            <GalleryPhoto src={p.image_url} alt="" thumb enabled={loadThumb} />
-                            {!loadThumb ? (
-                              <span className="absolute inset-0 flex items-center justify-center bg-muted text-[10px] font-semibold text-muted-foreground">
-                                {i + 1}
-                              </span>
-                            ) : null}
+                            <GalleryPhoto src={thumbSrc(p.image_url)} alt="" thumb enabled />
                           </button>
                         );
                       })}

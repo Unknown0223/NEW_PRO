@@ -14,6 +14,7 @@ import { GROUP_PROCESSING_IDS_STORAGE_KEY } from "@/components/clients/group-pro
 import { PageShell } from "@/components/dashboard/page-shell";
 import { Button } from "@/components/ui/button";
 import { api } from "@/lib/api";
+import { matchesSearchTokens } from "@/lib/search-text";
 import {
   applyClientMapFilters,
   computeCategoryCounts,
@@ -327,10 +328,10 @@ export function ClientMapWorkspace() {
     if (!q) return;
     const found = clientsWithCoords.find(
       (c) =>
-        c.name.toLowerCase().includes(q) ||
-        (c.address && c.address.toLowerCase().includes(q)) ||
-        (c.city && c.city.toLowerCase().includes(q)) ||
-        (c.region && c.region.toLowerCase().includes(q))
+        matchesSearchTokens(
+          [c.name, c.address, c.city, c.region].filter(Boolean).join(" "),
+          searchDraft
+        )
     );
     if (found) {
       setSelectedClientId(found.id);

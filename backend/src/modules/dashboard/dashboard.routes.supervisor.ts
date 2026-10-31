@@ -168,7 +168,8 @@ export function registerDashboardSupervisorRoutes(app: FastifyInstance) {
       if (!Number.isFinite(photoId) || photoId <= 0) {
         return sendApiError(reply, request, 400, "ValidationError", "Требуется photoId");
       }
-      const content = await loadSupervisorPhotoContent(request.tenant!.id, photoId);
+      const thumb = String((request.query as { thumb?: string }).thumb ?? "") === "1";
+      const content = await loadSupervisorPhotoContent(request.tenant!.id, photoId, { thumb });
       if (!content) {
         return sendApiError(reply, request, 404, "NotFound", "Фото не найдено");
       }
@@ -176,9 +177,9 @@ export function registerDashboardSupervisorRoutes(app: FastifyInstance) {
         return reply.redirect(content.url);
       }
       return reply
-        .header("Content-Type", content.contentType)
+        .header("Cross-Origin-Resource-Policy", "cross-origin")
         .header("Cache-Control", "private, max-age=3600, immutable")
-        .header("Content-Length", String(content.buffer.length))
+        .type(content.contentType)
         .send(content.buffer);
     }
   );

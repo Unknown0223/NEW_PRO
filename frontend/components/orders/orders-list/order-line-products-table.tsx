@@ -136,7 +136,7 @@ export function OrderLineProductsTable({
                     </span>
                   </td>
                   <td className="whitespace-nowrap px-2 py-1.5 text-right tabular-nums">
-                    {formatNumberGrouped(priceShow, { maxFractionDigits: 2 })}
+                    {p.is_bonus ? "—" : formatNumberGrouped(priceShow, { maxFractionDigits: 2 })}
                   </td>
                   <td className="whitespace-nowrap px-2 py-1.5 text-right tabular-nums">
                     {p.is_bonus ? "—" : blockFromQty(qty)}
