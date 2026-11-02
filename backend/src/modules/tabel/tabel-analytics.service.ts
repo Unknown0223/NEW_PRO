@@ -1,3 +1,5 @@
+import { branchLabelLookup, branchVisibleName } from "../tenant-settings/branch-display.pure";
+import { loadBranchLabelSources } from "../tenant-settings/tenant-settings.refs";
 import { listTimesheetMatrix, type TimesheetRowDto } from "../timesheet/timesheet.service";
 
 export type TabelAnalyticsEmployee = {
@@ -107,10 +109,14 @@ function packGroup(s: GroupStat) {
 }
 
 export async function getTabelAnalytics(tenantId: number, month: string, branch?: string) {
-  const matrix = await listTimesheetMatrix(tenantId, {
-    month,
-    branch: branch?.trim() || undefined
-  });
+  const [matrix, sources] = await Promise.all([
+    listTimesheetMatrix(tenantId, {
+      month,
+      branch: branch?.trim() || undefined
+    }),
+    loadBranchLabelSources(tenantId)
+  ]);
+  const lookup = branchLabelLookup(sources);
 
   const byBranch = new Map<string, GroupStat>();
   const byRole = new Map<string, GroupStat>();
@@ -119,6 +125,7 @@ export async function getTabelAnalytics(tenantId: number, month: string, branch?
 
   for (const r of matrix.rows) {
     const e = toEmployee(r);
+    e.branch = branchVisibleName(e.branch, lookup);
     employees.push(e);
     addToGroup(totals, e);
     const bKey = e.branch || "Без филиала";

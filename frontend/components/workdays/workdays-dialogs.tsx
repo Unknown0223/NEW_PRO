@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { Check, History, Save, Search, UserCog, X } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Check, History, Save, UserCog } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -14,6 +14,7 @@ import {
   WEEKDAYS,
   WEEKDAYS_FULL,
   dateStr,
+  wdRoleOf,
   type EmployeeOverride,
   type ExceptionType,
   type Schedule,
@@ -118,8 +119,9 @@ export function ExceptionDialog({
             </Button>
             <Button
               size="sm"
+              disabled={comment.trim().length < 3}
               onClick={() => {
-                onSave({ role: exRole, date, type, comment });
+                onSave({ role: exRole, date, type, comment: comment.trim() });
                 setComment("");
               }}
             >
@@ -149,20 +151,15 @@ export function OverrideDialog({
   existing: EmployeeOverride[];
   onSave: (ov: Omit<EmployeeOverride, "id" | "createdBy" | "createdAt">) => void;
 }) {
-  const [q, setQ] = useState("");
   const [empId, setEmpId] = useState<string>("");
   const [schedule, setSchedule] = useState<Schedule>([false, true, true, true, true, true, true]);
   const [comment, setComment] = useState("");
 
   const emp = employees.find((e) => String(e.id) === empId);
-  const roleSch: Schedule = emp
-    ? roleSchedules[emp.role as WdRole] ?? [true, true, true, true, true, true, false]
+  const empWd = wdRoleOf(emp?.role);
+  const roleSch: Schedule = empWd
+    ? roleSchedules[empWd] ?? [true, true, true, true, true, true, false]
     : [true, true, true, true, true, true, false];
-
-  const results = useMemo(() => {
-    const s = q.trim().toLowerCase();
-    return employees.filter((e) => !s || e.fio.toLowerCase().includes(s) || e.login.toLowerCase().includes(s)).slice(0, 6);
-  }, [employees, q]);
 
   const pickEmployee = (id: string) => {
     setEmpId(id);
@@ -172,22 +169,24 @@ export function OverrideDialog({
       setSchedule([...ex.schedule]);
       setComment(ex.comment);
     } else if (chosen) {
-      setSchedule([...(roleSchedules[chosen.role as WdRole] ?? [true, true, true, true, true, true, false])]);
+      const role = wdRoleOf(chosen.role);
+      setSchedule([...(role ? roleSchedules[role] : [true, true, true, true, true, true, false])]);
+      setComment("");
     }
   };
 
   const save = () => {
-    if (!emp) return;
+    if (!emp || comment.trim().length < 3) return;
+    const role = wdRoleOf(emp.role);
     onSave({
       employeeId: String(emp.id),
       employeeName: emp.fio,
-      employeeCode: emp.login,
-      position: emp.role,
+      employeeCode: "",
+      position: role ?? emp.role,
       schedule,
-      comment
+      comment: comment.trim()
     });
     setEmpId("");
-    setQ("");
     setComment("");
   };
 
@@ -202,49 +201,18 @@ export function OverrideDialog({
         <div className="max-h-[70vh] space-y-4 overflow-y-auto">
           <div>
             <label className={LABEL}>Сотрудник</label>
-            {emp ? (
-              <div className="mt-1.5 flex items-center gap-2.5 rounded-lg border border-purple-300 bg-purple-50 p-2.5 dark:bg-purple-900/20">
-                <div className="grid size-8 shrink-0 place-items-center rounded-full bg-purple-600 text-[10px] font-bold text-white">
-                  {emp.fio.split(" ").map((w) => w[0]).slice(0, 2).join("")}
-                </div>
-                <div className="min-w-0">
-                  <div className="truncate text-xs font-semibold">{emp.fio}</div>
-                  <div className="font-mono text-[10px] text-muted-foreground">{emp.login} · {emp.role}</div>
-                </div>
-                <Button variant="ghost" size="icon-sm" className="ml-auto" onClick={() => setEmpId("")}>
-                  <X className="size-4" />
-                </Button>
-              </div>
-            ) : (
-              <>
-                <div className="relative mt-1.5">
-                  <Search className="pointer-events-none absolute left-2.5 top-2.5 size-4 text-muted-foreground" />
-                  <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Поиск по имени или логину..." className="pl-8" />
-                </div>
-                <div className="mt-1.5 max-h-44 divide-y overflow-y-auto rounded-lg border">
-                  {results.map((e) => (
-                    <button
-                      key={e.id}
-                      type="button"
-                      onClick={() => pickEmployee(String(e.id))}
-                      className="flex w-full items-center gap-2.5 px-3 py-2 text-left hover:bg-muted/60"
-                    >
-                      <div className="grid size-7 shrink-0 place-items-center rounded-full bg-muted text-[9px] font-bold">
-                        {e.fio.split(" ").map((w) => w[0]).slice(0, 2).join("")}
-                      </div>
-                      <div className="min-w-0">
-                        <div className="truncate text-xs font-semibold">{e.fio}</div>
-                        <div className="font-mono text-[10px] text-muted-foreground">{e.login} · {e.role}</div>
-                      </div>
-                      {existing.some((o) => o.employeeId === String(e.id)) && (
-                        <span className="ml-auto rounded-full bg-purple-100 px-1.5 py-0.5 text-[9px] font-bold text-purple-600">есть</span>
-                      )}
-                    </button>
-                  ))}
-                  {results.length === 0 && <div className="px-3 py-3 text-xs italic text-muted-foreground">Не найдено</div>}
-                </div>
-              </>
-            )}
+            <select
+              value={empId}
+              onChange={(e) => pickEmployee(e.target.value)}
+              className="mt-1 h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
+            >
+              <option value="">Выберите сотрудника...</option>
+              {employees.map((e) => (
+                <option key={e.id} value={e.id}>
+                  {e.fio}
+                </option>
+              ))}
+            </select>
           </div>
 
           {emp && (
@@ -297,7 +265,7 @@ export function OverrideDialog({
                   })}
                 </div>
                 <p className="mt-2 text-[10px] text-muted-foreground">
-                  Обведённые дни отличаются от графика роли ({emp.role}).
+                  Обведённые дни отличаются от графика роли{empWd ? ` (${empWd})` : ""}.
                 </p>
               </div>
               <div>
@@ -317,7 +285,7 @@ export function OverrideDialog({
             <Button variant="outline" size="sm" onClick={() => onOpenChange(false)}>
               Отмена
             </Button>
-            <Button size="sm" disabled={!emp} onClick={save} className="bg-purple-600 hover:bg-purple-700">
+            <Button size="sm" disabled={!emp || comment.trim().length < 3} onClick={save} className="bg-purple-600 hover:bg-purple-700">
               <Save className="mr-1 size-4" /> Сохранить
             </Button>
           </div>

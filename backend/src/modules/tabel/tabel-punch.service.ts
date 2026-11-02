@@ -10,12 +10,15 @@ import { getFaceReferenceMeta, loadOrBuildReferenceDescriptor } from "../mobile/
 import { loadTimezoneFromSettingsJson } from "../tenant-settings/tenant-timezone";
 import { toFio } from "../staff/staff.shared.helpers";
 import { parseWorkdaysState } from "./workdays.service";
-import { DEFAULT_SHIFT_SPEC, computeDayFromPunches, type ShiftSpec } from "./tabel-engine.pure";
+import { computeDayFromPunches } from "./tabel-engine.pure";
 import { assertVideoPunch, normalizeFullTabelSettings, pickDayCode, type FullTabelSettings } from "./tabel-settings.pure";
 import { evaluateGeofenceAgainstLocations, evaluateTenLayerAntiFraud } from "./tabel-antifraud.pure";
 import { decodeBase64Media, saveCompressedPunchPhoto, savePunchVideo, sendAttendanceTelegramReport } from "./tabel-media-telegram.service";
 import { isManualDayLock } from "../timesheet/timesheet.day-ledger";
 import { markPayrollDirty } from "../payroll/payroll.dirty";
+import { resolveUserShift } from "./tabel-shift-resolve.service";
+
+export { resolveUserShift };
 
 function todayYmdInTz(now: Date, timeZone = "Asia/Tashkent"): string {
   return new Intl.DateTimeFormat("en-CA", { timeZone, year: "numeric", month: "2-digit", day: "2-digit" }).format(now);
@@ -37,32 +40,6 @@ export async function loadTenantTabelContext(tenantId: number): Promise<{
     workdays: parseWorkdaysState(tenant?.settings ?? {}),
     tabelSettings: normalizeFullTabelSettings(raw.tabel_settings),
     rawSettings: raw
-  };
-}
-
-export async function resolveUserShift(
-  tenantId: number,
-  role: string | null | undefined,
-  branch: string | null | undefined
-): Promise<ShiftSpec & { id?: number; name: string }> {
-  const shifts = await prisma.attendanceShift.findMany({
-    where: { tenant_id: tenantId, is_active: true },
-    orderBy: [{ is_default: "desc" }, { id: "asc" }]
-  });
-  const rNorm = (role ?? "").trim().toLowerCase();
-  const bNorm = (branch ?? "").trim().toLowerCase();
-  const exact = shifts.find((s) => s.role?.trim().toLowerCase() === rNorm && s.branch?.trim().toLowerCase() === bNorm);
-  const byRole = shifts.find((s) => s.role?.trim().toLowerCase() === rNorm && !s.branch);
-  const byBranch = shifts.find((s) => !s.role && s.branch?.trim().toLowerCase() === bNorm);
-  const hit = exact ?? byRole ?? byBranch ?? shifts.find((s) => s.is_default) ?? shifts[0];
-  if (!hit) return { ...DEFAULT_SHIFT_SPEC, name: "Стандартная смена (09:00–18:00)" };
-  return {
-    id: hit.id,
-    name: hit.name,
-    start_time: hit.start_time,
-    end_time: hit.end_time,
-    break_minutes: hit.break_minutes,
-    grace_minutes: hit.grace_minutes
   };
 }
 

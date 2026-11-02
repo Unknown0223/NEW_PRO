@@ -250,17 +250,21 @@ describe("Payroll formula variables & RBAC integration", () => {
     expect(catalog.some((c) => c.key === "tabel.obhodnye.approve")).toBe(true);
     expect(catalog.some((c) => c.key === "tabel.ustroystva.assign")).toBe(true);
     expect(catalog.some((c) => c.key === "tabel.statistika.view")).toBe(true);
+    expect(catalog.some((c) => c.key === "tabel.poseshcheniya.view")).toBe(true);
     expect(catalog.some((c) => c.key === "tabel.mobilnaya_otmetka.create")).toBe(true);
     expect(catalog.some((c) => c.key === "settings.tabel_pravila.update")).toBe(true);
     expect(catalog.some((c) => c.key === "settings.timezone.update")).toBe(true);
     expect(catalog.some((c) => c.key === "settings.prichiny.update")).toBe(true);
     expect(permissionDisplayGroup("tabel.otmetki.view")).toBe(TABEL_GROUP_RU);
     expect(permissionDisplayGroup("tabel.statistika.view")).toBe(TABEL_GROUP_RU);
+    expect(permissionDisplayGroup("tabel.poseshcheniya.view")).toBe(TABEL_GROUP_RU);
     expect(permissionDisplayGroup("tabel.mobilnaya_otmetka.view")).toBe(TABEL_GROUP_RU);
     expect(permissionDisplayGroup("staff.tabel.view")).toBe(TABEL_GROUP_RU);
 
     expect(matchRule("GET", "/api/:slug/tabel/marks")?.anyOf).toContain("tabel.otmetki.view");
     expect(matchRule("GET", "/api/:slug/tabel/analytics")?.anyOf).toContain("tabel.statistika.view");
+    expect(matchRule("GET", "/api/:slug/tabel/visit-dashboard")?.anyOf).toContain("tabel.poseshcheniya.view");
+    expect(matchRule("GET", "/api/:slug/tabel/marks/2/media/photo_front")?.anyOf).toContain("tabel.poseshcheniya.view");
     expect(matchRule("PUT", "/api/:slug/settings/tabel")?.anyOf).toContain("settings.tabel_pravila.update");
     expect(matchRule("GET", "/api/:slug/mobile/attendance/state")?.anyOf).toContain("tabel.mobilnaya_otmetka.view");
     expect(matchRule("POST", "/api/:slug/mobile/attendance/punch")?.anyOf).toContain("tabel.mobilnaya_otmetka.create");

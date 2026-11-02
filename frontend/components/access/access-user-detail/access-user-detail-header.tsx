@@ -81,7 +81,6 @@ export function AccessUserDetailHeader({ vm, onBack }: { vm: AccessUserDetailVm;
           ) : null}
           <div className="min-w-0">
             <h2 className="truncate text-base font-semibold leading-tight">
-              {user.code ? `[${user.code}] ` : ""}
               {user.full_name || user.login}
             </h2>
             <dl className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">

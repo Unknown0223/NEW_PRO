@@ -1,4 +1,10 @@
 import { prisma } from "../../config/database";
+import { loadBranchLabelSources } from "../tenant-settings/tenant-settings.refs";
+import {
+  branchLabelLookup,
+  branchVisibleName,
+  expandBranchFilterKeys
+} from "../tenant-settings/branch-display.pure";
 import type { ReportActor } from "./client-sales-4-report.service";
 import type { GpsDeliveryRouteRow, GpsDeliveryRoutesFilters } from "./gps-delivery-routes.types";
 
@@ -101,6 +107,11 @@ export async function getGpsDeliveryRoutesReport(
   rows: GpsDeliveryRouteRow[];
 }> {
   const { from, to } = dayBounds(filters.from, filters.to);
+  const branchCatalog = await loadBranchLabelSources(tenantId);
+  const branchLookup = branchLabelLookup(branchCatalog);
+  if (filters.branch_names.length) {
+    filters = { ...filters, branch_names: expandBranchFilterKeys(filters.branch_names, branchCatalog) };
+  }
 
   const whereExp: {
     tenant_id: number;
@@ -291,7 +302,7 @@ export async function getGpsDeliveryRoutesReport(
       expeditor_id: e.id,
       expeditor_name: cleanExpeditorName(e.name),
       expeditor_code: code,
-      branch: e.branch,
+      branch: branchVisibleName(e.branch, branchLookup),
       app_access: e.app_access,
       actual_time_sec: Math.round(actual_time_sec * 10) / 10,
       calculated_time_sec: Math.round(calculated_time_sec * 10) / 10,

@@ -20,11 +20,18 @@ import {
   type LeaderMinusRule
 } from "@/lib/timesheet/timesheet-norm-api";
 import { TIMESHEET_ROLE_LABELS } from "@/components/timesheet/timesheet-shared";
+import { branchVisibleName, isOpaqueBranchToken } from "@/lib/branch-options";
 
 type Emp = { id: number; fio: string; role: string; login: string; code: string | null; branch: string | null };
 
 function isAgent(role: string) {
   return role.trim().toLowerCase() === "agent";
+}
+
+function agentBranchLabel(raw: string | null | undefined): string {
+  const t = (raw ?? "").trim();
+  if (!t || isOpaqueBranchToken(t)) return "—";
+  return branchVisibleName(t, new Map()) ?? "—";
 }
 
 type Draft = {
@@ -395,7 +402,6 @@ export function TabelAgentNormWorkspace() {
                 {freeAgents.map((a) => (
                   <option key={a.id} value={a.id}>
                     {a.fio}
-                    {a.branch ? ` · ${a.branch}` : ""}
                   </option>
                 ))}
               </select>
@@ -454,7 +460,7 @@ export function TabelAgentNormWorkspace() {
                     <tr key={o.user_id}>
                       <td className="px-2 py-2 font-semibold">
                         {emp?.fio ?? `ID ${o.user_id}`}
-                        <div className="text-[11px] font-normal text-muted-foreground">{emp?.branch ?? "—"}</div>
+                        <div className="text-[11px] font-normal text-muted-foreground">{agentBranchLabel(emp?.branch)}</div>
                       </td>
                       <td className="px-2 py-2 font-mono">{o.open_amount != null ? `${fmtNormSum(o.open_amount)}` : "общая"}</td>
                       <td className="px-2 py-2 font-mono">{o.closed_amount != null ? `${fmtNormSum(o.closed_amount)}` : "общая"}</td>
@@ -515,7 +521,7 @@ export function TabelAgentNormWorkspace() {
                 return (
                   <tr key={a.id}>
                     <td className="px-2 py-2 font-semibold">{a.fio}</td>
-                    <td className="px-2 py-2 text-muted-foreground">{a.branch ?? "—"}</td>
+                    <td className="px-2 py-2 text-muted-foreground">{agentBranchLabel(a.branch)}</td>
                     <td className="px-2 py-2 font-mono">{on ? `${fmtNormSum(open)} / ${fmtNormSum(closed)}` : "—"}</td>
                     <td className="px-2 py-2 text-muted-foreground">
                       {on ? [min > 0 ? `мин. ${min} зак.` : null, half > 0 ? `полдня ${Math.round(half * 100)}%` : null].filter(Boolean).join(" · ") || "нет" : "табель по GPS"}

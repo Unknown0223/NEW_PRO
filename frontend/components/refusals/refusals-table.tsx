@@ -145,7 +145,7 @@ export function RefusalsTable({
                       {row.refusal_reason_label ?? row.refusal_reason_ref}
                     </td>
                     <td className="px-4 py-2.5 text-xs text-foreground">
-                      {row.agent_code ? `${row.agent_code} - [${row.agent_name}]` : row.agent_name}
+                      {row.agent_name}
                     </td>
                     <td className="px-4 py-2.5 text-right">
                       {row.territory ? (
@@ -193,7 +193,7 @@ export function RefusalsTable({
                 </div>
                 <p className="text-xs">{row.refusal_reason_label ?? row.refusal_reason_ref}</p>
                 <div className="flex items-center justify-between gap-2 border-t border-border pt-2 text-xs text-muted-foreground">
-                  <span className="truncate">{row.agent_code ?? row.agent_name}</span>
+                  <span className="truncate">{row.agent_name}</span>
                   <span className="whitespace-nowrap">{formatRefusalDateTime(row.created_at)}</span>
                 </div>
               </div>

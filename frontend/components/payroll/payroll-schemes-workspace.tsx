@@ -9,6 +9,7 @@ import { useTenant } from "@/lib/api-client";
 import { usePermissions } from "@/lib/use-permissions";
 import { currentYm, payrollApi, roleLabel, ymQuery } from "@/lib/payroll/payroll-api";
 import { toBody, toDraft, newKey, ymText, type SchemeDraft, type SchemeMatch, type SchemeRow } from "@/lib/payroll/payroll-scheme-types";
+import { branchLabelLookup, branchVisibleName, type BranchRefRow } from "@/lib/branch-options";
 import { cn } from "@/lib/utils";
 import { useNotice } from "@/components/payroll/payroll-ui";
 import { PayrollPageTitle, PayrollSegmentedTabs } from "@/components/payroll/kit/payroll-kit-layout";
@@ -64,6 +65,12 @@ export function PayrollSchemesWorkspace() {
     enabled: on,
     queryFn: async () => (await http.get<{ data: Array<{ id: number; name: string }> }>(`/api/${tenant}/trade-directions?is_active=true`)).data.data ?? []
   });
+  const branchCatalogQ = useQuery({
+    queryKey: ["settings", "profile", tenant, "payroll-scheme-branches"],
+    enabled: on,
+    queryFn: async () =>
+      (await http.get<{ references?: { branches?: BranchRefRow[] } }>(`/api/${tenant}/settings/profile`)).data.references?.branches ?? []
+  });
 
   const schemes = useMemo(() => listQ.data ?? [], [listQ.data]);
   const matches = useMemo(() => matchQ.data ?? [], [matchQ.data]);
@@ -80,24 +87,36 @@ export function PayrollSchemesWorkspace() {
   }, [currentRev, selected]);
 
   const options: SchemeOptions = useMemo(() => {
+    const lookup = branchLabelLookup(branchCatalogQ.data ?? []);
     const branches = new Set<string>();
+    const branchLabels: Record<string, string> = {};
     const positions = new Set<string>();
+    const addBranch = (raw: string | null | undefined) => {
+      const key = (raw ?? "").trim();
+      if (!key) return;
+      const label = branchVisibleName(key, lookup);
+      if (!label) return;
+      branches.add(key);
+      branchLabels[key] = label;
+    };
     for (const m of matches) {
-      if (m.branch) branches.add(m.branch);
+      addBranch(m.branch);
       if (m.position) positions.add(m.position);
     }
     for (const s of schemes) {
-      s.branches.forEach((b) => branches.add(b));
+      s.branches.forEach((b) => addBranch(b));
       s.positions.forEach((p) => positions.add(p));
     }
+    for (const b of branchCatalogQ.data ?? []) addBranch(b.name);
     return {
-      branches: [...branches].sort(),
+      branches: [...branches].sort((a, b) => (branchLabels[a] ?? a).localeCompare(branchLabels[b] ?? b, "ru")),
+      branchLabels,
       positions: [...positions].sort(),
       tradeDirections: tdQ.data ?? [],
       items: itemsQ.data ?? [],
       groups: varsQ.data?.kpi_groups ?? []
     };
-  }, [matches, schemes, tdQ.data, itemsQ.data, varsQ.data]);
+  }, [matches, schemes, tdQ.data, itemsQ.data, varsQ.data, branchCatalogQ.data]);
 
   const coverage = useMemo(() => {
     const m = new Map<number, number>();

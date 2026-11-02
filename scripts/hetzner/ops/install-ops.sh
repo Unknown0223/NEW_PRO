@@ -4,7 +4,7 @@
 set -euo pipefail
 
 D=/opt/salec/scripts
-for f in salec-alert.sh disk-guard.sh daily-pg-backup.sh offsite-backup.sh install-ops.sh; do
+for f in salec-alert.sh disk-guard.sh disk-cleanup.sh daily-pg-backup.sh offsite-backup.sh install-ops.sh; do
   if [ -f "$D/$f" ]; then
     sed -i 's/\r$//' "$D/$f"
     chmod 755 "$D/$f"
@@ -13,7 +13,7 @@ done
 mkdir -p /var/lib/salec-ops
 
 if [ ! -f /opt/salec/EMERGENCY_BALLAST ]; then
-  fallocate -l 5G /opt/salec/EMERGENCY_BALLAST
+  fallocate -l 2G /opt/salec/EMERGENCY_BALLAST
 fi
 
 if ! command -v restic >/dev/null 2>&1; then
@@ -21,10 +21,10 @@ if ! command -v restic >/dev/null 2>&1; then
 fi
 
 {
-  crontab -l 2>/dev/null | grep -v -e 'disk-guard.sh' -e 'daily-pg-backup.sh' -e 'builder prune' || true
+  crontab -l 2>/dev/null | grep -v -e 'disk-guard.sh' -e 'disk-cleanup.sh' -e 'daily-pg-backup.sh' -e 'builder prune' || true
   echo '*/10 * * * * /opt/salec/scripts/disk-guard.sh >> /var/log/salec-disk-guard.log 2>&1'
   echo '15 2 * * * /opt/salec/scripts/daily-pg-backup.sh >> /opt/salec/backups/daily-backup.log 2>&1'
-  echo '30 4 * * 0 docker builder prune -af --filter until=168h >> /var/log/salec-docker-prune.log 2>&1'
+  echo '30 4 * * * /opt/salec/scripts/disk-cleanup.sh >> /var/log/salec-docker-prune.log 2>&1'
 } | crontab -
 
 cat > /etc/logrotate.d/salec-ops <<'EOF'

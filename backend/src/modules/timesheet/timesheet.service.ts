@@ -24,6 +24,13 @@ import {
   type ExtendedAttendanceStatus
 } from "../tabel/tabel-engine.pure";
 import { loadTimezoneFromSettingsJson } from "../tenant-settings/tenant-timezone";
+import { loadBranchLabelSources } from "../tenant-settings/tenant-settings.refs";
+import {
+  branchLabelLookup,
+  branchVisibleName,
+  expandBranchFilterKeys,
+  uniqueBranchVisibleNames
+} from "../tenant-settings/branch-display.pure";
 import { parseYearMonth, tenantMonthRangeUtc } from "../../lib/workday-calendar";
 import {
   migrateTimesheetJsonOverridesToDayRecords,
@@ -240,23 +247,28 @@ export async function listTimesheetFilters(
         .filter((x) => x && x.trim().length > 0 && !isTimesheetExcludedRole(x))
     )
   ];
-  const branchSet = new Set<string>();
+  const catalog = await loadBranchLabelSources(tenantId);
+  const lookup = branchLabelLookup(catalog);
+  const rawBranches: string[] = [];
   for (const u of users) {
     if (isTimesheetExcludedRole(u.role)) continue;
-    if (u.branch?.trim()) branchSet.add(u.branch.trim());
+    if (u.branch?.trim()) rawBranches.push(u.branch.trim());
     for (const b of u.branch_links) {
-      if (b.branch_code?.trim()) branchSet.add(b.branch_code.trim());
+      if (b.branch_code?.trim()) rawBranches.push(b.branch_code.trim());
     }
   }
   if (!staffScope) {
     for (const b of branchLinks) {
-      if (b.branch_code?.trim()) branchSet.add(b.branch_code.trim());
+      if (b.branch_code?.trim()) rawBranches.push(b.branch_code.trim());
+    }
+    for (const b of catalog) {
+      if (b.active !== false && b.name.trim()) rawBranches.push(b.name.trim());
     }
   }
 
   return {
     roles,
-    branches: [...branchSet].sort((a, b) => a.localeCompare(b, "ru")),
+    branches: uniqueBranchVisibleNames(rawBranches, lookup),
     directions: directions.map((d) => ({ id: d.id, name: d.name })),
     employees: users
       .filter((u) => !isTimesheetExcludedRole(u.role))
@@ -266,7 +278,10 @@ export async function listTimesheetFilters(
         role: u.role,
         login: u.login,
         code: u.code,
-        branch: u.branch?.trim() || u.branch_links[0]?.branch_code?.trim() || null
+        branch: branchVisibleName(
+          u.branch?.trim() || u.branch_links[0]?.branch_code?.trim() || null,
+          lookup
+        )
       }))
   };
 }
@@ -313,6 +328,9 @@ export async function listTimesheetMatrix(
         .filter(Boolean)
     )
   ];
+  const branchCatalog = await loadBranchLabelSources(tenantId);
+  const branchLookup = branchLabelLookup(branchCatalog);
+  const branchKeys = expandBranchFilterKeys(branchList, branchCatalog);
   const directionId =
     typeof input.direction_id === "number" && Number.isFinite(input.direction_id) && input.direction_id > 0
       ? input.direction_id
@@ -338,16 +356,9 @@ export async function listTimesheetMatrix(
   if (roleFilter?.length === 1) and.push({ role: roleFilter[0] });
   else if (roleFilter && roleFilter.length > 1) and.push({ role: { in: roleFilter } });
   if (typeof input.user_id === "number") and.push({ id: input.user_id });
-  if (branchList.length === 1) {
+  if (branchKeys.length > 0) {
     and.push({
-      OR: [
-        { branch: { equals: branchList[0], mode: "insensitive" } },
-        { branch_links: { some: { branch_code: { equals: branchList[0], mode: "insensitive" } } } }
-      ]
-    });
-  } else if (branchList.length > 1) {
-    and.push({
-      OR: branchList.flatMap((b) => [
+      OR: branchKeys.flatMap((b) => [
         { branch: { equals: b, mode: "insensitive" as const } },
         { branch_links: { some: { branch_code: { equals: b, mode: "insensitive" as const } } } }
       ])
@@ -588,10 +599,12 @@ export async function listTimesheetMatrix(
       if (d.rec?.last_out_at) cell.last_out_at = d.rec.last_out_at.toISOString();
       return cell;
     });
-    const branch =
+    const branch = branchVisibleName(
       u.branch?.trim() ||
-      u.branch_links.find((b) => b.branch_code?.trim())?.branch_code?.trim() ||
-      null;
+        u.branch_links.find((b) => b.branch_code?.trim())?.branch_code?.trim() ||
+        null,
+      branchLookup
+    );
     const direction =
       u.trade_direction?.trim() ||
       u.trade_direction_row?.name?.trim() ||

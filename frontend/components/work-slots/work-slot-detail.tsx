@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { activeBranchNamesFromProfile, branchLabelLookup, type BranchRefRow } from "@/lib/branch-options";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
@@ -59,6 +60,7 @@ export function WorkSlotDetail({ slotId }: { slotId: number }) {
   const [editOpen, setEditOpen] = useState(false);
   const [assignOpen, setAssignOpen] = useState(false);
   const [branchOptions, setBranchOptions] = useState<string[]>([]);
+  const [branchLookup, setBranchLookup] = useState<Map<string, string>>(() => new Map());
   const [warehouses, setWarehouses] = useState<{ id: number; name: string }[]>([]);
   const [cashDesks, setCashDesks] = useState<{ id: number; name: string }[]>([]);
   const [clientRefs, setClientRefs] = useState<{
@@ -78,7 +80,7 @@ export function WorkSlotDetail({ slotId }: { slotId: number }) {
     if (!tenant) return;
     setLoading(true);
     try {
-      const [detail, hist, debtCol, list, whTable, cash, refs, profile, tradeDirs] = await Promise.all([
+      const [detail, hist, debtCol, whTable, cash, refs, profile, tradeDirs] = await Promise.all([
         apiFetch<{ data: WorkSlotListItem }>(`/api/${tenant}/work-slots/${slotId}`),
         apiFetch<{ data: SlotHistoryItem[] }>(`/api/${tenant}/work-slots/${slotId}/history?limit=30`),
         apiFetch<{
@@ -90,7 +92,6 @@ export function WorkSlotDetail({ slotId }: { slotId: number }) {
             unpaid: string;
           }>;
         }>(`/api/${tenant}/work-slots/${slotId}/debt-collectors`).catch(() => ({ data: [] })),
-        apiFetch<{ data: WorkSlotListItem[] }>(`/api/${tenant}/work-slots?limit=100`),
         apiFetch<{ data: { id: number; name: string }[] }>(
           `/api/${tenant}/warehouses/table?is_active=true&page=1&limit=200`
         ),
@@ -105,7 +106,7 @@ export function WorkSlotDetail({ slotId }: { slotId: number }) {
           city_options?: { value: string; label: string }[];
           city_territory_hints?: Record<string, { city_label?: string | null }>;
         }>(`/api/${tenant}/clients/references`),
-        apiFetch<{ references?: { territory_nodes?: TerritoryNode[] } }>(
+        apiFetch<{ references?: { territory_nodes?: TerritoryNode[]; branches?: BranchRefRow[] } }>(
           `/api/${tenant}/settings/profile`
         ).catch(() => ({ references: undefined })),
         apiFetch<{ data: Array<{ id: number; name: string; code: string | null }> }>(
@@ -120,14 +121,9 @@ export function WorkSlotDetail({ slotId }: { slotId: number }) {
       setSlot(detail.data);
       setHistory(hist.data ?? []);
       setDebtCollectors(debtCol.data ?? []);
-      const branches = new Set<string>();
-      for (const r of list.data ?? []) {
-        for (const code of r.branch_codes ?? []) {
-          if (code.trim()) branches.add(code.trim());
-        }
-        if (r.branch_code?.trim()) branches.add(r.branch_code.trim());
-      }
-      setBranchOptions([...branches].sort());
+      const catalog = profile.references?.branches ?? [];
+      setBranchLookup(branchLabelLookup(catalog));
+      setBranchOptions(activeBranchNamesFromProfile(catalog));
     } catch (e) {
       console.error(e);
     } finally {
@@ -418,6 +414,7 @@ export function WorkSlotDetail({ slotId }: { slotId: number }) {
         tenant={tenant}
         slotId={slotId}
         branchOptions={branchOptions}
+        branchLookup={branchLookup}
         tradeDirections={tradeDirections}
         warehouses={warehouses}
         cashDesks={cashDesks}

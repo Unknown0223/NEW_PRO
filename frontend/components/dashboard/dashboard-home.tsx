@@ -154,10 +154,8 @@ type VisitRow = {
 
 type VisitTotals = Omit<VisitRow, "agent_id" | "agent_name">;
 
-function visitAgentLabel(r: Pick<VisitRow, "agent_id" | "agent_code" | "agent_name">): string {
-  const idPart = String(r.agent_id).padStart(2, "0");
-  const code = (r.agent_code ?? "").trim() || "—";
-  return `${idPart} - ${code} - ${r.agent_name}`;
+function visitAgentLabel(r: Pick<VisitRow, "agent_name">): string {
+  return r.agent_name;
 }
 
 /** «Продажи по товарам» / универсальный отчёт bilan bir xil trigger */

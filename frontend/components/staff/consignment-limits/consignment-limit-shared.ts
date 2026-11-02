@@ -33,8 +33,7 @@ export function supervisorQuery(supervisor: string): string {
 }
 
 export function agentLabel(a: Pick<ConsignmentLimitAgent, "name" | "code" | "work_slot_code">): string {
-  const code = a.work_slot_code ?? a.code;
-  return code ? `${a.name} · ${code}` : a.name;
+  return a.name;
 }
 
 export function shiftYm(ym: { year: number; month: number }, delta: number) {

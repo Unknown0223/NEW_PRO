@@ -187,7 +187,7 @@ export function GeoBoundaryToolbar({
                 {warehouses.map((w) => (
                   <option key={w.id} value={String(w.id)}>
                     {w.name}
-                    {w.code ? ` (${w.code})` : ""}
+
                   </option>
                 ))}
               </select>
@@ -203,7 +203,7 @@ export function GeoBoundaryToolbar({
                 {cashDesks.map((d) => (
                   <option key={d.id} value={String(d.id)}>
                     {d.name}
-                    {d.code ? ` (${d.code})` : ""}
+
                   </option>
                 ))}
               </select>

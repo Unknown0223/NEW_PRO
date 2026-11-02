@@ -10,6 +10,9 @@ import { getAccessUser, jwtAccessVerify } from "../auth/auth.prehandlers";
 import { toFio } from "../staff/staff.shared.helpers";
 import { listTimesheetMatrix } from "../timesheet/timesheet.service";
 import { createTabelAbsenceRequest, listTabelAbsenceRequests } from "./tabel-hub-requests";
+import { parseTerminalIngest, parseTerminalIngestBuffer, type TerminalIngestEvent } from "./hikvision-ingest.pure";
+import { requestTabelDeviceLink } from "./tabel-clearance-devices.service";
+import { loadTenantBranchesForAccess } from "../tenant-settings/tenant-settings.profile.read";
 import {
   getMobileAttendanceState,
   issueOrGetDayCode,
@@ -58,7 +61,45 @@ async function punchInputFromRequest(request: FastifyRequest): Promise<PunchBody
   return input;
 }
 
+function asIngestBody(body: unknown): { pairing_code?: string; user_id?: number } {
+  if (!body || typeof body !== "object") return {};
+  return body as { pairing_code?: string; user_id?: number };
+}
+
+/** JSON yoki multipart (JSON + JPEG) Hikvision hodisasi. */
+async function readTerminalIngest(request: FastifyRequest): Promise<TerminalIngestEvent> {
+  if (Buffer.isBuffer(request.body)) return parseTerminalIngestBuffer(request.body);
+  if (!request.isMultipart()) return parseTerminalIngest(request.body);
+  let parsed = parseTerminalIngest(null);
+  let photo: string | null = null;
+  for await (const part of request.parts()) {
+    if (part.type === "file") {
+      const buf = await part.toBuffer();
+      if (buf.length > 500 && buf[0] === 0xff && buf[1] === 0xd8) {
+        photo = buf.toString("base64");
+        continue;
+      }
+      const fromFile = parseTerminalIngest(buf.toString("utf8"));
+      if (fromFile.employeeNo || fromFile.photoBase64) parsed = { ...parsed, ...fromFile, photoBase64: fromFile.photoBase64 ?? parsed.photoBase64 };
+      continue;
+    }
+    const fromField = parseTerminalIngest(String(part.value ?? ""));
+    if (fromField.employeeNo || fromField.photoBase64) {
+      parsed = { ...parsed, ...fromField, photoBase64: fromField.photoBase64 ?? parsed.photoBase64 };
+    }
+  }
+  if (photo && !parsed.photoBase64) parsed = { ...parsed, photoBase64: photo };
+  return parsed;
+}
+
 export async function registerTabelMobileRoutes(app: FastifyInstance) {
+  try {
+    app.addContentTypeParser(/^multipart\/mixed/i, { parseAs: "buffer" }, (_request, body, done) => {
+      done(null, body);
+    });
+  } catch {
+    // Parser allaqachon ro'yxatda.
+  }
   app.get("/api/:slug/mobile/attendance/state", { preHandler: [jwtAccessVerify] }, async (request, reply) => {
     if (!ensureTenantContext(request, reply)) return;
     const u = getAccessUser(request);
@@ -190,12 +231,16 @@ export async function registerTabelMobileRoutes(app: FastifyInstance) {
     return reply.send({ data });
   });
 
-  // Office-Link / Hikvision Terminal ingest
+  // Office-Link / Hikvision Terminal ingest. Qurilmada JWT yo‘q — ensureTenantContext chaqirilmaydi.
   app.post("/api/:slug/mobile/attendance/device-ingest", async (request, reply) => {
-    if (!ensureTenantContext(request, reply)) return;
+    if (!request.tenant) return sendApiError(reply, request, 404, "TenantNotFound");
     const rawHeader = request.headers["x-device-token"] ?? request.headers["x-attendance-token"];
     const token = Array.isArray(rawHeader) ? rawHeader[0] : rawHeader;
-    const body = (request.body ?? {}) as SubmitPunchInput & { user_id?: number; pairing_code?: string };
+    const query = (request.query ?? {}) as { pairing_code?: string };
+    const event = await readTerminalIngest(request);
+    const pairing = String(
+      (asIngestBody(request.body).pairing_code ?? query.pairing_code ?? "")
+    ).trim();
 
     let device = null;
     if (token) {
@@ -203,25 +248,81 @@ export async function registerTabelMobileRoutes(app: FastifyInstance) {
       device = await prisma.attendanceDevice.findFirst({
         where: { tenant_id: request.tenant!.id, device_token_hash: hash }
       });
-    } else if (body.pairing_code) {
+    } else if (pairing) {
       device = await prisma.attendanceDevice.findFirst({
-        where: { tenant_id: request.tenant!.id, pairing_code: String(body.pairing_code).trim() }
+        where: { tenant_id: request.tenant!.id, pairing_code: pairing }
       });
     }
     if (!device || device.status === "revoked") {
       return sendApiError(reply, request, 401, "UnauthorizedDevice", "Терминал не авторизован");
     }
+    const pending = device.status === "pending_confirm";
     await prisma.attendanceDevice.update({
       where: { id: device.id },
-      data: { last_seen_at: new Date(), status: "online", is_confirmed: true }
+      data: pending
+        ? { last_seen_at: new Date() }
+        : { last_seen_at: new Date(), status: "online", is_confirmed: true }
     });
-    if (!body.user_id) return reply.send({ data: { ok: true, device_id: device.id, status: "heartbeat" } });
+    const bodyUserId = Number(asIngestBody(request.body).user_id ?? 0);
+    let userId = Number.isInteger(bodyUserId) && bodyUserId > 0 ? bodyUserId : 0;
+    const employeeNo = event.employeeNo;
+    if (!userId && employeeNo) {
+      const asNumber = Number(employeeNo);
+      const staff = await prisma.user.findFirst({
+        where: {
+          tenant_id: request.tenant.id,
+          is_active: true,
+          OR: [
+            { code: employeeNo },
+            ...(Number.isInteger(asNumber) && asNumber > 0 ? [{ id: asNumber }] : [])
+          ]
+        },
+        select: { id: true }
+      });
+      userId = staff?.id ?? 0;
+    }
+    if (!userId) {
+      return reply.send({
+        data: { ok: true, device_id: device.id, status: employeeNo ? "unknown_employee" : "heartbeat" }
+      });
+    }
 
-    const data = await submitAttendancePunch(request.tenant!.id, Number(body.user_id), {
-      ...body,
+    const data = await submitAttendancePunch(request.tenant.id, userId, {
       source: "terminal",
-      device_id: device.id
+      device_id: device.id,
+      direction: event.direction,
+      photo_front_base64: event.photoBase64 ?? null
     });
     return reply.send({ data });
+  });
+
+  app.post("/api/:slug/mobile/attendance/device-link-request", async (request, reply) => {
+    if (!request.tenant) return sendApiError(reply, request, 404, "TenantNotFound");
+    const body = (request.body ?? {}) as { pairing_code?: string; terminal_password?: string; ip?: string; recovery_email?: string };
+    try {
+      const data = await requestTabelDeviceLink(request.tenant!.id, String(body.pairing_code ?? ""), {
+        terminal_password: body.terminal_password,
+        ip: body.ip,
+        recovery_email: body.recovery_email
+      });
+      return reply.send({ data });
+    } catch (err) {
+      if (err instanceof Error && err.message === "PASSWORD_REQUIRED") {
+        return sendApiError(reply, request, 400, "ValidationError", "Новый пароль терминала не передан");
+      }
+      return sendApiError(reply, request, 404, "NotFound", "Код привязки не найден");
+    }
+  });
+
+  app.get("/api/attendance/office-link/locations", async (request, reply) => {
+    const asked = String((request.query as { tenantCode?: string }).tenantCode ?? "").trim().toLowerCase();
+    const slug = !asked || asked === "demo" ? "aksit" : asked;
+    const tenant = await prisma.tenant.findFirst({ where: { slug, is_active: true }, select: { id: true } });
+    if (!tenant) return reply.send({ locations: [] });
+    const branches = await loadTenantBranchesForAccess(tenant.id);
+    const locations = branches
+      .filter((b) => b.active !== false && b.name.trim())
+      .map((b) => ({ id: b.id || b.name, name: b.name, label: b.name }));
+    return reply.send({ locations });
   });
 }

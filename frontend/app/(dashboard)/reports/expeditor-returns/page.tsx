@@ -380,11 +380,11 @@ export default function ReportExpeditorReturnsPage() {
   const statusItems = (opts?.statuses ?? []).map((x) => ({ id: x.id, title: x.label }));
   const agentItems = (opts?.agents ?? []).map((x) => ({
     id: String(x.id),
-    title: `${x.name}${x.code ? ` (${x.code})` : ""}`
+    title: x.name, searchText: [x.name, x.code].filter(Boolean).join(" ")
   }));
   const expeditorItems = (opts?.expeditors ?? []).map((x) => ({
     id: String(x.id),
-    title: `${x.name}${x.code ? ` (${x.code})` : ""}`
+    title: x.name, searchText: [x.name, x.code].filter(Boolean).join(" ")
   }));
   const categoryItems = (opts?.categories ?? []).map((x) => ({ id: String(x.id), title: x.name }));
   const paymentItems = (opts?.payment_methods ?? []).map((x) => ({ id: x.id, title: x.label }));

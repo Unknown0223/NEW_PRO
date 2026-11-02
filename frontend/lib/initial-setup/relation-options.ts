@@ -82,7 +82,7 @@ function fromRefEntries(
       const value = String(r[valueKey] ?? "").trim();
       if (!value) return null;
       const name = String(r.name ?? "").trim();
-      const label = labelExtra?.(r) ?? (name && name !== value ? `${name} (${value})` : value);
+      const label = labelExtra?.(r) ?? (name || value);
       return opt(value, label);
     })
   );
@@ -145,7 +145,7 @@ export async function loadRelationOptions(
         flat.map((r) => {
           const code = (r.cells.code ?? "").trim();
           const name = (r.cells.name ?? "").trim();
-          if (code) return opt(code, name ? `${name} (${code})` : code);
+          if (code) return opt(code, name || code);
           return opt(name);
         })
       );
@@ -158,7 +158,7 @@ export async function loadRelationOptions(
     out["unit-code"] = fromRefEntries(profileRefs, "unit_measures", "code", (r) => {
       const code = String(r.code ?? "");
       const name = String(r.name ?? "");
-      return name ? `${name} (${code})` : code;
+      return name || code;
     });
   }
   if (need.has("unit-name")) {
@@ -212,7 +212,7 @@ export async function loadRelationOptions(
       const code = String(r.code ?? "");
       const name = String(r.name ?? "");
       if (!code) return name;
-      return name ? `${name} (${code})` : code;
+      return name || code;
     });
   }
   if (need.has("client-format-code")) {
@@ -234,7 +234,7 @@ export async function loadRelationOptions(
         (data.data ?? []).map((r) => {
           const code = String(r.code ?? "").trim();
           const name = String(r.name ?? "").trim();
-          if (code) return opt(code, name ? `${name} (${code})` : code);
+          if (code) return opt(code, name || code);
           return opt(name);
         })
       );
@@ -250,7 +250,7 @@ export async function loadRelationOptions(
       );
       out["warehouse-name"] = uniqueOptions(
         (data.data ?? []).map((r) =>
-          opt(r.name, r.code ? `${r.name} (${r.code})` : r.name)
+          opt(r.name, r.name)
         )
       );
     } catch {
@@ -265,7 +265,7 @@ export async function loadRelationOptions(
       );
       const cats = uniqueOptions(
         (data.data ?? []).map((r) =>
-          opt(r.name, r.code ? `${r.name} (${r.code})` : r.name)
+          opt(r.name, r.name)
         )
       );
       if (need.has("product-category-name")) out["product-category-name"] = cats;
@@ -286,7 +286,7 @@ export async function loadRelationOptions(
           const sku = String(r.sku ?? "").trim();
           if (!sku) return null;
           const name = String(r.name ?? "").trim();
-          return opt(sku, name ? `${sku} — ${name}` : sku);
+          return opt(sku, name || sku);
         })
       );
     } catch {

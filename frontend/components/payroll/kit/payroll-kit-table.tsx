@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronDown, ChevronLeft, ChevronRight, ChevronsUpDown, FileSpreadsheet, Loader2, RefreshCw, Search, SlidersHorizontal, X } from "lucide-react";
+import { ArrowDown, ArrowUp, ArrowUpDown, ChevronDown, ChevronLeft, ChevronRight, FileSpreadsheet, Loader2, RefreshCw, Search, SlidersHorizontal, X } from "lucide-react";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { DEFAULT_TABLE_PAGE_SIZES } from "@/lib/table-page-sizes";
@@ -254,11 +254,12 @@ export function SortTh<K extends string>({
   className?: string;
 }) {
   const active = sort?.key === sortKey;
+  const Icon = active ? (sort?.dir === "asc" ? ArrowUp : ArrowDown) : ArrowUpDown;
   return (
     <th className={cn(PAYROLL_TH, className)}>
       <button type="button" className={cn("inline-flex items-center gap-1 hover:text-foreground", active && "text-foreground")} onClick={() => onSort(sortKey)}>
         {label}
-        <ChevronsUpDown className={cn("h-3.5 w-3.5 opacity-40", active && "text-[var(--pr-brand-600)] opacity-100")} />
+        <Icon className={cn("h-3.5 w-3.5 opacity-40", active && "text-[var(--pr-brand-600)] opacity-100")} />
       </button>
     </th>
   );

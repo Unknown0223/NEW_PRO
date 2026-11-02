@@ -138,9 +138,7 @@ function cashFlowToCsv(payload: CashFlowPayload): string {
 }
 
 async function cashFlowToXlsx(payload: CashFlowPayload): Promise<void> {
-  const deskLabel = payload.cash_desk.code
-    ? `${payload.cash_desk.name} (${payload.cash_desk.code})`
-    : payload.cash_desk.name;
+  const deskLabel = payload.cash_desk.name;
   const summaryKv: (string | number)[][] = [
     ["Период", `${payload.date_from} — ${payload.date_to}`],
     ["Касса", deskLabel],
@@ -397,7 +395,7 @@ export function CashFlowWorkspace() {
               <option value="">—</option>
               {desks.map((d) => (
                 <option key={d.id} value={String(d.id)}>
-                  {d.code ? `${d.name} (${d.code})` : d.name}
+                  {d.name}
                 </option>
               ))}
             </select>

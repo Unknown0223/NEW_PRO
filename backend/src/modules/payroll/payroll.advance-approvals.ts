@@ -3,9 +3,10 @@ import { prisma } from "../../config/database";
 import { withTransaction } from "../../lib/db-context";
 import { appendTenantAuditEvent, AuditEntityType } from "../../lib/tenant-audit";
 import { assertAdvanceWithinLimit } from "./payroll.advance-limits";
-import { actorIdsOf, advanceToDto, loadAdvanceUsers, type AdvanceActor } from "./payroll.advances.shared";
+import { actorIdsOf, advanceToDto, loadAdvanceUsers, loadTenantBranches, type AdvanceActor } from "./payroll.advances.shared";
 import { notifyUsers } from "./payroll.notify";
 import { PayrollError } from "./payroll.route-helpers";
+import { branchLabelLookup, branchVisibleName, expandBranchFilterKeys, uniqueBranchVisibleNames } from "../tenant-settings/branch-display.pure";
 
 const fmtSum = (v: unknown) => `${Math.round(Number(v ?? 0)).toLocaleString("ru-RU")} сум`;
 
@@ -26,7 +27,9 @@ export async function listAdvanceApprovals(tenantId: number, f: ApprovalFilter) 
     tenant_id: tenantId,
     status: { in: f.statuses?.length ? f.statuses : ["sent"] }
   };
-  if (f.branch) where.branch_snapshot = { equals: f.branch, mode: "insensitive" };
+  const branchCatalog = await loadTenantBranches(tenantId);
+  const branchLookup = branchLabelLookup(branchCatalog);
+  if (f.branch) where.branch_snapshot = { in: expandBranchFilterKeys([f.branch], branchCatalog) };
   if (f.sent_by) where.sent_by = f.sent_by;
   if (f.year) where.year = f.year;
   if (f.month) where.month = f.month;
@@ -35,9 +38,15 @@ export async function listAdvanceApprovals(tenantId: number, f: ApprovalFilter) 
   const users = await loadAdvanceUsers(tenantId, actorIdsOf(rows));
   const q = f.q?.trim().toLocaleLowerCase("ru");
   const data = rows
-    .map((r) => advanceToDto(r, users))
+    .map((r) => {
+      const dto = advanceToDto(r, users);
+      return { ...dto, branch: branchVisibleName(dto.branch, branchLookup) };
+    })
     .filter((r) => (!f.role || r.role === f.role) && (!q || `${r.fio} ${r.code ?? ""}`.toLocaleLowerCase("ru").includes(q)));
-  const branches = [...new Set(rows.map((r) => r.branch_snapshot).filter((x): x is string => Boolean(x)))].sort();
+  const branches = uniqueBranchVisibleNames(
+    rows.map((r) => r.branch_snapshot),
+    branchLookup
+  );
   const senders = [...new Set(rows.map((r) => r.sent_by).filter((x): x is number => x != null))].map((id) => ({
     id,
     fio: users.get(id)?.fio ?? `#${id}`

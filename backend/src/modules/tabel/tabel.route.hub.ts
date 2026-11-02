@@ -12,6 +12,8 @@ import {
   deleteTabelShift,
   getTabelSettingsForUi,
   listTabelLocations,
+  getTabelPunchMediaKey,
+  isTabelMediaSlot,
   listTabelMarks,
   listTabelShifts,
   patchTabelSettings,
@@ -27,18 +29,15 @@ import {
 } from "./tabel-hub-requests";
 import {
   createOrSyncClearanceSheet,
-  createTabelDevice,
-  deleteTabelDevice,
   getTabelAnalytics,
-  issueTabelDeviceToken,
   listTabelClearanceSheets,
-  listTabelDevices,
-  syncFacesToTabelDevice,
-  updateTabelClearanceSheet,
-  updateTabelDevice
+  updateTabelClearanceSheet
 } from "./tabel-clearance-devices.service";
 import { purgeTabelMediaAndFaces } from "./tabel-media-telegram.service";
+import { listMissingCheckouts } from "./tabel-problems.service";
+import { getVisitDashboard } from "./tabel-visit-dashboard.service";
 import { closeEndedShiftsAndMarkAbsent } from "./tabel-shift-close.service";
+import { registerTabelDeviceRoutes } from "./tabel.route.devices";
 
 function actorLabel(request: FastifyRequest): string {
   const u = request.user as { role?: string; login?: string } | undefined;
@@ -49,6 +48,7 @@ function actorLabel(request: FastifyRequest): string {
 }
 
 export async function registerTabelHubRoutes(app: FastifyInstance) {
+  registerTabelDeviceRoutes(app);
   // ─────────── Настройки: Табель, Face ID и посещаемость ───────────
   app.get("/api/:slug/settings/tabel", { preHandler: [jwtAccessVerify] }, async (request, reply) => {
     if (!ensureTenantContext(request, reply)) return;
@@ -72,6 +72,12 @@ export async function registerTabelHubRoutes(app: FastifyInstance) {
     return reply.send({ data: { ...media, ...shifts } });
   });
 
+  app.get("/api/:slug/tabel/visit-dashboard", { preHandler: [jwtAccessVerify] }, async (request, reply) => {
+    if (!ensureTenantContext(request, reply)) return;
+    const data = await getVisitDashboard(request.tenant!.id);
+    return reply.send({ data });
+  });
+
   // ─────────── Журнал отметок и Проблемные отметки ───────────
   app.get("/api/:slug/tabel/marks", { preHandler: [jwtAccessVerify] }, async (request, reply) => {
     if (!ensureTenantContext(request, reply)) return;
@@ -90,13 +96,17 @@ export async function registerTabelHubRoutes(app: FastifyInstance) {
   app.get("/api/:slug/tabel/problems", { preHandler: [jwtAccessVerify] }, async (request, reply) => {
     if (!ensureTenantContext(request, reply)) return;
     const q = (request.query ?? {}) as Record<string, unknown>;
-    const items = await listTabelMarks(request.tenant!.id, {
+    const filters = {
       from: typeof q.from === "string" ? q.from : undefined,
       to: typeof q.to === "string" ? q.to : undefined,
       branch: typeof q.branch === "string" ? q.branch : undefined,
-      only_problems: true
-    });
-    return reply.send({ data: { items } });
+      source: typeof q.source === "string" ? q.source : undefined
+    };
+    const [items, openDays] = await Promise.all([
+      listTabelMarks(request.tenant!.id, { ...filters, only_problems: true }),
+      listMissingCheckouts(request.tenant!.id, filters)
+    ]);
+    return reply.send({ data: { items, open_days: openDays } });
   });
 
   app.post("/api/:slug/tabel/marks/:id/review", { preHandler: [jwtAccessVerify] }, async (request, reply) => {
@@ -117,17 +127,8 @@ export async function registerTabelHubRoutes(app: FastifyInstance) {
   app.get("/api/:slug/tabel/marks/:id/media/:slot", { preHandler: [jwtAccessVerify] }, async (request, reply) => {
     if (!ensureTenantContext(request, reply)) return;
     const { id, slot } = request.params as { id: string; slot: string };
-    const items = await listTabelMarks(request.tenant!.id, {});
-    const hit = items.find((x) => x.id === Number(id));
-    if (!hit) return sendApiError(reply, request, 404, "NotFound");
-    const key =
-      slot === "photo_back"
-        ? hit.photo_back_key
-        : slot === "video_front"
-          ? hit.video_front_key
-          : slot === "video_back"
-            ? hit.video_back_key
-            : hit.photo_front_key;
+    if (!isTabelMediaSlot(slot)) return sendApiError(reply, request, 400, "ValidationError", "Неизвестный слот медиа");
+    const key = await getTabelPunchMediaKey(request.tenant!.id, Number(id), slot);
     if (!key) return sendApiError(reply, request, 404, "MediaNotFound");
     const buf = await storageReadBuffer(key);
     if (!buf) return sendApiError(reply, request, 404, "MediaNotFound");
@@ -202,17 +203,39 @@ export async function registerTabelHubRoutes(app: FastifyInstance) {
       reason?: string | null;
     };
     const uid = Number(body.user_id ?? actorUserIdOrNull(request) ?? 0);
-    if (!uid || !body.type || !body.from_date || !body.to_date) {
+    const type = (body.type ?? "").trim().toLowerCase();
+    const absenceTypes = new Set(["vacation", "sick", "trip", "unpaid_leave"]);
+    const overtimeTypes = new Set(["overtime", "weekend_work"]);
+    if (!uid || !type || !body.from_date || !body.to_date) {
       return sendApiError(reply, request, 400, "ValidationError", "Заполните сотрудника, тип и даты");
     }
-    const data = await createTabelAbsenceRequest(request.tenant!.id, uid, {
-      type: body.type,
-      from_date: body.from_date,
-      to_date: body.to_date,
-      hours: body.hours,
-      reason: body.reason
-    });
-    return reply.send({ data });
+    if (!absenceTypes.has(type) && !overtimeTypes.has(type)) {
+      return sendApiError(reply, request, 400, "ValidationError", "Неизвестный тип заявки");
+    }
+    if ((body.reason ?? "").trim().length < 3) {
+      return sendApiError(reply, request, 400, "ValidationError", "Укажите причину");
+    }
+    if (overtimeTypes.has(type)) {
+      const hours = Number(body.hours);
+      if (!Number.isFinite(hours) || hours <= 0 || hours > 24) {
+        return sendApiError(reply, request, 400, "ValidationError", "Укажите часы от 0,5 до 24");
+      }
+    }
+    try {
+      const data = await createTabelAbsenceRequest(request.tenant!.id, uid, {
+        type,
+        from_date: body.from_date,
+        to_date: body.to_date,
+        hours: body.hours,
+        reason: body.reason
+      });
+      return reply.send({ data });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "";
+      if (msg === "BAD_DATE_RANGE") return sendApiError(reply, request, 400, "ValidationError", "Проверьте даты");
+      if (msg === "RANGE_TOO_LONG") return sendApiError(reply, request, 400, "ValidationError", "Период не длиннее 62 дней");
+      throw e;
+    }
   });
 
   app.post("/api/:slug/tabel/absence-requests/:id/:action", { preHandler: [jwtAccessVerify] }, async (request, reply) => {
@@ -220,14 +243,21 @@ export async function registerTabelHubRoutes(app: FastifyInstance) {
     const { id, action } = request.params as { id: string; action: string };
     const body = (request.body ?? {}) as { comment?: string };
     const decision = action === "reject" ? "rejected" : "approved";
-    const data = await decideTabelAbsenceRequest(
-      request.tenant!.id,
-      Number(id),
-      decision,
-      actorUserIdOrNull(request),
-      body.comment
-    );
-    return reply.send({ data });
+    try {
+      const data = await decideTabelAbsenceRequest(
+        request.tenant!.id,
+        Number(id),
+        decision,
+        actorUserIdOrNull(request),
+        body.comment
+      );
+      return reply.send({ data });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "";
+      if (msg === "NOT_FOUND") return sendApiError(reply, request, 404, "NotFound", "Заявка не найдена");
+      if (msg === "ALREADY_DECIDED") return sendApiError(reply, request, 409, "Conflict", "Заявка уже решена");
+      throw e;
+    }
   });
 
   app.delete("/api/:slug/tabel/absence-requests/:id", { preHandler: [jwtAccessVerify] }, async (request, reply) => {
@@ -249,6 +279,9 @@ export async function registerTabelHubRoutes(app: FastifyInstance) {
     if (!ensureTenantContext(request, reply)) return;
     const body = (request.body ?? {}) as { user_id?: number; comment?: string };
     if (!body.user_id) return sendApiError(reply, request, 400, "ValidationError", "Выберите сотрудника");
+    if ((body.comment ?? "").trim().length < 3) {
+      return sendApiError(reply, request, 400, "ValidationError", "Укажите причину");
+    }
     try {
       const data = await createOrSyncClearanceSheet(request.tenant!.id, Number(body.user_id), body.comment);
       return reply.send({ data });
@@ -266,64 +299,6 @@ export async function registerTabelHubRoutes(app: FastifyInstance) {
     return reply.send({ data });
   });
 
-  app.get("/api/:slug/tabel/devices", { preHandler: [jwtAccessVerify] }, async (request, reply) => {
-    if (!ensureTenantContext(request, reply)) return;
-    const items = await listTabelDevices(request.tenant!.id);
-    return reply.send({ data: { items } });
-  });
-
-  app.post("/api/:slug/tabel/devices", { preHandler: [jwtAccessVerify] }, async (request, reply) => {
-    if (!ensureTenantContext(request, reply)) return;
-    const body = (request.body ?? {}) as Parameters<typeof createTabelDevice>[1];
-    if (!body.name?.trim()) return sendApiError(reply, request, 400, "ValidationError", "Название терминала обязательно");
-    const data = await createTabelDevice(request.tenant!.id, body);
-    return reply.send({ data });
-  });
-
-  app.patch("/api/:slug/tabel/devices/:id", { preHandler: [jwtAccessVerify] }, async (request, reply) => {
-    if (!ensureTenantContext(request, reply)) return;
-    const { id } = request.params as { id: string };
-    const body = (request.body ?? {}) as Parameters<typeof updateTabelDevice>[2];
-    const data = await updateTabelDevice(request.tenant!.id, Number(id), body);
-    return reply.send({ data });
-  });
-
-  app.post("/api/:slug/tabel/devices/:id/issue-token", { preHandler: [jwtAccessVerify] }, async (request, reply) => {
-    if (!ensureTenantContext(request, reply)) return;
-    const { id } = request.params as { id: string };
-    try {
-      const data = await issueTabelDeviceToken(request.tenant!.id, Number(id));
-      return reply.send({ data });
-    } catch (err) {
-      if (err instanceof Error && err.message === "NOT_FOUND") {
-        return sendApiError(reply, request, 404, "NotFound", "Терминал не найден");
-      }
-      if (err instanceof Error && err.message === "DEVICE_NOT_LINKED") {
-        return sendApiError(
-          reply,
-          request,
-          409,
-          "DeviceNotLinked",
-          "Токен можно создать только после полного подключения терминала."
-        );
-      }
-      throw err;
-    }
-  });
-
-  app.post("/api/:slug/tabel/devices/:id/sync-faces", { preHandler: [jwtAccessVerify] }, async (request, reply) => {
-    if (!ensureTenantContext(request, reply)) return;
-    const { id } = request.params as { id: string };
-    const data = await syncFacesToTabelDevice(request.tenant!.id, Number(id));
-    return reply.send({ data });
-  });
-
-  app.delete("/api/:slug/tabel/devices/:id", { preHandler: [jwtAccessVerify] }, async (request, reply) => {
-    if (!ensureTenantContext(request, reply)) return;
-    const { id } = request.params as { id: string };
-    const data = await deleteTabelDevice(request.tenant!.id, Number(id));
-    return reply.send({ data });
-  });
 
   app.get("/api/:slug/tabel/analytics", { preHandler: [jwtAccessVerify] }, async (request, reply) => {
     if (!ensureTenantContext(request, reply)) return;

@@ -195,9 +195,7 @@ export function SuppliersReconciliationWorkspace() {
     if (!rec || sid <= 0) return;
     setExporting(true);
     try {
-      const supplierLabel = rec.supplier.code
-        ? `${rec.supplier.name} (${rec.supplier.code})`
-        : rec.supplier.name;
+      const supplierLabel = rec.supplier.name;
       await downloadXlsxSheet(
         `supplier-reconciliation-${sid}-${appliedFrom}-${appliedTo}.xlsx`,
         "Акт сверки",
@@ -223,7 +221,7 @@ export function SuppliersReconciliationWorkspace() {
   const supplierTableLabel = useMemo(() => {
     const r = recQ.data;
     if (!r?.supplier) return "—";
-    return r.supplier.code ? `${r.supplier.name} (${r.supplier.code})` : r.supplier.name;
+    return r.supplier.name;
   }, [recQ.data]);
 
   const filteredLines = useMemo(() => {
@@ -234,6 +232,7 @@ export function SuppliersReconciliationWorkspace() {
       if (isSummaryRow(row.kind) || row.kind === "period_opening") return true;
       const hay = [
         supplierTableLabel,
+        recQ.data?.supplier.code ?? "",
         row.type_label,
         row.label,
         row.payment_method ?? "",
@@ -327,7 +326,7 @@ export function SuppliersReconciliationWorkspace() {
                     {(suppliersQ.data ?? []).map((s) => (
                       <option key={s.id} value={String(s.id)}>
                         {s.name}
-                        {s.code ? ` (${s.code})` : ""}
+
                       </option>
                     ))}
                   </select>

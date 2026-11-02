@@ -18,7 +18,7 @@ export const TABEL_PERMISSION_SECTIONS: PermissionSectionDef[] = [
   {
     module: "tabel",
     section: "otmetki",
-    labelRu: "Журнал отметок и нарушения",
+    labelRu: "Журнал отметок, нарушения и фото терминала",
     actions: ["view", "update", "approve", "export"],
     groupRu: TABEL_GROUP_RU
   },
@@ -62,6 +62,13 @@ export const TABEL_PERMISSION_SECTIONS: PermissionSectionDef[] = [
     section: "statistika",
     labelRu: "Статистика посещаемости",
     actions: ["view", "export"],
+    groupRu: TABEL_GROUP_RU
+  },
+  {
+    module: "tabel",
+    section: "poseshcheniya",
+    labelRu: "Статистика посещений",
+    actions: ["view"],
     groupRu: TABEL_GROUP_RU
   },
   {

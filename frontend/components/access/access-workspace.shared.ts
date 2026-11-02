@@ -270,7 +270,7 @@ export function applyOptimisticOperationDimPatch(
 const dimUserCollator = new Intl.Collator("ru", { sensitivity: "base", numeric: true });
 
 export function dimUserDisplayName(u: DimensionUserRow): string {
-  return u.code ? `[${u.code}] ${u.full_name || u.login}` : u.full_name || u.login;
+  return u.full_name || u.login;
 }
 
 export type DimUserSortKey = "name" | "role" | "position" | "status";

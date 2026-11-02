@@ -261,7 +261,7 @@ export function TimesheetWorkspace() {
       })
       .map((e) => ({
         value: String(e.id),
-        label: e.code ? `${e.fio} (${e.code})` : e.fio,
+        label: e.fio,
         searchText: `${e.fio} ${e.code ?? ""} ${e.login} ${e.role} ${e.branch ?? ""} ${timesheetRoleLabel(e.role)}`
       }));
   }, [filtersQ.data?.employees, draft.roles, draft.branches]);

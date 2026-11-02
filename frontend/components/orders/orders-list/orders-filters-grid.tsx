@@ -283,8 +283,8 @@ export function OrdersFiltersGrid({
           triggerClassName={ordersFilterRowSelect}
           items={(productsFilterQ.data ?? []).map((p) => ({
             id: String(p.id),
-            title: p.sku ? `${p.name} (${p.sku})` : p.name,
-            searchText: p.sku ?? undefined
+            title: p.name,
+            searchText: [p.name, p.sku].filter(Boolean).join(" ") || undefined
           }))}
           value={filterDraft.product_id}
           onChange={(v) => patchDraft({ product_id: v })}

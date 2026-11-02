@@ -12,6 +12,7 @@ import {
 import type { AgentOrdersFilters, TerritoryNode } from "./agent-orders.types";
 import { enrichScopedReportActor } from "../access/access-agent-scope";
 import { buildFilterSql } from "./agent-orders.helpers";
+import { orderBucketsByAmount, resolvedAgentIdSql } from "./agent-orders.agent-sql";
 import { loadWorkplaceMarks, readableAgentName, resolveAgentSmartCode } from "./agent-orders.workplace";
 
 export async function getAgentOrdersReport(
@@ -41,8 +42,8 @@ export async function getAgentOrdersReport(
     base AS (
       SELECT o.id, o.status, o.client_id, o.total_sum, COALESCE(it.qty_sum, 0) AS qty_sum
       FROM orders o
-      LEFT JOIN users u ON u.id = o.agent_id
       LEFT JOIN clients c ON c.id = o.client_id
+      LEFT JOIN users u ON u.id = ${resolvedAgentIdSql}
       LEFT JOIN status_logs sl ON sl.order_id = o.id
       LEFT JOIN item_totals it ON it.order_id = o.id
       WHERE ${whereSql}
@@ -133,7 +134,7 @@ export async function getAgentOrdersReport(
       GROUP BY oi.order_id
     )
     SELECT
-      o.agent_id,
+      ${resolvedAgentIdSql} AS agent_id,
       MAX(u.name) AS agent_name,
       MAX(u.code) AS agent_code,
       COALESCE(SUM(o.total_sum), 0)::numeric(15,2) AS amount_total,
@@ -169,12 +170,12 @@ export async function getAgentOrdersReport(
       COUNT(DISTINCT CASE WHEN o.status = 'returned' THEN o.client_id END)::bigint AS akb_returned,
       COUNT(DISTINCT CASE WHEN o.status = 'return_processing' THEN o.client_id END)::bigint AS akb_return_processing
     FROM orders o
-    LEFT JOIN users u ON u.id = o.agent_id
     LEFT JOIN clients c ON c.id = o.client_id
+    LEFT JOIN users u ON u.id = ${resolvedAgentIdSql}
     LEFT JOIN status_logs sl ON sl.order_id = o.id
     LEFT JOIN item_totals it ON it.order_id = o.id
     WHERE ${whereSql}
-    GROUP BY o.agent_id
+    GROUP BY ${resolvedAgentIdSql}
     ORDER BY amount_total DESC
   `;
 
@@ -199,7 +200,7 @@ export async function getAgentOrdersReport(
       GROUP BY sl.order_id
     )
     SELECT
-      o.agent_id,
+      ${resolvedAgentIdSql} AS agent_id,
       MAX(u.name) AS agent_name,
       MAX(u.code) AS agent_code,
       COALESCE(pc.name, '—') AS bucket,
@@ -211,15 +212,15 @@ export async function getAgentOrdersReport(
     JOIN order_items oi ON oi.order_id = o.id
     JOIN products p ON p.id = oi.product_id
     LEFT JOIN product_categories pc ON pc.id = p.category_id
-    LEFT JOIN users u ON u.id = o.agent_id
     LEFT JOIN clients c ON c.id = o.client_id
+    LEFT JOIN users u ON u.id = ${resolvedAgentIdSql}
     LEFT JOIN status_logs sl ON sl.order_id = o.id
     WHERE ${whereSql}
-    GROUP BY o.agent_id, pc.name
-    ORDER BY o.agent_id, bucket
+    GROUP BY ${resolvedAgentIdSql}, pc.name
+    ORDER BY bucket
   `;
 
-  const bySegment = await prisma.$queryRaw<
+  const byProduct = await prisma.$queryRaw<
     Array<{
       agent_id: number | null;
       agent_name: string | null;
@@ -240,10 +241,10 @@ export async function getAgentOrdersReport(
       GROUP BY sl.order_id
     )
     SELECT
-      o.agent_id,
+      ${resolvedAgentIdSql} AS agent_id,
       MAX(u.name) AS agent_name,
       MAX(u.code) AS agent_code,
-      COALESCE(ps.name, '—') AS bucket,
+      MAX(COALESCE(NULLIF(btrim(p.name), ''), '—')) AS bucket,
       COALESCE(SUM(oi.total), 0)::numeric(15,2) AS amount,
       COUNT(DISTINCT o.id)::bigint AS qty,
       COALESCE(SUM(oi.qty), 0)::numeric(15,3) AS volume,
@@ -251,13 +252,12 @@ export async function getAgentOrdersReport(
     FROM orders o
     JOIN order_items oi ON oi.order_id = o.id
     JOIN products p ON p.id = oi.product_id
-    LEFT JOIN product_segments ps ON ps.id = p.segment_id
-    LEFT JOIN users u ON u.id = o.agent_id
     LEFT JOIN clients c ON c.id = o.client_id
+    LEFT JOIN users u ON u.id = ${resolvedAgentIdSql}
     LEFT JOIN status_logs sl ON sl.order_id = o.id
     WHERE ${whereSql}
-    GROUP BY o.agent_id, ps.name
-    ORDER BY o.agent_id, bucket
+    GROUP BY ${resolvedAgentIdSql}, p.id
+    ORDER BY bucket
   `;
 
   const toMatrix = (
@@ -305,7 +305,7 @@ export async function getAgentOrdersReport(
   const agentIds = [
     ...byAgent.map((r) => r.agent_id),
     ...byCategory.map((r) => r.agent_id),
-    ...bySegment.map((r) => r.agent_id)
+    ...byProduct.map((r) => r.agent_id)
   ].filter((id): id is number => id != null);
   const [marks, people] = await Promise.all([
     loadWorkplaceMarks(tenantId, agentIds),
@@ -366,6 +366,6 @@ export async function getAgentOrdersReport(
       akb_return_processing: Number(r.akb_return_processing)
     })),
     category_matrix: toMatrix(byCategory),
-    segment_matrix: toMatrix(bySegment)
+    product_matrix: orderBucketsByAmount(toMatrix(byProduct))
   };
 }

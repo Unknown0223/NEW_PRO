@@ -189,14 +189,15 @@ export function ClientReconciliationWorkspace() {
   const clientOptions: FilterSearchableOption[] = useMemo(() => {
     const rows = (clientsQ.data ?? []).map((c) => ({
       value: String(c.id),
-      label: c.client_code ? `${c.name} (${c.client_code})` : c.name
+      label: c.name,
+      searchText: c.client_code ?? undefined
     }));
     const draft = clientDraft.trim();
     if (reportQ.data && draft === String(reportQ.data.client.id)) {
       const p = reportQ.data.client;
-      const label = p.client_code ? `${p.name} (${p.client_code})` : p.name;
+      const label = p.name;
       if (!rows.some((r) => r.value === draft)) {
-        return [{ value: draft, label }, ...rows];
+        return [{ value: draft, label, searchText: p.client_code ?? undefined }, ...rows];
       }
     }
     return rows;

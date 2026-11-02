@@ -156,7 +156,7 @@ export function ClientSalesSdcWorkspace() {
   const opts = filtersQ.data;
   const asOpt = (rows: Array<{ id: string | number; title: string }>): Opt[] => rows.map((r) => ({ id: String(r.id), title: r.title }));
   const statusItems = (opts?.statuses ?? []).map((x) => ({ id: x.id, title: x.label }));
-  const productItems = (opts?.products ?? []).map((x) => ({ id: String(x.id), title: x.sku ? `${x.name} (${x.sku})` : x.name }));
+  const productItems = (opts?.products ?? []).map((x) => ({ id: String(x.id), title: x.name, searchText: [x.name, x.sku].filter(Boolean).join(" ") }));
   const cards = useMemo(() => categoryCards(reportQ.data?.category_summary ?? []), [reportQ.data?.category_summary]);
 
   const q = search.trim().toLowerCase();
@@ -251,8 +251,8 @@ export function ClientSalesSdcWorkspace() {
           <Multi placeholder="Продукт" searchPlaceholder="Поиск продукта" items={productItems} values={draft.product_ids} onChange={(product_ids) => setDraft({ ...draft, product_ids })} />
           <Multi placeholder="Группа товаров" searchPlaceholder="Поиск группы" items={asOpt((opts?.groups ?? []).map((x) => ({ id: x.id, title: x.name })))} values={draft.product_group_ids} onChange={(product_group_ids) => setDraft({ ...draft, product_group_ids })} />
           <Multi placeholder="День визита" searchPlaceholder="Выберите дни" items={(opts?.day_visit_options ?? []).map((x) => ({ id: String(x.id), title: x.label }))} values={draft.day_visit_iso} onChange={(day_visit_iso) => setDraft({ ...draft, day_visit_iso })} />
-          <Multi placeholder="Супервайзер" searchPlaceholder="Поиск супервайзера" items={(opts?.supervisors ?? []).map((x) => ({ id: String(x.id), title: x.code ? `${x.name} (${x.code})` : x.name }))} values={draft.supervisor_ids} onChange={(supervisor_ids) => setDraft({ ...draft, supervisor_ids })} />
-          <Multi placeholder="Агент" searchPlaceholder="Поиск агента" items={(opts?.agents ?? []).map((x) => ({ id: String(x.id), title: x.code ? `${x.name} (${x.code})` : x.name }))} values={draft.agent_ids} onChange={(agent_ids) => setDraft({ ...draft, agent_ids })} />
+          <Multi placeholder="Супервайзер" searchPlaceholder="Поиск супервайзера" items={(opts?.supervisors ?? []).map((x) => ({ id: String(x.id), title: x.name, searchText: [x.name, x.code].filter(Boolean).join(" ") }))} values={draft.supervisor_ids} onChange={(supervisor_ids) => setDraft({ ...draft, supervisor_ids })} />
+          <Multi placeholder="Агент" searchPlaceholder="Поиск агента" items={(opts?.agents ?? []).map((x) => ({ id: String(x.id), title: x.name, searchText: [x.name, x.code].filter(Boolean).join(" ") }))} values={draft.agent_ids} onChange={(agent_ids) => setDraft({ ...draft, agent_ids })} />
           <Multi placeholder="Категория клиента" searchPlaceholder="Поиск категории клиента" items={(opts?.client_categories ?? []).map((x) => ({ id: x, title: x }))} values={draft.client_categories} onChange={(client_categories) => setDraft({ ...draft, client_categories })} />
           <Multi placeholder="Тип цен" searchPlaceholder="Поиск типа цен" items={(opts?.price_type_options ?? (opts?.price_types ?? []).map((x) => ({ id: x, label: x }))).map((x) => ({ id: x.id, title: x.label }))} values={draft.price_types} onChange={(price_types) => setDraft({ ...draft, price_types })} />
           <Multi placeholder="Сегменты" searchPlaceholder="Поиск сегмента" items={asOpt((opts?.segments ?? []).map((x) => ({ id: x.id, title: x.name })))} values={draft.segment_ids} onChange={(segment_ids) => setDraft({ ...draft, segment_ids })} />

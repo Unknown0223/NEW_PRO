@@ -46,7 +46,7 @@ export function isAccessScopeTab(tab: AccessUserDetailTab): tab is ScopeTab {
   return tab in SCOPE_META;
 }
 
-type Item = { id: string; label: string; sub?: string };
+type Item = { id: string; label: string; sub?: string; searchText?: string };
 
 function useScopeLabels(tenantSlug: string, tab: ScopeTab) {
   const dimType = tab === "territories" || tab === "staff" ? null : tab;
@@ -93,8 +93,9 @@ export function AccessUserScopeSummary({ vm, tab, readOnly }: { vm: AccessUserDe
     if (tab === "staff") {
       return (detail?.supervisees ?? []).map((s) => ({
         id: String(s.id),
-        label: `${s.code ? `[${s.code}] ` : ""}${s.name || s.login}`,
-        sub: accessRoleLabel(s.role)
+        label: s.name || s.login,
+        sub: accessRoleLabel(s.role),
+        searchText: s.code ?? undefined
       }));
     }
     const scope = detail?.scope;
@@ -120,7 +121,11 @@ export function AccessUserScopeSummary({ vm, tab, readOnly }: { vm: AccessUserDe
   }, [tab, detail, labelsQ.data]);
 
   const q = search.trim().toLocaleLowerCase("ru");
-  const shown = q ? items.filter((i) => i.label.toLocaleLowerCase("ru").includes(q) || i.sub?.toLocaleLowerCase("ru").includes(q)) : items;
+  const shown = q
+    ? items.filter((i) =>
+        `${i.label} ${i.sub ?? ""} ${i.searchText ?? ""}`.toLocaleLowerCase("ru").includes(q)
+      )
+    : items;
   const loadingNames = tab !== "staff" && items.length > 0 && labelsQ.isLoading;
   const serverIds = useMemo(() => items.map((i) => i.id), [items]);
   const serverKey = serverIds.join("\n");

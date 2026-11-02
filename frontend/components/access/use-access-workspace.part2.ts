@@ -127,7 +127,7 @@ export function useAccessWorkspacePart2(ctx: ReturnType<typeof useAccessWorkspac
     if (tab === "users") {
       return rows.map((r) => ({
         key: String(r.id),
-        title: r.code ? `[${r.code}] ${r.full_name || r.login}` : r.full_name || r.login,
+        title: r.full_name || r.login,
         subtitle: `${r.role} · ${r.operations_count} операций`,
         meta: r.status === "active" ? "Активный" : "Неактивный",
         idLine: String(r.id),
@@ -154,11 +154,12 @@ export function useAccessWorkspacePart2(ctx: ReturnType<typeof useAccessWorkspac
   const filteredSideRows = useMemo(() => {
     const q = search.trim().toLowerCase();
     return sideRows.filter((r) => {
-      const matchesSearch = !q || `${r.title} ${r.subtitle}`.toLowerCase().includes(q);
+      const code = tab === "users" ? (rows.find((u) => String(u.id) === r.key)?.code ?? "") : "";
+      const matchesSearch = !q || `${r.title} ${r.subtitle} ${code}`.toLowerCase().includes(q);
       const matchesStatus = status === "active" ? r.is_active : !r.is_active;
       return matchesSearch && matchesStatus;
     });
-  }, [sideRows, search, status]);
+  }, [sideRows, search, status, tab, rows]);
 
   function isNestedOperationRow(row: SideRow): boolean {
     return tab === "operations" && Boolean(row.subgroup);

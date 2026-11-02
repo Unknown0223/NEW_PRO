@@ -129,7 +129,7 @@ export function PayrollBonusTable({ rows, planRows, groupFilter, loading, editab
                 </td>
                 <td className={TD}>
                   <div className={cn("flex items-baseline gap-2", !r.is_active && "text-muted-foreground line-through")}>
-                    <span className="text-[13px] font-medium">{r.code ? `${r.code} ${r.fio}` : r.fio}</span>
+                    <span className="text-[13px] font-medium">{r.fio}</span>
                     <span className="text-[11px] text-muted-foreground">{roleLabel(r.role)}</span>
                   </div>
                 </td>

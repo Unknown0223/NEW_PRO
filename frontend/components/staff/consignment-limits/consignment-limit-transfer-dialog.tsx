@@ -126,12 +126,18 @@ export function ConsignmentLimitTransferDialog({ open, onClose, tenantSlug, trad
   ];
   const fromOptions = agents
     .filter((a) => a.consignment_limit_amount != null)
-    .map((a) => ({ value: String(a.id), label: agentLabel(a), hint: `Лимит ${sum(a.consignment_limit_amount)} · свободно ${sum(a.remaining_limit)}` }));
+    .map((a) => ({
+      value: String(a.id),
+      label: agentLabel(a),
+      searchText: a.work_slot_code ?? a.code ?? undefined,
+      hint: `Лимит ${sum(a.consignment_limit_amount)} · свободно ${sum(a.remaining_limit)}`
+    }));
   const toOptions = agents
     .filter((a) => String(a.id) !== fromId)
     .map((a) => ({
       value: String(a.id),
       label: agentLabel(a),
+      searchText: a.work_slot_code ?? a.code ?? undefined,
       hint: a.consignment_limit_amount != null ? `Лимит ${sum(a.consignment_limit_amount)}` : "Лимит не задан"
     }));
 

@@ -30,10 +30,10 @@ type Props = {
 type CatRow = { id: number; name: string; code: string | null };
 type RefRow = { id: number; name: string; code?: string | null };
 
-function toOptions(rows: RefRow[], withCode = false): SelectOption[] {
+function toOptions(rows: RefRow[], _withCode = false): SelectOption[] {
   return rows.map((r) => ({
     value: String(r.id),
-    label: withCode && r.code ? `${r.name} (${r.code})` : r.name
+    label: r.name
   }));
 }
 

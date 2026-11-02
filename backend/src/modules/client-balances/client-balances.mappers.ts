@@ -71,7 +71,7 @@ export function mapClientRow(
   if (lastPay) daysSincePay = daySpan(lastPay);
 
   const tags: string[] = [];
-  if (ag?.name) tags.push(ag.code ? `${ag.name} (${ag.code})` : ag.name);
+  if (ag?.name) tags.push(ag.name);
 
   const lastOrdOut =
     onOrBefore(deliveryOverride?.lastDel) ??
@@ -131,7 +131,7 @@ export function mapDeliveryOrderRow(
     ag?.trade_direction_row?.name?.trim() ||
     null;
   const tags: string[] = [];
-  if (ag?.name) tags.push(ag.code ? `${ag.name} (${ag.code})` : ag.name);
+  if (ag?.name) tags.push(ag.name);
 
   const clock = asOf?.getTime() ?? Date.now();
   const daySpan = (from: Date) => {

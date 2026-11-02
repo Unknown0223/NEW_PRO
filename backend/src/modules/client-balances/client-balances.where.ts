@@ -15,6 +15,8 @@ import {
   clientWhereForZoneFilter,
   loadClientTerritoryFilterBundle
 } from "../clients/clients.territory-filter";
+import { loadBranchLabelSources } from "../tenant-settings/tenant-settings.refs";
+import { expandBranchFilterKeys } from "../tenant-settings/branch-display.pure";
 
 /** Balanslar ro‘yxati: `search` — tashqi kod, aniq id yoki matn. */
 export function buildClientBalanceSearchOrClause(searchRaw: string): Prisma.ClientWhereInput[] {
@@ -173,13 +175,11 @@ export async function buildClientWhere(
   else if (ac === "regular") andParts.push({ agent: { consignment: false } });
 
   const brs = q.agent_branches?.filter((b) => b.trim() !== "") ?? [];
-  if (brs.length > 0) {
-    andParts.push({ agent: { branch: { in: brs } } });
-  } else {
-    const br = q.agent_branch?.trim();
-    if (br) {
-      andParts.push({ agent: { branch: br } });
-    }
+  const singleBranch = q.agent_branch?.trim();
+  const selectedBranches = brs.length > 0 ? brs : singleBranch ? [singleBranch] : [];
+  if (selectedBranches.length > 0) {
+    const keys = expandBranchFilterKeys(selectedBranches, await loadBranchLabelSources(tenantId));
+    andParts.push({ agent: { branch: { in: keys } } });
   }
 
   if (q.consignment_due_from?.trim() || q.consignment_due_to?.trim()) {

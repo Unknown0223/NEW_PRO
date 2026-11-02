@@ -214,7 +214,6 @@ export function AccessUsersSidebar({
                       <div className="min-w-0 flex-1">
                         <div className="truncate text-[13px] font-semibold text-teal-700 dark:text-teal-300">{r.login}</div>
                         <div className="truncate text-xs text-muted-foreground">
-                          {r.code ? `[${r.code}] ` : ""}
                           {r.full_name || "—"}
                         </div>
                       </div>

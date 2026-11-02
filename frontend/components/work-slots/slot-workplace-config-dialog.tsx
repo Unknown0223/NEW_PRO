@@ -572,7 +572,7 @@ export function SlotWorkplaceConfigDialog({
               >
                 {(tradeDirectionsQ.data ?? []).map((d) => (
                   <option key={d.id} value={String(d.id)}>
-                    {d.code ? `${d.name} (${d.code})` : d.name}
+                    {d.name}
                   </option>
                 ))}
               </FilterSelect>

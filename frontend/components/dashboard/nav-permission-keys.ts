@@ -137,6 +137,7 @@ export const NAV_PERM = {
   tabelOvertimeRequests: ["tabel.zayavki.view", "staff.tabel.view"],
   tabelClearanceSheets: ["tabel.obhodnye.view", "staff.sotrudniki.view"],
   tabelAnalytics: ["staff.tabel.view", "tabel.otmetki.view", "tabel.statistika.view"],
+  tabelVisits: ["tabel.poseshcheniya.view", "tabel.statistika.view", "tabel.otmetki.view", "staff.tabel.view"],
   tabelDevices: ["tabel.ustroystva.view"],
   staffTasks: ["staff.zadachi_spisok.view"],
   staffTaskTypes: ["settings.tipy_zadach.view"],

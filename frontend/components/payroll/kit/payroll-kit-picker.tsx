@@ -5,7 +5,7 @@ import { Calendar, Check, ChevronDown, ChevronLeft, ChevronRight, Search } from 
 import { currentYm, type Ym } from "@/lib/payroll/payroll-api";
 import { cn } from "@/lib/utils";
 
-export type PickOption = { value: string; label: string; hint?: string };
+export type PickOption = { value: string; label: string; hint?: string; searchText?: string };
 type Side = "top" | "bottom";
 
 const PANEL =
@@ -103,7 +103,7 @@ export function PayrollPickSelect({
   const current = options.find((o) => o.value === value);
   const list = useMemo(() => {
     const s = q.trim().toLowerCase();
-    return s ? options.filter((o) => o.label.toLowerCase().includes(s)) : options;
+    return s ? options.filter((o) => `${o.label} ${o.searchText ?? ""}`.toLowerCase().includes(s)) : options;
   }, [options, q]);
   const pick = (v: string) => {
     onChange(v);

@@ -351,6 +351,7 @@ export const dashboardTabelNav: {
       title: "АНАЛИТИКА И УСТРОЙСТВА",
       items: [
         { href: "/tabel/analytics", label: "Статистика посещаемости", showIfAnyPermission: [...NAV_PERM.tabelAnalytics] },
+        { href: "/tabel/visits", label: "Статистика посещений", showIfAnyPermission: [...NAV_PERM.tabelVisits] },
         { href: "/tabel/devices", label: "Терминалы Face ID и киоск", showIfAnyPermission: [...NAV_PERM.tabelDevices] }
       ]
     }

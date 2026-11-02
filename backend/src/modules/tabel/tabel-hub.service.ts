@@ -5,6 +5,13 @@
 import type { Prisma } from "@prisma/client";
 import { prisma } from "../../config/database";
 import { toFio } from "../staff/staff.shared.helpers";
+import { loadBranchLabelSources } from "../tenant-settings/tenant-settings.refs";
+import {
+  branchLabelLookup,
+  branchVisibleName,
+  expandBranchFilterKeys
+} from "../tenant-settings/branch-display.pure";
+import { punchProblemLabels } from "./tabel-problem-reasons.pure";
 import { mergeTabelAudit, readTabelAudit } from "./tabel-audit";
 import {
   maskTabelSettingsForClient,
@@ -106,7 +113,29 @@ export async function listTabelMarks(
       where.work_date.lte = new Date(`${filters.to}T00:00:00.000Z`);
     }
   }
+  const branchNames = (filters.branch ?? "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  const branchCatalog = await loadBranchLabelSources(tenantId);
+  const branchLookup = branchLabelLookup(branchCatalog);
+  const branchKeys = expandBranchFilterKeys(branchNames, branchCatalog);
   if (filters.user_id) where.user_id = filters.user_id;
+  if (branchKeys.length > 0) {
+    const inBranches = await prisma.user.findMany({
+      where: {
+        tenant_id: tenantId,
+        OR: branchKeys.flatMap((name) => [
+          { branch: { equals: name, mode: "insensitive" as const } },
+          { branch_links: { some: { branch_code: { equals: name, mode: "insensitive" as const } } } }
+        ])
+      },
+      select: { id: true }
+    });
+    const ids = inBranches.map((u) => u.id);
+    const allowed = filters.user_id ? ids.filter((id) => id === filters.user_id) : ids;
+    where.user_id = { in: allowed.length ? allowed : [-1] };
+  }
   if (filters.source) where.source = filters.source;
   if (filters.only_problems) {
     where.OR = [
@@ -143,7 +172,6 @@ export async function listTabelMarks(
 
   const userMap = new Map(users.map((u) => [u.id, u]));
   const locMap = new Map(locations.map((l) => [l.id, l]));
-  const branchFilter = filters.branch?.trim().toLowerCase();
 
   return punches
     .map((p) => {
@@ -154,17 +182,46 @@ export async function listTabelMarks(
         work_date_ymd: p.work_date.toISOString().slice(0, 10),
         user_fio: u ? toFio(u) : `User #${p.user_id}`,
         user_role: u?.role ?? "—",
-        user_branch: u?.branch ?? null,
+        user_branch: branchVisibleName(u?.branch ?? null, branchLookup),
         user_login: u?.login ?? "—",
         user_code: u?.code ?? null,
         location_name: loc?.name ?? null,
         has_photo_front: Boolean(p.photo_front_key),
         has_photo_back: Boolean(p.photo_back_key),
         has_video_front: Boolean(p.video_front_key),
-        has_video_back: Boolean(p.video_back_key)
+        has_video_back: Boolean(p.video_back_key),
+        problem_reasons: punchProblemLabels(p)
       };
-    })
-    .filter((row) => !branchFilter || (row.user_branch ?? "").toLowerCase() === branchFilter);
+    });
+}
+
+const MEDIA_SLOTS = ["photo_front", "photo_back", "video_front", "video_back"] as const;
+export type TabelMediaSlot = (typeof MEDIA_SLOTS)[number];
+
+export function isTabelMediaSlot(slot: string): slot is TabelMediaSlot {
+  return (MEDIA_SLOTS as readonly string[]).includes(slot);
+}
+
+/** Bitta otmetkaning rasm yoki video kaliti. Ro‘yxatni yuklamaydi. */
+export async function getTabelPunchMediaKey(
+  tenantId: number,
+  punchId: number,
+  slot: TabelMediaSlot
+): Promise<string | null> {
+  const row = await prisma.attendancePunch.findFirst({
+    where: { id: punchId, tenant_id: tenantId },
+    select: {
+      photo_front_key: true,
+      photo_back_key: true,
+      video_front_key: true,
+      video_back_key: true
+    }
+  });
+  if (!row) return null;
+  if (slot === "photo_back") return row.photo_back_key;
+  if (slot === "video_front") return row.video_front_key;
+  if (slot === "video_back") return row.video_back_key;
+  return row.photo_front_key;
 }
 
 export async function listTabelShifts(tenantId: number) {

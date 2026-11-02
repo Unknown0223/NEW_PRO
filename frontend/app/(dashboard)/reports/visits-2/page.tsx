@@ -221,7 +221,7 @@ export default function ReportVisits2Page() {
 
   const agentItems = (opts?.agents ?? []).map((x) => ({
     id: String(x.id),
-    title: `${x.name}${x.code ? ` (${x.code})` : ""}`
+    title: x.name, searchText: [x.name, x.code].filter(Boolean).join(" ")
   }));
   const clientCatItems = (opts?.client_categories ?? []).map((x) => ({ id: x, title: x }));
   const productCatItems = (opts?.product_categories ?? []).map((x) => ({ id: x, title: x }));

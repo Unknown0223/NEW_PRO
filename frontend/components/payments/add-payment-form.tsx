@@ -466,7 +466,7 @@ export function AddPaymentForm({
                 {(agentsQ.data ?? []).map((a) => (
                   <option key={a.id} value={String(a.id)}>
                     {a.fio}
-                    {a.code ? ` (${a.code})` : ""}
+
                   </option>
                 ))}
               </FilterSelect>
@@ -529,7 +529,7 @@ export function AddPaymentForm({
                 {(agentsQ.data ?? []).map((a) => (
                   <option key={a.id} value={String(a.id)}>
                     {a.fio}
-                    {a.code ? ` (${a.code})` : ""}
+
                   </option>
                 ))}
               </FilterSelect>

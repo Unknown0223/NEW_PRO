@@ -586,16 +586,8 @@ function StockPageContent() {
                       const p = products.find((x) => String(x.id) === line.product_id);
                       return (
                         <div key={line.product_id} className="grid grid-cols-[1fr_auto] items-center gap-2 py-1">
-                          <span className="truncate text-sm" title={p ? `${p.sku} — ${p.name}` : line.product_id}>
-                            {p ? (
-                              <>
-                                <span className="font-mono text-xs">{p.sku}</span>
-                                <span className="text-muted-foreground"> — </span>
-                                {p.name}
-                              </>
-                            ) : (
-                              line.product_id
-                            )}
+                          <span className="truncate text-sm" title={p?.name || line.product_id}>
+                            {p ? p.name : line.product_id}
                           </span>
                           <Input
                             className="h-9 w-28"

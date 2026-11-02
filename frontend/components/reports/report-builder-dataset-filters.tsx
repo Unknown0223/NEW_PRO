@@ -122,7 +122,7 @@ export function ReportBuilderDatasetFiltersPanel({
         }
         return true;
       })
-      .map((a) => ({ id: String(a.id), title: a.code ? `${a.code} — ${a.name}` : a.name }));
+      .map((a) => ({ id: String(a.id), title: a.name, searchText: [a.name, a.code].filter(Boolean).join(" ") }));
   }, [
     filterOptions?.agents,
     filters.supervisorUserIds,
@@ -147,7 +147,7 @@ export function ReportBuilderDatasetFiltersPanel({
         }
         return true;
       })
-      .map((p) => ({ id: String(p.id), title: `${p.sku} — ${p.name}` }));
+      .map((p) => ({ id: String(p.id), title: p.name, searchText: [p.name, p.sku].filter(Boolean).join(" ") }));
   }, [filterOptions?.products, filters.categoryIds, filters.productGroupIds, filters.brandIds]);
 
   const territory1Items = useMemo(() => {
@@ -312,7 +312,7 @@ export function ReportBuilderDatasetFiltersPanel({
               placeholder="Группа"
               items={(filterOptions?.product_groups ?? []).map((g) => ({
                 id: String(g.id),
-                title: g.code ? `${g.code} — ${g.name}` : g.name
+                title: g.name, searchText: [g.name, g.code].filter(Boolean).join(" ")
               }))}
               selected={filters.productGroupIds.map(String)}
               onChange={(ids) =>
@@ -340,7 +340,7 @@ export function ReportBuilderDatasetFiltersPanel({
               placeholder="Склад"
               items={(filterOptions?.warehouses ?? []).map((w) => ({
                 id: String(w.id),
-                title: w.code ? `${w.code} — ${w.name}` : w.name
+                title: w.name, searchText: [w.name, w.code].filter(Boolean).join(" ")
               }))}
               selected={filters.warehouseIds.map(String)}
               onChange={(ids) => onFiltersChange((f) => ({ ...f, warehouseIds: numSelected(ids) }))}
@@ -349,7 +349,7 @@ export function ReportBuilderDatasetFiltersPanel({
               placeholder="Экспедитор"
               items={(filterOptions?.expeditors ?? []).map((u) => ({
                 id: String(u.id),
-                title: u.code ? `${u.code} — ${u.name}` : u.name
+                title: u.name, searchText: [u.name, u.code].filter(Boolean).join(" ")
               }))}
               selected={filters.expeditorUserIds.map(String)}
               onChange={(ids) => onFiltersChange((f) => ({ ...f, expeditorUserIds: numSelected(ids) }))}
@@ -358,7 +358,7 @@ export function ReportBuilderDatasetFiltersPanel({
               placeholder="Бренд"
               items={(filterOptions?.brands ?? []).map((b) => ({
                 id: String(b.id),
-                title: b.code ? `${b.code} — ${b.name}` : b.name
+                title: b.name, searchText: [b.name, b.code].filter(Boolean).join(" ")
               }))}
               selected={filters.brandIds.map(String)}
               onChange={(ids) => onFiltersChange((f) => ({ ...f, brandIds: numSelected(ids) }))}
@@ -391,7 +391,7 @@ export function ReportBuilderDatasetFiltersPanel({
               placeholder="Супервайзер"
               items={(filterOptions?.supervisors ?? []).map((u) => ({
                 id: String(u.id),
-                title: u.code ? `${u.code} — ${u.name}` : u.name
+                title: u.name, searchText: [u.name, u.code].filter(Boolean).join(" ")
               }))}
               selected={filters.supervisorUserIds.map(String)}
               onChange={(ids) => onFiltersChange((f) => ({ ...f, supervisorUserIds: numSelected(ids) }))}
@@ -400,7 +400,7 @@ export function ReportBuilderDatasetFiltersPanel({
               placeholder="Направление"
               items={(filterOptions?.trade_directions ?? []).map((t) => ({
                 id: String(t.id),
-                title: t.code ? `${t.code} — ${t.name}` : t.name
+                title: t.name, searchText: [t.name, t.code].filter(Boolean).join(" ")
               }))}
               selected={filters.tradeDirectionIds.map(String)}
               onChange={(ids) => onFiltersChange((f) => ({ ...f, tradeDirectionIds: numSelected(ids) }))}
@@ -409,7 +409,7 @@ export function ReportBuilderDatasetFiltersPanel({
               placeholder="KPI"
               items={(filterOptions?.kpi_groups ?? []).map((g) => ({
                 id: String(g.id),
-                title: g.code ? `${g.code} — ${g.name}` : g.name
+                title: g.name, searchText: [g.name, g.code].filter(Boolean).join(" ")
               }))}
               selected={filters.kpiGroupIds.map(String)}
               onChange={(ids) => onFiltersChange((f) => ({ ...f, kpiGroupIds: numSelected(ids) }))}
@@ -418,7 +418,7 @@ export function ReportBuilderDatasetFiltersPanel({
               placeholder="Клиент"
               items={(filterOptions?.clients ?? []).map((c) => ({
                 id: String(c.id),
-                title: c.code ? `${c.code} — ${c.name}` : c.name
+                title: c.name, searchText: [c.name, c.code].filter(Boolean).join(" ")
               }))}
               selected={filters.clientIds.map(String)}
               onChange={(ids) => onFiltersChange((f) => ({ ...f, clientIds: numSelected(ids) }))}

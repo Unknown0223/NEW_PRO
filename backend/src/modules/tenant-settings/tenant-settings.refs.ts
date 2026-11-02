@@ -378,3 +378,13 @@ export async function mapWarehouseIdToBranchName(tenantId: number): Promise<Map<
   }
   return m;
 }
+
+/** Настройки → Филиалы. Tanlov va filtr shu katalogdan nom oladi. */
+export async function loadBranchLabelSources(tenantId: number): Promise<BranchDto[]> {
+  const row = await prisma.tenant.findUnique({
+    where: { id: tenantId },
+    select: { settings: true }
+  });
+  const ref = asRecord(asRecord(row?.settings).references);
+  return branchesFromUnknown(ref.branches);
+}

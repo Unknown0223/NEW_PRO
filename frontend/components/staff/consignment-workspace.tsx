@@ -953,7 +953,7 @@ export function ConsignmentWorkspace({ tenantSlug }: { tenantSlug: string }) {
                     tradeDirectionsQ.rows as Array<{ id: number; name: string; code: string | null }>
                   ).map((td) => (
                     <option key={td.id} value={String(td.id)}>
-                      {td.code?.trim() ? `${td.name} (${td.code})` : td.name}
+                      {td.name}
                     </option>
                   ))}
                 </FilterSelect>

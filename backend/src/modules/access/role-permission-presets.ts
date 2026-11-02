@@ -58,9 +58,10 @@ function tabelLeadView(): string[] {
     secOnly("staff", "tabel", ["view"]),
     secOnly("tabel", "otmetki", ["view"]),
     secOnly("tabel", "statistika", ["view"]),
+    secOnly("tabel", "poseshcheniya", ["view"]),
     secOnly("tabel", "zayavki", ["view", "create", "approve"]),
     secOnly("tabel", "smeny", ["view"]),
-    secOnly("tabel", "ustroystva", ["assign"])
+    secOnly("tabel", "ustroystva", ["view", "assign"])
   );
 }
 
@@ -189,6 +190,7 @@ const PRESET_BUILDERS: Record<string, () => string[]> = {
       secOnly("staff", "tabel", ["view", "history"]),
       secOnly("staff", "tabel_normativ", ["view"]),
       secOnly("tabel", "statistika", ["view"]),
+      secOnly("tabel", "poseshcheniya", ["view"]),
       secOnly("tabel", "otmetki", ["view"]),
       secOnly("tabel", "zayavki", ["view"]),
       secOnly("tabel", "obhodnye", ["view"])

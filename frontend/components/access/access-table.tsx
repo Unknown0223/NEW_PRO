@@ -104,7 +104,6 @@ export function AccessTable({
                 </td>
                 <td className="min-w-0 px-2 py-1.5">
                   <span className="text-sm">
-                    {item.code ? `[${item.code}] ` : ""}
                     {item.full_name || item.login}
                   </span>
                 </td>

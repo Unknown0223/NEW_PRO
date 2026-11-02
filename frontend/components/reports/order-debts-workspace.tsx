@@ -291,9 +291,7 @@ function staffDebtLabel(name: string | null | undefined, code: string | null | u
   const n = (name ?? "").trim();
   const c = (code ?? "").trim();
   if (!n && !c) return "—";
-  if (!c) return n;
-  if (!n) return c;
-  return `${n} (${c})`;
+  return n || c;
 }
 
 async function copyToClipboard(text: string): Promise<boolean> {
@@ -620,7 +618,7 @@ export function OrderDebtsWorkspace() {
       (clientsPickerQ.data ?? []).map((c) => ({
         id: c.id,
         title: c.name,
-        subtitle: c.client_code ? String(c.client_code) : String(c.id)
+        searchText: [c.name, c.client_code, c.id].filter(Boolean).join(" ")
       })),
     [clientsPickerQ.data]
   );

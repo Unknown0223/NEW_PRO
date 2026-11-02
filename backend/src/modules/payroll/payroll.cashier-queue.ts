@@ -9,6 +9,7 @@ import {
   loadTenantBranches,
   type AdvanceActor
 } from "./payroll.advances.shared";
+import { branchLabelLookup, branchVisibleName } from "../tenant-settings/branch-display.pure";
 import { PayrollError } from "./payroll.route-helpers";
 
 export type QueueRow = {
@@ -44,6 +45,8 @@ export async function listCashierQueue(tenantId: number, actor: AdvanceActor, op
   ]);
   const visibleBranches = deskIds == null ? branches : branches.filter((b) => branchCashDeskIds(b).some((d) => deskIds.includes(d)));
   const branchFor = (value: string | null) => branches.find((b) => branchMatches(b, value)) ?? null;
+  const branchLookup = branchLabelLookup(branches);
+  const showBranch = (value: string | null) => branchVisibleName(value, branchLookup);
   const allowed = (value: string | null) => deskIds == null || visibleBranches.some((b) => branchMatches(b, value));
 
   const [advances, records] = await Promise.all([
@@ -82,7 +85,7 @@ export async function listCashierQueue(tenantId: number, actor: AdvanceActor, op
       fio: u?.fio ?? `#${a.user_id}`,
       code: u?.code ?? null,
       role: u?.role ?? null,
-      branch,
+      branch: showBranch(branch),
       year: a.year,
       month: a.month,
       amount: Number(a.amount),
@@ -106,7 +109,7 @@ export async function listCashierQueue(tenantId: number, actor: AdvanceActor, op
       fio: u?.fio ?? `#${r.user_id}`,
       code: u?.code ?? null,
       role: r.role ?? u?.role ?? null,
-      branch,
+      branch: showBranch(branch),
       year: r.year,
       month: r.month,
       amount: Number(r.balance),

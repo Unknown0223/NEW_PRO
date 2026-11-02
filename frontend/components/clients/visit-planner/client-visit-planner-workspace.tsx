@@ -309,7 +309,7 @@ export function ClientVisitPlannerWorkspace() {
       (warehousesQ.data ?? []).map((w, i) => ({
         value: String(w.id),
         label: w.name?.trim() || `#${w.id}`,
-        subtitle: w.code?.trim() || undefined,
+        subtitle: undefined,
         color: staffColor(i + 5),
         searchText: w.code ?? undefined
       })),
@@ -320,7 +320,7 @@ export function ClientVisitPlannerWorkspace() {
       (cashDesksQ.data ?? []).map((d, i) => ({
         value: String(d.id),
         label: d.name?.trim() || `#${d.id}`,
-        subtitle: d.code?.trim() || undefined,
+        subtitle: undefined,
         color: staffColor(i + 7),
         searchText: d.code ?? undefined
       })),

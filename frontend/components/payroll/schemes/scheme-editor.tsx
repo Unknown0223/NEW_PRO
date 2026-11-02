@@ -105,7 +105,7 @@ export function SchemeEditor({
             <ChipMulti options={roleOptions} value={draft.roles} onChange={(roles) => set({ roles })} disabled={rulesLocked} empty="выберите роль" />
           </Labeled>
           <Labeled label="Филиалы" group>
-            <ChipMulti options={o.branches.map((b) => ({ value: b, label: b }))} value={draft.branches} onChange={(branches) => set({ branches })} disabled={rulesLocked} />
+            <ChipMulti options={o.branches.map((b) => ({ value: b, label: o.branchLabels?.[b] ?? b }))} value={draft.branches} onChange={(branches) => set({ branches })} disabled={rulesLocked} />
           </Labeled>
           <Labeled label="Направления торговли" group>
             <ChipMulti

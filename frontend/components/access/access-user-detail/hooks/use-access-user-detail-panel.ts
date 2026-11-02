@@ -1041,11 +1041,7 @@ export function useAccessUserDetailPanel({
     { id: "trade_directions", label: "Направления" }
   ];
 
-  const modalUserLabel = user
-    ? user.code
-      ? `[${user.code}] • ${user.full_name || user.login}`
-      : user.full_name || user.login
-    : "";
+  const modalUserLabel = user ? user.full_name || user.login : "";
 
   const modalTitle =
     modal === "operations"

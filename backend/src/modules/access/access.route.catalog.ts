@@ -125,7 +125,7 @@ export async function registerAccessCatalogRoutes(app: FastifyInstance) {
         data: cachedRows.map((r) => ({
           id: r.id,
           key: String(r.id),
-          label: r.code ? `${r.name} (${r.code})` : r.name,
+          label: r.name,
           name: r.name,
           code: r.code,
           is_active: r.is_active
@@ -160,7 +160,7 @@ export async function registerAccessCatalogRoutes(app: FastifyInstance) {
       data: visibleRows.map((r) => ({
         id: r.id,
         key: String(r.id),
-        label: r.code ? `${r.name} (${r.code})` : r.name,
+        label: r.name,
         name: r.name,
         code: r.code,
         is_active: r.is_active

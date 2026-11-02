@@ -418,7 +418,7 @@ function ListMode({ selected, onSelectEmployee, date, onDate, onLocate, employee
                         {ROLE_META[e.type].short}
                       </span>
                       <span className="truncate text-[12.5px] font-bold text-ink">
-                        {e.type === "supervisor" ? e.name : `${e.code} [${e.name}]`}
+                        {e.name}
                       </span>
                       {idle && (
                         <span className="shrink-0 rounded bg-slate-100 px-1 py-0.5 text-[8.5px] font-bold uppercase text-slate-500">

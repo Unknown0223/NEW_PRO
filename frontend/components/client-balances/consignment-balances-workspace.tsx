@@ -11,6 +11,7 @@ import { DEFAULT_TABLE_PAGE_SIZES } from "@/lib/table-page-sizes";
 import { Label } from "@/components/ui/label";
 import { SearchableMultiSelectPanel } from "@/components/ui/searchable-multi-select-panel";
 import { formatClientDisplayId } from "@shared/client-display-id";
+import { branchLabelLookup, branchVisibleName, type BranchRefRow } from "@/lib/branch-options";
 import { api } from "@/lib/api";
 import { useAuthStore, useAuthStoreHydrated } from "@/lib/auth-store";
 import type {
@@ -131,7 +132,11 @@ function buildConsignmentTerritoryScopeParams(form: FilterForm): string {
   return p.toString();
 }
 
-function expeditorMatchesConsignmentBranches(exp: StaffPick, branchIds: Set<string>): boolean {
+function expeditorMatchesConsignmentBranches(
+  exp: StaffPick,
+  branchIds: Set<string>,
+  branchLookup: Map<string, string>
+): boolean {
   if (branchIds.size === 0) return true;
   const rules = exp.expeditor_assignment_rules;
   const hasAgentOrTdRules =
@@ -139,7 +144,7 @@ function expeditorMatchesConsignmentBranches(exp: StaffPick, branchIds: Set<stri
     typeof rules === "object" &&
     ((rules.agent_ids?.length ?? 0) > 0 || (rules.trade_directions?.length ?? 0) > 0);
   if (hasAgentOrTdRules) return true;
-  const eb = normTrim(exp.branch);
+  const eb = normTrim(branchVisibleName(exp.branch, branchLookup) ?? "");
   if (!eb) return true;
   for (const b of Array.from(branchIds)) {
     if (normTrim(b) === eb) return true;
@@ -151,7 +156,8 @@ function filterConsignmentAgents(
   agents: StaffPick[],
   expeditors: StaffPick[] | undefined,
   d: FilterForm,
-  skip: ConsignmentAgentSkip
+  skip: ConsignmentAgentSkip,
+  branchLookup: Map<string, string>
 ): StaffPick[] {
   const branchSkip = skip.branch;
   const bid = d.branch_ids;
@@ -167,7 +173,7 @@ function filterConsignmentAgents(
   return agents.filter((a) => {
     if (Number.isFinite(agId) && a.id !== agId) return false;
     if (!branchSkip && bid.size > 0) {
-      const ab = normTrim(a.branch);
+      const ab = normTrim(branchVisibleName(a.branch, branchLookup) ?? "");
       if (!ab || !bid.has(ab)) return false;
     }
     if (Number.isFinite(supId) && (a.supervisor_user_id ?? -1) !== supId) return false;
@@ -473,6 +479,7 @@ export function ConsignmentBalancesWorkspace() {
           territory_levels?: string[];
           territory_nodes?: TerritoryNode[];
           trade_directions?: string[];
+          branches?: BranchRefRow[];
         };
       }>(`/api/${tenantSlug}/settings/profile`);
       return data.references ?? {};
@@ -610,19 +617,23 @@ export function ConsignmentBalancesWorkspace() {
     return Array.from(new Set([...fromOptions, ...fromList])).sort((a, b) => a.localeCompare(b, "ru"));
   }, [clientRefsQ.data]);
 
+  const branchLookup = useMemo(
+    () => branchLabelLookup(profileQ.data?.branches),
+    [profileQ.data?.branches]
+  );
   const agentsSrc = useMemo(() => agentsQ.data ?? [], [agentsQ.data]);
   const expeditorsSrc = useMemo(() => expeditorsQ.data ?? [], [expeditorsQ.data]);
 
   const consignmentCascade = useMemo(() => {
     const d = draft;
     return {
-      forAgentSelect: filterConsignmentAgents(agentsSrc, expeditorsSrc, d, { agent: true }),
-      forSupervisorSelect: filterConsignmentAgents(agentsSrc, expeditorsSrc, d, { supervisor: true }),
-      forBranchSelect: filterConsignmentAgents(agentsSrc, expeditorsSrc, d, { branch: true }),
-      forTradeDirectionSelect: filterConsignmentAgents(agentsSrc, expeditorsSrc, d, { tradeDirection: true }),
-      forExpeditorSelect: filterConsignmentAgents(agentsSrc, expeditorsSrc, d, { expeditor: true })
+      forAgentSelect: filterConsignmentAgents(agentsSrc, expeditorsSrc, d, { agent: true }, branchLookup),
+      forSupervisorSelect: filterConsignmentAgents(agentsSrc, expeditorsSrc, d, { supervisor: true }, branchLookup),
+      forBranchSelect: filterConsignmentAgents(agentsSrc, expeditorsSrc, d, { branch: true }, branchLookup),
+      forTradeDirectionSelect: filterConsignmentAgents(agentsSrc, expeditorsSrc, d, { tradeDirection: true }, branchLookup),
+      forExpeditorSelect: filterConsignmentAgents(agentsSrc, expeditorsSrc, d, { expeditor: true }, branchLookup)
     };
-  }, [agentsSrc, expeditorsSrc, draft]);
+  }, [agentsSrc, expeditorsSrc, draft, branchLookup]);
 
   const filteredAgents = consignmentCascade.forAgentSelect;
 
@@ -635,15 +646,18 @@ export function ConsignmentBalancesWorkspace() {
     const all = supervisorsQ.data ?? [];
     const bid = draft.branch_ids;
     const branchFiltered =
-      bid.size === 0 ? all : all.filter((s) => s.branch && bid.has(s.branch));
+      bid.size === 0 ? all : all.filter((s) => {
+        const name = normTrim(branchVisibleName(s.branch, branchLookup) ?? "");
+        return name && bid.has(name);
+      });
     if (supIds.size === 0) return branchFiltered;
     return branchFiltered.filter((s) => supIds.has(s.id));
-  }, [supervisorsQ.data, draft.branch_ids, consignmentCascade.forSupervisorSelect]);
+  }, [supervisorsQ.data, draft.branch_ids, consignmentCascade.forSupervisorSelect, branchLookup]);
 
   const branchAllowed = useMemo(() => {
     const fromAgents = new Set<string>();
     for (const a of consignmentCascade.forBranchSelect) {
-      const b = normTrim(a.branch);
+      const b = normTrim(branchVisibleName(a.branch, branchLookup) ?? "");
       if (b) fromAgents.add(b);
     }
     const territoryBranches = to?.branches ?? [];
@@ -658,7 +672,7 @@ export function ConsignmentBalancesWorkspace() {
     }
     const key = JSON.stringify(Array.from(set).sort((a, b) => a.localeCompare(b, "ru")));
     return { set, key };
-  }, [consignmentCascade.forBranchSelect, to?.branches]);
+  }, [consignmentCascade.forBranchSelect, to?.branches, branchLookup]);
 
   useEffect(() => {
     const allowed = branchAllowed.set;
@@ -703,9 +717,9 @@ export function ConsignmentBalancesWorkspace() {
     const bid = draft.branch_ids;
     return (expeditorsQ.data ?? []).filter((e) => {
       if (!consignmentCascade.forExpeditorSelect.some((a) => agentMatchesExpeditor(a, e))) return false;
-      return expeditorMatchesConsignmentBranches(e, bid);
+      return expeditorMatchesConsignmentBranches(e, bid, branchLookup);
     });
-  }, [expeditorsQ.data, consignmentCascade.forExpeditorSelect, draft.branch_ids]);
+  }, [expeditorsQ.data, consignmentCascade.forExpeditorSelect, draft.branch_ids, branchLookup]);
 
   useEffect(() => {
     if (!draft.supervisor_user_id) return;

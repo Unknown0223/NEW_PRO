@@ -12,6 +12,7 @@ import {
 import type { AgentOrdersFilters, TerritoryNode } from "./agent-orders.types";
 import type { ScopedReportActor } from "../access/access-agent-scope";
 import { buildScopedAgentExistsSql } from "../access/access-agent-scope";
+import { resolvedAgentIdSql } from "./agent-orders.agent-sql";
 
 export function splitCsvTokens(value: string): string[] {
   return String(value ?? "")
@@ -123,11 +124,11 @@ export function buildFilterSql(tenantId: number, f: AgentOrdersFilters, actor?: 
   if (f.statuses && f.statuses.length > 0) parts.push(Prisma.sql`o.status IN (${Prisma.join(f.statuses)})`);
   else if (f.status) parts.push(Prisma.sql`o.status = ${f.status}`);
 
-  if (f.agent_ids && f.agent_ids.length > 0) parts.push(Prisma.sql`o.agent_id IN (${Prisma.join(f.agent_ids)})`);
-  else if (f.agent_id) parts.push(Prisma.sql`o.agent_id = ${f.agent_id}`);
+  if (f.agent_ids && f.agent_ids.length > 0) parts.push(Prisma.sql`${resolvedAgentIdSql} IN (${Prisma.join(f.agent_ids)})`);
+  else if (f.agent_id) parts.push(Prisma.sql`${resolvedAgentIdSql} = ${f.agent_id}`);
 
   if (actor) {
-    parts.push(buildScopedAgentExistsSql(tenantId, Prisma.sql`o.agent_id`, actor));
+    parts.push(buildScopedAgentExistsSql(tenantId, resolvedAgentIdSql, actor));
   }
 
   if (f.order_types && f.order_types.length > 0) parts.push(Prisma.sql`o.order_type IN (${Prisma.join(f.order_types)})`);

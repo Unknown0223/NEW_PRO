@@ -554,7 +554,7 @@ export function EquipmentWorkspace({ view = "equipment" }: { view?: "equipment" 
                   <option value="">Выберите товар</option>
                   {productOptions.map((p) => (
                     <option key={p.id} value={String(p.id)}>
-                      {p.name} {p.sku ? `(${p.sku})` : ""} {!p.is_active ? "• неактив" : ""}
+                      {p.name}{!p.is_active ? " • неактив" : ""}
                     </option>
                   ))}
                 </select>

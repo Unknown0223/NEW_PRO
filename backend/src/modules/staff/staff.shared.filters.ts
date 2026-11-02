@@ -1,6 +1,7 @@
 import { prisma } from "../../config/database";
 import { listActiveTradeDirectionLabels } from "../sales-directions/sales-directions.service";
-import { activeBranchNamesFromReferences } from "../tenant-settings/tenant-settings.refs";
+import { activeBranchNamesFromReferences, branchesFromUnknown } from "../tenant-settings/tenant-settings.refs";
+import { branchLabelLookup, branchVisibleName } from "../tenant-settings/branch-display.pure";
 import { territoryRegionPickerNames } from "../tenant-settings/tenant-settings.service";
 import { asRecord } from "../tenant-settings/tenant-settings.shared";
 import {
@@ -203,6 +204,7 @@ export async function listSkladchikFilterOptions(tenantId: number): Promise<{
   const presetLabelActive = activePresetLabels(presetRows);
   const ref = asRecord(asRecord(tenant?.settings).references);
   const branches = activeBranchNamesFromReferences(ref);
+  const branchLookup = branchLabelLookup(branchesFromUnknown(ref.branches));
   const sort = (a: string, b: string) => a.localeCompare(b, "ru");
 
   const [users, allWh] = await Promise.all([
@@ -239,7 +241,7 @@ export async function listSkladchikFilterOptions(tenantId: number): Promise<{
       row = { id: wh.id, name: wh.name, branches: new Set() };
       byId.set(wh.id, row);
     }
-    const b = (branch ?? "").trim();
+    const b = branchVisibleName(branch, branchLookup);
     if (b) row.branches.add(b);
   };
 

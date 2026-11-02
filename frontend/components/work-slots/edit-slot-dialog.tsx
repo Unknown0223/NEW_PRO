@@ -10,6 +10,7 @@ import {
 import { WorkSlotsMultiSelect } from "./work-slots-multi-select";
 import { WorkSlotFormDrawer } from "./work-slot-form-drawer";
 import { apiFetch } from "@/lib/api-client";
+import { branchVisibleName } from "@/lib/branch-options";
 import { buildZoneRegionCityCascadeOptions, normalizeWorkSlotTerritoryLists } from "@/lib/territory-client-filters";
 import { createTerritoryLabelResolver } from "@/lib/territory-filter-labels";
 import type { RefSelectOption } from "@/lib/ref-select-options";
@@ -49,8 +50,11 @@ type Props = {
     city_territory_hints?: Record<string, { city_label?: string | null }>;
   };
   territoryNodes: TerritoryNode[];
+  branchLookup?: Map<string, string>;
   onSaved: () => void;
 };
+
+const EMPTY_BRANCH_LOOKUP = new Map<string, string>();
 
 const emptyLocation = (): WorkSlotsLocationValues => emptyLocationValues();
 
@@ -115,10 +119,13 @@ function locationFromSlot(
   };
 }
 
-function branchesFromSlot(d: WorkSlotListItem): string[] {
+function branchesFromSlot(d: WorkSlotListItem, lookup: Map<string, string>): string[] {
   const codes = (d.branch_codes ?? []).map((c) => c.trim()).filter(Boolean);
-  if (codes.length) return codes;
-  return d.branch_code?.trim() ? [d.branch_code.trim()] : [];
+  const raw = codes.length ? codes : d.branch_code?.trim() ? [d.branch_code.trim()] : [];
+  return [...new Set(raw.flatMap((c) => {
+    const name = branchVisibleName(c, lookup);
+    return name ? [name] : [];
+  }))];
 }
 
 function sameStringList(a: string[], b: string[]): boolean {
@@ -136,6 +143,7 @@ export function EditSlotDialog({
   cashDesks,
   clientRefs,
   territoryNodes,
+  branchLookup = EMPTY_BRANCH_LOOKUP,
   onSaved
 }: Props) {
   const [original, setOriginal] = useState<WorkSlotListItem | null>(null);
@@ -191,7 +199,7 @@ export function EditSlotDialog({
         setOriginal(d);
         setSlotCode(d.slot_code ?? "");
         setLabel(d.label ?? "");
-        setBranchCodeList(branchesFromSlot(d));
+        setBranchCodeList(branchesFromSlot(d, branchLookup));
         setDirectionId(d.direction_id != null ? String(d.direction_id) : "");
         setSlotType(d.slot_type as WorkSlotType);
         setIsActive(d.is_active);
@@ -199,7 +207,7 @@ export function EditSlotDialog({
       })
       .catch((e) => setError(e instanceof Error ? e.message : "Ошибка загрузки"))
       .finally(() => setLoading(false));
-  }, [open, slotId, tenant, territoryNodes]);
+  }, [open, slotId, tenant, territoryNodes, branchLookup]);
 
   const submit = async () => {
     if (!slotId || !original) return;
@@ -221,7 +229,7 @@ export function EditSlotDialog({
     const l = label.trim() || null;
     // slot_code PATCH backendda qo‘llab-quvvatlanmaydi — faqat type bilan mosligi tekshiriladi
     if (l !== (original.label ?? null)) changes.label = l;
-    const origBranches = branchesFromSlot(original);
+    const origBranches = branchesFromSlot(original, branchLookup);
     if (!sameStringList(branchCodeList, origBranches)) {
       changes.branch_codes = branchCodeList;
       changes.branch_code = branchCodeList[0] ?? null;
@@ -448,7 +456,7 @@ export function EditSlotDialog({
                       { id: "__none__", title: "—" },
                       ...tradeDirections.map((t) => ({
                         id: String(t.id),
-                        title: t.code ? `${t.name} (${t.code})` : t.name
+                        title: t.name, searchText: [t.name, t.code].filter(Boolean).join(" ")
                       }))
                     ]}
                     selectedValues={directionId ? [directionId] : []}

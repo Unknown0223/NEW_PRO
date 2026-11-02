@@ -37,6 +37,7 @@ describe("web staff (kassir/operator/SVR/skladchik) — Dostup cheklovlari", () 
       "settings.timezone.update",
       "settings.prichiny.update",
       "tabel.statistika.view",
+      "tabel.poseshcheniya.view",
       "tabel.mobilnaya_otmetka.create",
       "settings.initial_setup.view",
       "settings.returns_filter.view",

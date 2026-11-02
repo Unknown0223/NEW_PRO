@@ -59,9 +59,8 @@ function pickZodLeaf(per: Record<string, string>, leaf: string): string | undefi
   return undefined;
 }
 
-function withSmartCode(code: string | null | undefined, name: string): string {
-  const c = (code ?? "").trim();
-  return c ? `${c} ${name}`.trim() : name;
+function withSmartCode(_code: string | null | undefined, name: string): string {
+  return name.trim();
 }
 
 function TagOverflow({
@@ -303,7 +302,7 @@ export function KpiGroupsWorkspace({ tenantSlug }: Props) {
                   <TagOverflow
                     items={r.products.map((p) => ({
                       key: String(p.id),
-                      text: `${p.sku} ${p.name}`.trim()
+                      text: p.name.trim()
                     }))}
                     label="прод."
                     total={r.product_total}

@@ -98,7 +98,7 @@ export default function ExpeditorsDashboardPage() {
   const data = dashQ.data;
   const expeditorItems = (data?.expeditors ?? []).map((x) => ({
     id: String(x.id),
-    title: `${x.name}${x.code ? ` (${x.code})` : ""}`
+    title: x.name, searchText: [x.name, x.code].filter(Boolean).join(" ")
   }));
 
   const applyDraft = () => setApplied({ ...draft });
@@ -108,7 +108,7 @@ export default function ExpeditorsDashboardPage() {
     setApplied(reset);
   };
   const staffItems = (rows: Array<{ id: number; name: string; code: string | null }> | undefined) =>
-    (rows ?? []).map((x) => ({ id: String(x.id), title: `${x.name}${x.code ? ` (${x.code})` : ""}` }));
+    (rows ?? []).map((x) => ({ id: String(x.id), title: x.name, searchText: [x.name, x.code].filter(Boolean).join(" ") }));
 
   if (!hydrated || !tenantSlug) {
     return <p className="text-sm text-muted-foreground">Загрузка...</p>;

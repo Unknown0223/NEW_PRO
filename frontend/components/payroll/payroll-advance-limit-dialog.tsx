@@ -137,7 +137,7 @@ export function PayrollAdvanceLimitDialog({
                 <select className={PAYROLL_MODAL_LIST} aria-label="Сотрудник" value={d.user_id} size={6} onChange={(e) => setD({ ...d, user_id: e.target.value })}>
                   {filteredEmp.map((e) => (
                     <option key={e.id} value={e.id}>
-                      {e.fio}{e.code ? ` (${e.code})` : ""} · {roleLabel(e.role)}
+                      {e.fio} · {roleLabel(e.role)}
                     </option>
                   ))}
                 </select>

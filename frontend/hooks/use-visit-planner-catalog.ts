@@ -90,7 +90,7 @@ export function useVisitPlannerCatalog(tenantSlug: string | null) {
         kind: "branch",
         ref_id: b.id,
         name: b.name,
-        subtitle: b.code ?? undefined,
+        subtitle: undefined,
         depth: -1,
         isBranch: true
       });
@@ -109,7 +109,7 @@ export function useVisitPlannerCatalog(tenantSlug: string | null) {
         kind: territoryLayerToApiKind(layer),
         ref_id: node.id,
         name: node.name,
-        subtitle: node.code ?? undefined,
+        subtitle: undefined,
         layer,
         depth,
         parentRegionName

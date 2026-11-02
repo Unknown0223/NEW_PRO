@@ -12,6 +12,8 @@ import {
 import { recalcPayrollMonth } from "./payroll.recalc-month";
 import { csvList, parseYm, payrollCtx, perm, runPayroll, sendZod } from "./payroll.route-helpers";
 import { prisma } from "../../config/database";
+import { loadBranchLabelSources } from "../tenant-settings/tenant-settings.refs";
+import { branchLabelLookup, uniqueBranchVisibleNames } from "../tenant-settings/branch-display.pure";
 
 const VIEW = ["staff.zarplaty.view"];
 const UPDATE = ["staff.zarplaty.update"];
@@ -86,7 +88,10 @@ export async function registerPayrollRecordRoutes(app: FastifyInstance) {
     return reply.send({
       data: {
         roles: uniq(rows.map((r) => r.role)),
-        branches: uniq(rows.map((r) => r.branch)),
+        branches: uniqueBranchVisibleNames(
+          rows.map((r) => r.branch),
+          branchLabelLookup(await loadBranchLabelSources(c.tenantId))
+        ),
         positions: uniq(rows.map((r) => r.position)),
         directions: dirs
       }

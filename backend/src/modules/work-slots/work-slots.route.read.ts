@@ -5,6 +5,8 @@ import { ensureTenantContext } from "../../lib/tenant-context";
 import { actorUserIdOrNull } from "../../lib/request-actor";
 import { ADMIN_AND_OPERATOR_LIKE_ROLES, TENANT_ADMIN_ROLE } from "../../lib/tenant-user-roles";
 import { jwtAccessVerify, requireRoles } from "../auth/auth.prehandlers";
+import { loadBranchLabelSources } from "../tenant-settings/tenant-settings.refs";
+import { expandBranchFilterKeys } from "../tenant-settings/branch-display.pure";
 import {
   assignUserBodySchema,
   bulkWorkSlotsBodySchema,
@@ -144,7 +146,14 @@ export async function registerWorkSlotListRoutes(app: FastifyInstance) {
         .map((s) => Number.parseInt(s, 10))
         .filter((n) => Number.isFinite(n) && n > 0);
     const slotTypes = splitCsv(q.slot_types);
-    const branchCodes = splitCsv(q.branch_codes);
+    const branchCodesRaw = splitCsv(q.branch_codes);
+    const branchCatalog = branchCodesRaw.length || q.branch_code?.trim()
+      ? await loadBranchLabelSources(request.tenant!.id)
+      : [];
+    const branchCodes = expandBranchFilterKeys(
+      branchCodesRaw.length ? branchCodesRaw : q.branch_code?.trim() ? [q.branch_code.trim()] : [],
+      branchCatalog
+    );
     const directionIds = splitCsvInts(q.direction_ids);
     const territoryZones = splitCsv(q.territory_zones);
     const territoryOblasts = splitCsv(q.territory_oblasts);

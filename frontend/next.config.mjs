@@ -79,6 +79,17 @@ const nextConfig = {
       { source: "/auth/:path*", destination: `${prodTarget}/auth/:path*` }
     ];
   },
+  async headers() {
+    const download = [
+      { key: "Cache-Control", value: "public, max-age=86400" },
+      { key: "Content-Disposition", value: "attachment" }
+    ];
+    return [
+      "/salec-link/SalesArena-Link-Setup.exe",
+      "/salec-link/SalesArena-Link-Android.apk",
+      "/salec-link/SalesArena-Link-portable.zip"
+    ].map((source) => ({ source, headers: download }));
+  },
   webpack(config, { dev }) {
     // Package root — dist entry orqali; transpilePackages dan olib tashlangan (export * buzilmasin).
     config.resolve.alias = {

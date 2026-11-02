@@ -1,0 +1,54 @@
+---
+description: Davomat terminali, deploy va qayta qilinmasin ishlar xotirasi
+alwaysApply: true
+---
+
+# Davomat terminali — xotira
+
+Javob: oddiy o‘zbekcha. So‘ralmasa commit qilinmaydi. Parol va qulf tarixi repoda yo‘q — `C:\Users\UNKNOWN_007\AppData\Local\Cursor\AgentStores\cursor_agent_stores\u309096565\files\salec-attendance-secrets.md`.
+
+## Joylar
+- Sayt https://salesarena.sale (slug `aksit`). API https://api.salesarena.sale.
+- Lokal: frontend `127.0.0.1:3000`, API `127.0.0.1:18080` (4000 emas). Login `POST /auth/login` `{slug, login, password}`. DB `postgresql://postgres:0223@localhost:15432/savdo_aksit`, Docker `savdo_postgres`.
+- Prod: postgres `salec-postgres-1`, DB `savdo_db`. Backend `salec-backend-1`.
+- Deploy: `powershell -NoProfile -ExecutionPolicy Bypass -File scripts/hetzner/deploy.ps1 -SkipBot`. SSH `%USERPROFILE%\.ssh\salec_hetzner`, `157.180.116.50`, `/opt/salec`. Uzoq bash ni base64 qilib yuborish. PowerShell qo‘shtirnoq ichida `$()` ishlatilmaydi.
+- Band portga ikkinchi API ochilmaydi. `start-dev.cmd` allaqachon ishlaydi.
+
+## Terminal
+- Hikvision DS-K1T343MFWX, `192.168.100.127`. Kompyuter `192.168.100.89`. Portlar 80/443/8000.
+- Prod qator: `attendance_devices` id 2, nomi andijon, pairing `605622`, filial Andijon, online, tasdiqlangan.
+- Hodisa: HTTPS `api.salesarena.sale`, yo‘l `/api/aksit/mobile/attendance/device-ingest?pairing_code=605622`, port 443. SubscribeEvent `AccessControllerEvent`, heartbeat 30, `pictureURLType` binary.
+- `parameterFormatType` bo‘sh qoladi: PUT 200 qaytsa ham JSON yozilmaydi. Host URL va SubscribeEvent o‘chirilmaydi.
+- Soat `CST-5:00:00` — Hikvisionda bu UTC+5.
+- Yuzda faqat PMAND008, Jakbarova Muslima, user 11. Nurmatova Muazzam (user 12, PMAND009) kaliti bor, JPEG yo‘q. Avatarsiz odam terminalga yuborilmaydi.
+
+## Ingest
+- `device-ingest` da `ensureTenantContext` chaqirilmaydi: JWT yo‘q, `tenantId` da yiqiladi. Faqat `request.tenant`.
+- `employeeNoString` harfli qoladi (`PMAND008`). Raqamga kesilmaydi.
+- minor 76 (yuz rad) tashlanadi. Heartbeatda xodim yo‘q, javob `{ok:true, status:"heartbeat"}`. Muvaffaqiyat minor 75. Eshik 21/22 da odam yo‘q.
+- Rasm faqat `photo_front_base64`. Terminal manbai yuzni qayta solishtirmaydi. Kunning ikkinchi to‘g‘ri belgisi avtomatik OUT.
+- Jurnal `/tabel/marks`. «Фронт» tugmasi faqat `photo_front_key` bo‘lsa. Media JWT bilan.
+- Server `192.168.100.127` dagi `LOCALS/pic` ni ocholmaydi. JPEG POST tanasida keladi. `pictureURL` tokeni tez eskiradi.
+- Parser: `backend/src/modules/tabel/hikvision-ingest.pure.ts` (XML + JPEG kesish). 2026-11-01 da backend deploy qilingan.
+- 2026-11-01: punch 1 IN 20:29, rasmsiz (terminal saqlamagan). Punch 2 OUT 21:03, 20:55 dagi haqiqiy terminal JPEG (qo‘lda qayta yuborilgan).
+
+## Foto va sahifa
+- AcsCfg dagi rasm bayroqlari True. Ro‘yxat JPEG (`enrlFace`) 404.
+- `tenants/1/users/11/face/reference.jpg` — ro‘yxatdagi yuz, skan emas. Punch 1 dan olib tashlangan. Fail-kadr (minor 76) uning qatoriga yopishtirilmaydi.
+- `/tabel/visits` — «Статистика посещений». Rasm faqat belgi `photo_front_key`. `tenantSlug` store ildizida.
+- Доступ: `tabel.poseshcheniya.view` alohida qator. Jurnal fotosi `tabel.otmetki.view`. Terminal sahifasi `tabel.ustroystva.view` (rahbarlarda ko‘rish ham bor).
+
+## Disk
+- Ogohlantirish `scripts/hetzner/ops/disk-guard.sh` (80%). 2026-11-01: builder kesh tozalangan, disk ~24%, bildirishnoma 9940 o‘qilgan.
+- `/opt/salec/backups` dagi 3 kunlik pg_dump va `/opt/salec/EMERGENCY_BALLAST` (5G) o‘chirilmaydi.
+- Cron: har kuni 04:30 `docker builder prune -af --filter until=24h`.
+
+## Qayta qilinmaydi
+- Eski terminal parolini yuborish. Qulf paytida noto‘g‘ri parol taymerni qayta boshlaydi. Parolsiz `deviceInfo` 401 va `isActivated false` — bu qulf emas.
+- Link ilovadagi «Подключить» (hali HR Hub). ProbeOnly parol yubormaydi va shunday qoladi.
+- Avatar yoki minor 76 rasmini belgi fotosi qilish.
+- Backup dump va ballastni o‘chirish. Prod clearance varaqlarini omma yangilash.
+- Timesheet 13-bandi, so‘ralmasa. Qaytish 548/549, lokal SVR, eski absence/overtime/clearance qatorlarini o‘chirish.
+- Og‘ir foto URL skani, Android qayta yig‘ish, setup exe ni rcedit.
+- Cloudflare tez tunnel (429). Yuz sinxroni `127.0.0.1:39221` orqali.
+- Host sozlamasini SubscribeEvent yoki ingest URL siz qayta yozish.

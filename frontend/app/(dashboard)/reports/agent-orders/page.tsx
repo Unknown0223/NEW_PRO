@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { STALE } from "@/lib/query-stale";
@@ -87,7 +87,7 @@ type AgentOrdersReport = {
       values: Record<string, { amount: string; qty: number; volume: string; akb: number }>;
     }>;
   };
-  segment_matrix: {
+  product_matrix: {
     buckets: string[];
     rows: Array<{
       agent_id: number | null;
@@ -179,7 +179,8 @@ export default function ReportAgentOrdersPage() {
   const dateAnchorRef = useRef<HTMLButtonElement>(null);
   const [agentMetricMode, setAgentMetricMode] = useState<MetricMode>("amount");
   const [categoryMetricMode, setCategoryMetricMode] = useState<MetricMode>("amount");
-  const [segmentMetricMode, setSegmentMetricMode] = useState<MetricMode>("amount");
+  const [productMetricMode, setProductMetricMode] = useState<MetricMode>("amount");
+  const [productColumns, setProductColumns] = useState<string[]>([]);
 
   const filtersQ = useQuery({
     queryKey: ["report-agent-orders-filters", tenantSlug],
@@ -232,8 +233,8 @@ export default function ReportAgentOrdersPage() {
   if (!hydrated || !tenantSlug) return <p className="text-sm text-muted-foreground">Загрузка...</p>;
 
   const opts = filtersQ.data;
-  const productItems = (opts?.products ?? []).map((x) => ({ id: String(x.id), title: `${x.name}${x.sku ? ` (${x.sku})` : ""}` }));
-  const agentItems = (opts?.agents ?? []).map((x) => ({ id: String(x.id), title: `${x.name}${x.code ? ` (${x.code})` : ""}` }));
+  const productItems = (opts?.products ?? []).map((x) => ({ id: String(x.id), title: x.name, searchText: [x.name, x.sku].filter(Boolean).join(" ") }));
+  const agentItems = (opts?.agents ?? []).map((x) => ({ id: String(x.id), title: x.name, searchText: [x.name, x.code].filter(Boolean).join(" ") }));
   const territory1Items = (opts?.territory_1 ?? []).map((x) => ({ id: x, title: x }));
   const territory2Allowed = (() => {
     const selectedZones = draft.territory_1_list;
@@ -445,10 +446,10 @@ export default function ReportAgentOrdersPage() {
 
       <div className="flex flex-wrap gap-1.5">
         {cards.map((c) => (
-          <div key={c.status} className="w-[148px] shrink-0 overflow-hidden rounded-md border border-border/70 shadow-sm">
-            <div className={cn("px-2.5 py-1.5 text-[11px] font-medium", kpiCardTone(c.status).head)}>{c.label}</div>
-            <div className={cn("space-y-0.5 px-2.5 py-1.5", kpiCardTone(c.status).body)}>
-              <p className="text-[22px] font-semibold leading-tight tabular-nums">{money(c.amount)}</p>
+          <div key={c.status} className="w-max min-w-[168px] shrink-0 rounded-md border border-border/70 shadow-sm">
+            <div className={cn("px-3 py-1.5 text-[11px] font-medium", kpiCardTone(c.status).head)}>{c.label}</div>
+            <div className={cn("space-y-0.5 px-3 py-1.5", kpiCardTone(c.status).body)}>
+              <p className="whitespace-nowrap text-[22px] font-semibold leading-tight tabular-nums">{money(c.amount)}</p>
               <p className="text-[11px] text-muted-foreground">Кол-во: {c.qty}</p>
               <p className="text-[11px] text-muted-foreground">Объем: {money(c.volume ?? "0")}</p>
               <p className="text-[11px] text-muted-foreground">АКБ: {c.akb}</p>
@@ -513,12 +514,27 @@ export default function ReportAgentOrdersPage() {
         rows={reportQ.data?.category_matrix.rows ?? []}
       />
       <MatrixTable
-        title="По сегмент продуктов"
+        title="По товарам"
         loading={reportQ.isLoading}
-        metricMode={segmentMetricMode}
-        onMetricModeChange={setSegmentMetricMode}
-        buckets={reportQ.data?.segment_matrix.buckets ?? []}
-        rows={reportQ.data?.segment_matrix.rows ?? []}
+        metricMode={productMetricMode}
+        onMetricModeChange={setProductMetricMode}
+        filter={
+          <div className="w-56">
+            <MultiFilter
+              placeholder="Товар"
+              items={(reportQ.data?.product_matrix.buckets ?? []).map((name) => ({ id: name, title: name }))}
+              selectedValues={productColumns}
+              onChange={setProductColumns}
+              searchPlaceholder="Поиск товара"
+            />
+          </div>
+        }
+        buckets={
+          productColumns.length > 0
+            ? (reportQ.data?.product_matrix.buckets ?? []).filter((name) => productColumns.includes(name))
+            : (reportQ.data?.product_matrix.buckets ?? [])
+        }
+        rows={reportQ.data?.product_matrix.rows ?? []}
       />
     </div>
   );
@@ -630,7 +646,8 @@ function MatrixTable({
   rows,
   loading,
   metricMode,
-  onMetricModeChange
+  onMetricModeChange,
+  filter
 }: {
   title: string;
   buckets: string[];
@@ -638,6 +655,7 @@ function MatrixTable({
   loading: boolean;
   metricMode: MetricMode;
   onMetricModeChange: (next: MetricMode) => void;
+  filter?: ReactNode;
 }) {
   const totals = useMemo(() => {
     const out: Record<string, number> = {};
@@ -661,7 +679,10 @@ function MatrixTable({
         <div className="text-sm font-semibold">
           {title} <span className="ml-1 text-xs font-normal text-muted-foreground">({metricLabels(metricMode)})</span>
         </div>
-        <MetricSwitch metricMode={metricMode} onMetricModeChange={onMetricModeChange} />
+        <div className="flex items-center gap-2">
+          {filter}
+          <MetricSwitch metricMode={metricMode} onMetricModeChange={onMetricModeChange} />
+        </div>
       </div>
       <div className="overflow-auto">
         <table className="w-full min-w-[1000px] text-xs">

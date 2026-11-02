@@ -284,7 +284,7 @@ export default function BranchesSettingsPage() {
   const cashPanelItems = useMemo((): SearchableMultiSelectItem<number>[] => {
     return (cashDesksQ.data ?? [])
       .filter((d) => d.is_active !== false)
-      .map((d) => ({ id: d.id, title: d.name, subtitle: d.code?.trim() ? d.code : null }));
+      .map((d) => ({ id: d.id, title: d.name, subtitle: null }));
   }, [cashDesksQ.data]);
 
   const usersByRole = useMemo(() => {

@@ -135,7 +135,7 @@ export function PayrollBonusWorkspace() {
               hideOuterLabel
               triggerPlaceholder="Сотрудники"
               triggerClassName={PAYROLL_FILTER_TRIGGER}
-              items={everyone.filter((r) => !draftRole || r.role === draftRole).map((r) => ({ id: r.user_id, title: r.code ? `${r.code} ${r.fio}` : r.fio, searchText: `${r.code ?? ""} ${r.fio}` }))}
+              items={everyone.filter((r) => !draftRole || r.role === draftRole).map((r) => ({ id: r.user_id, title: r.fio, searchText: [r.fio, r.code].filter(Boolean).join(" ") }))}
               selected={draftUsers}
               onSelectedChange={setDraftUsers}
               filterItemsBySearch

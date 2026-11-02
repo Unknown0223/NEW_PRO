@@ -50,6 +50,7 @@ type AccessHistoryRow = {
 type AccessHistoryUserOption = {
   value: string;
   label: string;
+  searchText?: string;
 };
 
 /** Макет: акцент #00897B, тёмный фон ~#121212 */
@@ -250,8 +251,7 @@ export function AccessHistoryWorkspace({ tenantSlug }: { tenantSlug: string }) {
       const login = (u.login ?? "").trim();
       const code = (u.code ?? "").trim();
       const base = name || login || `ID ${u.id}`;
-      const suffix = code ? ` [${code}]` : "";
-      return { value: String(u.id), label: `${base}${suffix}` };
+      return { value: String(u.id), label: base, searchText: [base, login, code].filter(Boolean).join(" ") };
     });
   }, [usersQ.data]);
 

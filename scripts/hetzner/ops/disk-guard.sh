@@ -1,14 +1,14 @@
 #!/bin/bash
 # Har 10 daqiqada (cron): disk, Postgres va API holati.
 #   >= DISK_WARN_PCT (80)  — ogohlantirish (6 soatda bir marta)
-#   >= DISK_CRIT_PCT (92)  — 5 GB favqulodda zaxira fayl o'chiriladi + jiddiy ogohlantirish (soatda bir marta)
+#   >= DISK_CRIT_PCT (92)  — 2 GB favqulodda zaxira fayl o'chiriladi + jiddiy ogohlantirish (soatda bir marta)
 #   <  70                  — zaxira fayl qayta yaratiladi
 set -uo pipefail
 
 WARN=${DISK_WARN_PCT:-80}
 CRIT=${DISK_CRIT_PCT:-92}
 BALLAST=/opt/salec/EMERGENCY_BALLAST
-BALLAST_SIZE=5G
+BALLAST_SIZE=2G
 STATE=/var/lib/salec-ops
 ALERT=/opt/salec/scripts/salec-alert.sh
 mkdir -p "$STATE"

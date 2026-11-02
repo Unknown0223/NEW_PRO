@@ -22,3 +22,8 @@ globs:
 
 ## Fayl hajmi
 - `npm run audit:max-loc` — 400 satrdan oshmasin; legacy allowlist: `scripts/legacy-max-loc-backend.txt`.
+
+## Tanlov yorlig‘i
+- Select / multi-select / option / chip / subtitle: faqat nom. `Name (code)`, `code — name`, `[code]` taqiqlangan.
+- Kod qidiruvda: `searchText`, `catalogPickerSearch`, `staffPickerSearchText`.
+- Filial: `branchVisibleName` + `expandBranchFilterKeys`. Batafsil: `.cursor/rules/picker-labels.mdc`.

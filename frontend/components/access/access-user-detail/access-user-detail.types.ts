@@ -215,9 +215,7 @@ export function sortStaffRoleKeys(roles: string[]): string[] {
 
 export function formatStaffPickLine(u: SupervisorPickRow): string {
   const name = formatPersonDisplayName({ fio: u.full_name, name: u.full_name });
-  const base = name || `#${u.id}`;
-  const code = u.code?.trim();
-  return code ? `${base} (${code})` : base;
+  return name || `#${u.id}`;
 }
 
 /** Дерево из `tenant.settings.references.territory_nodes` (как на странице Territoriya). */

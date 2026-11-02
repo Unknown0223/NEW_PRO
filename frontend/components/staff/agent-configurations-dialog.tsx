@@ -81,7 +81,8 @@ function buildPaymentPickerItems(
     .map((e) => ({
       id: String(e.id),
       title: e.name,
-      subtitle: e.active === false ? "Неактивен" : e.code?.trim() || null
+      subtitle: e.active === false ? "Неактивен" : null,
+      searchText: e.code?.trim() || null
     }))
     .sort((a, b) => a.title.localeCompare(b.title, "ru"));
 }
@@ -95,7 +96,8 @@ function filterPaymentItemsBySearch(
   return items.filter(
     (i) =>
       i.title.toLowerCase().includes(t) ||
-      (i.subtitle != null && String(i.subtitle).toLowerCase().includes(t))
+      (i.subtitle != null && String(i.subtitle).toLowerCase().includes(t)) ||
+      (i.searchText != null && String(i.searchText).toLowerCase().includes(t))
   );
 }
 

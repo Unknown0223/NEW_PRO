@@ -21,6 +21,7 @@ import {
 import { TableColumnSettingsDialog } from "@/components/data-table/table-column-settings-dialog";
 import { PageShell } from "@/components/dashboard/page-shell";
 import { useUserTablePrefs } from "@/hooks/use-user-table-prefs";
+import { branchLabelLookup, branchVisibleName, type BranchRefRow } from "@/lib/branch-options";
 import { api } from "@/lib/api";
 import {
   loadClientBalancesFilterSnapshot,
@@ -201,9 +202,9 @@ function clientDisplayId(r: ClientBalanceRow): string {
 }
 
 function agentLabel(r: ClientBalanceRow): string | null {
-  if (r.agent_tags.length) return r.agent_tags[0];
-  if (!r.agent_name) return null;
-  return r.agent_code ? `${r.agent_name} (${r.agent_code})` : r.agent_name;
+  if (r.agent_name?.trim()) return r.agent_name.trim();
+  if (r.agent_tags.length) return r.agent_tags[0] ?? null;
+  return null;
 }
 
 /** Bir xil mijoz kodi bitta qator. Agentlar yig‘iladi, balans qo‘shiladi. */
@@ -635,7 +636,8 @@ function filterAgentsForBalances(
   agents: StaffPick[],
   expeditors: StaffPick[] | undefined,
   d: FilterForm,
-  skip: AgentFilterSkip
+  skip: AgentFilterSkip,
+  branchLookup: Map<string, string>
 ): StaffPick[] {
   const branches = skip.branch ? [] : splitMultiFilterValues(d.agent_branch);
   const supIds = skip.supervisor
@@ -653,7 +655,7 @@ function filterAgentsForBalances(
 
   return agents.filter((a) => {
     if (agentIds.length > 0 && !agentIds.includes(a.id)) return false;
-    if (branches.length > 0 && !branches.includes(normTrim(a.branch))) return false;
+    if (branches.length > 0 && !branches.includes(normTrim(branchVisibleName(a.branch, branchLookup) ?? ""))) return false;
     if (supIds.length > 0 && !supIds.includes(a.supervisor_user_id ?? -1)) return false;
     if (tds.length > 0 && !tds.includes(normTrim(a.trade_direction))) return false;
     if (expIds.length > 0) {
@@ -904,6 +906,7 @@ export function ClientBalancesWorkspace() {
         references?: {
           payment_types?: string[];
           payment_method_entries?: ProfilePaymentMethodEntry[];
+          branches?: BranchRefRow[];
         };
       }>(`/api/${tenantSlug}/settings/profile`);
       return data.references ?? {};
@@ -1114,19 +1117,23 @@ export function ClientBalancesWorkspace() {
     return Array.from(new Set([...fromOptions, ...fromList])).sort((a, b) => a.localeCompare(b, "ru"));
   }, [clientRefsQ.data]);
 
+  const branchLookup = useMemo(
+    () => branchLabelLookup(profileQ.data?.branches),
+    [profileQ.data?.branches]
+  );
   const agentsSrc = useMemo(() => agentsQ.data ?? [], [agentsQ.data]);
   const expeditorsSrc = useMemo(() => expeditorsQ.data ?? [], [expeditorsQ.data]);
 
   const balanceCascade = useMemo(() => {
     const d = draft;
     return {
-      forAgentSelect: filterAgentsForBalances(agentsSrc, expeditorsSrc, d, { agent: true }),
-      forSupervisorSelect: filterAgentsForBalances(agentsSrc, expeditorsSrc, d, { supervisor: true }),
-      forBranchSelect: filterAgentsForBalances(agentsSrc, expeditorsSrc, d, { branch: true }),
-      forTradeDirectionSelect: filterAgentsForBalances(agentsSrc, expeditorsSrc, d, { tradeDirection: true }),
-      forExpeditorSelect: filterAgentsForBalances(agentsSrc, expeditorsSrc, d, { expeditor: true })
+      forAgentSelect: filterAgentsForBalances(agentsSrc, expeditorsSrc, d, { agent: true }, branchLookup),
+      forSupervisorSelect: filterAgentsForBalances(agentsSrc, expeditorsSrc, d, { supervisor: true }, branchLookup),
+      forBranchSelect: filterAgentsForBalances(agentsSrc, expeditorsSrc, d, { branch: true }, branchLookup),
+      forTradeDirectionSelect: filterAgentsForBalances(agentsSrc, expeditorsSrc, d, { tradeDirection: true }, branchLookup),
+      forExpeditorSelect: filterAgentsForBalances(agentsSrc, expeditorsSrc, d, { expeditor: true }, branchLookup)
     };
-  }, [agentsSrc, expeditorsSrc, draft]);
+  }, [agentsSrc, expeditorsSrc, draft, branchLookup]);
 
   const filteredAgents = balanceCascade.forAgentSelect;
 
@@ -1141,17 +1148,17 @@ export function ClientBalancesWorkspace() {
     const branchFiltered =
       branches.length === 0
         ? all
-        : all.filter((s) => branches.includes(normTrim(s.branch)));
+        : all.filter((s) => branches.includes(normTrim(branchVisibleName(s.branch, branchLookup) ?? "")));
     if (supIds.size === 0) return branchFiltered;
     return branchFiltered.filter((s) => supIds.has(s.id));
-  }, [supervisorsQ.data, draft.agent_branch, balanceCascade.forSupervisorSelect]);
+  }, [supervisorsQ.data, draft.agent_branch, balanceCascade.forSupervisorSelect, branchLookup]);
 
   const to = territoryQ.data;
 
   const branchSelectOptionsFiltered = useMemo(() => {
     const fromAgents = new Set<string>();
     for (const a of balanceCascade.forBranchSelect) {
-      const b = normTrim(a.branch);
+      const b = normTrim(branchVisibleName(a.branch, branchLookup) ?? "");
       if (b) fromAgents.add(b);
     }
     let list = Array.from(fromAgents).sort((a, b) => a.localeCompare(b, "ru"));
@@ -1164,7 +1171,7 @@ export function ClientBalancesWorkspace() {
       }
     }
     return list;
-  }, [balanceCascade.forBranchSelect, to?.branches]);
+  }, [balanceCascade.forBranchSelect, to?.branches, branchLookup]);
 
   const tradeDirectionFilterOpts = useMemo(() => {
     const fromAgents = new Set<string>();

@@ -333,18 +333,18 @@ export default function ReportProductSalesPage() {
   }, [opts?.order_types]);
   const agentItems = (opts?.agents ?? []).map((x) => ({
     id: String(x.id),
-    title: `${x.name}${x.code ? ` (${x.code})` : ""}`
+    title: x.name, searchText: [x.name, x.code].filter(Boolean).join(" ")
   }));
   const supervisorItems = (opts?.supervisors ?? []).map((x) => ({
     id: String(x.id),
-    title: `${x.name}${x.code ? ` (${x.code})` : ""}`
+    title: x.name, searchText: [x.name, x.code].filter(Boolean).join(" ")
   }));
   const categoryItems = (opts?.categories ?? []).map((x) => ({ id: String(x.id), title: x.name }));
   const groupItems = (opts?.product_groups ?? []).map((x) => ({ id: String(x.id), title: x.name }));
   const segmentItems = (opts?.segments ?? []).map((x) => ({ id: String(x.id), title: x.name }));
   const tradeDirItems = (opts?.trade_directions ?? []).map((x) => ({
     id: String(x.id),
-    title: x.code ? `${x.name} (${x.code})` : x.name
+    title: x.name, searchText: [x.name, x.code].filter(Boolean).join(" ")
   }));
   const priceTypeItems = opts?.price_type_options?.length
     ? opts.price_type_options.map((x) => ({ id: x.id, title: x.label }))
@@ -352,11 +352,11 @@ export default function ReportProductSalesPage() {
   const paymentMethodItems = (opts?.payment_methods ?? []).map((x) => ({ id: x.id, title: x.label }));
   const brandItems = (opts?.brands ?? []).map((x) => ({
     id: String(x.id),
-    title: `${x.name}${x.code ? ` (${x.code})` : ""}`
+    title: x.name, searchText: [x.name, x.code].filter(Boolean).join(" ")
   }));
   const productItems = (opts?.products ?? []).map((x) => ({
     id: String(x.id),
-    title: `${x.name} (${x.sku})`
+    title: x.name, searchText: [x.name, x.sku].filter(Boolean).join(" ")
   }));
 
   const listRows = reportQ.data?.rows ?? [];

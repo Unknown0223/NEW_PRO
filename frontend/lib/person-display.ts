@@ -57,6 +57,25 @@ export function staffPickerDisplayName(
   return "—";
 }
 
+/**
+ * Spravochnik tanlovi (filial, ombor, yo‘nalish, kassa, tovar): ekranda faqat nom.
+ * Kodni yozuvga qo‘shmang — qidiruv uchun `catalogPickerSearch` ishlating.
+ * Nom bo‘lmasa va faqat kod qolsa, kod yashiriladi (bo‘sh qator).
+ */
+export function catalogPickerTitle(name: string | null | undefined): string {
+  return (name ?? "").trim();
+}
+
+export function catalogPickerSearch(
+  name: string | null | undefined,
+  ...extra: Array<string | number | null | undefined>
+): string {
+  return [name, ...extra]
+    .map((x) => (x == null ? "" : String(x).trim()))
+    .filter(Boolean)
+    .join(" ");
+}
+
 export function staffPickerSearchText(
   s: PersonNameParts & { code?: string | null; login?: string | null; id?: number }
 ): string {

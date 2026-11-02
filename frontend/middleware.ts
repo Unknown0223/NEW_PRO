@@ -103,6 +103,6 @@ export const config = {
      * Icon metadata routes (`/icon`, `/apple-icon`) kengaytmasiz — auth matcher’dan
      * chiqarilmasa login HTML “favicon” bo‘lib qoladi (Chrome eski Vercel/blank tab).
      */
-    "/((?!api|auth|_next/static|_next/image|favicon\\.ico|favicon-sa\\.ico|favicon\\.svg|icon|apple-icon|apple-touch-icon|sa-favicon|sa-brand-v3|site\\.webmanifest|.*\\.(?:svg|png|jpg|jpeg|gif|webp|css|js|woff2?|ttf|ico|map|geojson|webmanifest)$).*)"
+    "/((?!api|auth|_next/static|_next/image|favicon\\.ico|favicon-sa\\.ico|favicon\\.svg|icon|apple-icon|apple-touch-icon|sa-favicon|sa-brand-v3|site\\.webmanifest|.*\\.(?:svg|png|jpg|jpeg|gif|webp|css|js|ps1|apk|exe|zip|woff2?|ttf|ico|map|geojson|webmanifest)$).*)"
   ]
 };

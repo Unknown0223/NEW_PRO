@@ -75,6 +75,8 @@ export async function createTabelAbsenceRequest(
   if (Number.isNaN(fromDate.getTime()) || Number.isNaN(toDate.getTime()) || toDate < fromDate) {
     throw new Error("BAD_DATE_RANGE");
   }
+  const spanDays = Math.round((toDate.getTime() - fromDate.getTime()) / 86_400_000) + 1;
+  if (spanDays > 62) throw new Error("RANGE_TOO_LONG");
   return prisma.staffAbsenceRequest.create({
     data: {
       tenant_id: tenantId,
@@ -99,6 +101,7 @@ export async function decideTabelAbsenceRequest(
 ) {
   const req = await prisma.staffAbsenceRequest.findFirst({ where: { id, tenant_id: tenantId } });
   if (!req) throw new Error("NOT_FOUND");
+  if (req.status !== "pending") throw new Error("ALREADY_DECIDED");
 
   const updated = await prisma.staffAbsenceRequest.update({
     where: { id },

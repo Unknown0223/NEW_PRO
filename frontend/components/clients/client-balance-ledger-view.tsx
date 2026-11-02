@@ -192,8 +192,7 @@ export function ClientBalanceLedgerView({ clientId, embedded = false, pageShellC
   const ledgerClientLabel = useMemo(() => {
     const c = ledgerMetaQ.data?.client;
     if (!c) return "";
-    const code = c.client_code?.trim();
-    return code ? `${code} ${c.name}` : c.name;
+    return c.name;
   }, [ledgerMetaQ.data?.client]);
 
   if (!hydrated || !tenantSlug) {

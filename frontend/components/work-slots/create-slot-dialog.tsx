@@ -239,7 +239,7 @@ export function CreateSlotDialog({
                   { id: "__none__", title: "—" },
                   ...tradeDirections.map((t) => ({
                     id: String(t.id),
-                    title: t.code ? `${t.name} (${t.code})` : t.name
+                    title: t.name, searchText: [t.name, t.code].filter(Boolean).join(" ")
                   }))
                 ]}
                 selectedValues={directionId ? [directionId] : []}

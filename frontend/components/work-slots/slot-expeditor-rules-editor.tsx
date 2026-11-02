@@ -111,7 +111,7 @@ export function SlotExpeditorRulesEditor({ tenant, value, onChange }: Props) {
     () =>
       (agentsQ.data ?? []).map((a) => ({
         id: a.id,
-        title: `${a.fio}${a.code ? ` (${a.code})` : ""}`,
+        title: a.fio, searchText: [a.fio, a.code].filter(Boolean).join(" "),
         searchText: `${a.code ?? ""} ${a.id}`
       })),
     [agentsQ.data]

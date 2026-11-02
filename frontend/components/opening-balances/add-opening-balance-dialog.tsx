@@ -134,7 +134,7 @@ export function AddOpeningBalanceDialog({ open, onOpenChange, tenantSlug, onCrea
         return {
           id: c.id,
           title: c.name,
-          subtitle: [c.region, agent?.code ? `агент ${agent.code}` : null, c.phone]
+          subtitle: [c.region, agent?.fio, c.phone]
             .filter(Boolean)
             .join(" · "),
           searchText: [c.client_code, c.region, agent?.code, String(c.id)].filter(Boolean).join(" ")

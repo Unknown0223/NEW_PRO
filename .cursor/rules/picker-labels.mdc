@@ -1,0 +1,14 @@
+---
+description: Tanlovlar ekranda faqat nom — kod, SKU va UUID yozuvga qo‘shilmaydi
+alwaysApply: true
+---
+
+# Tanlov yorlig‘i — faqat nom
+
+Filial, ombor, kassa, yo‘nalish, hodim, mijoz, tovar va boshqa spravochnik **tanlovi** (select, multi-select, option, chip, subtitle) ekranda **faqat inson o‘qiydigan nom**.
+
+- Kod, SKU, login, UUID ni `title` / `label` / `subtitle` ga qo‘shmang: `Name (code)`, `code — name`, `[code] name` taqiqlangan.
+- Qidiruvda kod qoladi: `searchText` yoki `catalogPickerSearch` / `staffPickerSearchText`.
+- Nom bo‘lmasa, yorliq bo‘sh yoki faqat kod (fallback). Nom bor bo‘lsa kod yozuvga qo‘shilmaydi.
+- Filial: ko‘rinish `branchVisibleName`, filtr `expandBranchFilterKeys` (nom + kod + id mos keladi). Hodim: `staffPickerDisplayName`.
+- Alohida «kod» ustuni, fayl nomi, xarita pin va toast matni bu qoidaga kirmaydi. Sozlama formasidagi kod **maydoni** o‘z qiymatini ko‘rsatishi mumkin.

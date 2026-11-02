@@ -8,6 +8,8 @@ import { cn } from "@/lib/utils";
 
 export type SchemeOptions = {
   branches: string[];
+  /** Saqlangan kalit (kod yoki nom) → ko‘rinadigan filial nomi. */
+  branchLabels?: Record<string, string>;
   positions: string[];
   tradeDirections: Array<{ id: number; name: string }>;
   items: Array<{ id: number; name: string; type: string; system_key: string | null; is_active: boolean }>;
@@ -109,7 +111,7 @@ export function ChipMulti<T extends string | number>({
 }
 
 function condOptions(field: CondField, o: SchemeOptions): Array<{ value: string | number; label: string }> {
-  if (field === "branch") return o.branches.map((b) => ({ value: b, label: b }));
+  if (field === "branch") return o.branches.map((b) => ({ value: b, label: o.branchLabels?.[b] ?? b }));
   if (field === "position") return o.positions.map((p) => ({ value: p, label: p }));
   if (field === "trade_direction") return o.tradeDirections.map((t) => ({ value: t.id, label: t.name }));
   return [];

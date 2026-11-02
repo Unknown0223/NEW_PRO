@@ -11,10 +11,9 @@ function paymentMethodLabel(r: ClientLedgerRow): string {
 
 export function mapCustomer(data: ClientBalanceLedgerResponse): BalanceDetailCustomer {
   const c = data.client;
-  const code = c.client_code?.trim();
   return {
     id: c.id,
-    name: code ? `${code} ${c.name}` : c.name,
+    name: c.name,
     phone: c.phone?.trim() ?? "",
     territory: c.territory_label?.trim() ?? "—"
   };
@@ -81,7 +80,7 @@ export function mapBalanceCards(
   for (const ac of data.agent_cards) {
     const gd = parseAmount(ac.ledger_general_debt_total);
     const gp = parseAmount(ac.ledger_general_payment_total);
-    const title = ac.agent_code ? `${ac.agent_name} (${ac.agent_code})` : ac.agent_name;
+    const title = ac.agent_name;
     cards.push(cardFromPaymentTypes(String(ac.agent_id ?? "null"), title, gp - gd, ac.payment_by_type, ac.agent_id));
   }
   return cards;

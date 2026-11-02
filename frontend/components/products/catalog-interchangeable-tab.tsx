@@ -256,7 +256,7 @@ export function CatalogInterchangeableTab({
       map.set(id, { id, title: productLabels[id] ?? `#${id}` });
     }
     for (const p of productsQ.data?.data ?? []) {
-      map.set(p.id, { id: p.id, title: p.name, subtitle: p.sku });
+      map.set(p.id, { id: p.id, title: p.name, searchText: [p.name, p.sku].filter(Boolean).join(" ") });
     }
     return [...map.values()];
   }, [productIds, productLabels, productsQ.data]);

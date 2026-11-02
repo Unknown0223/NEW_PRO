@@ -271,12 +271,12 @@ export default function ReportClientSales4Page() {
       title: fromApi.find((o) => String(o.id) === id)?.label ?? orderTypeLabelRu(id)
     }));
   }, [opts?.order_types]);
-  const agentItems = (opts?.agents ?? []).map((x) => ({ id: String(x.id), title: `${x.name}${x.code ? ` (${x.code})` : ""}` }));
+  const agentItems = (opts?.agents ?? []).map((x) => ({ id: String(x.id), title: x.name, searchText: [x.name, x.code].filter(Boolean).join(" ") }));
   const categoryItems = (opts?.categories ?? []).map((x) => ({ id: String(x.id), title: x.name }));
-  const brandItems = (opts?.brands ?? []).map((x) => ({ id: String(x.id), title: `${x.name}${x.code ? ` (${x.code})` : ""}` }));
+  const brandItems = (opts?.brands ?? []).map((x) => ({ id: String(x.id), title: x.name, searchText: [x.name, x.code].filter(Boolean).join(" ") }));
   const tradeDirItems = (opts?.trade_directions ?? []).map((x) => ({
     id: String(x.id),
-    title: x.code ? `${x.name} (${x.code})` : x.name
+    title: x.name, searchText: [x.name, x.code].filter(Boolean).join(" ")
   }));
   const clientCategoryItems = (opts?.client_categories ?? []).map((x) => ({ id: x, title: x }));
 

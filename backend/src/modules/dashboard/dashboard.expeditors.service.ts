@@ -15,6 +15,12 @@ import type {
   ExpeditorsDashboardFilters,
   ExpeditorsDashboardResponse
 } from "./dashboard.expeditors.types";
+import { loadBranchLabelSources } from "../tenant-settings/tenant-settings.refs";
+import {
+  branchLabelLookup,
+  branchVisibleName,
+  expandBranchFilterKeys
+} from "../tenant-settings/branch-display.pure";
 
 export type {
   ExpeditorDashboardRow,
@@ -123,6 +129,11 @@ export async function getExpeditorsDashboard(
   tenantId: number,
   f: ExpeditorsDashboardFilters
 ): Promise<ExpeditorsDashboardResponse> {
+  const branchCatalog = await loadBranchLabelSources(tenantId);
+  const branchLookup = branchLabelLookup(branchCatalog);
+  if (f.branches.length) {
+    f = { ...f, branches: expandBranchFilterKeys(f.branches, branchCatalog) };
+  }
   const fromUtc = new Date(`${f.date_from}T00:00:00.000Z`);
   const toUtc = new Date(`${f.date_to}T23:59:59.999Z`);
   const expFilter = orderScope(f);
@@ -309,7 +320,8 @@ export async function getExpeditorsDashboard(
     rollupExpeditors(
       mapped.filter((r) => r.expeditor_user_id > 0),
       (r) => {
-        const branch = metaById.get(r.expeditor_user_id)?.branch?.trim() || "Без филиала";
+        const branch =
+          branchVisibleName(metaById.get(r.expeditor_user_id)?.branch, branchLookup) || "Без филиала";
         return { name: branch, code: null };
       }
     ),

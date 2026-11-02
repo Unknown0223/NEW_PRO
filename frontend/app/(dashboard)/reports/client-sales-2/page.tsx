@@ -219,8 +219,8 @@ export default function ReportClientSales2Page() {
 
   if (!hydrated || !tenantSlug) return <p className="text-sm text-muted-foreground">Загрузка...</p>;
 
-  const productItems = (opts?.products ?? []).map((x) => ({ id: String(x.id), title: `${x.name}${x.sku ? ` (${x.sku})` : ""}` }));
-  const agentItems = (opts?.agents ?? []).map((x) => ({ id: String(x.id), title: `${x.name}${x.code ? ` (${x.code})` : ""}` }));
+  const productItems = (opts?.products ?? []).map((x) => ({ id: String(x.id), title: x.name, searchText: [x.name, x.sku].filter(Boolean).join(" ") }));
+  const agentItems = (opts?.agents ?? []).map((x) => ({ id: String(x.id), title: x.name, searchText: [x.name, x.code].filter(Boolean).join(" ") }));
   const categoryItems = (opts?.categories ?? []).map((x) => ({ id: String(x.id), title: x.name }));
   const groupItems = (opts?.groups ?? []).map((x) => ({ id: String(x.id), title: x.name }));
   const segmentItems = (opts?.segments ?? []).map((x) => ({ id: String(x.id), title: x.name }));
@@ -393,7 +393,7 @@ export default function ReportClientSales2Page() {
           Number.parseFloat(r.amount) || 0,
           Number.parseFloat(r.qty) || 0,
           Number.parseFloat(r.volume) || 0,
-          r.agent_code ? `${r.agent_name} (${r.agent_code})` : r.agent_name,
+          r.agent_name,
           r.territory
         ])
       );
@@ -411,7 +411,7 @@ export default function ReportClientSales2Page() {
         "По агентам",
         ["Агент", "АКБ", "ОКБ", "% АКБ от ОКБ", "Кол-во", "Объем", "Сумма"],
         reportQ.data.agents_summary.map((r) => [
-          r.agent_code ? `${r.agent_name} (${r.agent_code})` : r.agent_name,
+          r.agent_name,
           r.akb,
           r.okb,
           r.akb_percent,
@@ -608,7 +608,7 @@ export default function ReportClientSales2Page() {
                       colId === "amount" ? money(r.amount) :
                       colId === "qty" ? money(r.qty) :
                       colId === "volume" ? money(r.volume) :
-                      colId === "agent" ? (r.agent_code ? `${r.agent_name} (${r.agent_code})` : r.agent_name) :
+                      colId === "agent" ? (r.agent_name) :
                       r.territory;
                     return (
                       <td key={`${r.client_id}-${colId}`} className={cn("px-2 py-2", colId === "amount" || colId === "qty" || colId === "volume" ? "text-right tabular-nums" : "")}>
@@ -706,7 +706,7 @@ export default function ReportClientSales2Page() {
                 <tr key={`${r.agent_id ?? 0}-${idx}`} className="border-t">
                   {visibleAgentCols.map((colId) => {
                     const text =
-                      colId === "agent" ? (r.agent_code ? `${r.agent_name} (${r.agent_code})` : r.agent_name) :
+                      colId === "agent" ? (r.agent_name) :
                       colId === "akb" ? String(r.akb) :
                       colId === "okb" ? String(r.okb) :
                       colId === "akb_percent" ? formatNumberGrouped(r.akb_percent, { maxFractionDigits: 2 }) :

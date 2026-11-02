@@ -113,7 +113,7 @@ export function ClientBalancesFiltersPanel({
     () =>
       agentOptions.map((a) => ({
         value: String(a.id),
-        label: `${a.fio}${a.code ? ` (${a.code})` : ""}`
+        label: a.fio
       })),
     [agentOptions]
   );

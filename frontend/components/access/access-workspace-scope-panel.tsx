@@ -268,10 +268,10 @@ export function AccessWorkspaceScopePanel({ ws }: { ws: UseAccessWorkspaceReturn
                                             return n;
                                           });
                                         }}
-                                        aria-label={`Выбрать: ${u.code ? `[${u.code}] ${u.full_name || u.login}` : u.full_name || u.login}`}
+                                        aria-label={`Выбрать: ${u.full_name || u.login}`}
                                       />
                                     </td>
-                                    <td className="min-w-0 px-2 py-1.5 align-middle leading-snug">{u.code ? `[${u.code}] ${u.full_name || u.login}` : u.full_name || u.login}</td>
+                                    <td className="min-w-0 px-2 py-1.5 align-middle leading-snug">{u.full_name || u.login}</td>
                                     <td className="px-2 py-1.5 align-middle text-[11px] whitespace-nowrap">{u.role}</td>
                                     <td className="truncate px-2 py-1.5 align-middle text-[11px] text-muted-foreground" title={u.position || undefined}>
                                       {u.position || "—"}

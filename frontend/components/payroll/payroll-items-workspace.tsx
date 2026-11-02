@@ -313,7 +313,7 @@ export function PayrollItemsWorkspace() {
                   <PayrollDeleteButton
                     disabled={remove.isPending}
                     onClick={async () => {
-                      const ok = await confirm({ title: "Удаление записи", message: "Вы действительно хотите удалить эту запись?", detail: `«${draft.name}»${draft.code ? ` (${draft.code})` : ""}`, confirmLabel: "Удалить", cancelLabel: "Отмена", destructive: true });
+                      const ok = await confirm({ title: "Удаление записи", message: "Вы действительно хотите удалить эту запись?", detail: `«${draft.name}»`, confirmLabel: "Удалить", cancelLabel: "Отмена", destructive: true });
                       if (ok && draft.id) remove.mutate(draft.id);
                     }}
                   />

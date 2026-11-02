@@ -133,7 +133,7 @@ export function ClientHubBalanceStrip({ tenantSlug, clientId, onOpenDebtsTab }: 
               const gd = parseLedgerKpiAmount(ac.ledger_general_debt_total ?? "0");
               const gp = parseLedgerKpiAmount(ac.ledger_general_payment_total ?? "0");
               const net = gp - gd;
-              const title = ac.agent_code ? `${ac.agent_name} (${ac.agent_code})` : ac.agent_name;
+              const title = ac.agent_name;
               return (
                 <div key={`${ac.agent_id ?? "null"}-${ac.agent_name}`} className={LEDGER_KPI_LANE_CLASS}>
                   <SelectableCompactBalanceKpiCard

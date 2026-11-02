@@ -25,6 +25,24 @@ export const WD_ROLES = [
 ] as const;
 export type WdRole = (typeof WD_ROLES)[number];
 
+/** `users.role` → jadvaldagi rol. Backend `USER_ROLE_TO_WD_ROLE` bilan bir xil. */
+const USER_ROLE_TO_WD: Record<string, WdRole> = {
+  agent: "Агент",
+  cashier: "Кассир",
+  manager: "Менеджер",
+  merchandiser: "Мерчендайзер",
+  operator: "Оператор",
+  skladchik: "Складчик",
+  supervisor: "Супервайзер",
+  expeditor: "Экспедитор"
+};
+
+export function wdRoleOf(role: string | null | undefined): WdRole | null {
+  const raw = (role ?? "").trim();
+  if ((WD_ROLES as readonly string[]).includes(raw)) return raw as WdRole;
+  return USER_ROLE_TO_WD[raw.toLowerCase()] ?? null;
+}
+
 /** Метки дней недели (понедельник первый). */
 export const WEEKDAYS = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"] as const;
 export const WEEKDAYS_FULL = [

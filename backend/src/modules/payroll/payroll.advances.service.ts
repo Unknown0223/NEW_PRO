@@ -11,8 +11,10 @@ import {
   advanceToDto,
   assertInScope,
   loadAdvanceUsers,
+  loadTenantBranches,
   type AdvanceActor
 } from "./payroll.advances.shared";
+import { branchLabelLookup, branchVisibleName } from "../tenant-settings/branch-display.pure";
 import { notifyPermissionHolders } from "./payroll.notify";
 import { PayrollError } from "./payroll.route-helpers";
 import { isPayrollEnabled } from "./payroll.settings";
@@ -45,6 +47,7 @@ export async function listManagerAdvances(tenantId: number, actor: AdvanceActor,
   if (ids) where.user_id = { in: ids };
   const rows = await prisma.payrollAdvance.findMany({ where, orderBy: [{ created_at: "desc" }], take: 5000 });
   const users = await loadAdvanceUsers(tenantId, actorIdsOf(rows));
+  const branchLookup = branchLabelLookup(await loadTenantBranches(tenantId));
   const q = f.q?.trim().toLocaleLowerCase("ru");
   const limitRows = await loadLimitRows(prisma, tenantId);
   const usedBy = new Map<number, number>();
@@ -56,7 +59,11 @@ export async function listManagerAdvances(tenantId: number, actor: AdvanceActor,
       const dto = advanceToDto(r, users);
       const lim = pickEffectiveLimit(limitRows, r.user_id, dto.role ?? "");
       const used = usedBy.get(r.user_id) ?? 0;
-      return { ...dto, limit: lim ? { max: lim.max, scope: lim.scope, used, remaining: Math.max(0, lim.max - used) } : null };
+      return {
+        ...dto,
+        branch: branchVisibleName(dto.branch, branchLookup),
+        limit: lim ? { max: lim.max, scope: lim.scope, used, remaining: Math.max(0, lim.max - used) } : null
+      };
     })
     .filter((r) => !q || `${r.fio} ${r.code ?? ""}`.toLocaleLowerCase("ru").includes(q));
 }

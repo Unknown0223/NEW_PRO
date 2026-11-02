@@ -1,4 +1,6 @@
 import { prisma } from "../../config/database";
+import { loadBranchLabelSources } from "../tenant-settings/tenant-settings.refs";
+import { branchLabelLookup, uniqueBranchVisibleNames } from "../tenant-settings/branch-display.pure";
 import type { ReportActor } from "./client-sales-4-report.service";
 import {
   resolveFilterOptionsScope,
@@ -27,13 +29,11 @@ export async function getGpsDeliveryRoutesFilterOptions(tenantId: number, actor?
     orderBy: { name: "asc" }
   });
 
-  const branches = [
-    ...new Set(
-      expeditors
-        .map((e) => (e.branch ?? "").trim())
-        .filter((b) => b.length > 0)
-    )
-  ].sort((a, b) => a.localeCompare(b, "uz"));
+  const catalog = await loadBranchLabelSources(tenantId);
+  const branches = uniqueBranchVisibleNames(
+    expeditors.map((e) => e.branch),
+    branchLabelLookup(catalog)
+  );
 
   return {
     branches: branches.map((name) => ({ id: name, label: name })),

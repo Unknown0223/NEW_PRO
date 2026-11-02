@@ -270,7 +270,7 @@ export function ReportBuilderWorkspace() {
   const usedIds = useMemo(() => new Set([...config.rowFieldIds, ...config.colFieldIds]), [config.rowFieldIds, config.colFieldIds]);
 
   const agentItems = useMemo(
-    () => (filtersQ.data?.agents ?? []).map((a) => ({ id: String(a.id), title: a.code ? `${a.code} — ${a.name}` : a.name })),
+    () => (filtersQ.data?.agents ?? []).map((a) => ({ id: String(a.id), title: a.name, searchText: [a.name, a.code].filter(Boolean).join(" ") })),
     [filtersQ.data?.agents]
   );
 

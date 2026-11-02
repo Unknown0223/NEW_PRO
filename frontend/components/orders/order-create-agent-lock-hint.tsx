@@ -46,8 +46,7 @@ export function OrderCreateAgentLockHint({
         {lockType === "contract" ? (
           <>
             Блокировка по договору: система разрешает создавать заказы только для агента{" "}
-            <strong>{slot1.agent_name ?? `агент #${lockedAgentId}`}</strong>
-            {slot1.agent_code ? ` (${slot1.agent_code})` : ""}.
+            <strong>{slot1.agent_name ?? `агент #${lockedAgentId}`}</strong>.
             {mismatch ? (
               <span className="mt-1 block text-destructive">
                 Выбранный агент не совпадает — при сохранении будет ошибка (409).

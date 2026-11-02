@@ -109,7 +109,7 @@ export function AgentRouteWorkspace() {
             {(agentsQ.data ?? []).map((a) => (
               <option key={a.id} value={a.id}>
                 {a.name}
-                {a.code ? ` (${a.code})` : ""}
+
               </option>
             ))}
           </select>

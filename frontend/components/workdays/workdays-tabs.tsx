@@ -14,6 +14,7 @@ import {
   monthWorkdayCount,
   monthWorkdayCountFor,
   scheduleDiff,
+  wdRoleOf,
   type ExceptionType,
   type ScheduleMap,
   type WdRole,
@@ -307,9 +308,10 @@ export function IndividualTab({
             </thead>
             <tbody>
               {overrides.map((ov) => {
-                const roleSch = saved[ov.position as WdRole] ?? [true, true, true, true, true, true, false];
+                const roleName = wdRoleOf(ov.position);
+                const roleSch = (roleName ? saved[roleName] : undefined) ?? [true, true, true, true, true, true, false];
                 const diff = scheduleDiff(ov.schedule, roleSch);
-                const mCount = monthWorkdayCountFor(ov.position, saved, overrides, exceptions, ov.employeeId, year, month);
+                const mCount = monthWorkdayCountFor(roleName ?? ov.position, saved, overrides, exceptions, ov.employeeId, year, month);
                 return (
                   <tr key={ov.id} className="group">
                     <td className="border-b border-r px-4 py-2.5 group-hover:bg-muted/50">
@@ -319,9 +321,7 @@ export function IndividualTab({
                         </div>
                         <div className="min-w-0">
                           <div className="truncate text-xs font-semibold">{ov.employeeName}</div>
-                          <div className="font-mono text-[10px] text-muted-foreground">
-                            {ov.employeeCode} · {ov.position}
-                          </div>
+                          {roleName ? <div className="text-[10px] text-muted-foreground">{roleName}</div> : null}
                         </div>
                       </div>
                     </td>

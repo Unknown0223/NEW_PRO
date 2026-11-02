@@ -90,7 +90,7 @@ export function PayrollAdvanceFormDialog({ target, ym, onClose, onSaved }: Props
             <select className={PAYROLL_MODAL_LIST} aria-label="Сотрудник" value={userId} onChange={(e) => setUserId(e.target.value)} size={6}>
               {list.map((e) => (
                 <option key={e.id} value={e.id}>
-                  {e.fio}{e.code ? ` (${e.code})` : ""} · {roleLabel(e.role)}{e.remaining != null ? ` · доступно ${money(e.remaining)}` : ""}
+                  {e.fio} · {roleLabel(e.role)}{e.remaining != null ? ` · доступно ${money(e.remaining)}` : ""}
                 </option>
               ))}
             </select>

@@ -1,6 +1,8 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "../../config/database";
 import type { ExpeditorGroupRow } from "./dashboard.expeditors.types";
+import { loadBranchLabelSources } from "../tenant-settings/tenant-settings.refs";
+import { branchLabelLookup, uniqueBranchVisibleNames } from "../tenant-settings/branch-display.pure";
 
 function dec(v: Prisma.Decimal | null | undefined): string {
   return (v ?? new Prisma.Decimal(0)).toFixed(2);
@@ -121,16 +123,21 @@ export function mergeFilialRows(base: ExpeditorGroupRow[], extra: ExpeditorGroup
 }
 
 export async function listBranches(tenantId: number) {
-  const rows = await prisma.user.findMany({
-    where: {
-      tenant_id: tenantId,
-      role: { in: ["expeditor", "agent"] },
-      branch: { not: null }
-    },
-    select: { branch: true },
-    distinct: ["branch"]
-  });
-  return [...new Set(rows.map((r) => r.branch?.trim()).filter((b): b is string => Boolean(b)))].sort((a, b) =>
-    a.localeCompare(b, "ru")
-  );
+  const [rows, catalog] = await Promise.all([
+    prisma.user.findMany({
+      where: {
+        tenant_id: tenantId,
+        role: { in: ["expeditor", "agent"] },
+        branch: { not: null }
+      },
+      select: { branch: true },
+      distinct: ["branch"]
+    }),
+    loadBranchLabelSources(tenantId)
+  ]);
+  const raw = rows.map((r) => r.branch?.trim()).filter((b): b is string => Boolean(b));
+  for (const b of catalog) {
+    if (b.active !== false && b.name.trim()) raw.push(b.name.trim());
+  }
+  return uniqueBranchVisibleNames(raw, branchLabelLookup(catalog));
 }

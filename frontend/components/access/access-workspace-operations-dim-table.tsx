@@ -155,11 +155,11 @@ export function AccessWorkspaceOperationsDimTable({ ws }: { ws: UseAccessWorkspa
                             return n;
                           });
                         }}
-                        aria-label={`Выбрать: ${u.code ? `[${u.code}] ${u.full_name || u.login}` : u.full_name || u.login}`}
+                        aria-label={`Выбрать: ${u.full_name || u.login}`}
                       />
                     </td>
                     <td className="min-w-0 px-1.5 py-1.5 align-middle leading-snug">
-                      {u.code ? `[${u.code}] ${u.full_name || u.login}` : u.full_name || u.login}
+                      {u.full_name || u.login}
                     </td>
                     <td className="px-1.5 py-1.5 align-middle text-[11px]">{u.role}</td>
                     <td

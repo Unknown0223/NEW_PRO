@@ -121,7 +121,7 @@ export function StaffPositionSelect({
         <option key={o.id} value={o.label}>
           {o.label}
           {o.role ? ` (${positionCatalogRoleLabel(o.role)})` : ""}
-          {o.code ? ` [${o.code}]` : ""}
+
         </option>
       ))}
     </select>

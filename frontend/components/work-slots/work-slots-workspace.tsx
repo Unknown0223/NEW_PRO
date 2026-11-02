@@ -29,7 +29,7 @@ import {
   TableRow
 } from "@/components/ui/table";
 import { apiFetch, useTenantReady } from "@/lib/api-client";
-import { activeBranchNamesFromProfile, type BranchRefRow } from "@/lib/branch-options";
+import { activeBranchNamesFromProfile, branchLabelLookup, type BranchRefRow } from "@/lib/branch-options";
 import { buildZoneRegionCityCascadeOptions, buildTerritoryTreeOnlyCascade } from "@/lib/territory-client-filters";
 import { createTerritoryLabelResolver } from "@/lib/territory-filter-labels";
 import type { RefSelectOption } from "@/lib/ref-select-options";
@@ -121,6 +121,7 @@ export function WorkSlotsWorkspace() {
   const [warehouses, setWarehouses] = useState<PickerOpt[]>([]);
   const [cashDesks, setCashDesks] = useState<PickerOpt[]>([]);
   const [profileBranches, setProfileBranches] = useState<string[]>([]);
+  const [profileBranchRows, setProfileBranchRows] = useState<BranchRefRow[]>([]);
   const [territoryNodes, setTerritoryNodes] = useState<TerritoryNode[]>([]);
   const [clientRefs, setClientRefs] = useState<{
     zones?: string[];
@@ -155,19 +156,11 @@ export function WorkSlotsWorkspace() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [staffImportOpen, setStaffImportOpen] = useState(false);
 
-  const branchOptions = useMemo(() => {
-    const set = new Set<string>(profileBranches);
-    for (const r of rows) {
-      for (const code of r.branch_codes ?? []) {
-        if (code.trim()) set.add(code.trim());
-      }
-      if (r.branch_code?.trim()) set.add(r.branch_code.trim());
-    }
-    for (const b of filterApplied.branchList) {
-      if (b?.trim()) set.add(b.trim());
-    }
-    return [...set].sort((a, b) => a.localeCompare(b, "ru"));
-  }, [profileBranches, rows, filterApplied.branchList]);
+  const branchLookup = useMemo(() => branchLabelLookup(profileBranchRows), [profileBranchRows]);
+  const branchOptions = useMemo(
+    () => activeBranchNamesFromProfile(profileBranchRows.length ? profileBranchRows : profileBranches.map((name) => ({ name }))),
+    [profileBranchRows, profileBranches]
+  );
 
   const resolveTerritoryDisplay = useMemo(
     () =>
@@ -281,6 +274,7 @@ export function WorkSlotsWorkspace() {
       setWarehouses((whTable.data ?? []).map((w) => ({ id: w.id, name: w.name })));
       setCashDesks((cash.data ?? []).map((c) => ({ id: c.id, name: c.name })));
       setClientRefs(refs);
+      setProfileBranchRows(profile.references?.branches ?? []);
       setProfileBranches(activeBranchNamesFromProfile(profile.references?.branches));
       setTerritoryNodes(profile.references?.territory_nodes ?? []);
     } catch (e) {
@@ -677,7 +671,7 @@ export function WorkSlotsWorkspace() {
                           {agents.map((a) => (
                             <SelectItem key={a.id} value={String(a.id)}>
                               {a.fio}
-                              {a.code ? ` (${a.code})` : ""}
+
                             </SelectItem>
                           ))}
                         </SelectContent>
@@ -818,6 +812,7 @@ export function WorkSlotsWorkspace() {
         cashDesks={cashDesks}
         clientRefs={clientRefs}
         territoryNodes={territoryNodes}
+        branchLookup={branchLookup}
         onSaved={() => {
           setToast("Сохранено");
           void load();

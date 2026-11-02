@@ -2,6 +2,8 @@ import type { Prisma } from "@prisma/client";
 import { prisma } from "../../config/database";
 import { toFio } from "../staff/staff.shared.helpers";
 import { PayrollError } from "./payroll.route-helpers";
+import { loadBranchLabelSources } from "../tenant-settings/tenant-settings.refs";
+import { branchLabelLookup, branchVisibleName, expandBranchFilterKeys } from "../tenant-settings/branch-display.pure";
 
 export type RecordsFilter = {
   year: number;
@@ -65,7 +67,9 @@ export async function listPayrollColumns(tenantId: number): Promise<PayrollColum
 export async function listPayrollRecords(tenantId: number, f: RecordsFilter) {
   const where: Prisma.PayrollRecordWhereInput = { tenant_id: tenantId, year: f.year, month: f.month };
   if (f.roles?.length) where.role = { in: f.roles };
-  if (f.branches?.length) where.branch = { in: f.branches };
+  const branchCatalog = await loadBranchLabelSources(tenantId);
+  const branchLookup = branchLabelLookup(branchCatalog);
+  if (f.branches?.length) where.branch = { in: expandBranchFilterKeys(f.branches, branchCatalog) };
   if (f.statuses?.length) where.status = { in: f.statuses };
   if (f.positions?.length) where.position = { in: f.positions };
   if (f.directionIds?.length) where.trade_direction_id = { in: f.directionIds };
@@ -111,7 +115,7 @@ export async function listPayrollRecords(tenantId: number, f: RecordsFilter) {
       code: u?.code ?? null,
       login: u?.login ?? null,
       role: r.role,
-      branch: r.branch,
+      branch: branchVisibleName(r.branch, branchLookup),
       position: r.position,
       trade_direction_id: r.trade_direction_id,
       trade_direction: r.trade_direction_id != null ? directionName.get(r.trade_direction_id) ?? null : null,
