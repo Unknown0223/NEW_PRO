@@ -72,7 +72,10 @@ export function BalanceDetailLedgerTable({
     switch (col.key) {
       case "date":
         return <span className="whitespace-nowrap">{fmtDateTime(row.createdAt)}</span>;
-      case "type":
+      case "type": {
+        const idLine = row.docNumber ? (
+          <span className="block text-[11px] font-normal leading-tight text-[#888]">{row.docNumber}</span>
+        ) : null;
         if (r.row_kind === "order" && r.order_id != null) {
           return (
             <Link
@@ -81,6 +84,7 @@ export function BalanceDetailLedgerTable({
               onClick={(e) => e.stopPropagation()}
             >
               {row.typeLabel}
+              {idLine}
             </Link>
           );
         }
@@ -95,10 +99,17 @@ export function BalanceDetailLedgerTable({
               onClick={(e) => e.stopPropagation()}
             >
               {row.typeLabel}
+              {idLine}
             </Link>
           );
         }
-        return row.typeLabel;
+        return (
+          <span>
+            {row.typeLabel}
+            {idLine}
+          </span>
+        );
+      }
       case "opName":
         return row.operationName || "—";
       case "orderType":

@@ -78,6 +78,16 @@ export function paymentListInclude(tenantId: number): Prisma.PaymentInclude {
       }
     },
     cash_desk: { select: { name: true } },
+    ledger_agent: {
+      select: {
+        id: true,
+        name: true,
+        code: true,
+        trade_direction: true,
+        consignment: true,
+        trade_direction_row: { select: { name: true } }
+      }
+    },
     expeditor_user: { select: { id: true, name: true } },
     deleted_by: { select: { id: true, name: true } },
     edit_grants: {
@@ -109,7 +119,8 @@ export function parseUtcDayEnd(isoDate: string | undefined): Date | undefined {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function mapPaymentToListRow(r: any, tenantId: number): PaymentListRow {
   const bal = r.client.client_balances[0]?.balance ?? new Prisma.Decimal(0);
-  const ag = r.client.agent as
+  const payAgent = r.ledger_agent as typeof r.client.agent;
+  const ag = (payAgent ?? r.client.agent) as
     | {
         id: number;
         name: string;
@@ -308,10 +319,18 @@ export function buildPaymentListWhere(
     }
   }
   if (scopedAgentIds.length > 0) {
-    clientAnd.push({
+    andParts.push({
       OR: [
-        { agent_id: { in: scopedAgentIds } },
-        { agent_assignments: { some: { agent_id: { in: scopedAgentIds } } } }
+        { ledger_agent_id: { in: scopedAgentIds } },
+        { order: { agent_id: { in: scopedAgentIds } } },
+        {
+          client: {
+            OR: [
+              { agent_id: { in: scopedAgentIds } },
+              { agent_assignments: { some: { agent_id: { in: scopedAgentIds } } } }
+            ]
+          }
+        }
       ]
     });
   }
@@ -367,6 +386,8 @@ export function buildPaymentListWhere(
     const s = q.search.trim();
     const idNum = Number.parseInt(s, 10);
     const orSearch: Prisma.PaymentWhereInput[] = [
+      { number: { contains: s, mode: "insensitive" } },
+      { note: { contains: s, mode: "insensitive" } },
       { client: { name: { contains: s, mode: "insensitive" } } },
       { client: { legal_name: { contains: s, mode: "insensitive" } } },
       { client: { client_code: { contains: s, mode: "insensitive" } } }

@@ -43,6 +43,10 @@ export function sdLedgerDate(date: string, dateLoad: string, dateDeliver: string
   return realDay(dateDeliver) || realDay(dateLoad) || realDay(date);
 }
 
+/** Hujjat raqami. `d0_` qoladi — lokal bazadagi qator shu bilan topiladi.
+ *  Yangi dilerda `SALESDOC_ORDER_PREFIX=f6-` qo‘yilsa raqam boshqa filialniki bilan aralashmaydi. */
 export function sdOrderNumber(id: string): string {
-  return id.replace(/^(?:f\d+-)?d0_/, "").slice(0, 64);
+  const prefix = process.env.SALESDOC_ORDER_PREFIX ?? "";
+  const bare = id.replace(/^f\d+-/, "");
+  return `${prefix}${bare}`.slice(0, 64);
 }

@@ -12,7 +12,10 @@ import {
   mergeLedgerWithUnpaidDelivered
 } from "../client-balances/client-balances.service";
 import { ORDER_STATUSES_OUTSTANDING_RECEIVABLE } from "../orders/order-status";
-import { PAYMENT_COUNTS_FOR_RECEIVABLE_NET } from "../client-balances/client-balances.constants";
+import {
+  PAYMENT_COUNTS_FOR_RECEIVABLE_NET,
+  PAYMENT_NOT_RETURN_MIRROR
+} from "../client-balances/client-balances.constants";
 
 import type { ClientBalanceLedgerResponse, ClientLedgerQuery } from "./client-balance-ledger.types";
 import {
@@ -168,6 +171,7 @@ export async function getClientBalanceLedger(
       AND p.client_id = ${clientId}
       AND p.deleted_at IS NULL
       ${PAYMENT_COUNTS_FOR_RECEIVABLE_NET}
+      ${PAYMENT_NOT_RETURN_MIRROR}
       ${payDateClause}
       ${paySearchClause}
       ${payAgentClause}
@@ -266,6 +270,7 @@ export async function getClientBalanceLedger(
         AND p.client_id = ${clientId}
         AND p.deleted_at IS NULL
         ${PAYMENT_COUNTS_FOR_RECEIVABLE_NET}
+        ${PAYMENT_NOT_RETURN_MIRROR}
         ${payDateClause}
         ${paySearchClause}
         ${payAgent}

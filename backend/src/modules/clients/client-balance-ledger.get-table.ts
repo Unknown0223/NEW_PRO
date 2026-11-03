@@ -1,6 +1,9 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "../../config/database";
-import { PAYMENT_COUNTS_FOR_RECEIVABLE_NET } from "../client-balances/client-balances.constants";
+import {
+  PAYMENT_COUNTS_FOR_RECEIVABLE_NET,
+  PAYMENT_NOT_RETURN_MIRROR
+} from "../client-balances/client-balances.constants";
 import { resolvePaymentMethodRefToLabel, type PaymentMethodEntryDto } from "../tenant-settings/finance-refs";
 import type { ClientLedgerRow, UnionRaw } from "./client-balance-ledger.types";
 import { mapUnionToLedgerRow } from "./client-balance-ledger.helpers";
@@ -96,6 +99,7 @@ export async function fetchClientBalanceLedgerTable(
         AND p.client_id = ${clientId}
         AND p.deleted_at IS NULL
         ${PAYMENT_COUNTS_FOR_RECEIVABLE_NET}
+        ${PAYMENT_NOT_RETURN_MIRROR}
         ${payDateClause}
         ${paySearchClause}
         ${payAgentClause}
@@ -124,22 +128,15 @@ export async function fetchClientBalanceLedgerTable(
           ag.name AS agent_name,
           ex.name AS expeditor_name,
           NULL::text AS cash_desk_name,
-          o.comment AS note,
+          NULLIF(BTRIM(o.comment, E' \t\n\r'), '') AS note,
           COALESCE(
+            NULLIF(TRIM(o.source_created_by), ''),
             (
               SELECT COALESCE(NULLIF(TRIM(cu.name), ''), cu.login)::text
               FROM order_change_logs ocl
               JOIN users cu ON cu.id = ocl.user_id
               WHERE ocl.order_id = o.id AND ocl.user_id IS NOT NULL
               ORDER BY ocl.created_at ASC NULLS LAST, ocl.id ASC
-              LIMIT 1
-            ),
-            (
-              SELECT COALESCE(NULLIF(TRIM(su.name), ''), su.login)::text
-              FROM order_status_logs osl
-              JOIN users su ON su.id = osl.user_id
-              WHERE osl.order_id = o.id AND osl.user_id IS NOT NULL
-              ORDER BY osl.created_at ASC NULLS LAST, osl.id ASC
               LIMIT 1
             )
           ) AS created_by_login,
@@ -163,7 +160,7 @@ export async function fetchClientBalanceLedgerTable(
           COALESCE(p.paid_at, p.created_at) AS sort_at,
           p.order_id AS order_id,
           p.id AS payment_id,
-          NULL::text AS order_number,
+          NULLIF(TRIM(p.number), '')::text AS order_number,
           CASE WHEN p.entry_kind = 'client_expense' THEN p.amount ELSE NULL END AS debt_amount,
           CASE WHEN p.entry_kind IN ('payment', 'refund') THEN p.amount ELSE NULL END AS payment_amount,
           p.payment_type,
@@ -174,8 +171,8 @@ export async function fetchClientBalanceLedgerTable(
           COALESCE(lag.name, oag.name, cag.name) AS agent_name,
           pex.name AS expeditor_name,
           cd.name AS cash_desk_name,
-          p.note,
-          COALESCE(NULLIF(TRIM(u.name), ''), u.login)::text AS created_by_login,
+          NULLIF(BTRIM(p.note, E' \t\n\r'), '') AS note,
+          COALESCE(NULLIF(TRIM(p.source_created_by), ''), NULLIF(TRIM(u.name), ''), u.login)::text AS created_by_login,
           p.entry_kind,
           NULLIF(TRIM(ord.payment_method_ref), '')::text AS order_payment_method_ref
         FROM client_payments p
@@ -191,6 +188,7 @@ export async function fetchClientBalanceLedgerTable(
           AND p.client_id = ${clientId}
           AND p.deleted_at IS NULL
           ${PAYMENT_COUNTS_FOR_RECEIVABLE_NET}
+          ${PAYMENT_NOT_RETURN_MIRROR}
           ${payDateClause}
           ${paySearchClause}
           ${payAgentClause}

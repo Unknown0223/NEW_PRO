@@ -9,7 +9,11 @@ import {
   type PaymentMethodEntryDto
 } from "../tenant-settings/finance-refs";
 
-import { LARGE_CLIENT_IDS_CHUNK, PAYMENT_COUNTS_FOR_RECEIVABLE_NET } from "./client-balances.constants";
+import {
+  LARGE_CLIENT_IDS_CHUNK,
+  PAYMENT_COUNTS_FOR_RECEIVABLE_NET,
+  PAYMENT_NOT_RETURN_MIRROR
+} from "./client-balances.constants";
 import { sqlIntIdToNumber } from "./client-balances.payments.util";
 
 export async function loadBalancesAsOf(
@@ -155,6 +159,7 @@ export async function loadLedgerCardNetByClient(
       WHERE p.tenant_id = ${tenantId}
         AND p.deleted_at IS NULL
         ${PAYMENT_COUNTS_FOR_RECEIVABLE_NET}
+        ${PAYMENT_NOT_RETURN_MIRROR}
         ${asOfPay}
       UNION ALL
       SELECT o.client_id,

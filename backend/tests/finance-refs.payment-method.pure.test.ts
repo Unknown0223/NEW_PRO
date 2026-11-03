@@ -136,6 +136,8 @@ describe("resolvePaymentMethodRefToLabel", () => {
     expect(resolvePaymentMethodRefToLabel("002", entries)).toBe("Терминал");
     expect(resolvePaymentMethodRefToLabel("003", entries)).toBe("Перечисление");
     expect(resolvePaymentMethodRefToLabel("pm-cash", entries)).toBe("Наличные");
+    expect(resolvePaymentMethodRefToLabel("pm-naxt", entries)).toBe("Наличные");
+    expect(resolvePaymentMethodRefToLabel("Naxt", entries)).toBe("Наличные");
   });
 
   it("returns raw value when catalog has no match", () => {

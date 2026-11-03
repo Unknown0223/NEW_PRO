@@ -133,7 +133,7 @@ function readCashClocks(root: string): Map<string, string> {
 function readStaff(root: string): SdStaff {
   const file = path.join(root, "08-xodim", "staff.json");
   if (!fs.existsSync(file)) {
-    throw new Error("08-xodim/staff.json yo‘q. pull-andijon.ps1 -Group 8");
+    return { agents: [], expeditors: [], supervisors: [], users: [], stores: [] };
   }
   const raw = readJson(file) as SdStaff;
   const id = (v: string) => String(v).replace(/^f1-/, "");

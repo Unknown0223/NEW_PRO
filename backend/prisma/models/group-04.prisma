@@ -148,6 +148,8 @@ model Order {
   work_slot_id                Int?
   /// `web` — ofis paneli; `mobile` — agent/ekspeditor ilovasi
   creation_channel           String?          @db.VarChar(16)
+  /// SalesDoctor «created_by» — tizimda user bo‘lmasa ham ism
+  source_created_by          String?          @db.VarChar(200)
   /// Mobil zakaz qaysi vizit ichida urilgan (agent «Начать визит»)
   agent_visit_id             Int?
   /// Vizit/zakaz GPS tekshiruvi: koordinata, masofa, radius, aniqlik, soxta GPS, oflayn
@@ -258,6 +260,8 @@ model Payment {
   delete_reason_ref  String?   @db.VarChar(128)
   /// Void paytida taqsimotlar snapshoti — restore da qayta yaratiladi
   allocations_snapshot Json?
+  /// SalesDoctor kassa «create_by» ismi
+  source_created_by    String?   @db.VarChar(200)
   client             Client    @relation(fields: [client_id], references: [id], onDelete: Cascade)
   created_by         User?     @relation("PaymentCreator", fields: [created_by_user_id], references: [id])
   deleted_by         User?     @relation("PaymentVoidedBy", fields: [deleted_by_user_id], references: [id], onDelete: SetNull)

@@ -98,7 +98,7 @@ export function mapLedgerRow(r: ClientLedgerRow, tab: "overall" | "detailed"): B
     raw: r,
     createdAt: r.sort_at,
     typeLabel: ledgerTypeName(r.type_label),
-    docNumber: r.order_number ?? String(r.payment_id ?? r.order_id ?? ""),
+    docNumber: r.order_number?.trim() ?? "",
     operationName: ledgerTypeName(r.type_label),
     orderType:
       r.order_kind_label ??
@@ -115,7 +115,7 @@ export function mapLedgerRow(r: ClientLedgerRow, tab: "overall" | "detailed"): B
     agent: r.agent_name?.trim() ?? "",
     expeditor: r.expeditor_name?.trim() ?? "",
     cashbox: r.cash_desk_name?.trim() ?? "",
-    comment: r.note?.trim() ?? r.comment_primary?.trim() ?? "",
+    comment: r.note?.trim() ?? "",
     txComment: r.comment_transaction?.trim() ?? "",
     createdBy: r.created_by_display?.trim() ?? r.created_by_login?.trim() ?? "",
     isSystem: r.entry_kind === "client_expense" || r.operation_type_code === "2"

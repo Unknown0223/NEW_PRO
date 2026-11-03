@@ -256,6 +256,15 @@ export function resolvePaymentMethodRefToLabel(
   if (!ref) return null;
   const hit = findPaymentMethodEntry(ref, entries);
   if (hit) return hit.name.trim();
+  const low = ref.toLowerCase().replace(/^pm-/, "");
+  if (low === "naxt" || low === "naqd" || low === "cash" || low === "наличные") {
+    const cash = entries.find((e) => {
+      if (e.active === false) return false;
+      const blob = `${e.id} ${e.code ?? ""} ${e.name}`.toLowerCase();
+      return blob.includes("pm-cash") || blob.includes("налич") || blob.includes("naqd") || blob.includes("cash");
+    });
+    return cash?.name.trim() || "Наличные";
+  }
   return ref;
 }
 

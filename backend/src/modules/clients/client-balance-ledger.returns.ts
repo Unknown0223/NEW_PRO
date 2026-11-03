@@ -170,8 +170,8 @@ export function finishedReturnOrderLedgerUnionSql(args: {
       ag.name AS agent_name,
       ex.name AS expeditor_name,
       NULL::text AS cash_desk_name,
-      ('Возврат · ' || COALESCE(o.number, CAST(o.id AS text)))::text AS note,
-      NULL::text AS created_by_login,
+      NULLIF(BTRIM(o.comment, E' \t\n\r'), '')::text AS note,
+      NULLIF(TRIM(o.source_created_by), '')::text AS created_by_login,
       'refund'::text AS entry_kind,
       NULLIF(TRIM(o.payment_method_ref), '')::text AS order_payment_method_ref
     FROM orders o

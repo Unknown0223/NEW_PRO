@@ -191,10 +191,7 @@ export function mapUnionToLedgerRow(r: UnionRaw): ClientLedgerRow {
               : null;
   const comment_transaction = (r.note ?? "").trim() || null;
 
-  const created_by_display =
-    rk === "payment"
-      ? (r.created_by_login?.trim() || null)
-      : (r.created_by_login?.trim() || r.expeditor_name?.trim() || r.agent_name?.trim() || null);
+  const created_by_display = r.created_by_login?.trim() || null;
 
   return {
     row_kind: rk,
