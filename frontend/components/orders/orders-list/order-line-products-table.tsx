@@ -25,6 +25,13 @@ function isShelfReturnType(orderType?: string | null): boolean {
   return ot === "return" || ot === "return_by_order" || ot === "partial_return";
 }
 
+/** Katalog kodi. Ichki d0_ raqam kod emas. */
+function catalogCode(sku: string, name: string): string {
+  const code = sku.trim();
+  if (!code || /^d0_/i.test(code) || code === name.trim()) return "";
+  return code;
+}
+
 /** Ichki mahsulot jadvali — expand panel ichida max-w-full (orders-list-expand-layout.ts). */
 export function OrderLineProductsTable({
   items,
@@ -114,6 +121,7 @@ export function OrderLineProductsTable({
               const showGross = !isReturn && !p.is_bonus && effectivePct > 0 && footerDiscount > 0;
               const lineGross = showGross ? lineGrossFromNet(lineNet, effectivePct) : lineNet;
               const priceShow = showGross ? lineGrossFromNet(priceNet, effectivePct) : priceNet;
+              const code = catalogCode(p.sku, p.name);
               return (
                 <tr
                   key={`${p.product_id}-${p.is_bonus ? "b" : "p"}`}
@@ -122,7 +130,16 @@ export function OrderLineProductsTable({
                     p.is_bonus && "bg-teal-50/70 dark:bg-teal-950/20"
                   )}
                 >
-                  <td className="px-2 py-1.5 break-words">{p.name}</td>
+                  <td className="px-2 py-1.5 break-words">
+                    {code ? (
+                      <>
+                        <div className="font-medium">{code}</div>
+                        <div className="text-[11px] font-normal text-muted-foreground">{p.name}</div>
+                      </>
+                    ) : (
+                      <div className="font-medium">{p.name}</div>
+                    )}
+                  </td>
                   <td className="whitespace-nowrap px-2 py-1.5">
                     <span
                       className={cn(
