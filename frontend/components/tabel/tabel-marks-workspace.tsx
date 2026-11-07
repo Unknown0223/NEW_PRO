@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, Camera, CheckCircle2, Clock, LogIn, LogOut, MapPin, RefreshCw, ShieldAlert, Timer, Video, XCircle } from "lucide-react";
+import { AlertTriangle, Camera, CheckCircle2, Clock, Download, LogIn, LogOut, MapPin, RefreshCw, ShieldAlert, Timer, Video, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -11,6 +11,7 @@ import { timesheetRoleLabel } from "@/components/timesheet/timesheet-shared";
 import { api } from "@/lib/api";
 import { useAuthStore } from "@/lib/auth-store";
 import { getUserFacingError } from "@/lib/error-utils";
+import { usePermissions } from "@/lib/use-permissions";
 import { cn } from "@/lib/utils";
 
 export type TabelMarkRow = {
@@ -73,6 +74,7 @@ const SOURCE_BADGE: Record<string, string> = {
 
 export function TabelMarksWorkspace({ onlyProblems = false }: { onlyProblems?: boolean }) {
   const { tenantSlug } = useAuthStore();
+  const perms = usePermissions();
   const qc = useQueryClient();
   const today = new Date().toISOString().slice(0, 10);
   const [from, setFrom] = useState(today);
@@ -86,6 +88,8 @@ export function TabelMarksWorkspace({ onlyProblems = false }: { onlyProblems?: b
   const [media, setMedia] = useState<{ url: string; slot: string } | null>(null);
   const [mediaError, setMediaError] = useState<string | null>(null);
   const [mediaLoading, setMediaLoading] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const canExport = perms.hasAny("tabel.otmetki.export", "staff.tabel.export");
 
   const marksQ = useQuery({
     queryKey: ["tabel", "marks", tenantSlug, { from, to, branches, source, onlyProblems }],
@@ -164,6 +168,38 @@ export function TabelMarksWorkspace({ onlyProblems = false }: { onlyProblems?: b
     };
   }, [media]);
 
+  async function exportExcel() {
+    if (!tenantSlug || !canExport) return;
+    setExporting(true);
+    setNotice(null);
+    try {
+      const res = await api.get<Blob>(`/api/${tenantSlug}/tabel/marks/export`, {
+        responseType: "blob",
+        params: {
+          from: from || undefined,
+          to: to || undefined,
+          branch: branches.length ? branches.join(",") : undefined,
+          source: source || undefined,
+          only_problems: onlyProblems ? "true" : undefined
+        }
+      });
+      const cd = String(res.headers["content-disposition"] ?? "");
+      const m = /filename="([^"]+)"/i.exec(cd);
+      const filename = m?.[1] ?? `tabel-${onlyProblems ? "problems" : "marks"}.xlsx`;
+      const url = URL.createObjectURL(res.data);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      a.click();
+      URL.revokeObjectURL(url);
+      setNotice("Excel файл скачан.");
+    } catch (e) {
+      setNotice(getUserFacingError(e, "Не удалось выгрузить Excel"));
+    } finally {
+      setExporting(false);
+    }
+  }
+
   async function openMedia(row: TabelMarkRow, slot: string) {
     setCard(row);
     setMediaError(null);
@@ -200,10 +236,18 @@ export function TabelMarksWorkspace({ onlyProblems = false }: { onlyProblems?: b
               : "За выбранный день: приход, примерный уход и официальный уход. Фото, видео с кодом и точка GPS открываются в карточке."}
           </p>
         </div>
-        <Button variant="outline" size="sm" onClick={() => void marksQ.refetch()} disabled={marksQ.isFetching}>
-          <RefreshCw className="mr-1.5 size-4" />
-          Обновить
-        </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          {canExport ? (
+            <Button variant="outline" size="sm" onClick={() => void exportExcel()} disabled={exporting}>
+              <Download className="mr-1.5 size-4" />
+              {exporting ? "Выгрузка…" : "Excel"}
+            </Button>
+          ) : null}
+          <Button variant="outline" size="sm" onClick={() => void marksQ.refetch()} disabled={marksQ.isFetching}>
+            <RefreshCw className="mr-1.5 size-4" />
+            Обновить
+          </Button>
+        </div>
       </div>
 
       {notice ? (

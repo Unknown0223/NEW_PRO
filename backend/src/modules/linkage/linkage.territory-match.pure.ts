@@ -2,16 +2,43 @@
  * Work-slot territory satrlari («zona / oblast / shahar» yoki multi-city)
  * klient manziliga mos keladimi — ish joyidagi kaskad bilan bir xil.
  *
- * Muhim: klientda shahar/viloyat **kod** (`XR_XIVA`) bo‘lishi mumkin,
- * ish joyida esa **nom** (`XIVA`) — ikkalasini ham tanib oladi.
+ * Muhim: klientda shahar/viloyat **kod** (`XR_XIVA`, `FR_SHAHAR`) bo‘lishi mumkin,
+ * ish joyida esa **nom** (`XIVA`, `FARGONA SHAHAR`) — ikkalasini ham tanib oladi.
+ * Apostrof: BOG'OT ≡ BOGOT ≡ XR_BOGOT. Zona yorlig‘i: Andijon ≡ FV (shahar+viloyat mos bo‘lsa).
  */
 
+/** Apostrof / urg‘u belgilari: BOG'OT ≡ BOGOT ≡ XR_BOGOT */
+const TERRITORY_APOSTROPHE_RE = /[\u0027\u2018\u2019\u201A\u201B\u2032\u2035\u0060\u00B4\u02BC\u02BB]/g;
+
 export function normTerritoryToken(s: string): string {
-  return s.trim().toUpperCase().replace(/[\s\-_]+/g, " ");
+  return s
+    .trim()
+    .toUpperCase()
+    .replace(TERRITORY_APOSTROPHE_RE, "")
+    .replace(/[\s\-_]+/g, " ");
 }
 
 /** Faqat geografik tur so‘zlari — o‘zaro «mos» deb hisoblanmasin (VILOYATI≡VILOYATI). */
-const GEO_TYPE_WORDS = new Set(["VILOYATI", "SHAHAR", "TUMANI", "TUMAN", "ZONE", "ZONA"]);
+const GEO_TYPE_WORDS = new Set([
+  "VILOYATI",
+  "SHAHAR",
+  "SHAXAR",
+  "TUMANI",
+  "TUMAN",
+  "ZONE",
+  "ZONA"
+]);
+
+function stripGeoTypeWords(token: string): string {
+  return token
+    .replace(/\bVILOYATI\b/g, "")
+    .replace(/\bSHAHAR\b/g, "")
+    .replace(/\bSHAXAR\b/g, "")
+    .replace(/\bTUMANI\b/g, "")
+    .replace(/\bTUMAN\b/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
 
 /** Kod/nom variantlari: XR_XIVA → XIVA; XORAZM VILOYATI → XORAZM */
 export function territoryTokenVariants(raw: string): string[] {
@@ -25,14 +52,14 @@ export function territoryTokenVariants(raw: string): string[] {
     const restFrom1 = parts.slice(1).join(" ");
     if (restFrom1 && !GEO_TYPE_WORDS.has(restFrom1)) out.add(restFrom1);
     const withoutLast = parts.slice(0, -1).join(" ");
-    if (withoutLast) out.add(withoutLast);
+    // «XORAZM VILOYATI» → XORAZM; «BUXORO SHAXAR» → BUXORO emas (TUMANI bilan chalkashmasin).
+    if (withoutLast && last === "VILOYATI") out.add(withoutLast);
+    else if (withoutLast && !GEO_TYPE_WORDS.has(last)) out.add(withoutLast);
   }
   for (const p of [...out]) {
+    // Faqat VILOYATI kesiladi; SHAHAR/TUMANI qoldiq shahar deb yurisin.
     const stripped = p
       .replace(/\bVILOYATI\b/g, "")
-      .replace(/\bSHAHAR\b/g, "")
-      .replace(/\bTUMANI\b/g, "")
-      .replace(/\bTUMAN\b/g, "")
       .replace(/\s+/g, " ")
       .trim();
     if (stripped && !GEO_TYPE_WORDS.has(stripped)) out.add(stripped);
@@ -75,12 +102,46 @@ function pushUnique(arr: string[], v: string | null | undefined) {
   if (!arr.some((x) => territoryTokensMatch(x, t))) arr.push(t);
 }
 
+/**
+ * FR_SHAHAR + FARGONA VILOYATI → FARGONA SHAHAR;
+ * AD_TUMANI + ANDIJON VILOYATI → ANDIJON TUMANI;
+ * BX_SHAXAR + BUXORO VILOYATI → BUXORO SHAXAR / BUXORO SHAHAR.
+ */
+export function cityMatchNeedles(city: string, region?: string | null): string[] {
+  const out: string[] = [];
+  const push = (s: string | null | undefined) => {
+    const t = (s ?? "").trim();
+    if (!t) return;
+    if (!out.some((x) => territoryTokensMatch(x, t))) out.push(t);
+  };
+  push(city);
+  const n = normTerritoryToken(city);
+  const parts = n.split(" ").filter(Boolean);
+  if (parts.length < 2) return out;
+  const last = parts[parts.length - 1]!;
+  if (!GEO_TYPE_WORDS.has(last)) return out;
+  if (last !== "SHAHAR" && last !== "SHAXAR" && last !== "TUMANI" && last !== "TUMAN") return out;
+
+  const oblast = (region ?? "").trim();
+  if (!oblast) return out;
+  const short = stripGeoTypeWords(normTerritoryToken(oblast));
+  if (short) {
+    push(`${short} ${last}`);
+    if (last === "SHAXAR") push(`${short} SHAHAR`);
+    if (last === "SHAHAR") push(`${short} SHAXAR`);
+  }
+  // Region allaqachon «QOQON SHAXAR» bo‘lsa — shahar sifatida ham sinab ko‘riladi.
+  push(oblast);
+  return out;
+}
+
 function isLikelyOblastToken(token: string): boolean {
   const u = token.trim().toUpperCase();
   return (
     u.includes("VILOYATI") ||
     u === "QORAQALPOQISTON" ||
-    u === "TOSHKENT SHAHAR" ||
+    u.includes("SHAHAR") ||
+    u.includes("SHAXAR") ||
     u === "SAMARQAND"
   );
 }
@@ -223,16 +284,19 @@ export function staffTerritoriesMatchAddress(
     });
 
   if (city) {
-    const cityHit = tokenInList(city, cov.cities) || blobHit(city);
+    const needles = cityMatchNeedles(city, region || null);
+    // Kengaytirilgan ignalar (FARGONA SHAHAR) faqat cities dan;
+    // blobHit faqat asl kod uchun — aks holda «QOQON SHAXAR» oblast segmenti shahar deb o‘tadi.
+    const cityHit =
+      needles.some((needle) => tokenInList(needle, cov.cities)) || blobHit(city);
     if (cityHit) {
+      // Viloyat mos kelishi kerak; zona yorlig‘i (Andijon vs FV) shahar topilganda talab qilinmaydi.
       if (region && cov.oblasts.length > 0 && !tokenInList(region, cov.oblasts)) return false;
-      if (zone && cov.zones.length > 0 && !tokenInList(zone, cov.zones)) return false;
       return true;
     }
     // Shahar yo‘q — faqat oblast/zona coverage (shaharsiz yo‘llar).
     // blobHit(region) ishlatilmaydi: aks holda boshqa shahar yo‘li ham «viloyat» deb o‘tadi.
     if (region && tokenInList(region, cov.oblastCover)) {
-      if (zone && cov.zones.length > 0 && !tokenInList(zone, cov.zones)) return false;
       return true;
     }
     if (zone && tokenInList(zone, cov.zoneCover)) return true;

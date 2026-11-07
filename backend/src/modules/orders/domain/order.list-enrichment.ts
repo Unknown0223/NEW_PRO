@@ -1,7 +1,11 @@
 import { prisma } from "../../../config/database";
 import { parseVisitWeekdaysJson } from "../../clients/clients.types";
 import { formatVisitWeekdaysRuAbbrev } from "../../clients/clients.visit-weekdays";
-import { inferListCreationChannel } from "./order.creation-channel";
+import {
+  inferListCreationChannel,
+  normalizeStoredCreationChannel,
+  resolveOrderCreatedByDisplay
+} from "./order.creation-channel";
 
 const PO_ZAKAZU_RE = /По\s+заказу\s+(\S+)/i;
 
@@ -53,6 +57,8 @@ export async function loadOrdersListMetaEnrichment(
     client_id: number;
     agent_login?: string | null;
     agent_name?: string | null;
+    creation_channel?: string | null;
+    source_created_by?: string | null;
     created_at: Date;
     status: string;
   }>
@@ -80,7 +86,7 @@ export async function loadOrdersListMetaEnrichment(
   const returnedAt = new Map<number, Date>();
   const firstLogUser = new Map<
     number,
-    { login: string | null; name: string | null; role: string | null }
+    { login: string | null; name: string | null; role: string | null; at: Date }
   >();
 
   for (const log of statusRows) {
@@ -88,7 +94,8 @@ export async function loadOrdersListMetaEnrichment(
       firstLogUser.set(log.order_id, {
         login: log.user.login,
         name: log.user.name,
-        role: log.user.role
+        role: log.user.role,
+        at: log.created_at
       });
     }
     if (log.superseded_at == null) {
@@ -211,10 +218,13 @@ export async function loadOrdersListMetaEnrichment(
 
     const firstUser = firstLogUser.get(r.id);
     const agentRole = r.agent_id != null ? agentRoleById.get(r.agent_id) : undefined;
-    const channel = inferListCreationChannel({
-      firstLogRole: firstUser?.role,
-      agentRole
-    });
+    const channel = normalizeStoredCreationChannel(
+      r.creation_channel,
+      inferListCreationChannel({
+        firstLogRole: firstUser?.role,
+        agentRole
+      })
+    );
 
     const isReturnType =
       r.order_type === "return" ||
@@ -224,15 +234,23 @@ export async function loadOrdersListMetaEnrichment(
       returnedAt.get(r.id) ??
       (isReturnType || r.status === "returned" ? r.created_at : undefined);
 
-    const creatorLabel =
-      firstUser?.login?.trim() ||
-      firstUser?.name?.trim() ||
-      r.agent_login?.trim() ||
-      r.agent_name?.trim() ||
-      null;
+    const creatorLabel = resolveOrderCreatedByDisplay({
+      sourceCreatedBy: r.source_created_by,
+      creationChannel: channel,
+      agentName: r.agent_name,
+      agentLogin: r.agent_login,
+      firstLogName: firstUser?.name,
+      firstLogLogin: firstUser?.login,
+      firstLogAtMs: firstUser?.at.getTime() ?? null,
+      orderCreatedAtMs: r.created_at.getTime()
+    });
 
     const dayLabel =
       r.agent_id != null ? visitDayByPair.get(`${r.client_id}:${r.agent_id}`) ?? null : null;
+
+    const creatorIsAgent =
+      !!creatorLabel &&
+      (creatorLabel === r.agent_name?.trim() || creatorLabel === r.agent_login?.trim());
 
     out.set(r.id, {
       source_order_numbers: sourceNumbers ?? [],
@@ -244,7 +262,7 @@ export async function loadOrdersListMetaEnrichment(
       list_created_at: r.created_at.toISOString(),
       creation_channel: channel,
       created_by: creatorLabel,
-      created_by_role: firstUser?.role ?? agentRole ?? null,
+      created_by_role: creatorIsAgent ? agentRole ?? firstUser?.role ?? null : firstUser?.role ?? agentRole ?? null,
       day: dayLabel
     });
   }

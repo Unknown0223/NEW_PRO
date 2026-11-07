@@ -263,9 +263,13 @@ export function GoodsReceiptNewWorkspace({ tenantSlug }: Props) {
     setSelectedProducts((prev) => {
       const valid = new Set(filteredProducts.map((p) => p.id));
       const next = new Set<number>();
+      let removed = false;
       for (const id of prev) {
         if (valid.has(id)) next.add(id);
+        else removed = true;
       }
+      // Har safar yangi Set → cheksiz re-render. O‘zgarish bo‘lmasa prev.
+      if (!removed && next.size === prev.size) return prev;
       return next;
     });
   }, [filteredProducts]);
@@ -273,17 +277,20 @@ export function GoodsReceiptNewWorkspace({ tenantSlug }: Props) {
   useEffect(() => {
     if (!priceType.trim()) return;
     setLines((prev) => {
+      let changed = false;
       const next = { ...prev };
       for (const p of mergedProducts) {
         const pr = p.prices?.find((x: { price_type: string; price: string }) => x.price_type === priceType.trim());
         const existing = next[p.id];
         if (!existing) {
           next[p.id] = { qty: "", block: "", price: pr?.price ?? "" };
+          changed = true;
         } else if (!existing.price.trim() && pr) {
           next[p.id] = { ...existing, price: pr.price };
+          changed = true;
         }
       }
-      return next;
+      return changed ? next : prev;
     });
   }, [mergedProducts, priceType]);
 

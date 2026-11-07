@@ -49,14 +49,36 @@ export async function patchTabelSettings(
     telegram: {
       ...current.telegram,
       ...asObj(patch.telegram),
-      branchChatIds: { ...current.telegram.branchChatIds, ...asObj(asObj(patch.telegram).branchChatIds) }
+      branchChatIds:
+        asObj(patch.telegram).branchChatIds !== undefined
+          ? asObj(asObj(patch.telegram).branchChatIds)
+          : current.telegram.branchChatIds
     },
     retention: {
       ...current.retention,
       ...asObj(patch.retention),
       compress: { ...current.retention.compress, ...asObj(asObj(patch.retention).compress) }
     },
-    dictionaries: { ...current.dictionaries, ...asObj(patch.dictionaries) }
+    dictionaries: {
+      absenceTypes:
+        asObj(patch.dictionaries).absenceTypes !== undefined
+          ? (asObj(patch.dictionaries).absenceTypes as typeof current.dictionaries.absenceTypes)
+          : current.dictionaries.absenceTypes,
+      clearanceItems:
+        asObj(patch.dictionaries).clearanceItems !== undefined
+          ? (asObj(patch.dictionaries).clearanceItems as typeof current.dictionaries.clearanceItems)
+          : current.dictionaries.clearanceItems
+    },
+    punchModes: {
+      methods: {
+        ...current.punchModes.methods,
+        ...asObj(asObj(patch.punchModes).methods)
+      },
+      byRole:
+        asObj(patch.punchModes).byRole !== undefined
+          ? asObj(asObj(patch.punchModes).byRole)
+          : current.punchModes.byRole
+    }
   };
 
   const tgPatch = asObj(patch.telegram);
@@ -101,6 +123,8 @@ export async function listTabelMarks(
     branch?: string;
     source?: string;
     only_problems?: boolean;
+    /** Ro‘yxat 300, Excel eksporti 5000 gacha. */
+    take?: number;
   }
 ) {
   const where: Prisma.AttendancePunchWhereInput = { tenant_id: tenantId };
@@ -146,10 +170,11 @@ export async function listTabelMarks(
     ];
   }
 
+  const take = Math.min(Math.max(filters.take ?? 300, 1), 5000);
   const punches = await prisma.attendancePunch.findMany({
     where,
     orderBy: [{ occurred_at: "desc" }],
-    take: 300
+    take
   });
 
   const userIds = [...new Set(punches.map((p) => p.user_id))];

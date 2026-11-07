@@ -12,10 +12,10 @@ export type PayrollCalcInputs = {
   trip_days: number;
   absent_days: number;
   half_days: number;
-  late_unexcused_days?: number;
-  late_minutes?: number;
-  early_leave_minutes?: number;
-  overtime_hours?: number;
+  late_unexcused_days: number;
+  late_minutes: number;
+  early_leave_minutes: number;
+  overtime_hours: number;
   fact_total: KpiMetrics;
   fact_by_group: Map<number, KpiMetrics>;
   returned_sum: number;
@@ -64,7 +64,12 @@ export function staticVariableGroups(): Array<{ group: string; items: string[] }
         "Командировка",
         "Прогул",
         "Прогул_кун",
-        "Полдня",
+        "Полдня"
+      ]
+    },
+    {
+      group: "Табель / посещаемость",
+      items: [
         "Кечиккан_кун",
         "Кечиккан_дақиқа",
         "Эрта_кетган_дақиқа",
@@ -152,14 +157,14 @@ export function buildFormulaVars(
   set("Прогул", inp.absent_days);
   set("Прогул_кун", inp.absent_days);
   set("Полдня", inp.half_days);
-  set("Кечиккан_кун", inp.late_unexcused_days ?? 0);
-  set("Опоздания (дни)", inp.late_unexcused_days ?? 0);
-  set("Кечиккан_дақиқа", inp.late_minutes ?? 0);
-  set("Опоздания (минуты)", inp.late_minutes ?? 0);
-  set("Эрта_кетган_дақиқа", inp.early_leave_minutes ?? 0);
-  set("Ранний уход (минуты)", inp.early_leave_minutes ?? 0);
-  set("Қўшимча_соат", inp.overtime_hours ?? 0);
-  set("Сверхурочные (часы)", inp.overtime_hours ?? 0);
+  set("Кечиккан_кун", inp.late_unexcused_days);
+  set("Опоздания (дни)", inp.late_unexcused_days);
+  set("Кечиккан_дақиқа", inp.late_minutes);
+  set("Опоздания (минуты)", inp.late_minutes);
+  set("Эрта_кетган_дақиқа", inp.early_leave_minutes);
+  set("Ранний уход (минуты)", inp.early_leave_minutes);
+  set("Қўшимча_соат", inp.overtime_hours);
+  set("Сверхурочные (часы)", inp.overtime_hours);
 
   const fact = kpiGroupId ? inp.fact_by_group.get(kpiGroupId) ?? ZERO_METRICS : inp.fact_total;
   const plan = kpiGroupId ? inp.plan_by_group.get(kpiGroupId) ?? ZERO_METRICS : inp.plan_total;

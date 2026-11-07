@@ -12,7 +12,6 @@ import { AccessUserDetailHeader, AccessUserDetailTabs, type AccessUserDetailTab 
 import { AccessOpsFilterCard } from "./access-ops-filter-card";
 import { AccessUserOperationsPanel } from "./access-user-operations-panel";
 import { AccessUserRolesTab } from "./access-user-roles-tab";
-import { AccessUserDelegationTab } from "./access-user-delegation-tab";
 import { AccessUserHistoryTab } from "./access-user-history-tab";
 import { AccessUserScopeSummary, isAccessScopeTab } from "./access-user-scope-summary";
 import { useAccessUserDetailPanel } from "./hooks/use-access-user-detail-panel";
@@ -103,7 +102,6 @@ export function AccessUserDetailPanel({
             <div className="flex min-h-0 flex-1 flex-col overflow-hidden overscroll-y-contain">
               {tab === "operations" ? <AccessUserOperationsPanel key={userId} vm={vm} filter={opsFilter} /> : null}
               {tab === "roles" ? <AccessUserRolesTab vm={vm} readOnly={readOnly} /> : null}
-              {tab === "delegation" ? <AccessUserDelegationTab key={userId} vm={vm} onDirtyChange={setDirty} /> : null}
               {tab === "history" ? <AccessUserHistoryTab tenantSlug={tenantSlug} userId={userId} /> : null}
               {isAccessScopeTab(tab) ? <AccessUserScopeSummary key={tab} vm={vm} tab={tab} readOnly={readOnly} /> : null}
             </div>

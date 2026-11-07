@@ -7,13 +7,31 @@ import {
   normalizeLatenessRules,
   type LatenessRules
 } from "./tabel-engine.pure";
+import { normalizePunchModesSettings, type PunchModesSettings } from "./tabel-punch-modes.pure";
+import { PUNCH_VIDEO_MAX_SEC, PUNCH_VIDEO_MIN_SEC } from "./tabel-punch-video.pure";
 
-export const PUNCH_VIDEO_MIN_SEC = 5;
-export const PUNCH_VIDEO_MAX_SEC = 10;
-export const PUNCH_VIDEO_MIN_BYTES = 10_000;
-export const PUNCH_VIDEO_MAX_BYTES = 15 * 1024 * 1024;
-export const PUNCH_CODE_MIN = 100;
-export const PUNCH_CODE_MAX = 999;
+export {
+  PUNCH_CODE_MAX,
+  PUNCH_CODE_MIN,
+  PUNCH_VIDEO_MAX_BYTES,
+  PUNCH_VIDEO_MAX_SEC,
+  PUNCH_VIDEO_MIN_BYTES,
+  PUNCH_VIDEO_MIN_SEC,
+  assertVideoPunch,
+  pickDayCode
+} from "./tabel-punch-video.pure";
+
+export {
+  DEFAULT_PUNCH_METHOD_FLAGS,
+  DEFAULT_PUNCH_MODES_SETTINGS,
+  assertPunchSourceAllowed,
+  punchSourceToMethod,
+  resolvePunchModesForRole,
+  type AttendancePunchSource,
+  type PunchMethodFlags,
+  type PunchModesSettings,
+  type ResolvedPunchModes
+} from "./tabel-punch-modes.pure";
 
 export type PunchVideoUserOverride = {
   enabled: boolean;
@@ -171,6 +189,7 @@ export type FullTabelSettings = {
   telegram: TelegramAttendanceSettings;
   retention: TabelRetentionSettings;
   dictionaries: TabelDictionariesSettings;
+  punchModes: PunchModesSettings;
 };
 
 function asObj(v: unknown): Record<string, unknown> {
@@ -184,6 +203,56 @@ export function retentionToDays(value: unknown, unit: unknown): number {
   if (u === "year") return n * 365;
   if (u === "month") return n * 30;
   return n;
+}
+
+function normalizeAbsenceDictionary(raw: unknown): AbsenceDictionaryItem[] {
+  if (!Array.isArray(raw) || raw.length === 0) return DEFAULT_TABEL_DICTIONARIES.absenceTypes;
+  const seen = new Set<string>();
+  const out: AbsenceDictionaryItem[] = [];
+  for (const item of raw) {
+    const o = asObj(item);
+    const code = String(o.code ?? "")
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9_]+/g, "_")
+      .replace(/^_+|_+$/g, "")
+      .slice(0, 40);
+    const labelRu = String(o.labelRu ?? "").trim().slice(0, 160);
+    if (!code || !labelRu || seen.has(code)) continue;
+    seen.add(code);
+    out.push({
+      code,
+      labelRu,
+      labelUz: String(o.labelUz ?? "").trim().slice(0, 160),
+      paid: o.paid !== false,
+      requiresAttachment: o.requiresAttachment === true
+    });
+  }
+  return out.length > 0 ? out : DEFAULT_TABEL_DICTIONARIES.absenceTypes;
+}
+
+function normalizeClearanceDictionary(raw: unknown): ClearanceDictionaryItem[] {
+  if (!Array.isArray(raw) || raw.length === 0) return DEFAULT_TABEL_DICTIONARIES.clearanceItems;
+  const seen = new Set<string>();
+  const out: ClearanceDictionaryItem[] = [];
+  for (const item of raw) {
+    const o = asObj(item);
+    const code = String(o.code ?? "")
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9_]+/g, "_")
+      .replace(/^_+|_+$/g, "")
+      .slice(0, 40);
+    const labelRu = String(o.labelRu ?? "").trim().slice(0, 200);
+    if (!code || !labelRu || seen.has(code)) continue;
+    seen.add(code);
+    out.push({
+      code,
+      labelRu,
+      department: String(o.department ?? "").trim().slice(0, 120)
+    });
+  }
+  return out.length > 0 ? out : DEFAULT_TABEL_DICTIONARIES.clearanceItems;
 }
 
 function normalizePhotoPolicy(raw: unknown, fallback: MarkPhotoPolicy): MarkPhotoPolicy {
@@ -209,6 +278,7 @@ export function normalizeFullTabelSettings(raw: unknown): FullTabelSettings {
   const ret = asObj(root.retention);
   const comp = asObj(ret.compress);
   const dict = asObj(root.dictionaries);
+  const punchModes = normalizePunchModesSettings(root.punchModes);
 
   const userOverrides: Record<string, PunchVideoUserOverride> = {};
   for (const [k, v] of Object.entries(asObj(pv.userOverrides))) {
@@ -304,13 +374,10 @@ export function normalizeFullTabelSettings(raw: unknown): FullTabelSettings {
       }
     },
     dictionaries: {
-      absenceTypes: Array.isArray(dict.absenceTypes) && dict.absenceTypes.length > 0
-        ? (dict.absenceTypes as AbsenceDictionaryItem[])
-        : DEFAULT_TABEL_DICTIONARIES.absenceTypes,
-      clearanceItems: Array.isArray(dict.clearanceItems) && dict.clearanceItems.length > 0
-        ? (dict.clearanceItems as ClearanceDictionaryItem[])
-        : DEFAULT_TABEL_DICTIONARIES.clearanceItems
-    }
+      absenceTypes: normalizeAbsenceDictionary(dict.absenceTypes),
+      clearanceItems: normalizeClearanceDictionary(dict.clearanceItems)
+    },
+    punchModes
   };
 }
 
@@ -324,51 +391,4 @@ export function maskTabelSettingsForClient(settings: FullTabelSettings): FullTab
       botToken: ""
     }
   };
-}
-
-/** Pick a free 3-digit code, 100..999. */
-export function pickDayCode(used: Set<number>, random: () => number = Math.random): number | null {
-  const span = PUNCH_CODE_MAX - PUNCH_CODE_MIN + 1;
-  let taken = 0;
-  for (const code of used) if (code >= PUNCH_CODE_MIN && code <= PUNCH_CODE_MAX) taken++;
-  if (taken >= span) return null;
-  for (let i = 0; i < 40; i++) {
-    const code = PUNCH_CODE_MIN + Math.floor(random() * span);
-    if (!used.has(code)) return code;
-  }
-  for (let code = PUNCH_CODE_MIN; code <= PUNCH_CODE_MAX; code++) if (!used.has(code)) return code;
-  return null;
-}
-
-export function assertVideoPunch(input: {
-  durationSec: number;
-  bytes: number;
-  enabled: boolean;
-  codeRequired: boolean;
-  code: number | null;
-  spokenCode?: number | null;
-  minSec?: number;
-  maxSec?: number;
-}) {
-  if (!input.enabled) {
-    return { ok: false as const, code: "PUNCH_VIDEO_DISABLED", message: "Video bilan belgilash o‘chirilgan" };
-  }
-  const minS = input.minSec ?? PUNCH_VIDEO_MIN_SEC;
-  const maxS = input.maxSec ?? PUNCH_VIDEO_MAX_SEC;
-  if (input.durationSec < minS || input.durationSec > maxS) {
-    return {
-      ok: false as const,
-      code: "PUNCH_VIDEO_DURATION",
-      message: `Video ${minS}–${maxS} soniya bo‘lishi kerak`
-    };
-  }
-  if (input.bytes < PUNCH_VIDEO_MIN_BYTES || input.bytes > PUNCH_VIDEO_MAX_BYTES) {
-    return { ok: false as const, code: "PUNCH_VIDEO_SIZE", message: "Video hajmi mos emas" };
-  }
-  if (input.codeRequired) {
-    if (!input.code || Number(input.spokenCode) !== input.code) {
-      return { ok: false as const, code: "PUNCH_VIDEO_CODE", message: "Ekrandagi 3 xonali kunlik kod mos kelmadi" };
-    }
-  }
-  return { ok: true as const };
 }

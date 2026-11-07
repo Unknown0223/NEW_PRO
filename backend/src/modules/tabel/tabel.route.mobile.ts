@@ -287,13 +287,23 @@ export async function registerTabelMobileRoutes(app: FastifyInstance) {
       });
     }
 
-    const data = await submitAttendancePunch(request.tenant.id, userId, {
-      source: "terminal",
-      device_id: device.id,
-      direction: event.direction,
-      photo_front_base64: event.photoBase64 ?? null
-    });
-    return reply.send({ data });
+    try {
+      const data = await submitAttendancePunch(request.tenant.id, userId, {
+        source: "terminal",
+        device_id: device.id,
+        direction: event.direction,
+        photo_front_base64: event.photoBase64 ?? null
+      });
+      return reply.send({ data });
+    } catch (e) {
+      const err = e as Error & { code?: string };
+      if (err.code === "METHOD_NOT_ALLOWED") {
+        return reply.send({
+          data: { ok: false, device_id: device.id, status: "method_not_allowed", message: err.message }
+        });
+      }
+      return sendApiError(reply, request, 400, err.code ?? "TerminalPunchError", err.message);
+    }
   });
 
   app.post("/api/:slug/mobile/attendance/device-link-request", async (request, reply) => {

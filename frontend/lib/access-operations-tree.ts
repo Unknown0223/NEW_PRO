@@ -121,6 +121,7 @@ export function buildOperationsDraftPatch(
     const effective = Boolean(row?.effective);
     if (want === effective) continue;
     if (want) {
+      // Rol ustidagi deny → remove (Из роли qaytadi). Faqat shaxsiy deny → allow (Лично).
       if (row?.user_effect === "deny" && row.from_role) remove.push(key);
       else permissions.push(key);
     } else if (row?.from_role) {

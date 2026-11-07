@@ -9,11 +9,14 @@ import {
   roleForDayMark
 } from "../src/modules/tabel/tabel-engine.pure";
 import {
+  assertPunchSourceAllowed,
   assertVideoPunch,
   maskTabelSettingsForClient,
   normalizeFullTabelSettings,
   pickDayCode,
-  retentionToDays
+  resolvePunchModesForRole,
+  retentionToDays,
+  DEFAULT_PUNCH_MODES_SETTINGS
 } from "../src/modules/tabel/tabel-settings.pure";
 import {
   evaluateGeofenceAgainstLocations,
@@ -21,7 +24,12 @@ import {
   haversineMeters,
   validateLivenessSteps
 } from "../src/modules/tabel/tabel-antifraud.pure";
-import { buildFormulaVars, knownVariableSet, type PayrollCalcInputs } from "../src/modules/payroll/payroll.formula-vars";
+import {
+  buildFormulaVars,
+  knownVariableSet,
+  staticVariableGroups,
+  type PayrollCalcInputs
+} from "../src/modules/payroll/payroll.formula-vars";
 import { ZERO_METRICS } from "../src/modules/payroll/payroll-kpi-fact.pure";
 import {
   TABEL_GROUP_RU,
@@ -209,6 +217,7 @@ describe("Payroll formula variables & RBAC integration", () => {
     expect(known.has("эрта_кетган_дақиқа")).toBe(true);
     expect(known.has("прогул_кун")).toBe(true);
     expect(known.has("қўшимча_соат")).toBe(true);
+    expect(staticVariableGroups().some((g) => g.group === "Табель / посещаемость")).toBe(true);
 
     const inp: PayrollCalcInputs = {
       base_full: 4_000_000,
@@ -240,6 +249,52 @@ describe("Payroll formula variables & RBAC integration", () => {
     expect(vars.get("эрта_кетган_дақиқа")).toBe(20);
     expect(vars.get("прогул_кун")).toBe(1);
     expect(vars.get("қўшимча_соат")).toBe(6);
+  });
+
+  it("resolves punch modes by role with inheritance and terminal-only", () => {
+    const base = normalizeFullTabelSettings({}).punchModes;
+    expect(base.methods.photo).toBe(true);
+    expect(base.methods.terminal).toBe(true);
+
+    const agent = resolvePunchModesForRole(base, "agent", { userId: 10, kioskLeaderIds: [] });
+    expect(agent.photo).toBe(true);
+    expect(agent.video).toBe(true);
+    expect(agent.kiosk).toBe(false);
+    expect(agent.terminal).toBe(true);
+    expect(agent.mobileAny).toBe(true);
+    expect(agent.allowedMethods).toEqual(["photo", "video", "terminal"]);
+
+    const supervisor = resolvePunchModesForRole(base, "supervisor", { userId: 2, kioskLeaderIds: [] });
+    expect(supervisor.kiosk).toBe(true);
+
+    const modes = {
+      ...DEFAULT_PUNCH_MODES_SETTINGS,
+      methods: { photo: true, video: true, kiosk: true, terminal: true },
+      byRole: {
+        skladchik: { photo: false, video: false, kiosk: false, terminal: true }
+      }
+    };
+    const wh = resolvePunchModesForRole(modes, "skladchik", { userId: 5, kioskLeaderIds: [] });
+    expect(wh.photo).toBe(false);
+    expect(wh.video).toBe(false);
+    expect(wh.kiosk).toBe(false);
+    expect(wh.terminal).toBe(true);
+    expect(wh.mobileAny).toBe(false);
+    expect(assertPunchSourceAllowed(wh, "mobile_photo").ok).toBe(false);
+    expect(assertPunchSourceAllowed(wh, "terminal").ok).toBe(true);
+
+    const partial = {
+      ...DEFAULT_PUNCH_MODES_SETTINGS,
+      byRole: { agent: { video: false } }
+    };
+    const agent2 = resolvePunchModesForRole(partial, "agent", {
+      userId: 1,
+      kioskLeaderIds: [],
+      applyKioskLeaderGate: false
+    });
+    expect(agent2.photo).toBe(true);
+    expect(agent2.video).toBe(false);
+    expect(agent2.terminal).toBe(true);
   });
 
   it("groups Tabel & Attendance permissions under TABEL_GROUP_RU and guards routes", () => {

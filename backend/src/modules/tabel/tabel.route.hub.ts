@@ -20,6 +20,8 @@ import {
   saveTabelLocation,
   saveTabelShift
 } from "./tabel-hub.service";
+import { buildTabelAnalyticsExportBuffer } from "./tabel-analytics-export";
+import { buildTabelMarksExportBuffer } from "./tabel-marks-export";
 import {
   createTabelAbsenceRequest,
   decideTabelAbsenceRequest,
@@ -74,11 +76,30 @@ export async function registerTabelHubRoutes(app: FastifyInstance) {
 
   app.get("/api/:slug/tabel/visit-dashboard", { preHandler: [jwtAccessVerify] }, async (request, reply) => {
     if (!ensureTenantContext(request, reply)) return;
-    const data = await getVisitDashboard(request.tenant!.id);
+    const q = (request.query ?? {}) as Record<string, unknown>;
+    const data = await getVisitDashboard(request.tenant!.id, {
+      date: typeof q.date === "string" ? q.date : undefined
+    });
     return reply.send({ data });
   });
 
   // ─────────── Журнал отметок и Проблемные отметки ───────────
+  app.get("/api/:slug/tabel/marks/export", { preHandler: [jwtAccessVerify] }, async (request, reply) => {
+    if (!ensureTenantContext(request, reply)) return;
+    const q = (request.query ?? {}) as Record<string, unknown>;
+    const { buffer, filename } = await buildTabelMarksExportBuffer(request.tenant!.id, {
+      from: typeof q.from === "string" ? q.from : undefined,
+      to: typeof q.to === "string" ? q.to : undefined,
+      user_id: q.user_id ? Number(q.user_id) : undefined,
+      branch: typeof q.branch === "string" ? q.branch : undefined,
+      source: typeof q.source === "string" ? q.source : undefined,
+      only_problems: q.only_problems === "true" || q.only_problems === "1"
+    });
+    reply.header("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    reply.header("Content-Disposition", `attachment; filename="${filename}"`);
+    return reply.send(buffer);
+  });
+
   app.get("/api/:slug/tabel/marks", { preHandler: [jwtAccessVerify] }, async (request, reply) => {
     if (!ensureTenantContext(request, reply)) return;
     const q = (request.query ?? {}) as Record<string, unknown>;
@@ -299,6 +320,17 @@ export async function registerTabelHubRoutes(app: FastifyInstance) {
     return reply.send({ data });
   });
 
+
+  app.get("/api/:slug/tabel/analytics/export", { preHandler: [jwtAccessVerify] }, async (request, reply) => {
+    if (!ensureTenantContext(request, reply)) return;
+    const q = (request.query ?? {}) as { month?: string; branch?: string };
+    const month = typeof q.month === "string" && /^\d{4}-\d{2}$/.test(q.month) ? q.month : new Date().toISOString().slice(0, 7);
+    const branch = typeof q.branch === "string" && q.branch.trim() ? q.branch.trim() : undefined;
+    const { buffer, filename } = await buildTabelAnalyticsExportBuffer(request.tenant!.id, month, branch);
+    reply.header("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    reply.header("Content-Disposition", `attachment; filename="${filename}"`);
+    return reply.send(buffer);
+  });
 
   app.get("/api/:slug/tabel/analytics", { preHandler: [jwtAccessVerify] }, async (request, reply) => {
     if (!ensureTenantContext(request, reply)) return;

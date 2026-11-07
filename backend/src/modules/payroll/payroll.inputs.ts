@@ -132,7 +132,10 @@ export async function computeUserAttendance(
     overtime_hours: 0
   };
   const rootObj = env.settings && typeof env.settings === "object" && !Array.isArray(env.settings) ? (env.settings as Record<string, unknown>) : {};
-  const tabelCfg = rootObj.tabel_settings && typeof rootObj.tabel_settings === "object" && !Array.isArray(env.settings) ? (rootObj.tabel_settings as Record<string, unknown>) : {};
+  const tabelCfg =
+    rootObj.tabel_settings && typeof rootObj.tabel_settings === "object" && !Array.isArray(rootObj.tabel_settings)
+      ? (rootObj.tabel_settings as Record<string, unknown>)
+      : {};
   const latenessRules = normalizeLatenessRules(tabelCfg.lateness);
   const recMap = new Map<
     string,

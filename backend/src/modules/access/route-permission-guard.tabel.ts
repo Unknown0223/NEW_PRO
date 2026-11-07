@@ -21,6 +21,7 @@ export const TABEL_ROUTE_PERMISSION_RULES: TabelRoutePermissionRule[] = [
 
   // ─────────── Табель и посещаемость: ички бўлимлар ───────────
   r(READ, /\/tabel\/marks\/export/, "tabel.otmetki.export", "staff.tabel.export"),
+  r(READ, /\/tabel\/analytics\/export/, "tabel.statistika.export", "staff.tabel.export"),
   r(WRITE, /\/tabel\/(marks|problems)(\/|$)/, "tabel.otmetki.approve", "tabel.otmetki.update", "staff.tabel.update"),
   r(READ, /\/tabel\/analytics(\/|$)/, "tabel.statistika.view", "tabel.statistika.export", "tabel.otmetki.view", "staff.tabel.view"),
   r(READ, /\/tabel\/visit-dashboard(\/|$)/, "tabel.poseshcheniya.view", "tabel.statistika.view", "tabel.otmetki.view", "staff.tabel.view"),

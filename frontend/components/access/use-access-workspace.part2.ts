@@ -103,9 +103,8 @@ export function useAccessWorkspacePart2(ctx: ReturnType<typeof useAccessWorkspac
     const effective = getOpEffective(u);
     if (effective === next) return null;
     if (next) {
-      /** Только `remove` при deny поверх роли; без роли deny → снова включить через `merge allow`. */
+      /** Deny поверх роли → remove (снова «Из роли»). Личный deny без роли → merge allow. */
       if (u.from_direct_deny && u.from_role) return { remove_permission_keys: [permissionKey] };
-      if (u.from_direct_deny) return { merge_permissions: true, permissions: [permissionKey], denied_permissions: [] };
       return { merge_permissions: true, permissions: [permissionKey], denied_permissions: [] };
     }
     return { merge_permissions: true, permissions: [], denied_permissions: [permissionKey] };

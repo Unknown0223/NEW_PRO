@@ -455,6 +455,7 @@ export function buildBulkEffectivePatchBody(rows: MatrixRow[], wantEffective: bo
       const row = rows[i]!;
       if (row.effective) continue;
       if (row.user_effect === "deny") {
+        // Rol ustidagi deny → remove; faqat shaxsiy deny → allow (rol yo‘q, remove yetarli emas).
         if (row.from_role) remove_permission_keys.push(row.key);
         else permissions.push(row.key);
       } else {

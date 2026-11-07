@@ -531,6 +531,8 @@ export async function listOrdersPaged(
       client_id: o.client_id,
       agent_login: o.agent?.login ?? null,
       agent_name: o.agent?.name ?? null,
+      creation_channel: (o as { creation_channel?: string | null }).creation_channel ?? null,
+      source_created_by: (o as { source_created_by?: string | null }).source_created_by ?? null,
       created_at: o.created_at,
       status: o.status
     }))

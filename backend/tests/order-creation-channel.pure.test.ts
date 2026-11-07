@@ -4,6 +4,7 @@ import {
   inferListCreationChannel,
   normalizeStoredCreationChannel,
   orderCreationChannelFromRole,
+  resolveOrderCreatedByDisplay,
   resolveOrderCreationChannel
 } from "../src/modules/orders/domain/order.creation-channel";
 import { toDetailRow } from "../src/modules/orders/domain/order.detail-row";
@@ -62,6 +63,52 @@ describe("inferListCreationChannel", () => {
     expect(
       inferListCreationChannel({ firstLogRole: "operator", agentRole: "operator" })
     ).toBe("web");
+  });
+});
+
+describe("resolveOrderCreatedByDisplay", () => {
+  const created = Date.parse("2026-09-28T06:27:41.000Z");
+
+  it("uses mobile agent instead of a later operator log", () => {
+    expect(
+      resolveOrderCreatedByDisplay({
+        sourceCreatedBy: null,
+        creationChannel: "mobile",
+        agentName: "Tojiboyev Nodirbek",
+        agentLogin: "agent41",
+        firstLogName: "Shoxruzbek",
+        firstLogLogin: "s541522",
+        firstLogAtMs: Date.parse("2026-09-28T18:30:20.000Z"),
+        orderCreatedAtMs: created
+      })
+    ).toBe("Tojiboyev Nodirbek");
+  });
+
+  it("keeps SalesDoctor source_created_by", () => {
+    expect(
+      resolveOrderCreatedByDisplay({
+        sourceCreatedBy: "Admin",
+        creationChannel: "mobile",
+        agentName: "Tojiboyev Nodirbek",
+        firstLogName: "Shoxruzbek",
+        firstLogAtMs: created + 60_000,
+        orderCreatedAtMs: created
+      })
+    ).toBe("Admin");
+  });
+
+  it("uses a contemporaneous log for web orders", () => {
+    expect(
+      resolveOrderCreatedByDisplay({
+        sourceCreatedBy: null,
+        creationChannel: "web",
+        agentName: "Tojiboyev Nodirbek",
+        firstLogName: "Operator",
+        firstLogLogin: "op1",
+        firstLogAtMs: created + 30_000,
+        orderCreatedAtMs: created
+      })
+    ).toBe("Operator");
   });
 });
 

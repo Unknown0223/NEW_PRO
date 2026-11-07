@@ -55,6 +55,13 @@ describe("access grant guard — forbidden / admin", () => {
     ]);
   });
 
+  it("forbiddenGrantKeys: legacy ↔ structured alias bir xil huquq", () => {
+    const grantable = new Set(["orders.zakaz.view"]);
+    expect(forbiddenGrantKeys(["orders.view"], grantable)).toEqual([]);
+    const grantableLegacy = new Set(["orders.view"]);
+    expect(forbiddenGrantKeys(["orders.zakaz.view"], grantableLegacy)).toEqual([]);
+  });
+
   it("isAdminActor", () => {
     expect(isAdminActor({ userId: 1, role: "admin" })).toBe(true);
     expect(isAdminActor({ userId: 1, role: "operator" })).toBe(false);

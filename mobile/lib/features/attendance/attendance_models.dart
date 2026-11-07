@@ -1,6 +1,6 @@
 import 'dart:math';
 
-import '../../core/time/server_clock.dart';
+export '../../core/security/location_guard.dart' show LocationIntegrityGuard, LocationGuardException;
 
 /// 4 va 8 yo'nalishli Liveness bosh burish bosqichlari.
 class LivenessHelper {
@@ -35,37 +35,7 @@ class LivenessHelper {
   }
 }
 
-/// Fake GPS (Mock Location), aniqlik va ServerClock farqini tekshiruvchi guard.
-class LocationIntegrityGuard {
-  final bool isMocked;
-  final double accuracyMeters;
-  final double maxAllowedAccuracyMeters;
-  final DateTime clientUtc;
-  final int maxClockSkewSeconds;
-
-  const LocationIntegrityGuard({
-    required this.isMocked,
-    required this.accuracyMeters,
-    this.maxAllowedAccuracyMeters = 100,
-    required this.clientUtc,
-    this.maxClockSkewSeconds = 300,
-  });
-
-  String? validate() {
-    if (isMocked) {
-      return 'Обнаружен Fake GPS (Mock Location). Отключите подмену геолокации.';
-    }
-    if (accuracyMeters > maxAllowedAccuracyMeters) {
-      return 'Низкая точность GPS (${accuracyMeters.round()} м > ${maxAllowedAccuracyMeters.round()} м). Выйдите на открытое место.';
-    }
-    final serverNow = ServerClock.instance.bestEffortNowUtc();
-    final skew = (serverNow.difference(clientUtc).inSeconds).abs();
-    if (skew > maxClockSkewSeconds) {
-      return 'Время телефона отличается от серверного на $skew сек. Включите авто-время.';
-    }
-    return null;
-  }
-}
+enum AttendanceMethodTab { photo, video, kiosk, requests }
 
 class MobileAttendanceState {
   final String serverTime;
@@ -78,12 +48,15 @@ class MobileAttendanceState {
   final bool requireDualCamera;
   final double maxGpsAccuracyM;
   final bool kioskAllowed;
+  final bool photoEnabled;
   final bool videoEnabled;
   final bool videoCodeRequired;
   final int? dayCode;
   final int videoMinSec;
   final int videoMaxSec;
   final String captureMode;
+  final bool terminalAllowed;
+  final List<String> allowedMethods;
   final List<Map<String, dynamic>> locations;
   final Map<String, dynamic>? todayRecord;
   final List<Map<String, dynamic>> todayPunches;
@@ -99,16 +72,33 @@ class MobileAttendanceState {
     required this.requireDualCamera,
     required this.maxGpsAccuracyM,
     required this.kioskAllowed,
+    required this.photoEnabled,
     required this.videoEnabled,
     required this.videoCodeRequired,
     required this.dayCode,
     required this.videoMinSec,
     required this.videoMaxSec,
     required this.captureMode,
+    required this.terminalAllowed,
+    required this.allowedMethods,
     required this.locations,
     required this.todayRecord,
     required this.todayPunches,
   });
+
+  bool get mobileAny => photoEnabled || videoEnabled || kioskAllowed;
+  bool get terminalOnly => !mobileAny && terminalAllowed;
+  bool get punchDisabled => !mobileAny && !terminalAllowed;
+
+  /// Mobil tablar (Заявки har doim oxirida).
+  List<AttendanceMethodTab> get visibleTabs {
+    final tabs = <AttendanceMethodTab>[];
+    if (photoEnabled) tabs.add(AttendanceMethodTab.photo);
+    if (videoEnabled) tabs.add(AttendanceMethodTab.video);
+    if (kioskAllowed) tabs.add(AttendanceMethodTab.kiosk);
+    tabs.add(AttendanceMethodTab.requests);
+    return tabs;
+  }
 
   factory MobileAttendanceState.fromJson(Map<String, dynamic> json) {
     final shift = json['shift'] is Map
@@ -116,6 +106,12 @@ class MobileAttendanceState {
         : <String, dynamic>{};
     final vp = json['video_punch'] is Map
         ? Map<String, dynamic>.from(json['video_punch'] as Map)
+        : <String, dynamic>{};
+    final pp = json['photo_punch'] is Map
+        ? Map<String, dynamic>.from(json['photo_punch'] as Map)
+        : <String, dynamic>{};
+    final pm = json['punch_modes'] is Map
+        ? Map<String, dynamic>.from(json['punch_modes'] as Map)
         : <String, dynamic>{};
     final locs = (json['locations'] is List ? json['locations'] as List : const [])
         .whereType<Map>()
@@ -125,6 +121,32 @@ class MobileAttendanceState {
         .whereType<Map>()
         .map((e) => Map<String, dynamic>.from(e))
         .toList();
+
+    final allowed = (json['allowed_methods'] is List ? json['allowed_methods'] as List : const [])
+        .map((e) => e.toString())
+        .where((e) => e.isNotEmpty)
+        .toList();
+
+    final bool photoEnabled;
+    final bool videoEnabled;
+    final bool kioskAllowed;
+    final bool terminalAllowed;
+    if (allowed.isNotEmpty) {
+      photoEnabled = allowed.contains('photo');
+      videoEnabled = allowed.contains('video');
+      kioskAllowed = allowed.contains('kiosk');
+      terminalAllowed = allowed.contains('terminal');
+    } else if (pm.isNotEmpty) {
+      photoEnabled = pm['photo'] != false;
+      videoEnabled = pm['video'] != false && vp['enabled'] != false;
+      kioskAllowed = pm['kiosk'] != false && json['kiosk_allowed'] == true;
+      terminalAllowed = pm['terminal'] != false;
+    } else {
+      photoEnabled = pp['enabled'] != false;
+      videoEnabled = vp['enabled'] != false;
+      kioskAllowed = json['kiosk_allowed'] == true;
+      terminalAllowed = true;
+    }
 
     return MobileAttendanceState(
       serverTime: json['server_time']?.toString() ?? '',
@@ -136,13 +158,23 @@ class MobileAttendanceState {
       livenessDirections: (json['liveness_directions'] as num?)?.toInt() == 8 ? 8 : 4,
       requireDualCamera: json['require_dual_camera'] != false,
       maxGpsAccuracyM: (json['max_gps_accuracy_m'] as num?)?.toDouble() ?? 100.0,
-      kioskAllowed: json['kiosk_allowed'] == true,
-      videoEnabled: vp['enabled'] != false,
+      kioskAllowed: kioskAllowed,
+      photoEnabled: photoEnabled,
+      videoEnabled: videoEnabled,
       videoCodeRequired: vp['code_required'] != false,
       dayCode: (vp['day_code'] as num?)?.toInt(),
       videoMinSec: (vp['min_sec'] as num?)?.toInt() ?? 5,
       videoMaxSec: (vp['max_sec'] as num?)?.toInt() ?? 10,
       captureMode: vp['capture_mode']?.toString() ?? 'sequential',
+      terminalAllowed: terminalAllowed,
+      allowedMethods: allowed.isNotEmpty
+          ? allowed
+          : [
+              if (photoEnabled) 'photo',
+              if (videoEnabled) 'video',
+              if (kioskAllowed) 'kiosk',
+              if (terminalAllowed) 'terminal',
+            ],
       locations: locs,
       todayRecord: json['today_record'] is Map
           ? Map<String, dynamic>.from(json['today_record'] as Map)

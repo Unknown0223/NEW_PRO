@@ -6,10 +6,13 @@ import { useQuery } from "@tanstack/react-query";
 import { CalendarDays, Camera, Clock, LogIn, LogOut, Users } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { api } from "@/lib/api";
+import { accessRoleLabel } from "@/lib/access-role-label";
 import { useAuthStore } from "@/lib/auth-store";
 
 type VisitDashboard = {
   date: string;
+  today?: string;
+  time_zone?: string;
   kpi: {
     headcount: number;
     present: number;
@@ -29,6 +32,7 @@ type VisitDashboard = {
     source: string;
     name: string;
     branch: string | null;
+    role?: string;
     has_terminal_photo: boolean;
   }>;
   absences: Array<{ id: number; name: string; type: string; from: string; to: string }>;
@@ -53,13 +57,20 @@ function initials(name: string) {
     .toUpperCase();
 }
 
-function timeLabel(iso: string) {
+function timeLabel(iso: string, timeZone: string) {
   return new Date(iso).toLocaleTimeString("ru-RU", {
     hour: "2-digit",
     minute: "2-digit",
     hour12: false,
-    timeZone: "Asia/Tashkent"
+    timeZone
   });
+}
+
+function roleText(raw: string | null | undefined) {
+  const t = (raw ?? "").trim();
+  if (!t || t === "—") return "—";
+  const labeled = accessRoleLabel(t);
+  return labeled !== t ? labeled : t;
 }
 
 function TerminalPhoto({ punchId, name }: { punchId: number | null; name: string }) {
@@ -102,37 +113,59 @@ function Kpi({ label, value, prev, icon }: { label: string; value: number; prev:
         {icon}
       </div>
       <div className="mt-2 text-3xl font-semibold tabular-nums">{value}</div>
-      <div className="mt-1 text-xs text-slate-500">вчера {prev}{delta === 0 ? "" : delta > 0 ? ` · +${delta}` : ` · ${delta}`}</div>
+      <div className="mt-1 text-xs text-slate-500">
+        вчера {prev}
+        {delta === 0 ? "" : delta > 0 ? ` · +${delta}` : ` · ${delta}`}
+      </div>
     </Card>
   );
 }
 
 export function TabelVisitsWorkspace() {
   const tenantSlug = useAuthStore((s) => s.tenantSlug ?? "");
+  const [date, setDate] = useState("");
   const query = useQuery({
-    queryKey: ["tabel", "visit-dashboard", tenantSlug],
+    queryKey: ["tabel", "visit-dashboard", tenantSlug, date],
     enabled: Boolean(tenantSlug),
     queryFn: async () => {
-      const { data } = await api.get<{ data: VisitDashboard }>(`/api/${tenantSlug}/tabel/visit-dashboard`);
+      const { data } = await api.get<{ data: VisitDashboard }>(`/api/${tenantSlug}/tabel/visit-dashboard`, {
+        params: date ? { date } : undefined
+      });
       return data.data;
     },
     refetchInterval: 60_000
   });
 
   const data = query.data;
+  const tz = data?.time_zone || "Asia/Tashkent";
   const maxBar = Math.max(1, ...(data?.month.map((row) => row.present + row.absent) ?? [1]));
   const maxBranch = Math.max(1, ...(data?.branches.map((row) => row.count) ?? [1]));
+
+  useEffect(() => {
+    if (!date && data?.date) setDate(data.date);
+  }, [data?.date, date]);
 
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-xl font-semibold">Статистика посещений</h1>
-          <p className="text-sm text-slate-500">Снимок только с терминала. Аватар сотрудника сюда не подставляется.</p>
+          <p className="text-sm text-slate-500">Снимок только с отметки (photo_front). Аватар сотрудника не подставляется.</p>
         </div>
-        <div className="flex gap-2 text-sm">
-          <Link href="/tabel/marks" className="rounded-md border px-3 py-1.5 hover:bg-slate-50">Журнал отметок</Link>
-          <Link href="/tabel/devices" className="rounded-md border px-3 py-1.5 hover:bg-slate-50">Терминалы</Link>
+        <div className="flex flex-wrap items-center gap-2 text-sm">
+          <input
+            type="date"
+            className="h-9 rounded-md border px-2"
+            value={date || data?.date || ""}
+            max={data?.today || data?.date}
+            onChange={(e) => setDate(e.target.value)}
+          />
+          <Link href="/tabel/marks" className="rounded-md border px-3 py-1.5 hover:bg-slate-50">
+            Журнал отметок
+          </Link>
+          <Link href="/tabel/devices" className="rounded-md border px-3 py-1.5 hover:bg-slate-50">
+            Терминалы
+          </Link>
         </div>
       </div>
 
@@ -150,12 +183,19 @@ export function TabelVisitsWorkspace() {
           <h2 className="text-sm font-semibold">Посещаемость за месяц</h2>
           <div className="mt-4 flex h-40 items-end gap-1">
             {(data?.month ?? []).map((row) => (
-              <div key={row.day} className="flex h-full min-w-0 flex-1 flex-col justify-end" title={`${row.day}: на работе ${row.present}`}>
+              <div
+                key={row.day}
+                className="flex h-full min-w-0 flex-1 flex-col justify-end gap-0.5"
+                title={`${row.day}: на работе ${row.present}, нет ${row.absent}`}
+              >
                 <div className="rounded-sm bg-teal-500" style={{ height: `${Math.max(2, (row.present / maxBar) * 100)}%` }} />
+                {row.absent > 0 ? (
+                  <div className="rounded-sm bg-slate-200" style={{ height: `${Math.max(1, (row.absent / maxBar) * 100)}%` }} />
+                ) : null}
               </div>
             ))}
           </div>
-          <div className="mt-2 text-xs text-slate-500">{data?.date ?? "—"} · зелёным — кто отметился</div>
+          <div className="mt-2 text-xs text-slate-500">{data?.date ?? "—"} · бирюзовый — отметились · серый — без отметки</div>
         </Card>
 
         <Card className="p-4">
@@ -179,19 +219,21 @@ export function TabelVisitsWorkspace() {
 
       <div className="grid gap-3 xl:grid-cols-2">
         <Card className="p-4">
-          <h2 className="text-sm font-semibold">Сегодня на работе</h2>
+          <h2 className="text-sm font-semibold">На работе ({data?.date ?? "—"})</h2>
           <ul className="mt-3 divide-y">
             {(data?.recent ?? []).map((row) => (
               <li key={row.id} className="flex items-center gap-3 py-2">
                 <TerminalPhoto punchId={row.punch_id} name={row.name} />
                 <div className="min-w-0">
                   <div className="truncate text-sm font-medium">{row.name}</div>
-                  <div className="truncate text-xs text-slate-500">{row.branch || "—"} · {row.role}</div>
+                  <div className="truncate text-xs text-slate-500">
+                    {row.branch || "—"} · {roleText(row.role)}
+                  </div>
                 </div>
                 {row.punch_id ? <Camera className="ml-auto size-4 text-teal-700" /> : null}
               </li>
             ))}
-            {!data?.recent.length && !query.isLoading ? <li className="py-3 text-sm text-slate-500">Сегодня отметок нет</li> : null}
+            {!data?.recent.length && !query.isLoading ? <li className="py-3 text-sm text-slate-500">Отметок нет</li> : null}
           </ul>
         </Card>
 
@@ -205,11 +247,16 @@ export function TabelVisitsWorkspace() {
                   <div className="truncate text-sm font-medium">{row.name}</div>
                   <div className="truncate text-xs text-slate-500">
                     {row.direction === "IN" ? "Приход" : "Уход"}
-                    {row.has_terminal_photo ? " · снимок терминала" : " · без снимка"}
+                    {row.branch ? ` · ${row.branch}` : ""}
+                    {row.has_terminal_photo ? " · снимок" : " · без снимка"}
                   </div>
                 </div>
-                <span className="text-xs tabular-nums text-slate-500">{timeLabel(row.at)}</span>
-                {row.direction === "IN" ? <LogIn className="size-4 text-teal-700" /> : <LogOut className="size-4 text-amber-700" />}
+                <span className="text-xs tabular-nums text-slate-500">{timeLabel(row.at, tz)}</span>
+                {row.direction === "IN" ? (
+                  <LogIn className="size-4 text-teal-700" />
+                ) : (
+                  <LogOut className="size-4 text-amber-700" />
+                )}
               </li>
             ))}
             {!data?.activity.length && !query.isLoading ? <li className="py-3 text-sm text-slate-500">Отметок нет</li> : null}
@@ -224,10 +271,14 @@ export function TabelVisitsWorkspace() {
             <li key={row.id} className="flex flex-wrap items-center justify-between gap-2 py-2 text-sm">
               <span className="font-medium">{row.name}</span>
               <span className="text-slate-500">{ABSENCE_LABEL[row.type] ?? row.type}</span>
-              <span className="tabular-nums text-slate-500">{row.from} — {row.to}</span>
+              <span className="tabular-nums text-slate-500">
+                {row.from} — {row.to}
+              </span>
             </li>
           ))}
-          {!data?.absences.length && !query.isLoading ? <li className="py-3 text-sm text-slate-500">На неделю вперёд заявок нет</li> : null}
+          {!data?.absences.length && !query.isLoading ? (
+            <li className="py-3 text-sm text-slate-500">На неделю вперёд заявок нет</li>
+          ) : null}
         </ul>
       </Card>
     </div>

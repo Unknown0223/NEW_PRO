@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  cityMatchNeedles,
   collectCoverageFromTerritoryString,
   staffTerritoriesMatchAddress,
   staffTerritoryStringMatchesAddress,
@@ -10,6 +11,33 @@ describe("territoryTokensMatch (kod ↔ nom)", () => {
   it("matches XR_XIVA with XIVA", () => {
     expect(territoryTokensMatch("XR_XIVA", "XIVA")).toBe(true);
     expect(territoryTokensMatch("XIVA", "XR_XIVA")).toBe(true);
+  });
+
+  it("matches BOG'OT with BOGOT and XR_BOGOT (apostrof)", () => {
+    expect(territoryTokensMatch("BOG'OT", "BOGOT")).toBe(true);
+    expect(territoryTokensMatch("BOG'OT", "XR_BOGOT")).toBe(true);
+    expect(territoryTokensMatch("XR_BOGOT", "BOG'OT")).toBe(true);
+    expect(territoryTokensMatch("QO'SHKO'PIR", "XR_QOSHKOPIR")).toBe(true);
+    expect(territoryTokensMatch("TO'RTKO'L", "XR_TORTKOL")).toBe(true);
+    expect(territoryTokensMatch("KATTAQO'RG'ON", "SM_KATTAQORGON")).toBe(true);
+    expect(territoryTokensMatch("UCHQORG`ON", "NM_UCHQORGON")).toBe(true);
+  });
+
+  it("does not treat SHAXAR alone as a city match token", () => {
+    expect(territoryTokensMatch("QQ_SHAXAR", "BESHARIK")).toBe(false);
+    expect(territoryTokensMatch("BUXORO SHAXAR", "BUXORO TUMANI")).toBe(false);
+  });
+
+  it("expands FR_SHAHAR / AD_TUMANI via region", () => {
+    expect(cityMatchNeedles("FR_SHAHAR", "FARGONA VILOYATI")).toEqual(
+      expect.arrayContaining(["FR_SHAHAR", "FARGONA SHAHAR", "FARGONA SHAXAR"])
+    );
+    expect(cityMatchNeedles("AD_TUMANI", "ANDIJON VILOYATI")).toEqual(
+      expect.arrayContaining(["AD_TUMANI", "ANDIJON TUMANI"])
+    );
+    expect(cityMatchNeedles("BX_SHAXAR", "BUXORO VILOYATI")).toEqual(
+      expect.arrayContaining(["BX_SHAXAR", "BUXORO SHAXAR", "BUXORO SHAHAR"])
+    );
   });
 
   it("matches region variants", () => {
@@ -100,6 +128,19 @@ describe("staffTerritoriesMatchAddress (work-slot multi-city)", () => {
     expect(staffTerritoriesMatchAddress(blobs, { ...xiv, city: "GURLAN" })).toBe(false);
   });
 
+  it("matches client city CODE XR_BOGOT to slot path with BOG'OT", () => {
+    const blobs = [
+      "SOUTH-WEST / XORAZM VILOYATI / BERUNIY",
+      "SOUTH-WEST / XORAZM VILOYATI / BO'STON",
+      "SOUTH-WEST / XORAZM VILOYATI / BOG'OT",
+      "SOUTH-WEST / XORAZM VILOYATI / GURLAN"
+    ];
+    const addr = { zone: "SOUTH-WEST", region: "XORAZM VILOYATI", city: "XR_BOGOT" };
+    expect(staffTerritoriesMatchAddress(blobs, addr)).toBe(true);
+    expect(staffTerritoriesMatchAddress(blobs, { ...addr, city: "BOGOT" })).toBe(true);
+    expect(staffTerritoriesMatchAddress(["BOG'OT", "BERUNIY", "XIVA"], addr)).toBe(true);
+  });
+
   it("matches bare city list like display overflow (BERUNIY, XIVA, ...)", () => {
     expect(
       staffTerritoriesMatchAddress(
@@ -125,5 +166,59 @@ describe("staffTerritoriesMatchAddress (work-slot multi-city)", () => {
     expect(c.zones).toEqual(["SOUTH-WEST"]);
     expect(c.oblasts).toEqual(["XORAZM VILOYATI"]);
     expect(c.cities).toEqual(["BERUNIY", "XIVA"]);
+  });
+
+  it("matches Andijon agent when client zone is FV but slot zone is Andijon", () => {
+    expect(
+      staffTerritoriesMatchAddress(["Andijon / ANDIJON VILOYATI / ASAKA"], {
+        zone: "FV",
+        region: "ANDIJON VILOYATI",
+        city: "AD_ASAKA"
+      })
+    ).toBe(true);
+  });
+
+  it("matches FR_SHAHAR / AD_TUMANI / BX_SHAXAR to display city names", () => {
+    expect(
+      staffTerritoriesMatchAddress(["FV / FARGONA VILOYATI / FARGONA SHAHAR"], {
+        zone: "FV",
+        region: "FARGONA VILOYATI",
+        city: "FR_SHAHAR"
+      })
+    ).toBe(true);
+    expect(
+      staffTerritoriesMatchAddress(["FV / ANDIJON VILOYATI / ANDIJON TUMANI"], {
+        zone: "FV",
+        region: "ANDIJON VILOYATI",
+        city: "AD_TUMANI"
+      })
+    ).toBe(true);
+    expect(
+      staffTerritoriesMatchAddress(["SOUTH-WEST / BUXORO VILOYATI / BUXORO SHAXAR"], {
+        zone: "SOUTH-WEST",
+        region: "BUXORO VILOYATI",
+        city: "BX_SHAXAR"
+      })
+    ).toBe(true);
+  });
+
+  it("does not match QQ_SHAXAR to a different Qoqon city via shared SHAXAR", () => {
+    expect(
+      staffTerritoriesMatchAddress(["FV / QOQON SHAXAR / BESHARIK"], {
+        zone: "FV",
+        region: "QOQON SHAXAR",
+        city: "QQ_SHAXAR"
+      })
+    ).toBe(false);
+  });
+
+  it("does not match BX_SHAXAR to BUXORO TUMANI", () => {
+    expect(
+      staffTerritoriesMatchAddress(["SOUTH-WEST / BUXORO VILOYATI / BUXORO TUMANI"], {
+        zone: "SOUTH-WEST",
+        region: "BUXORO VILOYATI",
+        city: "BX_SHAXAR"
+      })
+    ).toBe(false);
   });
 });

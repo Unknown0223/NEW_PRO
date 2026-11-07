@@ -148,7 +148,8 @@ export const DEFAULT_LATENESS_RULES: LatenessRules = {
   earlyLeaveGraceMinutes: 15,
   penalizeUnexcusedLateAsHalfDay: false,
   notifyTerminalArrival: true,
-  strictNonAgentAbsent: false
+  /** Omborchi/kassir/… belgisiz ish kunida «Прогул» — reja 5.2. */
+  strictNonAgentAbsent: true
 };
 
 function clampInt(value: unknown, min: number, max: number, fallback: number): number {

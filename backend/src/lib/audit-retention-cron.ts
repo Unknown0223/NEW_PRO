@@ -45,20 +45,7 @@ async function runOnce(): Promise<void> {
     );
   }
 
-  try {
-    const { purgeTabelMediaAndFaces } = await import("../modules/tabel/tabel-media-telegram.service");
-    const tabelPurge = await purgeTabelMediaAndFaces();
-    if (tabelPurge.photosPurged > 0 || tabelPurge.videosPurged > 0 || tabelPurge.facesPurged > 0) {
-      console.log(
-        "[tabel-retention] purged photos=%d videos=%d faces=%d",
-        tabelPurge.photosPurged,
-        tabelPurge.videosPurged,
-        tabelPurge.facesPurged
-      );
-    }
-  } catch (err) {
-    console.error("[tabel-retention] error:", err);
-  }
+  // Tabel media/yuz: alohida `tabel-retention-cron` (03:00 va 04:00).
 }
 
 export function enableAuditRetentionCron(): void {

@@ -48,7 +48,10 @@ export async function getPaymentDetail(
     payment: {
       ...base,
       created_by_user_id: p.created_by_user_id,
-      created_by_name: p.created_by?.name ?? null,
+      created_by_name:
+        (p as { source_created_by?: string | null }).source_created_by?.trim() ||
+        p.created_by?.name ||
+        null,
       deleted_by_name: p.deleted_by?.name ?? null
     },
     allocations,

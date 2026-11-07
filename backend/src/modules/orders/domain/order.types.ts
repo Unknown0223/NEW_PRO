@@ -353,6 +353,7 @@ export type OrderDetailLoaded = {
   discount_alert: string | null;
   bonus_alert: string | null;
   creation_channel?: string | null;
+  source_created_by?: string | null;
   created_at: Date;
   client: {
     name: string;

@@ -171,7 +171,26 @@ export function finishedReturnOrderLedgerUnionSql(args: {
       ex.name AS expeditor_name,
       NULL::text AS cash_desk_name,
       NULLIF(BTRIM(o.comment, E' \t\n\r'), '')::text AS note,
-      NULLIF(TRIM(o.source_created_by), '')::text AS created_by_login,
+      COALESCE(
+        NULLIF(TRIM(o.source_created_by), ''),
+        CASE
+          WHEN o.creation_channel = 'mobile'
+          THEN COALESCE(NULLIF(TRIM(ag.name), ''), NULLIF(TRIM(ag.login), ''))
+          ELSE NULL
+        END,
+        (
+          SELECT COALESCE(NULLIF(TRIM(cu.name), ''), cu.login)::text
+          FROM order_change_logs ocl
+          JOIN users cu ON cu.id = ocl.user_id
+          WHERE ocl.order_id = o.id
+            AND ocl.user_id IS NOT NULL
+            AND ocl.created_at >= o.created_at - interval '5 minutes'
+            AND ocl.created_at <= o.created_at + interval '5 minutes'
+          ORDER BY ocl.created_at ASC NULLS LAST, ocl.id ASC
+          LIMIT 1
+        ),
+        COALESCE(NULLIF(TRIM(ag.name), ''), NULLIF(TRIM(ag.login), ''))
+      )::text AS created_by_login,
       'refund'::text AS entry_kind,
       NULLIF(TRIM(o.payment_method_ref), '')::text AS order_payment_method_ref
     FROM orders o

@@ -255,6 +255,13 @@ export const settingsSections: SettingsSection[] = [
         description: "Лимит допустимых опозданий в месяц, минуты прощения и уведомления"
       },
       {
+        title: "Режимы отметки",
+        slug: "punch-modes",
+        href: "/settings/tabel/punch-modes",
+        status: "available",
+        description: "Фото, видео+код, киоск, терминал — базовые способы и матрица по ролям"
+      },
+      {
         title: "Видео-отметка и 3-значный код",
         slug: "punch-video",
         href: "/settings/tabel/punch-video",
@@ -484,6 +491,7 @@ const SETTINGS_HREF_VIEW_PERMS: Record<string, readonly string[]> = {
   "/settings/system-migration": ["settings.system_migration.view"],
   "/settings/audit": ["audit.log.view"],
   "/settings/tabel/lateness-rules": ["settings.tabel_pravila.view", "settings.tabel_pravila.update", "staff.tabel.view"],
+  "/settings/tabel/punch-modes": ["settings.tabel_pravila.view", "settings.tabel_pravila.update", "staff.tabel.view"],
   "/settings/tabel/punch-video": ["settings.tabel_pravila.view", "settings.tabel_pravila.update", "staff.tabel.view"],
   "/settings/tabel/face-antifraud": ["settings.tabel_pravila.view", "settings.tabel_pravila.update", "staff.tabel.view"],
   "/settings/tabel/telegram-attendance": ["settings.tabel_pravila.view", "settings.tabel_pravila.update", "staff.tabel.view"],

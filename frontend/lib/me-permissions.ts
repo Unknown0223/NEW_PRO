@@ -86,13 +86,16 @@ export function invalidateMePermissionsQueries(
   tenantSlug?: string | null,
   opts?: { userId?: number | null }
 ) {
+  // Prefiks: tenant ichidagi barcha actor keshlari (userId null bo‘lsa ham).
+  // Aniq userId bilan chaqirilganda ham shu tenant prefix — role-defaults / bulk
+  // o‘zgarishi operator sessiyasida darhol yangilansin.
   void qc.invalidateQueries({
     queryKey: tenantSlug
-      ? mePermissionsQueryKey(tenantSlug, opts?.userId)
-      : ["me", "access-permissions"],
+      ? (["me", "access-permissions", tenantSlug] as const)
+      : (["me", "access-permissions"] as const),
     refetchType: "active"
   });
-  broadcastMePermissionsInvalidate({ tenantSlug, userId: opts?.userId });
+  broadcastMePermissionsInvalidate({ tenantSlug, userId: opts?.userId ?? null });
 }
 
 /** QueryClient bo‘lmagan joylar (axios interceptor) uchun custom event. */

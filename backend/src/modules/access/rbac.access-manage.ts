@@ -1,7 +1,8 @@
 import type { Prisma } from "@prisma/client";
 import { prisma } from "../../config/database";
 
-import { loadRolesByKeys, type RoleWithPermKeys } from "./rbac.resolve";
+import { expandPermissionKeyAliases } from "./legacy-key-map";
+import { applyDeniedPermissionKeys, loadRolesByKeys, type RoleWithPermKeys } from "./rbac.resolve";
 
 /** «Доступ: управление» — boshqa foydalanuvchilarga operatsiya biriktirish. */
 export const ACCESS_MANAGE_PERMISSION_KEY = "access.manage";
@@ -61,15 +62,23 @@ function buildEffectivePermissionSets(
     const links = roleLinksByUser.get(userId) ?? [];
     if (links.length > 0) {
       for (const link of links) {
-        for (const row of link.role.permissions) rolePerms.add(row.permission.key);
+        for (const row of link.role.permissions) {
+          for (const k of expandPermissionKeyAliases([row.permission.key])) rolePerms.add(k);
+        }
       }
     } else if (fallbackRole && allRoleByKey.has(fallbackRole)) {
-      for (const row of allRoleByKey.get(fallbackRole)!.permissions) rolePerms.add(row.permission.key);
+      for (const row of allRoleByKey.get(fallbackRole)!.permissions) {
+        for (const k of expandPermissionKeyAliases([row.permission.key])) rolePerms.add(k);
+      }
     }
+    const denied = new Set<string>();
+    const allowed = new Set<string>();
     for (const up of permsByUserId.get(userId) ?? []) {
-      if (up.effect === "deny") rolePerms.delete(up.key);
-      if (up.effect === "allow") rolePerms.add(up.key);
+      if (up.effect === "deny") denied.add(up.key);
+      if (up.effect === "allow") allowed.add(up.key);
     }
+    for (const k of expandPermissionKeyAliases([...allowed])) rolePerms.add(k);
+    applyDeniedPermissionKeys(rolePerms, denied);
     out.set(userId, rolePerms);
   }
   return out;

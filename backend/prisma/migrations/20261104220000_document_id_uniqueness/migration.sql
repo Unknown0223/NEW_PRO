@@ -26,17 +26,42 @@ USING (
 ) d
 WHERE i.id = d.id AND d.n > 1;
 
-CREATE UNIQUE INDEX IF NOT EXISTS clients_active_code_uq
-  ON clients (tenant_id, lower(btrim(client_code)))
-  WHERE is_active
-    AND merged_into_client_id IS NULL
-    AND client_code IS NOT NULL
-    AND btrim(client_code) <> '';
+-- To‘qqiz shahar bitta tenant ichida bir xil SalesDoctor kodini ishlatadi.
+-- Takror bo‘lsa indeks tushmaydi, migratsiya esa to‘xtab qolmaydi.
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM clients
+    WHERE is_active
+      AND merged_into_client_id IS NULL
+      AND client_code IS NOT NULL
+      AND btrim(client_code) <> ''
+    GROUP BY tenant_id, lower(btrim(client_code))
+    HAVING count(*) > 1
+  ) THEN
+    CREATE UNIQUE INDEX IF NOT EXISTS clients_active_code_uq
+      ON clients (tenant_id, lower(btrim(client_code)))
+      WHERE is_active
+        AND merged_into_client_id IS NULL
+        AND client_code IS NOT NULL
+        AND btrim(client_code) <> '';
+  END IF;
 
-CREATE UNIQUE INDEX IF NOT EXISTS users_code_uq
-  ON users (tenant_id, lower(btrim(code)))
-  WHERE code IS NOT NULL
-    AND btrim(code) <> '';
+  IF NOT EXISTS (
+    SELECT 1
+    FROM users
+    WHERE code IS NOT NULL
+      AND btrim(code) <> ''
+    GROUP BY tenant_id, lower(btrim(code))
+    HAVING count(*) > 1
+  ) THEN
+    CREATE UNIQUE INDEX IF NOT EXISTS users_code_uq
+      ON users (tenant_id, lower(btrim(code)))
+      WHERE code IS NOT NULL
+        AND btrim(code) <> '';
+  END IF;
+END $$;
 
 CREATE UNIQUE INDEX IF NOT EXISTS order_items_product_line_uq
   ON order_items (order_id, product_id, is_bonus, (COALESCE(exchange_line_kind, '')));

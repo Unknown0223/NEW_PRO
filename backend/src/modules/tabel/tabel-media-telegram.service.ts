@@ -185,66 +185,76 @@ export async function purgeTabelMediaAndFaces(targetTenantId?: number): Promise<
     const cfg = normalizeFullTabelSettings(root.tabel_settings);
     const ret = cfg.retention;
 
-    const punches = await prisma.attendancePunch.findMany({
-      where: {
-        tenant_id: t.id,
-        OR: [
-          { NOT: { photo_front_key: null } },
-          { NOT: { photo_back_key: null } },
-          { NOT: { video_front_key: null } },
-          { NOT: { video_back_key: null } }
-        ]
-      },
-      select: {
-        id: true,
-        role_in_day: true,
-        occurred_at: true,
-        photo_front_key: true,
-        photo_back_key: true,
-        video_front_key: true,
-        video_back_key: true
-      },
-      take: 500
-    });
+    const mediaWhere = {
+      tenant_id: t.id,
+      OR: [
+        { NOT: { photo_front_key: null } },
+        { NOT: { photo_back_key: null } },
+        { NOT: { video_front_key: null } },
+        { NOT: { video_back_key: null } }
+      ]
+    };
+    const pageSize = 500;
+    let cursorId: number | undefined;
+    for (;;) {
+      const punches = await prisma.attendancePunch.findMany({
+        where: mediaWhere,
+        select: {
+          id: true,
+          role_in_day: true,
+          occurred_at: true,
+          photo_front_key: true,
+          photo_back_key: true,
+          video_front_key: true,
+          video_back_key: true
+        },
+        orderBy: { id: "asc" },
+        take: pageSize,
+        ...(cursorId != null ? { cursor: { id: cursorId }, skip: 1 } : {})
+      });
+      if (punches.length === 0) break;
 
-    for (const p of punches) {
-      const ageDays = (nowMs - p.occurred_at.getTime()) / (24 * 60 * 60 * 1000);
-      const rolePolicy =
-        p.role_in_day === "out" ? ret.out : p.role_in_day === "estimated_out" ? ret.estimated_out : ret.in;
-      const photoMaxDays = retentionToDays(rolePolicy.retentionValue, rolePolicy.retentionUnit);
-      const purgePhoto = !rolePolicy.enabled || (photoMaxDays > 0 && ageDays >= photoMaxDays);
-      const purgeVideo = ret.videoDays > 0 && ageDays >= ret.videoDays;
+      for (const p of punches) {
+        const ageDays = (nowMs - p.occurred_at.getTime()) / (24 * 60 * 60 * 1000);
+        const rolePolicy =
+          p.role_in_day === "out" ? ret.out : p.role_in_day === "estimated_out" ? ret.estimated_out : ret.in;
+        const photoMaxDays = retentionToDays(rolePolicy.retentionValue, rolePolicy.retentionUnit);
+        const purgePhoto = !rolePolicy.enabled || (photoMaxDays > 0 && ageDays >= photoMaxDays);
+        const purgeVideo = ret.videoDays > 0 && ageDays >= ret.videoDays;
 
-      let touched = false;
-      if (purgePhoto && (p.photo_front_key || p.photo_back_key)) {
-        if (p.photo_front_key) await storageDelete(p.photo_front_key).catch(() => {});
-        if (p.photo_back_key) await storageDelete(p.photo_back_key).catch(() => {});
-        photosPurged += 1;
-        touched = true;
+        let touched = false;
+        if (purgePhoto && (p.photo_front_key || p.photo_back_key)) {
+          if (p.photo_front_key) await storageDelete(p.photo_front_key).catch(() => {});
+          if (p.photo_back_key) await storageDelete(p.photo_back_key).catch(() => {});
+          photosPurged += 1;
+          touched = true;
+        }
+        if (purgeVideo && (p.video_front_key || p.video_back_key)) {
+          if (p.video_front_key) await storageDelete(p.video_front_key).catch(() => {});
+          if (p.video_back_key) await storageDelete(p.video_back_key).catch(() => {});
+          videosPurged += 1;
+          touched = true;
+        }
+        if (touched) {
+          const nextFrontPhoto = purgePhoto ? null : p.photo_front_key;
+          const nextBackPhoto = purgePhoto ? null : p.photo_back_key;
+          const nextFrontVideo = purgeVideo ? null : p.video_front_key;
+          const nextBackVideo = purgeVideo ? null : p.video_back_key;
+          const allCleared = !nextFrontPhoto && !nextBackPhoto && !nextFrontVideo && !nextBackVideo;
+          await prisma.attendancePunch.update({
+            where: { id: p.id },
+            data: {
+              photo_front_key: nextFrontPhoto,
+              photo_back_key: nextBackPhoto,
+              video_front_key: nextFrontVideo,
+              video_back_key: nextBackVideo,
+              ...(allCleared ? { media_purged_at: new Date() } : {})
+            }
+          });
+        }
       }
-      if (purgeVideo && (p.video_front_key || p.video_back_key)) {
-        if (p.video_front_key) await storageDelete(p.video_front_key).catch(() => {});
-        if (p.video_back_key) await storageDelete(p.video_back_key).catch(() => {});
-        videosPurged += 1;
-        touched = true;
-      }
-      if (touched) {
-        const nextFrontPhoto = purgePhoto ? null : p.photo_front_key;
-        const nextBackPhoto = purgePhoto ? null : p.photo_back_key;
-        const nextFrontVideo = purgeVideo ? null : p.video_front_key;
-        const nextBackVideo = purgeVideo ? null : p.video_back_key;
-        const allCleared = !nextFrontPhoto && !nextBackPhoto && !nextFrontVideo && !nextBackVideo;
-        await prisma.attendancePunch.update({
-          where: { id: p.id },
-          data: {
-            photo_front_key: nextFrontPhoto,
-            photo_back_key: nextBackPhoto,
-            video_front_key: nextFrontVideo,
-            video_back_key: nextBackVideo,
-            ...(allCleared ? { media_purged_at: new Date() } : {})
-          }
-        });
-      }
+      cursorId = punches[punches.length - 1]!.id;
+      if (punches.length < pageSize) break;
     }
 
     if (ret.dismissedFacePurgeDays > 0) {

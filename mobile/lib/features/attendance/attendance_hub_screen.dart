@@ -2,13 +2,18 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:geolocator/geolocator.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../core/face/face_verification_flow.dart';
+import '../../core/security/location_guard.dart';
+import '../../core/time/server_clock.dart';
 import 'attendance_api_service.dart';
 import 'attendance_models.dart';
 import 'attendance_offline_queue.dart';
+import 'dual_capture.dart';
+import 'liveness_camera_flow.dart';
+import 'photo_report.dart';
+import 'video_punch_flow.dart';
 
 class AttendanceHubScreen extends ConsumerStatefulWidget {
   const AttendanceHubScreen({super.key});
@@ -17,9 +22,7 @@ class AttendanceHubScreen extends ConsumerStatefulWidget {
   ConsumerState<AttendanceHubScreen> createState() => _AttendanceHubScreenState();
 }
 
-class _AttendanceHubScreenState extends ConsumerState<AttendanceHubScreen>
-    with SingleTickerProviderStateMixin {
-  late final TabController _tabs;
+class _AttendanceHubScreenState extends ConsumerState<AttendanceHubScreen> {
   final _picker = ImagePicker();
   final _commentCtrl = TextEditingController();
   final _spokenCodeCtrl = TextEditingController();
@@ -32,6 +35,8 @@ class _AttendanceHubScreenState extends ConsumerState<AttendanceHubScreen>
   String? _backPhotoB64;
   String? _frontVideoB64;
   String? _backVideoB64;
+  int? _videoDurationSec;
+  String _videoCaptureMode = 'sequential';
   int? _selectedKioskUserId;
   String _reqType = 'vacation';
   bool _submitting = false;
@@ -40,67 +45,115 @@ class _AttendanceHubScreenState extends ConsumerState<AttendanceHubScreen>
   @override
   void initState() {
     super.initState();
-    _tabs = TabController(length: 4, vsync: this);
+    LocationGuard.warmUp();
   }
 
   @override
   void dispose() {
-    _tabs.dispose();
+    LocationGuard.stopWarmUp();
     _commentCtrl.dispose();
     _spokenCodeCtrl.dispose();
     _reasonCtrl.dispose();
     super.dispose();
   }
 
-  Future<Position> _acquireGuardedPosition(double maxAcc) async {
-    final pos = await Geolocator.getCurrentPosition(
-      locationSettings: const LocationSettings(accuracy: LocationAccuracy.high),
-    );
-    final guard = LocationIntegrityGuard(
-      isMocked: pos.isMocked,
-      accuracyMeters: pos.accuracy,
-      maxAllowedAccuracyMeters: maxAcc,
-      clientUtc: DateTime.now().toUtc(),
-    );
-    final err = guard.validate();
-    if (err != null) throw Exception(err);
-    return pos;
+  Tab _tabFor(AttendanceMethodTab kind) {
+    switch (kind) {
+      case AttendanceMethodTab.photo:
+        return const Tab(icon: Icon(Icons.camera_front), text: 'Фото + Face ID');
+      case AttendanceMethodTab.video:
+        return const Tab(icon: Icon(Icons.videocam), text: 'Видео + 3-код');
+      case AttendanceMethodTab.kiosk:
+        return const Tab(icon: Icon(Icons.groups), text: 'Киоск бригады');
+      case AttendanceMethodTab.requests:
+        return const Tab(icon: Icon(Icons.event_note), text: 'Заявки');
+    }
   }
 
-  Future<void> _capturePhoto({required bool front}) async {
-    final xfile = await _picker.pickImage(
-      source: ImageSource.camera,
-      preferredCameraDevice: front ? CameraDevice.front : CameraDevice.rear,
-      maxWidth: 960,
-      imageQuality: 72,
+  Widget _viewFor(AttendanceMethodTab kind, MobileAttendanceState st) {
+    switch (kind) {
+      case AttendanceMethodTab.photo:
+        return _buildPhotoTab(st);
+      case AttendanceMethodTab.video:
+        return _buildVideoTab(st);
+      case AttendanceMethodTab.kiosk:
+        return _buildKioskTab(st);
+      case AttendanceMethodTab.requests:
+        return _buildRequestsTab(st);
+    }
+  }
+
+  Widget _buildModeBlocked(MobileAttendanceState st) {
+    final title = st.terminalOnly
+        ? 'Отметка только через терминал Face ID'
+        : 'Отметка для вашей роли отключена';
+    final body = st.terminalOnly
+        ? 'Администратор разрешил только терминал. Отметьтесь на устройстве Face ID в филиале.'
+        : 'В настройках табеля для вашей роли не включён ни один способ отметки. Обратитесь к руководителю.';
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              st.terminalOnly ? Icons.fingerprint : Icons.block,
+              size: 56,
+              color: Colors.teal.shade700,
+            ),
+            const SizedBox(height: 16),
+            Text(title, textAlign: TextAlign.center, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+            const SizedBox(height: 8),
+            Text(body, textAlign: TextAlign.center, style: TextStyle(color: Colors.grey.shade700)),
+            const SizedBox(height: 16),
+            Text('Смена: ${st.shiftName} (${st.shiftStart} – ${st.shiftEnd})', style: const TextStyle(fontSize: 13)),
+          ],
+        ),
+      ),
     );
-    if (xfile == null) return;
-    final bytes = await xfile.readAsBytes();
-    final b64 = base64Encode(bytes);
+  }
+
+  Future<PreciseFix> _acquireGuardedPosition(double maxAcc) {
+    return LocationGuard().acquire(maxAllowedAccuracyMeters: maxAcc);
+  }
+
+  Future<void> _runLiveness(MobileAttendanceState st) async {
+    final res = await LivenessCameraFlow.run(
+      context,
+      directions: st.livenessDirections,
+      presetSequence: _livenessSequence.isEmpty ? null : _livenessSequence,
+    );
+    if (res == null || !mounted) return;
     setState(() {
-      if (front) {
-        _frontPhotoB64 = b64;
-      } else {
-        _backPhotoB64 = b64;
-      }
+      _completedLiveness = res.steps;
+      _frontPhotoB64 = res.selfieBase64;
+      _statusBanner = 'Liveness пройден (${res.steps.length}/${st.livenessDirections})';
     });
   }
 
-  Future<void> _captureVideo({required bool front}) async {
-    final xfile = await _picker.pickVideo(
-      source: ImageSource.camera,
-      preferredCameraDevice: front ? CameraDevice.front : CameraDevice.rear,
-      maxDuration: const Duration(seconds: 10),
+  Future<void> _runDualCapture() async {
+    final res = await DualCapture.run(
+      context,
+      livenessSelfieBase64: _frontPhotoB64,
     );
-    if (xfile == null) return;
-    final bytes = await xfile.readAsBytes();
-    final b64 = base64Encode(bytes);
+    if (res == null || !mounted) return;
     setState(() {
-      if (front) {
-        _frontVideoB64 = b64;
-      } else {
-        _backVideoB64 = b64;
-      }
+      _backPhotoB64 = res.backBase64;
+      _frontPhotoB64 = res.frontBase64;
+      _statusBanner = 'Двойная съёмка готова (задняя + фронт)';
+    });
+  }
+
+  Future<void> _runVideoCapture(MobileAttendanceState st) async {
+    final res = await VideoPunchFlow.run(context, st: st);
+    if (res == null || !mounted) return;
+    setState(() {
+      _frontVideoB64 = res.frontBase64;
+      _backVideoB64 = res.backBase64;
+      _videoDurationSec = res.durationSec;
+      _videoCaptureMode = res.captureMode;
+      if (st.dayCode != null) _spokenCodeCtrl.text = '${st.dayCode}';
+      _statusBanner = 'Видео записано (${res.durationSec} с)';
     });
   }
 
@@ -117,13 +170,22 @@ class _AttendanceHubScreenState extends ConsumerState<AttendanceHubScreen>
   }
 
   Future<void> _submitPhotoPunch(MobileAttendanceState st) async {
-    if (_completedLiveness.length < st.livenessDirections) {
+    if (!st.photoEnabled) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Пройдите проверку живости (повороты головы)')),
+        const SnackBar(content: Text('Фото-отметка для вашей роли отключена')),
+      );
+      return;
+    }
+    if (_completedLiveness.length < st.livenessDirections) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Пройдите проверку живости (повороты головы + селфи)')),
       );
       return;
     }
     if (!await _ensureFace(st)) return;
+    if (!mounted) return;
     if (_frontPhotoB64 == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Сначала сделайте селфи (фронтальная камера)')),
@@ -139,13 +201,18 @@ class _AttendanceHubScreenState extends ConsumerState<AttendanceHubScreen>
     setState(() => _submitting = true);
     try {
       final pos = await _acquireGuardedPosition(st.maxGpsAccuracyM);
+      var frontB64 = _frontPhotoB64!;
+      try {
+        final shrunk = await faceMatchSelfie(base64Decode(frontB64));
+        frontB64 = base64Encode(shrunk);
+      } catch (_) {}
       await ref.read(attendanceApiProvider).submitPhotoPunch(
             lat: pos.latitude,
             lng: pos.longitude,
             accuracyM: pos.accuracy,
             isMockLocation: pos.isMocked,
             livenessSteps: _completedLiveness,
-            photoFrontBase64: _frontPhotoB64!,
+            photoFrontBase64: frontB64,
             photoBackBase64: _backPhotoB64,
             comment: _commentCtrl.text,
           );
@@ -187,9 +254,9 @@ class _AttendanceHubScreenState extends ConsumerState<AttendanceHubScreen>
             lng: pos.longitude,
             accuracyM: pos.accuracy,
             isMockLocation: pos.isMocked,
-            durationSec: 8,
+            durationSec: _videoDurationSec ?? st.videoMaxSec,
             spokenCode: code,
-            captureMode: st.captureMode,
+            captureMode: _videoCaptureMode,
             videoFrontBase64: _frontVideoB64!,
             videoBackBase64: _backVideoB64,
             comment: _commentCtrl.text,
@@ -221,7 +288,7 @@ class _AttendanceHubScreenState extends ConsumerState<AttendanceHubScreen>
           'photo_front_path': front,
           'photo_back_path': back,
           'comment': _commentCtrl.text,
-          'client_timestamp': DateTime.now().toUtc().toIso8601String(),
+          'client_timestamp': ServerClock.instance.bestEffortNowUtc().toIso8601String(),
         });
       } else if (kind == 'video' && _frontVideoB64 != null) {
         final front = await AttendanceOfflineQueue.persistBytes(base64Decode(_frontVideoB64!), 'mp4');
@@ -231,9 +298,9 @@ class _AttendanceHubScreenState extends ConsumerState<AttendanceHubScreen>
           'lng': 0,
           'accuracy_m': st.maxGpsAccuracyM,
           'is_mock_location': false,
-          'duration_sec': 8,
+          'duration_sec': _videoDurationSec ?? 8,
           'spoken_code': int.tryParse(_spokenCodeCtrl.text.trim()) ?? st.dayCode ?? 0,
-          'capture_mode': st.captureMode,
+          'capture_mode': _videoCaptureMode,
           'video_front_path': front,
           'comment': _commentCtrl.text,
         });
@@ -250,58 +317,79 @@ class _AttendanceHubScreenState extends ConsumerState<AttendanceHubScreen>
   Widget build(BuildContext context) {
     final stateAsync = ref.watch(mobileAttendanceStateProvider);
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Табель и Посещаемость'),
-        bottom: TabBar(
-          controller: _tabs,
-          isScrollable: true,
-          tabs: const [
-            Tab(icon: Icon(Icons.camera_front), text: 'Фото + Face ID'),
-            Tab(icon: Icon(Icons.videocam), text: 'Видео + 3-код'),
-            Tab(icon: Icon(Icons.groups), text: 'Киоск бригады'),
-            Tab(icon: Icon(Icons.event_note), text: 'Заявки'),
-          ],
-        ),
+    return stateAsync.when(
+      loading: () => Scaffold(
+        appBar: AppBar(title: const Text('Табель и Посещаемость')),
+        body: const Center(child: CircularProgressIndicator()),
       ),
-      body: stateAsync.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (err, _) => Center(child: Text('Ошибка загрузки: $err')),
-        data: (st) {
-          if (!_livenessSeeded) {
-            _livenessSeeded = true;
-            _livenessSequence = LivenessHelper.buildSequence(st.livenessDirections);
-            WidgetsBinding.instance.addPostFrameCallback((_) {
-              ref.read(attendanceApiProvider).flushOfflineQueue();
-            });
-          }
-          return Column(
-          children: [
-            if (_statusBanner != null)
-              Container(
-                width: double.infinity,
-                color: Colors.teal.shade50,
-                padding: const EdgeInsets.all(10),
-                child: Text(
-                  _statusBanner!,
-                  style: TextStyle(color: Colors.teal.shade900, fontWeight: FontWeight.w600),
-                ),
-              ),
-            Expanded(
-              child: TabBarView(
-                controller: _tabs,
-                children: [
-                  _buildPhotoTab(st),
-                  _buildVideoTab(st),
-                  _buildKioskTab(st),
-                  _buildRequestsTab(st),
-                ],
+      error: (err, _) => Scaffold(
+        appBar: AppBar(title: const Text('Табель и Посещаемость')),
+        body: Center(child: Text('Ошибка загрузки: $err')),
+      ),
+      data: (st) {
+        if (!_livenessSeeded) {
+          _livenessSeeded = true;
+          _livenessSequence = LivenessHelper.buildSequence(st.livenessDirections);
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            ref.read(attendanceApiProvider).flushOfflineQueue();
+          });
+        }
+
+        if (st.punchDisabled || st.terminalOnly) {
+          return Scaffold(
+            appBar: AppBar(title: const Text('Табель и Посещаемость')),
+            body: Column(
+              children: [
+                if (_statusBanner != null)
+                  Container(
+                    width: double.infinity,
+                    color: Colors.teal.shade50,
+                    padding: const EdgeInsets.all(10),
+                    child: Text(
+                      _statusBanner!,
+                      style: TextStyle(color: Colors.teal.shade900, fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                Expanded(child: _buildModeBlocked(st)),
+              ],
+            ),
+          );
+        }
+
+        final tabs = st.visibleTabs;
+        return DefaultTabController(
+          key: ValueKey(tabs.map((e) => e.name).join(',')),
+          length: tabs.length,
+          child: Scaffold(
+            appBar: AppBar(
+              title: const Text('Табель и Посещаемость'),
+              bottom: TabBar(
+                isScrollable: true,
+                tabs: tabs.map(_tabFor).toList(),
               ),
             ),
-          ],
+            body: Column(
+              children: [
+                if (_statusBanner != null)
+                  Container(
+                    width: double.infinity,
+                    color: Colors.teal.shade50,
+                    padding: const EdgeInsets.all(10),
+                    child: Text(
+                      _statusBanner!,
+                      style: TextStyle(color: Colors.teal.shade900, fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                Expanded(
+                  child: TabBarView(
+                    children: tabs.map((t) => _viewFor(t, st)).toList(),
+                  ),
+                ),
+              ],
+            ),
+          ),
         );
-        },
-      ),
+      },
     );
   }
 
@@ -321,7 +409,7 @@ class _AttendanceHubScreenState extends ConsumerState<AttendanceHubScreen>
         ),
         const SizedBox(height: 12),
         Text(
-          '1. Проверка живости лица (${st.livenessDirections} поворота головы):',
+          '1. Проверка живости лица (${st.livenessDirections} поворота + селфи):',
           style: const TextStyle(fontWeight: FontWeight.bold),
         ),
         const SizedBox(height: 6),
@@ -335,36 +423,27 @@ class _AttendanceHubScreenState extends ConsumerState<AttendanceHubScreen>
                   ))
               .toList(),
         ),
-        OutlinedButton.icon(
-          onPressed: () {
-            final next = dirs.where((d) => !_completedLiveness.contains(d)).toList();
-            if (next.isEmpty) return;
-            setState(() => _completedLiveness = [..._completedLiveness, next.first]);
-          },
+        FilledButton.tonalIcon(
+          onPressed: () => _runLiveness(st),
           icon: const Icon(Icons.face_retouching_natural),
           label: Text(_completedLiveness.length >= st.livenessDirections
-              ? 'Liveness подтверждён (${_completedLiveness.length}/${st.livenessDirections})'
-              : 'Следующий поворот (${_completedLiveness.length}/${st.livenessDirections})'),
+              ? 'Liveness OK — повторить'
+              : 'Начать liveness (${_completedLiveness.length}/${st.livenessDirections})'),
         ),
         const SizedBox(height: 12),
-        Row(
-          children: [
-            Expanded(
-              child: ElevatedButton.icon(
-                onPressed: () => _capturePhoto(front: true),
-                icon: const Icon(Icons.camera_front),
-                label: Text(_frontPhotoB64 != null ? 'Фронт: OK' : '1. Селфи (Фронт)'),
-              ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: ElevatedButton.icon(
-                onPressed: () => _capturePhoto(front: false),
-                icon: const Icon(Icons.camera_rear),
-                label: Text(_backPhotoB64 != null ? 'Задняя: OK' : '2. Объект (Задняя)'),
-              ),
-            ),
-          ],
+        Text(
+          '2. Двойная съёмка (задняя + фронт):',
+          style: const TextStyle(fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 6),
+        OutlinedButton.icon(
+          onPressed: _runDualCapture,
+          icon: const Icon(Icons.cameraswitch),
+          label: Text(
+            _backPhotoB64 != null && _frontPhotoB64 != null
+                ? 'Двойная съёмка: OK'
+                : 'Снять объект + селфи',
+          ),
         ),
         const SizedBox(height: 12),
         TextField(
@@ -418,24 +497,14 @@ class _AttendanceHubScreenState extends ConsumerState<AttendanceHubScreen>
           ),
         ),
         const SizedBox(height: 12),
-        Row(
-          children: [
-            Expanded(
-              child: ElevatedButton.icon(
-                onPressed: () => _captureVideo(front: true),
-                icon: const Icon(Icons.videocam),
-                label: Text(_frontVideoB64 != null ? 'Фронт видео: OK' : 'Видео (Фронт)'),
-              ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: ElevatedButton.icon(
-                onPressed: () => _captureVideo(front: false),
-                icon: const Icon(Icons.switch_video),
-                label: Text(_backVideoB64 != null ? 'Задняя видео: OK' : 'Видео (Задняя)'),
-              ),
-            ),
-          ],
+        OutlinedButton.icon(
+          onPressed: () => _runVideoCapture(st),
+          icon: const Icon(Icons.videocam),
+          label: Text(
+            _frontVideoB64 != null
+                ? 'Видео готово${_backVideoB64 != null ? " (фронт+зад)" : " (фронт)"} — перезаписать'
+                : 'Записать видео (фронт → задняя)',
+          ),
         ),
         const SizedBox(height: 12),
         FilledButton.icon(
@@ -468,7 +537,7 @@ class _AttendanceHubScreenState extends ConsumerState<AttendanceHubScreen>
               items: members
                   .map((m) => DropdownMenuItem<int>(
                         value: (m['id'] as num).toInt(),
-                        child: Text('${m['fio']} (${m['role']})'),
+                        child: Text('${m['fio']}'),
                       ))
                   .toList(),
               onChanged: (v) => setState(() => _selectedKioskUserId = v),
@@ -479,7 +548,22 @@ class _AttendanceHubScreenState extends ConsumerState<AttendanceHubScreen>
             ),
             const SizedBox(height: 12),
             ElevatedButton.icon(
-              onPressed: () => _capturePhoto(front: true),
+              onPressed: () async {
+                final x = await _picker.pickImage(
+                  source: ImageSource.camera,
+                  preferredCameraDevice: CameraDevice.front,
+                  maxWidth: 960,
+                  imageQuality: 78,
+                );
+                if (x == null) return;
+                var bytes = await x.readAsBytes();
+                try {
+                  final stamp =
+                      '${st.todayYmd}\n${ServerClock.instance.bestEffortNowUtc().toIso8601String()}';
+                  bytes = await stampedFacePhoto(bytes: bytes, stamp: stamp);
+                } catch (_) {}
+                setState(() => _frontPhotoB64 = base64Encode(bytes));
+              },
               icon: const Icon(Icons.camera_alt),
               label: Text(_frontPhotoB64 != null ? 'Лицо сотрудника снято' : 'Сфотографировать сотрудника'),
             ),
@@ -498,17 +582,18 @@ class _AttendanceHubScreenState extends ConsumerState<AttendanceHubScreen>
                               accuracyM: pos.accuracy,
                               photoFrontBase64: _frontPhotoB64!,
                             );
-                        setState(() => _statusBanner = 'Сотрудник отмечен через Киоск.');
+                        setState(() => _statusBanner = 'Киоск-отметка принята.');
+                        ref.invalidate(mobileAttendanceStateProvider);
                       } catch (e) {
                         if (mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Ошибка киоска: $e')));
+                          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
                         }
                       } finally {
                         if (mounted) setState(() => _submitting = false);
                       }
                     },
               icon: const Icon(Icons.how_to_reg),
-              label: const Text('Подтвердить отметку через Киоск'),
+              label: const Text('Отметить выбранного сотрудника'),
             ),
           ],
         );
@@ -520,73 +605,63 @@ class _AttendanceHubScreenState extends ConsumerState<AttendanceHubScreen>
     return FutureBuilder<List<Map<String, dynamic>>>(
       future: ref.read(attendanceApiProvider).fetchMyRequests(),
       builder: (ctx, snap) {
-        final items = snap.data ?? const [];
+        final rows = snap.data ?? const [];
         return ListView(
-      padding: const EdgeInsets.all(16),
-      children: [
-        if (items.isNotEmpty) ...[
-          const Text('Мои заявки', style: TextStyle(fontWeight: FontWeight.bold)),
-          const SizedBox(height: 8),
-          ...items.take(8).map((it) => ListTile(
+          padding: const EdgeInsets.all(16),
+          children: [
+            DropdownButtonFormField<String>(
+              value: _reqType,
+              items: const [
+                DropdownMenuItem(value: 'vacation', child: Text('Отпуск')),
+                DropdownMenuItem(value: 'sick', child: Text('Больничный')),
+                DropdownMenuItem(value: 'trip', child: Text('Командировка')),
+                DropdownMenuItem(value: 'overtime', child: Text('Сверхурочные')),
+              ],
+              onChanged: (v) => setState(() => _reqType = v ?? 'vacation'),
+              decoration: const InputDecoration(labelText: 'Тип заявки', border: OutlineInputBorder()),
+            ),
+            const SizedBox(height: 8),
+            TextField(
+              controller: _reasonCtrl,
+              decoration: const InputDecoration(labelText: 'Причина', border: OutlineInputBorder()),
+            ),
+            const SizedBox(height: 8),
+            FilledButton(
+              onPressed: _submitting
+                  ? null
+                  : () async {
+                      setState(() => _submitting = true);
+                      try {
+                        final today = st.todayYmd;
+                        await ref.read(attendanceApiProvider).createMyRequest(
+                              type: _reqType,
+                              fromDate: today,
+                              toDate: today,
+                              reason: _reasonCtrl.text,
+                            );
+                        setState(() => _statusBanner = 'Заявка отправлена.');
+                        ref.invalidate(mobileAttendanceStateProvider);
+                      } catch (e) {
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+                        }
+                      } finally {
+                        if (mounted) setState(() => _submitting = false);
+                      }
+                    },
+              child: const Text('Отправить заявку'),
+            ),
+            const Divider(height: 32),
+            const Text('Мои заявки', style: TextStyle(fontWeight: FontWeight.bold)),
+            ...rows.map(
+              (r) => ListTile(
                 dense: true,
-                title: Text('${it['type'] ?? ''} · ${it['status'] ?? ''}'),
-                subtitle: Text('${it['from_date'] ?? ''} — ${it['to_date'] ?? ''}'),
-              )),
-          const Divider(),
-        ],
-        const Text(
-          'Подать заявку (Отпуск, Больничный, Командировка, Сверхурочные):',
-          style: TextStyle(fontWeight: FontWeight.bold),
-        ),
-        const SizedBox(height: 12),
-        DropdownButtonFormField<String>(
-          value: _reqType,
-          items: const [
-            DropdownMenuItem(value: 'vacation', child: Text('Ежегодный отпуск')),
-            DropdownMenuItem(value: 'sick', child: Text('Больничный лист')),
-            DropdownMenuItem(value: 'trip', child: Text('Командировка')),
-            DropdownMenuItem(value: 'overtime', child: Text('Сверхурочная работа')),
+                title: Text('${r['type'] ?? ''} · ${r['status'] ?? ''}'),
+                subtitle: Text('${r['from_date'] ?? ''} → ${r['to_date'] ?? ''}'),
+              ),
+            ),
           ],
-          onChanged: (v) => setState(() => _reqType = v ?? 'vacation'),
-          decoration: const InputDecoration(border: OutlineInputBorder(), labelText: 'Тип заявки'),
-        ),
-        const SizedBox(height: 12),
-        TextField(
-          controller: _reasonCtrl,
-          decoration: const InputDecoration(
-            labelText: 'Причина / комментарий',
-            border: OutlineInputBorder(),
-          ),
-        ),
-        const SizedBox(height: 12),
-        FilledButton.icon(
-          onPressed: _submitting
-              ? null
-              : () async {
-                  setState(() => _submitting = true);
-                  try {
-                    await ref.read(attendanceApiProvider).createMyRequest(
-                          type: _reqType,
-                          fromDate: st.todayYmd,
-                          toDate: st.todayYmd,
-                          hours: _reqType == 'overtime' ? 4 : null,
-                          reason: _reasonCtrl.text,
-                        );
-                    _reasonCtrl.clear();
-                    setState(() => _statusBanner = 'Заявка отправлена руководителю / HR.');
-                  } catch (e) {
-                    if (mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Ошибка заявки: $e')));
-                    }
-                  } finally {
-                    if (mounted) setState(() => _submitting = false);
-                  }
-                },
-          icon: const Icon(Icons.add_task),
-          label: const Text('Отправить заявку'),
-        ),
-      ],
-    );
+        );
       },
     );
   }

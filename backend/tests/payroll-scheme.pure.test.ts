@@ -15,6 +15,10 @@ const inputs = (o: Partial<PayrollCalcInputs> = {}): PayrollCalcInputs => ({
   trip_days: 0,
   absent_days: 0,
   half_days: 0,
+  late_unexcused_days: 0,
+  late_minutes: 0,
+  early_leave_minutes: 0,
+  overtime_hours: 0,
   fact_total: { ...ZERO_METRICS, cost: 54_700_000, acb: 104 },
   fact_by_group: new Map([
     [1, { ...ZERO_METRICS, cost: 47_500_000 }],

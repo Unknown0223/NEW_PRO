@@ -16,7 +16,10 @@ import { parseAppliedBonusRulesSnapshot } from "../../bonus-rules/bonus-rules.sn
 import { applyOrderLevelDiscountPctToItems } from "../order-merchandise-net";
 import { enrichItemsBonusDisplay } from "./order.detail-items-bonus";
 import type { OrderDetailLoaded, OrderDetailRow, OrderItemRow } from "./order.types";
-import { normalizeStoredCreationChannel } from "./order.creation-channel";
+import {
+  normalizeStoredCreationChannel,
+  resolveOrderCreatedByDisplay
+} from "./order.creation-channel";
 
 export function toDetailRow(o: OrderDetailLoaded, viewerRole?: string): OrderDetailRow {
   const agentDisplay = o.agent ? `${o.agent.login} (${o.agent.name})` : null;
@@ -30,11 +33,15 @@ export function toDetailRow(o: OrderDetailLoaded, viewerRole?: string): OrderDet
   const cl = o.client;
   const statusLogsChrono = [...o.status_logs].reverse();
   const firstLogWithUser = statusLogsChrono.find((l) => l.user?.login?.trim());
-  const createdBy =
-    firstLogWithUser?.user?.login?.trim() ||
-    o.agent?.login?.trim() ||
-    o.agent?.name?.trim() ||
-    null;
+  const createdBy = resolveOrderCreatedByDisplay({
+    sourceCreatedBy: o.source_created_by,
+    creationChannel: o.creation_channel,
+    agentName: o.agent?.name,
+    agentLogin: o.agent?.login,
+    firstLogLogin: firstLogWithUser?.user?.login,
+    firstLogAtMs: firstLogWithUser?.created_at?.getTime() ?? null,
+    orderCreatedAtMs: o.created_at.getTime()
+  });
   return {
     id: o.id,
     number: o.number,

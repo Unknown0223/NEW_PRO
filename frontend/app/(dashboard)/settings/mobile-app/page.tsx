@@ -372,6 +372,9 @@ export default function MobileAppSettingsPage() {
             </CardDescription>
           </CardHeader>
           <CardContent className="grid gap-2 pt-4 sm:grid-cols-2 lg:grid-cols-4">
+            <Link href="/settings/tabel/punch-modes" className="flex items-center gap-2 rounded-lg border px-3 py-2 text-sm hover:bg-muted/50">
+              Режимы отметки (фото / видео / терминал)
+            </Link>
             <Link href="/settings/tabel/punch-video" className="flex items-center gap-2 rounded-lg border px-3 py-2 text-sm hover:bg-muted/50">
               <Video className="size-4 text-muted-foreground" /> Видео и 3-значный код
             </Link>

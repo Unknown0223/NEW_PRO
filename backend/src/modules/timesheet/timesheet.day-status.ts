@@ -19,7 +19,7 @@ export type DefaultDayInput = {
   hiredYmd: string | null;
   /** Tenant mahalliy `YYYY-MM-DD`; shu kundan keyin — ishlamagan. */
   dismissedYmd: string | null;
-  /** Agar yoqilgan bo'lsa — Agent bo'lmagan rollar ham punch bo'lmasa `absent` oladi. */
+  /** Default: true. `false` qilib o‘chirilmasa — Agent bo‘lmagan rollar punchsiz `absent`. */
   strictNonAgentAbsent?: boolean;
   /** Kun ichida haqiqiy davomat belgisi (punch) bormi. */
   hasPunch?: boolean;
@@ -41,7 +41,8 @@ export function isOutsideEmployment(ymd: string, hiredYmd: string | null, dismis
  * Qo'lda belgilanmagan kun holati:
  * - ishga olishdan oldin / bo'shatilgandan keyin → «Выходной» (kelmadi emas);
  * - agent: GPS vizit → ishladi; aks holda ish kuni → kelmadi, dam olish → выходной;
- * - boshqa rollar: grafik bo'yicha ish kuni → ishladi (auto), aks holda выходной.
+ * - boshqa rollar (omborchi, kassir, operator, ekspeditor…): ish kuni + belgi yo‘q →
+ *   `absent` (qat’iy rejim, default yoqilgan); belgi bor yoki qat’iy rejim o‘chirilgan → `worked`.
  */
 export function defaultTimesheetDay(input: DefaultDayInput): DefaultDayResult {
   if (isOutsideEmployment(input.ymd, input.hiredYmd, input.dismissedYmd)) {
@@ -54,7 +55,8 @@ export function defaultTimesheetDay(input: DefaultDayInput): DefaultDayResult {
   const working = isCalendarWorkingDay(input.state, role, input.userId, input.ymd);
   if (!working) return { status: "holiday", source: "auto", off_employment: false };
   if (isGpsTrackedRole(role)) return { status: "absent", source: "auto", off_employment: false };
-  if (input.strictNonAgentAbsent && !input.hasPunch) {
+  const strictAbsent = input.strictNonAgentAbsent !== false;
+  if (strictAbsent && !input.hasPunch) {
     return { status: "absent", source: "auto", off_employment: false };
   }
   return { status: "worked", source: "auto", off_employment: false };

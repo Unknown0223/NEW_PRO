@@ -19,7 +19,6 @@ export type AccessUserDetailTab =
   | "warehouses"
   | "trade_directions"
   | "staff"
-  | "delegation"
   | "history";
 
 export const ACCESS_USER_DETAIL_TABS: { id: AccessUserDetailTab; label: string }[] = [
@@ -32,7 +31,6 @@ export const ACCESS_USER_DETAIL_TABS: { id: AccessUserDetailTab; label: string }
   { id: "branches", label: "Филиал" },
   { id: "payment_methods", label: "Способ оплаты" },
   { id: "trade_directions", label: "Направления" },
-  { id: "delegation", label: "Делегирование" },
   { id: "history", label: "История" }
 ];
 

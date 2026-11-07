@@ -2,12 +2,15 @@
 
 import { Fragment, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowDown, ArrowUp, ArrowUpDown, ChevronDown, ChevronRight } from "lucide-react";
+import { ArrowDown, ArrowUp, ArrowUpDown, ChevronDown, ChevronRight, Download } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { timesheetRoleLabel } from "@/components/timesheet/timesheet-shared";
 import { api } from "@/lib/api";
 import { useAuthStore } from "@/lib/auth-store";
 import { branchLabelLookup, branchVisibleName, type BranchRefRow } from "@/lib/branch-options";
+import { getUserFacingError } from "@/lib/error-utils";
+import { usePermissions } from "@/lib/use-permissions";
 import { cn } from "@/lib/utils";
 
 type Emp = {
@@ -348,6 +351,7 @@ function ExpandGroupTable<T extends GroupRow>({
 
 export function TabelAnalyticsWorkspace() {
   const { tenantSlug } = useAuthStore();
+  const perms = usePermissions();
   const [month, setMonth] = useState(new Date().toISOString().slice(0, 7));
   const [branch, setBranch] = useState("");
   const [role, setRole] = useState("");
@@ -356,6 +360,9 @@ export function TabelAnalyticsWorkspace() {
   const [listBranches, setListBranches] = useState<string[]>([]);
   const [listRoles, setListRoles] = useState<string[]>([]);
   const [listNames, setListNames] = useState<string[]>([]);
+  const [exporting, setExporting] = useState(false);
+  const [exportNotice, setExportNotice] = useState<string | null>(null);
+  const canExport = perms.hasAny("tabel.statistika.export", "staff.tabel.export");
 
   const analyticsQ = useQuery({
     queryKey: ["tabel", "analytics", tenantSlug, month],
@@ -399,6 +406,32 @@ export function TabelAnalyticsWorkspace() {
     [people]
   );
 
+  async function exportExcel() {
+    if (!tenantSlug || !canExport) return;
+    setExporting(true);
+    setExportNotice(null);
+    try {
+      const res = await api.get<Blob>(`/api/${tenantSlug}/tabel/analytics/export`, {
+        responseType: "blob",
+        params: { month, branch: branch || undefined }
+      });
+      const cd = String(res.headers["content-disposition"] ?? "");
+      const m = /filename="([^"]+)"/i.exec(cd);
+      const filename = m?.[1] ?? `tabel-analytics_${month}.xlsx`;
+      const url = URL.createObjectURL(res.data);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      a.click();
+      URL.revokeObjectURL(url);
+      setExportNotice("Excel файл скачан.");
+    } catch (e) {
+      setExportNotice(getUserFacingError(e, "Не удалось выгрузить Excel"));
+    } finally {
+      setExporting(false);
+    }
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-end justify-between gap-3 rounded-xl border bg-card p-4 shadow-sm">
@@ -408,6 +441,13 @@ export function TabelAnalyticsWorkspace() {
             Сводка по филиалам и ролям. Галочка в строке открывает полный список сотрудников с деталями.
           </p>
         </div>
+        <div className="flex flex-wrap items-end gap-2">
+          {canExport ? (
+            <Button variant="outline" size="sm" className="h-9" onClick={() => void exportExcel()} disabled={exporting}>
+              <Download className="mr-1.5 size-4" />
+              {exporting ? "Выгрузка…" : "Excel"}
+            </Button>
+          ) : null}
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
           <div>
             <label className="mb-1 block text-[11px] font-medium text-muted-foreground">Месяц</label>
@@ -440,7 +480,14 @@ export function TabelAnalyticsWorkspace() {
             <Input className="h-9" placeholder="ФИО, логин, код…" value={search} onChange={(e) => setSearch(e.target.value)} />
           </div>
         </div>
+        </div>
       </div>
+
+      {exportNotice ? (
+        <div className="rounded-lg border border-emerald-500/40 bg-emerald-50 px-3 py-2 text-xs font-medium text-emerald-900">
+          {exportNotice}
+        </div>
+      ) : null}
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-6">
         <Card label="Сотрудников" value={people.length} />

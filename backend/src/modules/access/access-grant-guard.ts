@@ -85,7 +85,10 @@ export function collectPatchOperationKeys(
 }
 
 export function forbiddenGrantKeys(keys: readonly string[], grantable: ReadonlySet<string>): string[] {
-  return [...new Set(keys)].filter((k) => !grantable.has(k)).sort();
+  // Legacy ↔ structured alias: `orders.view` va `orders.zakaz.view` bir xil huquq.
+  return [...new Set(keys)]
+    .filter((k) => !expandPermissionKeyAliases([k]).some((a) => grantable.has(a)))
+    .sort();
 }
 
 /** Actor bera oladigan operatsiyalar: o'zida bor + «может выдавать» belgisi bor. */
@@ -96,7 +99,10 @@ export async function loadActorGrantableKeys(tenantId: number, actor: GrantGuard
     loadGrantDelegationOperationKeys(tenantId, actor.userId)
   ]);
   const out = new Set<string>();
-  for (const k of delegated) if (effective.has(k)) out.add(k);
+  for (const k of delegated) {
+    if (!effective.has(k) && !expandPermissionKeyAliases([k]).some((a) => effective.has(a))) continue;
+    for (const a of expandPermissionKeyAliases([k])) out.add(a);
+  }
   return out;
 }
 

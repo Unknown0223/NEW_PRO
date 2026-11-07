@@ -58,12 +58,32 @@ describe("defaultTimesheetDay", () => {
   const s = state();
   const base = { state: s, userId: 1, hasGpsVisit: false, hiredYmd: null, dismissedYmd: null };
 
-  it("non-GPS role is worked on schedule days, holiday otherwise", () => {
+  it("non-GPS role without punch is absent on schedule days (strict default), holiday otherwise", () => {
     expect(defaultTimesheetDay({ ...base, role: "expeditor", ymd: "2026-09-07" })).toMatchObject({
-      status: "worked",
+      status: "absent",
       source: "auto"
     });
     expect(defaultTimesheetDay({ ...base, role: "expeditor", ymd: "2026-09-06" }).status).toBe("holiday");
+  });
+
+  it("non-GPS role can stay worked when strict mode is off", () => {
+    expect(
+      defaultTimesheetDay({
+        ...base,
+        role: "expeditor",
+        ymd: "2026-09-07",
+        strictNonAgentAbsent: false
+      }).status
+    ).toBe("worked");
+    expect(
+      defaultTimesheetDay({
+        ...base,
+        role: "skladchik",
+        ymd: "2026-09-07",
+        hasPunch: true,
+        strictNonAgentAbsent: true
+      }).status
+    ).toBe("worked");
   });
 
   it("agent: GPS visit worked, else absent on working day", () => {
@@ -79,7 +99,13 @@ describe("defaultTimesheetDay", () => {
     expect(r1).toMatchObject({ status: "holiday", off_employment: true });
     const r2 = defaultTimesheetDay({ ...base, role: "expeditor", ymd: "2026-09-21", dismissedYmd: "2026-09-20" });
     expect(r2).toMatchObject({ status: "holiday", off_employment: true });
-    const r3 = defaultTimesheetDay({ ...base, role: "expeditor", ymd: "2026-09-19", dismissedYmd: "2026-09-20" });
+    const r3 = defaultTimesheetDay({
+      ...base,
+      role: "expeditor",
+      ymd: "2026-09-19",
+      dismissedYmd: "2026-09-20",
+      strictNonAgentAbsent: false
+    });
     expect(r3.status).toBe("worked");
   });
 });
