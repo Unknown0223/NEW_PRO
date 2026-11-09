@@ -10,16 +10,18 @@ import { invalidateMePermissionsQueries } from "@/lib/me-permissions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
-  accessOpKind,
   filterAccessTree,
   isFlatAccessModule,
-  type AccessTreeModule,
-  type AccessTreeOperation,
-  type AccessTreeSection
+  treeKeys,
+  type AccessTreeOperation
 } from "@/lib/access-operations-tree";
 import { useAccessOperationsTree } from "@/components/access/permission-tree/use-access-operations-tree";
-import { IndeterminateCheckbox } from "@/components/access/access-user-detail/access-user-detail-territory-ui";
 import { AccessCompactSwitch } from "@/components/access/access-compact-switch";
+import {
+  AccessRoleDefaultsOpPickTree,
+  viewKeysOfOps
+} from "@/components/access/access-role-defaults-op-pick-tree";
+import { AccessRoleDefaultsRoleGrantBranch } from "@/components/access/access-role-defaults-role-grant-branch";
 
 type RoleRow = {
   id: number;
@@ -29,6 +31,7 @@ type RoleRow = {
   permissions: string[];
 };
 
+/** «По операции»: operatsiyalarni massiv belgilash → rollarga bog‘lash. */
 export function AccessRoleDefaultsByOperation({
   tenantSlug,
   roles,
@@ -49,6 +52,7 @@ export function AccessRoleDefaultsByOperation({
   const [roleExpanded, setRoleExpanded] = useState<Record<number, string[]>>({});
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
   const [error, setError] = useState<string | null>(null);
+  const [okMsg, setOkMsg] = useState<string | null>(null);
 
   const tree = treeQ.data ?? [];
   const visibleTree = useMemo(() => filterAccessTree(tree, search), [tree, search]);
@@ -59,11 +63,17 @@ export function AccessRoleDefaultsByOperation({
   );
   const allExpanded = groupIds.length > 0 && groupIds.every((id) => expanded.has(id));
   const searching = search.trim().length > 0;
+  const visibleOpKeys = useMemo(() => treeKeys(visibleTree), [visibleTree]);
+  const allVisibleOpsOn =
+    visibleOpKeys.length > 0 && visibleOpKeys.every((k) => ops.has(k));
+  const someVisibleOpsOn = visibleOpKeys.some((k) => ops.has(k)) && !allVisibleOpsOn;
 
   const filteredRoles = useMemo(() => {
     const q = roleSearch.trim().toLowerCase();
     if (!q) return roles;
-    return roles.filter((r) => `${accessRoleDisplayName(r.key, r.name)} ${r.name} ${r.key}`.toLowerCase().includes(q));
+    return roles.filter((r) =>
+      `${accessRoleDisplayName(r.key, r.name)} ${r.name} ${r.key}`.toLowerCase().includes(q)
+    );
   }, [roles, roleSearch]);
 
   const isOn = (key: string) => ops.has(key);
@@ -85,33 +95,44 @@ export function AccessRoleDefaultsByOperation({
       });
     }
   };
-  const viewKeysOf = (opsList: AccessTreeOperation[]) => opsList.filter((o) => accessOpKind(o.action) === "view").map((o) => o.key);
   const toggleViewDefault = (all: AccessTreeOperation[], next: boolean) => {
     if (!next) setKeys(all.map((o) => o.key), false);
-    else setKeys(viewKeysOf(all), true);
+    else setKeys(viewKeysOfOps(all), true);
   };
 
   const bindMut = useMutation({
     mutationFn: async (action: "attach" | "detach") => {
+      const ids = [...roleIds];
+      const opCount = ops.size;
+      const roleCount = ids.length;
       await api.post(`/api/${tenantSlug}/access/role-defaults/bind`, {
         action,
         operation_keys: [...ops],
-        role_ids: [...roleIds],
+        role_ids: ids,
         role_grants:
           action === "attach"
-            ? [...roleIds].map((id) => ({
+            ? ids.map((id) => ({
                 role_id: id,
                 operation_keys: (roleGrant[id] ?? []).filter((k) => ops.has(k))
               }))
             : []
       });
+      return { action, opCount, roleCount };
     },
-    onSuccess: async () => {
+    onSuccess: async ({ action, opCount, roleCount }) => {
       setError(null);
+      setOkMsg(
+        action === "attach"
+          ? `Прикреплено: ${opCount} оп. → ${roleCount} рол.`
+          : `Откреплено: ${opCount} оп. ← ${roleCount} рол.`
+      );
       await qc.invalidateQueries({ queryKey: ["access-role-defaults", tenantSlug] });
       invalidateMePermissionsQueries(qc, tenantSlug);
     },
-    onError: (err: unknown) => setError(getUserFacingError(err, "Не удалось сохранить привязку."))
+    onError: (err: unknown) => {
+      setOkMsg(null);
+      setError(getUserFacingError(err, "Не удалось сохранить привязку."));
+    }
   });
 
   const canBind = ops.size > 0 && roleIds.size > 0 && !bindMut.isPending;
@@ -135,6 +156,14 @@ export function AccessRoleDefaultsByOperation({
             <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
             <Input className="h-7 pl-7 text-[11px]" placeholder="Поиск" value={search} onChange={(e) => setSearch(e.target.value)} />
           </div>
+          <button
+            type="button"
+            className="text-[11px] font-medium text-teal-700 hover:underline"
+            disabled={visibleOpKeys.length === 0}
+            onClick={() => setKeys(visibleOpKeys, !allVisibleOpsOn)}
+          >
+            {allVisibleOpsOn ? "Снять все" : someVisibleOpsOn ? "Выбрать видимые" : "Выбрать все"}
+          </button>
           <span className="text-[11px] tabular-nums text-muted-foreground">{ops.size}</span>
         </div>
         <div className="min-h-0 flex-1 overflow-auto">
@@ -143,7 +172,7 @@ export function AccessRoleDefaultsByOperation({
           ) : visibleTree.length === 0 ? (
             <p className="px-3 py-8 text-center text-xs text-muted-foreground">Ничего не найдено</p>
           ) : (
-            <OpPickTree
+            <AccessRoleDefaultsOpPickTree
               tree={visibleTree}
               expanded={expanded}
               forceOpen={searching}
@@ -247,7 +276,7 @@ export function AccessRoleDefaultsByOperation({
                     />
                   </div>
                   {picked && open ? (
-                    <RoleGrantBranch
+                    <AccessRoleDefaultsRoleGrantBranch
                       tree={pickedTree}
                       grant={granted}
                       expanded={new Set(roleExpanded[r.id] ?? [])}
@@ -267,7 +296,8 @@ export function AccessRoleDefaultsByOperation({
             })
           )}
         </div>
-        {error ? <p className="px-3 pb-2 text-xs text-destructive">{error}</p> : null}
+        {error ? <p className="px-3 pb-2 text-xs text-destructive" role="alert">{error}</p> : null}
+        {okMsg ? <p className="px-3 pb-2 text-xs text-teal-800 dark:text-teal-300" role="status">{okMsg}</p> : null}
         <div className="shrink-0 space-y-2 border-t border-border/70 bg-card px-3 py-2.5">
           <p className="text-[11px] text-muted-foreground">
             {canBind
@@ -299,184 +329,6 @@ export function AccessRoleDefaultsByOperation({
           </div>
         </div>
       </div>
-    </div>
-  );
-}
-
-function OpPickTree({
-  tree,
-  expanded,
-  forceOpen,
-  isOn,
-  onToggleOpen,
-  onToggleView,
-  onToggleKey
-}: {
-  tree: AccessTreeModule[];
-  expanded: ReadonlySet<string>;
-  forceOpen: boolean;
-  isOn: (key: string) => boolean;
-  onToggleOpen: (id: string) => void;
-  onToggleView: (ops: AccessTreeOperation[], next: boolean) => void;
-  onToggleKey: (key: string, next: boolean) => void;
-}) {
-  const open = (id: string) => forceOpen || expanded.has(id);
-  const box = (ops: AccessTreeOperation[]) => {
-    const keys = ops.map((o) => o.key);
-    const on = keys.filter(isOn).length;
-    return { keys, all: keys.length > 0 && on === keys.length, some: on > 0 && on < keys.length, ops };
-  };
-  const renderOps = (ops: AccessTreeOperation[]) =>
-    ops.map((op) => (
-      <label key={op.key} className="flex items-center gap-2 rounded px-2 py-1 text-[12px] hover:bg-muted/50">
-        <input type="checkbox" className="h-3.5 w-3.5 accent-teal-700" checked={isOn(op.key)} onChange={(e) => onToggleKey(op.key, e.target.checked)} />
-        <span className="min-w-0 flex-1 truncate">{op.label}</span>
-      </label>
-    ));
-  const renderSection = (mod: AccessTreeModule, sec: AccessTreeSection) => {
-    if (isFlatAccessModule(mod)) return <div key={sec.id}>{renderOps(sec.operations)}</div>;
-    const st = box(sec.operations);
-    const secOpen = open(sec.id);
-    return (
-      <div key={sec.id} className="ml-3">
-        <div className="flex items-center gap-1.5 px-1 py-1">
-          <button type="button" className="text-muted-foreground" onClick={() => onToggleOpen(sec.id)} aria-label={sec.label}>
-            {secOpen ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
-          </button>
-          <IndeterminateCheckbox
-            checked={st.all}
-            indeterminate={st.some}
-            className="h-3.5 w-3.5 accent-teal-700"
-            onChange={() => onToggleView(sec.operations, st.some || st.all ? false : true)}
-          />
-          <button type="button" className="min-w-0 flex-1 truncate text-left text-[12px] font-medium" onClick={() => onToggleOpen(sec.id)}>
-            {sec.label}
-          </button>
-        </div>
-        {secOpen ? <div className="ml-4 border-l border-border/70 pl-1">{renderOps(sec.operations)}</div> : null}
-      </div>
-    );
-  };
-  return (
-    <ul>
-      {tree.map((mod) => {
-        const allOps = mod.sections.flatMap((s) => s.operations);
-        const st = box(allOps);
-        const modOpen = open(mod.id);
-        return (
-          <li key={mod.id} className="border-b border-border/50">
-            <div className="flex items-center gap-1.5 px-2 py-1.5">
-              <button type="button" className="text-muted-foreground" onClick={() => onToggleOpen(mod.id)} aria-label={mod.label}>
-                {modOpen ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
-              </button>
-              <IndeterminateCheckbox
-                checked={st.all}
-                indeterminate={st.some}
-                className="h-3.5 w-3.5 accent-teal-700"
-                onChange={() => onToggleView(allOps, st.some || st.all ? false : true)}
-              />
-              <button type="button" className="min-w-0 flex-1 truncate text-left text-[13px] font-semibold" onClick={() => onToggleOpen(mod.id)}>
-                {mod.label}
-              </button>
-              <span className="text-[10px] tabular-nums text-muted-foreground">{st.keys.filter(isOn).length || allOps.length}</span>
-            </div>
-            {modOpen ? <div className="pb-1">{mod.sections.map((sec) => renderSection(mod, sec))}</div> : null}
-          </li>
-        );
-      })}
-    </ul>
-  );
-}
-
-function RoleGrantBranch({
-  tree,
-  grant,
-  expanded,
-  onToggleOpen,
-  onGrant
-}: {
-  tree: AccessTreeModule[];
-  grant: Set<string>;
-  expanded: Set<string>;
-  onToggleOpen: (id: string) => void;
-  onGrant: (keys: string[], next: boolean) => void;
-}) {
-  if (tree.length === 0) return <p className="px-3 py-2 text-[11px] text-muted-foreground">Сначала отметьте операции слева</p>;
-  const onCount = (keys: string[]) => keys.filter((k) => grant.has(k)).length;
-  const allOn = (keys: string[]) => keys.length > 0 && onCount(keys) === keys.length;
-  const hint = (keys: string[]) => {
-    const n = onCount(keys);
-    if (n === 0) return "Только просмотр";
-    if (n === keys.length) return "Можно выдавать другим";
-    return `Выдавать: ${n} из ${keys.length}`;
-  };
-  const Row = ({
-    label,
-    keys,
-    open,
-    onOpen,
-    depth
-  }: {
-    label: string;
-    keys: string[];
-    open?: boolean;
-    onOpen?: () => void;
-    depth: number;
-  }) => (
-    <div
-      className="flex items-start gap-2 rounded-md px-2 py-1.5 hover:bg-muted/40"
-      style={{ paddingLeft: 8 + depth * 14 }}
-    >
-      {onOpen ? (
-        <button type="button" className="mt-0.5 text-muted-foreground" onClick={onOpen} aria-label={label}>
-          {open ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
-        </button>
-      ) : (
-        <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-border" aria-hidden />
-      )}
-      <span className="min-w-0 flex-1">
-        <span className="block text-[12.5px] leading-snug text-foreground">{label}</span>
-        <span className="block text-[10.5px] leading-snug text-muted-foreground">{hint(keys)}</span>
-      </span>
-      <AccessCompactSwitch
-        checked={allOn(keys)}
-        title={hint(keys)}
-        onChange={(next) => onGrant(keys, next)}
-      />
-    </div>
-  );
-  return (
-    <div className="space-y-0.5 border-t border-border/60 bg-muted/20 px-1 py-1">
-      {tree.map((mod) => {
-        const keys = mod.sections.flatMap((s) => s.operations.map((o) => o.key));
-        const open = expanded.has(mod.id);
-        const flat = isFlatAccessModule(mod);
-        return (
-          <div key={mod.id}>
-            <Row label={mod.label} keys={keys} open={open} onOpen={() => onToggleOpen(mod.id)} depth={0} />
-            {open ? (
-              flat ? (
-                mod.sections.flatMap((s) => s.operations).map((op) => (
-                  <Row key={op.key} label={op.label} keys={[op.key]} depth={1} />
-                ))
-              ) : (
-                mod.sections.map((sec) => {
-                  const sKeys = sec.operations.map((o) => o.key);
-                  const secOpen = expanded.has(sec.id);
-                  return (
-                    <div key={sec.id}>
-                      <Row label={sec.label} keys={sKeys} open={secOpen} onOpen={() => onToggleOpen(sec.id)} depth={1} />
-                      {secOpen
-                        ? sec.operations.map((op) => <Row key={op.key} label={op.label} keys={[op.key]} depth={2} />)
-                        : null}
-                    </div>
-                  );
-                })
-              )
-            ) : null}
-          </div>
-        );
-      })}
     </div>
   );
 }
