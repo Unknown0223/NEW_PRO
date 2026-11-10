@@ -183,7 +183,7 @@ async function buildPlanningHierarchy(
   for (const lvl of configLevelUserIds) userIds.add(lvl);
   for (const m of autoManagers) userIds.add(m.id);
 
-  let userById = await loadHierarchyUsers(tenantId, userIds);
+  const userById = await loadHierarchyUsers(tenantId, userIds);
   for (let pass = 0; pass < 4; pass++) {
     const missing = new Set<number>();
     for (const a of agents) {

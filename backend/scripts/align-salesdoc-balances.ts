@@ -88,7 +88,7 @@ async function alignWarehouse(warehouseId: number, name: string) {
       let room = Math.round((n(order.amount) - n(order.used)) * 100) / 100;
       while (room >= 0.01 && need >= 0.01 && pi < clientPays.length) {
         const pay = clientPays[pi];
-        let left = Math.round((n(pay.amount) - n(pay.used)) * 100) / 100;
+        const left = Math.round((n(pay.amount) - n(pay.used)) * 100) / 100;
         if (left < 0.01) {
           pi += 1;
           continue;

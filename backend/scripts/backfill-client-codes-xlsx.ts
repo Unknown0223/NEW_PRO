@@ -28,7 +28,7 @@ function truthy(v: string | undefined): boolean {
 }
 
 function collectCodesFromWorkbook(xlsxPath: string): Map<number, string> {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  // eslint-disable-next-line @typescript-eslint/no-require-imports -- CJS skript: xlsx runtime'da yuklanadi
   const XLSX = require("xlsx") as typeof import("xlsx");
   const wb = XLSX.readFile(xlsxPath);
   const out = new Map<number, string>();

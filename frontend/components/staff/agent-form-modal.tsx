@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import { X, Lock, Palette, Tag, Package, Shield } from "lucide-react";
 import { api } from "@/lib/api";
@@ -255,19 +256,19 @@ export function AgentFormModal({
           <AgentFormSection title="Учётная запись и роль" icon={<Package className="h-4 w-4" />}>
             <p className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
               Код места, должность, доступ к приложению и сессии — в{" "}
-              <a href="/work-slots" className="font-semibold underline">
+              <Link href="/work-slots" className="font-semibold underline">
                 Рабочее место
-              </a>
+              </Link>
               {r?.work_slot_id != null ? (
                 <>
                   {" "}
                   (
-                  <a
+                  <Link
                     href={`/work-slots/${r.work_slot_id}`}
                     className="font-semibold underline"
                   >
                     открыть место
-                  </a>
+                  </Link>
                   ).
                 </>
               ) : (
@@ -341,16 +342,16 @@ export function AgentFormModal({
             <div className="flex items-center justify-between gap-3 rounded-lg border border-border bg-card px-3 py-2">
               <p className="text-xs text-slate-500">
                 Консигнация и лимит — в{" "}
-                <a
+                <Link
                   href="/settings/spravochnik/consignment"
                   className="font-semibold text-teal-700 underline"
                 >
                   Пользователи → Консигнация
-                </a>
+                </Link>
                 ; типы цен и ограничения продуктов — в{" "}
-                <a href="/work-slots" className="font-semibold text-teal-700 underline">
+                <Link href="/work-slots" className="font-semibold text-teal-700 underline">
                   Рабочее место
-                </a>
+                </Link>
               </p>
               <div className="flex shrink-0 items-center gap-2 text-sm text-slate-700">
                 <span>Цвет KPI</span>

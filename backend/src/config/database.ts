@@ -23,7 +23,6 @@ function createPrismaClient(): PrismaClient {
   if (process.env.PRISMA_QUERY_LOG === "1") {
     client.$on("query", (e: Prisma.QueryEvent) => {
       if (e.duration >= SLOW_QUERY_MS) {
-        // eslint-disable-next-line no-console
         console.warn("[prisma.slow]", {
           ms: e.duration,
           query: e.query.slice(0, 500)

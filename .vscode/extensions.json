@@ -1,0 +1,30 @@
+{
+  "recommendations": [
+    // Kod sifati
+    "dbaeumer.vscode-eslint",
+    "esbenp.prettier-vscode",
+    "usernamehw.errorlens",
+    "streetsidesoftware.code-spell-checker",
+    "editorconfig.editorconfig",
+    // TypeScript / React / Next
+    "ms-vscode.vscode-typescript-next",
+    "bradlc.vscode-tailwindcss",
+    "christian-kohler.path-intellisense",
+    "wix.vscode-import-cost",
+    // Backend / DB
+    "prisma.prisma",
+    "mtxr.sqltools",
+    "humao.rest-client",
+    // Testlar
+    "vitest.explorer",
+    "ms-playwright.playwright",
+    // Flutter (mobile/)
+    "dart-code.dart-code",
+    "dart-code.flutter",
+    // Git
+    "eamodio.gitlens",
+    "mhutchie.git-graph",
+    "donjayamanne.githistory"
+  ],
+  "unwantedRecommendations": []
+}

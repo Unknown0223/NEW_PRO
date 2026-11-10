@@ -199,7 +199,7 @@ export async function listClientBalancesReportMain(
      * Faqat aktiv agentlar (+ «Без агента»).
      * Guruhlash — ish o‘rnidagi joriy agent; bo‘shatilgan agent qarzi current_debt da.
      */
-    let agentRows: AgentBalanceRow[] = Array.from(byAgent.entries())
+    const agentRows: AgentBalanceRow[] = Array.from(byAgent.entries())
       .map(([agent_id, v]) => {
         const meta = agent_id != null ? metaById.get(agent_id) : undefined;
         return {

@@ -9,16 +9,13 @@ async function main() {
   const tenants = await prisma.tenant.findMany({ select: { id: true, slug: true } });
   for (const t of tenants) {
     await syncDefaultPermissionMetadata(t.id);
-    // eslint-disable-next-line no-console
     console.log(`Synced permission catalog for tenant ${t.slug} (${t.id})`);
   }
-  // eslint-disable-next-line no-console
   console.log(`Done. tenants=${tenants.length}`);
 }
 
 main()
   .catch((e) => {
-    // eslint-disable-next-line no-console
     console.error(e);
     process.exit(1);
   })

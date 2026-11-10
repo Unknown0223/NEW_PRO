@@ -14,6 +14,7 @@ import JSZip from "jszip";
  */
 
 const EXCELJS_BAD_DPI = "4294967295";
+// eslint-disable-next-line no-control-regex -- XML 1.0 taqiqlangan belgilari
 const XML_INVALID_CHARS = /[\x00-\x08\x0B\x0C\x0E-\x1F]/g;
 const SINGLE_CELL_MERGE_REF = /<mergeCell ref="([A-Z]+)(\d+):\1\2"\s*\/?>/gi;
 
