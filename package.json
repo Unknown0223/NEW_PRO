@@ -71,7 +71,7 @@
     "test:mobile-update": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test-mobile-app-update.ps1",
     "bitta-ilova:verify": "npm run bitta-ilova:verify --prefix backend && powershell -NoProfile -ExecutionPolicy Bypass -File mobile/tool/verify.ps1",
     "plans:verify": "npm run plans:verify --prefix backend && npm run plans:verify --prefix frontend",
-    "prod:verify": "npm run prod:verify --prefix backend && npm run refaktoring:verify --prefix frontend && npm run work-slots:verify --prefix frontend && npm run bitta-ilova:verify"
+    "prod:verify": "npm run lint:errors --prefix backend && npm run lint:errors --prefix frontend && npm run prod:verify --prefix backend && npm run refaktoring:verify --prefix frontend && npm run work-slots:verify --prefix frontend && npm run bitta-ilova:verify"
   },
   "devDependencies": {
     "concurrently": "^9.1.2",

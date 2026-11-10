@@ -274,34 +274,54 @@ qo‘shsangiz allowlist’ga yozmang, bo‘ling.
 
 ## 9. CI gate (GitHub Actions)
 
-`.github/workflows/ci.yml` da ikkita yangi qadam:
+Lint gate `prod:verify` ga **allaqachon qo‘shilgan** (`package.json`):
+
+```bash
+npm run prod:verify
+# = lint:errors (backend) && lint:errors (frontend) && prod:verify (backend) && ...
+```
+
+Ya’ni relizdan oldin lokal tekshiruv lint’siz o‘tmaydi.
+
+### `ci.yml` uchun qo‘shimcha qadam (qo‘lda qo‘shish kerak)
+
+Bu branch’da `.github/workflows/ci.yml` ni push qilib bo‘lmadi —
+GitHub App’da `workflows` ruxsati yo‘q:
+
+```
+refusing to allow a GitHub App to create or update workflow `.github/workflows/ci.yml`
+without `workflows` permission
+```
+
+Shuning uchun quyidagi 8 satrni **GitHub veb-interfeysida** (yoki `workflows`
+ruxsatli token bilan) qo‘shing. Backend job’da (`Typecheck scripts` dan keyin):
 
 ```yaml
-# backend job
 - name: ESLint (errors only)
   run: npm run lint:errors
   working-directory: backend
+```
 
-# frontend job
+Frontend job’da (`npm audit` dan keyin, `Audit max file lines` dan oldin):
+
+```yaml
 - name: ESLint (errors only)
   run: npm run lint:errors
   working-directory: frontend
 ```
 
-Bu **warning’larni bloklamaydi**, faqat error’larni. Hozirgi holat:
-**backend 0 error, frontend 0 error** — ya’ni gate yashil.
+Bu qadam **warning’larni bloklamaydi**, faqat error’larni. Hozirgi holat:
+backend 0 error, frontend 0 error — gate yashil bo‘ladi.
 
-> Eslatma: `npm ci` backend’da `eslint`, `@eslint/js`, `typescript-eslint` ni
-> o‘rnatadi (`devDependencies`), shuning uchun CI’da qo‘shimcha qadam kerak emas.
-
----
+> `npm ci` backend’da `eslint`, `@eslint/js`, `typescript-eslint` ni o‘rnatadi
+> (`devDependencies`, `package-lock.json` yangilangan), qo‘shimcha o‘rnatish kerak emas.
 
 ## 10. Keyingi qadamlar (tavsiya, ustuvorlik bo‘yicha)
 
 | #   | Ish                                                      | Foyda                                 | Mehnat            |
 | --- | -------------------------------------------------------- | ------------------------------------- | ----------------- |
 | 1   | `tabel-settings-workspace.tsx` (1347) ni bo‘lish         | `audit:max-loc` yashil, Cursor tezroq | 1-2 kun           |
-| 2   | Allowlist’dagi 10 ta tabel/timesheet faylini bo‘lish      | Refaktoring qarzi qisqaradi           | 3-4 kun           |
+| 2   | Allowlist’dagi 10 ta tabel/timesheet faylini bo‘lish     | Refaktoring qarzi qisqaradi           | 3-4 kun           |
 | 3   | `set-state-in-effect` ni 3 ta eng og‘ir ekranda tuzatish | Render soni −30%                      | 2 kun             |
 | 4   | Backend `mobile.route.ts` (2000+ satr) ni bo‘lish        | God-file yo‘qoladi                    | 2 kun             |
 | 5   | Frontend `no-unused-vars` ni modul bo‘yicha tozalash     | Bundle kichrayadi                     | har sprint 1 soat |
