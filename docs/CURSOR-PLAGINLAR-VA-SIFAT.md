@@ -256,7 +256,7 @@ Diqqat: `_unused` prefiksi bilan qoldirish mumkin (`argsIgnorePattern: "^_"`).
 
 ### 8.3. Fayl hajmi 400 satr (`audit:max-loc`)
 
-Hozir 10 ta fayl limitdan oshgan (`tabel-settings-workspace.tsx` — 1347 satr).
+Hozir allowlist’da 9 ta fayl qolgan (`tabel-settings-workspace.tsx` — 1347 satr edi, endi 276 satr).
 Yondashuv: **ekran → hook + ko‘rinish (view) + yordamchi (utils)**.
 
 ```
@@ -318,14 +318,14 @@ backend 0 error, frontend 0 error — gate yashil bo‘ladi.
 
 ## 10. Keyingi qadamlar (tavsiya, ustuvorlik bo‘yicha)
 
-| #   | Ish                                                      | Foyda                                 | Mehnat            |
-| --- | -------------------------------------------------------- | ------------------------------------- | ----------------- |
-| 1   | `tabel-settings-workspace.tsx` (1347) ni bo‘lish         | `audit:max-loc` yashil, Cursor tezroq | 1-2 kun           |
-| 2   | Allowlist’dagi 10 ta tabel/timesheet faylini bo‘lish     | Refaktoring qarzi qisqaradi           | 3-4 kun           |
-| 3   | `set-state-in-effect` ni 3 ta eng og‘ir ekranda tuzatish | Render soni −30%                      | 2 kun             |
-| 4   | Backend `mobile.route.ts` (2000+ satr) ni bo‘lish        | God-file yo‘qoladi                    | 2 kun             |
-| 5   | Frontend `no-unused-vars` ni modul bo‘yicha tozalash     | Bundle kichrayadi                     | har sprint 1 soat |
-| 6   | `format:all:write` ni alohida PR qilib bajarish          | Butun repo bir uslubda                | 1 kun + review    |
+| #   | Ish                                                                   | Foyda                                   | Mehnat            |
+| --- | --------------------------------------------------------------------- | --------------------------------------- | ----------------- |
+| 1   | ✅ `tabel-settings-workspace.tsx`: 1346 → 276 satr (6 fayl + 26 test) | allowlist’dan chiqdi, mantiq testlangan | bajarildi         |
+| 2   | Allowlist’dagi 10 ta tabel/timesheet faylini bo‘lish                  | Refaktoring qarzi qisqaradi             | 3-4 kun           |
+| 3   | `set-state-in-effect` ni 3 ta eng og‘ir ekranda tuzatish              | Render soni −30%                        | 2 kun             |
+| 4   | Backend `mobile.route.ts` (2000+ satr) ni bo‘lish                     | God-file yo‘qoladi                      | 2 kun             |
+| 5   | Frontend `no-unused-vars` ni modul bo‘yicha tozalash                  | Bundle kichrayadi                       | har sprint 1 soat |
+| 6   | `format:all:write` ni alohida PR qilib bajarish                       | Butun repo bir uslubda                  | 1 kun + review    |
 
 ---
 
