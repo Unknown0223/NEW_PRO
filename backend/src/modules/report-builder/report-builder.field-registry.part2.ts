@@ -119,7 +119,9 @@ export const FIELD_REGISTRY_PART2: Record<
     label: "Тип цены",
     allowRow: true,
     allowCol: true,
-    expr: () => Prisma.sql`''`
+    // Eski zakazlarda price_type null — payment_method_ref fallback (orders detail bilan bir xil).
+    expr: () =>
+      Prisma.sql`COALESCE(NULLIF(btrim(COALESCE(o.price_type, '')), ''), NULLIF(btrim(COALESCE(o.payment_method_ref, '')), ''), '')`
   },
   order_date_year: {
     label: "Дата заказа.Год",
@@ -137,49 +139,104 @@ export const FIELD_REGISTRY_PART2: Record<
     label: "Дата заказа.День",
     allowRow: true,
     allowCol: true,
-    expr: () => Prisma.sql`EXTRACT(DAY FROM o.created_at AT TIME ZONE 'UTC')::int::text`
+    // «День» — kun raqami emas, kalendar sanasi (YYYY-MM-DD).
+    expr: () => Prisma.sql`to_char(o.created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD')`
   },
   shipped_date_year: {
     label: "Дата отгрузки.Год",
     allowRow: true,
     allowCol: true,
     expr: () =>
-      Prisma.sql`CASE WHEN sl.shipped_at IS NULL THEN '' ELSE EXTRACT(YEAR FROM sl.shipped_at AT TIME ZONE 'UTC')::int::text END`
+      Prisma.sql`CASE
+        WHEN COALESCE(
+          sl.shipped_at,
+          CASE WHEN o.order_type IN ('return','return_by_order','partial_return') THEN COALESCE(sl.delivered_at, o.created_at) END
+        ) IS NULL THEN ''
+        ELSE EXTRACT(YEAR FROM COALESCE(
+          sl.shipped_at,
+          CASE WHEN o.order_type IN ('return','return_by_order','partial_return') THEN COALESCE(sl.delivered_at, o.created_at) END
+        ) AT TIME ZONE 'UTC')::int::text
+      END`
   },
   shipped_date_month: {
     label: "Дата отгрузки.Месяц",
     allowRow: true,
     allowCol: true,
     expr: () =>
-      Prisma.sql`CASE WHEN sl.shipped_at IS NULL THEN '' ELSE EXTRACT(MONTH FROM sl.shipped_at AT TIME ZONE 'UTC')::int::text END`
+      Prisma.sql`CASE
+        WHEN COALESCE(
+          sl.shipped_at,
+          CASE WHEN o.order_type IN ('return','return_by_order','partial_return') THEN COALESCE(sl.delivered_at, o.created_at) END
+        ) IS NULL THEN ''
+        ELSE EXTRACT(MONTH FROM COALESCE(
+          sl.shipped_at,
+          CASE WHEN o.order_type IN ('return','return_by_order','partial_return') THEN COALESCE(sl.delivered_at, o.created_at) END
+        ) AT TIME ZONE 'UTC')::int::text
+      END`
   },
   shipped_date_day: {
     label: "Дата отгрузки.День",
     allowRow: true,
     allowCol: true,
     expr: () =>
-      Prisma.sql`CASE WHEN sl.shipped_at IS NULL THEN '' ELSE EXTRACT(DAY FROM sl.shipped_at AT TIME ZONE 'UTC')::int::text END`
+      Prisma.sql`CASE
+        WHEN COALESCE(
+          sl.shipped_at,
+          CASE WHEN o.order_type IN ('return','return_by_order','partial_return') THEN COALESCE(sl.delivered_at, o.created_at) END
+        ) IS NULL THEN ''
+        ELSE to_char(COALESCE(
+          sl.shipped_at,
+          CASE WHEN o.order_type IN ('return','return_by_order','partial_return') THEN COALESCE(sl.delivered_at, o.created_at) END
+        ) AT TIME ZONE 'UTC', 'YYYY-MM-DD')
+      END`
   },
   delivered_date_year: {
     label: "Дата доставки.Год",
     allowRow: true,
     allowCol: true,
     expr: () =>
-      Prisma.sql`CASE WHEN sl.delivered_at IS NULL THEN '' ELSE EXTRACT(YEAR FROM sl.delivered_at AT TIME ZONE 'UTC')::int::text END`
+      Prisma.sql`CASE
+        WHEN COALESCE(
+          sl.delivered_at,
+          CASE WHEN o.order_type IN ('return','return_by_order','partial_return') THEN COALESCE(sl.shipped_at, o.created_at) END
+        ) IS NULL THEN ''
+        ELSE EXTRACT(YEAR FROM COALESCE(
+          sl.delivered_at,
+          CASE WHEN o.order_type IN ('return','return_by_order','partial_return') THEN COALESCE(sl.shipped_at, o.created_at) END
+        ) AT TIME ZONE 'UTC')::int::text
+      END`
   },
   delivered_date_month: {
     label: "Дата доставки.Месяц",
     allowRow: true,
     allowCol: true,
     expr: () =>
-      Prisma.sql`CASE WHEN sl.delivered_at IS NULL THEN '' ELSE EXTRACT(MONTH FROM sl.delivered_at AT TIME ZONE 'UTC')::int::text END`
+      Prisma.sql`CASE
+        WHEN COALESCE(
+          sl.delivered_at,
+          CASE WHEN o.order_type IN ('return','return_by_order','partial_return') THEN COALESCE(sl.shipped_at, o.created_at) END
+        ) IS NULL THEN ''
+        ELSE EXTRACT(MONTH FROM COALESCE(
+          sl.delivered_at,
+          CASE WHEN o.order_type IN ('return','return_by_order','partial_return') THEN COALESCE(sl.shipped_at, o.created_at) END
+        ) AT TIME ZONE 'UTC')::int::text
+      END`
   },
   delivered_date_day: {
     label: "Дата доставки.День",
     allowRow: true,
     allowCol: true,
     expr: () =>
-      Prisma.sql`CASE WHEN sl.delivered_at IS NULL THEN '' ELSE EXTRACT(DAY FROM sl.delivered_at AT TIME ZONE 'UTC')::int::text END`
+      Prisma.sql`CASE
+        WHEN COALESCE(
+          sl.delivered_at,
+          CASE WHEN o.order_type IN ('return','return_by_order','partial_return') THEN COALESCE(sl.shipped_at, o.created_at) END
+        ) IS NULL THEN ''
+        ELSE to_char(COALESCE(
+          sl.delivered_at,
+          CASE WHEN o.order_type IN ('return','return_by_order','partial_return') THEN COALESCE(sl.shipped_at, o.created_at) END
+        ) AT TIME ZONE 'UTC', 'YYYY-MM-DD')
+      END`
   },
   return_date_year: {
     label: "Дата возврата.Год",
@@ -200,7 +257,7 @@ export const FIELD_REGISTRY_PART2: Record<
     allowRow: true,
     allowCol: true,
     expr: () =>
-      Prisma.sql`CASE WHEN sret.return_at IS NULL THEN '' ELSE EXTRACT(DAY FROM sret.return_at AT TIME ZONE 'UTC')::int::text END`
+      Prisma.sql`CASE WHEN sret.return_at IS NULL THEN '' ELSE to_char(sret.return_at AT TIME ZONE 'UTC', 'YYYY-MM-DD') END`
   },
   order_date: {
     label: "Дата заявки",
@@ -213,14 +270,32 @@ export const FIELD_REGISTRY_PART2: Record<
     allowRow: true,
     allowCol: true,
     expr: () =>
-      Prisma.sql`CASE WHEN sl.shipped_at IS NULL THEN '' ELSE to_char(sl.shipped_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') END`
+      Prisma.sql`CASE
+        WHEN COALESCE(
+          sl.shipped_at,
+          CASE WHEN o.order_type IN ('return','return_by_order','partial_return') THEN COALESCE(sl.delivered_at, o.created_at) END
+        ) IS NULL THEN ''
+        ELSE to_char(COALESCE(
+          sl.shipped_at,
+          CASE WHEN o.order_type IN ('return','return_by_order','partial_return') THEN COALESCE(sl.delivered_at, o.created_at) END
+        ) AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"')
+      END`
   },
   delivered_date: {
     label: "Дата доставки",
     allowRow: true,
     allowCol: true,
     expr: () =>
-      Prisma.sql`CASE WHEN sl.delivered_at IS NULL THEN '' ELSE to_char(sl.delivered_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') END`
+      Prisma.sql`CASE
+        WHEN COALESCE(
+          sl.delivered_at,
+          CASE WHEN o.order_type IN ('return','return_by_order','partial_return') THEN COALESCE(sl.shipped_at, o.created_at) END
+        ) IS NULL THEN ''
+        ELSE to_char(COALESCE(
+          sl.delivered_at,
+          CASE WHEN o.order_type IN ('return','return_by_order','partial_return') THEN COALESCE(sl.shipped_at, o.created_at) END
+        ) AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"')
+      END`
   },
   return_date: {
     label: "Дата возврата",
@@ -251,7 +326,7 @@ export const FIELD_REGISTRY_PART2: Record<
     label: "Дата создания клиента.День",
     allowRow: true,
     allowCol: true,
-    expr: () => Prisma.sql`EXTRACT(DAY FROM c.created_at AT TIME ZONE 'UTC')::int::text`
+    expr: () => Prisma.sql`to_char(c.created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD')`
   },
   order_debt_display: {
     label: "Долг по заказу",

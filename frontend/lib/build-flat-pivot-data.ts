@@ -50,17 +50,7 @@ function formatCellValue(
       isEmpty: true
     };
   }
-  if (field?.dataType === "number" || field?.dataType === "currency" || effectiveFormat) {
-    const n = typeof raw === "number" ? raw : Number(raw);
-    if (Number.isFinite(n) && (field?.dataType === "number" || field?.dataType === "currency" || typeof raw === "number")) {
-      return {
-        value: n,
-        rawValue: n,
-        formatted: formatValue(n, effectiveFormat, { showCurrency }),
-        isEmpty: false
-      };
-    }
-  }
+  // Date avval — Number(Date) → ms timestamp bugini oldini olish.
   if (raw instanceof Date || field?.dataType === "date") {
     const d = raw instanceof Date ? raw : new Date(String(raw));
     if (!Number.isNaN(d.getTime())) {
@@ -68,6 +58,17 @@ function formatCellValue(
         value: d.toISOString(),
         rawValue: null,
         formatted: formatValue(d, effectiveFormat ?? { type: "date" }, { showCurrency }),
+        isEmpty: false
+      };
+    }
+  }
+  if (field?.dataType === "number" || field?.dataType === "currency" || effectiveFormat) {
+    const n = typeof raw === "number" ? raw : Number(raw);
+    if (Number.isFinite(n) && (field?.dataType === "number" || field?.dataType === "currency" || typeof raw === "number")) {
+      return {
+        value: n,
+        rawValue: n,
+        formatted: formatValue(n, effectiveFormat, { showCurrency }),
         isEmpty: false
       };
     }

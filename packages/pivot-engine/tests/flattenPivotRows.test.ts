@@ -46,9 +46,9 @@ describe("flattenPivotDisplayRows", () => {
     expect(flat[1]?.type).toBe("grandTotal");
   });
 
-  it("compact yoyilgan — ota + bola + subtotal", () => {
+  it("compact yoyilgan — ota (jami yonida) + bola, pastki subtotal yo‘q", () => {
     const flat = flattenPivotDisplayRows([parent], new Set(["a"]), grand);
-    expect(flat.map((f) => f.type)).toEqual(["row", "row", "subtotal", "grandTotal"]);
+    expect(flat.map((f) => f.type)).toEqual(["row", "row", "grandTotal"]);
   });
 
   it("compact pathLabels — har field alohida, ota bola da takrorlanadi", () => {
@@ -65,14 +65,20 @@ describe("flattenPivotDisplayRows", () => {
     }
   });
 
-  it("classic yoyilgan — ota alohida emas, bola bir qatorda pathLabels bilan", () => {
+  it("classic yoyilgan — ota jami yonida + bola pathLabels", () => {
     const flat = flattenPivotDisplayRows([parent], new Set(["a"]), grand, undefined, "classic");
-    expect(flat.map((f) => f.type)).toEqual(["row", "subtotal", "grandTotal"]);
-    const row = flat[0];
-    expect(row?.type).toBe("row");
-    if (row?.type === "row") {
-      expect(row.pathLabels).toEqual(["A", "Child"]);
-      expect(row.depth).toBe(1);
+    expect(flat.map((f) => f.type)).toEqual(["row", "row", "grandTotal"]);
+    const parentRow = flat[0];
+    const childRow = flat[1];
+    expect(parentRow?.type).toBe("row");
+    expect(childRow?.type).toBe("row");
+    if (parentRow?.type === "row") {
+      expect(parentRow.pathLabels).toEqual(["A"]);
+      expect(parentRow.depth).toBe(0);
+    }
+    if (childRow?.type === "row") {
+      expect(childRow.pathLabels).toEqual(["A", "Child"]);
+      expect(childRow.depth).toBe(1);
     }
   });
 

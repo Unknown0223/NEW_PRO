@@ -1436,10 +1436,10 @@ function HeaderCaption({
 }) {
   return (
     <span className={styles.thInner}>
-      <span className={styles.thLabel}>
-        {label}
+      <span className={styles.thSortSlot} aria-hidden={!sortMark}>
         {sortMark ? <span className={styles.thSortMark}>{sortMark}</span> : null}
       </span>
+      <span className={styles.thLabel}>{label}</span>
       {filterable ? (
         <button
           type="button"
@@ -1452,7 +1452,9 @@ function HeaderCaption({
           onMouseDown={(e) => e.stopPropagation()}
           onPointerDown={(e) => e.stopPropagation()}
         />
-      ) : null}
+      ) : (
+        <span className={styles.thFilterSlot} aria-hidden />
+      )}
     </span>
   );
 }

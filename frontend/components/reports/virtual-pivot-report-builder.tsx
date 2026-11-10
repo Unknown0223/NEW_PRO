@@ -64,7 +64,6 @@ import { useAuthStore, useAuthStoreHydrated } from "@/lib/auth-store";
 import { getUserFacingError } from "@/lib/error-utils";
 import {
   detectSavedReportFormat,
-  extractSavedDatasetFilters,
   DATASET_DISPLAY_PAGE_SIZE,
   DATASET_SCROLL_PAGE_SIZE,
   fetchAllReportBuilderDatasetPages,
@@ -126,15 +125,13 @@ import { STALE } from "@/lib/query-stale";
 
 const PIVOT_DEMO_URL = process.env.NEXT_PUBLIC_PIVOT_DEMO_URL ?? "http://127.0.0.1:5174";
 
-/** Saqlangan hisobot «dirty» solishtiruvi uchun barqaror snapshot. */
+/** Saqlangan hisobot «dirty» — faqat forma (filtr/davr shablonda yo‘q). */
 function snapshotSavedReportState(
   pivotConfig: PivotConfig,
-  datasetFilters: DatasetFiltersPayload,
   dateFmt: PivotDateFormatState
 ): string {
   return JSON.stringify({
     config: pivotConfig,
-    filters: datasetFilters,
     dateFormat: dateFmt
   });
 }
@@ -695,9 +692,7 @@ export function VirtualPivotReportBuilder() {
     async (savedId: number, savedConfig: unknown) => {
       setLoadingSavedReportId(savedId);
       try {
-        const restoredFilters = extractSavedDatasetFilters(savedConfig);
-        if (restoredFilters) setFilters(restoredFilters);
-
+        // Shablon: faqat pivot forma. Tepadagi filtr/davr o‘zgarmaydi.
         let pivotConfig = savedReportConfigToPivotConfig(savedConfig);
         if (!pivotConfig) {
           const legacy = savedConfig as Record<string, unknown>;
@@ -717,18 +712,13 @@ export function VirtualPivotReportBuilder() {
         setCellFormat({ ...DEFAULT_CELL_FORMAT, ...cellFormatFromConfig(pivotConfig) });
         setImportError(null);
         setActiveSavedReportId(savedId);
-        const nextFilters = restoredFilters ?? filters;
         setSavedReportBaseline(
-          snapshotSavedReportState(
-            pivotConfig,
-            nextFilters,
-            dateFormatStateFromConfig(pivotConfig)
-          )
+          snapshotSavedReportState(pivotConfig, dateFormatStateFromConfig(pivotConfig))
         );
 
-        if (tenantSlug) {
+        if (tenantSlug && canSavePivotConfig(pivotConfig)) {
           const payload: ReportBuilderDatasetRequest = {
-            ...(restoredFilters ?? filters),
+            ...filters,
             rowFieldIds: pivotConfig.rows,
             colFieldIds: pivotConfig.columns
           };
@@ -804,10 +794,25 @@ export function VirtualPivotReportBuilder() {
     onError: (err) => setLoadError(getUserFacingError(err))
   });
 
+  const canLoadDataset = canSavePivotConfig(config);
+
   const handleLoadData = useCallback(() => {
     if (!tenantSlug) return;
     loadMut.mutate();
   }, [tenantSlug, loadMut]);
+
+  /** Davr / dateMode o‘zgaganda — allaqachon yuklangan jadvalni qayta yuklash. */
+  const dateFilterKey = `${filters.dateFrom}|${filters.dateTo}|${filters.dateMode}`;
+  const dateFilterKeyRef = useRef(dateFilterKey);
+  useEffect(() => {
+    if (dateFilterKeyRef.current === dateFilterKey) return;
+    dateFilterKeyRef.current = dateFilterKey;
+    if (!tenantSlug || !canLoadDataset) return;
+    if (datasetRows.length === 0 && datasetMeta == null) return;
+    loadMut.mutate();
+    // faqat sana filtri
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- dateFilterKey
+  }, [dateFilterKey, tenantSlug, canLoadDataset, loadMut, datasetRows.length, datasetMeta]);
 
   const handleLoadMoreRows = useCallback(async () => {
     if (!tenantSlug || !datasetMeta?.hasMore || isLoadingMore || loadMut.isPending) return;
@@ -876,15 +881,9 @@ export function VirtualPivotReportBuilder() {
       // Sana formati local state da ham — saqlashdan oldin config ga yozamiz.
       const configToSave = applyDateFormatToConfig(config, pivotFields, dateFormat);
       if (args.overwriteId != null) {
-        return updatePivotConfigReport(
-          tenantSlug!,
-          args.overwriteId,
-          trimmed,
-          configToSave,
-          filters
-        );
+        return updatePivotConfigReport(tenantSlug!, args.overwriteId, trimmed, configToSave);
       }
-      return savePivotConfigReport(tenantSlug!, trimmed, configToSave, filters);
+      return savePivotConfigReport(tenantSlug!, trimmed, configToSave);
     },
     onSuccess: (saved, vars) => {
       setSaveError(null);
@@ -895,7 +894,6 @@ export function VirtualPivotReportBuilder() {
       setSavedReportBaseline(
         snapshotSavedReportState(
           applyDateFormatToConfig(config, pivotFields, dateFormat),
-          filters,
           dateFormat
         )
       );
@@ -945,10 +943,8 @@ export function VirtualPivotReportBuilder() {
 
   const isActiveSavedReportDirty = useMemo(() => {
     if (activeSavedReportId == null || savedReportBaseline == null) return false;
-    return (
-      snapshotSavedReportState(config, filters, dateFormat) !== savedReportBaseline
-    );
-  }, [activeSavedReportId, config, dateFormat, filters, savedReportBaseline]);
+    return snapshotSavedReportState(config, dateFormat) !== savedReportBaseline;
+  }, [activeSavedReportId, config, dateFormat, savedReportBaseline]);
 
   const saveActiveSelectedReport = useCallback(() => {
     if (activeSavedReportId == null) return;
@@ -1223,7 +1219,12 @@ export function VirtualPivotReportBuilder() {
             size="sm"
             className="h-9 min-w-[8.5rem] gap-1 bg-[#2D948A] text-white hover:bg-[#268a7f]"
             onClick={handleLoadData}
-            disabled={loadMut.isPending || !config.values.length}
+            disabled={loadMut.isPending || !canLoadDataset}
+            title={
+              canLoadDataset
+                ? undefined
+                : "Сначала выберите поля отчёта (строки / значения)"
+            }
           >
             {loadMut.isPending ? (
               <Loader2 className="h-3.5 w-3.5 animate-spin" />

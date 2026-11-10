@@ -12,11 +12,14 @@ import { listDistinctPriceTypesForTenant } from "../reference/reference.service"
 import { referencesWithResolvedTerritoryNodes } from "../tenant-settings/tenant-settings.service";
 import { activeBranchNamesFromReferences } from "../tenant-settings/tenant-settings.refs";
 import {
+  orderListPriceTypeLabel,
   priceTypeEntriesFromUnknown,
   resolveCurrencyEntries,
   resolvePaymentMethodEntries,
   resolvePaymentMethodRefToLabel,
-  resolvePriceTypeKeyToLabel
+  resolvePriceTypeKeyToLabel,
+  type PaymentMethodEntryDto,
+  type PriceTypeEntryDto
 } from "../tenant-settings/finance-refs";
 import { asRecord } from "../tenant-settings/tenant-settings.shared";
 import { enrichScopedReportActor, buildClientAgentScopeWhere } from "../access/access-agent-scope";
@@ -65,6 +68,53 @@ function serializeRows(rows: Record<string, unknown>[]): Record<string, unknown>
       o[k] = jsonSafe(val);
     }
     return o;
+  });
+}
+
+/** Tip ceny / to‘lov usuli — kod o‘rniga spravochnik nomi. */
+function resolveFinanceDisplayLabel(
+  raw: unknown,
+  pmEntries: PaymentMethodEntryDto[],
+  ptEntries: PriceTypeEntryDto[]
+): string {
+  const key = String(raw ?? "").trim();
+  if (!key) return "";
+  const asPt = resolvePriceTypeKeyToLabel(key, ptEntries);
+  if (asPt && asPt !== key) return asPt;
+  return orderListPriceTypeLabel(key, pmEntries, ptEntries) ?? key;
+}
+
+async function loadTenantFinanceLabelEntries(tenantId: number): Promise<{
+  pmEntries: PaymentMethodEntryDto[];
+  ptEntries: PriceTypeEntryDto[];
+}> {
+  const tenantRow = await prisma.tenant.findUnique({
+    where: { id: tenantId },
+    select: { settings: true }
+  });
+  const refs = asRecord(asRecord(tenantRow?.settings).references);
+  const pmEntries = resolvePaymentMethodEntries(refs, resolveCurrencyEntries(refs));
+  const ptEntries = priceTypeEntriesFromUnknown(refs.price_type_entries);
+  return { pmEntries, ptEntries };
+}
+
+function applyFinanceLabelsToRows(
+  rows: Record<string, unknown>[],
+  pmEntries: PaymentMethodEntryDto[],
+  ptEntries: PriceTypeEntryDto[]
+): Record<string, unknown>[] {
+  return rows.map((row) => {
+    const next = { ...row };
+    if ("price_type_ref" in next) {
+      next.price_type_ref = resolveFinanceDisplayLabel(next.price_type_ref, pmEntries, ptEntries);
+    }
+    if ("payment_method" in next) {
+      const pmRaw = String(next.payment_method ?? "").trim();
+      next.payment_method = pmRaw
+        ? resolvePaymentMethodRefToLabel(pmRaw, pmEntries) ?? pmRaw
+        : "";
+    }
+    return next;
   });
 }
 
@@ -348,10 +398,14 @@ export async function reportBuilderDataset(
   actor?: ReportActor
 ): Promise<ReportBuilderDatasetResponse> {
   const scopedActor = actor ? await enrichScopedReportActor(tenantId, actor) : undefined;
-  const raw = await runReportBuilderDataset(tenantId, filters, scopedActor);
+  const [raw, finance] = await Promise.all([
+    runReportBuilderDataset(tenantId, filters, scopedActor),
+    loadTenantFinanceLabelEntries(tenantId)
+  ]);
+  const labeled = applyFinanceLabelsToRows(raw.rows, finance.pmEntries, finance.ptEntries);
   return {
     ...raw,
-    rows: serializeRows(raw.rows)
+    rows: serializeRows(labeled)
   };
 }
 

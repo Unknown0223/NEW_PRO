@@ -14,7 +14,7 @@ export const COL_GUTTER_H = 25;
 export const DEFAULT_ROW_HEIGHT = 30;
 export const DEFAULT_COL_WIDTH = 100;
 /** Ko‘p ustunlarda matn o‘qilishi uchun pastki chegara. */
-export const MIN_COL_WIDTH = 72;
+export const MIN_COL_WIDTH = 88;
 /**
  * Klassik/kompaktda sticky qilinadigan row-dim ustunlar soni.
  * 0 = sticky yo‘q (ko‘p ustunda scroll/smear/buzilish oldini olish).
@@ -26,12 +26,12 @@ export const CELL_PAD_X = 8;
 /** Left+right 1px borders under `box-sizing: border-box`. */
 export const CELL_BORDER_X = 2;
 /** Subpixel / antialias slack — canvas measureText often under-reads real paint. */
-export const FIT_SAFETY_PAD = 8;
+export const FIT_SAFETY_PAD = 14;
 /**
  * Extra room for header funnel + `.thInner { padding-right: 16px }` + sort mark.
  * Must cover border-box chrome or measure captions (e.g. «Сумма») ellipsize.
  */
-export const HEADER_CHROME_PAD = 28;
+export const HEADER_CHROME_PAD = 40;
 /** Expand +/- control + gap in row-dim labels. */
 export const EXPAND_CHROME_PAD = 22;
 /**
@@ -176,8 +176,9 @@ export function computePivotColumnWidths(args: {
       bump(fitted, key, defaultColumnWidth);
     } else {
       for (const sample of samples) {
-        // Value/metric columns render with tabular-nums (.tdNumeric).
-        let w = contentWidthForText(sample, { tabularNums: true });
+        // Raqam ustunlari — tabular; matn/sana — oddiy o‘lchov (ellipsis oldini olish).
+        const looksNumeric = /^[\d\s.,\-]+$/.test(sample.trim());
+        let w = contentWidthForText(sample, { tabularNums: looksNumeric });
         // Money suffixes (soʻm / UZS) need a hard floor — canvas still under-reads some glyphs.
         if (/so[ʻʼ']?m|\bUZS\b|сум/i.test(sample)) {
           w = Math.max(w, 148);

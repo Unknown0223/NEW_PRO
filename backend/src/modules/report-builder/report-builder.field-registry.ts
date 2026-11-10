@@ -89,9 +89,24 @@ export function getReportBuilderMetadata(): ReportBuilderMetadataResponse {
   };
 }
 
+/** Polki vozvratlarda status_logs ko‘pincha bo‘sh — created_at fallback. */
+const SHELF_RETURN_TYPES_SQL = Prisma.sql`o.order_type IN ('return', 'return_by_order', 'partial_return')`;
+
 export function dateExprForMode(mode: ReportBuilderDateMode): Prisma.Sql {
-  if (mode === "shipped_date") return Prisma.sql`sl.shipped_at`;
-  if (mode === "delivered_date") return Prisma.sql`sl.delivered_at`;
+  if (mode === "shipped_date") {
+    return Prisma.sql`(CASE
+      WHEN ${SHELF_RETURN_TYPES_SQL}
+        THEN COALESCE(sl.shipped_at, sl.delivered_at, o.created_at)
+      ELSE sl.shipped_at
+    END)`;
+  }
+  if (mode === "delivered_date") {
+    return Prisma.sql`(CASE
+      WHEN ${SHELF_RETURN_TYPES_SQL}
+        THEN COALESCE(sl.delivered_at, sl.shipped_at, o.created_at)
+      ELSE sl.delivered_at
+    END)`;
+  }
   return Prisma.sql`o.created_at`;
 }
 

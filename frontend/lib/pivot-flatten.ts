@@ -141,13 +141,12 @@ export function maxVisibleRowDimCount(
  * Compact / Classic display flatten.
  *
  * Compact (tree + multi-column):
- * - Ota qatori har doim ko‘rinadi; ochilganda bolalar ostida
- * - Har row field — alohida ustun (pathLabels, ota yorliqlari takrorlanadi)
+ * - Ota qatori har doim ko‘rinadi (jami yonida); ochilganda bolalar ostida
+ * - Alohida pastki «Итого» qatori yo‘q — ota cells allaqachon guruh jami
  *
  * Classic:
- * - Har guruh — alohida ustun
- * - Ochilganda ota pastga tushmaydi; har bola — yangi qator
- * - pathLabels to‘liq (kalit); UI da `blankRepeatedParentLabels` — ota dublikatlari blank
+ * - Ota qatori har doim ko‘rinadi; jami yorliq yonida (pastdagi alohida subtotal emas)
+ * - Ochilganda bolalar ostida; pathLabels + blankRepeatedParentLabels
  */
 export function flattenPivotRowsLocal(
   rows: PivotRow[],
@@ -165,6 +164,7 @@ export function flattenPivotRowsLocal(
     const expanded = expandedRows.has(row.key) || rowHasMeasureChildren(row);
     const pathLabels = buildClassicPathLabels(row, ancestors, dimCount || ancestors.length + 1);
     const childAncestors = pathLabels;
+    // Jami ota qatori yonida — pastga alohida subtotal chiqarilmaydi.
     result.push({
       type: "row",
       row,
@@ -176,42 +176,16 @@ export function flattenPivotRowsLocal(
     });
     if (expanded && hasChildren) {
       for (const child of row.children!) walkCompact(child, childAncestors, depth + 1);
-      if (row.subtotal) {
-        result.push({
-          type: "subtotal",
-          subtotal: row.subtotal,
-          depth,
-          parentKey: row.key,
-          pathLabels
-        });
-      }
     }
   }
 
   function walkClassic(row: PivotRow, ancestors: string[], depth: number) {
     const hasChildren = Boolean(row.children?.length);
     const expanded = expandedRows.has(row.key) || rowHasMeasureChildren(row);
-    // Walk asosiy: […ota, self] — sibling lar ota yorlig‘ini MUSTAQIL takrorlaydi
     const pathLabels = buildClassicPathLabels(row, ancestors, dimCount || ancestors.length + 1);
-    // Bolalarga faqat ota yo‘li (self oxirida) — keyin bola o‘z self ini qo‘shadi
     const childAncestors = pathLabels;
 
-    if (expanded && hasChildren) {
-      for (const child of row.children!) {
-        walkClassic(child, childAncestors, depth + 1);
-      }
-      if (row.subtotal) {
-        result.push({
-          type: "subtotal",
-          subtotal: row.subtotal,
-          depth,
-          parentKey: row.key,
-          pathLabels
-        });
-      }
-      return;
-    }
-
+    // Ota har doim: yorliq + qiymatlar bir qatorda (yonida), pastga «Итого» emas.
     result.push({
       type: "row",
       row,
@@ -221,6 +195,12 @@ export function flattenPivotRowsLocal(
       rowKey: row.key,
       pathLabels
     });
+
+    if (expanded && hasChildren) {
+      for (const child of row.children!) {
+        walkClassic(child, childAncestors, depth + 1);
+      }
+    }
   }
 
   if (mode === "classic") {

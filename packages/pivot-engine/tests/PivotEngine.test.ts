@@ -197,7 +197,7 @@ describe("PivotEngine", () => {
     expect(result.columnTotals?.cells[0]?.formatted).toContain("Итог по столбцам");
   });
 
-  it("umumiy итог yonida ustun jami qatori takrorlanmaydi", () => {
+  it("Общий итог both — qator jami + ustun jami birga", () => {
     const config: PivotConfig = {
       ...DEFAULT_PIVOT_CONFIG,
       rows: ["region"],
@@ -207,7 +207,7 @@ describe("PivotEngine", () => {
     };
     const result = engine.compute(ROWS, FIELDS, config);
     expect(result.grandTotal).toBeDefined();
-    expect(result.columnTotals).toBeUndefined();
+    expect(result.columnTotals).toBeDefined();
   });
 
   it("calculatedMeasures — formula maydoni", () => {

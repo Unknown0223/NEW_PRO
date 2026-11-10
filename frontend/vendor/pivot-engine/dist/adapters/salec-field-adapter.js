@@ -104,11 +104,18 @@ const NUMERIC_MEASURE_IDS = new Set([
 function isDateFieldKey(key) {
     return key.includes("date") || key.endsWith("_at") || key.endsWith("_date");
 }
+/** `order_date_day` / `delivered_date_day` — kalendar sanasi, kun raqami emas. */
+function isCalendarDateDayField(key) {
+    return isDateFieldKey(key) && key.endsWith("_day");
+}
 function isNumericFieldKey(key) {
     if (NUMERIC_MEASURE_IDS.has(key))
         return true;
     if (key.endsWith("_id"))
         return true;
+    // Sana maydonlarini Number() qilmaslik (Date → timestamp bug).
+    if (isDateFieldKey(key))
+        return false;
     if (key.endsWith("_year") || key.endsWith("_month") || key.endsWith("_day"))
         return true;
     if (key.includes("amount") || key.includes("sum") || key.includes("balance") || key.includes("debt")) {
@@ -119,10 +126,13 @@ function isNumericFieldKey(key) {
     return false;
 }
 function inferDimensionDataType(fieldId) {
-    if (fieldId.endsWith("_year") || fieldId.endsWith("_month") || fieldId.endsWith("_day"))
+    // Yil/oy — son; «…date…_day» — to‘liq sana (YYYY-MM-DD).
+    if (fieldId.endsWith("_year") || fieldId.endsWith("_month"))
         return "number";
-    if (isDateFieldKey(fieldId))
+    if (isCalendarDateDayField(fieldId) || isDateFieldKey(fieldId))
         return "date";
+    if (fieldId.endsWith("_day"))
+        return "number";
     if (fieldId.includes("amount") || fieldId.includes("sum") || fieldId.includes("balance"))
         return "currency";
     /** Bonus dona / blok miqdorlari — Значения (Σ). */

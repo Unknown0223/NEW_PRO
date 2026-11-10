@@ -148,7 +148,7 @@ describe("flatten classic 3 daraja", () => {
     children: [agent, agentSeed]
   };
 
-  it("ochiq: har ustun alohida, Agent hech qachon bo‘sh emas", () => {
+  it("ochiq: ota jami yonida + bolalar; Agent hech qachon bo‘sh emas", () => {
     const flat = flattenPivotRowsLocal(
       [svr],
       new Set(["T-SVR-01", "T-SVR-01 | Agent 01 TEST", "T-SVR-01 | Agent (seed)"]),
@@ -158,28 +158,32 @@ describe("flatten classic 3 daraja", () => {
       3
     );
     const rows = flat.filter((r) => r.type === "row");
-    expect(rows).toHaveLength(4);
+    // SVR + 2 agent + 4 product = 7 (pastki alohida subtotal yo‘q)
+    expect(rows).toHaveLength(7);
 
-    expect(rows[0]?.type === "row" && rows[0].pathLabels).toEqual([
+    expect(rows[0]?.type === "row" && rows[0].pathLabels).toEqual(["T-SVR-01"]);
+    expect(rows[1]?.type === "row" && rows[1].pathLabels).toEqual(["T-SVR-01", "Agent 01 TEST"]);
+    expect(rows[2]?.type === "row" && rows[2].pathLabels).toEqual([
       "T-SVR-01",
       "Agent 01 TEST",
       "Mahsulot 1"
     ]);
-    expect(rows[1]?.type === "row" && rows[1].pathLabels).toEqual([
+    expect(rows[3]?.type === "row" && rows[3].pathLabels).toEqual([
       "T-SVR-01",
       "Agent 01 TEST",
       "Mahsulot 2"
     ]);
     // Sibling product under same agent — Agent MUST repeat (not blank)
-    expect(rows[0]?.type === "row" && rows[0].pathLabels[1]).toBe("Agent 01 TEST");
-    expect(rows[1]?.type === "row" && rows[1].pathLabels[1]).toBe("Agent 01 TEST");
+    expect(rows[2]?.type === "row" && rows[2].pathLabels[1]).toBe("Agent 01 TEST");
+    expect(rows[3]?.type === "row" && rows[3].pathLabels[1]).toBe("Agent 01 TEST");
 
-    expect(rows[2]?.type === "row" && rows[2].pathLabels).toEqual([
+    expect(rows[4]?.type === "row" && rows[4].pathLabels).toEqual(["T-SVR-01", "Agent (seed)"]);
+    expect(rows[5]?.type === "row" && rows[5].pathLabels).toEqual([
       "T-SVR-01",
       "Agent (seed)",
       "Mahsulot A"
     ]);
-    expect(rows[3]?.type === "row" && rows[3].pathLabels).toEqual([
+    expect(rows[6]?.type === "row" && rows[6].pathLabels).toEqual([
       "T-SVR-01",
       "Agent (seed)",
       "Mahsulot B"
@@ -196,12 +200,14 @@ describe("flatten classic 3 daraja", () => {
       3
     );
     const rows = flat.filter((r) => r.type === "row");
-    expect(rows).toHaveLength(3);
-    expect(rows[0]?.type === "row" && rows[0].pathLabels[2]).toBe("Mahsulot 1");
-    expect(rows[1]?.type === "row" && rows[1].pathLabels[2]).toBe("Mahsulot 2");
+    // SVR + Agent01 + 2 product + AgentSeed collapsed = 5
+    expect(rows).toHaveLength(5);
+    expect(rows[0]?.type === "row" && rows[0].pathLabels).toEqual(["T-SVR-01"]);
+    expect(rows[2]?.type === "row" && rows[2].pathLabels[2]).toBe("Mahsulot 1");
+    expect(rows[3]?.type === "row" && rows[3].pathLabels[2]).toBe("Mahsulot 2");
     // Agent (seed) collapsed — o‘z qatori, products yo‘q
-    expect(rows[2]?.type === "row" && rows[2].pathLabels).toEqual(["T-SVR-01", "Agent (seed)"]);
-    expect(rows[2]?.type === "row" && rows[2].rowKey).toBe("T-SVR-01 | Agent (seed)");
+    expect(rows[4]?.type === "row" && rows[4].pathLabels).toEqual(["T-SVR-01", "Agent (seed)"]);
+    expect(rows[4]?.type === "row" && rows[4].rowKey).toBe("T-SVR-01 | Agent (seed)");
   });
 
   it("eski aralash key ham ajraladi", () => {
@@ -360,7 +366,9 @@ describe("flatten values-on-rows (WDR Measures in Rows)", () => {
   it("metrika bolalari expand qilinmasdan ham ko‘rinadi (classic)", () => {
     const flat = flattenPivotRowsLocal([region], new Set(), undefined, undefined, "classic", 1);
     const rows = flat.filter((r) => r.type === "row");
-    expect(rows).toHaveLength(2);
+    // Ota (jami yonida) + 2 metrika
+    expect(rows).toHaveLength(3);
+    expect(rows[0]?.type === "row" && rows[0].pathLabels).toEqual(["Toshkent"]);
     const labels = rows.map((r) => (r.type === "row" ? r.row.cells[0]?.formatted : ""));
     expect(labels).toContain("Summa");
     expect(labels).toContain("Miqdor");

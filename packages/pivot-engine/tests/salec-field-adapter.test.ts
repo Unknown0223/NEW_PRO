@@ -18,13 +18,22 @@ describe("salec-field-adapter", () => {
     expect(salecFieldsToPivotFields([{ id: "shipped_at", label: "Yuborilgan" }])[0]?.dataType).toBe("date");
   });
 
-  it("yil/oy/kun — number tipi", () => {
+  it("yil/oy — number; date_day — date tipi", () => {
     expect(salecFieldsToPivotFields([{ id: "order_date_year", label: "Yil" }])[0]?.dataType).toBe("number");
+    expect(salecFieldsToPivotFields([{ id: "order_date_month", label: "Oy" }])[0]?.dataType).toBe("number");
+    expect(salecFieldsToPivotFields([{ id: "delivered_date_day", label: "Kun" }])[0]?.dataType).toBe("date");
+    expect(salecFieldsToPivotFields([{ id: "order_date_day", label: "Kun" }])[0]?.dataType).toBe("date");
   });
 
   it("normalizeSalecDatasetRows — sana parse", () => {
     const rows = normalizeSalecDatasetRows([{ order_date: "2026-01-15", amount: 100 }]);
     expect(rows[0]?.order_date).toBeInstanceOf(Date);
+  });
+
+  it("normalizeSalecDatasetRows — date_day Date bo‘lib qoladi, timestamp emas", () => {
+    const rows = normalizeSalecDatasetRows([{ delivered_date_day: "2024-11-07", amount: "100" }]);
+    expect(rows[0]?.delivered_date_day).toBeInstanceOf(Date);
+    expect(typeof rows[0]?.delivered_date_day).not.toBe("number");
   });
 
   it("normalizeSalecDatasetRows — _at va bo'sh string", () => {

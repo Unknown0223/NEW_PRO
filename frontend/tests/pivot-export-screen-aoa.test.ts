@@ -164,34 +164,32 @@ describe("buildScreenMatchingPivotAoA — classic multi-column = UI", () => {
     expect(aoa[0]).not.toContain("Группа");
   });
 
-  it("body: leaf rows with all dims; classic blanks repeated parents", () => {
+  it("body: ota jami yonida + leaf; classic blanks repeated parents", () => {
     const data = buildClassicDealerSample();
     const aoa = buildScreenMatchingPivotAoA(data, classicConfig, fields, {
       expandAllForExport: true
     });
 
-    // header + 2 leaves + grand total
-    expect(aoa.length).toBe(4);
+    // header + 2×6 daraja + grand total
+    expect(aoa.length).toBe(14);
 
-    const row1 = aoa[1]!;
-    expect(row1).toEqual([
-      "Asosiy mijoz (tashqi)",
-      "retail",
-      "N/A",
-      "N/A",
-      "N/A",
-      "Agent 01 TEST",
-      "2"
-    ]);
+    // Birinchi zanjir ildizi
+    expect(aoa[1]).toEqual(["Asosiy mijoz (tashqi)", "", "", "", "", "", "2"]);
 
-    // second client — classic blanks parents that match? Different client so all filled
-    const row2 = aoa[2]!;
-    expect(row2[0]).toBe("Asosiy mijoz (baza) (пром.)");
-    expect(row2[1]).toBe("retail");
-    expect(row2[5]).toBe("Agent 01 TEST");
-    expect(row2[6]).toBe("2");
+    // Birinchi zanjir leaf (agent)
+    const leaf1 = aoa[6]!;
+    expect(leaf1).toEqual(["", "", "", "", "", "Agent 01 TEST", "2"]);
 
-    const total = aoa[3]!;
+    // Ikkinchi mijoz ildizi
+    expect(aoa[7]![0]).toBe("Asosiy mijoz (baza) (пром.)");
+    expect(aoa[7]![6]).toBe("2");
+
+    // Ikkinchi leaf
+    const leaf2 = aoa[12]!;
+    expect(leaf2[5]).toBe("Agent 01 TEST");
+    expect(leaf2[6]).toBe("2");
+
+    const total = aoa[13]!;
     expect(total[0]).toBe("Итого");
     expect(total.slice(1, 6)).toEqual(["", "", "", "", ""]);
     expect(total[6]).toBe("2");
@@ -216,11 +214,13 @@ describe("buildScreenMatchingPivotAoA — classic multi-column = UI", () => {
       "classic",
       6
     );
-    const leafItems = flat.filter((i) => i.type === "row");
+    const rowItems = flat.filter((i) => i.type === "row");
+    expect(rowItems).toHaveLength(12);
+    const leafItems = rowItems.filter((i) => i.type === "row" && !i.hasChildren);
     expect(leafItems).toHaveLength(2);
 
     let prev: string[] | null = null;
-    const uiRows = leafItems.map((item) => {
+    const uiRows = rowItems.map((item) => {
       if (item.type !== "row") return [];
       const full = resolveClassicLabelsForExport(
         item.pathLabels,
@@ -237,7 +237,8 @@ describe("buildScreenMatchingPivotAoA — classic multi-column = UI", () => {
       expandAllForExport: true
     });
     expect(aoa[1]?.slice(0, 6)).toEqual(uiRows[0]);
-    expect(aoa[2]?.slice(0, 6)).toEqual(uiRows[1]);
+    expect(aoa[6]?.slice(0, 6)).toEqual(uiRows[5]);
+    expect(aoa[12]?.slice(0, 6)).toEqual(uiRows[11]);
   });
 
   it("compact multi-column repeats parent labels (no blanking)", () => {

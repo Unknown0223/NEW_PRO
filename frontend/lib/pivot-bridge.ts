@@ -213,19 +213,14 @@ export function savedReportConfigToPivotConfig(config: unknown): PivotConfig | n
   return null;
 }
 
-export type SavePivotConfigMeta = DatasetFiltersPayload;
-
-function buildSavedPivotReportPayload(pivotConfig: PivotConfig, meta: SavePivotConfigMeta) {
+/** Saqlangan otchyot — faqat pivot forma shabloni (filtr/davr saqlanmaydi). */
+function buildSavedPivotReportPayload(pivotConfig: PivotConfig) {
   return {
     dataSource: { type: "salec-pivot-engine" },
     // Bo‘sh emas: WDR detector uchun zones yo‘q, lekin salecPivotConfig birinchi o‘qiladi.
     slice: {},
     salecPivotConfig: pivotConfig,
-    savdoDatasetFilters: meta,
-    datasetId: meta.datasetId ?? "orders_sales_lines",
-    dateMode: meta.dateMode ?? "order_date",
-    dateFrom: meta.dateFrom,
-    dateTo: meta.dateTo
+    datasetId: "orders_sales_lines"
   };
 }
 
@@ -233,14 +228,13 @@ function buildSavedPivotReportPayload(pivotConfig: PivotConfig, meta: SavePivotC
 export async function savePivotConfigReport(
   tenantSlug: string,
   name: string,
-  pivotConfig: PivotConfig,
-  meta: SavePivotConfigMeta
+  pivotConfig: PivotConfig
 ) {
   const { data } = await api.post<{ data: { id: number; name: string } }>(
     `/api/${tenantSlug}/reports/report-builder/saved`,
     {
       name,
-      config: buildSavedPivotReportPayload(pivotConfig, meta)
+      config: buildSavedPivotReportPayload(pivotConfig)
     }
   );
   return data.data;
@@ -251,14 +245,13 @@ export async function updatePivotConfigReport(
   tenantSlug: string,
   id: number,
   name: string,
-  pivotConfig: PivotConfig,
-  meta: SavePivotConfigMeta
+  pivotConfig: PivotConfig
 ) {
   const { data } = await api.put<{ data: { id: number; name: string } }>(
     `/api/${tenantSlug}/reports/report-builder/saved/${id}`,
     {
       name,
-      config: buildSavedPivotReportPayload(pivotConfig, meta)
+      config: buildSavedPivotReportPayload(pivotConfig)
     }
   );
   return data.data;

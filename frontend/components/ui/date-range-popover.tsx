@@ -651,14 +651,21 @@ function DateRangePanel({
                 type="button"
                 className="rounded px-1.5 py-1 text-left text-[0.65rem] text-foreground hover:bg-muted"
                 onClick={() => {
-                  setDf(p.from);
-                  setDt(p.to);
+                  const n = normalizeDateRange(p.from, p.to);
+                  setDf(n.dateFrom);
+                  setDt(n.dateTo);
                   setDayAnchor(null);
                   setSelectedDays(new Set());
-                  setSelectedMonths(new Set(monthsCoveredByRange(p.from, p.to)));
+                  setSelectedMonths(new Set(monthsCoveredByRange(n.dateFrom, n.dateTo)));
                   setPanelMode("days");
-                  syncViewsFromRange(p.from, p.to);
-                  commitRange(p.from, p.to);
+                  syncViewsFromRange(n.dateFrom, n.dateTo);
+                  // Preset har doim filtrga yoziladi (autoSave ga bog‘liq emas).
+                  onApply({
+                    dateFrom: n.dateFrom,
+                    dateTo: n.dateTo,
+                    datePeriods: undefined
+                  });
+                  onClose();
                 }}
               >
                 {p.label}

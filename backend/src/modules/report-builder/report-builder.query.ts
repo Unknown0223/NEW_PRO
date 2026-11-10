@@ -65,14 +65,24 @@ export function buildReportBuilderWhereSql(
   if (c.statuses.length > 0) {
     parts.push(Prisma.sql`o.status IN (${sqlInStrings(c.statuses)})`);
   } else {
-    // Supervayzer Fact MTD bilan: cancelled + returned chiqariladi
-    parts.push(Prisma.sql`o.status NOT IN ('cancelled', 'returned')`);
+    // Oddiy zakaz: cancelled + returned (mijoz rad) chiqariladi.
+    // Polki vozvrat hujjati ba’zan status=returned — ular qoladi.
+    parts.push(Prisma.sql`(
+      o.status NOT IN ('cancelled', 'returned')
+      OR (
+        o.order_type IN ('return', 'return_by_order', 'partial_return')
+        AND o.status <> 'cancelled'
+      )
+    )`);
   }
 
   if (c.orderTypes.length > 0) {
     parts.push(Prisma.sql`o.order_type IN (${sqlInStrings(c.orderTypes)})`);
   } else {
-    parts.push(Prisma.sql`o.order_type = 'order'`);
+    // Default: Заказ + Возврат с полки (+ qisman / by-order). Обмен — filtr orqali.
+    parts.push(
+      Prisma.sql`o.order_type IN ('order', 'return', 'return_by_order', 'partial_return')`
+    );
   }
 
   if (c.agentIds.length > 0) {

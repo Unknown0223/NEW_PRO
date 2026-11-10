@@ -24,9 +24,8 @@ function rowLabel(row: PivotRow): string {
 }
 
 /**
- * Compact: ota qatori + ochilganda bolalar (daraxt); pathLabels — har field alohida ustun.
- * Classic: ochilganda ota alohida qator emas — bola bilan bir xil horizontal
- *          pathLabels (Client | Agent bir qatorda).
+ * Compact: ota qatori (jami yonida) + ochilganda bolalar; pastki alohida subtotal yo‘q.
+ * Classic: ota har doim ko‘rinadi (jami yonida); ochilganda bolalar ostida.
  */
 export function flattenPivotDisplayRows(
   rows: PivotRow[],
@@ -57,15 +56,6 @@ export function flattenPivotDisplayRows(
       for (const child of row.children!) {
         walkCompact(child, pathLabels, depth + 1);
       }
-      if (row.subtotal) {
-        result.push({
-          type: "subtotal",
-          subtotal: row.subtotal,
-          depth,
-          parentKey: row.key,
-          pathLabels
-        });
-      }
     }
   }
 
@@ -73,24 +63,7 @@ export function flattenPivotDisplayRows(
     const hasChildren = Boolean(row.children?.length);
     const expanded = expandedRows.has(row.key);
     const label = rowLabel(row);
-    // Ota yorliqlari har bola qatorida takrorlanadi — blank/suppress YO‘Q
     const pathLabels = [...ancestors, label];
-
-    if (expanded && hasChildren) {
-      for (const child of row.children!) {
-        walkClassic(child, pathLabels, depth + 1);
-      }
-      if (row.subtotal) {
-        result.push({
-          type: "subtotal",
-          subtotal: row.subtotal,
-          depth,
-          parentKey: row.key,
-          pathLabels
-        });
-      }
-      return;
-    }
 
     result.push({
       type: "row",
@@ -101,6 +74,12 @@ export function flattenPivotDisplayRows(
       rowKey: row.key,
       pathLabels
     });
+
+    if (expanded && hasChildren) {
+      for (const child of row.children!) {
+        walkClassic(child, pathLabels, depth + 1);
+      }
+    }
   }
 
   if (mode === "classic") {
