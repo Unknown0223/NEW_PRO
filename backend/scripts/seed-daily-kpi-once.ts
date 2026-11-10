@@ -77,7 +77,7 @@ async function main() {
     });
   }
 
-  let supervisor = await prisma.user.findFirst({
+  const supervisor = await prisma.user.findFirst({
     where: { tenant_id: tenant.id, role: "supervisor", is_active: true },
     orderBy: { id: "asc" },
     select: { id: true, name: true }

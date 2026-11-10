@@ -1,0 +1,25 @@
+# Prettier bilan formatlanmaydi: generatsiya qilingan kod, vendor bundle, build artefaktlari.
+.next
+.next-*
+out
+build
+dist
+coverage
+node_modules
+**/node_modules
+vendor
+frontend/vendor
+packages/*/dist
+backend/openapi/generated
+backend/openapi/openapi.bundle.yaml
+backend/prisma/migrations
+backend/assets
+mobile/build
+mobile/.dart_tool
+*.min.js
+*.min.css
+package-lock.json
+backend/package-lock.json
+frontend/package-lock.json
+**/*.monolith.tsx
+frontend/lint-report.json

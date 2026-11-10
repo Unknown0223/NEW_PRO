@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, type ReactNode } from "react";
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -1266,9 +1267,9 @@ export function AgentConfigurationsDialog({
                 : (
                   <>
                     Склад, филиал и территория — в{" "}
-                    <a href="/work-slots" className="font-semibold text-teal-700 underline">
+                    <Link href="/work-slots" className="font-semibold text-teal-700 underline">
                       Рабочее место
-                    </a>
+                    </Link>
                     . Здесь только настройки мобильного приложения.
                   </>
                 )}

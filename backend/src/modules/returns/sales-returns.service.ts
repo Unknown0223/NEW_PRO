@@ -204,7 +204,7 @@ export async function createSalesReturn(
     if (!c) throw new Error("BAD_CLIENT");
   }
 
-  let orderId: number | null = input.order_id != null && input.order_id > 0 ? input.order_id : null;
+  const orderId: number | null = input.order_id != null && input.order_id > 0 ? input.order_id : null;
   if (orderId != null) {
     const ord = await prisma.order.findFirst({
       where: { id: orderId, tenant_id: tenantId }

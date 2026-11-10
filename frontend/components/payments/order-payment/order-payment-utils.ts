@@ -54,7 +54,7 @@ export function applyDraftWithCap(
 
   const draftByMethodId: Record<string, number> = { ...row.draftByMethodId };
   const otherIds = Object.keys(draftByMethodId).filter((id) => id !== methodId);
-  let othersSum = otherIds.reduce((a, id) => a + (draftByMethodId[id] ?? 0), 0);
+  const othersSum = otherIds.reduce((a, id) => a + (draftByMethodId[id] ?? 0), 0);
   const othersBudget = Math.max(0, cap - target);
 
   if (othersSum > othersBudget + 0.0001) {

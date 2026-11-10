@@ -87,7 +87,7 @@ function findTerritoryPathInTree(
       const nodeName = n.name.trim();
       if (!nodeName) continue;
       const nextPath = [...path, nodeName];
-      const nodeCodeGuess = nodeName.toUpperCase().replace(/[\s\-]+/g, "_").slice(0, 20);
+      const nodeCodeGuess = nodeName.toUpperCase().replace(/[\s-]+/g, "_").slice(0, 20);
       const matches =
         (codeKey && (normTerritoryKey(nodeCodeGuess) === codeKey || normTerritoryKey(nodeName) === codeKey)) ||
         (nameKey && normTerritoryKey(nodeName) === nameKey);
@@ -348,7 +348,7 @@ export async function getMobileAgentAssignedCities(
         for (const n of list) {
           if (n.active === false) continue;
           const nodeName = n.name.trim();
-          const nodeCodeGuess = nodeName.toUpperCase().replace(/[\s\-]+/g, "_").slice(0, 20);
+          const nodeCodeGuess = nodeName.toUpperCase().replace(/[\s-]+/g, "_").slice(0, 20);
           const isMatch =
             (code && (normTerritoryKey(code) === normTerritoryKey(nodeCodeGuess) ||
               normTerritoryKey(code) === normTerritoryKey(nodeName))) ||

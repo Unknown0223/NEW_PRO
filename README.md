@@ -20,13 +20,13 @@ Batafsil: [docs/ONBOARDING.md](docs/ONBOARDING.md)
 
 ## Struktura
 
-| Papka | Tavsif |
-|-------|--------|
-| `backend/` | API, worker, Prisma, testlar |
-| `frontend/` | Admin panel (Next.js 14) |
-| `mobile/` | Agent / expeditor / supervisor ilova |
-| `infrastructure/` | Docker Compose, nginx misollari |
-| `docs/` | ADR, backup, onboarding, API changelog |
+| Papka             | Tavsif                                 |
+| ----------------- | -------------------------------------- |
+| `backend/`        | API, worker, Prisma, testlar           |
+| `frontend/`       | Admin panel (Next.js 14)               |
+| `mobile/`         | Agent / expeditor / supervisor ilova   |
+| `infrastructure/` | Docker Compose, nginx misollari        |
+| `docs/`           | ADR, backup, onboarding, API changelog |
 
 ## Muhit o'zgaruvchilari
 
@@ -44,13 +44,32 @@ npm run worker:dev       # BullMQ worker
 npm run build            # TypeScript compile
 npm run test:ci          # Vitest
 npm run prod:verify      # Release gate
+npm run lint:errors      # ESLint: faqat error'lar (CI gate)
+npm run lint:fix         # Auto-fix
 npm run backup:pre-release
 ```
+
+### Kod sifati (lint / format / IDE)
+
+```bash
+npm run lint:errors      # frontend ESLint — faqat error'lar
+npm run lint:fix         # frontend ESLint — auto-fix
+npm run format:write     # Prettier: faqat o'zgargan fayllar
+npm run format:check     # Prettier tekshiruvi (CI uchun)
+```
+
+- ESLint: `frontend/eslint.config.mjs` (Next.js + React Compiler), `backend/eslint.config.mjs` (typescript-eslint)
+- Prettier: `.prettierrc.json` (`printWidth: 100`, `trailingComma: none`, `endOfLine: auto`)
+- Cursor / VS Code: `.vscode/settings.json` (format-on-save + `fixAll.eslint`), tavsiya etilgan plaginlar `.vscode/extensions.json`
+- Batafsil qo'llanma: [docs/CURSOR-PLAGINLAR-VA-SIFAT.md](docs/CURSOR-PLAGINLAR-VA-SIFAT.md)
 
 ```bash
 cd frontend
 npm run dev
 npm run test:ci
+npm run lint:errors      # ESLint: faqat error'lar (CI gate)
+npm run lint:fix         # Auto-fix (prefer-const, importlar, escape)
+npm run typecheck        # tsc --noEmit
 npm run analyze          # Bundle analyzer (ANALYZE=true)
 ```
 

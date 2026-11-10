@@ -15,7 +15,7 @@ import { referencesWithResolvedTerritoryNodes } from "../tenant-settings/tenant-
 
 /** «SAMARQAND» ↔ «SAMARQAND VILOYATI», «QOQON» ↔ «QOQON SHAXAR»: tarixiy qisqa nomlar ham to‘g‘ri. */
 function leadToken(v: string): string {
-  const first = v.trim().split(/[\s_\-]+/)[0] ?? "";
+  const first = v.trim().split(/[\s_-]+/)[0] ?? "";
   const k = normKeyTerritoryMatch(first);
   return k.length >= 4 ? k : "";
 }

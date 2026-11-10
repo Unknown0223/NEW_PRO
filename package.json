@@ -46,6 +46,12 @@
     "test:e2e:ci": "npm run test:e2e:ci --prefix frontend",
     "test:quality:frontend": "npm run test:quality --prefix frontend",
     "frontend:lint": "npm run lint --prefix frontend",
+    "lint:errors": "npm run lint:errors --prefix frontend",
+    "lint:fix": "npm run lint:fix --prefix frontend",
+    "format:check": "node scripts/prettier-changed.mjs",
+    "format:write": "node scripts/prettier-changed.mjs --write",
+    "format:all:check": "prettier --check \"backend/{src,scripts,shared}/**/*.ts\" \"frontend/{app,components,hooks,lib,shared}/**/*.{ts,tsx,tsx}\"",
+    "format:all:write": "prettier --write \"backend/{src,scripts,shared}/**/*.ts\" \"frontend/{app,components,hooks,lib,shared}/**/*.{ts,tsx,tsx}\"",
     "frontend:typecheck": "npm run typecheck --prefix frontend",
     "frontend:build": "npm run build --prefix frontend",
     "load:smoke": "node scripts/load-smoke.mjs",
@@ -71,6 +77,7 @@
     "concurrently": "^9.1.2",
     "cross-env": "^7.0.3",
     "kill-port": "^2.0.1",
+    "prettier": "^3.9.10",
     "wait-on": "^9.0.4"
   }
 }

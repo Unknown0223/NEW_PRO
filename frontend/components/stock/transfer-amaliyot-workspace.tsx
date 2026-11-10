@@ -207,7 +207,7 @@ export function TransferAmaliyotWorkspace() {
           `/api/${tenant}/warehouses${qs ? `?${qs}` : ""}`
         );
         const list = res.data ?? [];
-        let branchMap = new Map<number, string>();
+        const branchMap = new Map<number, string>();
         if (branchScope) {
           const profile = await apiFetch<{ references?: { branches?: { name?: string; warehouse_ids?: number[] }[] } }>(
             `/api/${tenant}/settings/profile`

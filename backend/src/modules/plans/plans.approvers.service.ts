@@ -221,8 +221,8 @@ export async function listApproverOptions(
     role: u.role
   });
 
-  let employeesOut = employees.map(toPerson);
-  let leadersOut = leaders.map(toPerson);
+  const employeesOut = employees.map(toPerson);
+  const leadersOut = leaders.map(toPerson);
 
   /** «Главный утверждающий» — «Степень» dagi SVR ustidagi xodimlar ham tanlanadi. */
   function mergeEmployeesIntoLeaders() {

@@ -64,5 +64,5 @@ export function decideTelegramBind(input: {
 }
 
 export function normSmartCode(raw: string): string {
-  return raw.trim().toUpperCase().replace(/[\s\-]+/g, "");
+  return raw.trim().toUpperCase().replace(/[\s-]+/g, "");
 }

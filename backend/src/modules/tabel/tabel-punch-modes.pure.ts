@@ -100,10 +100,10 @@ export function resolvePunchModesForRole(
     .toLowerCase();
   const override = roleKey ? punchModes.byRole[roleKey] : undefined;
   const base = punchModes.methods;
-  let photo = override && typeof override.photo === "boolean" ? override.photo : base.photo;
+  const photo = override && typeof override.photo === "boolean" ? override.photo : base.photo;
   let video = override && typeof override.video === "boolean" ? override.video : base.video;
   let kiosk = override && typeof override.kiosk === "boolean" ? override.kiosk : base.kiosk;
-  let terminal = override && typeof override.terminal === "boolean" ? override.terminal : base.terminal;
+  const terminal = override && typeof override.terminal === "boolean" ? override.terminal : base.terminal;
 
   if (opts?.punchVideoEnabled === false) video = false;
   if (opts?.videoUserOverrideEnabled === false) video = false;

@@ -49,7 +49,6 @@ export async function registerOrderCatalogRoutes(app: FastifyInstance) {
       const q = request.query as Record<string, string | undefined>;
       const selected = parseSelectedMastersFromQuery(q);
       if (process.env.ORDER_CREATE_CONTEXT_DEBUG === "1") {
-        // eslint-disable-next-line no-console
         console.info("[order-create-context-debug] request.query", {
           tenantId: request.tenant!.id,
           selected,

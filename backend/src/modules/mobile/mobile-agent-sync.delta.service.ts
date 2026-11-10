@@ -33,7 +33,7 @@ export async function syncDelta(
   await applyMobileSyncGate(tenantId, userId, presence);
   const since: Date = lastSyncAt ?? new Date(0);
   const now = new Date();
-  let result: Record<string, unknown> = {};
+  const result: Record<string, unknown> = {};
 
   switch (entityType) {
     case "clients": {

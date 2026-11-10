@@ -88,7 +88,7 @@ export function primaryQtyCondition(rule: BonusRuleRow): {
   bonus_qty: number;
 } | null {
   if (rule.type !== "qty") return null;
-  let conditions = rule.conditions;
+  const conditions = rule.conditions;
   if (conditions.length === 0 && rule.buy_qty != null && rule.free_qty != null) {
     return { step_qty: rule.buy_qty, bonus_qty: rule.free_qty };
   }

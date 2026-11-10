@@ -11,6 +11,8 @@
     "sync:pivot-engine": "node scripts/sync-pivot-engine.mjs",
     "start": "next start -H 0.0.0.0",
     "lint": "eslint .",
+    "lint:errors": "eslint . --quiet",
+    "lint:fix": "eslint . --fix",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",

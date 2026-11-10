@@ -124,7 +124,6 @@ export async function createBonusRule(
     if (gift && clauses && clauses.length > 0) {
       for (let i = 0; i < clauses.length; i++) {
         const c = clauses[i]!;
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         await (tx as any).bonusRuleClause.create({
           data: clauseCreateData(rule.id, c, i)
         });

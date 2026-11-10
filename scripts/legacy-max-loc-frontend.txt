@@ -204,3 +204,13 @@ frontend/components/products/product-create/product-create-grid-ui.tsx
 frontend/components/plans/setup/planning-workspace.tsx
 frontend/components/clients/visit-planner/use-visit-planner-filter-state.ts
 frontend/components/payroll/payroll-employee-configs.tsx
+frontend/components/settings/tabel-settings-workspace.tsx
+frontend/components/tabel/tabel-analytics-workspace.tsx
+frontend/components/tabel/tabel-marks-workspace.tsx
+frontend/components/tabel/tabel-analytics-devices-workspace.tsx
+frontend/components/settings/tabel-settings-places.tsx
+frontend/components/tabel/tabel-agent-norm-workspace.tsx
+frontend/components/tabel/tabel-requests-clearance-workspace.tsx
+frontend/components/tabel/tabel-shifts-corrections-workspace.tsx
+frontend/components/timesheet/timesheet-table.tsx
+frontend/components/timesheet/timesheet-shared.ts

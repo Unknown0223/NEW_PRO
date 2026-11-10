@@ -232,11 +232,9 @@ export async function updateBonusRule(
 
     await prisma.$transaction(async (tx) => {
       await tx.bonusRuleCondition.deleteMany({ where: { bonus_rule_id: id } });
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       await (tx as any).bonusRuleClause.deleteMany({ where: { bonus_rule_id: id } });
 
       for (let i = 0; i < clauses.length; i++) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         await (tx as any).bonusRuleClause.create({
           data: clauseCreateData(id, clauses[i]!, i)
         });
