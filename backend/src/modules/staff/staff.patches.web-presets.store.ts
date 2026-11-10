@@ -249,7 +249,7 @@ export async function resolveWebStaffPresetsFromSettings(
     asTenantSettingsRecord(settings).web_staff_position_presets
   );
   const { presets: withCreated, changed: needCreated } = ensureCreatedAtOnPresets(parsed);
-  let presets = withCreated;
+  const presets = withCreated;
   if (needsMigrate) {
     await persistWebStaffPositionPresets(tenantId, presets, null, "migrate.web_staff_position_presets");
   } else if (needCreated) {

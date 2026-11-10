@@ -206,7 +206,7 @@ export async function registerBankTransferInboxRoutes(app: FastifyInstance) {
               ? "csv"
               : "excel";
 
-      let parsed =
+      const parsed =
         typeof body.xlsx_base64 === "string" && body.xlsx_base64.trim()
           ? parseBankTransferXlsxBase64(body.xlsx_base64)
           : typeof body.csv === "string" && body.csv.trim()

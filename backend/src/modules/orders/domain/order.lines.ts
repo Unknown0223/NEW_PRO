@@ -403,7 +403,7 @@ export async function updateOrderLines(
       (existing as { discount_alert?: string | null }).discount_alert ?? null;
     const prevBonusAlert = (existing as { bonus_alert?: string | null }).bonus_alert ?? null;
 
-    let discountAlert = discountRes.alert;
+    const discountAlert = discountRes.alert;
     if (discountAlert != null) {
       linesComment = mergeOrderAutoComments(linesComment, [
         buildDiscountAlertComment(discountAlert, {

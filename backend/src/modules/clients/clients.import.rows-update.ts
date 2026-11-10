@@ -225,7 +225,7 @@ export async function importClientUpdateRows(
 
     try {
       const resolveStarted = Date.now();
-      let data = buildImportUpdateScalarData(row, colIndexByKey, refResolver, applySet);
+      const data = buildImportUpdateScalarData(row, colIndexByKey, refResolver, applySet);
       const assignOutcome = hasAgentSlots
         ? buildAgentAssignmentPatchesFromImportRow(
             row,
@@ -237,7 +237,7 @@ export async function importClientUpdateRows(
             applySet
           )
         : { createPatches: [], updatePatches: [], touched: false };
-      let agentPatches = await filterImportAgentPatchesByWorkSlot(
+      const agentPatches = await filterImportAgentPatchesByWorkSlot(
         tenantId,
         assignOutcome.updatePatches,
         { excelRow: r + 1, warn: ctx.warnings.push }

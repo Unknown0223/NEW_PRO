@@ -46,6 +46,12 @@
     "test:e2e:ci": "npm run test:e2e:ci --prefix frontend",
     "test:quality:frontend": "npm run test:quality --prefix frontend",
     "frontend:lint": "npm run lint --prefix frontend",
+    "lint:errors": "npm run lint:errors --prefix frontend",
+    "lint:fix": "npm run lint:fix --prefix frontend",
+    "format:check": "node scripts/prettier-changed.mjs",
+    "format:write": "node scripts/prettier-changed.mjs --write",
+    "format:all:check": "prettier --check \"backend/{src,scripts,shared}/**/*.ts\" \"frontend/{app,components,hooks,lib,shared}/**/*.{ts,tsx,tsx}\"",
+    "format:all:write": "prettier --write \"backend/{src,scripts,shared}/**/*.ts\" \"frontend/{app,components,hooks,lib,shared}/**/*.{ts,tsx,tsx}\"",
     "frontend:typecheck": "npm run typecheck --prefix frontend",
     "frontend:build": "npm run build --prefix frontend",
     "load:smoke": "node scripts/load-smoke.mjs",
@@ -65,12 +71,13 @@
     "test:mobile-update": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test-mobile-app-update.ps1",
     "bitta-ilova:verify": "npm run bitta-ilova:verify --prefix backend && powershell -NoProfile -ExecutionPolicy Bypass -File mobile/tool/verify.ps1",
     "plans:verify": "npm run plans:verify --prefix backend && npm run plans:verify --prefix frontend",
-    "prod:verify": "npm run prod:verify --prefix backend && npm run refaktoring:verify --prefix frontend && npm run work-slots:verify --prefix frontend && npm run bitta-ilova:verify"
+    "prod:verify": "npm run lint:errors --prefix backend && npm run lint:errors --prefix frontend && npm run prod:verify --prefix backend && npm run refaktoring:verify --prefix frontend && npm run work-slots:verify --prefix frontend && npm run bitta-ilova:verify"
   },
   "devDependencies": {
     "concurrently": "^9.1.2",
     "cross-env": "^7.0.3",
     "kill-port": "^2.0.1",
+    "prettier": "^3.9.10",
     "wait-on": "^9.0.4"
   }
 }

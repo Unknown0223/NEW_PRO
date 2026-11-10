@@ -52,6 +52,7 @@ export function classifyFlexibleImportId(
     };
   }
   /** Nazorat belgilari / faq taqiqlangan */
+  // eslint-disable-next-line no-control-regex -- boshqaruv belgilarini aniqlash ataylab
   if (/[\u0000-\u001f]/.test(s)) {
     return { kind: "invalid", detail: `${label} содержит недопустимые символы` };
   }

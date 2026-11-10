@@ -15,7 +15,7 @@ export function fillListSimple112(
   const exp = options.warehouseExport ?? DEFAULT_WAREHOUSE_EXPORT_OPTIONS;
   setCell(ws, 3, 4, metaExpeditors(ctx));
 
-  let lines = [...ctx.lines].filter((ln) => ln.qty > 0 || ln.bonusQty > 0);
+  const lines = [...ctx.lines].filter((ln) => ln.qty > 0 || ln.bonusQty > 0);
   if (exp.sortProducts !== false) {
     lines.sort((a, b) => a.name.localeCompare(b.name, "ru"));
   }

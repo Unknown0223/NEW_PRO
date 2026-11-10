@@ -229,7 +229,7 @@ export async function getAssignChecklist(tenantId: number, slotId: number) {
     select: { user_id: true }
   });
 
-  let cash_desk_conflicts: Array<{
+  const cash_desk_conflicts: Array<{
     cash_desk_id: number;
     cash_desk_name: string;
     other_user_id: number;

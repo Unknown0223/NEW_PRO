@@ -91,6 +91,7 @@ export function buildChronological(loaded: ClientReconciliationLoaded): ClientRe
 }
 
 export function safeExcelSheetName(name: string): string {
+  // eslint-disable-next-line no-useless-escape -- legacy regex: belgilar to‘plami ataylab escape qilingan
   let s = name.replace(/[\*\?\\\/\[\]\:]/g, "-").replace(/\s+/g, " ").trim();
   if (s.length > 31) s = `${s.slice(0, 28)}...`;
   return s || "Sheet";

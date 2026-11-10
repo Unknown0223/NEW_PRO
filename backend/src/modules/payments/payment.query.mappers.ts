@@ -116,7 +116,6 @@ export function parseUtcDayEnd(isoDate: string | undefined): Date | undefined {
   return Number.isNaN(d.getTime()) ? undefined : d;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function mapPaymentToListRow(r: any, tenantId: number): PaymentListRow {
   const bal = r.client.client_balances[0]?.balance ?? new Prisma.Decimal(0);
   const payAgent = r.ledger_agent as typeof r.client.agent;

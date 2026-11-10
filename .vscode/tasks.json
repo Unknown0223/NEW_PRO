@@ -1,0 +1,82 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "dev: full stack",
+      "type": "npm",
+      "script": "dev",
+      "problemMatcher": [],
+      "isBackground": true,
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated"
+      }
+    },
+    {
+      "label": "lint: frontend (errors)",
+      "type": "npm",
+      "script": "lint:errors",
+      "args": ["--prefix", "frontend"],
+      "problemMatcher": ["$eslint-stylish"]
+    },
+    {
+      "label": "lint: frontend (fix)",
+      "type": "npm",
+      "script": "lint:fix",
+      "args": ["--prefix", "frontend"],
+      "problemMatcher": []
+    },
+    {
+      "label": "typecheck: frontend",
+      "type": "npm",
+      "script": "typecheck",
+      "args": ["--prefix", "frontend"],
+      "problemMatcher": ["$tsc"]
+    },
+    {
+      "label": "typecheck: backend",
+      "type": "shell",
+      "command": "npx tsc -p tsconfig.json --noEmit",
+      "options": {
+        "cwd": "${workspaceFolder}/backend"
+      },
+      "problemMatcher": ["$tsc"]
+    },
+    {
+      "label": "test: frontend",
+      "type": "npm",
+      "script": "test",
+      "args": ["--prefix", "frontend"],
+      "problemMatcher": []
+    },
+    {
+      "label": "test: backend",
+      "type": "npm",
+      "script": "test:ci",
+      "args": ["--prefix", "backend"],
+      "problemMatcher": []
+    },
+    {
+      "label": "audit: max-loc",
+      "type": "npm",
+      "script": "audit:max-loc",
+      "problemMatcher": []
+    },
+    {
+      "label": "format: write",
+      "type": "npm",
+      "script": "format:write",
+      "problemMatcher": []
+    },
+    {
+      "label": "verify: pre-commit (lint+types+tests)",
+      "dependsOrder": "sequence",
+      "dependsOn": ["lint: frontend (errors)", "typecheck: frontend", "typecheck: backend", "audit: max-loc"],
+      "problemMatcher": []
+    }
+  ]
+}

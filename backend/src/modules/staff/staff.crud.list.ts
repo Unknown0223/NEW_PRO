@@ -226,7 +226,7 @@ export async function listStaff(
     workSlotByUser = await loadActiveWorkSlotsByUserIds(userIds);
   }
 
-  let superviseeCountMap = new Map<number, number>();
+  const superviseeCountMap = new Map<number, number>();
   const superviseesBySupervisor = new Map<
     number,
     Array<{ id: number; fio: string; code: string | null; is_active: boolean }>

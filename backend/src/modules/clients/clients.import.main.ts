@@ -153,7 +153,7 @@ export async function importClientsFromXlsx(
     return { ...base, errors };
   };
 
-  let manualMap = buildManualColumnMap(opts?.columnMap);
+  const manualMap = buildManualColumnMap(opts?.columnMap);
   if (manualMap != null && opts?.importMode === "create") {
     if (!Object.prototype.hasOwnProperty.call(manualMap, "name")) {
       return {
@@ -181,7 +181,7 @@ export async function importClientsFromXlsx(
       return { created: 0, updated: 0, errors: ["Не удалось прочитать лист."] };
     }
     const rows = sheetToRowsMatrix(ws);
-    let headerRowIdx =
+    const headerRowIdx =
       typeof opts?.headerRowIndex === "number" && Number.isFinite(opts.headerRowIndex)
         ? Math.floor(opts.headerRowIndex)
         : 0;

@@ -32,7 +32,7 @@ export async function importProductCategories(
   for (const row of rows) {
     const oldId = Number(row.id);
     const parentOld = row.parent_id != null ? Number(row.parent_id) : null;
-    let data = prepareRow(row, EXTENDED_IMPORT_PHASES[0][0], maps, tenantId, false);
+    const data = prepareRow(row, EXTENDED_IMPORT_PHASES[0][0], maps, tenantId, false);
     data.parent_id = null;
     rowIdx += 1;
 

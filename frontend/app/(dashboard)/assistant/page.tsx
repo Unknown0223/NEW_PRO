@@ -61,7 +61,7 @@ export default function AssistantPage() {
           </span>
           <div>
             <h1 className="text-lg font-semibold">Помощник</h1>
-            <p className="text-sm text-muted-foreground">Tizim bo'yicha savol bering. Javob shu diler ma'lumotidan olinadi.</p>
+            <p className="text-sm text-muted-foreground">Tizim bo‘yicha savol bering. Javob shu diler ma’lumotidan olinadi.</p>
           </div>
         </div>
 
@@ -130,7 +130,7 @@ export default function AssistantPage() {
                   )}
                 </div>
               ))}
-              {busy ? <p className="text-sm text-muted-foreground">Ma'lumot olinmoqda...</p> : null}
+              {busy ? <p className="text-sm text-muted-foreground">Ma’lumot olinmoqda...</p> : null}
             </div>
           )}
         </div>

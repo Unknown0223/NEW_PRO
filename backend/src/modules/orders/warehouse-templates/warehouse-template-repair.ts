@@ -6,6 +6,7 @@ import type ExcelJS from "exceljs";
  */
 
 /** XML 1.0 da taqiqlangan boshqaruv belgilari. */
+// eslint-disable-next-line no-control-regex -- XML 1.0 taqiqlangan belgilari
 const XML_INVALID = /[\x00-\x08\x0B\x0C\x0E-\x1F]/g;
 
 /** exceljs page-setup-xform parseOpen default. */

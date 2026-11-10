@@ -20,13 +20,11 @@ async function main() {
     });
     linkCount += 1;
   }
-  // eslint-disable-next-line no-console
   console.log(`Backfill done. rolesTouched=${roleCount} linksTouched=${linkCount}`);
 }
 
 main()
   .catch((e) => {
-    // eslint-disable-next-line no-console
     console.error(e);
     process.exit(1);
   })

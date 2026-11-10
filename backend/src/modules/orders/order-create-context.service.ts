@@ -52,7 +52,6 @@ export async function getOrderCreateContextBundle(
   const ORDER_CREATE_CONTEXT_DEBUG = process.env.ORDER_CREATE_CONTEXT_DEBUG === "1";
   const logDebug = (event: string, payload: Record<string, unknown>) => {
     if (!ORDER_CREATE_CONTEXT_DEBUG) return;
-    // eslint-disable-next-line no-console
     console.info(`[order-create-context-debug] ${event}`, payload);
   };
 

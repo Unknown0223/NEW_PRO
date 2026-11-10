@@ -209,7 +209,8 @@ export async function importClientDataRows(
     }
     const nameTrimmed = latinName.name;
     const built = buildImportCreateRowScalar(nameTrimmed, row, colIndexByKey, refResolver);
-    let { scalarData, client_code, client_pinfl, inn, city, phoneNormalized, cityNorm } = built;
+    let { scalarData, client_code } = built;
+    const { client_pinfl, inn, city, phoneNormalized, cityNorm } = built;
     if (idCode) {
       client_code = idCode;
       scalarData = { ...scalarData, client_code: idCode };

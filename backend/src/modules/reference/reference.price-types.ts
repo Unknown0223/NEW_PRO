@@ -41,6 +41,9 @@ async function computeDistinctPriceTypesForTenant(
    */
   return ["retail"];
 
+  /* Legacy DB-fallback quyida: hozircha ataylab o‘chirilgan (kelajakda qaytarilishi mumkin). */
+  /* eslint-disable no-unreachable */
+
   /**
    * `product_prices` qatorlarida `kind` ustuni yo‘q — farq faqat sozlamadagi `price_type_entries.kind`.
    * Katalog bo‘sh bo‘lsa: DB kalitlari + katalog qoldiqlari (legacy).
@@ -62,6 +65,7 @@ async function computeDistinctPriceTypesForTenant(
   });
 
   return uniqueSortedPriceTypeKeys([...fromDbFiltered, ...fromCatalog]);
+  /* eslint-enable no-unreachable */
 }
 
 export async function listDistinctPriceTypesForTenant(

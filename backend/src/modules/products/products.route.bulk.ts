@@ -19,16 +19,12 @@ export async function registerProductBulkRoutes(app: FastifyInstance) {
       if (!parsed.success) {
         return sendApiError(reply, request, 400, "ValidationError", undefined, zodValidationExtras(parsed.error));
       }
-      try {
-        const result = await createProductsBulk(
-          request.tenant!.id,
-          parsed.data.items,
-          actorUserIdOrNull(request)
-        );
-        return reply.status(201).send(result);
-      } catch (e) {
-        throw e;
-      }
+      const result = await createProductsBulk(
+        request.tenant!.id,
+        parsed.data.items,
+        actorUserIdOrNull(request)
+      );
+      return reply.status(201).send(result);
     }
   );
 }

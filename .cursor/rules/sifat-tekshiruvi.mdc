@@ -1,0 +1,65 @@
+---
+description: Kod sifatini tekshirish tartibi — lint, typecheck, test, format (Cursor uchun)
+alwaysApply: true
+---
+
+# Sifat tekshiruvi tartibi (har o‘zgarishdan keyin)
+
+Kichik o‘zgarishdan keyin ham shu tartibda tekshir:
+
+```bash
+# 1. Frontend — faqat ERROR'lar (CI gate bilan bir xil)
+npm run lint:errors --prefix frontend
+
+# 2. Frontend — tiplar
+npm run typecheck --prefix frontend
+
+# 3. Backend — tiplar (build dry)
+cd backend && npx tsc -p tsconfig.json --noEmit
+
+# 4. Fayl hajmi qoidasi (≤400 satr, legacy allowlist bilan)
+npm run audit:max-loc
+```
+
+Faqat o‘zgartirilgan fayllarni tez tekshirish uchun:
+
+```bash
+cd frontend && npx eslint "components/yo‘l/fayl.tsx"     # yoki app/... 
+cd backend  && npx tsc -p tsconfig.json --noEmit          # to‘liq, lekin ~20-40 sek
+```
+
+## Qoidalar
+
+- **Yangi kod:** `no-unused-vars`, `prefer-const`, `react/no-unescaped-entities`,
+  `@next/next/no-html-link-for-pages`, `react-hooks/rules-of-hooks` — **error**, bajarilishi shart.
+- **Legacy pattern:** `react-hooks/set-state-in-effect`, `react-hooks/refs`,
+  `react-hooks/exhaustive-deps`, `no-unused-vars` (eski fayllar) — **warning**;
+  tegishli ekranni refaktoring qilayotganda tuzat.
+- **Ichki havola:** `next/link` (`<Link href="/...">`) ishlatilsa — `<a>` bilan aralashtirmang
+  (ochish va yopish tegi mos bo‘lishi kerak).
+- **Regex:** regex ichida faqat zarur escape qoldiriladi — `[\s_-]`, `[\\/]`.
+  Boshqaruv belgilari (`\x00-\x1F`) ataylab ishlatilsa, sabab bilan
+  `// eslint-disable-next-line no-control-regex -- izoh` yoziladi.
+- **Format:** faylni qo‘lda qayta formatlamang; `npm run format:write` (ildizda) yoki
+  Cursor’da "Format Document" (Prettier) ishlatiladi. Kod uslubi: 2 bo‘sh joy, qo‘sh tirnoq,
+  `;` bilan, `trailingComma: none`, `endOfLine: auto` (CRLF fayllarni buzmaydi).
+- **Commit oldidan:** `backend/.husky/pre-commit` typecheck + `audit:max-loc` ni bajaradi;
+  u yiqilsa commit bo‘lmaydi.
+
+## Buyruqlar (Cursor’da tez ishlatish uchun)
+
+| Maqsad | Buyruq |
+|--------|--------|
+| Frontend error’lar | `npm run lint:errors --prefix frontend` |
+| Frontend hammasi | `npm run lint --prefix frontend` |
+| Frontend auto-fix | `npm run lint:fix --prefix frontend` |
+| Frontend typecheck | `npm run typecheck --prefix frontend` |
+| Frontend testlar | `npm run test --prefix frontend` |
+| Backend typecheck | `cd backend && npx tsc -p tsconfig.json --noEmit` |
+| Backend testlar | `npm run test:ci --prefix backend` |
+| Fayl hajmi audit | `npm run audit:max-loc` |
+| Format tekshirish | `npm run format:check` |
+| Format yozish | `npm run format:write` |
+
+> Eslatma: `lint` uchun `frontend/node_modules` o‘rnatilgan bo‘lishi kerak (`npm ci --prefix frontend`).
+> Backendda ESLint konfiguratsiyasi yo‘q — backend uchun gate `tsc --noEmit` + Vitest.
