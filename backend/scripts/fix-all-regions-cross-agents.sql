@@ -1,0 +1,4 @@
+-- DEPRECATED / WRONG DIRECTION.
+-- Previously moved agents/orders/payments to match client GPS region.
+-- Correct approach: keep agent/docs, fix client territory from agent.
+-- See: backend/scripts/fix-client-territory-from-agent.sql
