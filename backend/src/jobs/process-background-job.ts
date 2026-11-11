@@ -219,5 +219,11 @@ export async function processBackgroundJob(job: Job): Promise<unknown> {
     return closeEndedShiftsAndMarkAbsent(d.tenant_id);
   }
 
+  {
+    const { processCronBackgroundJob } = await import("./cron-repeatable");
+    const cronResult = await processCronBackgroundJob(job.name);
+    if (cronResult != null) return cronResult;
+  }
+
   throw new Error(`Неизвестная задача: ${job.name}`);
 }

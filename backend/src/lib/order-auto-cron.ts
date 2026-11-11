@@ -29,16 +29,28 @@ let intervalLowStock: ReturnType<typeof setInterval> | null = null;
 export function enableAutoClose(): void {
   if (intervalAutoClose != null) return; // already running
   intervalAutoClose = setInterval(() => {
-    void runAutoClose().catch((err) => {
-      console.error("[order-auto-cron] runAutoClose error:", err);
-    });
+    void import("./cron-redis-lock")
+      .then(({ withCronLock }) =>
+        withCronLock("order-auto-close", Math.max(60_000, CHECK_INTERVAL_MS - 5_000), () =>
+          runAutoClose().then(() => undefined)
+        )
+      )
+      .catch((err) => {
+        console.error("[order-auto-cron] runAutoClose error:", err);
+      });
   }, CHECK_INTERVAL_MS);
 
   if (intervalLowStock != null) return;
   intervalLowStock = setInterval(() => {
-    void runLowStockNotifications().catch((err) => {
-      console.error("[order-auto-cron] runLowStockNotifications error:", err);
-    });
+    void import("./cron-redis-lock")
+      .then(({ withCronLock }) =>
+        withCronLock("order-low-stock", Math.max(60_000, CHECK_INTERVAL_MS - 5_000), () =>
+          runLowStockNotifications().then(() => undefined)
+        )
+      )
+      .catch((err) => {
+        console.error("[order-auto-cron] runLowStockNotifications error:", err);
+      });
   }, CHECK_INTERVAL_MS);
 
   console.log("[order-auto-cron] Timers started (interval = %d ms)", CHECK_INTERVAL_MS);

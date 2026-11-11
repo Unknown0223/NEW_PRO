@@ -10,9 +10,15 @@ let intervalHandle: ReturnType<typeof setInterval> | null = null;
 export function enableProductPriceScheduleCron(): void {
   if (intervalHandle != null) return;
   intervalHandle = setInterval(() => {
-    void applyDueProductPriceSchedules().catch((err) => {
-      console.error("[product-price-schedule-cron] applyDue error:", err);
-    });
+    void import("./cron-redis-lock")
+      .then(({ withCronLock }) =>
+        withCronLock("product-price-schedule", Math.max(30_000, CHECK_INTERVAL_MS - 5_000), () =>
+          applyDueProductPriceSchedules().then(() => undefined)
+        )
+      )
+      .catch((err) => {
+        console.error("[product-price-schedule-cron] applyDue error:", err);
+      });
   }, CHECK_INTERVAL_MS);
   console.log("[product-price-schedule-cron] Timer started (interval = %d ms)", CHECK_INTERVAL_MS);
 }

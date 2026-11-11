@@ -58,6 +58,7 @@ export async function syncDelta(
           is_active: true,
           weight_kg: true,
           sell_code: true,
+          image_url: true,
           updated_at: true
         },
         take: 5000
@@ -106,13 +107,23 @@ export async function enqueueOrder(
   warehouseId: number,
   items: { product_id: number; qty: number; price?: number }[],
   offlineCreatedAt: Date,
-  opts?: { price_type?: string; comment?: string | null }
+  opts?: { price_type?: string; comment?: string | null; client_uuid?: string | null }
 ) {
   const clientId =
     typeof clientLocalId === "number"
       ? clientLocalId
       : Number.parseInt(String(clientLocalId), 10);
   if (!Number.isFinite(clientId) || clientId < 1) throw new Error("BAD_CLIENT");
+
+  const { normalizeClientUuid } = await import("../orders/domain/order-idempotency.pure");
+  const clientUuid = normalizeClientUuid(opts?.client_uuid);
+  if (clientUuid) {
+    const existing = await prisma.order.findFirst({
+      where: { tenant_id: tenantId, client_uuid: clientUuid },
+      select: { id: true, number: true, status: true, created_at: true }
+    });
+    if (existing) return existing;
+  }
 
   const cfg = await loadAgentMobileConfig(tenantId, userId);
   await assertAgentScopedClient(tenantId, userId, clientId);
@@ -136,45 +147,56 @@ export async function enqueueOrder(
     priceTypeEntries,
     paymentMethodEntries
   });
-  const order = await prisma.order.create({
-    data: {
-      tenant_id: tenantId,
-      number: tempNumber,
-      client_id: clientId,
-      agent_id: userId,
-      warehouse_id: warehouseId,
-      creation_channel: "mobile",
-      status: "pending_sync",
-      total_sum: 0,
-      bonus_sum: 0,
-      comment: opts?.comment?.trim() || null,
-      payment_method_ref: paymentMethodRef,
-      created_at: offlineCreatedAt,
-      updated_at: now,
-      items: {
-        create: items.map((it) => ({
-          product_id: it.product_id,
-          qty: it.qty,
-          price: it.price ?? 0,
-          total: 0,
-          is_bonus: false
-        }))
-      },
-      change_logs: {
-        create: {
-          user_id: userId,
-          action: "offline_enqueue",
-          payload: {
-            offline_created_at: offlineCreatedAt.toISOString(),
-            price_type: priceType
+  try {
+    const order = await prisma.order.create({
+      data: {
+        tenant_id: tenantId,
+        number: tempNumber,
+        client_id: clientId,
+        agent_id: userId,
+        warehouse_id: warehouseId,
+        client_uuid: clientUuid,
+        creation_channel: "mobile",
+        status: "pending_sync",
+        total_sum: 0,
+        bonus_sum: 0,
+        comment: opts?.comment?.trim() || null,
+        payment_method_ref: paymentMethodRef,
+        created_at: offlineCreatedAt,
+        updated_at: now,
+        items: {
+          create: items.map((it) => ({
+            product_id: it.product_id,
+            qty: it.qty,
+            price: it.price ?? 0,
+            total: 0,
+            is_bonus: false
+          }))
+        },
+        change_logs: {
+          create: {
+            user_id: userId,
+            action: "offline_enqueue",
+            payload: {
+              offline_created_at: offlineCreatedAt.toISOString(),
+              price_type: priceType
+            }
           }
         }
-      }
-    },
-    select: { id: true, number: true, status: true, created_at: true }
-  });
-
-  return order;
+      },
+      select: { id: true, number: true, status: true, created_at: true }
+    });
+    return order;
+  } catch (e) {
+    if (clientUuid && e && typeof e === "object" && (e as { code?: string }).code === "P2002") {
+      const existing = await prisma.order.findFirst({
+        where: { tenant_id: tenantId, client_uuid: clientUuid },
+        select: { id: true, number: true, status: true, created_at: true }
+      });
+      if (existing) return existing;
+    }
+    throw e;
+  }
 }
 
 export async function getPendingCount(tenantId: number, userId: number) {

@@ -152,6 +152,8 @@ model Order {
   source_created_by          String?          @db.VarChar(200)
   /// Mobil zakaz qaysi vizit ichida urilgan (agent «Начать визит»)
   agent_visit_id             Int?
+  /// Offline/retry: mijoz UUID — bir xil kalit bilan ikkinchi create qayta ishlanadi
+  client_uuid                String?          @db.VarChar(64)
   /// Vizit/zakaz GPS tekshiruvi: koordinata, masofa, radius, aniqlik, soxta GPS, oflayn
   visit_geo                  Json?
   agent_visit                AgentVisit?      @relation(fields: [agent_visit_id], references: [id], onDelete: SetNull)
@@ -172,6 +174,7 @@ model Order {
   auto_confirm_schedules      OrderAutoConfirmSchedule[]
 
   @@unique([tenant_id, warehouse_id, number])
+  @@unique([tenant_id, client_uuid])
   @@index([tenant_id, status])
   @@index([tenant_id, expeditor_user_id])
   /// Dashboard / monitoring: sana + `order_type` bo‘yicha tez filtr

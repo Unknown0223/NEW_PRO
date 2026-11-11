@@ -1,13 +1,25 @@
 import { Worker } from "bullmq";
 import IORedis from "ioredis";
 import { env } from "../config/env";
+import { getBackgroundQueue } from "../jobs/background-queue";
 import { BACKGROUND_QUEUE_NAME } from "../jobs/constants";
+import { registerCronRepeatableJobs } from "../jobs/cron-repeatable";
 import { processBackgroundJob } from "../jobs/process-background-job";
 import { logJobResult } from "../lib/job-log.service";
 
 const connection = new IORedis(env.REDIS_URL, {
   maxRetriesPerRequest: null
 });
+
+if (env.CRON_VIA_WORKER === "1") {
+  void registerCronRepeatableJobs(getBackgroundQueue())
+    .then(() => process.stdout.write("[worker] cron repeatable jobs registered\n"))
+    .catch((err) =>
+      process.stderr.write(
+        `[worker] cron register failed: ${err instanceof Error ? err.message : String(err)}\n`
+      )
+    );
+}
 
 /**
  * Fon ishlar: `ping`, `order_status_notify`, importlar (`import_clients_xlsx`, `import_stock_xlsx`, `import_products_*`), …

@@ -46,7 +46,9 @@ export const mobileEnqueueBodySchema = z
     offline_created_at: dateLikeSchema,
     price_type: z.string().trim().min(1).max(128).optional(),
     comment: z.string().max(4000).optional().nullable(),
-    visit: mobileOrderVisitSchema.optional().nullable()
+    visit: mobileOrderVisitSchema.optional().nullable(),
+    /** Offline queue UUID — qayta yuborishda dublikat yaratilmasin */
+    client_uuid: z.string().trim().uuid().max(64).optional().nullable()
   })
   .superRefine((val, ctx) => {
     if (val.client_local_id == null && val.client_id == null) {

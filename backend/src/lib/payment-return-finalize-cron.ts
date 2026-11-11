@@ -11,9 +11,15 @@ let intervalHandle: ReturnType<typeof setInterval> | null = null;
 export function enablePaymentReturnFinalizeCron(): void {
   if (intervalHandle != null) return;
   intervalHandle = setInterval(() => {
-    void finalizeExpiredRejectedPayments().catch((err) => {
-      console.error("[payment-return-finalize-cron] finalize error:", err);
-    });
+    void import("./cron-redis-lock")
+      .then(({ withCronLock }) =>
+        withCronLock("payment-return-finalize", Math.max(30_000, CHECK_INTERVAL_MS - 5_000), () =>
+          finalizeExpiredRejectedPayments().then(() => undefined)
+        )
+      )
+      .catch((err) => {
+        console.error("[payment-return-finalize-cron] finalize error:", err);
+      });
   }, CHECK_INTERVAL_MS);
   console.log("[payment-return-finalize-cron] Timer started (interval = %d ms)", CHECK_INTERVAL_MS);
 }

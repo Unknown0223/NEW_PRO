@@ -129,6 +129,7 @@ export async function persistCreateOrderInTransaction(
       warehouse_id: input.warehouse_id,
       agent_id: input.agent_id ?? null,
       work_slot_id: workSlotId,
+      client_uuid: input.client_uuid?.trim() || null,
       creation_channel: p.creationChannel,
       expeditor_user_id: expeditorUserId,
       order_type: orderType,

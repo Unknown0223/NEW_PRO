@@ -15,7 +15,7 @@ Oxirgi yangilanish: 2026-11-11
 | 9 | Davomat terminal himoya | ✅ | Ingest faqat device_token; pairing TTL; user_id ishonchsiz |
 | 10 | Fayl yuklash xavfsizligi | ✅ | Multipart 32MB; stream put; magic-byte (xlsx/apk/zip/jpeg) |
 | 11 | Ombor qulfi | ✅ | FOR UPDATE + reserved CHECK; parallel reserve test |
-| 12 | Cron→worker + idempotentlik | ⏳ | Cron ikki marta ishlamasin; dublikat buyurtma yo‘q |
+| 12 | Cron→worker + idempotentlik | ✅ | Redis cron lock; worker cron ixtiyoriy; order client_uuid |
 
 **Belgilar:** ⏳ kutilmoqda · 🔄 bajarilmoqda · ✅ tugadi · ⏸️ qo‘lda (siz)
 
@@ -26,4 +26,4 @@ Oxirgi yangilanish: 2026-11-11
 4. Prod env ga `TRUST_PROXY=1` qo‘shish
 5. **Andijon terminal (id 2):** deploy oldin/keyin `issue-token` → Hikvision HttpHost URL ni `?device_token=dev_…` qilib qo‘ying (`pairing_code` endi ishlamaydi). SubscribeEvent ni o‘chirmang.
 
-**Keyingi kod:** #12 Cron→worker + idempotentlik
+**Keyingi kod:** navbat kod bandlari tugadi (qo‘lda qolganlar — yuqorida)

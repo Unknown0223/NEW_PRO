@@ -49,6 +49,8 @@ export type CreateOrderInput = {
   consignment_due_date?: string | null;
   /** Ixtiyoriy hujjat ID; bo‘sh → create dan keyin String(id) */
   number?: string | null;
+  /** Offline/retry UUID — bir xil kalit → mavjud zakaz */
+  client_uuid?: string | null;
   /** Server-only: mobile API sets `mobile`. Web omits (inferred from viewer role). */
   creation_channel?: "web" | "mobile" | null;
   items: OrderLineInput[];

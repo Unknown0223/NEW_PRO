@@ -72,6 +72,11 @@ const envSchema = z.object({
   DEVICE_INGEST_RATE_MAX: z.coerce.number().int().positive().default(300),
   DEVICE_INGEST_RATE_WINDOW_MS: z.coerce.number().int().positive().default(60_000),
   /**
+   * `1` — auto-close / price-schedule BullMQ worker’da (API setInterval o‘chiriladi).
+   * Default `0`: API cron + Redis NX lock (cluster xavfsiz).
+   */
+  CRON_VIA_WORKER: z.enum(["0", "1"]).default("0"),
+  /**
    * `1` bo‘lsa: `/dashboard/*` so‘rovlari uchun `request.log` ga `dashboard.request` yoziladi
    * va javobga `X-Dashboard-Duration-Ms` qo‘shiladi (ms).
    */

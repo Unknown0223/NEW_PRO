@@ -380,7 +380,11 @@ export async function registerMobileAgentOrderRoutes(app: FastifyInstance) {
           parsed.data.warehouse_id,
           parsed.data.items,
           offlineCreated,
-          { price_type: parsed.data.price_type, comment: parsed.data.comment }
+          {
+            price_type: parsed.data.price_type,
+            comment: parsed.data.comment,
+            client_uuid: parsed.data.client_uuid
+          }
         );
         await linkOrderVisitSafe(request, userId, result.id, visit);
         return reply.status(201).send(result);

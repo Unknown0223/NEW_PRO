@@ -39,10 +39,14 @@ async function main() {
   app.log.info({ port: env.PORT, host: listenHost }, "Server listening");
   startFinishedReturnOrderBackfill();
 
-  enableAutoClose();
-  app.log.info("Auto-status cron worker enabled.");
-  enableProductPriceScheduleCron();
-  app.log.info("Product price schedule cron enabled.");
+  if (env.CRON_VIA_WORKER === "1") {
+    app.log.info("Auto-status + price schedule crons owned by BullMQ worker (CRON_VIA_WORKER=1).");
+  } else {
+    enableAutoClose();
+    app.log.info("Auto-status cron enabled (Redis lock).");
+    enableProductPriceScheduleCron();
+    app.log.info("Product price schedule cron enabled (Redis lock).");
+  }
   enablePaymentReturnFinalizeCron();
   app.log.info("Payment return finalize cron enabled.");
   enableDashboardCacheWarm();

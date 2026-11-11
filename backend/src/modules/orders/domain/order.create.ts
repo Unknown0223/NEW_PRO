@@ -92,6 +92,21 @@ export async function createOrder(
   const viewerCtx: OrderViewerContext =
     typeof viewer === "string" ? { role: viewer } : (viewer ?? {});
   const viewerRole = viewerCtx.role;
+  const { normalizeClientUuid } = await import("./order-idempotency.pure");
+  const clientUuid = normalizeClientUuid(input.client_uuid);
+  if (clientUuid) {
+    input = { ...input, client_uuid: clientUuid };
+    const existing = await prisma.order.findFirst({
+      where: { tenant_id: tenantId, client_uuid: clientUuid },
+      select: { id: true }
+    });
+    if (existing) {
+      const { getOrderDetail } = await import("./order.query.detail");
+      return getOrderDetail(tenantId, existing.id, viewerRole, viewerCtx.userId);
+    }
+  } else {
+    input = { ...input, client_uuid: null };
+  }
   const orderTypeEarly = normalizeOrderType(input.order_type);
   if (orderTypeEarly !== "exchange" && !input.items.length) {
     throw new Error("EMPTY_ITEMS");

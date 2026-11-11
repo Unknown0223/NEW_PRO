@@ -16,7 +16,10 @@ async function tick(): Promise<void> {
   if (running) return;
   running = true;
   try {
-    await reconcileAllTenantsConsignmentClosures();
+    const { withCronLock } = await import("./cron-redis-lock");
+    await withCronLock("consignment-closure", Math.max(60_000, CHECK_INTERVAL_MS - 5_000), () =>
+      reconcileAllTenantsConsignmentClosures().then(() => undefined)
+    );
   } catch (err) {
     console.error("[consignment-closure-cron] error:", err);
   } finally {
