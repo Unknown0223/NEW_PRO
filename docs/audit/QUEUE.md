@@ -25,4 +25,4 @@ Oxirgi yangilanish: 2026-11-11
 3. `git filter-repo` — kalit/Excel ni **tarixdan** o‘chirish
 4. Prod env ga `TRUST_PROXY=1` qo‘shish
 
-**Keyingi kod:** #6 Access token TTL + sessiya tekshiruvi
+**Keyingi kod:** #7 Refresh token oilasi / reuse detection
