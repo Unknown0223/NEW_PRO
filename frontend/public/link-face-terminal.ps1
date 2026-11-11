@@ -3,6 +3,7 @@ param(
   [string]$Password = "",
   [string]$Branch = "",
   [string]$PairingCode = "",
+  [string]$DeviceToken = "",
   [string]$IngestUrl = "https://api.salesarena.sale/api/aksit/mobile/attendance/device-ingest",
   [string]$LinkUrl = "https://api.salesarena.sale/api/aksit/mobile/attendance/device-link-request",
   [string]$RecoveryEmail = "botirovanvar96@gmail.com",
@@ -132,9 +133,10 @@ if (-not $chosen) {
 
 $ingestHost = ([Uri]$IngestUrl).Host
 $ingestPath = ([Uri]$IngestUrl).PathAndQuery
-if ($PairingCode) {
+# Ingest faqat device_token (pairing_code endi rad etiladi).
+if ($DeviceToken) {
   $join = if ($ingestPath.Contains("?")) { "&" } else { "?" }
-  $ingestPath = "$ingestPath${join}pairing_code=$PairingCode"
+  $ingestPath = "$ingestPath${join}device_token=$([uri]::EscapeDataString($DeviceToken))"
 }
 $xml = @"
 <?xml version="1.0" encoding="UTF-8"?>

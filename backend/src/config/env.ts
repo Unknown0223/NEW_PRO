@@ -68,6 +68,9 @@ const envSchema = z.object({
   /** POST write API (zakaz/to‘lov/mijoz) — bir IP dan maksimal so‘rovlar (oyna) */
   WRITE_API_RATE_MAX: z.coerce.number().int().positive().default(120),
   WRITE_API_RATE_WINDOW_MS: z.coerce.number().int().positive().default(60_000),
+  /** Terminal device-ingest (heartbeat + punch) — token/IP bo‘yicha */
+  DEVICE_INGEST_RATE_MAX: z.coerce.number().int().positive().default(300),
+  DEVICE_INGEST_RATE_WINDOW_MS: z.coerce.number().int().positive().default(60_000),
   /**
    * `1` bo‘lsa: `/dashboard/*` so‘rovlari uchun `request.log` ga `dashboard.request` yoziladi
    * va javobga `X-Dashboard-Duration-Ms` qo‘shiladi (ms).

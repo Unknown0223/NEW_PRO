@@ -1,9 +1,9 @@
 /**
  * Mobil ilova va Terminal / Kiosk uchun davomat API marshrutlari (`/api/:slug/mobile/attendance/*`).
  */
-import { createHash } from "crypto";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { prisma } from "../../config/database";
+import { env } from "../../config/env";
 import { sendApiError } from "../../lib/api-error";
 import { ensureTenantContext } from "../../lib/tenant-context";
 import { getAccessUser, jwtAccessVerify } from "../auth/auth.prehandlers";
@@ -12,6 +12,11 @@ import { listTimesheetMatrix } from "../timesheet/timesheet.service";
 import { createTabelAbsenceRequest, listTabelAbsenceRequests } from "./tabel-hub-requests";
 import { parseTerminalIngest, parseTerminalIngestBuffer, type TerminalIngestEvent } from "./hikvision-ingest.pure";
 import { requestTabelDeviceLink } from "./tabel-clearance-devices.service";
+import {
+  extractDeviceIngestToken,
+  hashDeviceToken,
+  terminalEmployeeWhere
+} from "./device-ingest-auth.pure";
 import { loadTenantBranchesForAccess } from "../tenant-settings/tenant-settings.profile.read";
 import {
   getMobileAttendanceState,
@@ -59,11 +64,6 @@ async function punchInputFromRequest(request: FastifyRequest): Promise<PunchBody
     }
   }
   return input;
-}
-
-function asIngestBody(body: unknown): { pairing_code?: string; user_id?: number } {
-  if (!body || typeof body !== "object") return {};
-  return body as { pairing_code?: string; user_id?: number };
 }
 
 /** JSON yoki multipart (JSON + JPEG) Hikvision hodisasi. */
@@ -232,79 +232,86 @@ export async function registerTabelMobileRoutes(app: FastifyInstance) {
   });
 
   // Office-Link / Hikvision Terminal ingest. Qurilmada JWT yo‘q — ensureTenantContext chaqirilmaydi.
-  app.post("/api/:slug/mobile/attendance/device-ingest", async (request, reply) => {
-    if (!request.tenant) return sendApiError(reply, request, 404, "TenantNotFound");
-    const rawHeader = request.headers["x-device-token"] ?? request.headers["x-attendance-token"];
-    const token = Array.isArray(rawHeader) ? rawHeader[0] : rawHeader;
-    const query = (request.query ?? {}) as { pairing_code?: string };
-    const event = await readTerminalIngest(request);
-    const pairing = String(
-      (asIngestBody(request.body).pairing_code ?? query.pairing_code ?? "")
-    ).trim();
-
-    let device = null;
-    if (token) {
-      const hash = createHash("sha256").update(String(token).trim()).digest("hex");
-      device = await prisma.attendanceDevice.findFirst({
-        where: { tenant_id: request.tenant!.id, device_token_hash: hash }
+  // Auth: faqat device token (header yoki ?device_token= — Hikvision SubscribeEvent uchun).
+  app.post(
+    "/api/:slug/mobile/attendance/device-ingest",
+    {
+      config: {
+        rateLimit: {
+          max: env.DEVICE_INGEST_RATE_MAX,
+          timeWindow: env.DEVICE_INGEST_RATE_WINDOW_MS,
+          keyGenerator: (req: FastifyRequest) => {
+            const token = extractDeviceIngestToken({
+              headers: req.headers as Record<string, string | string[] | undefined>,
+              query: (req.query ?? {}) as Record<string, unknown>
+            });
+            const tenantKey = req.tenant?.id ?? "na";
+            if (token) return `ingest|${tenantKey}|${hashDeviceToken(token).slice(0, 16)}`;
+            return `ingest|${tenantKey}|${req.ip}`;
+          }
+        }
+      }
+    },
+    async (request, reply) => {
+      if (!request.tenant) return sendApiError(reply, request, 404, "TenantNotFound");
+      const token = extractDeviceIngestToken({
+        headers: request.headers as Record<string, string | string[] | undefined>,
+        query: (request.query ?? {}) as Record<string, unknown>
       });
-    } else if (pairing) {
-      device = await prisma.attendanceDevice.findFirst({
-        where: { tenant_id: request.tenant!.id, pairing_code: pairing }
-      });
-    }
-    if (!device || device.status === "revoked") {
-      return sendApiError(reply, request, 401, "UnauthorizedDevice", "Терминал не авторизован");
-    }
-    const pending = device.status === "pending_confirm";
-    await prisma.attendanceDevice.update({
-      where: { id: device.id },
-      data: pending
-        ? { last_seen_at: new Date() }
-        : { last_seen_at: new Date(), status: "online", is_confirmed: true }
-    });
-    const bodyUserId = Number(asIngestBody(request.body).user_id ?? 0);
-    let userId = Number.isInteger(bodyUserId) && bodyUserId > 0 ? bodyUserId : 0;
-    const employeeNo = event.employeeNo;
-    if (!userId && employeeNo) {
-      const asNumber = Number(employeeNo);
-      const staff = await prisma.user.findFirst({
+      const event = await readTerminalIngest(request);
+      if (!token) {
+        return sendApiError(reply, request, 401, "UnauthorizedDevice", "Терминал не авторизован");
+      }
+      const device = await prisma.attendanceDevice.findFirst({
         where: {
           tenant_id: request.tenant.id,
-          is_active: true,
-          OR: [
-            { code: employeeNo },
-            ...(Number.isInteger(asNumber) && asNumber > 0 ? [{ id: asNumber }] : [])
-          ]
-        },
-        select: { id: true }
+          device_token_hash: hashDeviceToken(token)
+        }
       });
-      userId = staff?.id ?? 0;
-    }
-    if (!userId) {
-      return reply.send({
-        data: { ok: true, device_id: device.id, status: employeeNo ? "unknown_employee" : "heartbeat" }
+      if (!device || device.status === "revoked") {
+        return sendApiError(reply, request, 401, "UnauthorizedDevice", "Терминал не авторизован");
+      }
+      const pending = device.status === "pending_confirm";
+      await prisma.attendanceDevice.update({
+        where: { id: device.id },
+        data: pending
+          ? { last_seen_at: new Date() }
+          : { last_seen_at: new Date(), status: "online", is_confirmed: true }
       });
-    }
-
-    try {
-      const data = await submitAttendancePunch(request.tenant.id, userId, {
-        source: "terminal",
-        device_id: device.id,
-        direction: event.direction,
-        photo_front_base64: event.photoBase64 ?? null
-      });
-      return reply.send({ data });
-    } catch (e) {
-      const err = e as Error & { code?: string };
-      if (err.code === "METHOD_NOT_ALLOWED") {
+      const employeeNo = event.employeeNo;
+      let userId = 0;
+      if (employeeNo) {
+        const staff = await prisma.user.findFirst({
+          where: terminalEmployeeWhere(request.tenant.id, employeeNo),
+          select: { id: true }
+        });
+        userId = staff?.id ?? 0;
+      }
+      if (!userId) {
         return reply.send({
-          data: { ok: false, device_id: device.id, status: "method_not_allowed", message: err.message }
+          data: { ok: true, device_id: device.id, status: employeeNo ? "unknown_employee" : "heartbeat" }
         });
       }
-      return sendApiError(reply, request, 400, err.code ?? "TerminalPunchError", err.message);
+
+      try {
+        const data = await submitAttendancePunch(request.tenant.id, userId, {
+          source: "terminal",
+          device_id: device.id,
+          direction: event.direction,
+          photo_front_base64: event.photoBase64 ?? null
+        });
+        return reply.send({ data });
+      } catch (e) {
+        const err = e as Error & { code?: string };
+        if (err.code === "METHOD_NOT_ALLOWED") {
+          return reply.send({
+            data: { ok: false, device_id: device.id, status: "method_not_allowed", message: err.message }
+          });
+        }
+        return sendApiError(reply, request, 400, err.code ?? "TerminalPunchError", err.message);
+      }
     }
-  });
+  );
 
   app.post("/api/:slug/mobile/attendance/device-link-request", async (request, reply) => {
     if (!request.tenant) return sendApiError(reply, request, 404, "TenantNotFound");
@@ -319,6 +326,9 @@ export async function registerTabelMobileRoutes(app: FastifyInstance) {
     } catch (err) {
       if (err instanceof Error && err.message === "PASSWORD_REQUIRED") {
         return sendApiError(reply, request, 400, "ValidationError", "Новый пароль терминала не передан");
+      }
+      if (err instanceof Error && err.message === "PAIRING_EXPIRED") {
+        return sendApiError(reply, request, 410, "PairingExpired", "Код привязки истёк. Создайте терминал заново.");
       }
       return sendApiError(reply, request, 404, "NotFound", "Код привязки не найден");
     }

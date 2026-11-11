@@ -116,8 +116,9 @@ function LinkCommand({
   const apiBase = origin.includes("127.0.0.1") || origin.includes("localhost") ? "http://127.0.0.1:18080" : "https://api.salesarena.sale";
   const branchArg = (dev?.branch || "device").replace(/'/g, "''");
   const passArg = devicePassword.replace(/'/g, "''").replace(/`/g, "``").replace(/\$/g, "`$").replace(/"/g, "`\"");
-  const command = dev?.pairing_code && devicePassword
-    ? `powershell -NoProfile -ExecutionPolicy Bypass -Command "(New-Object Net.WebClient).DownloadFile('${origin}/link-face-terminal.ps1','C:\\Users\\Public\\salec-link.ps1'); powershell -NoProfile -ExecutionPolicy Bypass -File C:\\Users\\Public\\salec-link.ps1 -PairingCode ${dev.pairing_code} -Branch '${branchArg}' -Password '${passArg}' -IngestUrl ${apiBase}/api/aksit/mobile/attendance/device-ingest -LinkUrl ${apiBase}/api/aksit/mobile/attendance/device-link-request"`
+  const tokenArg = (dev?.device_token || "").replace(/'/g, "''").replace(/`/g, "``").replace(/\$/g, "`$").replace(/"/g, "`\"");
+  const command = dev?.pairing_code && devicePassword && tokenArg
+    ? `powershell -NoProfile -ExecutionPolicy Bypass -Command "(New-Object Net.WebClient).DownloadFile('${origin}/link-face-terminal.ps1','C:\\Users\\Public\\salec-link.ps1'); powershell -NoProfile -ExecutionPolicy Bypass -File C:\\Users\\Public\\salec-link.ps1 -PairingCode ${dev.pairing_code} -DeviceToken '${tokenArg}' -Branch '${branchArg}' -Password '${passArg}' -IngestUrl ${apiBase}/api/aksit/mobile/attendance/device-ingest -LinkUrl ${apiBase}/api/aksit/mobile/attendance/device-link-request"`
     : "";
   return (
     <div className="mt-4 rounded-lg border bg-muted/30 p-3">
@@ -225,19 +226,23 @@ export function TabelDevicesWorkspace() {
 
   const createMut = useMutation({
     mutationFn: async () => {
-      const { data } = await api.post<{ data: { pairing_code: string } }>(`/api/${tenantSlug}/tabel/devices`, {
-        name,
-        vendor,
-        branch: branch.trim() || null,
-        serial_no: serialNo.trim() || null
-      });
+      const { data } = await api.post<{ data: { pairing_code: string; device_token: string } }>(
+        `/api/${tenantSlug}/tabel/devices`,
+        {
+          name,
+          vendor,
+          branch: branch.trim() || null,
+          serial_no: serialNo.trim() || null
+        }
+      );
       return data.data;
     },
     onSuccess: async (res) => {
       setName("");
       setNotice({
-        title: "Терминал создан. Сначала подключите его по коду привязки. Токен появится после полного подключения.",
-        pairing: res.pairing_code
+        title: "Терминал создан. Подключите по коду привязки; ingest URL — только device_token (не pairing).",
+        pairing: res.pairing_code,
+        token: res.device_token
       });
       await qc.invalidateQueries({ queryKey: ["tabel", "devices", tenantSlug] });
     }

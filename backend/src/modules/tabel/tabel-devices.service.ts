@@ -1,12 +1,13 @@
 /**
  * Terminallar Face ID (AttendanceDevice) servisi.
  */
-import { createHash, randomBytes } from "crypto";
+import { randomBytes } from "crypto";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "../../config/database";
 import { getFaceReferenceKey, getFaceReferenceMeta } from "../mobile/mobile-face.reference";
 import { storageReadBuffer } from "../../lib/storage.service";
 import { branchMatchKey } from "../tenant-settings/branch-display.pure";
+import { hashDeviceToken, isPairingExpired, pairingExpiresAt } from "./device-ingest-auth.pure";
 
 function asMeta(v: unknown): Record<string, unknown> {
   return v && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : {};
@@ -23,6 +24,7 @@ export function toTabelDeviceDto(d: {
   serial_no: string | null;
   branch: string | null;
   pairing_code: string | null;
+  pairing_expires_at?: Date | null;
   tunnel_url: string | null;
   status: string;
   is_confirmed: boolean;
@@ -41,6 +43,7 @@ export function toTabelDeviceDto(d: {
     serial_no: d.serial_no,
     branch: d.branch,
     pairing_code: d.pairing_code,
+    pairing_expires_at: d.pairing_expires_at ?? null,
     tunnel_url: d.tunnel_url,
     status: d.status,
     is_confirmed: d.is_confirmed,
@@ -48,7 +51,8 @@ export function toTabelDeviceDto(d: {
     synced_faces_count: d.synced_faces_count,
     last_seen_at: d.last_seen_at,
     has_token: Boolean(d.device_token_hash),
-    device_token: linked ? stored : null,
+    /** Admin UI / link skript — token create dan keyin ham ko‘rinadi (pending). */
+    device_token: stored,
     terminal_password: typeof meta.terminal_password === "string" ? meta.terminal_password : null,
     recovery_email: typeof meta.recovery_email === "string" ? meta.recovery_email : null,
     terminal_ip: typeof meta.terminal_ip === "string" ? meta.terminal_ip : null,
@@ -76,6 +80,9 @@ export async function createTabelDevice(
   }
 ) {
   const pairingCode = String(100000 + Math.floor(Math.random() * 900000));
+  const rawToken = `dev_${randomBytes(18).toString("hex")}`;
+  const tokenHash = hashDeviceToken(rawToken);
+  const meta = { device_token: rawToken, token_issued_at: new Date().toISOString() };
   const device = await prisma.attendanceDevice.create({
     data: {
       tenant_id: tenantId,
@@ -85,12 +92,19 @@ export async function createTabelDevice(
       branch: input.branch?.trim() || null,
       location_id: input.location_id ?? null,
       pairing_code: pairingCode,
+      pairing_expires_at: pairingExpiresAt(),
+      device_token_hash: tokenHash,
+      meta,
       tunnel_url: input.tunnel_url?.trim() || null,
       status: "pending",
       is_confirmed: false
     }
   });
-  return { device: toTabelDeviceDto(device), pairing_code: pairingCode };
+  return {
+    device: toTabelDeviceDto(device),
+    pairing_code: pairingCode,
+    device_token: rawToken
+  };
 }
 
 export async function requestTabelDeviceLink(
@@ -103,6 +117,7 @@ export async function requestTabelDeviceLink(
     where: { tenant_id: tenantId, pairing_code: code }
   });
   if (!device || device.status === "revoked") throw new Error("NOT_FOUND");
+  if (isPairingExpired(device.pairing_expires_at)) throw new Error("PAIRING_EXPIRED");
   const password = String(input.terminal_password ?? "").trim();
   if (password.length < 8) throw new Error("PASSWORD_REQUIRED");
   const meta = {
@@ -125,7 +140,13 @@ export async function confirmTabelDeviceLink(tenantId: number, id: number) {
   if (existing.status !== "pending_confirm") throw new Error("NOT_PENDING");
   const device = await prisma.attendanceDevice.update({
     where: { id },
-    data: { status: "online", is_confirmed: true, last_seen_at: new Date() }
+    data: {
+      status: "online",
+      is_confirmed: true,
+      last_seen_at: new Date(),
+      pairing_code: null,
+      pairing_expires_at: null
+    }
   });
   return toTabelDeviceDto(device);
 }
@@ -135,11 +156,16 @@ export async function issueTabelDeviceToken(tenantId: number, id: number) {
   if (!existing) throw new Error("NOT_FOUND");
   if (!isDeviceLinked(existing)) throw new Error("DEVICE_NOT_LINKED");
   const rawToken = `dev_${randomBytes(18).toString("hex")}`;
-  const tokenHash = createHash("sha256").update(rawToken).digest("hex");
+  const tokenHash = hashDeviceToken(rawToken);
   const meta = { ...asMeta(existing.meta), device_token: rawToken, token_issued_at: new Date().toISOString() };
   const device = await prisma.attendanceDevice.update({
     where: { id },
-    data: { device_token_hash: tokenHash, meta }
+    data: {
+      device_token_hash: tokenHash,
+      meta,
+      pairing_code: null,
+      pairing_expires_at: null
+    }
   });
   return { device: toTabelDeviceDto(device), device_token: rawToken };
 }

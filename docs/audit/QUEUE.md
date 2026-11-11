@@ -12,7 +12,7 @@ Oxirgi yangilanish: 2026-11-11
 | 6 | Token 15 daqiqa + sessiya | ✅ | Access 15m; sid + is_active barcha rollar uchun |
 | 7 | Refresh token oilasi | ✅ | family_id; grace dan keyin reuse → butun oila revoke |
 | 8 | Login himoyasi | ✅ | Lockout, dummy bcrypt, parol min 8, must_change_password |
-| 9 | Davomat terminal himoya | ⏳ | Begona odam “keldi” yoza olmasin |
+| 9 | Davomat terminal himoya | ✅ | Ingest faqat device_token; pairing TTL; user_id ishonchsiz |
 | 10 | Fayl yuklash xavfsizligi | ⏳ | Katta fayl serverni yiqitmasin |
 | 11 | Ombor qulfi | ⏳ | Ikki agent bir mahsulotni ikki marta sotolmasin |
 | 12 | Cron→worker + idempotentlik | ⏳ | Cron ikki marta ishlamasin; dublikat buyurtma yo‘q |
@@ -24,5 +24,6 @@ Oxirgi yangilanish: 2026-11-11
 2. Yangi Android kalit + GitHub Secrets (eski kalit oshkor)
 3. `git filter-repo` — kalit/Excel ni **tarixdan** o‘chirish
 4. Prod env ga `TRUST_PROXY=1` qo‘shish
+5. **Andijon terminal (id 2):** deploy oldin/keyin `issue-token` → Hikvision HttpHost URL ni `?device_token=dev_…` qilib qo‘ying (`pairing_code` endi ishlamaydi). SubscribeEvent ni o‘chirmang.
 
-**Keyingi kod:** #9 Davomat terminal himoya (device-ingest token)
+**Keyingi kod:** #10 Fayl yuklash xavfsizligi

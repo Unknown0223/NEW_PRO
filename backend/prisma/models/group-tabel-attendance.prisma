@@ -206,6 +206,8 @@ model AttendanceDevice {
   branch             String?             @db.VarChar(120)
   location_id        Int?
   pairing_code       String?             @db.VarChar(32)
+  /// Bog‘lash kodi TTL (yaratilganda); muddati o‘tsa link-request rad.
+  pairing_expires_at DateTime?
   device_token_hash  String?             @db.VarChar(128)
   tunnel_url         String?             @db.VarChar(300)
   /// pending | online | offline | revoked
