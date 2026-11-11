@@ -3,6 +3,7 @@
  * «new»: reserved_qty; «confirmed»: qty (confirmda allaqachon chiqarilgan).
  */
 import { Prisma } from "@prisma/client";
+import { lockStockRowsForUpdate, throwInsufficientStock } from "./order.stock-lock";
 
 export type OrderLinesStockMode = "reserved" | "consumed";
 
@@ -59,16 +60,6 @@ export async function adjustOutboundStockForOrderLinesEdit(
   if (productIds.size === 0) return;
 
   const ids = [...productIds];
-  const stockRows = await tx.stock.findMany({
-    where: {
-      tenant_id: params.tenantId,
-      warehouse_id: params.warehouseId,
-      product_id: { in: ids }
-    },
-    select: { product_id: true, qty: true, reserved_qty: true }
-  });
-  const stockMap = new Map(stockRows.map((s) => [s.product_id, s]));
-
   type Delta = { productId: number; delta: Prisma.Decimal };
   const deltas: Delta[] = [];
   for (const productId of ids) {
@@ -80,6 +71,12 @@ export async function adjustOutboundStockForOrderLinesEdit(
   }
   if (deltas.length === 0) return;
 
+  const stockMap = await lockStockRowsForUpdate(tx, {
+    tenantId: params.tenantId,
+    warehouseId: params.warehouseId,
+    productIds: ids
+  });
+
   for (const { productId, delta } of deltas) {
     if (!delta.gt(0)) continue;
     const row = stockMap.get(productId);
@@ -88,15 +85,7 @@ export async function adjustOutboundStockForOrderLinesEdit(
     const reserved = reservedRaw.lt(0) ? new Prisma.Decimal(0) : reservedRaw;
     const available = qty.sub(reserved);
     if (available.lt(delta)) {
-      const err = new Error("INSUFFICIENT_STOCK") as Error & {
-        product_id: number;
-        available: string;
-        requested: string;
-      };
-      err.product_id = productId;
-      err.available = available.toString();
-      err.requested = delta.toString();
-      throw err;
+      throwInsufficientStock(productId, available, delta);
     }
   }
 
