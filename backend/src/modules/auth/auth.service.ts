@@ -1,4 +1,4 @@
-import { createHash, randomBytes } from "node:crypto";
+import { createHash, randomBytes, randomUUID } from "node:crypto";
 import bcrypt from "bcryptjs";
 import type { FastifyInstance } from "fastify";
 import { prisma } from "../../config/database";
@@ -7,6 +7,7 @@ import { toFio } from "../staff/staff.shared.helpers";
 import { isSessionLimitReached, isUnlimitedMaxSessions } from "../../lib/max-sessions";
 import { resolveTenantSlugAlias } from "../../lib/tenant-slug-alias";
 import { isSessionEnforcedRole, MOBILE_FIELD_ROLES } from "./app-access.service";
+import { decideRefreshReuse } from "./refresh-reuse.pure";
 
 type LoginInput = {
   slug: string;
@@ -27,7 +28,8 @@ const ACCESS_TOKEN_TTL = "15m";
 const REFRESH_TOKEN_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 /**
  * Parallel refresh (bir nechta 401 bir vaqtda) — eski token rotate qilinganidan
- * keyin qisqa oynada qayta ishlatilsa INVALID_REFRESH emas, yangi juftlik beriladi.
+ * keyin qisqa oynada qayta ishlatilsa yangi juftlik beriladi.
+ * Undan keyin reuse = oila o‘g‘irligi → butun family revoke.
  */
 const REFRESH_REUSE_GRACE_MS = 30_000;
 
@@ -61,6 +63,13 @@ function newRefreshTokenValue(): string {
 
 function refreshExpiresAt(): Date {
   return new Date(Date.now() + REFRESH_TOKEN_TTL_MS);
+}
+
+async function revokeRefreshFamily(familyId: string): Promise<void> {
+  await prisma.refreshToken.updateMany({
+    where: { family_id: familyId, revoked_at: null },
+    data: { revoked_at: new Date() }
+  });
 }
 
 /** Shu qurilmadan tashqari faol sessiyalar (limit hisobi). Joriy qurilmani oldin o‘chirmaymiz. */
@@ -155,12 +164,14 @@ export async function login(app: FastifyInstance, input: LoginInput) {
   const ipAddr = input.ip_address?.trim().slice(0, 64) || null;
   const refreshToken = newRefreshTokenValue();
   const newHash = hashToken(refreshToken);
+  const familyId = randomUUID();
 
   const session = await prisma.refreshToken.create({
     data: {
       tenant_id: tenantId,
       user_id: user.id,
       token_hash: newHash,
+      family_id: familyId,
       expires_at: refreshExpiresAt(),
       device_name: deviceName,
       device_id: deviceId,
@@ -241,68 +252,85 @@ export async function login(app: FastifyInstance, input: LoginInput) {
 export async function refresh(app: FastifyInstance, input: RefreshInput) {
   const tokenHash = hashToken(input.refreshToken);
 
-  const existing = await prisma.refreshToken.findUnique({
-    where: { token_hash: tokenHash },
-    include: { user: true, tenant: true }
-  });
-
-  if (!existing || existing.expires_at < new Date()) {
-    throw new Error("INVALID_REFRESH");
-  }
-
-  const recentlyRotated =
-    existing.revoked_at != null &&
-    Date.now() - existing.revoked_at.getTime() <= REFRESH_REUSE_GRACE_MS;
-
-  if (existing.revoked_at && !recentlyRotated) {
-    throw new Error("INVALID_REFRESH");
-  }
-  if (!existing.tenant.is_active || !existing.user.is_active) {
-    throw new Error("INVALID_REFRESH");
-  }
-
-  if (MOBILE_FIELD_ROLES.has(existing.user.role) && existing.user.app_access === false) {
-    throw new Error("APP_ACCESS_DENIED");
-  }
-
-  {
-    const { assertUserOnWorkSlot } = await import("../work-slots/work-slots.access-gate");
-    await assertUserOnWorkSlot(existing.tenant_id, existing.user.id, existing.user.role);
-  }
-
-  const refreshToken = newRefreshTokenValue();
-  const session = await prisma.refreshToken.create({
-    data: {
-      tenant_id: existing.tenant_id,
-      user_id: existing.user_id,
-      token_hash: hashToken(refreshToken),
-      expires_at: refreshExpiresAt(),
-      device_name: existing.device_name,
-      device_id: existing.device_id,
-      user_agent: existing.user_agent,
-      ip_address: existing.ip_address
-    },
-    select: { id: true }
-  });
-  const accessToken = buildAccessToken(app, existing.user, existing.tenant.slug, {
-    deviceId: existing.device_id,
-    sessionId: session.id
-  });
-  /* Avval yangi token — ping /auth/me 0 sessiya ko‘rib SESSION_REVOKED qilmasin. */
-  if (!existing.revoked_at) {
-    await prisma.refreshToken.update({
-      where: { id: existing.id },
-      data: { revoked_at: new Date() }
+  return prisma.$transaction(async (tx) => {
+    const existing = await tx.refreshToken.findUnique({
+      where: { token_hash: tokenHash },
+      include: { user: true, tenant: true }
     });
-  }
 
-  return { accessToken, refreshToken };
+    if (!existing) {
+      throw new Error("INVALID_REFRESH");
+    }
+
+    const decision = decideRefreshReuse({
+      nowMs: Date.now(),
+      expiresAtMs: existing.expires_at.getTime(),
+      revokedAtMs: existing.revoked_at ? existing.revoked_at.getTime() : null,
+      graceMs: REFRESH_REUSE_GRACE_MS
+    });
+
+    if (decision.action === "reject_expired") {
+      throw new Error("INVALID_REFRESH");
+    }
+
+    if (decision.action === "reject_reuse_theft") {
+      await tx.refreshToken.updateMany({
+        where: { family_id: existing.family_id, revoked_at: null },
+        data: { revoked_at: new Date() }
+      });
+      throw new Error("REFRESH_REUSE_DETECTED");
+    }
+
+    if (!existing.tenant.is_active || !existing.user.is_active) {
+      throw new Error("INVALID_REFRESH");
+    }
+
+    if (MOBILE_FIELD_ROLES.has(existing.user.role) && existing.user.app_access === false) {
+      throw new Error("APP_ACCESS_DENIED");
+    }
+
+    {
+      const { assertUserOnWorkSlot } = await import("../work-slots/work-slots.access-gate");
+      await assertUserOnWorkSlot(existing.tenant_id, existing.user.id, existing.user.role);
+    }
+
+    const refreshToken = newRefreshTokenValue();
+    const session = await tx.refreshToken.create({
+      data: {
+        tenant_id: existing.tenant_id,
+        user_id: existing.user_id,
+        token_hash: hashToken(refreshToken),
+        family_id: existing.family_id,
+        expires_at: refreshExpiresAt(),
+        device_name: existing.device_name,
+        device_id: existing.device_id,
+        user_agent: existing.user_agent,
+        ip_address: existing.ip_address
+      },
+      select: { id: true }
+    });
+    const accessToken = buildAccessToken(app, existing.user, existing.tenant.slug, {
+      deviceId: existing.device_id,
+      sessionId: session.id
+    });
+    /* Avval yangi token — ping /auth/me 0 sessiya ko‘rib SESSION_REVOKED qilmasin. */
+    if (!existing.revoked_at) {
+      await tx.refreshToken.update({
+        where: { id: existing.id },
+        data: { revoked_at: new Date() }
+      });
+    }
+
+    return { accessToken, refreshToken };
+  });
 }
 
 export async function logout(input: RefreshInput) {
   const tokenHash = hashToken(input.refreshToken);
-  await prisma.refreshToken.updateMany({
-    where: { token_hash: tokenHash, revoked_at: null },
-    data: { revoked_at: new Date() }
+  const row = await prisma.refreshToken.findUnique({
+    where: { token_hash: tokenHash },
+    select: { family_id: true }
   });
+  if (!row) return;
+  await revokeRefreshFamily(row.family_id);
 }

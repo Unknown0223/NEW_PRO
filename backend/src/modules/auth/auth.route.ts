@@ -115,6 +115,15 @@ function registerAuthAtBase(app: FastifyInstance, base: string) {
       if (msg === "INVALID_REFRESH") {
         return sendApiError(reply, request, 401, msg);
       }
+      if (msg === "REFRESH_REUSE_DETECTED") {
+        return sendApiError(
+          reply,
+          request,
+          401,
+          msg,
+          "Сессия отозвана: обнаружено повторное использование токена"
+        );
+      }
       if (msg === "APP_ACCESS_DENIED") {
         return sendApiError(reply, request, 403, msg, "Доступ к приложению отключён");
       }

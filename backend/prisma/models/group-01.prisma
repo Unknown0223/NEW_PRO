@@ -378,6 +378,8 @@ model RefreshToken {
   tenant_id   Int
   user_id     Int
   token_hash  String    @unique
+  /// Login da yaratiladi; rotate da nusxalanadi. Reuse aniqlansa butun oila revoke.
+  family_id   String    @db.VarChar(36)
   expires_at  DateTime
   revoked_at  DateTime?
   created_at  DateTime  @default(now())
@@ -390,6 +392,7 @@ model RefreshToken {
 
   @@index([tenant_id, user_id])
   @@index([tenant_id, user_id, device_id])
+  @@index([family_id])
   @@map("refresh_tokens")
 }
 
