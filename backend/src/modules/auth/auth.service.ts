@@ -21,8 +21,8 @@ type LoginInput = {
 };
 type RefreshInput = { refreshToken: string };
 
-/** Access JWT — kamroq refresh race (mobil uzoq ochiq qoladi). */
-const ACCESS_TOKEN_TTL = "24h";
+/** Access JWT — qisqa muddat; refresh orqali yangilanadi (audit P1-2). */
+const ACCESS_TOKEN_TTL = "15m";
 /** Refresh sliding TTL — foydalanuvchi chiqmaguncha sessiya yashaydi. */
 const REFRESH_TOKEN_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 /**
@@ -35,25 +35,28 @@ function hashToken(token: string): string {
   return createHash("sha256").update(token).digest("hex");
 }
 
-function buildTokens(
+function buildAccessToken(
   app: FastifyInstance,
   user: { id: number; tenant_id: number; role: string; login: string },
   tenantSlug: string,
-  deviceId?: string | null
+  opts: { deviceId?: string | null; sessionId: number }
 ) {
-  const accessToken = app.jwt.sign(
+  return app.jwt.sign(
     {
       sub: String(user.id),
       tenantId: user.tenant_id,
       role: user.role,
       login: user.login,
       tenantSlug,
-      ...(deviceId ? { did: deviceId } : {})
+      sid: opts.sessionId,
+      ...(opts.deviceId ? { did: opts.deviceId } : {})
     },
     { expiresIn: ACCESS_TOKEN_TTL }
   );
-  const refreshToken = randomBytes(48).toString("hex");
-  return { accessToken, refreshToken };
+}
+
+function newRefreshTokenValue(): string {
+  return randomBytes(48).toString("hex");
 }
 
 function refreshExpiresAt(): Date {
@@ -147,13 +150,13 @@ export async function login(app: FastifyInstance, input: LoginInput) {
     }
   }
 
-  const tokens = buildTokens(app, user, tenant.slug, deviceId);
   const deviceName = input.device_name?.trim().slice(0, 255) || null;
   const userAgent = input.user_agent?.trim().slice(0, 512) || null;
   const ipAddr = input.ip_address?.trim().slice(0, 64) || null;
-  const newHash = hashToken(tokens.refreshToken);
+  const refreshToken = newRefreshTokenValue();
+  const newHash = hashToken(refreshToken);
 
-  await prisma.refreshToken.create({
+  const session = await prisma.refreshToken.create({
     data: {
       tenant_id: tenantId,
       user_id: user.id,
@@ -163,8 +166,15 @@ export async function login(app: FastifyInstance, input: LoginInput) {
       device_id: deviceId,
       user_agent: userAgent,
       ip_address: ipAddr
-    }
+    },
+    select: { id: true }
   });
+
+  const accessToken = buildAccessToken(app, user, tenant.slug, {
+    deviceId,
+    sessionId: session.id
+  });
+  const tokens = { accessToken, refreshToken };
 
   /* Yangi token yozilgach — shu qurilmadagi eskilar. Hech qachon 0 sessiya oynasi yo‘q. */
   if (deviceId) {
@@ -260,18 +270,23 @@ export async function refresh(app: FastifyInstance, input: RefreshInput) {
     await assertUserOnWorkSlot(existing.tenant_id, existing.user.id, existing.user.role);
   }
 
-  const tokens = buildTokens(app, existing.user, existing.tenant.slug, existing.device_id);
-  await prisma.refreshToken.create({
+  const refreshToken = newRefreshTokenValue();
+  const session = await prisma.refreshToken.create({
     data: {
       tenant_id: existing.tenant_id,
       user_id: existing.user_id,
-      token_hash: hashToken(tokens.refreshToken),
+      token_hash: hashToken(refreshToken),
       expires_at: refreshExpiresAt(),
       device_name: existing.device_name,
       device_id: existing.device_id,
       user_agent: existing.user_agent,
       ip_address: existing.ip_address
-    }
+    },
+    select: { id: true }
+  });
+  const accessToken = buildAccessToken(app, existing.user, existing.tenant.slug, {
+    deviceId: existing.device_id,
+    sessionId: session.id
   });
   /* Avval yangi token — ping /auth/me 0 sessiya ko‘rib SESSION_REVOKED qilmasin. */
   if (!existing.revoked_at) {
@@ -281,7 +296,7 @@ export async function refresh(app: FastifyInstance, input: RefreshInput) {
     });
   }
 
-  return tokens;
+  return { accessToken, refreshToken };
 }
 
 export async function logout(input: RefreshInput) {

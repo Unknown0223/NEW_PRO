@@ -2,6 +2,7 @@ import type { FastifyReply, FastifyRequest } from "fastify";
 import { prisma } from "../../config/database";
 import { OPERATOR_LIKE_WEB_ROLES } from "../../lib/tenant-user-roles";
 import { sendApiError } from "../../lib/api-error";
+import { getAppCache, setAppCache } from "../../lib/redis-cache";
 import { resolveUserPermissionKeys } from "../access/rbac.service";
 import {
   APP_ACCESS_DENIED_MESSAGE,
@@ -27,7 +28,11 @@ export type AccessJwtUser = {
   tenantSlug?: string;
   /** Qurilma identifikatori (2026-06+). Aniq qurilma sessiyasi tirikligini tekshirish uchun. */
   did?: string;
+  /** refresh_tokens.id — sessiya bekor qilinganda access ham yopiladi (2026-11+). */
+  sid?: number;
 };
+
+const AUTH_STATUS_CACHE_TTL_SEC = 30;
 
 export function getAccessUser(request: FastifyRequest): AccessJwtUser {
   return request.user as AccessJwtUser;
@@ -59,18 +64,54 @@ export async function jwtAccessVerify(request: FastifyRequest, reply: FastifyRep
       return sendApiError(reply, request, 403, "WORKDAY_OFF", workday.message ?? undefined, { workday });
     }
   }
-  if (!isAppAccessEnforcedRole(user.role)) return;
 
   const userId = Number(user.sub);
   if (!Number.isFinite(userId) || userId < 1) {
     return sendApiError(reply, request, 401, "InvalidAccessUser");
   }
 
-  const row = await prisma.user.findUnique({
-    where: { id: userId },
-    select: { app_access: true, is_active: true }
-  });
-  if (!row?.is_active || row.app_access === false) {
+  /** Barcha rollar: deaktiv user 15m oynada ham yura olmasin (Redis 30s kesh). */
+  const userCacheKey = `auth:user-active:${userId}`;
+  type UserActiveCache = { is_active: boolean; app_access: boolean | null };
+  let userRow = await getAppCache<UserActiveCache>(userCacheKey);
+  if (!userRow) {
+    const db = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { app_access: true, is_active: true }
+    });
+    userRow = {
+      is_active: Boolean(db?.is_active),
+      app_access: db?.app_access ?? null
+    };
+    await setAppCache(userCacheKey, userRow, AUTH_STATUS_CACHE_TTL_SEC).catch(() => undefined);
+  }
+  if (!userRow.is_active) {
+    return sendApiError(reply, request, 403, "APP_ACCESS_DENIED", APP_ACCESS_DENIED_MESSAGE);
+  }
+
+  if (typeof user.sid === "number" && user.sid > 0) {
+    const sidKey = `auth:sid:${user.sid}`;
+    type SidCache = { ok: boolean };
+    let sidRow = await getAppCache<SidCache>(sidKey);
+    if (!sidRow) {
+      const sess = await prisma.refreshToken.findUnique({
+        where: { id: user.sid },
+        select: { user_id: true, revoked_at: true, expires_at: true }
+      });
+      const ok =
+        Boolean(sess) &&
+        sess!.user_id === userId &&
+        sess!.revoked_at == null &&
+        sess!.expires_at > new Date();
+      sidRow = { ok };
+      await setAppCache(sidKey, sidRow, AUTH_STATUS_CACHE_TTL_SEC).catch(() => undefined);
+    }
+    if (!sidRow.ok) {
+      return sendApiError(reply, request, 401, "SESSION_REVOKED", "Session revoked or expired");
+    }
+  }
+
+  if (isAppAccessEnforcedRole(user.role) && userRow.app_access === false) {
     return sendApiError(reply, request, 403, "APP_ACCESS_DENIED", APP_ACCESS_DENIED_MESSAGE);
   }
 }

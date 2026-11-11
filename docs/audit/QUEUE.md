@@ -9,7 +9,7 @@ Oxirgi yangilanish: 2026-11-11
 | 3 | CI audit/secret scan qattiqlash | ✅ | TruffleHog pin; audit-gate kutilmagan high/critical ni bloklaydi |
 | 4 | npm audit fix (kichik) | ✅ | Major bo‘lmagan tuzatishlar qo‘llandi |
 | 5 | trustProxy + rate-limit Redis | ✅ | Login limini IP+slug+login; proxy ortida to‘g‘ri IP |
-| 6 | Token 15 daqiqa + sessiya | ⏳ | Bo‘shatilgan odam uzoq yura olmasin |
+| 6 | Token 15 daqiqa + sessiya | ✅ | Access 15m; sid + is_active barcha rollar uchun |
 | 7 | Refresh token oilasi | ⏳ | O‘g‘irlangan yangilash tokeni ushlansin |
 | 8 | Login himoyasi | ⏳ | Parol taxminlash qiyinlashsin |
 | 9 | Davomat terminal himoya | ⏳ | Begona odam “keldi” yoza olmasin |
