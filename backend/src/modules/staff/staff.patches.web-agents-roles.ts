@@ -4,6 +4,7 @@ import { prisma } from "../../config/database";
 import { assertValidMaxSessions } from "../../lib/max-sessions";
 import { appendTenantAuditEvent, AuditEntityType } from "../../lib/tenant-audit";
 import { onAppAccessChanged } from "../auth/app-access.service";
+import { assertPasswordPolicy } from "../auth/password-policy.pure";
 import { syncEmploymentAfterActiveChange } from "./staff.employment-sync";
 import { parseMobileConfigV1, type AgentMobileConfigV1 } from "./agent-mobile-config";
 import type { AgentEntitlements, ExpeditorAssignmentRules, StaffRow } from "./staff.shared";
@@ -104,8 +105,9 @@ export async function patchExpeditor(
   }
   if (input.kpi_color !== undefined) data.kpi_color = input.kpi_color?.trim().slice(0, 16) || null;
   if (input.password !== undefined && input.password.trim().length > 0) {
-    if (input.password.length < 6) throw new Error("BAD_PASSWORD");
+    assertPasswordPolicy(input.password);
     data.password_hash = await bcrypt.hash(input.password, 12);
+    data.must_change_password = false;
   }
 
   if (input.expeditor_assignment_rules !== undefined) {
@@ -247,8 +249,9 @@ export async function patchCollector(
   }
   if (input.kpi_color !== undefined) data.kpi_color = input.kpi_color?.trim().slice(0, 16) || null;
   if (input.password !== undefined && input.password.trim().length > 0) {
-    if (input.password.length < 6) throw new Error("BAD_PASSWORD");
+    assertPasswordPolicy(input.password);
     data.password_hash = await bcrypt.hash(input.password, 12);
+    data.must_change_password = false;
   }
   if (input.agent_entitlements !== undefined) {
     const prev = parseEntitlements(existing.agent_entitlements);
@@ -337,8 +340,9 @@ export async function patchAuditor(
   }
   if (input.kpi_color !== undefined) data.kpi_color = input.kpi_color?.trim().slice(0, 16) || null;
   if (input.password !== undefined && input.password.trim().length > 0) {
-    if (input.password.length < 6) throw new Error("BAD_PASSWORD");
+    assertPasswordPolicy(input.password);
     data.password_hash = await bcrypt.hash(input.password, 12);
+    data.must_change_password = false;
   }
   if (input.agent_entitlements !== undefined) {
     const prev = parseEntitlements(existing.agent_entitlements);

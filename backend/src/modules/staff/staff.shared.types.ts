@@ -150,6 +150,8 @@ export type CreateStaffInput = {
   middle_name?: string | null;
   login: string;
   password: string;
+  /** Import / default parol — birinchi kirishda almashtirish */
+  must_change_password?: boolean;
   phone?: string | null;
   email?: string | null;
   product?: string | null;

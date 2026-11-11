@@ -8,6 +8,7 @@ import { createCashDeskUserLink } from "../cash-desks/cash-desks.service";
 import { listActiveTradeDirectionLabels } from "../sales-directions/sales-directions.service";
 import { appendTenantAuditEvent, AuditEntityType } from "../../lib/tenant-audit";
 import { onAppAccessChanged } from "../auth/app-access.service";
+import { assertPasswordPolicy } from "../auth/password-policy.pure";
 import { syncEmploymentAfterActiveChange } from "./staff.employment-sync";
 import { territoryRegionPickerNames } from "../tenant-settings/tenant-settings.service";
 import { listTenantAuditEvents } from "../audit-events/audit-events.service";
@@ -226,8 +227,9 @@ export async function applyAgentPatchInDb(
         : { connect: { id: input.supervisor_user_id } };
   }
   if (input.password !== undefined && input.password.trim().length > 0) {
-    if (input.password.length < 6) throw new Error("BAD_PASSWORD");
+    assertPasswordPolicy(input.password);
     data.password_hash = await bcrypt.hash(input.password, 12);
+    data.must_change_password = false;
   }
 
   if (Object.keys(data).length > 0) {

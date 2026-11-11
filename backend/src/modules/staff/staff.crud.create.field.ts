@@ -78,6 +78,7 @@ export async function createFieldStaff(
       middle_name: input.middle_name?.trim() || null,
       login,
       password_hash: passwordHash,
+      must_change_password: input.must_change_password === true,
       role: kindRole(kind),
       phone: input.phone?.trim() || null,
       email: input.email?.trim() || null,

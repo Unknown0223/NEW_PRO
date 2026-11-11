@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import bcrypt from "bcryptjs";
 import { Prisma } from "@prisma/client";
 import { prisma } from "../../config/database";
+import { assertPasswordPolicy } from "../auth/password-policy.pure";
 import { assertValidMaxSessions } from "../../lib/max-sessions";
 import { listActiveTradeDirectionLabels } from "../sales-directions/sales-directions.service";
 import { appendTenantAuditEvent, AuditEntityType } from "../../lib/tenant-audit";
@@ -118,8 +119,9 @@ export async function patchOperator(
     data.max_sessions = n;
   }
   if (input.password !== undefined && input.password.trim().length > 0) {
-    if (input.password.length < 6) throw new Error("BAD_PASSWORD");
+    assertPasswordPolicy(input.password);
     data.password_hash = await bcrypt.hash(input.password, 12);
+    data.must_change_password = false;
   }
 
   if (Object.keys(data).length > 0) {
@@ -222,8 +224,9 @@ export async function patchSkladchik(
     data.max_sessions = n;
   }
   if (input.password !== undefined && input.password.trim().length > 0) {
-    if (input.password.length < 6) throw new Error("BAD_PASSWORD");
+    assertPasswordPolicy(input.password);
     data.password_hash = await bcrypt.hash(input.password, 12);
+    data.must_change_password = false;
   }
 
   if (input.warehouse_ids !== undefined) {

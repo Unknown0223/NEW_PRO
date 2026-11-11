@@ -119,6 +119,10 @@ model User {
   name                       String
   login                      String
   password_hash              String
+  /// Import / default parol — birinchi kirishda almashtirish shart
+  must_change_password       Boolean                 @default(false)
+  failed_login_count         Int                     @default(0)
+  locked_until               DateTime?
   role                       String
   is_active                  Boolean                 @default(true)
   /// Nofaol, lekin filtr / qidiruv / dostup ro‘yxatlarida qizil holatda ko‘rinadi

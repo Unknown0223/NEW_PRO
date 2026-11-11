@@ -306,7 +306,7 @@ export async function importStaffFromMatrix(
         if (warehouse_id !== undefined) patch.warehouse_id = warehouse_id;
         if (warehouse_ids !== undefined) patch.warehouse_ids = warehouse_ids;
         if (supervisee_agent_ids !== undefined) patch.supervisee_agent_ids = supervisee_agent_ids;
-        if (passwordRaw.trim().length >= 6) patch.password = passwordRaw.trim();
+        if (passwordRaw.trim().length >= 8) patch.password = passwordRaw.trim();
         await applyPatch(tenantId, kind, existing.id, patch, actorUserId);
 
         if (work_slot_id != null && STAFF_KINDS_WITH_WORK_SLOT.has(kind as StaffKind)) {
@@ -316,9 +316,10 @@ export async function importStaffFromMatrix(
 
         updated++;
       } else {
-        const password = passwordRaw.trim().length >= 6 ? passwordRaw.trim() : defaultPassword;
-        if (password.length < 6) {
-          pushErr(excelRow, "пароль меньше 6 символов");
+        const usedDefault = passwordRaw.trim().length < 8;
+        const password = usedDefault ? defaultPassword : passwordRaw.trim();
+        if (password.length < 8) {
+          pushErr(excelRow, "пароль меньше 8 символов");
           continue;
         }
 
@@ -328,6 +329,7 @@ export async function importStaffFromMatrix(
           middle_name,
           login,
           password,
+          must_change_password: usedDefault || password === defaultPassword,
           phone,
           email,
           product,

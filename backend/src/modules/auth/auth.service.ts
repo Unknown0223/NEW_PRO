@@ -1,5 +1,4 @@
 import { createHash, randomBytes, randomUUID } from "node:crypto";
-import bcrypt from "bcryptjs";
 import type { FastifyInstance } from "fastify";
 import { prisma } from "../../config/database";
 import { tenantIdFrom } from "../../domain/tenant-id";
@@ -8,6 +7,12 @@ import { isSessionLimitReached, isUnlimitedMaxSessions } from "../../lib/max-ses
 import { resolveTenantSlugAlias } from "../../lib/tenant-slug-alias";
 import { isSessionEnforcedRole, MOBILE_FIELD_ROLES } from "./app-access.service";
 import { decideRefreshReuse } from "./refresh-reuse.pure";
+import {
+  assertNotLocked,
+  clearFailedLogin,
+  recordFailedLogin,
+  verifyLoginPassword
+} from "./login-credentials";
 
 type LoginInput = {
   slug: string;
@@ -109,14 +114,15 @@ export async function login(app: FastifyInstance, input: LoginInput) {
   const user = await prisma.user.findUnique({
     where: { tenant_id_login: { tenant_id: tenantId, login: input.login } }
   });
-  if (!user || !user.is_active) {
+
+  await assertNotLocked(user);
+  const ok = await verifyLoginPassword(user, input.password);
+  if (!user || !user.is_active || !ok) {
+    if (user?.is_active) await recordFailedLogin(user);
     throw new Error("INVALID_CREDENTIALS");
   }
 
-  const ok = await bcrypt.compare(input.password, user.password_hash);
-  if (!ok) {
-    throw new Error("INVALID_CREDENTIALS");
-  }
+  await clearFailedLogin(user.id);
 
   if (MOBILE_FIELD_ROLES.has(user.role) && user.app_access === false) {
     throw new Error("APP_ACCESS_DENIED");
@@ -243,7 +249,8 @@ export async function login(app: FastifyInstance, input: LoginInput) {
       role: user.role,
       tenantId: user.tenant_id,
       code: user.code,
-      app_access: user.app_access
+      app_access: user.app_access,
+      must_change_password: user.must_change_password === true
     },
     ...(app_update ? { app_update } : {})
   };

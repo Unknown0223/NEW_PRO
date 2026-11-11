@@ -111,7 +111,13 @@ export async function changeMobileMePassword(
 ) {
   const oldPw = input.old_password?.trim() ?? "";
   const newPw = input.new_password?.trim() ?? "";
-  if (oldPw.length < 1 || newPw.length < 6) throw new Error("VALIDATION");
+  if (oldPw.length < 1) throw new Error("VALIDATION");
+  const { assertPasswordPolicy } = await import("../auth/password-policy.pure");
+  try {
+    assertPasswordPolicy(newPw);
+  } catch {
+    throw new Error("VALIDATION");
+  }
 
   const u = await prisma.user.findFirst({
     where: { id: userId, tenant_id: tenantId, is_active: true },
@@ -123,6 +129,9 @@ export async function changeMobileMePassword(
   if (!ok) throw new Error("INVALID_OLD_PASSWORD");
 
   const password_hash = await bcrypt.hash(newPw, 12);
-  await prisma.user.update({ where: { id: userId }, data: { password_hash } });
+  await prisma.user.update({
+    where: { id: userId },
+    data: { password_hash, must_change_password: false }
+  });
   return { ok: true as const };
 }

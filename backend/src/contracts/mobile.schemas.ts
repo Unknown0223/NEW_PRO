@@ -120,7 +120,7 @@ const mobileClientOptionalFieldsSchema = {
 /** POST `/api/:slug/mobile/me/change-password` */
 export const mobileChangePasswordBodySchema = z.object({
   old_password: z.string().min(1).max(128),
-  new_password: z.string().min(6).max(128)
+  new_password: z.string().min(8).max(128)
 });
 
 /** PATCH `/api/:slug/mobile/me/profile` */

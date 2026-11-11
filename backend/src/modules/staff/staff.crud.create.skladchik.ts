@@ -38,6 +38,7 @@ export async function createSkladchikStaff(
       middle_name: input.middle_name?.trim() || null,
       login,
       password_hash: passwordHashSk,
+      must_change_password: input.must_change_password === true,
       role: "skladchik",
       phone: input.phone?.trim() || null,
       email: input.email?.trim() || null,

@@ -12,6 +12,9 @@ type User = {
   role: string;
   is_active: boolean;
   max_sessions?: number | null;
+  must_change_password?: boolean;
+  failed_login_count?: number;
+  locked_until?: Date | null;
 };
 type RefreshToken = {
   id: number;
@@ -256,7 +259,10 @@ describe("auth + tenant integration", () => {
         password_hash: "hashed-secret",
         role: "agent",
         is_active: true,
-        max_sessions: 2
+        max_sessions: 2,
+        must_change_password: false,
+        failed_login_count: 0,
+        locked_until: null
       }
     ];
     state.refreshTokens = [];

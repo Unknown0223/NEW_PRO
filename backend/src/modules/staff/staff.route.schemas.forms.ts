@@ -25,7 +25,7 @@ export const createBodySchema = z.object({
   last_name: z.string().nullable().optional(),
   middle_name: z.string().nullable().optional(),
   login: z.string().min(1),
-  password: z.string().min(6),
+  password: z.string().min(8),
   phone: z.string().nullable().optional(),
   email: z.string().nullable().optional(),
   product: z.string().nullable().optional(),
@@ -91,7 +91,7 @@ export const patchStaffMutableBody = z.object({
   territory: z.string().nullable().optional(),
   is_active: z.boolean().optional(),
   filter_visible: z.boolean().optional(),
-  password: z.string().min(6).optional(),
+  password: z.string().min(8).optional(),
   max_sessions: maxSessionsValueSchema.optional(),
   kpi_color: z.string().max(16).nullable().optional()
 });

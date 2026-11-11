@@ -1,5 +1,6 @@
 import { prisma } from "../../config/database";
 import { DISTRIBUTION_WEB_STAFF_ROLES } from "../../lib/tenant-user-roles";
+import { assertPasswordPolicy } from "../auth/password-policy.pure";
 import type { CreateStaffInput, StaffCreateResult, StaffKind } from "./staff.shared";
 import { createFieldStaff } from "./staff.crud.create.field";
 import { createSkladchikStaff } from "./staff.crud.create.skladchik";
@@ -15,7 +16,7 @@ export async function createStaff(
 ): Promise<StaffCreateResult> {
   const login = input.login.trim().toLowerCase();
   if (!login) throw new Error("BAD_LOGIN");
-  if (input.password.length < 6) throw new Error("BAD_PASSWORD");
+  assertPasswordPolicy(input.password);
   const firstName = input.first_name.trim();
   if (!firstName) throw new Error("BAD_FIRST_NAME");
 

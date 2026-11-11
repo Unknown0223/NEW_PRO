@@ -39,6 +39,7 @@ export async function createWebStaff(
       middle_name: input.middle_name?.trim() || null,
       login,
       password_hash: passwordHashOp,
+      must_change_password: input.must_change_password === true,
       role: dbRole,
       phone: input.phone?.trim() || null,
       email: input.email?.trim() || null,

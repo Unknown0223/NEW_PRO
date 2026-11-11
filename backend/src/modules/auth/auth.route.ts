@@ -67,6 +67,15 @@ function registerAuthAtBase(app: FastifyInstance, base: string) {
           "Неверный логин или пароль. Проверьте код компании, логин и пароль."
         );
       }
+      if (msg === "ACCOUNT_LOCKED") {
+        return sendApiError(
+          reply,
+          request,
+          429,
+          msg,
+          "Слишком много неудачных попыток. Попробуйте позже."
+        );
+      }
       if (msg === "APP_ACCESS_DENIED") {
         return sendApiError(reply, request, 403, msg, "Доступ к приложению отключён");
       }

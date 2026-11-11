@@ -89,7 +89,7 @@ export const createOperatorBodySchema = z
     last_name: z.string().nullable().optional(),
     middle_name: z.string().nullable().optional(),
     login: z.string().min(1),
-    password: z.string().min(6),
+    password: z.string().min(8),
     phone: z.string().nullable().optional(),
     email: z.string().nullable().optional(),
     code: z.string().max(24).nullable().optional(),
@@ -135,7 +135,7 @@ export const patchOperatorBody = z
     filter_visible: z.boolean().optional(),
     app_access: z.boolean().optional(),
     max_sessions: maxSessionsValueSchema.optional(),
-    password: z.string().min(6).optional()
+    password: z.string().min(8).optional()
   })
   .refine((o) => Object.keys(o).length > 0, { message: "empty" });
 
@@ -144,7 +144,7 @@ export const createSkladchikBodySchema = z.object({
   last_name: z.string().nullable().optional(),
   middle_name: z.string().nullable().optional(),
   login: z.string().min(1),
-  password: z.string().min(6),
+  password: z.string().min(8),
   phone: z.string().nullable().optional(),
   email: z.string().nullable().optional(),
   code: z.string().max(24).nullable().optional(),
@@ -176,7 +176,7 @@ export const patchSkladchikBody = z
     filter_visible: z.boolean().optional(),
     app_access: z.boolean().optional(),
     max_sessions: maxSessionsValueSchema.optional(),
-    password: z.string().min(6).optional(),
+    password: z.string().min(8).optional(),
     warehouse_ids: z.array(z.number().int().positive()).optional(),
     warehouse_staff_entitlements: z.record(z.string(), z.boolean()).optional()
   })
