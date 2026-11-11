@@ -10,13 +10,14 @@ import '../../../core/config/mobile_config.dart';
 import '../../../core/config/mobile_config_policy.dart';
 import '../../../core/config/sync_policy_provider.dart';
 import '../../../core/database/app_database.dart';
+import '../../../core/l10n/app_strings_ru.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/time/work_region_time.dart';
-import '../../auth/auth_provider.dart';
-import '../../../core/l10n/app_strings_ru.dart';
 import '../../../core/ui/agent_ui.dart';
 import '../../../core/ui/agent_ui_extended.dart';
+import '../../../design_system/design_system.dart';
+import '../../auth/auth_provider.dart';
 import '../misc/agent_notifications_page.dart';
 import '../shell/agent_app_bar.dart';
 import '../sync/sync_bottom_sheet.dart';
@@ -37,14 +38,23 @@ String planDashboardLine(AgentDashboardResult dash, String? planVersion) {
 
 final homeStatsProvider = FutureProvider<Map<String, int>>((ref) async {
   final db = AppDatabase();
+  final counts = await Future.wait([
+    db.clientCount(),
+    db.productCount(),
+    db.orderCount(),
+    db.pendingCount(),
+    db.pendingPhotoReportCount(),
+    db.getPhotosSyncedToday(),
+    db.failedPhotoReportCount(),
+  ]);
   return {
-    'clients': await db.clientCount(),
-    'products': await db.productCount(),
-    'orders': await db.orderCount(),
-    'pending': await db.pendingCount(),
-    'pending_photos': await db.pendingPhotoReportCount(),
-    'synced_photos': await db.getPhotosSyncedToday(),
-    'failed_photos': await db.failedPhotoReportCount(),
+    'clients': counts[0],
+    'products': counts[1],
+    'orders': counts[2],
+    'pending': counts[3],
+    'pending_photos': counts[4],
+    'synced_photos': counts[5],
+    'failed_photos': counts[6],
   };
 });
 
@@ -63,14 +73,34 @@ class AgentHomePage extends ConsumerStatefulWidget {
 
 class _AgentHomePageState extends ConsumerState<AgentHomePage> {
   Timer? _syncPolicyPoll;
+  /// Birinchi kadrlar bo‘shalsin — dashboard/metrics/API birdaniga ANR beradi.
+  bool _heavyProvidersReady = false;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      refreshVisitStatsProviders(ref.invalidate);
-      unawaited(_refreshSyncConfigOnOpen());
-      _fixStaleClientCatalog();
+      // Avval UI chizilsin; keyin og‘ir provayderlar + tarmoq.
+      unawaited(
+        Future<void>.delayed(const Duration(milliseconds: 1800), () {
+          if (!mounted) return;
+          setState(() => _heavyProvidersReady = true);
+          refreshVisitStatsProviders(ref.invalidate);
+        }),
+      );
+      unawaited(
+        Future<void>.delayed(const Duration(seconds: 3), () async {
+          if (!mounted) return;
+          await _refreshSyncConfigOnOpen();
+        }),
+      );
+      // Bootstrap sync dan keyin darhol ikkinchi to‘liq sync ANR beradi.
+      unawaited(
+        Future<void>.delayed(const Duration(seconds: 10), () async {
+          if (!mounted) return;
+          await _fixStaleClientCatalog();
+        }),
+      );
     });
   }
 
@@ -130,6 +160,14 @@ class _AgentHomePageState extends ConsumerState<AgentHomePage> {
     final syncCfg = ref.read(sessionProvider).mobileConfig?.sync ?? const SyncConfig();
     if (!evaluateSyncPolicy(syncCfg).allowed) return;
     final db = AppDatabase();
+    // Yangi bootstrap sync endigina bo‘lsa — katalogni yana tortmaslik.
+    final lastSyncRaw = await db.getSyncMeta('last_sync_at');
+    final lastSync = DateTime.tryParse(lastSyncRaw ?? '');
+    if (lastSync != null &&
+        DateTime.now().toUtc().difference(lastSync.toUtc()) <
+            const Duration(minutes: 10)) {
+      return;
+    }
     if (!await db.needsFullClientCatalogResync()) return;
 
     // Bir kunda bir marta majburiy katalog — har home ochilishda to‘liq sync emas.
@@ -166,8 +204,12 @@ class _AgentHomePageState extends ConsumerState<AgentHomePage> {
 
     final session = ref.watch(sessionProvider);
     final statsAsync = ref.watch(homeStatsProvider);
-    final dashAsync = ref.watch(agentDashboardProvider);
-    final metricsAsync = ref.watch(homeVisitMetricsProvider);
+    final dashAsync = _heavyProvidersReady
+        ? ref.watch(agentDashboardProvider)
+        : const AsyncValue<AgentDashboardResult>.loading();
+    final metricsAsync = _heavyProvidersReady
+        ? ref.watch(homeVisitMetricsProvider)
+        : const AsyncValue<HomeVisitMetrics>.loading();
     final createdBanner = ref.watch(lastCreatedOrderBannerProvider);
     final dash = dashAsync.valueOrNull;
     final metrics = metricsAsync.valueOrNull;
@@ -306,7 +348,9 @@ class _AgentHomePageState extends ConsumerState<AgentHomePage> {
                     style: AppTypography.caption.copyWith(color: AppColors.warning),
                   ),
                 ),
-              AgentSurfaceCard(
+              SaEnter(
+                preset: SaMotionPreset.rise,
+                child: AgentSurfaceCard(
                 padding: const EdgeInsets.all(12),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -327,6 +371,10 @@ class _AgentHomePageState extends ConsumerState<AgentHomePage> {
                             ),
                           ),
                         ),
+                        // Live pulse faqat sync oynasida — emulyatorda ANR bermaslik uchun
+                        // doimiy soatlik animatsiya o‘rniga ikonka.
+                        if (syncAllowed)
+                          Icon(Icons.circle, size: 8, color: AppColors.success),
                       ],
                     ),
                     const SizedBox(height: 12),
@@ -453,24 +501,29 @@ class _AgentHomePageState extends ConsumerState<AgentHomePage> {
                         error: (_, __) => const SizedBox.shrink(),
                       ),
                     const SizedBox(height: 12),
-                    AgentPrimaryButton(
-                      label: S.sync,
-                      height: 44,
-                      onPressed: syncAllowed
-                          ? () => SyncBottomSheet.show(context)
-                          : () => unawaited(_tryRefreshAndOpenSync()),
+                    SaPressable(
+                      child: AgentPrimaryButton(
+                        label: S.sync,
+                        height: 44,
+                        onPressed: syncAllowed
+                            ? () => SyncBottomSheet.show(context)
+                            : () => unawaited(_tryRefreshAndOpenSync()),
+                      ),
                     ),
                   ],
                 ),
               ),
+              ),
               const SizedBox(height: 12),
-              statsAsync.when(
+              SaEnter(
+                delay: SaStaggerDelay.of(1),
+                preset: SaMotionPreset.rise,
+                child: statsAsync.when(
                 data: (s) => Row(
                   children: [
                     Expanded(
-                      child: InkWell(
+                      child: SaPressable(
                         onTap: () => context.push('/orders'),
-                        borderRadius: BorderRadius.circular(16),
                         child: AgentMiniSummary(
                           title: S.ordersSumToday,
                           value: _formatSum(dash?.ordersSumToday ?? 0),
@@ -488,6 +541,7 @@ class _AgentHomePageState extends ConsumerState<AgentHomePage> {
                 ),
                 loading: () => const SizedBox(height: 72),
                 error: (_, __) => const SizedBox.shrink(),
+              ),
               ),
             ],
           ),

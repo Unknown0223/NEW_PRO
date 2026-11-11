@@ -37,14 +37,18 @@ List<Map<String, dynamic>> unionRouteStopsWithPlanned({
   return out;
 }
 
-Future<Map<String, dynamic>> mergeRouteWithLocal(Map<String, dynamic>? route) async {
-  if (route == null) return localRouteFallback();
+Future<Map<String, dynamic>> mergeRouteWithLocal(
+  Map<String, dynamic>? route, {
+  List<Map<String, dynamic>>? localClients,
+}) async {
+  if (route == null) return localRouteFallback(localClients: localClients);
 
   var stops = (route['stops'] as List?) ?? [];
-  if (stops.isEmpty) return localRouteFallback();
+  if (stops.isEmpty) return localRouteFallback(localClients: localClients);
 
+  final clients = localClients ?? await AppDatabase().getAllClients();
   final localById = {
-    for (final c in await AppDatabase().getAllClients())
+    for (final c in clients)
       if (c['id'] != null) c['id'] as int: c,
   };
 
@@ -85,8 +89,11 @@ Future<Map<String, dynamic>> mergeRouteWithLocal(Map<String, dynamic>? route) as
   };
 }
 
-Future<Map<String, dynamic>> localRouteFallback({String? routeDate}) async {
-  final clients = await AppDatabase().getAllClients();
+Future<Map<String, dynamic>> localRouteFallback({
+  String? routeDate,
+  List<Map<String, dynamic>>? localClients,
+}) async {
+  final clients = localClients ?? await AppDatabase().getAllClients();
   final stops = clients
       .where((c) => c['latitude'] != null && c['longitude'] != null)
       .map((c) => {

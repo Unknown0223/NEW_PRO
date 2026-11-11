@@ -9,6 +9,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/api/field_api.dart';
 import '../../../core/auth/session.dart';
+import '../../../core/ui/quick_panel_sheet.dart';
 import '../../../core/utils/external_actions.dart';
 
 /// «Скоро» — dialog (faqat haqiqatan yo‘q funksiyalar).
@@ -61,6 +62,7 @@ PreferredSizeWidget supervisorAppBar(
   required String title,
   List<Widget>? actions,
   bool showMenu = true,
+  bool showQuickPanel = true,
 }) {
   return AppBar(
     backgroundColor: Theme.of(context).cardColor,
@@ -83,7 +85,15 @@ PreferredSizeWidget supervisorAppBar(
           ),
     title: Text(title, style: AppTypography.titleMedium.copyWith(fontWeight: FontWeight.w700)),
     centerTitle: true,
-    actions: actions,
+    actions: [
+      if (showQuickPanel)
+        IconButton(
+          tooltip: 'Быстрое меню',
+          icon: const Icon(Icons.grid_view_rounded),
+          onPressed: () => showQuickPanelSheet(context),
+        ),
+      ...?actions,
+    ],
   );
 }
 

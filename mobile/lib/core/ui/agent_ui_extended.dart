@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../design_system/design_system.dart';
 import '../clients/agent_outlet_filters_provider.dart';
 import '../l10n/app_strings_ru.dart';
 import '../format/money_display.dart';
@@ -286,72 +287,51 @@ class AgentProgressGauge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final p = percent.clamp(0.0, 1.0);
-    return SizedBox(
-      height: 140,
-      width: double.infinity,
-      child: Stack(
-        alignment: Alignment.center,
+    // CustomPaint/drawArc Impeller+emulyatorda GPU artefakt berardi —
+    // LinearProgressIndicator + count-up (Motion Lab).
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(24, 8, 24, 4),
+      child: Column(
         children: [
-          CustomPaint(
-            size: const Size(240, 120),
-            painter: _GaugePainter(percent: p),
-          ),
-          Positioned(
-            bottom: 8,
-            child: Column(
-              children: [
-                Text(
-                  S.performance,
-                  style: AppTypography.labelLarge.copyWith(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.textMenu,
-                  ),
-                ),
-                Text(
-                  '${(p * 100).round()}%',
-                  style: const TextStyle(fontSize: 32, fontWeight: FontWeight.w800, color: AppColors.textPrimary),
-                ),
-              ],
+          Text(
+            S.performance,
+            style: AppTypography.labelLarge.copyWith(
+              fontSize: 15,
+              fontWeight: FontWeight.w700,
+              color: AppColors.textMenu,
             ),
           ),
+          const SizedBox(height: 4),
+          SaCountUp(
+            value: p * 100,
+            format: (v) => '${v.round()}%',
+            style: const TextStyle(
+              fontSize: 32,
+              fontWeight: FontWeight.w800,
+              color: AppColors.textPrimary,
+              fontFeatures: [FontFeature.tabularFigures()],
+            ),
+          ),
+          const SizedBox(height: 12),
+          TweenAnimationBuilder<double>(
+            tween: Tween(begin: 0, end: p),
+            duration: SaDurations.data,
+            curve: SaCurves.enter,
+            builder: (context, value, _) => ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: LinearProgressIndicator(
+                value: value,
+                minHeight: 10,
+                backgroundColor: const Color(0xFFE8EEF5),
+                color: AppColors.primary,
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
         ],
       ),
     );
   }
-}
-
-class _GaugePainter extends CustomPainter {
-  final double percent;
-  _GaugePainter({required this.percent});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final rect = Rect.fromLTWH(0, 0, size.width, size.height * 2);
-    const start = 3.14159;
-    const sweep = 3.14159;
-    final bg = Paint()
-      ..color = Colors.white
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 18
-      ..strokeCap = StrokeCap.round;
-    final track = Paint()
-      ..color = const Color(0xFFF9FBFD)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 18
-      ..strokeCap = StrokeCap.round;
-    final fg = Paint()
-      ..color = AppColors.primary
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 18
-      ..strokeCap = StrokeCap.round;
-    canvas.drawArc(rect, start, sweep, false, bg);
-    canvas.drawArc(rect, start, sweep, false, track);
-    if (percent > 0) canvas.drawArc(rect, start, sweep * percent, false, fg);
-  }
-
-  @override
-  bool shouldRepaint(covariant _GaugePainter old) => old.percent != percent;
 }
 
 class AgentVisitMetric extends StatelessWidget {

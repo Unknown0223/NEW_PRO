@@ -10,6 +10,7 @@ import '../../core/auth/session.dart';
 import '../../core/l10n/app_strings_ru.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_typography.dart';
+import '../../design_system/design_system.dart';
 import 'auth_provider.dart';
 import 'pin_pad.dart';
 
@@ -151,48 +152,63 @@ class _PinUnlockScreenState extends ConsumerState<PinUnlockScreen> {
           child: Column(
             children: [
               const SizedBox(height: 56),
-              Container(
-                width: 58,
-                height: 58,
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(18),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.08),
-                      blurRadius: 24,
-                      offset: const Offset(0, 8),
+              SaEnter(
+                preset: SaMotionPreset.spring,
+                child: Column(
+                  children: [
+                    Container(
+                      width: 58,
+                      height: 58,
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(18),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.08),
+                            blurRadius: 24,
+                            offset: const Offset(0, 8),
+                          ),
+                        ],
+                      ),
+                      child: const Icon(
+                        Icons.lock_rounded,
+                        size: 26,
+                        color: AppColors.primary,
+                      ),
                     ),
+                    const SizedBox(height: 18),
+                    Text(
+                      S.pinEnter,
+                      style: AppTypography.headlineMedium.copyWith(
+                        fontSize: 22,
+                        fontWeight: FontWeight.w800,
+                        color: AppColors.textTitle,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                    if (userSubtitle.isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        userSubtitle,
+                        style: AppTypography.bodyMedium.copyWith(
+                          fontSize: 13,
+                          color: AppColors.textMuted,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ],
                   ],
                 ),
-                child: const Icon(Icons.lock_rounded, size: 26, color: AppColors.primary),
               ),
-              const SizedBox(height: 18),
-              Text(
-                S.pinEnter,
-                style: AppTypography.headlineMedium.copyWith(
-                  fontSize: 22,
-                  fontWeight: FontWeight.w800,
-                  color: AppColors.textTitle,
-                ),
-                textAlign: TextAlign.center,
-              ),
-              if (userSubtitle.isNotEmpty) ...[
-                const SizedBox(height: 4),
-                Text(
-                  userSubtitle,
-                  style: AppTypography.bodyMedium.copyWith(
-                    fontSize: 13,
-                    color: AppColors.textMuted,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-              ],
               const SizedBox(height: 30),
-              PinDots(
-                filled: _pin.length,
-                pinLength: _pinLen,
-                variant: PinDotsVariant.unlock,
+              SaEnter(
+                delay: SaStaggerDelay.of(1),
+                preset: SaMotionPreset.rise,
+                child: PinDots(
+                  filled: _pin.length,
+                  pinLength: _pinLen,
+                  variant: PinDotsVariant.unlock,
+                ),
               ),
               if (auth.error != null) ...[
                 const SizedBox(height: 12),

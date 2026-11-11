@@ -220,9 +220,11 @@ class SessionManager extends StateNotifier<SessionState> {
     TenantReferences? tenantReferences;
     AgentLimits agentLimits = const AgentLimits();
     List<AgentCityOption> agentCities = const [];
+    Object? rawCfgDecoded;
     if (cfgStr != null && cfgStr.isNotEmpty) {
       try {
         final decoded = jsonDecode(cfgStr);
+        rawCfgDecoded = decoded;
         if (decoded is Map<String, dynamic>) {
           mobileConfig = MobileConfig.fromJson(decoded);
         }
@@ -275,14 +277,10 @@ class SessionManager extends StateNotifier<SessionState> {
       bootstrapped: lastSync != null,
     );
     if (mobileConfig != null) {
-      Object? rawCfg;
-      if (cfgStr != null && cfgStr.isNotEmpty) {
-        try {
-          rawCfg = jsonDecode(cfgStr);
-        } catch (_) {}
-      }
       _configSig = _stableJson({
-        'c': rawCfg is Map ? rawCfg : <String, dynamic>{'schema_version': mobileConfig.schemaVersion},
+        'c': rawCfgDecoded is Map
+            ? rawCfgDecoded
+            : <String, dynamic>{'schema_version': mobileConfig.schemaVersion},
         'p': priceTypes.isEmpty ? const ['default'] : priceTypes,
         'r': tenantReferences?.toJson(),
         'l': agentLimits.toJson(),

@@ -222,7 +222,13 @@ class _SyncWindowCountdownStripState extends State<SyncWindowCountdownStrip> {
       nextShow = true;
       if (!_permissionAsked) {
         _permissionAsked = true;
-        unawaited(MobileLocalNotificationService.instance.ensureNotificationPermission());
+        // Home birinchi chizilishidan keyin — dialog ANR bilan aralashmasin.
+        unawaited(
+          Future<void>.delayed(const Duration(seconds: 8), () async {
+            await MobileLocalNotificationService.instance
+                .ensureNotificationPermission();
+          }),
+        );
       }
     } else if (start != null) {
       nextTick = start;

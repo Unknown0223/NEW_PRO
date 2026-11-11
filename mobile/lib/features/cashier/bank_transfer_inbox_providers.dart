@@ -1,7 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../core/api/bank_transfer_inbox_api.dart';
-import '../../../core/auth/session.dart';
+import '../../core/api/bank_transfer_inbox_api.dart';
+import '../../core/auth/session.dart';
 
 typedef BtiTab = String;
 typedef BtiChannel = String;

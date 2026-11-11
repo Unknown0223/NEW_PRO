@@ -32,7 +32,7 @@ Future<void> main() async {
     await initializeDateFormatting('ru');
     await loadAppEnv();
     await MobileLocalNotificationService.instance.init();
-    await _initServerClockPersistence();
+    await AppTheme.loadCatalog();
 
     if (!kIsWeb && Platform.isAndroid) {
       final info = await DeviceInfoPlugin().androidInfo;
@@ -51,6 +51,8 @@ Future<void> main() async {
     };
 
     runApp(const ProviderScope(child: SalesDocApp()));
+    // DB ochishni birinchi kadrdan keyinga — cold start ANR kamayadi.
+    unawaited(_initServerClockPersistence());
   }, (error, stack) {
     ErrorReporter.instance?.reportFatal(error, stack, extra: {'source': 'zone'});
   });

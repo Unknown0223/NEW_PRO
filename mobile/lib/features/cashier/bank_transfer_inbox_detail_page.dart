@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../core/api/api_exceptions.dart';
-import '../../../core/api/bank_transfer_inbox_api.dart';
-import '../../../core/auth/session.dart';
-import '../../../core/format/money_display.dart';
-import '../../../core/theme/app_colors.dart';
-import '../../../core/theme/app_typography.dart';
+import '../../core/api/api_exceptions.dart';
+import '../../core/api/bank_transfer_inbox_api.dart';
+import '../../core/auth/session.dart';
+import '../../core/format/money_display.dart';
+import '../../core/theme/app_colors.dart';
+import '../../core/theme/app_typography.dart';
 import 'bank_transfer_inbox_providers.dart';
 
 /// Detail: summa, INN/hisob, status; assign / reassign + majburiy izoh; confirm pending.

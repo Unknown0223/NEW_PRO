@@ -140,6 +140,9 @@ if (Test-Path (Join-Path $env:USERPROFILE '.android\avd\salesdoc_pixel7.avd')) {
     $avd = 'salesdoc_pixel7'
 } elseif (Test-Path (Join-Path $env:USERPROFILE '.android\avd\Pixel_9a.avd')) {
     $avd = 'Pixel_9a'
+} elseif (Test-Path $emulatorExe) {
+    $listed = & $emulatorExe -list-avds 2>$null | Where-Object { $_.Trim() } | Select-Object -First 1
+    if ($listed) { $avd = $listed.Trim() }
 }
 
 if (-not $avd) {

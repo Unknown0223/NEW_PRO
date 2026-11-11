@@ -14,6 +14,8 @@ class AgentLocalPrefs {
   final bool sortClientsAlphabetically;
   final bool sortProductsAlphabetically;
   final bool showBoxCount;
+  /// Katalog ko‘rinishi: `list` (default) | `grid`
+  final String catalogViewMode;
   /// `moving` | `stopped` — van_selling.allow_change_movement_status
   final String? vanMovementStatus;
   /// YYYY-MM-DD — mahalliy stock snapshot (server bilan sinxron)
@@ -28,9 +30,12 @@ class AgentLocalPrefs {
     this.sortClientsAlphabetically = true,
     this.sortProductsAlphabetically = true,
     this.showBoxCount = false,
+    this.catalogViewMode = 'list',
     this.vanMovementStatus,
     this.stockSnapshotDay,
   });
+
+  bool get catalogIsGrid => catalogViewMode == 'grid';
 
   AgentLocalPrefs copyWith({
     String? locale,
@@ -41,6 +46,7 @@ class AgentLocalPrefs {
     bool? sortClientsAlphabetically,
     bool? sortProductsAlphabetically,
     bool? showBoxCount,
+    String? catalogViewMode,
     String? vanMovementStatus,
     String? stockSnapshotDay,
   }) =>
@@ -53,6 +59,7 @@ class AgentLocalPrefs {
         sortClientsAlphabetically: sortClientsAlphabetically ?? this.sortClientsAlphabetically,
         sortProductsAlphabetically: sortProductsAlphabetically ?? this.sortProductsAlphabetically,
         showBoxCount: showBoxCount ?? this.showBoxCount,
+        catalogViewMode: catalogViewMode ?? this.catalogViewMode,
         vanMovementStatus: vanMovementStatus ?? this.vanMovementStatus,
         stockSnapshotDay: stockSnapshotDay ?? this.stockSnapshotDay,
       );
@@ -66,6 +73,7 @@ class AgentLocalPrefs {
         'sort_clients_alphabetically': sortClientsAlphabetically,
         'sort_products_alphabetically': sortProductsAlphabetically,
         'show_box_count': showBoxCount,
+        'catalog_view_mode': catalogViewMode,
         if (vanMovementStatus != null) 'van_movement_status': vanMovementStatus,
         if (stockSnapshotDay != null) 'stock_snapshot_day': stockSnapshotDay,
       };
@@ -79,6 +87,7 @@ class AgentLocalPrefs {
         sortClientsAlphabetically: j['sort_clients_alphabetically'] != false,
         sortProductsAlphabetically: j['sort_products_alphabetically'] != false,
         showBoxCount: j['show_box_count'] == true,
+        catalogViewMode: j['catalog_view_mode']?.toString() == 'grid' ? 'grid' : 'list',
         vanMovementStatus: j['van_movement_status']?.toString(),
         stockSnapshotDay: j['stock_snapshot_day']?.toString(),
       );

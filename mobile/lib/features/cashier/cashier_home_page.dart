@@ -2,9 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../../core/auth/session.dart';
-import '../../../core/theme/app_colors.dart';
-import '../../../core/theme/app_typography.dart';
+import '../../core/auth/session.dart';
+import '../../core/theme/app_colors.dart';
+import '../../core/theme/app_typography.dart';
+import '../../core/ui/quick_panel_sheet.dart';
 import 'bank_transfer_inbox_providers.dart';
 
 /// Kassir home — Bank Transfer Inbox kirish nuqtasi.
@@ -26,6 +27,7 @@ class CashierHomePage extends ConsumerWidget {
         foregroundColor: AppColors.textTitle,
         elevation: 0,
         actions: [
+          const QuickPanelAction(),
           IconButton(
             icon: const Icon(Icons.person_outline),
             onPressed: () => context.go('/profile'),

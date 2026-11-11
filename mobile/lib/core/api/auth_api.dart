@@ -151,11 +151,13 @@ class AuthUser {
   final String? tenantSlug, tenantName, workSlotCode, code;
   final int? workSlotId;
   final bool? appAccess;
+  final bool mustChangePassword;
 
   AuthUser({
     required this.id, required this.name, required this.login, required this.role,
     required this.tenantId, this.tenantSlug, this.tenantName, this.workSlotCode, this.workSlotId,
     this.code, this.appAccess,
+    this.mustChangePassword = false,
   });
 
   factory AuthUser.fromJson(Map<String, dynamic> j) => AuthUser(
@@ -165,6 +167,7 @@ class AuthUser {
     workSlotCode: j['work_slot_code'], workSlotId: j['work_slot_id'],
     code: j['code']?.toString(),
     appAccess: j['app_access'],
+    mustChangePassword: j['must_change_password'] == true,
   );
 
   bool get isMobileRole =>

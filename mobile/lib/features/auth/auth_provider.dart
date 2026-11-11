@@ -47,6 +47,8 @@ enum AuthStatus {
   unauthenticated,
   loading,
   authenticated,
+  /// Vaqtinchalik parolni majburiy almashtirish.
+  mustChangePassword,
   pinSetup,
   bootstrapping,
   syncComplete,
@@ -625,6 +627,10 @@ class AuthNotifier extends StateNotifier<AuthState> {
         );
         return;
       }
+      if (r.user.mustChangePassword) {
+        state = const AuthState(status: AuthStatus.mustChangePassword);
+        return;
+      }
       if (await _needsPinSetup()) {
         state = const AuthState(status: AuthStatus.pinSetup);
         return;
@@ -1120,17 +1126,18 @@ class AuthNotifier extends StateNotifier<AuthState> {
       final payload = await se.pullSync(
         lastSyncAt: _session.state.lastSyncAt,
         onPhase: _setSyncPhase,
+        awaitFlush: false,
       );
       await _session.setLastSyncAt(payload.syncAt);
     } else {
       _setSyncPhase(0);
-      final syncResult = await _mobileApi.syncFull(
+      final payload = await _mobileApi.syncFullParsed(
         slug,
         lastSyncAt: _session.state.lastSyncAt,
         device: await MobileDeviceInfo.syncPayload(),
       );
-      await _persistSyncResult(syncResult, lastSyncAt: _session.state.lastSyncAt);
-      await _session.setLastSyncAt(syncResult.syncAt);
+      await _persistSyncPayload(payload, lastSyncAt: _session.state.lastSyncAt);
+      await _session.setLastSyncAt(payload.syncAt);
     }
     _session.markBootstrapped();
   }
@@ -1138,6 +1145,9 @@ class AuthNotifier extends StateNotifier<AuthState> {
   /// Login bootstrap tugagach — push, GPS, offline navbat (asosiy oqimdan tashqari).
   Future<void> _bootstrapPostSyncServices() async {
     try {
+      // SyncComplete → Continue → home chizilgunga qadar FCM/WebView/GPS
+      // asosiy izolyatorni band qilmasin (emulyator ANR).
+      await Future<void>.delayed(const Duration(seconds: 6));
       final fcm = _ref.read(fcmServiceProvider);
       if (fcm != null) {
         try {
@@ -1159,7 +1169,11 @@ class AuthNotifier extends StateNotifier<AuthState> {
         final se = _ref.read(syncEngineProvider);
         if (se != null) {
           try {
-            await se.flushOfflineQueue(policySync: _syncCfg);
+            await Future.wait([
+              se.flushOfflineQueue(policySync: _syncCfg),
+              se.flushPendingPhotoReports(),
+              se.flushPendingLocationPings(),
+            ]);
           } catch (_) {}
         }
       }
@@ -1317,9 +1331,16 @@ class AuthNotifier extends StateNotifier<AuthState> {
   void _resumeAfterRestore() {
     final gpsConfig = _session.state.mobileConfig?.gps;
     if (gpsConfig?.trackingEnabled == true) {
-      try {
-        _ref.read(gpsTrackerProvider.notifier).startTracking();
-      } catch (_) {}
+      // PIN/home birinchi kadrdan keyin — GPS ANR bermasin.
+      unawaited(Future<void>(() async {
+        await Future<void>.delayed(const Duration(seconds: 2));
+        try {
+          await _ref
+              .read(gpsTrackerProvider.notifier)
+              .startTracking()
+              .timeout(const Duration(seconds: 8), onTimeout: () {});
+        } catch (_) {}
+      }));
     }
   }
 
@@ -1667,6 +1688,16 @@ class AuthNotifier extends StateNotifier<AuthState> {
   void finishBootstrap() {
     if (state.status != AuthStatus.syncComplete) return;
     state = state.copyWith(status: AuthStatus.ready);
+  }
+
+  /// Parol almashtirilgach — PIN yoki bootstrap.
+  Future<void> continueAfterPasswordChange() async {
+    state = const AuthState(status: AuthStatus.authenticated);
+    if (await _needsPinSetup()) {
+      state = const AuthState(status: AuthStatus.pinSetup);
+      return;
+    }
+    await _bootstrap();
   }
 
   Future<void> logout() async {

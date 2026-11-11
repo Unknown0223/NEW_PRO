@@ -70,7 +70,7 @@ run {
 
 android {
     namespace = "uz.salesdoc.salesdoc_mobile"
-    compileSdk = flutter.compileSdkVersion
+    compileSdk = 36
     buildToolsVersion = "35.0.0"
     ndkVersion = "27.0.12077973"
 

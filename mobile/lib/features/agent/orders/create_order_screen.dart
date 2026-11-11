@@ -36,6 +36,8 @@ import '../../../core/time/work_region_time.dart';
 import '../../auth/auth_provider.dart';
 import '../../../core/ui/agent_ui.dart';
 import '../../../core/ui/agent_ui_extended.dart';
+import '../../../core/ui/client_photo_thumb.dart';
+import '../../../core/ui/product_photo_thumb.dart';
 import '../../../core/l10n/app_strings_ru.dart';
 import '../shell/agent_app_bar.dart';
 import '../shell/agent_drawer.dart';
@@ -62,12 +64,14 @@ class CreateOrderScreen extends ConsumerStatefulWidget {
   final int? initialClientId;
   final Map<String, dynamic>? initialClient;
   final int? heldOrderId;
+  final String? prefillComment;
 
   const CreateOrderScreen({
     super.key,
     this.initialClientId,
     this.initialClient,
     this.heldOrderId,
+    this.prefillComment,
   });
 
   @override
@@ -232,6 +236,10 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
   void initState() {
     super.initState();
     _exitGuard = CreateOrderExitGuard(_confirmLeaveForNavigation);
+    final prefill = widget.prefillComment?.trim();
+    if (prefill != null && prefill.isNotEmpty) {
+      _comment = prefill;
+    }
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       ref.read(createOrderExitGuardProvider.notifier).state = _exitGuard;
@@ -1690,67 +1698,174 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
       return const Center(child: AgentEmptyState(message: 'Ничего не найдено'));
     }
 
+    final isGrid =
+        ref.watch(agentLocalPrefsProvider).valueOrNull?.catalogIsGrid ?? false;
+
+    Widget tile(OrderCategoryGroup cat) {
+      final qQty = _qtyInCategory(cat);
+      final blocked = productSelectionBlocked;
+      final count = cat.products.length;
+      String? firstImg;
+      for (final p in cat.products) {
+        final u = productImageUrl(p);
+        if (u != null && u.isNotEmpty) {
+          firstImg = u;
+          break;
+        }
+      }
+      void onTap() {
+        if (blocked) {
+          unawaited(() async {
+            await _addPhotoReport();
+            await _refreshPhotoStatus(force: true);
+          }());
+          return;
+        }
+        _enterCategory(cat);
+      }
+
+      if (isGrid) {
+        return Material(
+          color: blocked ? Colors.grey.shade50 : AppColors.surface,
+          borderRadius: BorderRadius.circular(15),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(15),
+            onTap: onTap,
+            child: Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(15),
+                border: Border.all(
+                  color: qQty > 0 ? AppColors.agentAccent : AppColors.border,
+                ),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      ProductPhotoThumb(source: firstImg, size: 36, radius: 10),
+                      const Spacer(),
+                      if (qQty > 0)
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 2,
+                          ),
+                          decoration: BoxDecoration(
+                            color: AppColors.agentAccent,
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Text(
+                            '$qQty',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  Text(
+                    cat.name,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 13,
+                      color: blocked ? AppColors.textMuted : AppColors.textTitle,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    blocked
+                        ? 'Сначала фотоотчет'
+                        : '$count ${S.categoryProductsCount}',
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: blocked ? AppColors.warning : AppColors.textSecondary,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      }
+
+      return Card(
+        margin: EdgeInsets.zero,
+        color: blocked ? Colors.grey.shade50 : null,
+        child: ListTile(
+          enabled: !blocked,
+          leading: ProductPhotoThumb(source: firstImg, size: 40, radius: 10),
+          title: Text(
+            cat.name,
+            style: TextStyle(
+              fontWeight: FontWeight.w600,
+              color: blocked ? AppColors.textMuted : null,
+            ),
+          ),
+          subtitle: blocked
+              ? const Text(
+                  'Сначала добавьте фотоотчет',
+                  style: TextStyle(fontSize: 12, color: AppColors.warning),
+                )
+              : Text('$count ${S.categoryProductsCount}'),
+          trailing: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (blocked)
+                const Icon(Icons.photo_camera_outlined,
+                    color: AppColors.warning, size: 20)
+              else if (qQty > 0)
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: AppColors.success,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    '$qQty',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              const SizedBox(width: 4),
+              Icon(Icons.chevron_right,
+                  color: blocked ? AppColors.textMuted : null),
+            ],
+          ),
+          onTap: onTap,
+        ),
+      );
+    }
+
+    if (isGrid) {
+      return GridView.builder(
+        padding: const EdgeInsets.all(16),
+        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 2,
+          mainAxisSpacing: 10,
+          crossAxisSpacing: 10,
+          childAspectRatio: 1.15,
+        ),
+        itemCount: visible.length,
+        itemBuilder: (_, i) => tile(visible[i]),
+      );
+    }
+
     return ListView.separated(
       padding: const EdgeInsets.all(16),
       itemCount: visible.length,
       separatorBuilder: (_, __) => const SizedBox(height: 8),
-      itemBuilder: (_, i) {
-        final cat = visible[i];
-        final qQty = _qtyInCategory(cat);
-        final blocked = productSelectionBlocked;
-        final count = cat.products.length;
-        return Card(
-          margin: EdgeInsets.zero,
-          color: blocked ? Colors.grey.shade50 : null,
-          child: ListTile(
-            enabled: !blocked,
-            title: Text(
-              cat.name,
-              style: TextStyle(
-                fontWeight: FontWeight.w600,
-                color: blocked ? AppColors.textMuted : null,
-              ),
-            ),
-            subtitle: blocked
-                ? const Text(
-                    'Сначала добавьте фотоотчет',
-                    style: TextStyle(fontSize: 12, color: AppColors.warning),
-                  )
-                : Text('$count ${S.categoryProductsCount}'),
-            trailing: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (blocked)
-                  const Icon(Icons.photo_camera_outlined, color: AppColors.warning, size: 20)
-                else if (qQty > 0)
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: AppColors.success,
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Text(
-                      '$qQty',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 12,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                const SizedBox(width: 4),
-                Icon(Icons.chevron_right, color: blocked ? AppColors.textMuted : null),
-              ],
-            ),
-            onTap: blocked
-                ? () async {
-                    await _addPhotoReport();
-                    await _refreshPhotoStatus(force: true);
-                  }
-                : () => _enterCategory(cat),
-          ),
-        );
-      },
+      itemBuilder: (_, i) => tile(visible[i]),
     );
   }
 
@@ -2052,91 +2167,218 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
         Expanded(
           child: products.isEmpty
               ? const Center(child: AgentEmptyState(message: S.emptyProducts))
-              : ListView.builder(
-            padding: const EdgeInsets.all(12),
-            itemCount: products.length,
-            itemBuilder: (_, i) {
-              final p = products[i];
-              final pid = (p['id'] as num).toInt();
-              final qty = _quantities[pid] ?? 0;
-              final price = _unitPrices[pid] ?? 0;
-              final avail = _stockAvailable[pid] ?? 0;
-              final out = avail <= 0;
-              final remaining = (avail - qty).clamp(0.0, double.infinity);
-              final stockLabel = qty > 0
-                  ? '${S.warehouseStock}: ${avail.toStringAsFixed(0)} · ${S.remaining}: ${remaining.toStringAsFixed(0)}'
-                  : '${S.inStock}: ${avail.toStringAsFixed(0)}';
-              final stockText = out ? S.outOfStock : stockLabel;
-              final boxLabel = productQuantityLabel(p, qty.toDouble(), showBoxes: showBoxes);
-              return RepaintBoundary(
-                child: Card(
-                margin: const EdgeInsets.only(bottom: 8),
-                color: out ? Colors.grey.shade100 : null,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  side: qty > 0
-                      ? const BorderSide(color: AppColors.agentAccent, width: 2)
-                      : BorderSide.none,
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.all(12),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(productDisplayName(p), style: const TextStyle(fontWeight: FontWeight.w600)),
-                      const SizedBox(height: 6),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              stockText,
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: out
-                                    ? AppColors.error
-                                    : (qty > avail ? AppColors.error : AppColors.success),
-                                fontWeight: FontWeight.w600,
-                              ),
+              : Builder(
+                  builder: (context) {
+                    final isGrid = ref
+                            .watch(agentLocalPrefsProvider)
+                            .valueOrNull
+                            ?.catalogIsGrid ??
+                        false;
+
+                    Widget productCard(Map<String, dynamic> p) {
+                      final pid = (p['id'] as num).toInt();
+                      final qty = _quantities[pid] ?? 0;
+                      final price = _unitPrices[pid] ?? 0;
+                      final avail = _stockAvailable[pid] ?? 0;
+                      final out = avail <= 0;
+                      final remaining =
+                          (avail - qty).clamp(0.0, double.infinity);
+                      final stockLabel = qty > 0
+                          ? '${S.warehouseStock}: ${avail.toStringAsFixed(0)} · ${S.remaining}: ${remaining.toStringAsFixed(0)}'
+                          : '${S.inStock}: ${avail.toStringAsFixed(0)}';
+                      final stockText = out ? S.outOfStock : stockLabel;
+                      final boxLabel = productQuantityLabel(
+                        p,
+                        qty.toDouble(),
+                        showBoxes: showBoxes,
+                      );
+                      final img = productImageUrl(p);
+                      final stepper = AgentEditableQuantityStepper(
+                        value: qty,
+                        min: 0,
+                        max: avail,
+                        disabled: out || productSelectionBlocked,
+                        onChanged: (next) {
+                          setState(() {
+                            if (next <= 0) {
+                              _quantities.remove(pid);
+                            } else {
+                              _quantities[pid] = next;
+                            }
+                          });
+                        },
+                      );
+
+                      if (isGrid) {
+                        return Card(
+                          margin: EdgeInsets.zero,
+                          color: out ? Colors.grey.shade100 : null,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            side: qty > 0
+                                ? const BorderSide(
+                                    color: AppColors.agentAccent,
+                                    width: 2,
+                                  )
+                                : BorderSide(color: AppColors.border),
+                          ),
+                          child: Padding(
+                            padding: const EdgeInsets.all(10),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                ProductPhotoThumb(
+                                  source: img,
+                                  size: 48,
+                                  radius: 10,
+                                ),
+                                const SizedBox(height: 8),
+                                Text(
+                                  productDisplayName(p),
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  stockText,
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    color: out
+                                        ? AppColors.error
+                                        : AppColors.success,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                Text(
+                                  price > 0
+                                      ? formatOrderMoney(price)
+                                      : '—',
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                                const Spacer(),
+                                Align(
+                                  alignment: Alignment.centerRight,
+                                  child: stepper,
+                                ),
+                              ],
                             ),
                           ),
-                          Text(
-                            price > 0 ? '${S.price}: ${formatOrderMoney(price)}' : '—',
-                            style: const TextStyle(fontSize: 12),
+                        );
+                      }
+
+                      return Card(
+                        margin: const EdgeInsets.only(bottom: 8),
+                        color: out ? Colors.grey.shade100 : null,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          side: qty > 0
+                              ? const BorderSide(
+                                  color: AppColors.agentAccent,
+                                  width: 2,
+                                )
+                              : BorderSide.none,
+                        ),
+                        child: Padding(
+                          padding: const EdgeInsets.all(12),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  ProductPhotoThumb(
+                                    source: img,
+                                    size: 44,
+                                    radius: 10,
+                                  ),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: Text(
+                                      productDisplayName(p),
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 6),
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      stockText,
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: out
+                                            ? AppColors.error
+                                            : (qty > avail
+                                                ? AppColors.error
+                                                : AppColors.success),
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ),
+                                  Text(
+                                    price > 0
+                                        ? '${S.price}: ${formatOrderMoney(price)}'
+                                        : '—',
+                                    style: const TextStyle(fontSize: 12),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 8),
+                              Row(
+                                children: [
+                                  Text(
+                                    qty > 0 && showBoxes
+                                        ? '$qty ${p['unit']?.toString() ?? S.unitPcs} · $boxLabel'
+                                        : S.unitPcs,
+                                    style: AppTypography.caption,
+                                  ),
+                                  const Spacer(),
+                                  stepper,
+                                ],
+                              ),
+                            ],
                           ),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      Row(
-                        children: [
-                          Text(
-                            qty > 0 && showBoxes ? '$qty ${p['unit']?.toString() ?? S.unitPcs} · $boxLabel' : S.unitPcs,
-                            style: AppTypography.caption,
-                          ),
-                          const Spacer(),
-                          AgentEditableQuantityStepper(
-                            value: qty,
-                            min: 0,
-                            max: avail,
-                            disabled: out || productSelectionBlocked,
-                            onChanged: (next) {
-                              setState(() {
-                                if (next <= 0) {
-                                  _quantities.remove(pid);
-                                } else {
-                                  _quantities[pid] = next;
-                                }
-                              });
-                            },
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
+                        ),
+                      );
+                    }
+
+                    if (isGrid) {
+                      return GridView.builder(
+                        padding: const EdgeInsets.all(12),
+                        gridDelegate:
+                            const SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: 2,
+                          mainAxisSpacing: 10,
+                          crossAxisSpacing: 10,
+                          childAspectRatio: 0.72,
+                        ),
+                        itemCount: products.length,
+                        itemBuilder: (_, i) =>
+                            RepaintBoundary(child: productCard(products[i])),
+                      );
+                    }
+
+                    return ListView.builder(
+                      padding: const EdgeInsets.all(12),
+                      itemCount: products.length,
+                      itemBuilder: (_, i) =>
+                          RepaintBoundary(child: productCard(products[i])),
+                    );
+                  },
                 ),
-              ),
-              );
-            },
-          ),
         ),
         _buildBottomBar(
           primaryLabel: S.finish,
@@ -2188,8 +2430,21 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
             AgentIconButton(icon: Icons.close, onPressed: _cancelHeldOrder),
           if (_selectedClientId > 0)
             AgentIconButton(icon: Icons.more_horiz, onPressed: _showOrderActionsSheet),
-          if (_step == _CreateStep.categoryProducts || _step == _CreateStep.categories)
+          if (_step == _CreateStep.categoryProducts || _step == _CreateStep.categories) ...[
+            AgentIconButton(
+              icon: (ref.watch(agentLocalPrefsProvider).valueOrNull?.catalogIsGrid ?? false)
+                  ? Icons.view_list_rounded
+                  : Icons.grid_view_rounded,
+              onPressed: () {
+                final prefs = ref.read(agentLocalPrefsProvider).valueOrNull;
+                final next = (prefs?.catalogIsGrid ?? false) ? 'list' : 'grid';
+                ref.read(agentLocalPrefsProvider.notifier).setPrefs(
+                      (p) => p.copyWith(catalogViewMode: next),
+                    );
+              },
+            ),
             AgentIconButton(icon: Icons.search, onPressed: _showProductSearch),
+          ],
         ],
       ),
       body: Stack(
@@ -2357,6 +2612,11 @@ class _ClientPickerSheetState extends State<_ClientPickerSheet> {
   Widget _clientTile(Map<String, dynamic> c) {
     final days = formatClientVisitDaysDisplay(c);
     return ListTile(
+      leading: ClientPhotoThumb(
+        source: firstClientPhotoUrl(c),
+        size: 40,
+        radius: 10,
+      ),
       title: Text(c['name']?.toString() ?? ''),
       subtitle: Text(
         [

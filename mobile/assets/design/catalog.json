@@ -1,0 +1,14 @@
+{
+  "version": "1.0.0",
+  "updated": "2026-01-01",
+  "colors": {
+    "salesBlue": "#1F66D1",
+    "brightSky": "#6FA8FF",
+    "agent": "#1F66D1",
+    "expeditor": "#0E8A4F",
+    "supervisor": "#1FA855",
+    "cashier": "#0F766E"
+  },
+  "radius": { "card": 16, "sheet": 20, "control": 12 },
+  "flags": { "newSyncView": true, "catalogV2": false }
+}

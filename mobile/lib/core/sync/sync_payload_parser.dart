@@ -95,6 +95,9 @@ List<Map<String, dynamic>> _parseProducts(dynamic raw) {
       'name': j['name']?.toString() ?? '',
       'unit': j['unit'],
       'barcode': j['barcode'],
+      if (_nonEmpty(j['image_url']))
+        'image_url': j['image_url'].toString().trim(),
+      if (j['category_id'] != null) 'category_id': _asInt(j['category_id']),
     });
   }
   return out;

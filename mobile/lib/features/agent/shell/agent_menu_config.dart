@@ -34,6 +34,7 @@ List<AgentMenuItem> agentMenuItems(MobileConfig? config) {
       visible: (c) => c?.orders.allowReturnFromShelf == true,
     ),
     const AgentMenuItem(label: 'KPI', route: '/kpi'),
+    const AgentMenuItem(label: 'Мои бонусы', route: '/bonuses'),
     const AgentMenuItem(label: 'Дневной план', route: '/kpi/route'),
     const AgentMenuItem(label: 'Отчёты', route: '/report'),
     const AgentMenuItem(label: 'Торговые точки', route: '/clients'),
@@ -101,6 +102,8 @@ const agentNavigationPages = <String>[
   '/search',
   '/route',
   '/tasks',
+  '/bonuses',
+  '/settings/quick',
 ];
 
 const agentShellTabPaths = <String>[

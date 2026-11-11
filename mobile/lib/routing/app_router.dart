@@ -9,6 +9,7 @@ import '../features/auth/pin_setup_screen.dart';
 import '../features/auth/pin_unlock_screen.dart';
 import '../core/permissions/app_permissions.dart';
 import '../features/auth/login_screen.dart';
+import '../features/auth/must_change_password_screen.dart';
 import '../features/auth/permission_gate_page.dart';
 import '../features/auth/bootstrap_screen.dart';
 import '../features/auth/session_splash_screen.dart';
@@ -21,6 +22,7 @@ import '../features/agent/clients/agent_debtors_by_orders_page.dart';
 import '../features/agent/misc/agent_map_page.dart';
 import '../features/agent/misc/agent_search_page.dart';
 import '../features/agent/misc/agent_settings_page.dart';
+import '../features/agent/misc/quick_panel_settings_page.dart';
 import '../features/agent/orders/agent_orders_page.dart';
 import '../features/agent/orders/agent_order_detail_page.dart';
 import '../features/agent/orders/agent_misc_orders_page.dart';
@@ -35,6 +37,7 @@ import '../features/agent/warehouse/agent_warehouse_stock_page.dart';
 import '../features/agent/report/agent_report_page.dart';
 import '../features/agent/tabel/agent_tabel_page.dart';
 import '../features/agent/kpi/agent_kpi_page.dart';
+import '../features/agent/kpi/agent_bonuses_page.dart';
 import '../features/agent/kpi/agent_kpi_calc_page.dart';
 import '../features/agent/kpi/agent_kpi_route_page.dart';
 import '../features/agent/kpi/agent_kpi_diagnostics_days_page.dart';
@@ -184,6 +187,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         return null;
       }
 
+      if (s == AuthStatus.mustChangePassword) {
+        return loc == '/must-change-password' ? null : '/must-change-password';
+      }
+
       if (s == AuthStatus.pinSetup) {
         return loc == '/pin-setup' ? null : '/pin-setup';
       }
@@ -208,7 +215,13 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         if (perms.checkedOnce && !perms.allGranted) {
           return loc == '/permissions' ? null : '/permissions';
         }
-        if (isLogin || isBoot || isSplash || loc == '/unlock' || loc == '/pin-setup' || loc == '/permissions') {
+        if (isLogin ||
+            isBoot ||
+            isSplash ||
+            loc == '/unlock' ||
+            loc == '/pin-setup' ||
+            loc == '/must-change-password' ||
+            loc == '/permissions') {
           return '/home';
         }
 
@@ -224,6 +237,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
     routes: [
       GoRoute(path: '/splash', builder: (_, __) => const SessionSplashScreen()),
       GoRoute(path: '/login', builder: (_, __) => const LoginScreen()),
+      GoRoute(
+        path: '/must-change-password',
+        builder: (_, __) => const MustChangePasswordScreen(),
+      ),
       GoRoute(path: '/pin-setup', builder: (_, __) => const PinSetupScreen()),
       GoRoute(path: '/unlock', builder: (_, __) => const PinUnlockScreen()),
       GoRoute(path: '/bootstrap', builder: (_, __) => const BootstrapScreen()),
@@ -261,15 +278,26 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           Map<String, dynamic>? initialClient;
           final extra = state.extra;
           if (extra is Map) {
-            initialClient = Map<String, dynamic>.from(extra);
+            final m = Map<String, dynamic>.from(extra);
+            // misc oqimidan kelgan comment — mijoz emas
+            if (m.containsKey('id') || m.containsKey('name')) {
+              initialClient = m;
+            }
           }
           final heldId = int.tryParse(state.uri.queryParameters['held_id'] ?? '');
+          final prefill = state.uri.queryParameters['prefill_comment'];
           return CreateOrderScreen(
             initialClientId: clientId,
             initialClient: initialClient,
             heldOrderId: heldId,
+            prefillComment: prefill,
           );
         },
+      ),
+      GoRoute(
+        path: '/bonuses',
+        parentNavigatorKey: rootNavigatorKey,
+        builder: (_, __) => const AgentBonusesPage(),
       ),
       GoRoute(
         path: '/draft',
@@ -414,6 +442,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: '/settings',
         parentNavigatorKey: rootNavigatorKey,
         builder: (_, __) => const AgentSettingsPage(),
+      ),
+      GoRoute(
+        path: '/settings/quick',
+        parentNavigatorKey: rootNavigatorKey,
+        builder: (_, __) => const QuickPanelSettingsPage(),
       ),
       GoRoute(
         path: '/tabel',

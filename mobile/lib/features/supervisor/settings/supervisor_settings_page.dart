@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../core/auth/session.dart';
 import '../../../core/prefs/app_prefs.dart';
@@ -80,6 +81,11 @@ class SupervisorSettingsPage extends ConsumerWidget {
               label: l10n.darkTheme,
               value: themeLabel(),
               onTap: () => _pickTheme(context, ref),
+            ),
+            _NavRow(
+              label: 'Быстрое меню (разделы)',
+              value: '',
+              onTap: () => context.push('/settings/quick'),
             ),
           ]),
           SvCard(

@@ -178,10 +178,7 @@ class AgentHamburger extends StatelessWidget {
             clipBehavior: Clip.none,
             alignment: Alignment.center,
             children: [
-              CustomPaint(
-                size: const Size(18, 14),
-                painter: _AgentHamburgerPainter(),
-              ),
+              const Icon(Icons.menu, size: 22, color: AppColors.textPrimary),
               if (badge != null && badge! > 0)
                 Positioned(
                   top: -3,

@@ -1,30 +1,45 @@
 import 'package:flutter/material.dart';
 
-/// Agent 2.0 UI (develop-flutter-mobile-frontend shablon) rang palitrasi.
+import '../../design_system/design_system.dart';
+
+/// Agent 2.0 UI rang palitrasi.
+/// Yangi tokenlar: [SaColors] / [SaCompat] (`mobile/lib/design_system`).
+/// Eski `AppColors.*` nomlari saqlanadi — ekranlar bosqichma-bosqich Sa* ga o‘tadi.
 class AppColors {
   AppColors._();
 
-  // Canvas
-  static const Color background = Color(0xFFEDF3F7);
+  /// Dizayn-sistem versiyasi (shablon Flutter kit).
+  static const String designSystemVersion = saDesignSystemVersion;
+
+  // Canvas — SaColors.surfaceLight bridj
+  static const Color background = Color(0xFFF7F9FA);
   static const Color surface = Colors.white;
   static const Color surfaceMuted = Color(0xFFF1F4F8);
   static const Color surfaceVariant = Color(0xFFEDF2F6);
   static const Color surfaceReport = Color(0xFFF3F6F9);
   static const Color surfaceNested = Color(0xFFF0F4F8);
 
-  // Brand / primary (shablon #07958f)
-  static const Color primary = Color(0xFF07958F);
-  static const Color primaryLight = Color(0xFF3AB8B1);
-  static const Color primaryDark = Color(0xFF064C4C);
-  static const Color primarySoft = Color(0xFFE8F6F5);
-  static const Color primaryGradientStart = Color(0xFF12C86F);
-  static const Color primaryGradientEnd = Color(0xFF079BD4);
+  // Brand / primary — Sa katalog (salesBlue / agent)
+  static const Color primary = Color(0xFF1F66D1);
+  static const Color primaryLight = Color(0xFF6FA8FF);
+  static const Color primaryDark = Color(0xFF14223F);
+  static const Color primarySoft = Color(0xFFE8F0FC);
+  static const Color primaryGradientStart = Color(0xFF1F66D1);
+  static const Color primaryGradientEnd = Color(0xFF6FA8FF);
 
-  // Text
-  static const Color textPrimary = Color(0xFF13202B);
-  static const Color textTitle = Color(0xFF111C28);
-  static const Color textHeadline = Color(0xFF172330);
-  static const Color textMenu = Color(0xFF26323D);
+  /// Yangi shablon accent (SaColors) — tezkor panel / yangi ekranlar.
+  static Color get saAgent => SaColors.agent;
+  static Color get saExpeditor => SaColors.expeditor;
+  static Color get saSupervisor => SaColors.supervisor;
+  static Color get saCashier => SaColors.cashier;
+  static Color get saNavy => SaColors.navy;
+  static Color get saSalesBlue => SaColors.salesBlue;
+
+  // Text — Sa navy / ink
+  static const Color textPrimary = Color(0xFF14223F);
+  static const Color textTitle = Color(0xFF14223F);
+  static const Color textHeadline = Color(0xFF14223F);
+  static const Color textMenu = Color(0xFF14223F);
   static const Color textSecondary = Color(0xFF64748B);
   static const Color textMuted = Color(0xFF94A3B8);
   static const Color textDisabled = Color(0xFFCBD5E1);
@@ -35,14 +50,13 @@ class AppColors {
   static const Color warning = Color(0xFFF59E0B);
   static const Color info = Color(0xFF3B82F6);
 
-  // Role accents (agent = shablon primary)
-  static const Color agentAccent = primary;
-  /// Экспедитор / dastavchik — 0223 dizayn brand (#0E8A4F)
+  // Role accents — SaColors bilan bir xil hex
+  static const Color agentAccent = Color(0xFF1F66D1);
   static const Color expeditorAccent = Color(0xFF0E8A4F);
-  /// CACTUS Supervayzer yashil accent
   static const Color supervisorAccent = Color(0xFF1FA855);
-  /// Kassir / bank transfer inbox
   static const Color cashierAccent = Color(0xFF0F766E);
+
+  static Color roleAccent(SaRole role) => SaColors.roleAccent(role);
 
   // UI chrome
   static const Color border = Color(0xFFE2E8F0);

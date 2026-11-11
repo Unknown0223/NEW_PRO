@@ -371,6 +371,7 @@ class MobileApi {
     String? comment,
     Map<String, dynamic>? visit,
     DateTime? createdAt,
+    String? clientUuid,
   }) async {
     try {
       final r = await _dio.post('/api/$slug/mobile/orders/enqueue', data: {
@@ -380,6 +381,7 @@ class MobileApi {
         if (priceType != null) 'price_type': priceType,
         if (comment != null) 'comment': comment,
         if (visit != null) 'visit': visit,
+        if (clientUuid != null && clientUuid.isNotEmpty) 'client_uuid': clientUuid,
         'offline_created_at': (createdAt ?? DateTime.now()).toUtc().toIso8601String(),
       },);
       return r.data;

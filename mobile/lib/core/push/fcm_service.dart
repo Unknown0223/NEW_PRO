@@ -91,6 +91,7 @@ class OfflineFlushService {
           comment: item['comment']?.toString(),
           visit: await _db.findVisitGeoForClient(clientId, at: createdAt),
           createdAt: createdAt,
+          clientUuid: item['client_uuid']?.toString(),
         );
 
         await _db.markQueueItemSent(item['id'] as int);

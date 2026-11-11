@@ -7,7 +7,11 @@ setlocal EnableDelayedExpansion
 REM Android SDK / aapt kirill yo'lni o'qiy olmaydi — build faqat C:\salesdoc_mobile da.
 
 
-set "JAVA_HOME=C:\Program Files\Android\Android Studio\jbr"
+if exist "C:\src\jdk-17\bin\java.exe" (
+  set "JAVA_HOME=C:\src\jdk-17"
+) else (
+  set "JAVA_HOME=C:\Program Files\Android\Android Studio\jbr"
+)
 
 set "ANDROID_HOME=%LOCALAPPDATA%\Android\Sdk"
 

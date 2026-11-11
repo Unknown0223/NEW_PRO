@@ -6,7 +6,10 @@ import 'package:image_picker/image_picker.dart';
 
 import '../../core/face/face_verification_flow.dart';
 import '../../core/security/location_guard.dart';
+import '../../core/theme/app_colors.dart';
 import '../../core/time/server_clock.dart';
+import '../../core/ui/quick_panel_sheet.dart';
+import '../agent/shell/agent_app_bar.dart';
 import 'attendance_api_service.dart';
 import 'attendance_models.dart';
 import 'attendance_offline_queue.dart';
@@ -319,11 +322,13 @@ class _AttendanceHubScreenState extends ConsumerState<AttendanceHubScreen> {
 
     return stateAsync.when(
       loading: () => Scaffold(
-        appBar: AppBar(title: const Text('Табель и Посещаемость')),
+        backgroundColor: AppColors.background,
+        appBar: const AgentAppBar(title: 'Табель и Посещаемость', showBack: true),
         body: const Center(child: CircularProgressIndicator()),
       ),
       error: (err, _) => Scaffold(
-        appBar: AppBar(title: const Text('Табель и Посещаемость')),
+        backgroundColor: AppColors.background,
+        appBar: const AgentAppBar(title: 'Табель и Посещаемость', showBack: true),
         body: Center(child: Text('Ошибка загрузки: $err')),
       ),
       data: (st) {
@@ -337,17 +342,18 @@ class _AttendanceHubScreenState extends ConsumerState<AttendanceHubScreen> {
 
         if (st.punchDisabled || st.terminalOnly) {
           return Scaffold(
-            appBar: AppBar(title: const Text('Табель и Посещаемость')),
+            backgroundColor: AppColors.background,
+            appBar: const AgentAppBar(title: 'Табель и Посещаемость', showBack: true),
             body: Column(
               children: [
                 if (_statusBanner != null)
                   Container(
                     width: double.infinity,
-                    color: Colors.teal.shade50,
+                    color: AppColors.primarySoft,
                     padding: const EdgeInsets.all(10),
                     child: Text(
                       _statusBanner!,
-                      style: TextStyle(color: Colors.teal.shade900, fontWeight: FontWeight.w600),
+                      style: const TextStyle(color: AppColors.primaryDark, fontWeight: FontWeight.w600),
                     ),
                   ),
                 Expanded(child: _buildModeBlocked(st)),
@@ -361,10 +367,17 @@ class _AttendanceHubScreenState extends ConsumerState<AttendanceHubScreen> {
           key: ValueKey(tabs.map((e) => e.name).join(',')),
           length: tabs.length,
           child: Scaffold(
+            backgroundColor: AppColors.background,
             appBar: AppBar(
+              backgroundColor: AppColors.surface,
+              foregroundColor: AppColors.textTitle,
               title: const Text('Табель и Посещаемость'),
+              actions: const [QuickPanelAction()],
               bottom: TabBar(
                 isScrollable: true,
+                labelColor: AppColors.primary,
+                unselectedLabelColor: AppColors.textSecondary,
+                indicatorColor: AppColors.primary,
                 tabs: tabs.map(_tabFor).toList(),
               ),
             ),
@@ -373,11 +386,11 @@ class _AttendanceHubScreenState extends ConsumerState<AttendanceHubScreen> {
                 if (_statusBanner != null)
                   Container(
                     width: double.infinity,
-                    color: Colors.teal.shade50,
+                    color: AppColors.primarySoft,
                     padding: const EdgeInsets.all(10),
                     child: Text(
                       _statusBanner!,
-                      style: TextStyle(color: Colors.teal.shade900, fontWeight: FontWeight.w600),
+                      style: const TextStyle(color: AppColors.primaryDark, fontWeight: FontWeight.w600),
                     ),
                   ),
                 Expanded(

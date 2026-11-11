@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../core/auth/session.dart';
 import '../../../core/config/mobile_config.dart';
@@ -49,6 +50,11 @@ class ExpeditorSettingsPage extends ConsumerWidget {
                 label: 'Язык приложении',
                 value: prefs.localeLabel,
                 onTap: () => _pickLocale(context, ref, prefs),
+              ),
+              _NavRow(
+                label: 'Быстрое меню (разделы)',
+                value: '',
+                onTap: () => context.push('/settings/quick'),
               ),
             ]),
             AgentSurfaceCard(

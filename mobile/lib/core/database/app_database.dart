@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:math';
 
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart' as p;
@@ -20,19 +21,25 @@ class AppDatabase {
       final path = p.join(dbPath, 'salesdoc.db');
       return openDatabase(
         path,
-        version: 21,
+        version: 23,
         onOpen: (db) async {
           // Android: PRAGMA faqat rawQuery orqali (execute xato beradi).
           try {
             await db.rawQuery('PRAGMA journal_mode=WAL');
             await db.rawQuery('PRAGMA synchronous=NORMAL');
           } catch (_) {}
-          await _ensureClientColumns(db);
-          await _ensureHeldOrderSummaryColumns(db);
-          await _ensurePhotoRetryColumn(db);
-          await _ensurePendingLocationPingsTable(db);
-          await _ensureVisitGeoColumn(db);
-          await _ensurePerfIndexes(db);
+          // Har ochilishda ALTER urinishlari ANR/log shovqin — bir marta hook.
+          final hooksDone = await _schemaHooksApplied(db);
+          if (!hooksDone) {
+            await _ensureClientColumns(db);
+            await _ensureHeldOrderSummaryColumns(db);
+            await _ensurePhotoRetryColumn(db);
+            await _ensurePendingLocationPingsTable(db);
+            await _ensureVisitGeoColumn(db);
+            await _ensureProductImageColumn(db);
+            await _ensurePerfIndexes(db);
+            await _markSchemaHooksApplied(db);
+          }
         },
         onCreate: (db, version) async {
         await db.execute('''
@@ -72,7 +79,9 @@ class AppDatabase {
             sku TEXT,
             name TEXT NOT NULL DEFAULT '',
             unit TEXT,
-            barcode TEXT
+            barcode TEXT,
+            image_url TEXT,
+            category_id INTEGER
           )
         ''');
         await db.execute('''
@@ -104,7 +113,8 @@ class AppDatabase {
             latitude REAL,
             longitude REAL,
             price_type TEXT,
-            comment TEXT
+            comment TEXT,
+            client_uuid TEXT
           )
         ''');
         await db.execute('''
@@ -202,25 +212,30 @@ class AppDatabase {
       },
       onUpgrade: (db, oldVersion, newVersion) async {
         if (oldVersion < 2) {
-          await db.execute('ALTER TABLE clients ADD COLUMN client_code TEXT');
-          await db.execute('ALTER TABLE clients ADD COLUMN category TEXT');
-          await db.execute('ALTER TABLE clients ADD COLUMN is_active INTEGER NOT NULL DEFAULT 1');
+          await _addColumnIfMissing(db, 'clients', 'client_code', 'TEXT');
+          await _addColumnIfMissing(db, 'clients', 'category', 'TEXT');
+          await _addColumnIfMissing(
+            db,
+            'clients',
+            'is_active',
+            'INTEGER NOT NULL DEFAULT 1',
+          );
         }
         if (oldVersion < 3) {
           // Eski to‘liq katalog (admin/sync) — agent bog‘langan ro‘yxatiga o‘tish
           await db.delete('clients');
         }
         if (oldVersion < 4) {
-          await db.execute('ALTER TABLE offline_queue ADD COLUMN warehouse_id INTEGER');
-          await db.execute('ALTER TABLE offline_queue ADD COLUMN price_type TEXT');
-          await db.execute('ALTER TABLE offline_queue ADD COLUMN comment TEXT');
+          await _addColumnIfMissing(db, 'offline_queue', 'warehouse_id', 'INTEGER');
+          await _addColumnIfMissing(db, 'offline_queue', 'price_type', 'TEXT');
+          await _addColumnIfMissing(db, 'offline_queue', 'comment', 'TEXT');
         }
         if (oldVersion < 6) {
-          await db.execute('ALTER TABLE clients ADD COLUMN visit_weekdays TEXT');
-          await db.execute('ALTER TABLE clients ADD COLUMN balance REAL');
+          await _addColumnIfMissing(db, 'clients', 'visit_weekdays', 'TEXT');
+          await _addColumnIfMissing(db, 'clients', 'balance', 'REAL');
         }
         if (oldVersion < 7) {
-          await db.execute('ALTER TABLE clients ADD COLUMN credit_limit REAL');
+          await _addColumnIfMissing(db, 'clients', 'credit_limit', 'REAL');
         }
         if (oldVersion < 8) {
           await _ensureClientColumns(db);
@@ -314,6 +329,12 @@ class AppDatabase {
         if (oldVersion < 21) {
           await _ensurePendingLocationPingMetaColumns(db);
         }
+        if (oldVersion < 22) {
+          await _ensureProductImageColumn(db);
+        }
+        if (oldVersion < 23) {
+          await _addColumnIfMissing(db, 'offline_queue', 'client_uuid', 'TEXT');
+        }
         if (oldVersion < 5) {
           await db.execute('''
             CREATE TABLE IF NOT EXISTS agent_visits (
@@ -348,30 +369,79 @@ class AppDatabase {
     }
   }
 
+  static const _schemaHooksKey = 'schema_hooks_v';
+  static const _schemaHooksValue = '23';
+
+  static Future<bool> _schemaHooksApplied(Database db) async {
+    try {
+      final rows = await db.query(
+        'sync_meta',
+        columns: ['value'],
+        where: 'key = ?',
+        whereArgs: [_schemaHooksKey],
+        limit: 1,
+      );
+      return rows.isNotEmpty && rows.first['value'] == _schemaHooksValue;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  static Future<void> _markSchemaHooksApplied(Database db) async {
+    try {
+      await db.insert(
+        'sync_meta',
+        {'key': _schemaHooksKey, 'value': _schemaHooksValue},
+        conflictAlgorithm: ConflictAlgorithm.replace,
+      );
+    } catch (_) {}
+  }
+
+  static Future<void> _addColumnIfMissing(
+    Database db,
+    String table,
+    String column,
+    String ddlSuffix,
+  ) async {
+    final cols = (await db.rawQuery('PRAGMA table_info($table)'))
+        .map((r) => r['name'] as String)
+        .toSet();
+    if (cols.contains(column)) return;
+    await db.execute('ALTER TABLE $table ADD COLUMN $column $ddlSuffix');
+  }
+
   static Future<void> _ensureHeldOrderSummaryColumns(Database db) async {
-    try {
-      await db.execute('ALTER TABLE held_orders ADD COLUMN bonus_qty INTEGER NOT NULL DEFAULT 0');
-    } catch (_) {}
-    try {
-      await db.execute('ALTER TABLE held_orders ADD COLUMN discount_pct REAL NOT NULL DEFAULT 0');
-    } catch (_) {}
+    await _addColumnIfMissing(
+      db,
+      'held_orders',
+      'bonus_qty',
+      'INTEGER NOT NULL DEFAULT 0',
+    );
+    await _addColumnIfMissing(
+      db,
+      'held_orders',
+      'discount_pct',
+      'REAL NOT NULL DEFAULT 0',
+    );
+  }
+
+  static Future<void> _ensureProductImageColumn(Database db) async {
+    await _addColumnIfMissing(db, 'products', 'image_url', 'TEXT');
+    await _addColumnIfMissing(db, 'products', 'category_id', 'INTEGER');
   }
 
   static Future<void> _ensureVisitGeoColumn(Database db) async {
-    try {
-      await db.execute('ALTER TABLE agent_visits ADD COLUMN geo_json TEXT');
-    } catch (_) {}
+    await _addColumnIfMissing(db, 'agent_visits', 'geo_json', 'TEXT');
   }
 
   static Future<void> _ensurePhotoRetryColumn(Database db) async {
-    try {
-      await db.execute(
-        'ALTER TABLE pending_photo_reports ADD COLUMN retry_count INTEGER NOT NULL DEFAULT 0',
-      );
-    } catch (_) {}
-    try {
-      await db.execute('ALTER TABLE held_orders ADD COLUMN capture_deadline TEXT');
-    } catch (_) {}
+    await _addColumnIfMissing(
+      db,
+      'pending_photo_reports',
+      'retry_count',
+      'INTEGER NOT NULL DEFAULT 0',
+    );
+    await _addColumnIfMissing(db, 'held_orders', 'capture_deadline', 'TEXT');
     try {
       await db.execute(
         "UPDATE held_orders SET capture_deadline = submit_at WHERE capture_deadline IS NULL OR capture_deadline = ''",
@@ -403,12 +473,18 @@ class AppDatabase {
   }
 
   static Future<void> _ensurePendingLocationPingMetaColumns(Database db) async {
-    try {
-      await db.execute('ALTER TABLE pending_location_pings ADD COLUMN battery_pct INTEGER');
-    } catch (_) {}
-    try {
-      await db.execute('ALTER TABLE pending_location_pings ADD COLUMN network_type TEXT');
-    } catch (_) {}
+    await _addColumnIfMissing(
+      db,
+      'pending_location_pings',
+      'battery_pct',
+      'INTEGER',
+    );
+    await _addColumnIfMissing(
+      db,
+      'pending_location_pings',
+      'network_type',
+      'TEXT',
+    );
   }
 
   /// Ro‘yxat/qidiruv/vizit metrikalarini tezlashtirish.
@@ -560,7 +636,7 @@ class AppDatabase {
     Transaction txn,
     String table,
     List<Map<String, dynamic>> rows, {
-    int chunkSize = 400,
+    int chunkSize = 150,
   }) async {
     if (rows.isEmpty) return;
     for (var i = 0; i < rows.length; i += chunkSize) {
@@ -570,7 +646,8 @@ class AppDatabase {
         batch.insert(table, row, conflictAlgorithm: ConflictAlgorithm.replace);
       }
       await batch.commit(noResult: true);
-      await Future<void>.delayed(Duration.zero);
+      // Emulyator ANR: UI oqimiga nafas berish.
+      await Future<void>.delayed(const Duration(milliseconds: 1));
     }
   }
 
@@ -1098,6 +1175,7 @@ class AppDatabase {
     double? lng,
     String? priceType,
     String? comment,
+    String? clientUuid,
   }) async {
     final db = await database;
     return db.insert('offline_queue', {
@@ -1110,7 +1188,19 @@ class AppDatabase {
       'longitude': lng,
       'price_type': priceType,
       'comment': comment,
+      'client_uuid': clientUuid ?? _newClientUuid(),
     });
+  }
+
+  /// Offline retry uchun barqaror UUID (bir marta saqlanadi).
+  static String _newClientUuid() {
+    final r = Random.secure();
+    final bytes = List<int>.generate(16, (_) => r.nextInt(256));
+    bytes[6] = (bytes[6] & 0x0f) | 0x40;
+    bytes[8] = (bytes[8] & 0x3f) | 0x80;
+    String h(int b) => b.toRadixString(16).padLeft(2, '0');
+    final s = bytes.map(h).join();
+    return '${s.substring(0, 8)}-${s.substring(8, 12)}-${s.substring(12, 16)}-${s.substring(16, 20)}-${s.substring(20)}';
   }
 
   Future<List<Map<String, dynamic>>> getPendingOrders() async {

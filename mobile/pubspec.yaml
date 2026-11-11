@@ -51,3 +51,4 @@ flutter:
     - .env.local
     - .env.production
     - assets/brand/
+    - assets/design/catalog.json

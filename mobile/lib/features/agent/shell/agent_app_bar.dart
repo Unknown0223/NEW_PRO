@@ -6,11 +6,12 @@ import '../../../core/auth/session.dart';
 import '../../../core/config/mobile_config.dart';
 import '../../../core/config/sync_window_countdown.dart';
 import '../../../core/ui/agent_ui.dart';
+import '../../../core/ui/quick_panel_sheet.dart';
 import 'agent_scaffold_key.dart';
 import '../orders/create_order_exit_guard.dart';
 
 /// Agent sahifalari uchun TopBar (shablon Agent 2.0).
-/// Sinхron oynasi taymeri har doim title yonida ko‘rinadi.
+/// Pastki nav saqlanadi; tezkor panel app bar da.
 class AgentAppBar extends ConsumerWidget implements PreferredSizeWidget {
   final String title;
   final List<Widget>? actions;
@@ -24,6 +25,8 @@ class AgentAppBar extends ConsumerWidget implements PreferredSizeWidget {
   final VoidCallback? onBack;
   final int? menuBadge;
   final bool showSyncCountdown;
+  /// Shablon tezkor panel tugmasi.
+  final bool showQuickPanel;
 
   const AgentAppBar({
     super.key,
@@ -37,6 +40,7 @@ class AgentAppBar extends ConsumerWidget implements PreferredSizeWidget {
     this.onBack,
     this.menuBadge,
     this.showSyncCountdown = true,
+    this.showQuickPanel = true,
   });
 
   @override
@@ -82,7 +86,8 @@ class AgentAppBar extends ConsumerWidget implements PreferredSizeWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final useMenuLeading =
         drawerScaffoldKey != null || useShellDrawer || !showBack;
-    final syncCfg = ref.watch(sessionProvider).mobileConfig?.sync ?? const SyncConfig();
+    final syncCfg =
+        ref.watch(sessionProvider).mobileConfig?.sync ?? const SyncConfig();
 
     Widget? trailing = titleTrailing;
     if (showSyncCountdown) {
@@ -108,7 +113,11 @@ class AgentAppBar extends ConsumerWidget implements PreferredSizeWidget {
       menuBadge: menuBadge,
       actions: [
         if (showBack && useMenuLeading)
-          AgentIconButton(icon: Icons.arrow_back, onPressed: () => _goBack(context)),
+          AgentIconButton(
+            icon: Icons.arrow_back,
+            onPressed: () => _goBack(context),
+          ),
+        if (showQuickPanel) const QuickPanelAction(),
         ...?actions,
       ],
     );

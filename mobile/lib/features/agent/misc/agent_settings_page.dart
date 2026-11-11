@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../core/auth/session.dart';
 import '../../../core/config/mobile_config.dart';
@@ -53,6 +54,12 @@ class _AgentSettingsPageState extends ConsumerState<AgentSettingsPage> {
           chevron: true,
           group: 'ОСНОВНЫЕ НАСТРОЙКИ',
         ),
+        const _SettingRow(
+          id: 'quick_panel',
+          label: 'Быстрое меню (разделы)',
+          chevron: true,
+          group: 'НАВИГАЦИЯ',
+        ),
         _SettingRow(
           id: 'full_sync_with_photo',
           label: 'Полная синхронизация с фото',
@@ -89,6 +96,12 @@ class _AgentSettingsPageState extends ConsumerState<AgentSettingsPage> {
           id: 'show_boxes',
           label: 'Показать кол-во коробок',
           toggle: prefs.showBoxCount,
+        ),
+        _SettingRow(
+          id: 'catalog_grid',
+          label: 'Каталог: сетка (иначе список)',
+          toggle: prefs.catalogIsGrid,
+          group: 'КАТАЛОГ',
         ),
       ];
 
@@ -177,6 +190,9 @@ class _AgentSettingsPageState extends ConsumerState<AgentSettingsPage> {
       if (picked != null) {
         await ref.read(agentLocalPrefsProvider.notifier).setPrefs((p) => p.copyWith(locale: picked));
       }
+    } else if (row.id == 'quick_panel') {
+      if (!mounted) return;
+      context.push('/settings/quick');
     }
   }
 
@@ -199,6 +215,10 @@ class _AgentSettingsPageState extends ConsumerState<AgentSettingsPage> {
         await n.setPrefs((p) => p.copyWith(sortProductsAlphabetically: v));
       case 'show_boxes':
         await n.setPrefs((p) => p.copyWith(showBoxCount: v));
+      case 'catalog_grid':
+        await n.setPrefs(
+          (p) => p.copyWith(catalogViewMode: v ? 'grid' : 'list'),
+        );
       default:
         break;
     }

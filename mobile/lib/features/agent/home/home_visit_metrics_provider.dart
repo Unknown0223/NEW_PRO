@@ -24,15 +24,23 @@ typedef HomeVisitMetrics = ({
 });
 
 /// Bosh sahifa «Посещено / Осталось» — bugungi reja (ОКБ) bo‘yicha.
+/// Og‘ir 30-kunlik skan / filteredClients — keyingi kadrga (ANR oldini olish).
 final homeVisitMetricsProvider = FutureProvider<HomeVisitMetrics>((ref) async {
-  final calendarOn = ref.watch(agentLocalPrefsProvider).valueOrNull?.calendarMode ?? true;
+  final calendarOn =
+      ref.watch(agentLocalPrefsProvider).valueOrNull?.calendarMode ?? true;
   final visitedIds = await ref.watch(visitedTodayClientIdsProvider.future);
 
   final todayIso = serverTodayKey();
   final todayWeekday = serverTodayWeekday();
-  final realTodayRoute = await ref.watch(realTodayRouteProvider.future);
   final allClients = await ref.watch(clientsListProvider.future);
   final hasSchedule = tenantHasAnyVisitSchedule(allClients);
+
+  // Marshrut API + getAllClients merge — mijozlar bo‘sh bo‘lsa o‘tkazib yuboramiz.
+  final routeRaw = await ref.watch(realTodayRouteProvider.future);
+  final realTodayRoute = allClients.isEmpty
+      ? const <String, dynamic>{'stops': <dynamic>[]}
+      : (routeRaw ?? const <String, dynamic>{'stops': <dynamic>[]});
+
   final planIds = resolveDailyVisitPlanIds(
     route: realTodayRoute,
     allClients: allClients,
@@ -47,20 +55,22 @@ final homeVisitMetricsProvider = FutureProvider<HomeVisitMetrics>((ref) async {
   final total = planIds.length;
   final remainingOnRoute = progress.remainingOnPlan;
 
-  final plannedToday = plannedClientIdsForDay(allClients, todayWeekday, todayIso);
+  final plannedToday =
+      plannedClientIdsForDay(allClients, todayWeekday, todayIso);
   final offPlanRemaining = <int>{};
   for (final id in plannedToday) {
     if (planIds.contains(id)) continue;
     if (!visitedIds.contains(id)) offPlanRemaining.add(id);
   }
-  if (calendarOn) {
+  // filteredClientsProvider og‘ir — faqat kerak bo‘lsa va katalog kichik.
+  if (calendarOn && allClients.length <= 800) {
     final filtered = await ref.watch(filteredClientsProvider.future);
     for (final c in filtered) {
       final id = (c['id'] as num?)?.toInt();
       if (id == null || planIds.contains(id)) continue;
       if (!visitedIds.contains(id)) offPlanRemaining.add(id);
     }
-  } else {
+  } else if (!calendarOn) {
     for (final c in allClients) {
       final id = (c['id'] as num?)?.toInt();
       if (id == null || planIds.contains(id)) continue;
@@ -69,21 +79,28 @@ final homeVisitMetricsProvider = FutureProvider<HomeVisitMetrics>((ref) async {
   }
   final remainingOffRoute = offPlanRemaining.length;
 
-  final visitedIn30d = await AppDatabase().getClientIdsVisitedSince(okbLookbackSince());
+  // 30-kunlik visit skani — asosiy UI dan keyin (bo‘sh set bilan birinchi paint).
+  var dormantOnWeekday = 0;
+  var dormantUnique = 0;
+  if (allClients.isNotEmpty) {
+    await Future<void>.delayed(Duration.zero);
+    final visitedIn30d =
+        await AppDatabase().getClientIdsVisitedSince(okbLookbackSince());
+    dormantOnWeekday = countDormantOnTodayWeekday(
+      clients: allClients,
+      weekday: todayWeekday,
+      todayIso: todayIso,
+      routeClientIds: planIds,
+      visitedInLookback: visitedIn30d,
+    );
+    dormantUnique = countDormantUniqueClients(
+      clients: allClients,
+      visitedInLookback: visitedIn30d,
+    );
+  }
 
-  final dormantOnWeekday = countDormantOnTodayWeekday(
-    clients: allClients,
-    weekday: todayWeekday,
-    todayIso: todayIso,
-    routeClientIds: planIds,
-    visitedInLookback: visitedIn30d,
-  );
-  final dormantUnique = countDormantUniqueClients(
-    clients: allClients,
-    visitedInLookback: visitedIn30d,
-  );
-
-  final noVisitsPlannedToday = hasSchedule && total == 0 && allClients.isNotEmpty;
+  final noVisitsPlannedToday =
+      hasSchedule && total == 0 && allClients.isNotEmpty;
 
   if (calendarOn) {
     return (

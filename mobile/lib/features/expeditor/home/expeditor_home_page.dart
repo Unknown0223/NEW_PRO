@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 import '../../../core/auth/session.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
+import '../../../core/ui/quick_panel_sheet.dart';
 import '../../agent/orders/order_create_models.dart' show formatMoneySpaced;
 import '../config/expeditor_config_enforcement.dart';
 import '../expeditor_providers.dart';
@@ -46,7 +47,10 @@ class ExpeditorHomePage extends ConsumerWidget {
       drawer: const ExpeditorDrawer(),
       appBar: AppBar(
         title: const Text('Главная'),
-        actions: const [ExpeditorNotificationsBell()],
+        actions: const [
+          QuickPanelAction(),
+          ExpeditorNotificationsBell(),
+        ],
       ),
       body: RefreshIndicator(
         onRefresh: () async {

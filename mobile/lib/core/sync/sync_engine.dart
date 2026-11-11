@@ -113,10 +113,14 @@ class SyncEngine {
   }
 
   /// Sync + SQLite yangilash (parse isolate + bitta tranzaksiya).
+  ///
+  /// [awaitFlush]: bootstrapda false — offline/foto/GPS UI ni bloklamasdan
+  /// `_bootstrapPostSyncServices` / keyingi sync da ketadi.
   Future<ParsedSyncPayload> pullSync({
     String? lastSyncAt,
     void Function(int phase)? onPhase,
     bool forceClientsCatalog = false,
+    bool awaitFlush = true,
   }) async {
     onPhase?.call(0);
     final deviceFuture = MobileDeviceInfo.syncPayload();
@@ -153,8 +157,11 @@ class SyncEngine {
     );
 
     onPhase?.call(5);
-    // Navbat + foto + GPS to‘liq tugaguncha kutamiz — aks holda «OK» erta chiqadi.
-    await Future.wait([offlineFuture, photoFuture, gpsFuture]);
+    if (awaitFlush) {
+      // Navbat + foto + GPS to‘liq tugaguncha kutamiz — aks holda «OK» erta chiqadi.
+      await Future.wait([offlineFuture, photoFuture, gpsFuture]);
+    }
+    // awaitFlush=false: future lar fonda davom etadi (unawaited).
     return payload;
   }
 
@@ -191,6 +198,7 @@ class SyncEngine {
           comment: item['comment']?.toString(),
           visit: await _db.findVisitGeoForClient(clientId, at: createdAt),
           createdAt: createdAt,
+          clientUuid: item['client_uuid']?.toString(),
         );
 
         await _db.markQueueItemSent(item['id'] as int);
