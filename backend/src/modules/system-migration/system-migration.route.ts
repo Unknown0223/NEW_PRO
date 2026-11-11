@@ -5,6 +5,7 @@ import * as os from "os";
 import * as path from "path";
 import { z } from "zod";
 import { sendApiError } from "../../lib/api-error";
+import { assertFileKind } from "../../lib/file-signature.pure";
 import { writeMigrationImportTempFile } from "../../jobs/import-temp-file";
 import { ensureTenantContext } from "../../lib/tenant-context";
 import { actorUserIdOrNull } from "../../lib/request-actor";
@@ -300,6 +301,11 @@ export async function registerSystemMigrationRoutes(app: FastifyInstance) {
           "ZIP-файл не загружен. Выберите архив резервной копии через «Выбрать ZIP»."
         );
       }
+      try {
+        assertFileKind(uploaded.buf, ["zip"]);
+      } catch {
+        return sendApiError(reply, request, 400, "BadFileType", "Файл должен быть ZIP-архивом резервной копии.");
+      }
       const preview = await parseBackupZip(uploaded.buf, request.tenant!.id);
       return reply.send(preview);
     }
@@ -371,6 +377,12 @@ export async function registerSystemMigrationRoutes(app: FastifyInstance) {
           "NoFile",
           "ZIP-файл не загружен. Выберите архив резервной копии через «Выбрать ZIP»."
         );
+      }
+
+      try {
+        assertFileKind(fileBuf, ["zip"]);
+      } catch {
+        return sendApiError(reply, request, 400, "BadFileType", "Файл должен быть ZIP-архивом резервной копии.");
       }
 
       const parsedFields = applyBodySchema.safeParse({

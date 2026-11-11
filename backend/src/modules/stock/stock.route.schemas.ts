@@ -1,7 +1,7 @@
 import type { FastifyRequest } from "fastify";
 import { z } from "zod";
 import { env } from "../../config/env";
-import { assertExcelImportSize } from "../../lib/multipart-limits";
+import { assertExcelImportBuffer } from "../../lib/multipart-limits";
 import {
   stockBalancesExportQuerySchema,
   stockBalancesQuerySchema
@@ -185,7 +185,7 @@ export async function parseStockImportMultipart(request: FastifyRequest): Promis
   if (!buf || buf.length === 0) {
     return null;
   }
-  assertExcelImportSize(buf.length);
+  assertExcelImportBuffer(buf);
   return { buf, defaultWarehouseId };
 }
 

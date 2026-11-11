@@ -1,15 +1,26 @@
 import {
   DeleteObjectCommand,
   GetObjectCommand,
-  PutObjectCommand,
   S3Client
 } from "@aws-sdk/client-s3";
-import { createReadStream, existsSync, mkdirSync, renameSync, statSync } from "fs";
+import { Upload } from "@aws-sdk/lib-storage";
+import {
+  createReadStream,
+  createWriteStream,
+  existsSync,
+  mkdirSync,
+  renameSync,
+  statSync,
+  unlinkSync
+} from "fs";
+import { unlink } from "fs/promises";
 import { join } from "path";
 import { pipeline } from "stream/promises";
-import type { Readable } from "stream";
+import { Readable } from "stream";
+import type { Readable as ReadableType } from "stream";
 import { env } from "../config/env";
 import { logger } from "../config/logger";
+import { limitStreamBytes, type ByteCountState } from "./storage-stream.pure";
 
 export type StoragePutResult = { key: string; bytes: number; url?: string };
 
@@ -48,17 +59,6 @@ function publicUrlForKey(key: string): string | undefined {
   return publicBase ? `${publicBase}/${key}` : undefined;
 }
 
-async function s3PutObject(key: string, body: Buffer, contentType: string): Promise<void> {
-  await getS3Client().send(
-    new PutObjectCommand({
-      Bucket: env.STORAGE_BUCKET!,
-      Key: key,
-      Body: body,
-      ContentType: contentType
-    })
-  );
-}
-
 async function s3GetObject(key: string): Promise<Buffer | null> {
   try {
     const res = await getS3Client().send(
@@ -89,35 +89,73 @@ function localPath(key: string): string {
   return join(LOCAL_ROOT, key.replace(/\.\./g, "_"));
 }
 
-/** S3/R2 object storage — env yoqilmagan bo‘lsa lokal disk fallback. */
+async function putLocalStream(
+  key: string,
+  stream: ReadableType,
+  maxBytes: number
+): Promise<number> {
+  const target = localPath(key);
+  mkdirSync(join(target, ".."), { recursive: true });
+  const tmp = `${target}.upload`;
+  const state: ByteCountState = { written: 0 };
+  try {
+    await pipeline(
+      stream,
+      async function* (source) {
+        yield* limitStreamBytes(source, maxBytes, state);
+      },
+      createWriteStream(tmp)
+    );
+    renameSync(tmp, target);
+    return state.written;
+  } catch (err) {
+    try {
+      if (existsSync(tmp)) unlinkSync(tmp);
+    } catch {
+      /* ignore */
+    }
+    throw err;
+  }
+}
+
+async function putS3Stream(
+  key: string,
+  stream: ReadableType,
+  contentType: string,
+  maxBytes: number
+): Promise<number> {
+  const state: ByteCountState = { written: 0 };
+  const limited = Readable.from(limitStreamBytes(stream, maxBytes, state));
+  const upload = new Upload({
+    client: getS3Client(),
+    params: {
+      Bucket: env.STORAGE_BUCKET!,
+      Key: key,
+      Body: limited,
+      ContentType: contentType
+    }
+  });
+  await upload.done();
+  return state.written;
+}
+
+/** S3/R2 object storage — env yoqilmagan bo‘lsa lokal disk. Buffer.concat yo‘q. */
 export async function storagePut(
   prefix: string,
   filename: string,
-  stream: Readable,
+  stream: ReadableType,
   contentType: string,
   maxBytes: number
 ): Promise<StoragePutResult> {
   const key = objectKey(prefix, filename);
-  let written = 0;
-  const chunks: Buffer[] = [];
-  for await (const chunk of stream) {
-    const buf = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
-    written += buf.length;
-    if (written > maxBytes) throw new Error("FILE_TOO_LARGE");
-    chunks.push(buf);
-  }
-  const body = Buffer.concat(chunks);
-
-  if (isObjectStorageEnabled()) {
-    await s3PutObject(key, body, contentType);
-    return { key, bytes: written, url: publicUrlForKey(key) };
-  }
-
-  const target = localPath(key);
-  mkdirSync(join(target, ".."), { recursive: true });
-  const { writeFileSync } = await import("fs");
-  writeFileSync(target, body);
-  return { key, bytes: written };
+  const bytes = isObjectStorageEnabled()
+    ? await putS3Stream(key, stream, contentType, maxBytes)
+    : await putLocalStream(key, stream, maxBytes);
+  return {
+    key,
+    bytes,
+    url: isObjectStorageEnabled() ? publicUrlForKey(key) : undefined
+  };
 }
 
 export async function storagePutFile(
@@ -158,44 +196,7 @@ export async function storageDelete(key: string): Promise<void> {
   }
   const p = localPath(key);
   if (existsSync(p)) {
-    const { unlinkSync } = await import("fs");
-    unlinkSync(p);
-  }
-}
-
-export async function storageSaveStreamToLocalThenUpload(
-  prefix: string,
-  filename: string,
-  stream: Readable,
-  contentType: string,
-  maxBytes: number
-): Promise<StoragePutResult> {
-  const tmpDir = join(LOCAL_ROOT, "_tmp");
-  mkdirSync(tmpDir, { recursive: true });
-  const tmp = join(tmpDir, `${Date.now()}-${filename}.upload`);
-  const target = join(tmpDir, `${Date.now()}-${filename}`);
-  let written = 0;
-  await pipeline(
-    stream,
-    async function* (source) {
-      for await (const chunk of source) {
-        const buf = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
-        written += buf.length;
-        if (written > maxBytes) throw new Error("FILE_TOO_LARGE");
-        yield buf;
-      }
-    },
-    (await import("fs")).createWriteStream(tmp)
-  );
-  renameSync(tmp, target);
-  try {
-    return await storagePutFile(prefix, filename, target, contentType);
-  } finally {
-    try {
-      (await import("fs/promises")).unlink(target);
-    } catch {
-      /* ignore */
-    }
+    await unlink(p).catch(() => undefined);
   }
 }
 

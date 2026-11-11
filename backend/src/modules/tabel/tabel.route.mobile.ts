@@ -17,6 +17,7 @@ import {
   hashDeviceToken,
   terminalEmployeeWhere
 } from "./device-ingest-auth.pure";
+import { detectFileKind } from "../../lib/file-signature.pure";
 import { loadTenantBranchesForAccess } from "../tenant-settings/tenant-settings.profile.read";
 import {
   getMobileAttendanceState,
@@ -75,7 +76,7 @@ async function readTerminalIngest(request: FastifyRequest): Promise<TerminalInge
   for await (const part of request.parts()) {
     if (part.type === "file") {
       const buf = await part.toBuffer();
-      if (buf.length > 500 && buf[0] === 0xff && buf[1] === 0xd8) {
+      if (buf.length > 500 && detectFileKind(buf) === "jpeg") {
         photo = buf.toString("base64");
         continue;
       }

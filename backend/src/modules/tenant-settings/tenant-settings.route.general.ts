@@ -266,6 +266,9 @@ export async function registerTenantSettingsGeneralRoutes(app: FastifyInstance) 
             `Размер APK не должен превышать ${Math.round(MOBILE_APK_MAX_BYTES / (1024 * 1024))} МБ`
           );
         }
+        if (e instanceof Error && e.message === "FILE_TYPE_MISMATCH") {
+          return sendApiError(reply, request, 400, "BadFileType", "Файл должен быть APK (ZIP).");
+        }
         throw e;
       }
     }

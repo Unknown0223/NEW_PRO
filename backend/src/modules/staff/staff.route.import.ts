@@ -5,7 +5,11 @@
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { z } from "zod";
 import { sendApiError, zodValidationExtras, zodValidationSummary } from "../../lib/api-error";
-import { assertExcelImportSize, ExcelImportTooLargeError } from "../../lib/multipart-limits";
+import {
+  assertExcelImportBuffer,
+  ExcelImportBadTypeError,
+  ExcelImportTooLargeError
+} from "../../lib/multipart-limits";
 import { writeApiRateLimitRouteOpts } from "../../lib/rate-limit-config";
 import { actorUserIdOrNull } from "../../lib/request-actor";
 import { ensureTenantContext } from "../../lib/tenant-context";
@@ -50,16 +54,19 @@ const kindOrAllSchema = z.object({
 
 async function readImportBuffer(
   request: FastifyRequest
-): Promise<{ ok: true; buf: Buffer } | { ok: false; error: "NoFile" | "EmptyFile" | "TooLarge" }> {
+): Promise<
+  { ok: true; buf: Buffer } | { ok: false; error: "NoFile" | "EmptyFile" | "TooLarge" | "BadFileType" }
+> {
   try {
     const file = await request.file();
     if (!file) return { ok: false, error: "NoFile" };
     const buf = await file.toBuffer();
     if (buf.length === 0) return { ok: false, error: "EmptyFile" };
-    assertExcelImportSize(buf.length);
+    assertExcelImportBuffer(buf);
     return { ok: true, buf };
   } catch (e) {
     if (e instanceof ExcelImportTooLargeError) return { ok: false, error: "TooLarge" };
+    if (e instanceof ExcelImportBadTypeError) return { ok: false, error: "BadFileType" };
     throw e;
   }
 }
@@ -127,6 +134,7 @@ async function handleImport(
   if (!read.ok) {
     if (read.error === "NoFile") return sendApiError(reply, request, 400, "NoFile");
     if (read.error === "TooLarge") return sendApiError(reply, request, 400, "FileTooLarge");
+    if (read.error === "BadFileType") return sendApiError(reply, request, 400, "BadFileType");
     return sendApiError(reply, request, 400, "EmptyFile");
   }
   try {
@@ -151,6 +159,7 @@ async function handleAllRolesImport(
   if (!read.ok) {
     if (read.error === "NoFile") return sendApiError(reply, request, 400, "NoFile");
     if (read.error === "TooLarge") return sendApiError(reply, request, 400, "FileTooLarge");
+    if (read.error === "BadFileType") return sendApiError(reply, request, 400, "BadFileType");
     return sendApiError(reply, request, 400, "EmptyFile");
   }
   try {
@@ -245,6 +254,7 @@ export async function registerStaffImportRoutes(app: FastifyInstance) {
         if (!read.ok) {
           if (read.error === "NoFile") return sendApiError(reply, request, 400, "NoFile");
           if (read.error === "TooLarge") return sendApiError(reply, request, 400, "FileTooLarge");
+          if (read.error === "BadFileType") return sendApiError(reply, request, 400, "BadFileType");
           return sendApiError(reply, request, 400, "EmptyFile");
         }
         try {

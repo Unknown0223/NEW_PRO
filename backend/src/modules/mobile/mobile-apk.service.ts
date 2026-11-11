@@ -55,16 +55,22 @@ export async function mobileApkReady(
 }
 
 export async function saveMobileApkStream(tenantSlug: string, stream: Readable): Promise<number> {
+  const { assertFileKind } = await import("../../lib/file-signature.pure");
   const dir = join(UPLOAD_ROOT, tenantSlug);
   mkdirSync(dir, { recursive: true });
   const target = mobileApkFilePath(tenantSlug);
   const tmp = `${target}.upload`;
   let written = 0;
+  let checkedMagic = false;
   await pipeline(
     stream,
     async function* (source) {
       for await (const chunk of source) {
         const buf = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+        if (!checkedMagic) {
+          checkedMagic = true;
+          assertFileKind(buf, ["zip"]);
+        }
         written += buf.length;
         if (written > MOBILE_APK_MAX_BYTES) {
           throw new Error("FILE_TOO_LARGE");

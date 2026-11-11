@@ -16,7 +16,7 @@ import { sentryPlugin } from "./plugins/sentry.plugin";
 import { telemetryPlugin } from "./plugins/telemetry.plugin";
 import { registerBusinessMetricsRoutes } from "./modules/health/business-metrics.route";
 import { registerWebVitalsRoutes } from "./modules/health/web-vitals.route";
-import { ExcelImportTooLargeError } from "./lib/multipart-limits";
+import { ExcelImportBadTypeError, ExcelImportTooLargeError } from "./lib/multipart-limits";
 import { checkReadiness } from "./modules/health/health.service";
 import { buildCorsOrigin } from "./lib/cors-options";
 import { GLOBAL_HTTP_BODY_LIMIT_BYTES } from "./lib/constants";
@@ -42,12 +42,12 @@ export function buildApp() {
   app.register(helmet, helmetOptions);
   app.register(multipart, {
     limits: {
-      // Migratsiya ZIP (siqilgan fotolar) — 512 MB gacha.
-      fileSize: Math.max(
-        env.MULTIPART_MAX_FILE_BYTES,
-        env.MULTIPART_APK_MAX_BYTES,
-        512 * 1024 * 1024
-      )
+      /**
+       * Oddiy yuklashlar — 32 MB (env). APK/migratsiya marshrutlari
+       * `request.file` / `parts({ limits })` orqali alohida oshiradi.
+       * Hardcoded 512 MB floor olib tashlandi (audit P1-6).
+       */
+      fileSize: env.MULTIPART_MAX_FILE_BYTES
     }
   });
   app.register(sentryPlugin);
@@ -142,6 +142,9 @@ export function buildApp() {
       return sendApiError(reply, request, 413, "PayloadTooLarge", error.message, {
         maxBytes: env.MULTIPART_EXCEL_MAX_BYTES
       });
+    }
+    if (error instanceof ExcelImportBadTypeError) {
+      return sendApiError(reply, request, 400, "BadFileType", error.message);
     }
     if (error instanceof ZodError) {
       return sendApiError(

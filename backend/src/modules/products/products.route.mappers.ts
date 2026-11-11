@@ -1,7 +1,7 @@
 import type { FastifyRequest } from "fastify";
 import type { Prisma } from "@prisma/client";
 import { env } from "../../config/env";
-import { assertExcelImportSize } from "../../lib/multipart-limits";
+import { assertExcelImportBuffer } from "../../lib/multipart-limits";
 
 export type ProductListRow = {
   id: number;
@@ -49,7 +49,7 @@ export async function readProductImportBuffer(
   if (buf.length === 0) {
     return { ok: false, error: "EmptyFile" };
   }
-  assertExcelImportSize(buf.length);
+  assertExcelImportBuffer(buf);
   return { ok: true, buf };
 }
 

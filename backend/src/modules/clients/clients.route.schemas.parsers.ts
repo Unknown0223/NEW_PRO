@@ -1,6 +1,6 @@
 import type { FastifyReply, FastifyRequest } from "fastify";
 import { env } from "../../config/env";
-import { assertExcelImportSize } from "../../lib/multipart-limits";
+import { assertExcelImportBuffer } from "../../lib/multipart-limits";
 import { parseVisitWeekdaysFromCell } from "./clients.visit-weekdays";
 import type { ListClientsQuery } from "./clients.service";
 import { buildClientUpdateImportTemplateBuffer } from "./clients.service";
@@ -88,7 +88,7 @@ export async function parseClientImportMultipart(request: FastifyRequest): Promi
   if (!buf || buf.length === 0) {
     return null;
   }
-  assertExcelImportSize(buf.length);
+  assertExcelImportBuffer(buf);
   return {
     buf,
     sheetName,
