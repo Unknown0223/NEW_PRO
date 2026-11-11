@@ -11,11 +11,15 @@ globs:
 
 ## Har bir PR
 
-- [ ] Maxfiy ma'lumotlar (`.env`, parollar, tokenlar) commit qilinmagan
-- [ ] Yangi API marshrutlari RBAC guard bilan (`route-permission-guard.ts`)
+- [ ] Maxfiy ma'lumotlar (`.env`, parollar, tokenlar, `.jks`, xodim Excel) commit qilinmagan
+- [ ] Yangi marshrut: `jwtAccessVerify` + `ensureTenantContext` + `requirePermission`
+- [ ] Har bir Prisma so'rovida `tenant_id` filtri (bola jadvalga id bilan to'g'ridan-to'g'ri emas)
 - [ ] Raw SQL: faqat `Prisma.sql` — `queryRawUnsafe` yo'q
 - [ ] Input validatsiya: Zod schema (`contracts/`)
 - [ ] Rate limit write API uchun (`writeApiRateLimitRouteOpts`)
+- [ ] Pul/miqdor: `Prisma.Decimal`; `Number()` faqat ko'rsatishda
+- [ ] Qoldiq/balans o'zgartirish: avval `FOR UPDATE` (yoki atomar UPDATE)
+- [ ] Yozuv endpoint: `client_uuid` / idempotentlik
 
 ## Production deploy
 

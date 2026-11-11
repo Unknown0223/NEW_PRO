@@ -26,7 +26,14 @@ const loginRouteOpts = {
   config: {
     rateLimit: {
       max: env.AUTH_LOGIN_RATE_MAX,
-      timeWindow: env.AUTH_LOGIN_RATE_WINDOW_MS
+      timeWindow: env.AUTH_LOGIN_RATE_WINDOW_MS,
+      /** IP + tenant slug + login — bitta proxy ortida barcha agentlar bloklanmasin. */
+      keyGenerator: (request: { ip: string; body?: unknown }) => {
+        const body = (request.body ?? {}) as { slug?: unknown; login?: unknown };
+        const slug = typeof body.slug === "string" ? body.slug.trim().toLowerCase() : "";
+        const login = typeof body.login === "string" ? body.login.trim().toLowerCase() : "";
+        return `${request.ip}|${slug}|${login}`;
+      }
     }
   }
 };
@@ -39,13 +46,9 @@ function registerAuthAtBase(app: FastifyInstance, base: string) {
     }
 
     try {
-      const ip =
-        (request.headers["x-forwarded-for"] as string | undefined)?.split(",")[0]?.trim() ||
-        request.ip ||
-        null;
       const result = await login(app, {
         ...parsed.data,
-        ip_address: ip,
+        ip_address: request.ip || null,
         request_origin: resolveRequestOrigin(request.headers)
       });
       setRefreshTokenCookie(reply, result.refreshToken);

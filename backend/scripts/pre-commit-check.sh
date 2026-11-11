@@ -6,8 +6,10 @@ cd "$(dirname "$0")/.."
 
 has() { command -v "$1" >/dev/null 2>&1; }
 
-STAGED_TS=$(git diff --cached --name-only --diff-filter=ACMR -- 'src/**/*.ts' 'scripts/**/*.ts' 'shared/**/*.ts' || true)
-STAGED_FE=$(git diff --cached --name-only --diff-filter=ACMR -- '../frontend/**/*.ts' '../frontend/**/*.tsx' || true)
+# Git ildiz monorepo bo‘lsa yo‘llar `backend/src/...` keladi — cwd backend.
+STAGED_TS_RAW=$(git diff --cached --name-only --diff-filter=ACMR -- 'src/**/*.ts' 'scripts/**/*.ts' 'shared/**/*.ts' 'backend/src/**/*.ts' 'backend/scripts/**/*.ts' 'backend/shared/**/*.ts' || true)
+STAGED_TS=$(printf '%s\n' "$STAGED_TS_RAW" | sed -e 's|^backend/||' | grep -E '^(src|scripts|shared)/' | sort -u || true)
+STAGED_FE=$(git diff --cached --name-only --diff-filter=ACMR -- '../frontend/**/*.ts' '../frontend/**/*.tsx' 'frontend/**/*.ts' 'frontend/**/*.tsx' || true)
 
 if [ -n "${STAGED_TS}${STAGED_FE}" ]; then
   echo "pre-commit: typecheck (tsc --noEmit)..."

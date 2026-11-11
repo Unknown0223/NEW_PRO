@@ -155,7 +155,7 @@
     "@types/bcryptjs": "^2.4.6",
     "@types/node": "^22.10.1",
     "@types/opossum": "^8.1.9",
-    "@types/pdfkit": "^0.17.5",
+    "@types/pdfkit": "^0.17.7",
     "@types/readable-stream": "^4.0.23",
     "@vitest/coverage-v8": "^2.1.9",
     "eslint": "^9.39.5",

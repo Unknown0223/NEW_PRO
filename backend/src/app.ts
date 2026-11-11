@@ -24,6 +24,8 @@ import { helmetOptions } from "./lib/helmet-options";
 import { sendApiError, zodValidationExtras } from "./lib/api-error";
 import { registerAllRoutes } from "./route-registry";
 import { registerPayrollMutationHook } from "./modules/payroll/payroll.auto-hooks";
+import { createRateLimitRedis } from "./lib/rate-limit-redis";
+import { resolveTrustProxy } from "./lib/trust-proxy";
 
 export function buildApp() {
   const app = Fastify({
@@ -32,7 +34,8 @@ export function buildApp() {
     requestIdHeader: "x-request-id",
     /** Standart JSON body; foto marshrutlari alohida kattaroq limit oladi. */
     bodyLimit: GLOBAL_HTTP_BODY_LIMIT_BYTES,
-    pluginTimeout: 120_000
+    pluginTimeout: 120_000,
+    trustProxy: resolveTrustProxy()
   });
 
   app.register(cors, { origin: buildCorsOrigin(), credentials: true });
@@ -50,8 +53,16 @@ export function buildApp() {
   app.register(sentryPlugin);
   app.register(telemetryPlugin);
   app.register(jwtPlugin);
-  /** Faqat `config.rateLimit` berilgan marshrutlar (login) uchun — global: false */
-  app.register(rateLimit, { global: false });
+  /**
+   * Faqat `config.rateLimit` berilgan marshrutlar (login/write) uchun — global: false.
+   * Redis store: PM2 cluster’da limit umumiy; Redis xato bo‘lsa skipOnError.
+   */
+  app.register(rateLimit, {
+    global: false,
+    redis: createRateLimitRedis(),
+    nameSpace: "salec-rl-",
+    skipOnError: true
+  });
   app.register(tenantPlugin);
   app.register(requestObservabilityPlugin);
   app.register(metricsPlugin);

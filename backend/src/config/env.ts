@@ -56,6 +56,11 @@ const envSchema = z.object({
   ),
   /** Productionda majburiy: vergul bilan ajratilgan ruxsat etilgan Origin lar (masalan https://panel.example.com) */
   CORS_ALLOWED_ORIGINS: z.string().optional(),
+  /**
+   * Fastify trustProxy: `true` | hop soni (`1`) | IP/CIDR ro‘yxati.
+   * Productionda majburiy (nginx/Coolify ortida `1` yoki proxy CIDR).
+   */
+  TRUST_PROXY: z.string().optional(),
   /** POST /auth/login va /api/auth/login uchun bir IP dan maksimal urinishlar (oyna) */
   AUTH_LOGIN_RATE_MAX: z.coerce.number().int().positive().default(30),
   /** Login rate limit oynasi (ms), masalan 900000 = 15 daqiqa */
@@ -196,6 +201,11 @@ if (env.NODE_ENV === "production") {
   }
   if (!env.CORS_ALLOWED_ORIGINS?.trim()) {
     throw new Error("Production requires CORS_ALLOWED_ORIGINS (comma-separated origins, e.g. https://app.example.com)");
+  }
+  if (!env.TRUST_PROXY?.trim()) {
+    throw new Error(
+      "Production requires TRUST_PROXY (e.g. 1 for one reverse-proxy hop, or comma-separated proxy CIDRs)"
+    );
   }
   if (env.RBAC_ENFORCE_PERMISSIONS !== "1") {
     throw new Error(
