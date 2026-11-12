@@ -60,6 +60,7 @@ import { registerUserUiRoutes } from "./modules/users/user-ui.route";
 import { registerWorkSlotRoutes } from "./modules/work-slots/work-slots.route";
 import { registerPayrollRoutes } from "./modules/payroll/payroll.route";
 import { registerLocalAssistantRoutes } from "./modules/assistant/local-assistant.route";
+import { registerAiRoutes } from "./modules/ai/ai.route";
 
 type RouteRegistrar = (app: FastifyInstance) => void | Promise<void>;
 
@@ -133,6 +134,12 @@ export const routeRegistrars: RouteRegistrar[] = [
       registerLocalAssistantRoutes(app);
     },
     { name: "register-local-assistant-routes", fastify: "4.x" }
+  ),
+  fp(
+    async (app) => {
+      await registerAiRoutes(app);
+    },
+    { name: "register-ai-routes", fastify: "4.x" }
   ),
   registerSystemMigrationRoutes
 ];
