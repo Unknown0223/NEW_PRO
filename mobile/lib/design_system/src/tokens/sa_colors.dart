@@ -14,11 +14,11 @@ class SaColors {
   static const Color salesBlue = Color(0xFF1F66D1);
   static const Color brightSky = Color(0xFF6FA8FF);
 
-  // Rol aksentlari
-  static const Color agent = Color(0xFF1F66D1);
-  static const Color expeditor = Color(0xFF0E8A4F);
-  static const Color supervisor = Color(0xFF1FA855);
-  static const Color cashier = Color(0xFF0F766E);
+  // Rol aksentlari — prototip design.ts accents
+  static const Color agent = Color(0xFF5548F0); // Agent Iris
+  static const Color expeditor = Color(0xFF4ADE80); // Ekspeditor Lime
+  static const Color supervisor = Color(0xFF0369A1); // Supervayzer Sky
+  static const Color cashier = Color(0xFFC026D3); // Kassir Fuchsia
 
   static Color roleAccent(SaRole role) {
     switch (role) {

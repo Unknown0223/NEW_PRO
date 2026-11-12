@@ -12,6 +12,7 @@ import '../../../core/theme/app_typography.dart';
 import '../../../core/orders/order_status_labels.dart';
 import '../../../core/ui/agent_ui.dart';
 import '../../../core/ui/agent_ui_extended.dart';
+import '../../../design_system/design_system.dart';
 import '../orders/order_create_models.dart';
 import '../orders/orders_providers.dart';
 import '../shell/agent_app_bar.dart';
@@ -113,50 +114,65 @@ class _AgentDebtorsByOrdersPageState extends ConsumerState<AgentDebtorsByOrdersP
               }
             },
             child: ListView(
-              padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
+              padding: const EdgeInsets.fromLTRB(12, 12, 12, 140),
               children: [
-                AgentSurfaceCard(
-                  padding: const EdgeInsets.all(16),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text(
-                        'Общие долги:',
-                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: AppColors.textMuted),
-                      ),
-                      Text(
-                        formatDebtMoney(total, currency: result.currency),
-                        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: AppColors.error),
-                      ),
-                    ],
+                SaEnter(
+                  preset: SaMotionPreset.rise,
+                  child: AgentSurfaceCard(
+                    padding: const EdgeInsets.all(16),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text(
+                          'Общие долги:',
+                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: AppColors.textMuted),
+                        ),
+                        Text(
+                          formatDebtMoney(total, currency: result.currency),
+                          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: AppColors.error),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
-                Padding(
-                  padding: const EdgeInsets.only(top: 8, bottom: 8, left: 4),
-                  child: Text(
-                    'Найдено: ${result.data.length}',
-                    style: AppTypography.caption.copyWith(fontWeight: FontWeight.w700, color: AppColors.textSecondary),
+                SaEnter(
+                  delay: SaStaggerDelay.of(1),
+                  child: Padding(
+                    padding: const EdgeInsets.only(top: 8, bottom: 8, left: 4),
+                    child: Text(
+                      'Найдено: ${result.data.length}',
+                      style: AppTypography.caption.copyWith(fontWeight: FontWeight.w700, color: AppColors.textSecondary),
+                    ),
                   ),
                 ),
-                for (final row in result.data)
-                  _OrderDebtCard(
-                    row: row,
-                    currency: result.currency,
-                    expanded: _expandedOrderId == row.orderId,
-                    detailAsync: _expandedOrderId == row.orderId
-                        ? ref.watch(orderHistoryDetailProvider(row.orderId))
-                        : null,
-                    onTap: () => setState(() {
-                      _expandedOrderId = _expandedOrderId == row.orderId ? null : row.orderId;
-                    }),
-                    formatDate: _formatDate,
-                    statusChip: orderStatusChip(row.orderStatus),
-                    orderTitle: _orderTitle(row),
-                    lineRows: _lineRows,
-                    orderTitleFromDetail: _orderTitleFromDetail,
-                    formatBonusSummary: _formatBonusSummary,
-                    formatQty: _formatQty,
-                    statusChipFromDetail: (o) => orderStatusChip(o.status, orderType: o.orderType),
+                for (var i = 0; i < result.data.length; i++)
+                  SaEnter(
+                    delay: SaStaggerDelay.of(2 + i),
+                    preset: SaMotionPreset.rise,
+                    child: Builder(
+                      builder: (context) {
+                        final row = result.data[i];
+                        return _OrderDebtCard(
+                          row: row,
+                          currency: result.currency,
+                          expanded: _expandedOrderId == row.orderId,
+                          detailAsync: _expandedOrderId == row.orderId
+                              ? ref.watch(orderHistoryDetailProvider(row.orderId))
+                              : null,
+                          onTap: () => setState(() {
+                            _expandedOrderId = _expandedOrderId == row.orderId ? null : row.orderId;
+                          }),
+                          formatDate: _formatDate,
+                          statusChip: orderStatusChip(row.orderStatus),
+                          orderTitle: _orderTitle(row),
+                          lineRows: _lineRows,
+                          orderTitleFromDetail: _orderTitleFromDetail,
+                          formatBonusSummary: _formatBonusSummary,
+                          formatQty: _formatQty,
+                          statusChipFromDetail: (o) => orderStatusChip(o.status, orderType: o.orderType),
+                        );
+                      },
+                    ),
                   ),
               ],
             ),

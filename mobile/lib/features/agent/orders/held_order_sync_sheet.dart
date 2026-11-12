@@ -9,6 +9,7 @@ import '../../../core/format/money_display.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/ui/agent_ui.dart';
+import '../../../design_system/design_system.dart';
 import 'held_order_model.dart';
 import 'held_order_timing.dart';
 import 'held_orders_provider.dart';
@@ -220,10 +221,11 @@ class _HeldOrderSyncSheetState extends ConsumerState<HeldOrderSyncSheet> {
 
     final bottom = MediaQuery.paddingOf(context).bottom;
 
-    return Container(
+    return SaPopIn(
+      child: Container(
       decoration: const BoxDecoration(
         color: AppColors.surface,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(SaRadius.sheet)),
       ),
       padding: EdgeInsets.fromLTRB(16, 8, 16, 12 + bottom),
       child: Column(
@@ -371,25 +373,25 @@ class _HeldOrderSyncSheetState extends ConsumerState<HeldOrderSyncSheet> {
             ],
           ),
           const SizedBox(height: 16),
-          AgentPrimaryButton(
-            label: _sending ? 'Отправка…' : 'Отправить сейчас',
-            height: 48,
+          SaPrimaryButton(
+            label: 'Отправить сейчас',
+            loading: _sending,
             onPressed: (_sending || _postponing) ? null : _submitNow,
           ),
           const SizedBox(height: 8),
-          AgentSecondaryButton(
+          SaGhostButton(
             label: 'Редактировать',
             onPressed: (_sending || _postponing)
                 ? null
                 : () => _closeSheet(HeldOrderSyncAction.edit),
           ),
           const SizedBox(height: 8),
-          AgentSecondaryButton(
+          SaGhostButton(
             label: postponeLabel,
             onPressed: (_postponing || _sending) ? null : _postpone,
           ),
           const SizedBox(height: 8),
-          AgentSecondaryButton(
+          SaGhostButton(
             label: homeLabel,
             onPressed: _sending
                 ? null
@@ -397,6 +399,7 @@ class _HeldOrderSyncSheetState extends ConsumerState<HeldOrderSyncSheet> {
           ),
         ],
       ),
+    ),
     );
   }
 }
@@ -473,7 +476,7 @@ class _MiniStatCard extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
       decoration: BoxDecoration(
         color: bg,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(SaRadius.control),
         border: Border.all(color: border),
       ),
       child: Column(

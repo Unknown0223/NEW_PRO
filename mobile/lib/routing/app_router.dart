@@ -182,9 +182,14 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         return null;
       }
 
-      // Loading (masalan oflayn me tekshiruvi) — splash/unlock da qolish mumkin.
-      if (s == AuthStatus.loading && (isSplash || loc == '/unlock')) {
+      // Unlock da loading — PIN ekrani qolsin.
+      // Splash + allaqachon bootstrap qilingan sessiya: /me kutib oq spinnerda
+      // osilib qolmasin — darhol home (me fonda).
+      if (s == AuthStatus.loading && loc == '/unlock') {
         return null;
+      }
+      if (s == AuthStatus.loading && isSplash && session.bootstrapped) {
+        return '/home';
       }
 
       if (s == AuthStatus.mustChangePassword) {

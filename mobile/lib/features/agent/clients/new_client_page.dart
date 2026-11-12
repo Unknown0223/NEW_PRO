@@ -21,6 +21,7 @@ import '../../../core/config/tenant_refs_provider.dart';
 import '../../../core/database/app_database.dart';
 import '../../../core/gps/gps_tracker.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../design_system/design_system.dart';
 import '../../../core/ui/agent_template_form.dart';
 import '../../../core/clients/agent_outlet_filters_provider.dart';
 import '../../../core/clients/client_outlet_filters.dart';
@@ -469,7 +470,9 @@ class _NewClientPageState extends ConsumerState<NewClientPage> {
             child: ListView(
               padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
               children: [
-                AgentTemplateSection(
+                SaEnter(
+                  preset: SaMotionPreset.rise,
+                  child: AgentTemplateSection(
                   title: 'Данные клиента',
                   subtitle: 'Поля отображаются по настройкам конфигурации.',
                   children: [
@@ -485,8 +488,12 @@ class _NewClientPageState extends ConsumerState<NewClientPage> {
                     ],
                   ],
                 ),
+                ),
                 if (showLocationSection)
-                  AgentTemplateSection(
+                  SaEnter(
+                    delay: SaStaggerDelay.of(1),
+                    preset: SaMotionPreset.rise,
+                    child: AgentTemplateSection(
                     title: 'Локация',
                     subtitle: showGpsCapture ? 'Привяжите точку по GPS.' : null,
                     children: [
@@ -536,6 +543,7 @@ class _NewClientPageState extends ConsumerState<NewClientPage> {
                       ],
                     ],
                   ),
+                  ),
                 if (_error != null)
                   Padding(
                     padding: const EdgeInsets.only(top: 4, bottom: 8),
@@ -558,21 +566,10 @@ class _NewClientPageState extends ConsumerState<NewClientPage> {
             ),
             child: SafeArea(
               top: false,
-              child: FilledButton(
+              child: SaPrimaryButton(
+                label: 'Сохранить клиента',
+                loading: _saving || _photoUploading,
                 onPressed: (_saving || _photoUploading) ? null : _save,
-                style: FilledButton.styleFrom(
-                  backgroundColor: AppColors.primary,
-                  foregroundColor: Colors.white,
-                  minimumSize: const Size(double.infinity, 52),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                ),
-                child: _saving
-                    ? const SizedBox(
-                        height: 22,
-                        width: 22,
-                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                      )
-                    : const Text('Сохранить клиента', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
               ),
             ),
           ),

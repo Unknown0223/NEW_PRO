@@ -27,38 +27,39 @@ class _SaEnterState extends State<SaEnter> with SingleTickerProviderStateMixin {
   late final Animation<double> _fade;
   late final Animation<Offset> _slide;
   late final Animation<double> _scale;
+  bool _ready = false;
 
   @override
   void initState() {
     super.initState();
+    // Yengil au-in: fade + kichik slide (scale faqat spring).
     _c = AnimationController(vsync: this, duration: widget.preset.duration);
-    _fade = CurvedAnimation(parent: _c, curve: widget.preset.curve);
-    final dy = widget.preset == SaMotionPreset.screen ? 0.04 : 0.06;
-    _slide = Tween<Offset>(begin: Offset(0, dy), end: Offset.zero).animate(
-      CurvedAnimation(parent: _c, curve: widget.preset.curve),
-    );
+    final curve = CurvedAnimation(parent: _c, curve: widget.preset.curve);
+    _fade = curve;
+    final dy = widget.preset == SaMotionPreset.screen ? 0.03 : 0.04;
+    _slide = Tween<Offset>(begin: Offset(0, dy), end: Offset.zero).animate(curve);
     _scale = Tween<double>(
-      begin: widget.preset == SaMotionPreset.spring ? 0.9 : 0.988,
+      begin: widget.preset == SaMotionPreset.spring ? 0.92 : 1,
       end: 1,
-    ).animate(CurvedAnimation(parent: _c, curve: widget.preset.curve));
-    // MediaQuery initState da chaqirilmasin — birinchi kadrdan keyin.
+    ).animate(curve);
     WidgetsBinding.instance.addPostFrameCallback((_) => _start());
   }
 
   Future<void> _start() async {
     if (!mounted) return;
-    if (!widget.enabled) {
+    if (!widget.enabled || saReduceMotion(context)) {
       _c.value = 1;
+      setState(() => _ready = true);
       return;
     }
+    // Soft: biroz qisqaroq
+    final d = saDuration(context, widget.preset.duration);
+    _c.duration = d <= Duration.zero ? widget.preset.duration : d;
     if (widget.delay > Duration.zero) {
-      await Future<void>.delayed(widget.delay);
+      await Future<void>.delayed(saDuration(context, widget.delay));
     }
     if (!mounted) return;
-    if (saReduceMotion(context)) {
-      _c.value = 1;
-      return;
-    }
+    setState(() => _ready = true);
     await _c.forward();
   }
 
@@ -71,13 +72,21 @@ class _SaEnterState extends State<SaEnter> with SingleTickerProviderStateMixin {
   @override
   Widget build(BuildContext context) {
     if (!widget.enabled || saReduceMotion(context)) return widget.child;
-    return FadeTransition(
-      opacity: _fade,
-      child: SlideTransition(
-        position: _slide,
-        child: ScaleTransition(scale: _scale, child: widget.child),
-      ),
-    );
+    // Birinchi kadrda ko‘rinmasin (opacity 0), keyin au-in.
+    if (!_ready && _c.value == 0) {
+      return Opacity(opacity: 0, child: widget.child);
+    }
+    // Spring: fade+scale; qolganlari: fade+slide (arzonroq).
+    final body = widget.preset == SaMotionPreset.spring
+        ? FadeTransition(
+            opacity: _fade,
+            child: ScaleTransition(scale: _scale, child: widget.child),
+          )
+        : FadeTransition(
+            opacity: _fade,
+            child: SlideTransition(position: _slide, child: widget.child),
+          );
+    return RepaintBoundary(child: body);
   }
 }
 

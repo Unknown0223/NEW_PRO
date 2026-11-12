@@ -6,6 +6,7 @@ import 'package:image_picker/image_picker.dart';
 import '../../../core/auth/session.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
+import '../../../design_system/design_system.dart';
 import '../shell/agent_app_bar.dart';
 
 /// Shablon `shelf-return`: to‘liq / qisman / polka + almashtirish + foto.
@@ -85,96 +86,128 @@ class _AgentMiscOrdersPageState extends ConsumerState<AgentMiscOrdersPage> {
               ),
             )
           : ListView(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 140),
               children: [
-                Text(
-                  _isExchange
-                      ? 'Укажите причину и фото, затем создайте заказ обмена.'
-                      : 'Выберите тип возврата, причину и фото (как в шаблоне).',
-                  style: AppTypography.bodyMedium.copyWith(
-                    color: AppColors.textSecondary,
+                SaEnter(
+                  preset: SaMotionPreset.rise,
+                  child: Text(
+                    _isExchange
+                        ? 'Укажите причину и фото, затем создайте заказ обмена.'
+                        : 'Выберите тип возврата, причину и фото (как в шаблоне).',
+                    style: AppTypography.bodyMedium.copyWith(
+                      color: AppColors.textSecondary,
+                    ),
                   ),
                 ),
                 if (!_isExchange) ...[
                   const SizedBox(height: 16),
-                  Text(
-                    'Тип возврата',
-                    style: AppTypography.labelLarge.copyWith(
-                      color: AppColors.textTitle,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: [
-                      for (final e in const [
-                        ('full', 'Полный'),
-                        ('partial', 'Частичный'),
-                        ('shelf', 'С полки'),
-                      ])
-                        ChoiceChip(
-                          label: Text(e.$2),
-                          selected: _kind == e.$1,
-                          selectedColor: AppColors.primarySoft,
-                          onSelected: (_) => setState(() => _kind = e.$1),
+                  SaEnter(
+                    delay: SaStaggerDelay.of(1),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Тип возврата',
+                          style: AppTypography.labelLarge.copyWith(
+                            color: AppColors.textTitle,
+                          ),
                         ),
-                    ],
+                        const SizedBox(height: 8),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: [
+                            for (final e in const [
+                              ('full', 'Полный'),
+                              ('partial', 'Частичный'),
+                              ('shelf', 'С полки'),
+                            ])
+                              ChoiceChip(
+                                label: Text(e.$2),
+                                selected: _kind == e.$1,
+                                selectedColor: AppColors.primarySoft,
+                                onSelected: (_) => setState(() => _kind = e.$1),
+                              ),
+                          ],
+                        ),
+                      ],
+                    ),
                   ),
                 ],
                 const SizedBox(height: 16),
-                Text(
-                  'Причина',
-                  style: AppTypography.labelLarge.copyWith(
-                    color: AppColors.textTitle,
+                SaEnter(
+                  delay: SaStaggerDelay.of(2),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Причина',
+                        style: AppTypography.labelLarge.copyWith(
+                          color: AppColors.textTitle,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          for (final r in _reasons)
+                            ChoiceChip(
+                              label: Text(r),
+                              selected: _reason == r,
+                              selectedColor: AppColors.warningSoft,
+                              onSelected: (_) => setState(() => _reason = r),
+                            ),
+                        ],
+                      ),
+                    ],
                   ),
                 ),
-                const SizedBox(height: 8),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    for (final r in _reasons)
-                      ChoiceChip(
-                        label: Text(r),
-                        selected: _reason == r,
-                        selectedColor: AppColors.warningSoft,
-                        onSelected: (_) => setState(() => _reason = r),
-                      ),
-                  ],
-                ),
                 const SizedBox(height: 16),
-                TextField(
-                  controller: _noteCtrl,
-                  maxLines: 3,
-                  decoration: InputDecoration(
-                    labelText: 'Комментарий',
-                    filled: true,
-                    fillColor: AppColors.surface,
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
+                SaEnter(
+                  delay: SaStaggerDelay.of(3),
+                  child: TextField(
+                    controller: _noteCtrl,
+                    maxLines: 3,
+                    decoration: InputDecoration(
+                      labelText: 'Комментарий',
+                      filled: true,
+                      fillColor: AppColors.surface,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
                     ),
                   ),
                 ),
                 const SizedBox(height: 16),
-                OutlinedButton.icon(
-                  onPressed: _pickPhoto,
-                  icon: const Icon(Icons.photo_camera_outlined),
-                  label: Text(
-                    _photoPath == null ? 'Сделать фото' : 'Фото добавлено',
+                SaEnter(
+                  delay: SaStaggerDelay.of(4),
+                  child: SaPressable(
+                    onTap: _pickPhoto,
+                    child: OutlinedButton.icon(
+                      onPressed: _pickPhoto,
+                      icon: const Icon(Icons.photo_camera_outlined),
+                      label: Text(
+                        _photoPath == null ? 'Сделать фото' : 'Фото добавлено',
+                      ),
+                    ),
                   ),
                 ),
                 const SizedBox(height: 24),
-                FilledButton(
-                  onPressed: _reason == null
-                      ? null
-                      : _continueToOrder,
-                  style: FilledButton.styleFrom(
-                    backgroundColor: AppColors.primary,
-                    minimumSize: const Size.fromHeight(48),
-                  ),
-                  child: Text(
-                    _isExchange ? 'Создать заказ обмена' : 'Создать возврат',
+                SaEnter(
+                  delay: SaStaggerDelay.of(5),
+                  child: SaPressable(
+                    onTap: _reason == null ? null : _continueToOrder,
+                    child: FilledButton(
+                      onPressed: _reason == null ? null : _continueToOrder,
+                      style: FilledButton.styleFrom(
+                        backgroundColor: AppColors.primary,
+                        minimumSize: const Size.fromHeight(48),
+                      ),
+                      child: Text(
+                        _isExchange ? 'Создать заказ обмена' : 'Создать возврат',
+                      ),
+                    ),
                   ),
                 ),
                 if (_reason == null)

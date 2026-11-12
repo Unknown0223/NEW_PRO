@@ -11,6 +11,7 @@ import '../clients/clients_list_provider.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/ui/agent_ui.dart';
+import '../../../design_system/design_system.dart';
 import '../../auth/biometric_quick_login_tile.dart';
 import '../shell/agent_app_bar.dart';
 import '../sync/manual_sync_runner.dart';
@@ -275,20 +276,27 @@ class _AgentSettingsPageState extends ConsumerState<AgentSettingsPage> {
                 ),
               Expanded(
                 child: ListView(
-                  padding: const EdgeInsets.all(12),
+                  padding: const EdgeInsets.fromLTRB(12, 12, 12, 140),
                   children: [
                     if (_tab == 0) ...[
-                      AgentSurfaceCard(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                        child: const BiometricQuickLoginTile(),
+                      SaEnter(
+                        preset: SaMotionPreset.rise,
+                        child: AgentSurfaceCard(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          child: const BiometricQuickLoginTile(),
+                        ),
                       ),
                       const SizedBox(height: 12),
                     ],
-                    _buildGrouped(
-                      rows,
-                      readOnly: _tab == 1,
-                      prefs: prefs,
-                      onRowTap: _tab == 0 ? (r) => _onMainRowTap(r, prefs) : null,
+                    SaEnter(
+                      delay: SaStaggerDelay.of(_tab == 0 ? 1 : 0),
+                      preset: SaMotionPreset.rise,
+                      child: _buildGrouped(
+                        rows,
+                        readOnly: _tab == 1,
+                        prefs: prefs,
+                        onRowTap: _tab == 0 ? (r) => _onMainRowTap(r, prefs) : null,
+                      ),
                     ),
                   ],
                 ),

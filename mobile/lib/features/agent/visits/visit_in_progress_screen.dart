@@ -18,6 +18,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/ui/agent_ui_extended.dart';
 import '../../../core/ui/agent_visit_ui.dart';
+import '../../../design_system/design_system.dart';
 import '../../../core/ui/client_photo_thumb.dart';
 import '../clients/client_photo_report_flow.dart';
 import '../orders/held_order_model.dart';
@@ -312,19 +313,26 @@ class _VisitInProgressScreenState extends ConsumerState<VisitInProgressScreen> {
         ),
       ),
       body: Stack(
-        children: [
-          ListView(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 360),
-            children: [
-              AgentLiveStopwatch(startSeconds: visitElapsedSeconds(visit.startTime)),
+          children: [
+            ListView(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 360),
+              children: [
+                SaEnter(
+                  preset: SaMotionPreset.spring,
+                  child: AgentLiveStopwatch(startSeconds: visitElapsedSeconds(visit.startTime)),
+                ),
               const SizedBox(height: 12),
-              AgentVisitOutletCard(
+              SaEnter(
+                delay: SaStaggerDelay.of(1),
+                preset: SaMotionPreset.rise,
+                child: AgentVisitOutletCard(
                 name: name,
                 code: code.isEmpty ? '—' : code,
                 grade: category.isEmpty ? 'B' : category,
                 photoUrl: firstClientPhotoUrl(client),
                 balanceAmount: balanceAmount,
                 hasDraft: hasDraft,
+              ),
               ),
               const SizedBox(height: 8),
               Row(
@@ -346,7 +354,7 @@ class _VisitInProgressScreenState extends ConsumerState<VisitInProgressScreen> {
             alignment: Alignment.bottomCenter,
             child: AgentVisitActionsSheet(
               clientName: name,
-              subtitle: [code, category.isNotEmpty ? 'Категория $category' : null].whereType<String>().where((s) => s.isNotEmpty).join(' · '),
+              subtitle: category.isNotEmpty ? 'Категория $category' : '',
               createOrderEnabled: ref.watch(sessionProvider).permissions.canCreateOrders,
               supervisionEnabled: _supervisionEnabled,
               onPhotoReport: _addPhotoReport,
@@ -376,8 +384,8 @@ class _VisitInProgressScreenState extends ConsumerState<VisitInProgressScreen> {
               onComplete: () => _completeVisit(refused: false),
             ),
           ),
-        ],
-      ),
+          ],
+        ),
     );
   }
 }

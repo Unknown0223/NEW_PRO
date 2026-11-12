@@ -8,6 +8,7 @@ import '../../../core/l10n/app_strings_ru.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/ui/agent_ui.dart';
 import '../../../core/ui/agent_ui_extended.dart';
+import '../../../design_system/design_system.dart';
 import '../shell/agent_app_bar.dart';
 import '../../../core/prefs/agent_local_prefs_provider.dart';
 import 'warehouse_stock_providers.dart';
@@ -122,7 +123,9 @@ class _AgentWarehouseStockPageState extends ConsumerState<AgentWarehouseStockPag
           return Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Container(
+              SaEnter(
+                preset: SaMotionPreset.rise,
+                child: Container(
                 color: AppColors.surface,
                 padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
                 child: Row(
@@ -150,6 +153,7 @@ class _AgentWarehouseStockPageState extends ConsumerState<AgentWarehouseStockPag
                   ],
                 ),
               ),
+              ),
               Expanded(
                 child: RefreshIndicator(
                   color: AppColors.primary,
@@ -166,22 +170,31 @@ class _AgentWarehouseStockPageState extends ConsumerState<AgentWarehouseStockPag
                         )
                       : ListView(
                           physics: const AlwaysScrollableScrollPhysics(),
-                          padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
+                          padding: const EdgeInsets.fromLTRB(12, 12, 12, 140),
                           children: [
-                            for (final cat in view.categories)
-                              AgentExpandableStockGroup(
-                                title: cat.name,
-                                expanded: _expanded[cat.name] ?? false,
-                                onToggle: () => setState(() {
-                                  final open = !(_expanded[cat.name] ?? false);
-                                  for (final k in _expanded.keys) {
-                                    _expanded[k] = false;
-                                  }
-                                  _expanded[cat.name] = open;
-                                }),
-                                items: cat.items
-                                    .map((l) => (name: l.name, price: l.priceLabel, count: l.count))
-                                    .toList(),
+                            for (var ci = 0; ci < view.categories.length; ci++)
+                              SaEnter(
+                                delay: SaStaggerDelay.of(1 + ci),
+                                preset: SaMotionPreset.rise,
+                                child: Builder(
+                                  builder: (context) {
+                                    final cat = view.categories[ci];
+                                    return AgentExpandableStockGroup(
+                                      title: cat.name,
+                                      expanded: _expanded[cat.name] ?? false,
+                                      onToggle: () => setState(() {
+                                        final open = !(_expanded[cat.name] ?? false);
+                                        for (final k in _expanded.keys) {
+                                          _expanded[k] = false;
+                                        }
+                                        _expanded[cat.name] = open;
+                                      }),
+                                      items: cat.items
+                                          .map((l) => (name: l.name, price: l.priceLabel, count: l.count))
+                                          .toList(),
+                                    );
+                                  },
+                                ),
                               ),
                           ],
                         ),

@@ -18,6 +18,8 @@ export 'src/widgets/sa_card.dart';
 export 'src/widgets/sa_sheet.dart';
 export 'src/widgets/sa_sync_view.dart';
 export 'src/widgets/sa_motion.dart';
+export 'src/widgets/sa_brand.dart';
+export 'src/widgets/sa_page_transitions.dart';
 export 'src/catalog/sa_catalog.dart';
 
 /// Paket versiyasi — katalog bilan moslik shu yerdan tekshiriladi.

@@ -16,6 +16,7 @@ import '../../../core/database/app_database.dart';
 import '../../../core/sync/photo_report_queue.dart';
 import '../../../core/time/work_region_time.dart';
 import '../../../core/ui/agent_ui.dart';
+import '../../../design_system/design_system.dart';
 import '../home/sync_count_provider.dart';
 import '../visits/visit_stats_helper.dart';
 
@@ -39,52 +40,62 @@ class MandatoryPhotoInlinePrompt extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
-      decoration: BoxDecoration(
-        color: const Color(0xFFFFF7ED),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFFED7AA)),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            width: 4,
-            height: 44,
-            decoration: BoxDecoration(
-              color: const Color(0xFFF97316),
-              borderRadius: BorderRadius.circular(2),
+    return SaEnter(
+      preset: SaMotionPreset.rise,
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+        decoration: BoxDecoration(
+          color: const Color(0xFFFFF7ED),
+          borderRadius: BorderRadius.circular(SaRadius.control),
+          border: Border.all(color: const Color(0xFFFED7AA)),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              width: 4,
+              height: 44,
+              decoration: BoxDecoration(
+                color: const Color(0xFFF97316),
+                borderRadius: BorderRadius.circular(2),
+              ),
             ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'Необходимо добавить фотоотчет',
-                  style: TextStyle(
-                    color: Color(0xFF9A3412),
-                    fontWeight: FontWeight.w700,
-                    fontSize: 14,
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Необходимо добавить фотоотчет',
+                    style: TextStyle(
+                      color: Color(0xFF9A3412),
+                      fontWeight: FontWeight.w700,
+                      fontSize: 14,
+                    ),
                   ),
-                ),
-                const SizedBox(height: 8),
-                OutlinedButton.icon(
-                  onPressed: onAdd,
-                  icon: const Icon(Icons.photo_camera_outlined, size: 18),
-                  label: const Text('Добавить фотоотчет'),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: const Color(0xFF9A3412),
-                    side: const BorderSide(color: Color(0xFFF97316)),
+                  const SizedBox(height: 8),
+                  SaPressable(
+                    onTap: onAdd,
+                    borderRadius: BorderRadius.circular(SaRadius.control),
+                    child: OutlinedButton.icon(
+                      onPressed: onAdd,
+                      icon: const Icon(Icons.photo_camera_outlined, size: 18),
+                      label: const Text('Добавить фотоотчет'),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: const Color(0xFF9A3412),
+                        side: const BorderSide(color: Color(0xFFF97316)),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(SaRadius.control),
+                        ),
+                      ),
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -113,9 +124,12 @@ class MandatoryPhotoBanner extends StatelessWidget {
                   style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 14),
                 ),
               ),
-              TextButton(
-                onPressed: onAdd,
-                child: const Text('Добавить', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
+              SaPressable(
+                onTap: onAdd,
+                child: const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                  child: Text('Добавить', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
+                ),
               ),
             ],
           ),

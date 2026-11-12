@@ -13,6 +13,7 @@ import '../../../core/theme/app_typography.dart';
 import '../../../core/ui/agent_ui.dart';
 import '../../../core/ui/agent_ui_extended.dart';
 import '../../../core/ui/agent_visit_ui.dart';
+import '../../../design_system/design_system.dart';
 import '../clients/agent_clients_outlet_list.dart';
 import '../shell/agent_app_bar.dart';
 
@@ -150,25 +151,40 @@ class AgentVisitsPage extends ConsumerWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           if (activeVisits.isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
-              child: _ActiveVisitPill(
-                visit: activeVisits.first,
-                onTap: () {
-                  final id = activeVisits.first.clientId;
-                  if (id != null) context.push('/visits/active/$id');
-                },
+            SaEnter(
+              preset: SaMotionPreset.rise,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
+                child: _ActiveVisitPill(
+                  visit: activeVisits.first,
+                  onTap: () {
+                    final id = activeVisits.first.clientId;
+                    if (id != null) context.push('/visits/active/$id');
+                  },
+                ),
               ),
             ),
           if (config?.gps.trackingEnabled == true) ...[
             const SizedBox(height: 10),
-            const AgentVisitGpsBanner(),
+            SaEnter(
+              delay: SaStaggerDelay.of(1),
+              preset: SaMotionPreset.rise,
+              child: const AgentVisitGpsBanner(),
+            ),
           ],
           const SizedBox(height: 12),
-          const AgentVisitsWeekTabs(),
+          SaEnter(
+            delay: SaStaggerDelay.of(2),
+            preset: SaMotionPreset.rise,
+            child: const AgentVisitsWeekTabs(),
+          ),
           const SizedBox(height: 12),
-          const Expanded(
-            child: AgentClientsOutletList(visitsMode: true),
+          Expanded(
+            child: SaEnter(
+              delay: SaStaggerDelay.of(3),
+              preset: SaMotionPreset.rise,
+              child: const AgentClientsOutletList(visitsMode: true),
+            ),
           ),
         ],
       ),
@@ -197,7 +213,7 @@ class _ActiveVisitPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
+    return SaPressable(
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),

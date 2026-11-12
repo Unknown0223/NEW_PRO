@@ -6,6 +6,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/ui/agent_ui.dart';
 import '../../../core/ui/agent_ui_extended.dart';
+import '../../../design_system/design_system.dart';
 import '../../../core/api/mobile_api.dart';
 import '../shell/agent_app_bar.dart';
 import '../home/home_visit_metrics_provider.dart';
@@ -86,9 +87,15 @@ class _AgentReportPageState extends ConsumerState<AgentReportPage> {
                     physics: const AlwaysScrollableScrollPhysics(),
                     padding: const EdgeInsets.fromLTRB(12, 12, 12, 140),
                     children: [
-                      _statGrid(salesTotals),
+                      SaEnter(
+                        preset: SaMotionPreset.rise,
+                        child: _statGrid(salesTotals),
+                      ),
                       const SizedBox(height: 12),
-                      const AgentEmptyState(message: S.emptyReport),
+                      SaEnter(
+                        delay: SaStaggerDelay.of(1),
+                        child: const AgentEmptyState(message: S.emptyReport),
+                      ),
                     ],
                   );
                 }
@@ -97,9 +104,15 @@ class _AgentReportPageState extends ConsumerState<AgentReportPage> {
                   physics: const AlwaysScrollableScrollPhysics(),
                   padding: const EdgeInsets.fromLTRB(12, 12, 12, 140),
                   children: [
-                    _statGrid(salesTotals),
+                    SaEnter(
+                      preset: SaMotionPreset.rise,
+                      child: _statGrid(salesTotals),
+                    ),
                     const SizedBox(height: 12),
-                    AgentSurfaceCard(
+                    SaEnter(
+                      delay: SaStaggerDelay.of(1),
+                      preset: SaMotionPreset.rise,
+                      child: AgentSurfaceCard(
                       padding: EdgeInsets.zero,
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -119,6 +132,7 @@ class _AgentReportPageState extends ConsumerState<AgentReportPage> {
                           for (final item in visible) _categoryRow(item),
                         ],
                       ),
+                    ),
                     ),
                   ],
                 );

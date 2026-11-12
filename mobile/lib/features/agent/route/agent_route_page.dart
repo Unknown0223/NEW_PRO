@@ -10,6 +10,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/ui/agent_ui.dart';
 import '../../../core/ui/agent_ui_extended.dart';
+import '../../../design_system/design_system.dart';
 import '../../auth/auth_provider.dart';
 import '../shell/agent_app_bar.dart';
 import '../shell/agent_drawer.dart';
@@ -104,27 +105,33 @@ class _RouteMapBodyState extends ConsumerState<_RouteMapBody> {
       children: [
         if (widget.showDayTabs) const AgentDayTabs(),
         if (waitingGps)
-          Padding(
-            padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
-            child: Text(
-              'Определяем геолокацию — маршрут от ближайшей точки',
-              style: AppTypography.caption.copyWith(color: AppColors.info),
+          SaEnter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+              child: Text(
+                'Определяем геолокацию — маршрут от ближайшей точки',
+                style: AppTypography.caption.copyWith(color: AppColors.info),
+              ),
             ),
           )
         else if (parsed.isNotEmpty)
-          Padding(
-            padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
-            child: Text(
-              'Маршрут: ${parsed.length} точек',
-              style: AppTypography.caption.copyWith(color: AppColors.success),
+          SaEnter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+              child: Text(
+                'Маршрут: ${parsed.length} точек',
+                style: AppTypography.caption.copyWith(color: AppColors.success),
+              ),
             ),
           )
         else if (widget.localFallback && weekdayTab > 0)
-          Padding(
-            padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
-            child: Text(
-              'Нет точек в маршруте на этот день',
-              style: AppTypography.caption.copyWith(color: AppColors.warning),
+          SaEnter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+              child: Text(
+                'Нет точек в маршруте на этот день',
+                style: AppTypography.caption.copyWith(color: AppColors.warning),
+              ),
             ),
           ),
         Expanded(
@@ -149,9 +156,12 @@ class _RouteMapBodyState extends ConsumerState<_RouteMapBody> {
                 Positioned(
                   right: 12,
                   top: 12,
-                  child: _MapFab(
-                    icon: Icons.my_location,
-                    onTap: () => _mapKey.currentState?.goToUserLocation(),
+                  child: SaEnter(
+                    delay: SaStaggerDelay.of(1),
+                    child: _MapFab(
+                      icon: Icons.my_location,
+                      onTap: () => _mapKey.currentState?.goToUserLocation(),
+                    ),
                   ),
                 ),
               ],
@@ -171,13 +181,13 @@ class _MapFab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: AppColors.surface,
+    return SaPressable(
+      onTap: onTap,
       borderRadius: BorderRadius.circular(10),
-      elevation: 2,
-      child: InkWell(
-        onTap: onTap,
+      child: Material(
+        color: AppColors.surface,
         borderRadius: BorderRadius.circular(10),
+        elevation: 2,
         child: SizedBox(
           width: 44,
           height: 44,

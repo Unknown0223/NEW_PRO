@@ -13,6 +13,7 @@ import '../../../core/l10n/app_strings_ru.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/ui/agent_ui_extended.dart';
+import '../../../design_system/design_system.dart';
 import '../clients/client_photo_report_flow.dart';
 import 'bonus_fill_policy.dart';
 import 'bonus_stock_utils.dart';
@@ -95,11 +96,12 @@ class OrderSetupSheet extends StatefulWidget {
     return showModalBottomSheet<OrderSetupResult>(
       context: context,
       isScrollControlled: true,
-      backgroundColor: AppColors.surface,
+      backgroundColor: Colors.transparent,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(SaRadius.sheet)),
       ),
-      builder: (_) => OrderSetupSheet(
+      builder: (_) => SaPopIn(
+        child: OrderSetupSheet(
         warehouses: warehouses,
         priceTypes: priceTypes,
         priceTypeLabels: priceTypeLabels,
@@ -121,6 +123,7 @@ class OrderSetupSheet extends StatefulWidget {
         showShipmentDateField: showShipmentDateField,
         initialShipmentDate: initialShipmentDate,
         onAddPhoto: onAddPhoto,
+        ),
       ),
     );
   }
@@ -330,7 +333,7 @@ class _OrderSetupSheetState extends State<OrderSetupSheet> {
           padding: const EdgeInsets.fromLTRB(12, 10, 8, 10),
           decoration: BoxDecoration(
             border: Border.all(color: Colors.grey.shade300),
-            borderRadius: BorderRadius.circular(8),
+            borderRadius: BorderRadius.circular(SaRadius.control),
             color: Colors.grey.shade50,
           ),
           child: Row(
@@ -428,11 +431,11 @@ class _OrderSetupSheetState extends State<OrderSetupSheet> {
         fillColor: const Color(0xFFF7FAFC),
         contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(SaRadius.control),
           borderSide: const BorderSide(color: Color(0xFFE6ECF1)),
         ),
         enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(SaRadius.control),
           borderSide: const BorderSide(color: Color(0xFFE6ECF1)),
         ),
       ),
@@ -526,16 +529,21 @@ class _OrderSetupSheetState extends State<OrderSetupSheet> {
     final bottom = mq.viewInsets.bottom;
     final maxHeight = (mq.size.height * 0.88 - bottom).clamp(280.0, mq.size.height * 0.88);
 
-    return Padding(
-      padding: EdgeInsets.only(bottom: bottom),
-      child: ConstrainedBox(
-        constraints: BoxConstraints(maxHeight: maxHeight),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 12, 12, 0),
-              child: Column(
+    final scheme = Theme.of(context).colorScheme;
+
+    return Material(
+      color: scheme.surface,
+      borderRadius: const BorderRadius.vertical(top: Radius.circular(SaRadius.sheet)),
+      child: Padding(
+        padding: EdgeInsets.only(bottom: bottom),
+        child: ConstrainedBox(
+          constraints: BoxConstraints(maxHeight: maxHeight),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 12, 12, 0),
+                child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   Center(
@@ -577,7 +585,7 @@ class _OrderSetupSheetState extends State<OrderSetupSheet> {
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
                           color: const Color(0xFFFFF1F0),
-                          borderRadius: BorderRadius.circular(12),
+                          borderRadius: BorderRadius.circular(SaRadius.control),
                           border: Border.all(color: const Color(0xFFFFCCC7)),
                         ),
                         child: Text(
@@ -664,14 +672,14 @@ class _OrderSetupSheetState extends State<OrderSetupSheet> {
                     if (widget.showShipmentDateField) ...[
                       const SizedBox(height: 13),
                       _fieldLabel(S.orderShipmentDate),
-                      InkWell(
+                      SaPressable(
                         onTap: _pickShipmentDate,
-                        borderRadius: BorderRadius.circular(12),
+                        borderRadius: BorderRadius.circular(SaRadius.control),
                         child: Container(
                           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
                           decoration: BoxDecoration(
                             color: const Color(0xFFF7FAFC),
-                            borderRadius: BorderRadius.circular(12),
+                            borderRadius: BorderRadius.circular(SaRadius.control),
                             border: Border.all(color: const Color(0xFFE6ECF1)),
                           ),
                           child: Row(
@@ -693,14 +701,14 @@ class _OrderSetupSheetState extends State<OrderSetupSheet> {
                     if (_isConsignment && _consignmentUiEnabled) ...[
                       const SizedBox(height: 13),
                       _fieldLabel(S.orderConsignmentDue),
-                      InkWell(
+                      SaPressable(
                         onTap: _pickConsignmentDueDate,
-                        borderRadius: BorderRadius.circular(12),
+                        borderRadius: BorderRadius.circular(SaRadius.control),
                         child: Container(
                           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
                           decoration: BoxDecoration(
                             color: const Color(0xFFF7FAFC),
-                            borderRadius: BorderRadius.circular(12),
+                            borderRadius: BorderRadius.circular(SaRadius.control),
                             border: Border.all(color: const Color(0xFFE6ECF1)),
                           ),
                           child: Row(
@@ -730,32 +738,18 @@ class _OrderSetupSheetState extends State<OrderSetupSheet> {
                 ),
               ),
             ),
-            SafeArea(
-              top: false,
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
-                child: SizedBox(
-                  width: double.infinity,
-                  height: 50,
-                  child: ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: _canContinue
-                          ? AppColors.primary
-                          : AppColors.primary.withValues(alpha: 0.45),
-                      foregroundColor: Colors.white,
-                      disabledBackgroundColor: AppColors.primary.withValues(alpha: 0.4),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                    ),
-                    onPressed: _submit,
-                    child: const Text(
-                      S.continueArrow,
-                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
-                    ),
+              SafeArea(
+                top: false,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(SaSpace.lg, SaSpace.sm, SaSpace.lg, SaSpace.md),
+                  child: SaPrimaryButton(
+                    label: S.continueArrow,
+                    onPressed: _canContinue ? _submit : null,
                   ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -892,10 +886,12 @@ class OrderBonusDiscountSheet extends StatefulWidget {
       useRootNavigator: true,
       isDismissible: true,
       enableDrag: true,
+      backgroundColor: Colors.transparent,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(SaRadius.sheet)),
       ),
-      builder: (ctx) => OrderBonusDiscountSheet(
+      builder: (ctx) => SaPopIn(
+        child: OrderBonusDiscountSheet(
         slug: slug,
         clientId: clientId,
         warehouseId: warehouseId,
@@ -908,6 +904,7 @@ class OrderBonusDiscountSheet extends StatefulWidget {
         initialDraft: initialDraft,
         onDraftChanged: onDraftChanged,
         isConsignment: isConsignment,
+        ),
       ),
     );
   }
@@ -2213,14 +2210,14 @@ class _OrderBonusDiscountSheetState extends State<OrderBonusDiscountSheet> {
     final bg = isBonus ? AppColors.bonusBg : AppColors.discBg;
     final border = isBonus ? AppColors.bonusBg2 : AppColors.discBg2;
     return Expanded(
-      child: InkWell(
+      child: SaPressable(
         onTap: disabled ? null : () => _switchSection(index),
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(SaRadius.chip),
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
           decoration: BoxDecoration(
             color: selected ? bg : Colors.transparent,
-            borderRadius: BorderRadius.circular(8),
+            borderRadius: BorderRadius.circular(SaRadius.chip),
             border: Border.all(color: selected ? accent : border),
           ),
           alignment: Alignment.center,
@@ -2399,9 +2396,9 @@ class _OrderBonusDiscountSheetState extends State<OrderBonusDiscountSheet> {
     required String label,
     required ValueChanged<T?>? onChanged,
   }) {
-    return InkWell(
+    return SaPressable(
       onTap: onChanged == null ? null : () => onChanged(value),
-      borderRadius: BorderRadius.circular(8),
+      borderRadius: BorderRadius.circular(SaRadius.control),
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 6),
         child: Row(
@@ -2503,10 +2500,10 @@ class _OrderBonusDiscountSheetState extends State<OrderBonusDiscountSheet> {
 
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.all(10),
+      padding: const EdgeInsets.all(SaSpace.md),
       decoration: BoxDecoration(
         border: Border.all(color: AppColors.border),
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(SaRadius.control),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -2810,14 +2807,15 @@ class _OrderBonusDiscountSheetState extends State<OrderBonusDiscountSheet> {
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
         color: AppColors.bonusBg.withValues(alpha: 0.35),
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(SaRadius.control),
         border: Border.all(color: AppColors.bonusBg2),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          InkWell(
+          SaPressable(
             onTap: canToggle ? () => onToggleExpanded(rule.ruleId) : null,
+            borderRadius: BorderRadius.circular(SaRadius.control),
             child: AgentTierStrip(
               kind: 'bonus',
               currentQty: _bonusProgressQty(rule),
@@ -2916,7 +2914,7 @@ class _OrderBonusDiscountSheetState extends State<OrderBonusDiscountSheet> {
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
         decoration: BoxDecoration(
           color: shortage > 0 ? AppColors.error.withValues(alpha: 0.04) : Colors.white,
-          borderRadius: BorderRadius.circular(10),
+          borderRadius: BorderRadius.circular(SaRadius.control),
           border: Border.all(
             color: shortage > 0 ? AppColors.error.withValues(alpha: 0.35) : Colors.grey.shade200,
           ),
@@ -2978,7 +2976,7 @@ class _OrderBonusDiscountSheetState extends State<OrderBonusDiscountSheet> {
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
         color: shortage > 0 ? AppColors.error.withValues(alpha: 0.04) : Colors.white,
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(SaRadius.control),
         border: Border.all(
           color: shortage > 0 ? AppColors.error.withValues(alpha: 0.35) : Colors.grey.shade200,
         ),
@@ -3014,10 +3012,18 @@ class _OrderBonusDiscountSheetState extends State<OrderBonusDiscountSheet> {
         _discountMode == DiscountMode.auto && _preview.autoDiscountRuleId == d.ruleId;
     final warn = _discountRuleHasWarning(d);
 
-    return Container(
+    return SaPressable(
+      onTap: _discountSectionDisabled
+          ? null
+          : () => setState(() {
+                _selectedDiscountRuleId = d.ruleId;
+                _discountMode = DiscountMode.manual;
+              }),
+      borderRadius: BorderRadius.circular(SaRadius.control),
+      child: Container(
       margin: const EdgeInsets.only(bottom: 10),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(SaRadius.control),
         border: Border.all(
           color: warn
               ? AppColors.error.withValues(alpha: 0.45)
@@ -3028,14 +3034,6 @@ class _OrderBonusDiscountSheetState extends State<OrderBonusDiscountSheet> {
         ),
         color: warn ? AppColors.error.withValues(alpha: 0.04) : AppColors.discBg,
       ),
-      child: InkWell(
-        onTap: _discountSectionDisabled
-            ? null
-            : () => setState(() {
-                  _selectedDiscountRuleId = d.ruleId;
-                  _discountMode = DiscountMode.manual;
-                }),
-        borderRadius: BorderRadius.circular(11),
         child: Padding(
           padding: const EdgeInsets.fromLTRB(14, 12, 10, 12),
           child: Row(
@@ -3169,14 +3167,18 @@ class _OrderBonusDiscountSheetState extends State<OrderBonusDiscountSheet> {
   @override
   Widget build(BuildContext context) {
     final mq = MediaQuery.of(context);
+    final scheme = Theme.of(context).colorScheme;
     final sheetHeight = (mq.size.height * 0.88).clamp(360.0, mq.size.height * 0.92);
     final hint = _canUseBoth ? S.linkedBonusDiscountHint : S.exclusiveBonusDiscountHint;
 
-    return Padding(
-      padding: EdgeInsets.only(bottom: mq.viewInsets.bottom),
-      child: SizedBox(
-        height: sheetHeight,
-        child: Column(
+    return Material(
+      color: scheme.surface,
+      borderRadius: const BorderRadius.vertical(top: Radius.circular(SaRadius.sheet)),
+      child: Padding(
+        padding: EdgeInsets.only(bottom: mq.viewInsets.bottom),
+        child: SizedBox(
+          height: sheetHeight,
+          child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Center(
@@ -3253,22 +3255,19 @@ class _OrderBonusDiscountSheetState extends State<OrderBonusDiscountSheet> {
                     ),
             ),
             Padding(
-              padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
+              padding: const EdgeInsets.fromLTRB(SaSpace.lg, 0, SaSpace.lg, SaSpace.lg),
               child: Row(
                 children: [
                   Expanded(
-                    child: OutlinedButton(
+                    child: SaGhostButton(
+                      label: S.close,
                       onPressed: () => Navigator.pop(context),
-                      child: const Text(S.close),
                     ),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
-                    child: ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.agentAccent,
-                        foregroundColor: Colors.white,
-                      ),
+                    child: SaPrimaryButton(
+                      label: S.finish,
                       onPressed: _loadingPreview
                           ? null
                           : () {
@@ -3288,7 +3287,6 @@ class _OrderBonusDiscountSheetState extends State<OrderBonusDiscountSheet> {
                               }
                               Navigator.pop(context, _buildResult());
                             },
-                      child: const Text(S.finish),
                     ),
                   ),
                 ],
@@ -3296,6 +3294,7 @@ class _OrderBonusDiscountSheetState extends State<OrderBonusDiscountSheet> {
             ),
           ],
         ),
+      ),
       ),
     );
   }

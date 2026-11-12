@@ -1,33 +1,24 @@
 import 'package:flutter/material.dart';
-
-import '../tokens/sa_motion.dart';
 import '../tokens/sa_space.dart';
 import '../tokens/sa_type.dart';
-import 'sa_motion.dart';
 
-/// Standart kontent kartasi: 16px radius + ixtiyoriy enter/tilt/press.
+/// Standart kontent kartasi: 16px radius, yupqa chegara, soyasiz.
 class SaCard extends StatelessWidget {
   final Widget child;
   final EdgeInsetsGeometry padding;
   final VoidCallback? onTap;
-  final bool animateEnter;
-  final Duration enterDelay;
-  final bool tilt;
 
   const SaCard({
     super.key,
     required this.child,
     this.padding = const EdgeInsets.all(SaSpace.lg),
     this.onTap,
-    this.animateEnter = false,
-    this.enterDelay = Duration.zero,
-    this.tilt = false,
   });
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    Widget body = Container(
+    final body = Container(
       padding: padding,
       decoration: BoxDecoration(
         color: scheme.surface,
@@ -36,29 +27,16 @@ class SaCard extends StatelessWidget {
       ),
       child: child,
     );
-
-    if (onTap != null) {
-      body = SaPressable(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(SaRadius.card),
-        child: body,
-      );
-    }
-    if (tilt) {
-      body = SaTilt(child: body);
-    }
-    if (animateEnter) {
-      body = SaEnter(
-        delay: enterDelay,
-        preset: SaMotionPreset.rise,
-        child: body,
-      );
-    }
-    return body;
+    if (onTap == null) return body;
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(SaRadius.card),
+      child: body,
+    );
   }
 }
 
-/// Bo‘lim sarlavhasi: kichik mono ustki matn + katta sarlavha.
+/// Bo'lim sarlavhasi: kichik mono ustki matn + katta sarlavha.
 class SaSectionTitle extends StatelessWidget {
   final String eyebrow;
   final String title;
@@ -68,19 +46,16 @@ class SaSectionTitle extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    return SaEnter(
-      preset: SaMotionPreset.rise,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            eyebrow.toUpperCase(),
-            style: SaType.mono.copyWith(color: scheme.primary, fontSize: 9),
-          ),
-          const SizedBox(height: SaSpace.xs),
-          Text(title, style: SaType.title.copyWith(color: scheme.onSurface)),
-        ],
-      ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          eyebrow.toUpperCase(),
+          style: SaType.mono.copyWith(color: scheme.primary, fontSize: 9),
+        ),
+        const SizedBox(height: SaSpace.xs),
+        Text(title, style: SaType.title.copyWith(color: scheme.onSurface)),
+      ],
     );
   }
 }

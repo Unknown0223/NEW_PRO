@@ -17,6 +17,7 @@ import '../../../core/ui/client_photo_thumb.dart';
 import '../../../core/ui/agent_ui_extended.dart';
 import '../../../core/utils/client_navigation.dart';
 import '../../../core/utils/external_actions.dart';
+import '../../../design_system/design_system.dart';
 import '../../auth/auth_provider.dart';
 import '../route/agent_route_provider.dart';
 import '../route/agent_route_start_provider.dart';
@@ -169,46 +170,58 @@ class _AgentMapPageState extends ConsumerState<AgentMapPage> {
                     Positioned(
                       right: 12,
                       top: 12,
-                      child: _MapControl(
-                        icon: Icons.info_outline,
-                        onTap: () {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Яндекс Карты — торговые точки')),
-                          );
-                        },
+                      child: SaEnter(
+                        preset: SaMotionPreset.rise,
+                        child: _MapControl(
+                          icon: Icons.info_outline,
+                          onTap: () {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('Яндекс Карты — торговые точки')),
+                            );
+                          },
+                        ),
                       ),
                     ),
                     Positioned(
                       right: 12,
                       bottom: 63,
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          _MapControl(icon: Icons.add, onTap: () => _mapKey.currentState?.zoomIn()),
-                          const SizedBox(height: 4),
-                          _MapControl(icon: Icons.remove, onTap: () => _mapKey.currentState?.zoomOut()),
-                        ],
+                      child: SaEnter(
+                        delay: SaStaggerDelay.of(1),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            _MapControl(icon: Icons.add, onTap: () => _mapKey.currentState?.zoomIn()),
+                            const SizedBox(height: 4),
+                            _MapControl(icon: Icons.remove, onTap: () => _mapKey.currentState?.zoomOut()),
+                          ],
+                        ),
                       ),
                     ),
                     Positioned(
                       right: 12,
                       bottom: 12,
-                      child: _MapControl(
-                        icon: Icons.my_location,
-                        filled: true,
-                        onTap: () => _mapKey.currentState?.goToUserLocation(),
+                      child: SaEnter(
+                        delay: SaStaggerDelay.of(2),
+                        child: _MapControl(
+                          icon: Icons.my_location,
+                          filled: true,
+                          onTap: () => _mapKey.currentState?.goToUserLocation(),
+                        ),
                       ),
                     ),
                     Positioned(
                       left: 12,
                       bottom: 12,
-                      child: _MapControl(
-                        icon: _listOpen ? Icons.map : Icons.list,
-                        filled: true,
-                        onTap: () => setState(() {
-                          _listOpen = !_listOpen;
-                          if (_listOpen) _selectedClient = null;
-                        }),
+                      child: SaEnter(
+                        delay: SaStaggerDelay.of(2),
+                        child: _MapControl(
+                          icon: _listOpen ? Icons.map : Icons.list,
+                          filled: true,
+                          onTap: () => setState(() {
+                            _listOpen = !_listOpen;
+                            if (_listOpen) _selectedClient = null;
+                          }),
+                        ),
                       ),
                     ),
                     if (_selectedClient != null && !_listOpen)
@@ -216,27 +229,30 @@ class _AgentMapPageState extends ConsumerState<AgentMapPage> {
                         left: 0,
                         right: 0,
                         bottom: 0,
-                        child: _OutletDetailBar(
-                          client: _selectedClient!,
-                          onClose: () => setState(() => _selectedClient = null),
-                          onDetails: () {
-                            final id = _selectedClient!['id'];
-                            if (id != null) context.push('/clients/$id');
-                          },
-                          onRoute: () async {
-                            final stop = RouteMapStop.fromClient(_selectedClient!);
-                            if (!stop.hasCoords) return;
-                            await _mapKey.currentState?.focusStop(stop);
-                            final ok = await openDirectionsToClient(
-                              latitude: stop.latitude,
-                              longitude: stop.longitude,
-                            );
-                            if (!ok && context.mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(content: Text('Не удалось открыть навигацию')),
+                        child: SaEnter(
+                          preset: SaMotionPreset.spring,
+                          child: _OutletDetailBar(
+                            client: _selectedClient!,
+                            onClose: () => setState(() => _selectedClient = null),
+                            onDetails: () {
+                              final id = _selectedClient!['id'];
+                              if (id != null) context.push('/clients/$id');
+                            },
+                            onRoute: () async {
+                              final stop = RouteMapStop.fromClient(_selectedClient!);
+                              if (!stop.hasCoords) return;
+                              await _mapKey.currentState?.focusStop(stop);
+                              final ok = await openDirectionsToClient(
+                                latitude: stop.latitude,
+                                longitude: stop.longitude,
                               );
-                            }
-                          },
+                              if (!ok && context.mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(content: Text('Не удалось открыть навигацию')),
+                                );
+                              }
+                            },
+                          ),
                         ),
                       ),
                     if (_listOpen)
@@ -244,40 +260,46 @@ class _AgentMapPageState extends ConsumerState<AgentMapPage> {
                         left: 0,
                         right: 0,
                         bottom: 0,
-                        child: _OutletListSheet(
-                          onMap: onMap,
-                          offMap: offMap,
-                          visitedIds: visitedIds,
-                          onSelect: (c) {
-                            setState(() {
-                              _selectedClient = c;
-                              _listOpen = false;
-                            });
-                            final stop = RouteMapStop.fromClient(c);
-                            if (stop.hasCoords) _mapKey.currentState?.focusStop(stop);
-                          },
-                          onClose: () => setState(() => _listOpen = false),
+                        child: SaEnter(
+                          preset: SaMotionPreset.spring,
+                          child: _OutletListSheet(
+                            onMap: onMap,
+                            offMap: offMap,
+                            visitedIds: visitedIds,
+                            onSelect: (c) {
+                              setState(() {
+                                _selectedClient = c;
+                                _listOpen = false;
+                              });
+                              final stop = RouteMapStop.fromClient(c);
+                              if (stop.hasCoords) _mapKey.currentState?.focusStop(stop);
+                            },
+                            onClose: () => setState(() => _listOpen = false),
+                          ),
                         ),
                       ),
                   ],
                 ),
                 ),
               ),
-              _MapStatsBar(
-                visited: visitedOnMap,
-                totalOnMap: onWeekdayPlan ? routeLine.length : onMap.length,
-                hidden: offMap.length,
-                totalAll: clients.length,
-                onHiddenTap: offMap.isEmpty
-                    ? null
-                    : () => setState(() {
-                          _listOpen = true;
-                          _selectedClient = null;
-                        }),
-                onVisitedTap: () => setState(() {
-                  _listOpen = true;
-                  _selectedClient = null;
-                }),
+              SaEnter(
+                delay: SaStaggerDelay.of(1),
+                child: _MapStatsBar(
+                  visited: visitedOnMap,
+                  totalOnMap: onWeekdayPlan ? routeLine.length : onMap.length,
+                  hidden: offMap.length,
+                  totalAll: clients.length,
+                  onHiddenTap: offMap.isEmpty
+                      ? null
+                      : () => setState(() {
+                            _listOpen = true;
+                            _selectedClient = null;
+                          }),
+                  onVisitedTap: () => setState(() {
+                    _listOpen = true;
+                    _selectedClient = null;
+                  }),
+                ),
               ),
             ],
           );
@@ -320,13 +342,13 @@ class _MapControl extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: filled ? AppColors.primary : AppColors.surface,
+    return SaPressable(
+      onTap: onTap,
       borderRadius: BorderRadius.circular(10),
-      elevation: 2,
-      child: InkWell(
-        onTap: onTap,
+      child: Material(
+        color: filled ? AppColors.primary : AppColors.surface,
         borderRadius: BorderRadius.circular(10),
+        elevation: 2,
         child: SizedBox(
           width: 43,
           height: 43,

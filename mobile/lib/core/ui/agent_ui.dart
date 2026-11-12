@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../l10n/app_strings_ru.dart';
 import '../errors/user_facing_error.dart';
-import '../theme/app_colors.dart';
+import '../../design_system/design_system.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_typography.dart';
 import 'client_photo_thumb.dart';
@@ -444,7 +444,7 @@ class AgentSurfaceCard extends StatelessWidget {
       padding: padding ?? const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: AppColors.surface,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(SaRadius.card),
       ),
       child: child,
     );
@@ -464,27 +464,32 @@ class AgentPrimaryButton extends StatelessWidget {
     this.onPressed,
     this.height = 39,
     this.color,
-    this.borderRadius = 10,
+    this.borderRadius = SaRadius.control,
   });
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      width: double.infinity,
-      height: height,
-      child: ElevatedButton(
-        onPressed: onPressed,
-        style: ElevatedButton.styleFrom(
-          backgroundColor: color ?? AppColors.primary,
-          disabledBackgroundColor: const Color(0xFFCBD5E1),
-          disabledForegroundColor: Colors.white,
-          foregroundColor: Colors.white,
-          elevation: onPressed == null ? 0 : 4,
-          shadowColor: onPressed == null ? Colors.transparent : AppColors.primary.withValues(alpha: 0.25),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(borderRadius)),
-          textStyle: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700, letterSpacing: 0.2),
+    final radius = borderRadius >= SaRadius.card - 4 ? SaRadius.control : borderRadius;
+    return SaPressable(
+      child: SizedBox(
+        width: double.infinity,
+        height: height,
+        child: ElevatedButton(
+          onPressed: onPressed,
+          style: ElevatedButton.styleFrom(
+            backgroundColor: color ?? Theme.of(context).colorScheme.primary,
+            disabledBackgroundColor: const Color(0xFFCBD5E1),
+            disabledForegroundColor: Colors.white,
+            foregroundColor: Colors.white,
+            elevation: onPressed == null ? 0 : 4,
+            shadowColor: onPressed == null
+                ? Colors.transparent
+                : (color ?? AppColors.primary).withValues(alpha: 0.25),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(radius)),
+            textStyle: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700, letterSpacing: 0.2),
+          ),
+          child: Text(label),
         ),
-        child: Text(label),
       ),
     );
   }
@@ -542,12 +547,13 @@ class AgentOutletCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Material(
+    return SaPressable(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(SaRadius.card),
+      child: Material(
       color: AppColors.surface,
-      borderRadius: BorderRadius.circular(16),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(16),
+      borderRadius: BorderRadius.circular(SaRadius.card),
+      clipBehavior: Clip.antiAlias,
         child: Padding(
           padding: const EdgeInsets.all(16),
           child: Column(
@@ -641,13 +647,14 @@ class AgentWarningBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
+    return SaPressable(
       onTap: onTap,
+      borderRadius: BorderRadius.circular(SaRadius.control),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
         decoration: BoxDecoration(
           color: AppColors.warningSoft,
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(SaRadius.control),
           border: Border.all(color: const Color(0xFFFED7AA)),
         ),
         child: Row(

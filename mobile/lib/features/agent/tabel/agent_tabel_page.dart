@@ -8,6 +8,7 @@ import '../../../core/theme/app_typography.dart';
 import '../../../core/time/work_region_time.dart';
 import '../../../core/ui/agent_ui.dart';
 import '../../../core/ui/agent_ui_extended.dart';
+import '../../../design_system/design_system.dart';
 import '../shell/agent_app_bar.dart';
 import 'agent_tabel_day_sheet.dart';
 import 'agent_tabel_detail_page.dart';
@@ -82,20 +83,39 @@ class AgentTabelPage extends ConsumerWidget {
   Widget _content(BuildContext context, AgentTimesheetResult data, String month) {
     return ListView(
       physics: const AlwaysScrollableScrollPhysics(),
-      padding: const EdgeInsets.fromLTRB(14, 12, 14, 32),
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 140),
       children: [
-        _SummaryCard(data: data, month: month),
+        SaEnter(
+          preset: SaMotionPreset.rise,
+          child: _SummaryCard(data: data, month: month),
+        ),
         const SizedBox(height: 12),
-        _CalendarCard(data: data),
+        SaEnter(
+          delay: SaStaggerDelay.of(1),
+          preset: SaMotionPreset.rise,
+          child: _CalendarCard(data: data),
+        ),
         const SizedBox(height: 12),
-        const _LegendCard(),
+        SaEnter(
+          delay: SaStaggerDelay.of(2),
+          preset: SaMotionPreset.rise,
+          child: const _LegendCard(),
+        ),
         const SizedBox(height: 12),
-        _RecentDaysCard(data: data),
+        SaEnter(
+          delay: SaStaggerDelay.of(3),
+          preset: SaMotionPreset.rise,
+          child: _RecentDaysCard(data: data),
+        ),
         const SizedBox(height: 12),
-        AgentSecondaryButton(
-          label: 'Батафсил жадвал',
-          onPressed: () => Navigator.of(context).push(
-            MaterialPageRoute(builder: (_) => const AgentTabelDetailPage()),
+        SaEnter(
+          delay: SaStaggerDelay.of(4),
+          preset: SaMotionPreset.rise,
+          child: AgentSecondaryButton(
+            label: 'Батафсил жадвал',
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const AgentTabelDetailPage()),
+            ),
           ),
         ),
       ],

@@ -28,6 +28,7 @@ import '../../../core/utils/client_navigation.dart';
 import '../../../core/utils/external_actions.dart';
 import '../../../core/ui/agent_ui_extended.dart';
 import '../../../core/ui/client_photo_thumb.dart';
+import '../../../design_system/design_system.dart';
 import '../../auth/auth_provider.dart';
 import '../shell/agent_app_bar.dart';
 import '../orders/order_draft_model.dart';
@@ -483,28 +484,19 @@ class _ClientDetailScreenState extends ConsumerState<ClientDetailScreen> {
           ? AgentBottomActionBar(
               children: [
                 Expanded(
-                  child: ElevatedButton.icon(
+                  child: SaPrimaryButton(
+                    label: 'Добавить заказ',
+                    icon: Icons.shopping_cart_rounded,
                     onPressed: _openCreateOrder,
-                    icon: const Icon(Icons.shopping_cart_rounded, size: 18),
-                    label: const Text(
-                      'Добавить заказ',
-                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
-                    ),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.primary,
-                      foregroundColor: Colors.white,
-                      minimumSize: const Size(0, 50),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                    ),
                   ),
                 ),
                 const SizedBox(width: 10),
-                Material(
-                  color: const Color(0xFFF1F5F9),
-                  borderRadius: BorderRadius.circular(14),
-                  child: InkWell(
-                    onTap: _showActionsSheet,
-                    borderRadius: BorderRadius.circular(14),
+                SaPressable(
+                  onTap: _showActionsSheet,
+                  borderRadius: BorderRadius.circular(SaRadius.control),
+                  child: Material(
+                    color: const Color(0xFFF1F5F9),
+                    borderRadius: BorderRadius.circular(SaRadius.control),
                     child: const SizedBox(
                       width: 50,
                       height: 50,
@@ -515,9 +507,11 @@ class _ClientDetailScreenState extends ConsumerState<ClientDetailScreen> {
               ],
             )
           : null,
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 100),
-        child: Column(
+      body: SaEnter(
+        preset: SaMotionPreset.rise,
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(SaSpace.lg, SaSpace.md, SaSpace.lg, 100),
+          child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             AgentSurfaceCard(
@@ -557,30 +551,19 @@ class _ClientDetailScreenState extends ConsumerState<ClientDetailScreen> {
                   Row(
                     children: [
                       Expanded(
-                        child: ElevatedButton.icon(
+                        child: AgentPrimaryButton(
+                          label: 'Позвонить',
+                          height: 44,
+                          borderRadius: SaRadius.control,
                           onPressed: () => _callClient(c),
-                          icon: const Icon(Icons.phone_rounded, size: 16),
-                          label: const Text('Позвонить'),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: AppColors.primary,
-                            foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(11)),
-                          ),
                         ),
                       ),
                       const SizedBox(width: 10),
                       Expanded(
-                        child: ElevatedButton.icon(
+                        child: SaGhostButton(
+                          label: 'Локация',
+                          icon: Icons.location_on_rounded,
                           onPressed: () => _openClientLocation(c),
-                          icon: const Icon(Icons.location_on_rounded, size: 16, color: Color(0xFFEF4444)),
-                          label: const Text('Локация'),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFFF1F5F9),
-                            foregroundColor: AppColors.textPrimary,
-                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(11)),
-                          ),
                         ),
                       ),
                     ],
@@ -787,6 +770,7 @@ class _ClientDetailScreenState extends ConsumerState<ClientDetailScreen> {
             ),
           ],
         ),
+      ),
       ),
     );
   }
@@ -1041,19 +1025,10 @@ class _EditClientSheetState extends ConsumerState<_EditClientSheet> {
                 top: false,
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
-                  child: SizedBox(
-                    width: double.infinity,
-                    height: 52,
-                    child: ElevatedButton(
-                      onPressed: _saving ? null : _save,
-                      child: _saving
-                          ? const SizedBox(
-                              width: 22,
-                              height: 22,
-                              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                            )
-                          : const Text('Сохранить'),
-                    ),
+                  child: SaPrimaryButton(
+                    label: 'Сохранить',
+                    loading: _saving,
+                    onPressed: _saving ? null : _save,
                   ),
                 ),
               ),

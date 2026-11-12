@@ -15,6 +15,7 @@ import '../../../core/time/server_clock.dart';
 import '../../../core/time/work_region_time.dart';
 import '../../../core/ui/agent_ui.dart';
 import '../../../core/ui/agent_ui_extended.dart';
+import '../../../design_system/design_system.dart';
 import '../home/sync_count_provider.dart';
 import '../orders/held_order_model.dart' show HeldOrder, formatHeldCountdown;
 import '../orders/held_orders_provider.dart';
@@ -536,9 +537,11 @@ class _AgentNotificationsPageState extends ConsumerState<AgentNotificationsPage>
         },
         child: ListView(
           physics: const AlwaysScrollableScrollPhysics(),
-          padding: const EdgeInsets.fromLTRB(12, 4, 12, 100),
+          padding: const EdgeInsets.fromLTRB(12, 4, 12, 140),
           children: [
-            SizedBox(
+            SaEnter(
+              preset: SaMotionPreset.rise,
+              child: SizedBox(
               height: 40,
               child: ListView.separated(
                 scrollDirection: Axis.horizontal,
@@ -557,51 +560,63 @@ class _AgentNotificationsPageState extends ConsumerState<AgentNotificationsPage>
                 },
               ),
             ),
+            ),
             const SizedBox(height: 14),
             if (visible.isEmpty)
-              Padding(
+              SaEnter(
+                delay: SaStaggerDelay.of(1),
+                child: Padding(
                 padding: const EdgeInsets.only(top: 48),
                 child: AgentEmptyState.fill(
                   message: 'Нет уведомлений',
-                  action: AgentPrimaryButton(
+                  action: SaPrimaryButton(
                     label: 'К заказам',
-                    height: 48,
                     onPressed: () => context.go('/orders'),
                   ),
                 ),
+              ),
               )
             else
-              for (final item in visible)
-                _NotifCard(
-                  item: item,
-                  unread: item.kind == _NotifKind.serverInApp
-                      ? (item.server?.isUnread ?? !readIds.contains(item.id))
-                      : !readIds.contains(item.id),
-                  syncRunning: syncState.status == ManualSyncStatus.running,
-                  syncUiProgress: syncState.progress,
-                  debtDays: _debtDays,
-                  onMarkRead: () {
-                    ref.read(notificationsReadIdsProvider.notifier).state = {
-                      ...ref.read(notificationsReadIdsProvider),
-                      item.id,
-                    };
-                    final server = item.server;
-                    if (server != null && server.isUnread) {
-                      final slug = ref.read(sessionProvider).tenantSlug?.trim() ?? '';
-                      if (slug.isNotEmpty) {
-                        unawaited(
-                          ref
-                              .read(mobileApiProvider)
-                              .markInAppNotificationRead(slug, server.id)
-                              .then((_) => ref.invalidate(serverInAppNotificationsProvider))
-                              .catchError((_) {}),
-                        );
-                      }
-                    }
+              for (var ni = 0; ni < visible.length; ni++)
+                Builder(
+                  builder: (context) {
+                    final item = visible[ni];
+                    return SaEnter(
+                      delay: SaStaggerDelay.of(1 + ni),
+                      preset: SaMotionPreset.rise,
+                      child: _NotifCard(
+                        item: item,
+                        unread: item.kind == _NotifKind.serverInApp
+                            ? (item.server?.isUnread ?? !readIds.contains(item.id))
+                            : !readIds.contains(item.id),
+                        syncRunning: syncState.status == ManualSyncStatus.running,
+                        syncUiProgress: syncState.progress,
+                        debtDays: _debtDays,
+                        onMarkRead: () {
+                          ref.read(notificationsReadIdsProvider.notifier).state = {
+                            ...ref.read(notificationsReadIdsProvider),
+                            item.id,
+                          };
+                          final server = item.server;
+                          if (server != null && server.isUnread) {
+                            final slug = ref.read(sessionProvider).tenantSlug?.trim() ?? '';
+                            if (slug.isNotEmpty) {
+                              unawaited(
+                                ref
+                                    .read(mobileApiProvider)
+                                    .markInAppNotificationRead(slug, server.id)
+                                    .then((_) => ref.invalidate(serverInAppNotificationsProvider))
+                                    .catchError((_) {}),
+                              );
+                            }
+                          }
+                        },
+                        onCancelHeld: item.held != null ? () => _cancelHeld(item.held!.id) : null,
+                        onSendHeldNow: item.held != null ? () => _sendHeldNow(item.held!.id) : null,
+                        onSyncNow: () => startManualSync(context, ref, full: false),
+                      ),
+                    );
                   },
-                  onCancelHeld: item.held != null ? () => _cancelHeld(item.held!.id) : null,
-                  onSendHeldNow: item.held != null ? () => _sendHeldNow(item.held!.id) : null,
-                  onSyncNow: () => startManualSync(context, ref, full: false),
                 ),
           ],
         ),

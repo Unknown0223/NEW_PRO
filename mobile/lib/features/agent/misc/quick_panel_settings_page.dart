@@ -7,6 +7,7 @@ import '../../../core/prefs/quick_panel_provider.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/ui/agent_ui.dart';
+import '../../../design_system/design_system.dart';
 import '../../../core/ui/quick_panel_sheet.dart';
 import '../shell/agent_app_bar.dart';
 
@@ -145,7 +146,7 @@ class _QuickPanelSettingsPageState
       body: !_loaded
           ? const Center(child: CircularProgressIndicator())
           : ReorderableListView.builder(
-              padding: const EdgeInsets.fromLTRB(12, 12, 12, 96),
+              padding: const EdgeInsets.fromLTRB(12, 12, 12, 140),
               itemCount: _items.length,
               onReorder: (oldIndex, newIndex) {
                 var next = List<QuickPanelItem>.from(_items);
@@ -156,7 +157,10 @@ class _QuickPanelSettingsPageState
               },
               itemBuilder: (context, index) {
                 final item = _items[index];
-                return Card(
+                return SaEnter(
+                  delay: SaStaggerDelay.of(index),
+                  preset: SaMotionPreset.rise,
+                  child: Card(
                   key: ValueKey(item.id),
                   margin: const EdgeInsets.only(bottom: 8),
                   shape: RoundedRectangleBorder(
@@ -197,6 +201,7 @@ class _QuickPanelSettingsPageState
                       ],
                     ),
                   ),
+                ),
                 );
               },
             ),

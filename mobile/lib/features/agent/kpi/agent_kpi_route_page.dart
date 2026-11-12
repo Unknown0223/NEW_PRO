@@ -12,6 +12,7 @@ import '../../../core/theme/app_typography.dart';
 import '../../../core/time/work_region_time.dart';
 import '../../../core/ui/agent_ui.dart';
 import '../../../core/ui/agent_ui_extended.dart';
+import '../../../design_system/design_system.dart';
 import '../shell/agent_app_bar.dart';
 import '../tabel/tabel_format.dart';
 import 'kpi_format.dart';
@@ -171,55 +172,64 @@ class _MonthBody extends StatelessWidget {
 
     return ListView(
       physics: const AlwaysScrollableScrollPhysics(),
-      padding: const EdgeInsets.fromLTRB(14, 12, 14, 32),
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 140),
       children: [
-        _TodaySalesHero(
-          fact: todayFact,
-          plan: todayPlan,
-          remaining: todayRem,
-          overSum: todayOver,
-          pct: todayPct,
-          vsYesterday: data.dailyRoute.vsYesterdayPct ?? data.todayVsYesterdayPct,
-          workLeft: remDays,
-          workTotal: data.dailyRoute.workingDaysTotal,
-          carryForward: data.dailyRoute.carryForwardSum,
-          monthFact: data.monthFactSum,
-          monthPlan: data.monthPlanSum,
-          monthPct: data.monthExecutionPct,
-          onOpenDays: () => context.push('/kpi/route/days'),
+        SaEnter(
+          preset: SaMotionPreset.rise,
+          child: _TodaySalesHero(
+            fact: todayFact,
+            plan: todayPlan,
+            remaining: todayRem,
+            overSum: todayOver,
+            pct: todayPct,
+            vsYesterday: data.dailyRoute.vsYesterdayPct ?? data.todayVsYesterdayPct,
+            workLeft: remDays,
+            workTotal: data.dailyRoute.workingDaysTotal,
+            carryForward: data.dailyRoute.carryForwardSum,
+            monthFact: data.monthFactSum,
+            monthPlan: data.monthPlanSum,
+            monthPct: data.monthExecutionPct,
+            onOpenDays: () => context.push('/kpi/route/days'),
+          ),
         ),
         const SizedBox(height: 14),
-        Row(
-          children: [
-            Expanded(
-              child: Text(
-                'KPI · план на сегодня',
-                style: AppTypography.headlineSmall.copyWith(fontSize: 14),
+        SaEnter(
+          delay: SaStaggerDelay.of(1),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'KPI · план на сегодня',
+                  style: AppTypography.headlineSmall.copyWith(fontSize: 14),
+                ),
               ),
-            ),
-            TextButton(
-              onPressed: () => context.push('/kpi/route/days'),
-              style: TextButton.styleFrom(
-                foregroundColor: AppColors.primary,
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                minimumSize: Size.zero,
-                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              TextButton(
+                onPressed: () => context.push('/kpi/route/days'),
+                style: TextButton.styleFrom(
+                  foregroundColor: AppColors.primary,
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  minimumSize: Size.zero,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+                child: const Text(
+                  'Подробнее →',
+                  style: TextStyle(fontWeight: FontWeight.w800, fontSize: 12.5),
+                ),
               ),
-              child: const Text(
-                'Подробнее →',
-                style: TextStyle(fontWeight: FontWeight.w800, fontSize: 12.5),
-              ),
-            ),
-          ],
+            ],
+          ),
         ),
         const SizedBox(height: 8),
         if (groups.isEmpty)
-          AgentSurfaceCard(
-            child: Text(
-              data.hasPlans
-                  ? 'Нет активных групп KPI.'
-                  : 'Одобренных KPI-планов на месяц нет.',
-              style: AppTypography.bodySmall.copyWith(color: AppColors.textSecondary),
+          SaEnter(
+            delay: SaStaggerDelay.of(2),
+            child: AgentSurfaceCard(
+              child: Text(
+                data.hasPlans
+                    ? 'Нет активных групп KPI.'
+                    : 'Одобренных KPI-планов на месяц нет.',
+                style: AppTypography.bodySmall.copyWith(color: AppColors.textSecondary),
+              ),
             ),
           )
         else
@@ -235,29 +245,33 @@ class _MonthBody extends StatelessWidget {
       final left = groups[i];
       final right = i + 1 < groups.length ? groups[i + 1] : null;
       out.add(
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: _KpiTile(
-                group: left,
-                icon: kpiMetricIcon(left.primaryMetric),
-                tone: kpiMetricIconTone(left.primaryMetric, i),
-                remDays: remDays,
+        SaEnter(
+          delay: SaStaggerDelay.of(2 + (i ~/ 2)),
+          preset: SaMotionPreset.rise,
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: _KpiTile(
+                  group: left,
+                  icon: kpiMetricIcon(left.primaryMetric),
+                  tone: kpiMetricIconTone(left.primaryMetric, i),
+                  remDays: remDays,
+                ),
               ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: right != null
-                  ? _KpiTile(
-                      group: right,
-                      icon: kpiMetricIcon(right.primaryMetric),
-                      tone: kpiMetricIconTone(right.primaryMetric, i + 1),
-                      remDays: remDays,
-                    )
-                  : const SizedBox.shrink(),
-            ),
-          ],
+              const SizedBox(width: 10),
+              Expanded(
+                child: right != null
+                    ? _KpiTile(
+                        group: right,
+                        icon: kpiMetricIcon(right.primaryMetric),
+                        tone: kpiMetricIconTone(right.primaryMetric, i + 1),
+                        remDays: remDays,
+                      )
+                    : const SizedBox.shrink(),
+              ),
+            ],
+          ),
         ),
       );
     }

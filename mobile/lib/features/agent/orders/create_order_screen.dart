@@ -36,6 +36,7 @@ import '../../../core/time/work_region_time.dart';
 import '../../auth/auth_provider.dart';
 import '../../../core/ui/agent_ui.dart';
 import '../../../core/ui/agent_ui_extended.dart';
+import '../../../design_system/design_system.dart';
 import '../../../core/ui/client_photo_thumb.dart';
 import '../../../core/ui/product_photo_thumb.dart';
 import '../../../core/l10n/app_strings_ru.dart';
@@ -637,9 +638,12 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
-      builder: (ctx) => _ClientPickerSheet(
-        clientCount: _clientCount,
-        mobileConfig: cfg,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => SaPopIn(
+        child: _ClientPickerSheet(
+          clientCount: _clientCount,
+          mobileConfig: cfg,
+        ),
       ),
     );
     if (picked != null && mounted) {
@@ -1725,20 +1729,18 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
       }
 
       if (isGrid) {
-        return Material(
-          color: blocked ? Colors.grey.shade50 : AppColors.surface,
-          borderRadius: BorderRadius.circular(15),
-          child: InkWell(
-            borderRadius: BorderRadius.circular(15),
-            onTap: onTap,
-            child: Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(15),
-                border: Border.all(
-                  color: qQty > 0 ? AppColors.agentAccent : AppColors.border,
-                ),
+        return SaPressable(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(SaRadius.card),
+          child: Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: blocked ? Colors.grey.shade50 : AppColors.surface,
+              borderRadius: BorderRadius.circular(SaRadius.card),
+              border: Border.all(
+                color: qQty > 0 ? AppColors.agentAccent : AppColors.border,
               ),
+            ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -1790,15 +1792,20 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
                   ),
                 ],
               ),
-            ),
           ),
         );
       }
 
-      return Card(
-        margin: EdgeInsets.zero,
-        color: blocked ? Colors.grey.shade50 : null,
-        child: ListTile(
+      return SaPressable(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(SaRadius.card),
+        child: Card(
+          margin: EdgeInsets.zero,
+          color: blocked ? Colors.grey.shade50 : null,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(SaRadius.card),
+          ),
+          child: ListTile(
           enabled: !blocked,
           leading: ProductPhotoThumb(source: firstImg, size: 40, radius: 10),
           title: Text(
@@ -1842,7 +1849,7 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
                   color: blocked ? AppColors.textMuted : null),
             ],
           ),
-          onTap: onTap,
+          ),
         ),
       );
     }
@@ -1857,7 +1864,11 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
           childAspectRatio: 1.15,
         ),
         itemCount: visible.length,
-        itemBuilder: (_, i) => tile(visible[i]),
+        itemBuilder: (_, i) => SaEnter(
+          delay: SaStaggerDelay.of(i),
+          preset: SaMotionPreset.rise,
+          child: tile(visible[i]),
+        ),
       );
     }
 
@@ -1865,7 +1876,11 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
       padding: const EdgeInsets.all(16),
       itemCount: visible.length,
       separatorBuilder: (_, __) => const SizedBox(height: 8),
-      itemBuilder: (_, i) => tile(visible[i]),
+      itemBuilder: (_, i) => SaEnter(
+        delay: SaStaggerDelay.of(i),
+        preset: SaMotionPreset.rise,
+        child: tile(visible[i]),
+      ),
     );
   }
 
@@ -1913,53 +1928,31 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
                   children: [
                     if (showDraftButton) ...[
                       Expanded(
-                        child: SizedBox(
-                          height: 48,
-                          child: OutlinedButton(
-                            style: OutlinedButton.styleFrom(
-                              backgroundColor: const Color(0xFFF1F5F9),
-                              foregroundColor: AppColors.textPrimary,
-                              side: BorderSide.none,
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                            ),
-                            onPressed: (_submitting || _cartQty <= 0)
-                                ? null
-                                : () => _saveDraft(popAfter: true),
-                            child: const Text(S.draft),
-                          ),
+                        child: SaGhostButton(
+                          label: S.draft,
+                          onPressed: (_submitting || _cartQty <= 0)
+                              ? null
+                              : () => _saveDraft(popAfter: true),
                         ),
                       ),
                       const SizedBox(width: 8),
                     ],
                     Expanded(
                       flex: showDraftButton ? 2 : 1,
-                      child: SizedBox(
-                        height: 48,
-                        child: ElevatedButton(
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: AppColors.agentAccent,
-                            foregroundColor: Colors.white,
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                          ),
-                          onPressed: (_submitting || !primaryEnabled) ? null : onPrimary,
-                          child: _submitting
-                              ? const SizedBox(
-                                  width: 22,
-                                  height: 22,
-                                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                                )
-                              : Text(primaryLabel),
-                        ),
+                      child: SaPrimaryButton(
+                        label: primaryLabel,
+                        loading: _submitting,
+                        onPressed: (!primaryEnabled) ? null : onPrimary,
                       ),
                     ),
                     if (showActionsButton && _selectedClientId > 0) ...[
                       const SizedBox(width: 8),
-                      Material(
-                        color: const Color(0xFFF1F5F9),
-                        borderRadius: BorderRadius.circular(12),
-                        child: InkWell(
-                          onTap: _showOrderActionsSheet,
-                          borderRadius: BorderRadius.circular(12),
+                      SaPressable(
+                        onTap: _showOrderActionsSheet,
+                        borderRadius: BorderRadius.circular(SaRadius.control),
+                        child: Material(
+                          color: const Color(0xFFF1F5F9),
+                          borderRadius: BorderRadius.circular(SaRadius.control),
                           child: const SizedBox(
                             width: 48,
                             height: 48,
@@ -1980,25 +1973,28 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
 
   Widget _buildPickClient() {
     return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.person_search_outlined, size: 64, color: Colors.grey.shade300),
-            const SizedBox(height: 16),
-            Text(
-              _clientCount == 0 ? S.syncFirst : S.selectClient,
-              textAlign: TextAlign.center,
-              style: AppTypography.bodyMedium,
-            ),
-            const SizedBox(height: 20),
-            ElevatedButton.icon(
-              onPressed: _clientCount == 0 ? null : _pickClient,
-              icon: const Icon(Icons.people),
-              label: const Text(S.selectClient),
-            ),
-          ],
+      child: SaEnter(
+        preset: SaMotionPreset.rise,
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.person_search_outlined, size: 64, color: Colors.grey.shade300),
+              const SizedBox(height: 16),
+              Text(
+                _clientCount == 0 ? S.syncFirst : S.selectClient,
+                textAlign: TextAlign.center,
+                style: AppTypography.bodyMedium,
+              ),
+              const SizedBox(height: 20),
+              SaPrimaryButton(
+                label: S.selectClient,
+                icon: Icons.people,
+                onPressed: _clientCount == 0 ? null : _pickClient,
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -2069,20 +2065,23 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
         if (_consignmentLimitGateReason() != null)
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-            child: Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-              decoration: BoxDecoration(
-                color: AppColors.error.withValues(alpha: 0.08),
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: AppColors.error.withValues(alpha: 0.35)),
-              ),
-              child: Text(
-                _consignmentLimitGateReason()!,
-                style: AppTypography.caption.copyWith(
-                  color: AppColors.error,
-                  fontWeight: FontWeight.w700,
-                  height: 1.35,
+            child: SaEnter(
+              preset: SaMotionPreset.rise,
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                decoration: BoxDecoration(
+                  color: AppColors.error.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(SaRadius.control),
+                  border: Border.all(color: AppColors.error.withValues(alpha: 0.35)),
+                ),
+                child: Text(
+                  _consignmentLimitGateReason()!,
+                  style: AppTypography.caption.copyWith(
+                    color: AppColors.error,
+                    fontWeight: FontWeight.w700,
+                    height: 1.35,
+                  ),
                 ),
               ),
             ),
@@ -2214,7 +2213,7 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
                           margin: EdgeInsets.zero,
                           color: out ? Colors.grey.shade100 : null,
                           shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
+                            borderRadius: BorderRadius.circular(SaRadius.control),
                             side: qty > 0
                                 ? const BorderSide(
                                     color: AppColors.agentAccent,
@@ -2279,7 +2278,7 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
                         margin: const EdgeInsets.only(bottom: 8),
                         color: out ? Colors.grey.shade100 : null,
                         shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
+                          borderRadius: BorderRadius.circular(SaRadius.control),
                           side: qty > 0
                               ? const BorderSide(
                                   color: AppColors.agentAccent,
@@ -2366,16 +2365,22 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
                           childAspectRatio: 0.72,
                         ),
                         itemCount: products.length,
-                        itemBuilder: (_, i) =>
-                            RepaintBoundary(child: productCard(products[i])),
+                        itemBuilder: (_, i) => SaEnter(
+                          delay: SaStaggerDelay.of(i.clamp(0, 24)),
+                          preset: SaMotionPreset.rise,
+                          child: RepaintBoundary(child: productCard(products[i])),
+                        ),
                       );
                     }
 
                     return ListView.builder(
                       padding: const EdgeInsets.all(12),
                       itemCount: products.length,
-                      itemBuilder: (_, i) =>
-                          RepaintBoundary(child: productCard(products[i])),
+                      itemBuilder: (_, i) => SaEnter(
+                        delay: SaStaggerDelay.of(i.clamp(0, 24)),
+                        preset: SaMotionPreset.rise,
+                        child: RepaintBoundary(child: productCard(products[i])),
+                      ),
                     );
                   },
                 ),
@@ -2611,23 +2616,26 @@ class _ClientPickerSheetState extends State<_ClientPickerSheet> {
 
   Widget _clientTile(Map<String, dynamic> c) {
     final days = formatClientVisitDaysDisplay(c);
-    return ListTile(
-      leading: ClientPhotoThumb(
-        source: firstClientPhotoUrl(c),
-        size: 40,
-        radius: 10,
-      ),
-      title: Text(c['name']?.toString() ?? ''),
-      subtitle: Text(
-        [
-          c['phone']?.toString() ?? '',
-          if (days != null && days.isNotEmpty) days,
-        ].where((s) => s.trim().isNotEmpty).join(' · '),
-      ),
+    return SaPressable(
       onTap: () {
         _focusNode.unfocus();
         Navigator.pop(context, c);
       },
+      borderRadius: BorderRadius.circular(SaRadius.control),
+      child: ListTile(
+        leading: ClientPhotoThumb(
+          source: firstClientPhotoUrl(c),
+          size: 40,
+          radius: 10,
+        ),
+        title: Text(c['name']?.toString() ?? ''),
+        subtitle: Text(
+          [
+            c['phone']?.toString() ?? '',
+            if (days != null && days.isNotEmpty) days,
+          ].where((s) => s.trim().isNotEmpty).join(' · '),
+        ),
+      ),
     );
   }
 
@@ -2644,12 +2652,17 @@ class _ClientPickerSheetState extends State<_ClientPickerSheet> {
         alignment: Alignment.topCenter,
         child: Material(
           color: Theme.of(context).scaffoldBackgroundColor,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(SaRadius.sheet)),
+          clipBehavior: Clip.antiAlias,
           child: Column(
             children: [
               const SizedBox(height: 8),
-              const Padding(
-                padding: EdgeInsets.all(16),
-                child: Text('Выберите клиента', style: AppTypography.headlineSmall),
+              SaEnter(
+                preset: SaMotionPreset.rise,
+                child: const Padding(
+                  padding: EdgeInsets.all(16),
+                  child: Text('Выберите клиента', style: AppTypography.headlineSmall),
+                ),
               ),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -2688,7 +2701,11 @@ class _ClientPickerSheetState extends State<_ClientPickerSheet> {
                             ? const Center(child: AgentEmptyState(message: S.emptyClientSearch))
                             : ListView.builder(
                                 itemCount: _results.length,
-                                itemBuilder: (_, i) => _clientTile(_results[i]),
+                                itemBuilder: (_, i) => SaEnter(
+                                  delay: SaStaggerDelay.of(i),
+                                  preset: SaMotionPreset.rise,
+                                  child: _clientTile(_results[i]),
+                                ),
                               ))
                         : (_suggested.isEmpty
                             ? Center(
@@ -2702,7 +2719,11 @@ class _ClientPickerSheetState extends State<_ClientPickerSheet> {
                               )
                             : ListView.builder(
                                 itemCount: _suggested.length,
-                                itemBuilder: (_, i) => _clientTile(_suggested[i]),
+                                itemBuilder: (_, i) => SaEnter(
+                                  delay: SaStaggerDelay.of(i),
+                                  preset: SaMotionPreset.rise,
+                                  child: _clientTile(_suggested[i]),
+                                ),
                               )),
               ),
             ],

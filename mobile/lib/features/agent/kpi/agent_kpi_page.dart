@@ -9,6 +9,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/ui/agent_ui.dart';
 import '../../../core/ui/agent_ui_extended.dart';
+import '../../../design_system/design_system.dart';
 import '../home/home_visit_metrics_provider.dart';
 import '../shell/agent_app_bar.dart';
 import '../tabel/tabel_format.dart';
@@ -110,36 +111,46 @@ class _Body extends StatelessWidget {
 
     return ListView(
       physics: const AlwaysScrollableScrollPhysics(),
-      padding: const EdgeInsets.fromLTRB(14, 12, 14, 32),
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 140),
       children: [
-        _TodayHero(
-          sales: data.todaySalesSum,
-          plan: data.todayPlanDaySum,
-          pct: todayPct,
-          remaining: data.todayRemainingSum,
-          vsYesterday: data.todayVsYesterdayPct,
-          week: data.week,
-          workingDaysLeft: data.dailyRoute.remainingWorkingDays,
-          workingDaysTotal: data.dailyRoute.workingDaysTotal,
-          carryForward: data.dailyRoute.carryForwardSum,
+        SaEnter(
+          preset: SaMotionPreset.rise,
+          child: _TodayHero(
+            sales: data.todaySalesSum,
+            plan: data.todayPlanDaySum,
+            pct: todayPct,
+            remaining: data.todayRemainingSum,
+            vsYesterday: data.todayVsYesterdayPct,
+            week: data.week,
+            workingDaysLeft: data.dailyRoute.remainingWorkingDays,
+            workingDaysTotal: data.dailyRoute.workingDaysTotal,
+            carryForward: data.dailyRoute.carryForwardSum,
+          ),
         ),
         const SizedBox(height: 12),
-        _VisitRouteCard(
-          onRoute: onRoute,
-          offRoute: offRoute,
-          remaining: remaining,
-          stops: stops > 0 ? stops : 12,
-          pct: kpiPctInt(visitPct ?? data.todayExecutionPct),
-          onOpen: () => context.go('/kpi/route'),
+        SaEnter(
+          delay: SaStaggerDelay.of(1),
+          preset: SaMotionPreset.rise,
+          child: _VisitRouteCard(
+            onRoute: onRoute,
+            offRoute: offRoute,
+            remaining: remaining,
+            stops: stops > 0 ? stops : 12,
+            pct: kpiPctInt(visitPct ?? data.todayExecutionPct),
+            onOpen: () => context.go('/kpi/route'),
+          ),
         ),
         const SizedBox(height: 12),
         ..._kpiGroupGrid(context, data),
         if (!data.hasPlans) ...[
           const SizedBox(height: 12),
-          AgentSurfaceCard(
-            child: Text(
-              'Одобренных KPI-планов на месяц нет. Задайте в «Установка планов».',
-              style: AppTypography.bodySmall.copyWith(color: AppColors.textSecondary),
+          SaEnter(
+            delay: SaStaggerDelay.of(3),
+            child: AgentSurfaceCard(
+              child: Text(
+                'Одобренных KPI-планов на месяц нет. Задайте в «Установка планов».',
+                style: AppTypography.bodySmall.copyWith(color: AppColors.textSecondary),
+              ),
             ),
           ),
         ],
@@ -157,17 +168,21 @@ class _Body extends StatelessWidget {
       final right = i + 1 < groups.length ? groups[i + 1] : null;
       tiles.add(const SizedBox(height: 10));
       tiles.add(
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(child: _groupTile(left, i)),
-            const SizedBox(width: 10),
-            Expanded(
-              child: right != null
-                  ? _groupTile(right, i + 1)
-                  : const SizedBox.shrink(),
-            ),
-          ],
+        SaEnter(
+          delay: SaStaggerDelay.of(2 + (i ~/ 2)),
+          preset: SaMotionPreset.rise,
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(child: _groupTile(left, i)),
+              const SizedBox(width: 10),
+              Expanded(
+                child: right != null
+                    ? _groupTile(right, i + 1)
+                    : const SizedBox.shrink(),
+              ),
+            ],
+          ),
         ),
       );
     }
@@ -461,82 +476,79 @@ class _VisitRouteCard extends StatelessWidget {
       return const Color(0xFFE5EDF3);
     });
 
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onOpen,
-        borderRadius: BorderRadius.circular(16),
-        child: AgentSurfaceCard(
-          padding: const EdgeInsets.all(14),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
+    return SaPressable(
+      onTap: onOpen,
+      borderRadius: BorderRadius.circular(16),
+      child: AgentSurfaceCard(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Маршрут на сегодня',
+                        style: AppTypography.headlineSmall.copyWith(fontSize: 13.5),
+                      ),
+                      Text(
+                        '$onRoute из $stops точек'
+                        '${offRoute > 0 ? ' · вне маршрута $offRoute' : ''}',
+                        style: AppTypography.captionSmall.copyWith(
+                          color: AppColors.textMuted,
+                          fontSize: 11.5,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: AppColors.primarySoft,
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text(
+                    '$pct%',
+                    style: AppTypography.captionSmall.copyWith(
+                      color: AppColors.primary,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+                const Icon(Icons.chevron_right, size: 20, color: AppColors.textMuted),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                for (var i = 0; i < segs.length; i++) ...[
+                  if (i > 0) const SizedBox(width: 4),
                   Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Маршрут на сегодня',
-                          style: AppTypography.headlineSmall.copyWith(fontSize: 13.5),
-                        ),
-                        Text(
-                          '$onRoute из $stops точек'
-                          '${offRoute > 0 ? ' · вне маршрута $offRoute' : ''}',
-                          style: AppTypography.captionSmall.copyWith(
-                            color: AppColors.textMuted,
-                            fontSize: 11.5,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: AppColors.primarySoft,
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Text(
-                      '$pct%',
-                      style: AppTypography.captionSmall.copyWith(
-                        color: AppColors.primary,
-                        fontWeight: FontWeight.w800,
+                    child: Container(
+                      height: 10,
+                      decoration: BoxDecoration(
+                        color: segs[i],
+                        borderRadius: BorderRadius.circular(3),
                       ),
                     ),
                   ),
-                  const Icon(Icons.chevron_right, size: 20, color: AppColors.textMuted),
                 ],
-              ),
-              const SizedBox(height: 10),
-              Row(
-                children: [
-                  for (var i = 0; i < segs.length; i++) ...[
-                    if (i > 0) const SizedBox(width: 4),
-                    Expanded(
-                      child: Container(
-                        height: 10,
-                        decoration: BoxDecoration(
-                          color: segs[i],
-                          borderRadius: BorderRadius.circular(3),
-                        ),
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-              const SizedBox(height: 8),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  _legend(AppColors.success, 'Посещено $onRoute'),
-                  _legend(const Color(0xFFF59E0B), 'Вне маршрута $offRoute'),
-                  _legend(const Color(0xFFE5EDF3), 'Осталось $remaining'),
-                ],
-              ),
-            ],
-          ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                _legend(AppColors.success, 'Посещено $onRoute'),
+                _legend(const Color(0xFFF59E0B), 'Вне маршрута $offRoute'),
+                _legend(const Color(0xFFE5EDF3), 'Осталось $remaining'),
+              ],
+            ),
+          ],
         ),
       ),
     );

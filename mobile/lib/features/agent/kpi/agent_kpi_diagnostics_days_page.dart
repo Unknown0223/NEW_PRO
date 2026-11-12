@@ -8,6 +8,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/ui/agent_ui.dart';
 import '../../../core/ui/agent_ui_extended.dart';
+import '../../../design_system/design_system.dart';
 import '../shell/agent_app_bar.dart';
 import 'kpi_format.dart';
 import 'kpi_provider.dart';
@@ -87,7 +88,9 @@ class _DaysBodyState extends State<_DaysBody> {
       physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.fromLTRB(14, 12, 14, 32),
       children: [
-        AgentSurfaceCard(
+        SaEnter(
+          preset: SaMotionPreset.rise,
+          child: AgentSurfaceCard(
           padding: const EdgeInsets.all(14),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -166,25 +169,37 @@ class _DaysBodyState extends State<_DaysBody> {
             ],
           ),
         ),
+        ),
         const SizedBox(height: 12),
         if (workDays.isEmpty)
-          AgentSurfaceCard(
-            child: Text(
-              'Рабочие дни не найдены. Проверьте настройку «Рабочие дни».',
-              style: AppTypography.bodySmall.copyWith(color: AppColors.textSecondary),
+          SaEnter(
+            delay: SaStaggerDelay.of(1),
+            child: AgentSurfaceCard(
+              child: Text(
+                'Рабочие дни не найдены. Проверьте настройку «Рабочие дни».',
+                style: AppTypography.bodySmall.copyWith(color: AppColors.textSecondary),
+              ),
             ),
           )
         else if (filtered.isEmpty)
-          AgentSurfaceCard(
-            child: Text(
-              _filter == _DaysFilter.past
-                  ? 'Прошлых рабочих дней нет.'
-                  : 'Сегодня и будущих рабочих дней нет.',
-              style: AppTypography.bodySmall.copyWith(color: AppColors.textSecondary),
+          SaEnter(
+            delay: SaStaggerDelay.of(1),
+            child: AgentSurfaceCard(
+              child: Text(
+                _filter == _DaysFilter.past
+                    ? 'Прошлых рабочих дней нет.'
+                    : 'Сегодня и будущих рабочих дней нет.',
+                style: AppTypography.bodySmall.copyWith(color: AppColors.textSecondary),
+              ),
             ),
           )
         else
-          ...filtered.map((d) => _DayTile(day: d)),
+          for (var di = 0; di < filtered.length; di++)
+            SaEnter(
+              delay: SaStaggerDelay.of(1 + di),
+              preset: SaMotionPreset.rise,
+              child: _DayTile(day: filtered[di]),
+            ),
       ],
     );
   }

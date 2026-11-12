@@ -1,3 +1,5 @@
+import 'package:flutter/widgets.dart';
+
 /// Masofa va radius tokenlari — 4px lik baza katak.
 class SaSpace {
   const SaSpace._();
@@ -28,4 +30,17 @@ class SaRadius {
 
   /// Telefon ramkasi, katta panel
   static const double panel = 28;
+}
+
+/// Ro‘yxat padding — avval pastki nav uchun, endi shablonda nav yo‘q.
+class SaShellInsets {
+  const SaShellInsets._();
+
+  static EdgeInsets listWithShellNav({
+    double horizontal = SaSpace.md,
+    double top = SaSpace.md,
+    double bottom = SaSpace.xxl,
+  }) {
+    return EdgeInsets.fromLTRB(horizontal, top, horizontal, bottom);
+  }
 }

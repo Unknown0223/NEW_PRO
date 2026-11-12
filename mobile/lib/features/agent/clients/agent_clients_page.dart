@@ -14,6 +14,7 @@ import '../../auth/auth_provider.dart';
 import '../../../core/ui/agent_ui.dart';
 import '../../../core/ui/agent_ui_extended.dart';
 import '../../../core/ui/agent_visit_ui.dart';
+import '../../../design_system/design_system.dart';
 import '../../../core/ui/client_photo_thumb.dart';
 import '../../../core/clients/client_outlet_filters.dart';
 import '../shell/agent_app_bar.dart';
@@ -180,7 +181,9 @@ class _AgentClientsPageState extends ConsumerState<AgentClientsPage> {
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Padding(
+          SaEnter(
+            preset: SaMotionPreset.rise,
+            child: Padding(
             padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
             child: TextField(
               controller: _searchCtrl,
@@ -201,17 +204,26 @@ class _AgentClientsPageState extends ConsumerState<AgentClientsPage> {
               ),
             ),
           ),
+          ),
           if (!inSearch) ...[
             const SizedBox(height: 10),
-            const _OutletCategoryChips(),
+            SaEnter(
+              delay: SaStaggerDelay.of(1),
+              preset: SaMotionPreset.rise,
+              child: const _OutletCategoryChips(),
+            ),
           ],
           if (staleCatalog)
-            Padding(
+            SaEnter(
+              delay: SaStaggerDelay.of(2),
+              preset: SaMotionPreset.rise,
+              child: Padding(
               padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
               child: AgentWarningBanner(
                 message: '⚠️ ${S.staleCatalog}',
                 onTap: _syncing ? null : _syncClients,
               ),
+            ),
             ),
           const SizedBox(height: 8),
           Expanded(
@@ -309,7 +321,7 @@ class _AgentClientsPageState extends ConsumerState<AgentClientsPage> {
               ref.watch(clientAgentLedgerBalancesProvider).valueOrNull;
           final drafts = ref.watch(orderDraftsProvider).valueOrNull;
           return ListView.separated(
-            padding: const EdgeInsets.fromLTRB(12, 4, 12, 100),
+            padding: const EdgeInsets.fromLTRB(12, 4, 12, 140),
             itemCount: clients.length,
             separatorBuilder: (_, __) => const SizedBox(height: 12),
             itemBuilder: (ctx, i) {
@@ -319,14 +331,18 @@ class _AgentClientsPageState extends ConsumerState<AgentClientsPage> {
                   ? clientAgentLedgerBalance(agentBalances, id)
                   : null;
               final hasDraft = id != null && drafts?[id] != null;
-              return _ClientListTile(
-                client: client,
-                balanceAmount: balanceAmount,
-                hasDraft: hasDraft,
-                onTap: () {
-                  if (id == null) return;
-                  context.push('/clients/$id');
-                },
+              return SaEnter(
+                delay: SaStaggerDelay.of(i.clamp(0, 12)),
+                preset: SaMotionPreset.rise,
+                child: _ClientListTile(
+                  client: client,
+                  balanceAmount: balanceAmount,
+                  hasDraft: hasDraft,
+                  onTap: () {
+                    if (id == null) return;
+                    context.push('/clients/$id');
+                  },
+                ),
               );
             },
           );

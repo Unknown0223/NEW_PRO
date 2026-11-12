@@ -7,6 +7,7 @@ import '../../../core/theme/app_typography.dart';
 import '../../../core/time/work_region_time.dart';
 import '../../../core/ui/agent_ui.dart';
 import '../../../core/ui/agent_ui_extended.dart';
+import '../../../design_system/design_system.dart';
 import '../shell/agent_app_bar.dart';
 import 'agent_tabel_day_sheet.dart';
 import 'tabel_format.dart';
@@ -47,16 +48,19 @@ class _AgentTabelDetailPageState extends ConsumerState<AgentTabelDetailPage> {
           ),
         ),
       ),
-      body: RefreshIndicator(
-        onRefresh: () async => ref.invalidate(tabelDataProvider),
-        child: dataAsync.when(
-          data: (data) => _content(data),
-          loading: () => const Center(
-            child: CircularProgressIndicator(color: AppColors.primary),
-          ),
-          error: (e, _) => AgentErrorPanel(
-            error: e,
-            onRetry: () => ref.invalidate(tabelDataProvider),
+      body: SaEnter(
+        preset: SaMotionPreset.rise,
+        child: RefreshIndicator(
+          onRefresh: () async => ref.invalidate(tabelDataProvider),
+          child: dataAsync.when(
+            data: (data) => _content(data),
+            loading: () => const Center(
+              child: CircularProgressIndicator(color: AppColors.primary),
+            ),
+            error: (e, _) => AgentErrorPanel(
+              error: e,
+              onRetry: () => ref.invalidate(tabelDataProvider),
+            ),
           ),
         ),
       ),

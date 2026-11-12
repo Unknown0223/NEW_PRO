@@ -239,13 +239,16 @@ class _PinUnlockScreenState extends ConsumerState<PinUnlockScreen> {
                   onPressed: () => _tryBiometric(),
                 ),
               const Spacer(),
-              TextButton(
-                onPressed: _pinUnlocking
+              SaPressable(
+                onTap: _pinUnlocking
                     ? null
                     : () => ref.read(authStateProvider.notifier).logout(),
-                child: Text(
-                  'Выйти',
-                  style: AppTypography.bodySmall.copyWith(color: AppColors.textMuted),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  child: Text(
+                    'Выйти',
+                    style: AppTypography.bodySmall.copyWith(color: AppColors.textMuted),
+                  ),
                 ),
               ),
               const SizedBox(height: 8),

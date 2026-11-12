@@ -11,6 +11,7 @@ import '../../../core/theme/app_typography.dart';
 import '../../../core/time/work_region_time.dart';
 import '../../../core/ui/agent_ui.dart';
 import '../../../core/ui/agent_ui_extended.dart';
+import '../../../design_system/design_system.dart';
 import '../../auth/auth_provider.dart';
 import '../../../core/sync/sync_data_refresh.dart';
 import '../../../core/sync/sync_engine.dart';
@@ -205,15 +206,18 @@ class _AgentOrdersPageState extends ConsumerState<AgentOrdersPage> {
                   onRefresh: _refresh,
                   child: ListView(
                     physics: const AlwaysScrollableScrollPhysics(),
-                    padding: const EdgeInsets.fromLTRB(12, 12, 12, 100),
+                    padding: const EdgeInsets.fromLTRB(12, 12, 12, 140),
                     children: [
-                      GestureDetector(
-                        onTap: _pickDate,
-                        child: AgentOrdersHeroCard(
-                          totalSum: formatMoneyUz(totalSum + heldOrders.fold(0.0, (s, h) => s + h.estimatedTotal)),
-                          totalCount: orders.length + heldOrders.length,
-                          inProgressCount: inProgress + heldOrders.length,
-                          debtLabel: debtLabel,
+                      SaEnter(
+                        preset: SaMotionPreset.rise,
+                        child: SaPressable(
+                          onTap: _pickDate,
+                          child: AgentOrdersHeroCard(
+                            totalSum: formatMoneyUz(totalSum + heldOrders.fold(0.0, (s, h) => s + h.estimatedTotal)),
+                            totalCount: orders.length + heldOrders.length,
+                            inProgressCount: inProgress + heldOrders.length,
+                            debtLabel: debtLabel,
+                          ),
                         ),
                       ),
                       if (heldOrders.isNotEmpty) ...[
@@ -225,63 +229,73 @@ class _AgentOrdersPageState extends ConsumerState<AgentOrdersPage> {
                           ),
                         ),
                       ],
-                      for (final h in heldOrders)
-                        AgentHeldOrderCard(
-                          clientName: h.clientName,
-                          countdown: formatHeldCountdown(h.remaining()),
-                          sumLabel: formatMoneyUz(h.estimatedTotal),
-                          itemCount: h.itemCount,
-                          onTap: () async {
-                            final delayMin = ref.read(sessionProvider).mobileConfig?.sync.postOrderDelayMinutes ??
-                                h.submitAt.difference(h.createdAt).inMinutes.clamp(1, 59);
-                            final action = await showHeldOrderSyncSheet(
-                              context,
-                              order: h,
-                              delayMinutes: delayMin,
-                            );
-                            if (!context.mounted) return;
-                            if (action == HeldOrderSyncAction.edit) {
-                              context.push('/orders/create?held_id=${h.id}');
-                            } else if (action == HeldOrderSyncAction.goHome) {
-                              context.go('/home');
-                            } else if (action == HeldOrderSyncAction.sent) {
-                              showAgentToast(
-                                context,
-                                'Заказ отправлен',
-                                accentColor: AppColors.success,
+                      for (var hi = 0; hi < heldOrders.length; hi++)
+                        SaEnter(
+                          delay: SaStaggerDelay.of(1 + hi),
+                          preset: SaMotionPreset.rise,
+                          child: Builder(
+                            builder: (context) {
+                              final h = heldOrders[hi];
+                              return AgentHeldOrderCard(
+                                clientName: h.clientName,
+                                countdown: formatHeldCountdown(h.remaining()),
+                                sumLabel: formatMoneyUz(h.estimatedTotal),
+                                itemCount: h.itemCount,
+                                onTap: () async {
+                                  final delayMin =
+                                      ref.read(sessionProvider).mobileConfig?.sync.postOrderDelayMinutes ??
+                                          h.submitAt.difference(h.createdAt).inMinutes.clamp(1, 59);
+                                  final action = await showHeldOrderSyncSheet(
+                                    context,
+                                    order: h,
+                                    delayMinutes: delayMin,
+                                  );
+                                  if (!context.mounted) return;
+                                  if (action == HeldOrderSyncAction.edit) {
+                                    context.push('/orders/create?held_id=${h.id}');
+                                  } else if (action == HeldOrderSyncAction.goHome) {
+                                    context.go('/home');
+                                  } else if (action == HeldOrderSyncAction.sent) {
+                                    showAgentToast(
+                                      context,
+                                      'Заказ отправлен',
+                                      accentColor: AppColors.success,
+                                    );
+                                  }
+                                },
+                                onCancel: () async {
+                                  final ok = await showDialog<bool>(
+                                    context: context,
+                                    builder: (ctx) => AlertDialog(
+                                      title: const Text('Отменить заказ?'),
+                                      content: const Text(
+                                        'Заказ не будет отправлен на сервер и удалится с устройства.',
+                                      ),
+                                      actions: [
+                                        TextButton(
+                                          onPressed: () => Navigator.pop(ctx, false),
+                                          child: const Text('Нет'),
+                                        ),
+                                        TextButton(
+                                          onPressed: () => Navigator.pop(ctx, true),
+                                          child: const Text('Да, отменить'),
+                                        ),
+                                      ],
+                                    ),
+                                  );
+                                  if (ok != true) return;
+                                  await ref.read(heldOrderSchedulerProvider).cancelHeldOrder(h.id);
+                                  if (context.mounted) {
+                                    showAgentToast(
+                                      context,
+                                      'Заказ отменён',
+                                      accentColor: AppColors.warning,
+                                    );
+                                  }
+                                },
                               );
-                            }
-                          },
-                          onCancel: () async {
-                            final ok = await showDialog<bool>(
-                              context: context,
-                              builder: (ctx) => AlertDialog(
-                                title: const Text('Отменить заказ?'),
-                                content: const Text(
-                                  'Заказ не будет отправлен на сервер и удалится с устройства.',
-                                ),
-                                actions: [
-                                  TextButton(
-                                    onPressed: () => Navigator.pop(ctx, false),
-                                    child: const Text('Нет'),
-                                  ),
-                                  TextButton(
-                                    onPressed: () => Navigator.pop(ctx, true),
-                                    child: const Text('Да, отменить'),
-                                  ),
-                                ],
-                              ),
-                            );
-                            if (ok != true) return;
-                            await ref.read(heldOrderSchedulerProvider).cancelHeldOrder(h.id);
-                            if (context.mounted) {
-                              showAgentToast(
-                                context,
-                                'Заказ отменён',
-                                accentColor: AppColors.warning,
-                              );
-                            }
-                          },
+                            },
+                          ),
                         ),
                       const OrderDraftListSection(
                         padding: EdgeInsets.only(bottom: 10),
@@ -303,7 +317,12 @@ class _AgentOrdersPageState extends ConsumerState<AgentOrdersPage> {
                           ),
                         )
                       else
-                        for (final o in orders) _orderCard(o, debts),
+                        for (var oi = 0; oi < orders.length; oi++)
+                          SaEnter(
+                            delay: SaStaggerDelay.of(2 + heldOrders.length + oi),
+                            preset: SaMotionPreset.rise,
+                            child: _orderCard(orders[oi], debts),
+                          ),
                     ],
                   ),
                 );
@@ -338,18 +357,21 @@ class _AgentOrdersPageState extends ConsumerState<AgentOrdersPage> {
         ? formatDebtMoney(debtRow.remainder, currency: debts?.currency ?? 'UZS')
         : null;
 
-    return AgentOrderCard(
-      title: _orderTitle(o),
-      statusChip: chip,
-      client: o.clientName.isNotEmpty ? o.clientName : '—',
-      date: _formatOrderDate(o.createdAt),
-      bonus: _formatBonusSummary(o),
-      volume: o.volumeM3 != null && o.volumeM3! > 0 ? o.volumeM3!.toStringAsFixed(2) : '—',
-      count: _formatQty(o.qty),
-      amount: _formatAmount(o),
-      debt: debtLabel,
-      expanded: false,
+    return SaPressable(
       onTap: () => context.push('/orders/detail/${o.id}'),
+      child: AgentOrderCard(
+        title: _orderTitle(o),
+        statusChip: chip,
+        client: o.clientName.isNotEmpty ? o.clientName : '—',
+        date: _formatOrderDate(o.createdAt),
+        bonus: _formatBonusSummary(o),
+        volume: o.volumeM3 != null && o.volumeM3! > 0 ? o.volumeM3!.toStringAsFixed(2) : '—',
+        count: _formatQty(o.qty),
+        amount: _formatAmount(o),
+        debt: debtLabel,
+        expanded: false,
+        onTap: () => context.push('/orders/detail/${o.id}'),
+      ),
     );
   }
 

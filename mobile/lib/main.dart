@@ -22,6 +22,7 @@ import 'core/sync/sync_engine.dart';
 import 'core/time/server_clock.dart';
 import 'core/time/work_region_time.dart';
 import 'core/update/app_update_listener.dart';
+import 'design_system/design_system.dart';
 import 'features/auth/biometric_setup_listener.dart';
 import 'features/auth/face_verification_listener.dart';
 import 'routing/app_router.dart';
@@ -112,15 +113,31 @@ class _SalesDocAppState extends ConsumerState<SalesDocApp> {
         darkTheme: AppTheme.darkTheme,
         themeMode: themeMode,
         routerConfig: router,
-        builder: (context, child) => WorkdayOffGuard(
-          child: AppUpdateListener(
-            child: BiometricSetupListener(
-              child: FaceVerificationListener(
-                child: child ?? const SizedBox.shrink(),
-              ),
-            ),
-          ),
-        ),
+        builder: (context, child) {
+          // Emulyator Animator scale=0 → MediaQuery.disableAnimations=true
+          // bo‘lsa barcha SaEnter o‘chadi. Product motion default: full.
+          return ValueListenableBuilder<SaMotionLevel>(
+            valueListenable: SaMotionSettings.level,
+            builder: (context, level, _) {
+              final mq = saMotionMediaQuery(MediaQuery.of(context), level);
+              return MediaQuery(
+                data: mq,
+                child: SaMotionScope(
+                  level: level,
+                  child: WorkdayOffGuard(
+                    child: AppUpdateListener(
+                      child: BiometricSetupListener(
+                        child: FaceVerificationListener(
+                          child: child ?? const SizedBox.shrink(),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            },
+          );
+        },
       ),
     );
   }

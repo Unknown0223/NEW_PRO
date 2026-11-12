@@ -4,6 +4,7 @@ import '../../../core/l10n/app_strings_ru.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/ui/agent_ui.dart';
+import '../../../design_system/design_system.dart';
 import 'manual_sync_provider.dart';
 
 /// Shablon 26 — sinxronizatsiya jarayoni (pastki varaq, progress faqat oldinga).
@@ -15,64 +16,60 @@ class SyncProgressSheet extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final steps = state.uiSteps;
+    final scheme = Theme.of(context).colorScheme;
+    final doneSteps = steps.where((s) => s.status == SyncUiStepStatus.done).length;
+    final syncDone = state.status == ManualSyncStatus.success;
+
     return Align(
       alignment: Alignment.bottomCenter,
       child: Material(
         color: Colors.transparent,
-        child: Container(
-          width: double.infinity,
-          decoration: const BoxDecoration(
-            color: AppColors.surface,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-            boxShadow: [
-              BoxShadow(
-                color: Color(0x26000000),
-                blurRadius: 24,
-                offset: Offset(0, -6),
-              ),
-            ],
-          ),
-          child: SafeArea(
-            top: false,
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(20, 10, 20, 20),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  const Center(child: AgentSheetHandle()),
-                  const SizedBox(height: 6),
-                  Text(
-                    S.syncTitle,
-                    textAlign: TextAlign.center,
-                    style: AppTypography.headlineMedium.copyWith(fontWeight: FontWeight.w800),
-                  ),
-                  const SizedBox(height: 16),
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(4),
-                    child: TweenAnimationBuilder<double>(
-                      tween: Tween(end: state.progress.clamp(0.0, 1.0)),
-                      duration: const Duration(milliseconds: 450),
-                      curve: Curves.easeOutCubic,
-                      builder: (context, value, _) {
-                        return LinearProgressIndicator(
-                          value: value,
-                          backgroundColor: const Color(0xFFE6ECF2),
-                          valueColor: const AlwaysStoppedAnimation(AppColors.primary),
-                          minHeight: 8,
-                        );
-                      },
+        child: SaPopIn(
+          child: Container(
+            width: double.infinity,
+            decoration: BoxDecoration(
+              color: scheme.surface,
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(SaRadius.sheet)),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.15),
+                  blurRadius: 24,
+                  offset: const Offset(0, -6),
+                ),
+              ],
+            ),
+            child: SafeArea(
+              top: false,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(SaSpace.lg, 10, SaSpace.lg, SaSpace.lg),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const Center(child: AgentSheetHandle()),
+                    const SizedBox(height: 6),
+                    Text(
+                      S.syncTitle,
+                      textAlign: TextAlign.center,
+                      style: AppTypography.headlineMedium.copyWith(fontWeight: FontWeight.w800),
                     ),
-                  ),
-                  const SizedBox(height: 16),
-                  ...steps.map((step) => _SyncStepRow(step: step)),
+                    const SizedBox(height: SaSpace.md),
+                    SaSyncView(
+                      progress: state.progress,
+                      steps: steps.map((s) => s.label).toList(),
+                      doneSteps: doneSteps,
+                      done: syncDone,
+                    ),
+                    const SizedBox(height: SaSpace.md),
+                    ...steps.map((step) => _SyncStepRow(step: step)),
                   const SizedBox(height: 10),
                   Text(
                     S.syncProgressHint,
                     textAlign: TextAlign.center,
                     style: AppTypography.captionSmall.copyWith(color: const Color(0xFF8B6A00)),
                   ),
-                ],
+                  ],
+                ),
               ),
             ),
           ),

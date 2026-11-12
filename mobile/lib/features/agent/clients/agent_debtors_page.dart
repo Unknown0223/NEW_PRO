@@ -10,6 +10,7 @@ import '../../../core/l10n/app_strings_ru.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/ui/agent_ui.dart';
 import '../../../core/ui/agent_ui_extended.dart';
+import '../../../design_system/design_system.dart';
 import '../../auth/auth_provider.dart';
 import '../shell/agent_app_bar.dart';
 import '../orders/order_create_models.dart' show formatMoneyUz;
@@ -81,32 +82,46 @@ class AgentDebtorsPage extends ConsumerWidget {
               ref.invalidate(clientAgentLedgerBalancesProvider);
             },
             child: ListView(
-              padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
+              padding: const EdgeInsets.fromLTRB(12, 12, 12, 140),
               children: [
-                AgentBalanceBanner(
-                  label: 'Общий долг:',
-                  value: formatMoneyUz(total),
-                ),
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 8, left: 4, top: 4),
-                  child: Text(
-                    'Найдено: ${visible.length}',
-                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.textSecondary),
+                SaEnter(
+                  preset: SaMotionPreset.rise,
+                  child: AgentBalanceBanner(
+                    label: 'Общий долг:',
+                    value: formatMoneyUz(total),
                   ),
                 ),
-                ...visible.map((c) {
-                  final balance = shownBalance(c);
-                  return AgentDebtorCard(
-                    name: c.name,
-                    photoUrl: c.photoUrl,
-                    balance: _formatBalance(balance),
-                    balanceAmount: balance,
-                    overdue: _formatOverdue(c.overdueAt),
-                    openingDebt: c.openingDebt > 0.01 ? _formatBalance(c.openingDebt) : null,
-                    debtCollectionOnly: c.debtCollectionOnly,
-                    onTap: () => context.push('/clients/${c.id}'),
-                  );
-                }),
+                SaEnter(
+                  delay: SaStaggerDelay.of(1),
+                  child: Padding(
+                    padding: const EdgeInsets.only(bottom: 8, left: 4, top: 4),
+                    child: Text(
+                      'Найдено: ${visible.length}',
+                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.textSecondary),
+                    ),
+                  ),
+                ),
+                for (var i = 0; i < visible.length; i++)
+                  SaEnter(
+                    delay: SaStaggerDelay.of(2 + i),
+                    preset: SaMotionPreset.rise,
+                    child: Builder(
+                      builder: (context) {
+                        final c = visible[i];
+                        final balance = shownBalance(c);
+                        return AgentDebtorCard(
+                          name: c.name,
+                          photoUrl: c.photoUrl,
+                          balance: _formatBalance(balance),
+                          balanceAmount: balance,
+                          overdue: _formatOverdue(c.overdueAt),
+                          openingDebt: c.openingDebt > 0.01 ? _formatBalance(c.openingDebt) : null,
+                          debtCollectionOnly: c.debtCollectionOnly,
+                          onTap: () => context.push('/clients/${c.id}'),
+                        );
+                      },
+                    ),
+                  ),
               ],
             ),
           );

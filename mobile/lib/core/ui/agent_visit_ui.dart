@@ -10,6 +10,7 @@ import '../gps/gps_tracker.dart';
 import '../l10n/app_strings_ru.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_typography.dart';
+import '../../design_system/design_system.dart';
 import 'agent_ui.dart';
 import 'client_photo_thumb.dart';
 
@@ -56,15 +57,16 @@ class AgentVisitsWeekTabs extends ConsumerWidget {
   }) {
     final active = selected == weekday;
     return Expanded(
-      child: GestureDetector(
+      child: SaPressable(
         onTap: onTap,
+        borderRadius: BorderRadius.circular(SaRadius.chip),
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 200),
           margin: EdgeInsets.only(right: weekday < 7 ? 7 : 0),
           padding: EdgeInsets.symmetric(vertical: 9, horizontal: isAll ? 4 : 0),
           decoration: BoxDecoration(
             color: active ? AppColors.primary : Colors.white,
-            borderRadius: BorderRadius.circular(11),
+            borderRadius: BorderRadius.circular(SaRadius.chip),
             border: Border.all(color: active ? AppColors.primary : const Color(0xFFE4ECF2)),
           ),
           child: Text(
@@ -95,14 +97,16 @@ class AgentVisitGpsBanner extends ConsumerWidget {
     final accuracy = gps.lastPosition?.accuracy;
     final accuracyLabel = accuracy != null ? '${accuracy.round()}м' : '12м';
 
-    return Padding(
+    return SaEnter(
+      preset: SaMotionPreset.rise,
+      child: Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Container(
         height: 38,
         padding: const EdgeInsets.symmetric(horizontal: 12),
         decoration: BoxDecoration(
           color: AppColors.successSoft,
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(SaRadius.control),
         ),
         child: Row(
           children: [
@@ -127,6 +131,7 @@ class AgentVisitGpsBanner extends ConsumerWidget {
           ],
         ),
       ),
+    ),
     );
   }
 }
@@ -158,13 +163,14 @@ class AgentVisitOutletCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Material(
+    return SaPressable(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(SaRadius.card),
+      child: Material(
       color: AppColors.surface,
-      borderRadius: BorderRadius.circular(16),
+      borderRadius: BorderRadius.circular(SaRadius.card),
       clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: onTap,
-        child: Column(
+      child: Column(
           children: [
             Padding(
               padding: const EdgeInsets.all(13),
@@ -194,8 +200,6 @@ class AgentVisitOutletCard extends StatelessWidget {
                           ),
                         ),
                       ),
-                      const SizedBox(width: 8),
-                      Text(code, style: AppTypography.captionSmall),
                       if (hasDraft) ...[
                         const SizedBox(width: 8),
                         _pill(S.draftBadge, const Color(0xFFEFF6FF), const Color(0xFF1D4ED8)),
@@ -236,8 +240,8 @@ class AgentVisitOutletCard extends StatelessWidget {
                 color: AppColors.success,
               ),
           ],
-        ),
       ),
+    ),
     );
   }
 
@@ -271,55 +275,58 @@ class StartVisitClientTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final dist = distanceLabel ?? '';
     final isNear = dist.contains('м') && !dist.contains('к');
-    return AgentOnboardingCard(
-      padding: const EdgeInsets.all(14),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(16),
-        child: Row(
-          children: [
-            ClientPhotoThumb(source: photoUrl, size: 52, radius: 12),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    name,
-                    style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
-                  ),
-                  const SizedBox(height: 3),
-                  Text(
-                    '$code · ${S.noOrderToday}',
-                    style: AppTypography.captionSmall.copyWith(color: AppColors.textMuted),
-                  ),
-                ],
-              ),
-            ),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                if (dist.isNotEmpty)
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: isNear ? AppColors.successSoft : AppColors.warningSoft,
-                      borderRadius: BorderRadius.circular(20),
+    return SaEnter(
+      preset: SaMotionPreset.rise,
+      child: AgentOnboardingCard(
+        padding: const EdgeInsets.all(14),
+        child: SaPressable(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(SaRadius.card),
+          child: Row(
+            children: [
+              ClientPhotoThumb(source: photoUrl, size: 52, radius: 12),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      name,
+                      style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
                     ),
-                    child: Text(
-                      dist,
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w800,
-                        color: isNear ? const Color(0xFF157F3A) : const Color(0xFF9A4D00),
+                    const SizedBox(height: 3),
+                    Text(
+                      S.noOrderToday,
+                      style: AppTypography.captionSmall.copyWith(color: AppColors.textMuted),
+                    ),
+                  ],
+                ),
+              ),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  if (dist.isNotEmpty)
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: isNear ? AppColors.successSoft : AppColors.warningSoft,
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Text(
+                        dist,
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w800,
+                          color: isNear ? const Color(0xFF157F3A) : const Color(0xFF9A4D00),
+                        ),
                       ),
                     ),
-                  ),
-                const SizedBox(height: 4),
-                Icon(Icons.chevron_right_rounded, color: AppColors.textMuted.withValues(alpha: 0.55), size: 20),
-              ],
-            ),
-          ],
+                  const SizedBox(height: 4),
+                  Icon(Icons.chevron_right_rounded, color: AppColors.textMuted.withValues(alpha: 0.55), size: 20),
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -553,19 +560,12 @@ class AgentVisitActionsSheet extends StatelessWidget {
           if (supervisionEnabled)
             _action(Icons.checklist_rounded, S.supervisionChecklist, onSupervision, iconColor: const Color(0xFF0D9488)),
           const SizedBox(height: 12),
-          SizedBox(
-            width: double.infinity,
+          AgentPrimaryButton(
+            label: S.visitComplete,
+            onPressed: onComplete,
             height: 50,
-            child: ElevatedButton(
-              onPressed: onComplete,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.error,
-                foregroundColor: Colors.white,
-                elevation: 0,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-              ),
-              child: Text(S.visitComplete, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
-            ),
+            color: AppColors.error,
+            borderRadius: SaRadius.control,
           ),
           const SizedBox(height: 6),
           Text(
@@ -587,17 +587,17 @@ class AgentVisitActionsSheet extends StatelessWidget {
   }) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 9),
-      child: Material(
-        color: const Color(0xFFF7FAFC),
-        borderRadius: BorderRadius.circular(14),
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(14),
+      child: SaPressable(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(SaRadius.control),
+        child: Material(
+          color: const Color(0xFFF7FAFC),
+          borderRadius: BorderRadius.circular(SaRadius.control),
           child: Container(
             height: subtitle == null ? 56 : 64,
             padding: const EdgeInsets.symmetric(horizontal: 14),
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(14),
+              borderRadius: BorderRadius.circular(SaRadius.control),
               border: Border.all(color: const Color(0xFFE8EEF2)),
             ),
             child: Row(
@@ -721,26 +721,16 @@ class _RefusalReasonSheetState extends State<_RefusalReasonSheet> {
           Row(
             children: [
               Expanded(
-                child: OutlinedButton(
+                child: SaGhostButton(
+                  label: S.cancel,
                   onPressed: () => Navigator.pop(context),
-                  style: OutlinedButton.styleFrom(
-                    minimumSize: const Size(0, 48),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  ),
-                  child: Text(S.cancel, style: const TextStyle(fontWeight: FontWeight.w700)),
                 ),
               ),
               const SizedBox(width: 10),
               Expanded(
-                child: ElevatedButton(
+                child: SaPrimaryButton(
+                  label: S.save,
                   onPressed: _selected == null ? null : () => Navigator.pop(context, _selected),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.primary,
-                    foregroundColor: Colors.white,
-                    minimumSize: const Size(0, 48),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  ),
-                  child: Text(S.save, style: const TextStyle(fontWeight: FontWeight.w700)),
                 ),
               ),
             ],

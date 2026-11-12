@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../../core/theme/app_colors.dart';
+import '../../../design_system/design_system.dart';
 
 /// Sinxronizatsiya jarayonida fon ustida markaziy loader (shablon).
 /// Pastki [SyncProgressSheet] bilan birga ishlaydi — markaziy spinner + progress.
@@ -9,6 +9,7 @@ class AgentSyncLoadingOverlay extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return Stack(
       children: [
         ModalBarrier(
@@ -18,26 +19,28 @@ class AgentSyncLoadingOverlay extends StatelessWidget {
         // Progress sheet pastida qolishi uchun spinner biroz yuqoriroq.
         Align(
           alignment: const Alignment(0, -0.25),
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              color: AppColors.primary,
-              borderRadius: BorderRadius.circular(14),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.18),
-                  blurRadius: 14,
-                  offset: const Offset(0, 4),
-                ),
-              ],
-            ),
-            child: const SizedBox(
-              width: 72,
-              height: 72,
-              child: Padding(
-                padding: EdgeInsets.all(20),
-                child: CircularProgressIndicator(
-                  strokeWidth: 2.5,
-                  color: Colors.white,
+          child: SaPopIn(
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: scheme.primary,
+                borderRadius: BorderRadius.circular(SaRadius.control),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.18),
+                    blurRadius: 14,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: const SizedBox(
+                width: 72,
+                height: 72,
+                child: Padding(
+                  padding: EdgeInsets.all(20),
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2.5,
+                    color: Colors.white,
+                  ),
                 ),
               ),
             ),

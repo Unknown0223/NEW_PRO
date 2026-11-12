@@ -10,6 +10,7 @@ import '../../../core/theme/app_typography.dart';
 import '../../../core/time/work_region_time.dart';
 import '../../../core/ui/agent_ui.dart';
 import '../../../core/ui/agent_ui_extended.dart';
+import '../../../design_system/design_system.dart';
 import '../shell/agent_app_bar.dart';
 import 'order_create_models.dart' show formatMoneyUz;
 import 'orders_providers.dart';
@@ -61,19 +62,34 @@ class AgentOrderDetailPage extends ConsumerWidget {
             },
             child: ListView(
               physics: const AlwaysScrollableScrollPhysics(),
-              padding: const EdgeInsets.fromLTRB(16, 14, 16, 32),
+              padding: const EdgeInsets.fromLTRB(16, 14, 16, 140),
               children: [
-                _StatusHero(
-                  order: order,
-                  debtRemainder: debtRemainder,
-                  onRepeat: () => _repeatOrder(context, order),
+                SaEnter(
+                  preset: SaMotionPreset.rise,
+                  child: _StatusHero(
+                    order: order,
+                    debtRemainder: debtRemainder,
+                    onRepeat: () => _repeatOrder(context, order),
+                  ),
                 ),
                 const SizedBox(height: 12),
-                _PromoPair(order: order),
+                SaEnter(
+                  delay: SaStaggerDelay.of(1),
+                  preset: SaMotionPreset.rise,
+                  child: _PromoPair(order: order),
+                ),
                 const SizedBox(height: 12),
-                _CompositionCard(order: order),
+                SaEnter(
+                  delay: SaStaggerDelay.of(2),
+                  preset: SaMotionPreset.rise,
+                  child: _CompositionCard(order: order),
+                ),
                 const SizedBox(height: 12),
-                _ViewOnlyStatus(order: order),
+                SaEnter(
+                  delay: SaStaggerDelay.of(3),
+                  preset: SaMotionPreset.rise,
+                  child: _ViewOnlyStatus(order: order),
+                ),
               ],
             ),
           );
@@ -234,19 +250,22 @@ class _StatusHero extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 8),
-              OutlinedButton(
-                onPressed: onRepeat,
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: AppColors.primary,
-                  side: const BorderSide(color: AppColors.primary, width: 1.5),
-                  backgroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 0),
-                  minimumSize: const Size(0, 34),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                ),
-                child: const Text(
-                  'Повторить',
-                  style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12),
+              SaPressable(
+                onTap: onRepeat,
+                child: OutlinedButton(
+                  onPressed: onRepeat,
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: AppColors.primary,
+                    side: const BorderSide(color: AppColors.primary, width: 1.5),
+                    backgroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 0),
+                    minimumSize: const Size(0, 34),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                  child: const Text(
+                    'Повторить',
+                    style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12),
+                  ),
                 ),
               ),
             ],

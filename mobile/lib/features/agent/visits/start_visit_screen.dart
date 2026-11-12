@@ -12,10 +12,10 @@ import '../../../core/gps/gps_tracker.dart';
 import '../../../core/l10n/app_strings_ru.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/time/work_region_time.dart';
-import '../../../core/ui/agent_ui.dart';
 import '../../../core/ui/agent_ui_extended.dart';
 import '../../../core/ui/agent_visit_ui.dart';
 import '../../../core/ui/client_photo_thumb.dart';
+import '../../../design_system/design_system.dart';
 import '../clients/clients_list_provider.dart';
 import '../route/agent_route_provider.dart';
 import '../shell/agent_app_bar.dart';
@@ -191,49 +191,56 @@ class _StartVisitScreenState extends ConsumerState<StartVisitScreen> {
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: const AgentAppBar(title: S.startVisit, showBack: true),
-      body: _loading
-          ? const Center(child: CircularProgressIndicator(color: AppColors.primary))
-          : _loadError != null && _clients.isEmpty
-              ? AgentEmptyState.fill(
-                  message: _loadError!,
-                  action: AgentPrimaryButton(
-                    label: S.retry,
-                    onPressed: () {
-                      setState(() {
-                        _loading = true;
-                        _loadError = null;
-                      });
-                      unawaited(_load());
-                    },
-                  ),
-                )
-              : _clients.isEmpty
-                  ? AgentEmptyState.fill(
-                      message: S.noVisitsPlannedToday,
-                      action: AgentPrimaryButton(
-                        label: S.home,
-                        onPressed: () {
-                          if (context.mounted) context.go('/home');
-                        },
-                      ),
-                    )
-                  : ListView.separated(
-                      padding: const EdgeInsets.all(16),
-                      itemCount: _clients.length,
-                      separatorBuilder: (_, __) => const SizedBox(height: 10),
-                      itemBuilder: (_, i) {
-                        final c = _clients[i];
-                        final code = c['client_code']?.toString().trim() ?? '—';
-                        final dist = formatVisitDistance(_distanceM(c));
-                        return StartVisitClientTile(
-                          name: c['name']?.toString() ?? '—',
-                          code: code,
-                          photoUrl: firstClientPhotoUrl(c),
-                          distanceLabel: dist.isEmpty ? null : dist,
-                          onTap: () => _startVisit(c),
-                        );
+      body: SaEnter(
+        preset: SaMotionPreset.rise,
+        child: _loading
+            ? const Center(child: CircularProgressIndicator(color: AppColors.primary))
+            : _loadError != null && _clients.isEmpty
+                ? AgentEmptyState.fill(
+                    message: _loadError!,
+                    action: SaPrimaryButton(
+                      label: S.retry,
+                      onPressed: () {
+                        setState(() {
+                          _loading = true;
+                          _loadError = null;
+                        });
+                        unawaited(_load());
                       },
                     ),
+                  )
+                : _clients.isEmpty
+                    ? AgentEmptyState.fill(
+                        message: S.noVisitsPlannedToday,
+                        action: SaPrimaryButton(
+                          label: S.home,
+                          onPressed: () {
+                            if (context.mounted) context.go('/home');
+                          },
+                        ),
+                      )
+                    : ListView.separated(
+                        padding: SaShellInsets.listWithShellNav(horizontal: SaSpace.lg, top: SaSpace.lg),
+                        itemCount: _clients.length,
+                        separatorBuilder: (_, __) => const SizedBox(height: 10),
+                        itemBuilder: (_, i) {
+                          final c = _clients[i];
+                          final code = c['client_code']?.toString().trim() ?? '—';
+                          final dist = formatVisitDistance(_distanceM(c));
+                          return SaEnter(
+                            delay: SaStaggerDelay.of(i),
+                            preset: SaMotionPreset.rise,
+                            child: StartVisitClientTile(
+                              name: c['name']?.toString() ?? '—',
+                              code: code,
+                              photoUrl: firstClientPhotoUrl(c),
+                              distanceLabel: dist.isEmpty ? null : dist,
+                              onTap: () => _startVisit(c),
+                            ),
+                          );
+                        },
+                      ),
+      ),
     );
   }
 }

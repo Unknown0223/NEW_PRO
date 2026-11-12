@@ -6,6 +6,7 @@ import '../../core/l10n/app_strings_ru.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_typography.dart';
 import '../../core/ui/agent_ui.dart';
+import '../../design_system/design_system.dart';
 import 'auth_provider.dart';
 import 'pin_pad.dart';
 
@@ -118,29 +119,40 @@ class _PinSetupScreenState extends ConsumerState<PinSetupScreen> {
           child: Column(
             children: [
               const SizedBox(height: 38),
-              Text(
-                step == 1 ? S.pinCreate : S.pinConfirmTitle,
-                style: AppTypography.headlineMedium.copyWith(
-                  fontSize: 22,
-                  fontWeight: FontWeight.w800,
-                  color: AppColors.textTitle,
+              SaEnter(
+                preset: SaMotionPreset.spring,
+                child: Column(
+                  children: [
+                    Text(
+                      step == 1 ? S.pinCreate : S.pinConfirmTitle,
+                      style: AppTypography.headlineMedium.copyWith(
+                        fontSize: 22,
+                        fontWeight: FontWeight.w800,
+                        color: AppColors.textTitle,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      S.pinSubtitle,
+                      style: AppTypography.bodyMedium.copyWith(
+                        fontSize: 13.5,
+                        color: AppColors.textMuted,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
                 ),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 6),
-              Text(
-                S.pinSubtitle,
-                style: AppTypography.bodyMedium.copyWith(
-                  fontSize: 13.5,
-                  color: AppColors.textMuted,
-                ),
-                textAlign: TextAlign.center,
               ),
               const SizedBox(height: 34),
-              PinDots(
-                filled: filled,
-                pinLength: _pinLen,
-                variant: PinDotsVariant.onboarding,
+              SaEnter(
+                delay: SaStaggerDelay.of(1),
+                preset: SaMotionPreset.rise,
+                child: PinDots(
+                  filled: filled,
+                  pinLength: _pinLen,
+                  variant: PinDotsVariant.onboarding,
+                ),
               ),
               if (_busy)
                 const Padding(

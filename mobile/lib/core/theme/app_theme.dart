@@ -20,10 +20,10 @@ class AppTheme {
         scaffoldBackgroundColor: AppColors.background,
         pageTransitionsTheme: const PageTransitionsTheme(
           builders: {
-            // Screen slide — Motion Lab «screen» (yumshoq kirish)
-            TargetPlatform.android: ZoomPageTransitionsBuilder(),
-            TargetPlatform.iOS: ZoomPageTransitionsBuilder(),
-            TargetPlatform.windows: FadeUpwardsPageTransitionsBuilder(),
+            // Motion Lab «screen» — fade + slide
+            TargetPlatform.android: SaScreenPageTransitionsBuilder(),
+            TargetPlatform.iOS: SaScreenPageTransitionsBuilder(),
+            TargetPlatform.windows: SaScreenPageTransitionsBuilder(),
           },
         ),
         appBarTheme: const AppBarTheme(

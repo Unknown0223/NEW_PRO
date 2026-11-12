@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/l10n/app_strings_ru.dart';
 import '../../../core/sync/sync_data_refresh.dart';
 import '../../../core/time/work_region_time.dart';
+import '../../../design_system/design_system.dart';
 import '../../auth/auth_provider.dart';
 import 'sync_success_dialog.dart';
 
@@ -27,9 +28,14 @@ class SyncSuccessScreen extends ConsumerWidget {
     return Scaffold(
       backgroundColor: Colors.black.withValues(alpha: 0.45),
       body: Center(
-        child: SyncSuccessDialog(
-          subtitle: subtitle,
-          onContinue: goHome,
+        child: SaEnter(
+          preset: SaMotionPreset.spring,
+          child: SyncSuccessDialog(
+            subtitle: subtitle,
+            onContinue: goHome,
+            showSyncRing: true,
+            syncDoneSteps: 4,
+          ),
         ),
       ),
     );

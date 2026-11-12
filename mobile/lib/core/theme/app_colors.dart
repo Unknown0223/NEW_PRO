@@ -19,13 +19,13 @@ class AppColors {
   static const Color surfaceReport = Color(0xFFF3F6F9);
   static const Color surfaceNested = Color(0xFFF0F4F8);
 
-  // Brand / primary — Sa katalog (salesBlue / agent)
-  static const Color primary = Color(0xFF1F66D1);
-  static const Color primaryLight = Color(0xFF6FA8FF);
+  // Brand / primary — Agent Iris (prototip accent) + Sales Arena blue
+  static const Color primary = Color(0xFF5548F0);
+  static const Color primaryLight = Color(0xFFA79BFF);
   static const Color primaryDark = Color(0xFF14223F);
-  static const Color primarySoft = Color(0xFFE8F0FC);
-  static const Color primaryGradientStart = Color(0xFF1F66D1);
-  static const Color primaryGradientEnd = Color(0xFF6FA8FF);
+  static const Color primarySoft = Color(0xFFEEEBFF);
+  static const Color primaryGradientStart = Color(0xFF6A5BFF);
+  static const Color primaryGradientEnd = Color(0xFF3B2BD9);
 
   /// Yangi shablon accent (SaColors) — tezkor panel / yangi ekranlar.
   static Color get saAgent => SaColors.agent;
@@ -50,11 +50,11 @@ class AppColors {
   static const Color warning = Color(0xFFF59E0B);
   static const Color info = Color(0xFF3B82F6);
 
-  // Role accents — SaColors bilan bir xil hex
-  static const Color agentAccent = Color(0xFF1F66D1);
-  static const Color expeditorAccent = Color(0xFF0E8A4F);
-  static const Color supervisorAccent = Color(0xFF1FA855);
-  static const Color cashierAccent = Color(0xFF0F766E);
+  // Role accents — prototip design.ts
+  static const Color agentAccent = Color(0xFF5548F0);
+  static const Color expeditorAccent = Color(0xFF4ADE80);
+  static const Color supervisorAccent = Color(0xFF0369A1);
+  static const Color cashierAccent = Color(0xFFC026D3);
 
   static Color roleAccent(SaRole role) => SaColors.roleAccent(role);
 

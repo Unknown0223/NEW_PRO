@@ -2,8 +2,6 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
-
 import '../../../core/config/mobile_config.dart';
 import '../../../core/gps/gps_tracker.dart';
 import '../../../core/clients/agent_client_balance.dart';
@@ -26,10 +24,8 @@ import '../../../core/l10n/app_strings_ru.dart';
 import '../../../core/notifications/notifications_day_rollover.dart';
 import '../../../core/time/work_region_time.dart';
 import '../orders/held_orders_provider.dart';
-import '../orders/create_order_exit_guard.dart';
-import 'agent_menu_config.dart';
 
-/// Agent ilova qobig‘i: drawer + shablon pastki navigatsiya.
+/// Agent ilova qobig‘i: drawer + GlobalChrome (pastki nav shablonda yo‘q).
 class AgentShell extends ConsumerStatefulWidget {
   final Widget child;
   const AgentShell({super.key, required this.child});
@@ -73,18 +69,8 @@ class _AgentShellState extends ConsumerState<AgentShell> with WidgetsBindingObse
     }
   }
 
-  int _tabIndex(String loc) {
-    if (loc.startsWith('/visits')) return 1;
-    if (loc.startsWith('/orders')) return 2;
-    if (loc.startsWith('/kpi/route')) return 4;
-    if (loc.startsWith('/kpi')) return 3;
-    return 0;
-  }
-
   @override
   Widget build(BuildContext context) {
-    final loc = GoRouterState.of(context).matchedLocation;
-    final hideNav = agentShellHidesBottomNav(loc);
     final sync = ref.watch(manualSyncProvider);
     final syncRunning = sync.status == ManualSyncStatus.running;
     ref.watch(notificationsDayRolloverProvider);
@@ -137,31 +123,9 @@ class _AgentShellState extends ConsumerState<AgentShell> with WidgetsBindingObse
           if (syncRunning) SyncProgressSheet(state: sync),
         ],
       ),
-      bottomNavigationBar: hideNav
-          ? null
-          : AgentBottomNav(
-              selectedIndex: _tabIndex(loc),
-              onTab: (i) {
-                const paths = [
-                  '/home',
-                  '/visits',
-                  '/orders',
-                  '/kpi',
-                  '/kpi/route',
-                ];
-                if (i < 0 || i >= paths.length) return;
-                final path = paths[i];
-                final router = GoRouter.of(context);
-                final loc = GoRouterState.of(context).uri.path;
-                final container = ProviderScope.containerOf(context);
-                unawaited(leaveCreateOrderThenGo(
-                  container: container,
-                  go: router.go,
-                  path: path,
-                  currentLocation: loc,
-                ));
-              },
-            ),
+      // Shablon PhoneFrame: pastki nav olib tashlangan —
+      // navigatsiya drawer + tezkor panel (GlobalChrome) orqali.
+      bottomNavigationBar: null,
     );
   }
 }

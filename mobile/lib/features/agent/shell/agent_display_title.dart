@@ -15,18 +15,28 @@ String formatAgentMenuTitle({
   return displayName;
 }
 
-/// Agent ismi/kodidan avatar bosh harflari.
+/// Agent ismi/kodidan avatar bosh harflari (faqat harf — «Agent (seed)» → AS).
 String agentMenuInitials({String? name, String? code}) {
+  String lettersOf(String s) =>
+      s.replaceAll(RegExp(r'[^A-Za-zА-Яа-яЁёЎўҚқҒғҲҳІі]'), '');
+
   final n = (name ?? '').trim();
   if (n.isNotEmpty) {
-    final parts = n.split(RegExp(r'\s+')).where((p) => p.isNotEmpty).toList();
+    final parts = n
+        .split(RegExp(r'\s+'))
+        .map(lettersOf)
+        .where((p) => p.isNotEmpty)
+        .toList();
     if (parts.length >= 2) {
       return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
     }
-    if (n.length >= 2) return n.substring(0, 2).toUpperCase();
-    return n[0].toUpperCase();
+    if (parts.isNotEmpty) {
+      final p = parts.first;
+      if (p.length >= 2) return p.substring(0, 2).toUpperCase();
+      return p[0].toUpperCase();
+    }
   }
-  final c = (code ?? '').trim();
+  final c = lettersOf((code ?? '').trim());
   if (c.length >= 2) return c.substring(0, 2).toUpperCase();
   if (c.isNotEmpty) return c[0].toUpperCase();
   return 'AG';

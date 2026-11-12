@@ -5,6 +5,7 @@ import '../../../core/sync/bootstrap_sync_labels.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/ui/agent_ui.dart';
+import '../../../design_system/design_system.dart';
 
 /// Shablon: «Полная синхронизация» — progress va success holati.
 class FullSyncView extends StatelessWidget {
@@ -42,15 +43,20 @@ class FullSyncView extends StatelessWidget {
 
   static const successExtraLabel = 'Другие';
 
-  int get _recordCurrent => (progress.clamp(0.0, 1.0) * recordTotal).round();
+  int get _doneStepCount =>
+      items.where((i) => i.status == FullSyncItemStatus.done).length;
+
+  List<String> get _stepLabels => items.map((i) => i.label).toList();
 
   @override
   Widget build(BuildContext context) {
-    final accent = accentColor ?? AppColors.primary;
+    final scheme = Theme.of(context).colorScheme;
+    final accent = accentColor ?? scheme.primary;
     final syncSubtitle = subtitle ?? '${S.firstLaunch} · ${S.syncRecordsLabel}';
+    final reduce = saReduceMotion(context);
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: scheme.surfaceContainerLowest,
       appBar: AgentTopBar(
         title: title,
         onBack: onBack,
@@ -75,22 +81,21 @@ class FullSyncView extends StatelessWidget {
                 padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
                 child: Column(
                   children: [
-                    if (isSuccess)
-                      const _BootstrapSuccessIcon()
-                    else
-                      SyncProgressRing(
-                        progress: progress,
-                        current: _recordCurrent,
-                        total: recordTotal,
-                        accentColor: accent,
-                      ),
+                    SaSyncView(
+                      progress: progress,
+                      steps: _stepLabels,
+                      doneSteps: _doneStepCount,
+                      done: isSuccess,
+                    ),
                     const SizedBox(height: 20),
                     ...items.asMap().entries.map((entry) {
                       return TweenAnimationBuilder<Offset>(
                         key: ValueKey('${entry.value.label}-${entry.value.status}'),
                         tween: Tween(begin: const Offset(-0.1, 0), end: Offset.zero),
-                        duration: Duration(milliseconds: 400 + entry.key * 100),
-                        curve: Curves.easeOut,
+                        duration: reduce
+                            ? Duration.zero
+                            : Duration(milliseconds: 280 + entry.key * 80),
+                        curve: SaCurves.standard,
                         builder: (context, offset, child) {
                           return Transform.translate(
                             offset: offset * 20,
@@ -104,22 +109,9 @@ class FullSyncView extends StatelessWidget {
                       );
                     }),
                     const SizedBox(height: 18),
-                    SizedBox(
-                      width: double.infinity,
-                      height: 52,
-                      child: ElevatedButton(
-                        onPressed: isSuccess ? onContinue : null,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: accent,
-                          disabledBackgroundColor: const Color(0xFFCBD5E1),
-                          disabledForegroundColor: Colors.white,
-                          foregroundColor: Colors.white,
-                          elevation: 0,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                          textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
-                        ),
-                        child: Text(S.continueBtn),
-                      ),
+                    SaPrimaryButton(
+                      label: S.continueBtn,
+                      onPressed: isSuccess ? onContinue : null,
                     ),
                   ],
                 ),
@@ -163,28 +155,6 @@ class FullSyncView extends StatelessWidget {
             ],
           ),
         ),
-      ),
-    );
-  }
-}
-
-class _BootstrapSuccessIcon extends StatelessWidget {
-  const _BootstrapSuccessIcon();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 148,
-      height: 148,
-      alignment: Alignment.center,
-      child: Container(
-        width: 88,
-        height: 88,
-        decoration: const BoxDecoration(
-          color: Color(0xFFEAFBEF),
-          shape: BoxShape.circle,
-        ),
-        child: const Icon(Icons.check_rounded, size: 42, color: AppColors.success),
       ),
     );
   }
