@@ -96,34 +96,16 @@ export async function hasActiveSessionForDevice(
   return hasActiveRefreshSession(tenantId, userId);
 }
 
-const REFRESH_SLIDE_MS = 30 * 24 * 60 * 60 * 1000;
-
-/** Ilova ochiq ekan — muddat uzayadi (o‘zi chiqmaguncha / admin yopmaguncha). */
+/**
+ * Ilova ochiq ekan — avval 30 kun slide qilardi; endi sessiya qat’iy max 1 soat
+ * (login oilasi `created_at` + TTL). Muddatni uzaytirmaymiz.
+ */
 export async function touchActiveRefreshSessions(
-  tenantId: number,
-  userId: number,
-  deviceId?: string | null
+  _tenantId: number,
+  _userId: number,
+  _deviceId?: string | null
 ): Promise<void> {
-  if (!Number.isFinite(userId) || userId < 1 || !Number.isFinite(tenantId)) return;
-  const nextExpiry = new Date(Date.now() + REFRESH_SLIDE_MS);
-  const base = {
-    tenant_id: tenantId,
-    user_id: userId,
-    revoked_at: null,
-    expires_at: { gt: new Date() }
-  };
-  const did = deviceId?.trim() || null;
-  if (did) {
-    const r = await prisma.refreshToken.updateMany({
-      where: { ...base, device_id: did },
-      data: { expires_at: nextExpiry }
-    });
-    if (r.count > 0) return;
-  }
-  await prisma.refreshToken.updateMany({
-    where: base,
-    data: { expires_at: nextExpiry }
-  });
+  /* no-op: absolute session TTL — see session-ttl.ts */
 }
 
 /** Mobil JWT hali amal qilsa ham server sessiyasi yopilgan bo‘lsa — 401.

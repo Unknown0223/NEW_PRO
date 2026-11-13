@@ -1,7 +1,11 @@
 import type { FastifyInstance } from "fastify";
 import { prisma } from "../../config/database";
 import { env } from "../../config/env";
-import { authLoginBodySchema, authRefreshBodySchema } from "../../contracts/auth.schemas";
+import {
+  authChangePasswordBodySchema,
+  authLoginBodySchema,
+  authRefreshBodySchema
+} from "../../contracts/auth.schemas";
 import { sendApiError, zodValidationExtras } from "../../lib/api-error";
 import { getAccessUser, jwtAccessVerify } from "./auth.prehandlers";
 import {
@@ -11,7 +15,7 @@ import {
   touchActiveRefreshSessions
 } from "./app-access.service";
 import { toFio } from "../staff/staff.shared.helpers";
-import { login, logout, refresh } from "./auth.service";
+import { changeOwnPassword, login, logout, refresh } from "./auth.service";
 import {
   clearRefreshTokenCookie,
   resolveRefreshTokenInput,
@@ -49,9 +53,25 @@ function registerAuthAtBase(app: FastifyInstance, base: string) {
       const result = await login(app, {
         ...parsed.data,
         ip_address: request.ip || null,
-        request_origin: resolveRequestOrigin(request.headers)
+        request_origin: resolveRequestOrigin(request.headers),
+        request_headers: {
+          origin: request.headers.origin,
+          "x-forwarded-proto": request.headers["x-forwarded-proto"],
+          "x-forwarded-host": request.headers["x-forwarded-host"],
+          host: request.headers.host
+        }
       });
-      setRefreshTokenCookie(reply, result.refreshToken);
+      /* Face ID challenge — access/refresh hali yo‘q; cookie qo‘ymaymiz. */
+      if (
+        result &&
+        typeof result === "object" &&
+        "face_required" in result &&
+        (result as { face_required?: boolean }).face_required === true
+      ) {
+        return reply.send(result);
+      }
+      const tokens = result as { refreshToken?: string };
+      if (tokens.refreshToken) setRefreshTokenCookie(reply, tokens.refreshToken);
       return reply.send(result);
     } catch (error) {
       const msg = error instanceof Error ? error.message : "UNKNOWN";
@@ -182,7 +202,8 @@ function registerAuthAtBase(app: FastifyInstance, base: string) {
             code: true,
             first_name: true,
             last_name: true,
-            middle_name: true
+            middle_name: true,
+            must_change_password: true
           }
         })
       ]);
@@ -231,9 +252,49 @@ function registerAuthAtBase(app: FastifyInstance, base: string) {
           code: userRow?.code ?? null,
           work_slot_id,
           work_slot_code,
-          app_access: userRow.app_access
+          app_access: userRow.app_access,
+          must_change_password: userRow.must_change_password === true
         }
       };
+    }
+  );
+
+  app.post(
+    `${base}/change-password`,
+    { preHandler: [jwtAccessVerify] },
+    async (request, reply) => {
+      const parsed = authChangePasswordBodySchema.safeParse(request.body ?? {});
+      if (!parsed.success) {
+        return sendApiError(
+          reply,
+          request,
+          400,
+          "ValidationError",
+          "Некорректные данные запроса",
+          zodValidationExtras(parsed.error)
+        );
+      }
+      const u = getAccessUser(request);
+      try {
+        await changeOwnPassword(u.tenantId, Number(u.sub), parsed.data);
+        return reply.send({ ok: true });
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : "";
+        if (msg === "NOT_FOUND") return sendApiError(reply, request, 404, "NotFound");
+        if (msg === "VALIDATION") {
+          return sendApiError(
+            reply,
+            request,
+            400,
+            "ValidationError",
+            "Пароль: минимум 8 символов, буква и цифра"
+          );
+        }
+        if (msg === "INVALID_OLD_PASSWORD") {
+          return sendApiError(reply, request, 400, "ValidationError", "Неверный текущий пароль");
+        }
+        throw e;
+      }
     }
   );
 }
@@ -242,4 +303,6 @@ export async function registerAuthRoutes(app: FastifyInstance) {
   for (const prefix of AUTH_PREFIXES) {
     registerAuthAtBase(app, prefix);
   }
+  const { registerFaceLoginRoutes } = await import("./face-login.route");
+  await registerFaceLoginRoutes(app);
 }

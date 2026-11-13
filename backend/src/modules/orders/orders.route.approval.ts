@@ -78,7 +78,7 @@ export async function registerOrderApprovalRoutes(app: FastifyInstance) {
         }
         return reply.send({ data: { approval: result.view } });
       } catch (e) {
-        if (isDocumentEditPeriodLockedError(e)) return sendDocumentEditPeriodLocked(reply, request);
+        if (isDocumentEditPeriodLockedError(e)) return sendDocumentEditPeriodLocked(reply, request, e);
         const msg = getErrorCode(e) ?? "";
         if (msg === "NOT_FOUND") return sendApiError(reply, request, 404, "NotFound");
         if (msg === "APPROVAL_NOT_PENDING") return sendApiError(reply, request, 400, "ApprovalNotPending");
@@ -111,7 +111,7 @@ export async function registerOrderApprovalRoutes(app: FastifyInstance) {
         );
         return reply.send({ data: view });
       } catch (e) {
-        if (isDocumentEditPeriodLockedError(e)) return sendDocumentEditPeriodLocked(reply, request);
+        if (isDocumentEditPeriodLockedError(e)) return sendDocumentEditPeriodLocked(reply, request, e);
         const msg = getErrorCode(e) ?? "";
         if (msg === "NOT_FOUND") return sendApiError(reply, request, 404, "NotFound");
         if (msg === "APPROVAL_NOT_PENDING") return sendApiError(reply, request, 400, "ApprovalNotPending");

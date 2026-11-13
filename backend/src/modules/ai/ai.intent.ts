@@ -146,6 +146,12 @@ const ALL_INTENTS: IntentSpec[] = [...WRITE_INTENTS, ...READ_INTENTS];
 
 export const WRITE_INTENT_NAMES = WRITE_INTENTS.map((item) => item.name);
 
+export const ALL_INTENT_NAMES: readonly string[] = ALL_INTENTS.map((item) => item.name);
+
+export function isKnownIntent(intent: string): boolean {
+  return ALL_INTENTS.some((item) => item.name === intent);
+}
+
 export function isWriteIntent(intent: string): boolean {
   return WRITE_INTENTS.some((item) => item.name === intent);
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import { api } from "@/lib/api";
+import { newClientUuid } from "@/lib/client-uuid";
 import { ORDER_TYPE_VALUES } from "@/lib/order-types";
 import { firstValidationUserHint, getZodFlattenFromApiErrorBody } from "@/lib/api-validation-details";
 import { getUserFacingError, withApiSupportLine } from "@/lib/error-utils";
@@ -47,6 +48,8 @@ import type { PolkiPriceTypeEntryRef } from "../view/polki-shelf-return/polki-pr
 import { salePriceTypeOptionsFromProfile } from "../view/polki-shelf-return/polki-price-type-options";
 import { useOldPrices } from "./use-old-prices";
 import { buildPriceTypeLabelMap } from "@/lib/price-type-label";
+import { defaultDatetimeLocalValue } from "@/lib/order-status-datetime";
+import { localValueToDatetimeInput } from "@/components/ui/datetime-popover";
 import type { OrderDetailRow } from "@/components/orders/order-detail-view";
 import {
   parsePriceAmount,
@@ -177,7 +180,7 @@ export function useOrderCreate({
   const [orderNotePreset, setOrderNotePreset] = useState("");
   const [refSelectKey, setRefSelectKey] = useState(0);
   const [productSearch, setProductSearch] = useState("");
-  const [orderOpenedAtNow] = useState(() => new Date());
+  const [orderCreatedAtLocal, setOrderCreatedAtLocal] = useState(() => defaultDatetimeLocalValue());
   const [polkiDateFrom, setPolkiDateFrom] = useState("");
   const [polkiDateTo, setPolkiDateTo] = useState("");
   const polkiRangeAnchorRef = useRef<HTMLElement | null>(null);
@@ -2157,13 +2160,18 @@ export function useOrderCreate({
     Boolean(createCtxQ.data) &&
     !createCtxQ.isPlaceholderData;
 
+  useEffect(() => {
+    if (!isEditMode || !editOrderQ.data?.created_at) return;
+    const d = new Date(editOrderQ.data.created_at);
+    if (Number.isNaN(d.getTime())) return;
+    setOrderCreatedAtLocal(localValueToDatetimeInput(d));
+  }, [isEditMode, editOrderQ.data?.created_at]);
+
   const orderOpenedAt = useMemo(() => {
-    if (isEditMode && editOrderQ.data?.created_at) {
-      const d = new Date(editOrderQ.data.created_at);
-      if (!Number.isNaN(d.getTime())) return d;
-    }
-    return orderOpenedAtNow;
-  }, [isEditMode, editOrderQ.data?.created_at, orderOpenedAtNow]);
+    const d = new Date(orderCreatedAtLocal);
+    if (!Number.isNaN(d.getTime())) return d;
+    return new Date();
+  }, [orderCreatedAtLocal]);
 
   const lockedAgentLabel = useMemo(() => {
     const id = agentId.trim();
@@ -2552,6 +2560,13 @@ export function useOrderCreate({
           const eid = Number.parseInt(expRaw, 10);
           if (Number.isFinite(eid) && eid > 0) body.expeditor_user_id = eid;
         }
+        body.client_uuid = newClientUuid();
+        {
+          const createdAt = new Date(orderCreatedAtLocal);
+          if (!Number.isNaN(createdAt.getTime())) {
+            body.created_at = createdAt.toISOString();
+          }
+        }
         await api.post(`/api/${tenantSlug}/orders`, body);
         return;
       }
@@ -2691,6 +2706,12 @@ export function useOrderCreate({
       if (priceAsOf && oldPricesEnabled) {
         body.price_as_of = priceAsOf;
       }
+      {
+        const createdAt = new Date(orderCreatedAtLocal);
+        if (!Number.isNaN(createdAt.getTime())) {
+          body.created_at = createdAt.toISOString();
+        }
+      }
       if (validatedOrderType === "order" && orderIsConsignment) {
         body.is_consignment = true;
         const due = consignmentDueDate.trim() || currentMonthEndIsoDate();
@@ -2706,6 +2727,7 @@ export function useOrderCreate({
         body.payment_method_ref = paymentMethodRef.trim().slice(0, 64);
       }
 
+      body.client_uuid = newClientUuid();
       await api.post(`/api/${tenantSlug}/orders`, body);
     },
     onSuccess: (result) => {
@@ -3003,10 +3025,14 @@ export function useOrderCreate({
         };
         fail(
           stockErr?.product_id != null
-            ? `Товар #${stockErr.product_id}: недостаточно на складе (доступно ${stockErr.available ?? "—"}, требуется ${stockErr.requested ?? "—"}).`
-            : "Недостаточно товара на складе.",
+            ? `Не хватает на складе (товар #${stockErr.product_id}: ${stockErr.available ?? "—"} / нужно ${stockErr.requested ?? "—"}).`
+            : "На складе не хватает товара.",
           "catalog"
         );
+        return;
+      }
+      if (code === "StockReserveConflict" || code === "StockQtyConflict") {
+        fail(getUserFacingError(e, "Резерв склада сбился. Обновите страницу и повторите."));
         return;
       }
       if (code === "BadExpeditor") {
@@ -3499,6 +3525,8 @@ export function useOrderCreate({
     orderNoteOptions,
     orderNotePreset,
     orderOpenedAt,
+    orderCreatedAtLocal,
+    setOrderCreatedAtLocal,
     paymentMethodRef,
     paymentMethodSelectOptions,
     polkiBonusCash,

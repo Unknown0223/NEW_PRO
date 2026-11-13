@@ -1,6 +1,7 @@
 "use client";
 
 import { ErrorLogsWorkspace } from "@/components/diagnostics/error-logs-workspace";
+import { AccessDeniedBanner } from "@/components/access/access-denied-banner";
 import { useAuthStore, useAuthStoreHydrated, useEffectiveRole } from "@/lib/auth-store";
 
 export default function DiagnosticsErrorsPage() {
@@ -12,7 +13,12 @@ export default function DiagnosticsErrorsPage() {
     return <p className="text-sm text-muted-foreground">Загрузка...</p>;
   }
   if (role !== "admin") {
-    return <p className="text-sm text-destructive">Раздел доступен только администратору.</p>;
+    return (
+      <AccessDeniedBanner
+        resource="Диагностика · Ошибки"
+        message="Раздел доступен только администратору."
+      />
+    );
   }
   return <ErrorLogsWorkspace tenantSlug={tenantSlug} />;
 }

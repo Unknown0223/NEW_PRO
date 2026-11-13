@@ -67,11 +67,12 @@ export function WorkplaceMovedNotice({
     <p
       className={`rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900 ${className}`}
     >
-      Склад, филиал, территория, направление и назначение сотрудника настраиваются в{" "}
+      Склад, филиал, территория, направление, назначение и{" "}
+      <strong>Требовать Face ID</strong> настраиваются в{" "}
       <Link href={href} className="font-semibold underline">
         Рабочее место
       </Link>
-      .
+      . Эталонное фото лица — здесь, в карточке сотрудника.
     </p>
   );
 }

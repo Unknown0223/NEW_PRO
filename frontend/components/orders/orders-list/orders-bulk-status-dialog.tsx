@@ -58,6 +58,9 @@ export function OrdersBulkStatusDialog({
             onChange={(e) => setDatetimeLocal(e.target.value)}
             disabled={isPending}
           />
+          <span className="text-[11px] leading-snug text-muted-foreground">
+            Дата вне окна «Ограничение периода» (прошлое или будущее) запрещена.
+          </span>
         </label>
 
         <DialogFooter className="gap-2 sm:gap-0">

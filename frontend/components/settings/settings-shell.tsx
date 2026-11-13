@@ -194,14 +194,14 @@ export function SettingsShell({ children }: { children: ReactNode }) {
     perms.isLoading && role !== "admin" ? (
       <p className="p-6 text-sm text-muted-foreground">Проверка доступа…</p>
     ) : settingsRoleGate ? (
-    <div className="flex flex-1 items-start justify-center py-8">
-      <AccessDeniedBanner
-        title="Нет доступа"
-        message={`Раздел «${settingsRoleGate.title}» недоступен для вашей роли или прав.`}
-        primaryHref="/settings"
-        primaryLabel="К настройкам"
-      />
-    </div>
+    <AccessDeniedBanner
+      resource={settingsRoleGate.title}
+      message={`Раздел «${settingsRoleGate.title}» недоступен для вашей роли или прав.`}
+      primaryHref="/settings"
+      primaryLabel="К настройкам"
+      secondaryHref="/access"
+      secondaryLabel="Доступ"
+    />
   ) : (
     children
   );

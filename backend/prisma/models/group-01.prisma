@@ -96,6 +96,7 @@ model Tenant {
   agent_consignment_month_status AgentConsignmentMonthStatus[]
   face_verification_logs        FaceVerificationLog[]
   face_verification_daily_states FaceVerificationDailyState[]
+  face_login_challenges         FaceLoginChallenge[]
   attendance_shifts             AttendanceShift[]
   attendance_locations          AttendanceLocation[]
   attendance_punches            AttendancePunch[]
@@ -167,6 +168,8 @@ model User {
   /// { price_types?: string[], product_rules?: { category_id: number, all: boolean, product_ids?: number[] }[] }
   agent_entitlements         Json                    @default("{}")
   max_sessions               Int                     @default(1)
+  /// Veb kirishda Face ID majburiy (etalon rasm bilan solishtirish)
+  require_face_login         Boolean                 @default(false)
   kpi_color                  String?                 @db.VarChar(16)
   /// Dastavchik: zakaz yaratilganda avtobog‘lash shartlari (bo‘sh = cheklov yo‘q)
   expeditor_assignment_rules Json                    @default("{}")
@@ -278,6 +281,7 @@ model User {
   consignment_month_status            AgentConsignmentMonthStatus[]
   face_verification_logs              FaceVerificationLog[]       @relation("FaceVerificationLogs")
   face_verification_daily_states      FaceVerificationDailyState[] @relation("FaceVerificationDailyStates")
+  face_login_challenges               FaceLoginChallenge[]        @relation("FaceLoginChallenges")
   attendance_punches                  AttendancePunch[]           @relation("AttendancePunchUser")
   attendance_kiosk_punches            AttendancePunch[]           @relation("AttendancePunchKioskLeader")
   attendance_reviewed_punches         AttendancePunch[]           @relation("AttendancePunchReviewedBy")

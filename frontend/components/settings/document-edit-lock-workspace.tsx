@@ -323,8 +323,9 @@ export function DocumentEditLockWorkspace() {
       <header className="space-y-2">
         <h1 className="text-lg font-semibold tracking-tight text-foreground">Ограничение периода</h1>
         <p className="max-w-2xl text-sm leading-relaxed text-muted-foreground">
-          Сколько дней по каждому разделу можно вносить изменения. По истечении срока обычный сотрудник
-          не может редактировать/удалять — при необходимости администратор временно открывает доступ.
+          Окно ±N дней от текущей даты: документы и даты операций (в том числе в прошлом и в будущем)
+          вне окна обычный сотрудник не может создавать/менять — при необходимости администратор
+          временно открывает доступ.
         </p>
       </header>
 
@@ -340,8 +341,8 @@ export function DocumentEditLockWorkspace() {
           <div className="flex gap-2 text-xs leading-relaxed text-muted-foreground">
             <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500" />
             <span>
-              <span className="font-medium text-foreground">Автозакрытие</span> — через N дней изменения
-              закрываются
+              <span className="font-medium text-foreground">Окно ±N</span> — даты вне окна (прошлое и
+              будущее) закрыты
             </span>
           </div>
           <div className="flex gap-2 text-xs leading-relaxed text-muted-foreground">

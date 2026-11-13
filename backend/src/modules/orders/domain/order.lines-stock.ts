@@ -3,7 +3,11 @@
  * «new»: reserved_qty; «confirmed»: qty (confirmda allaqachon chiqarilgan).
  */
 import { Prisma } from "@prisma/client";
-import { lockStockRowsForUpdate, throwInsufficientStock } from "./order.stock-lock";
+import {
+  lockStockRowsForUpdate,
+  releaseReservedQtyClamped,
+  throwInsufficientStock
+} from "./order.stock-lock";
 
 export type OrderLinesStockMode = "reserved" | "consumed";
 
@@ -92,6 +96,15 @@ export async function adjustOutboundStockForOrderLinesEdit(
   for (const { productId, delta } of deltas) {
     const abs = delta.abs();
     if (mode === "reserved") {
+      if (delta.lt(0)) {
+        await releaseReservedQtyClamped(tx, {
+          tenantId: params.tenantId,
+          warehouseId: params.warehouseId,
+          productId,
+          qty: abs
+        });
+        continue;
+      }
       await tx.stock.upsert({
         where: {
           tenant_id_warehouse_id_product_id: {
@@ -104,11 +117,9 @@ export async function adjustOutboundStockForOrderLinesEdit(
           tenant_id: params.tenantId,
           warehouse_id: params.warehouseId,
           product_id: productId,
-          reserved_qty: delta.gt(0) ? delta : new Prisma.Decimal(0)
+          reserved_qty: delta
         },
-        update: delta.gt(0)
-          ? { reserved_qty: { increment: abs } }
-          : { reserved_qty: { decrement: abs } }
+        update: { reserved_qty: { increment: abs } }
       });
     } else {
       // confirmed: fizik qty allaqachon kamaytirilgan — farqni qty ga qo‘llaymiz

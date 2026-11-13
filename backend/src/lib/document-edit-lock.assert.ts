@@ -1,5 +1,6 @@
 import { prisma } from "../config/database";
 import {
+  buildDocumentEditPeriodLockedMessage,
   DOCUMENT_EDIT_PERIOD_LOCKED,
   DOCUMENT_EDIT_PERIOD_LOCKED_MESSAGE,
   evaluateDocumentEditLockPure,
@@ -13,10 +14,19 @@ export { DOCUMENT_EDIT_PERIOD_LOCKED, DOCUMENT_EDIT_PERIOD_LOCKED_MESSAGE };
 
 export class DocumentEditPeriodLockedError extends Error {
   readonly userMessage: string;
-  constructor(userMessage = DOCUMENT_EDIT_PERIOD_LOCKED_MESSAGE) {
+  readonly details?: {
+    section: DocumentEditLockSection;
+    days: number;
+    document_date: string | null;
+  };
+  constructor(
+    userMessage = DOCUMENT_EDIT_PERIOD_LOCKED_MESSAGE,
+    details?: DocumentEditPeriodLockedError["details"]
+  ) {
     super(DOCUMENT_EDIT_PERIOD_LOCKED);
     this.name = "DocumentEditPeriodLockedError";
     this.userMessage = userMessage;
+    this.details = details;
   }
 }
 
@@ -115,7 +125,23 @@ export async function assertDocumentEditable(input: {
     if (ok) return;
   }
 
-  throw new DocumentEditPeriodLockedError();
+  const days = settings.sections[input.section]?.days ?? 1;
+  const docDate =
+    input.documentDate != null && !Number.isNaN(input.documentDate.getTime())
+      ? input.documentDate
+      : null;
+  throw new DocumentEditPeriodLockedError(
+    buildDocumentEditPeriodLockedMessage({
+      section: input.section,
+      days,
+      documentDate: docDate
+    }),
+    {
+      section: input.section,
+      days,
+      document_date: docDate ? docDate.toISOString() : null
+    }
+  );
 }
 
 export type StockDocumentKind = "goods_receipt" | "transfer" | "correction" | "stock_take";

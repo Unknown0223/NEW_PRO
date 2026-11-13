@@ -47,9 +47,12 @@ export function OrderCreateViewAlerts({ vm }: { vm: OrderCreateVm }) {
   return (
     <>
         {localError ? (
-          <p className="text-sm text-destructive" role="alert">
-            {localError}
-          </p>
+          <div
+            role="alert"
+            className="sticky top-0 z-30 rounded-md border border-destructive/35 bg-destructive/10 px-3 py-2 text-sm leading-snug text-destructive shadow-sm"
+          >
+            <p className="line-clamp-2 font-medium">{localError}</p>
+          </div>
         ) : null}
         {selectionNotice ? (
           <p className="text-sm text-amber-700 dark:text-amber-300" role="status">

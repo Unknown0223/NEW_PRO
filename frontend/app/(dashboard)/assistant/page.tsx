@@ -1,10 +1,14 @@
 "use client";
 
 import { FormEvent, useState, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import { Sparkles, RefreshCw, Download, ShieldAlert, Mail, FileText } from "lucide-react";
+import { Forbidden403 } from "@/components/access/forbidden-403";
 import { api } from "@/lib/api";
 import { useAuthStore } from "@/lib/auth-store";
 import { PageShell } from "@/components/dashboard/page-shell";
+import { usePermissions } from "@/lib/use-permissions";
+import { isAxiosError } from "axios";
 
 type AiTableResult = {
   title: string;
@@ -60,6 +64,10 @@ const HINTS = [
 
 export default function AssistantPage() {
   const slug = useAuthStore((s) => s.tenantSlug);
+  const role = useAuthStore((s) => s.role);
+  const router = useRouter();
+  const { has, isLoading: permsLoading } = usePermissions();
+  const canChat = role === "admin" || has("assistant.chat.view");
   const [question, setQuestion] = useState("");
   const [turns, setTurns] = useState<Turn[]>([]);
   const [error, setError] = useState("");
@@ -95,14 +103,29 @@ export default function AssistantPage() {
         if (data.actions?.length && !data.denied?.length) {
           setConfirmPending(data.actions[0]);
         }
-      } catch {
+      } catch (err) {
+        if (isAxiosError(err) && err.response?.status === 403) {
+          router.replace(`/forbidden?from=${encodeURIComponent("Помощник")}`);
+          return;
+        }
         setError("Javob olinmadi. Server va AI kalitini tekshiring.");
       } finally {
         setBusy(false);
       }
     },
-    [slug, busy]
+    [slug, busy, router]
   );
+
+  if (!permsLoading && !canChat) {
+    return (
+      <Forbidden403
+        deniedPage="Помощник"
+        onRefresh={() => router.refresh()}
+        onBack={() => router.push("/dashboard")}
+        onRequestAccess={() => router.push("/access")}
+      />
+    );
+  }
 
   async function confirmAction() {
     if (!confirmPending || !slug) return;

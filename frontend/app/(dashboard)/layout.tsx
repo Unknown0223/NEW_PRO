@@ -1,6 +1,7 @@
 import { AppShell } from "@/components/dashboard/app-shell";
 import { RouteAccessGate } from "@/components/access/route-access-gate";
 import { WebPanelDeniedGate } from "@/components/access/web-panel-denied-gate";
+import { IdleSessionWatcher } from "@/components/dashboard/idle-session-watcher";
 import { SessionWatcher } from "@/components/dashboard/session-watcher";
 import { RouteLoadingFallback } from "@/components/ui/route-loading-fallback";
 import { WorkdayOffGate } from "@/components/workdays/workday-off-gate";
@@ -14,6 +15,7 @@ export default function DashboardGroupLayout({ children }: { children: ReactNode
       <ActivityTrackerProvider>
         <WebPanelDeniedGate>
           <SessionWatcher />
+          <IdleSessionWatcher />
           <WorkdayOffGate>
             <AppShell>
               <RouteAccessGate>{children}</RouteAccessGate>

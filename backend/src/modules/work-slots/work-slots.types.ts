@@ -29,6 +29,7 @@ export type WorkSlotRow = {
   active_user_position: string | null;
   active_user_app_access: boolean | null;
   active_user_max_sessions: number | null;
+  active_user_require_face_login: boolean | null;
   /** Faol (revoked emas, muddati o‘tmagan) refresh-tokenlar soni. */
   active_user_active_session_count: number;
   active_territory_zone: string | null;

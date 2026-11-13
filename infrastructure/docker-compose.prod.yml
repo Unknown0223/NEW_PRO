@@ -82,6 +82,7 @@ services:
       JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:?set JWT_REFRESH_SECRET}
       CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:?set CORS_ALLOWED_ORIGINS}
       TRUST_PROXY: ${TRUST_PROXY:-1}
+      CRON_VIA_WORKER: ${CRON_VIA_WORKER:-1}
       RBAC_ENFORCE_PERMISSIONS: "1"
       INTERNAL_HEALTH_TOKEN: ${INTERNAL_HEALTH_TOKEN:-}
       PHOTO_CONTENT_RETENTION_DAYS: ${PHOTO_CONTENT_RETENTION_DAYS:-60}
@@ -107,6 +108,33 @@ services:
       # salec-postgres-1 / salec-redis-1 ishlating (yuqorida).
       - coolify
 
+  worker:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile.worker
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      TZ: Asia/Tashkent
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD}@salec-postgres-1:5432/savdo_db
+      REDIS_URL: redis://:${REDIS_PASSWORD}@salec-redis-1:6379
+      CRON_VIA_WORKER: "1"
+      TRUST_PROXY: ${TRUST_PROXY:-1}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:?set CORS_ALLOWED_ORIGINS}
+      RBAC_ENFORCE_PERMISSIONS: "1"
+      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:?set JWT_ACCESS_SECRET}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:?set JWT_REFRESH_SECRET}
+      TENANT_SLUG_ALIASES: ${TENANT_SLUG_ALIASES:-test1:aksit}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      backend:
+        condition: service_healthy
+    networks:
+      - salec
+
   frontend:
     build:
       context: ../frontend
@@ -114,6 +142,9 @@ services:
       args:
         API_INTERNAL_ORIGIN: http://backend:4000
         NEXT_PUBLIC_API_URL: ${PUBLIC_API_URL:-}
+        # QR Face ID telefon uchun — login himoyasiz /face-bridge ochilishi shu origin orqali
+        NEXT_PUBLIC_APP_URL: ${PUBLIC_APP_URL:-https://salesarena.sale}
+        NEXT_PUBLIC_FACE_BRIDGE_ORIGIN: ${PUBLIC_APP_URL:-https://salesarena.sale}
     restart: unless-stopped
     expose:
       - "3000"
@@ -124,6 +155,8 @@ services:
       TZ: Asia/Tashkent
       API_INTERNAL_ORIGIN: http://backend:4000
       NEXT_PUBLIC_API_URL: ${PUBLIC_API_URL:-}
+      NEXT_PUBLIC_APP_URL: ${PUBLIC_APP_URL:-https://salesarena.sale}
+      NEXT_PUBLIC_FACE_BRIDGE_ORIGIN: ${PUBLIC_APP_URL:-https://salesarena.sale}
     depends_on:
       backend:
         condition: service_healthy

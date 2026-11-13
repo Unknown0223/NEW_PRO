@@ -2,19 +2,24 @@ import { useEffect, useState } from "react";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { clearAuthSessionFlagCookie, setAuthSessionFlagCookie } from "@/lib/auth-sync";
+import { clearWebSessionStarted, markWebSessionStarted } from "@/lib/session-idle";
 
 type AuthState = {
   accessToken: string | null;
   refreshToken: string | null;
   tenantSlug: string | null;
   role: string | null;
+  /** Login/me: vaqtinchalik parolni majburiy almashtirish. */
+  mustChangePassword: boolean;
   setSession: (payload: {
     accessToken: string;
     refreshToken: string;
     /** Agar berilmasa yoki bo‘sh bo‘lsa — JWT dan `tenantSlug` olinadi (refresh). */
     tenantSlug?: string | null;
     role?: string | null;
+    mustChangePassword?: boolean;
   }) => void;
+  setMustChangePassword: (value: boolean) => void;
   clearSession: () => void;
 };
 
@@ -73,18 +78,34 @@ export const useAuthStore = create<AuthState>()(
       refreshToken: null,
       tenantSlug: null,
       role: null,
-      setSession: ({ accessToken, refreshToken, tenantSlug, role: roleIn }) => {
+      mustChangePassword: false,
+      setSession: ({ accessToken, refreshToken, tenantSlug, role: roleIn, mustChangePassword }) => {
         setSessionCookie();
+        markWebSessionStarted();
         const trimmedIn = roleIn != null && String(roleIn).trim() !== "" ? String(roleIn).trim() : null;
         const role = trimmedIn ?? decodeAccessTokenRole(accessToken);
         const slugFromJwt = decodeAccessTokenTenantSlug(accessToken);
         const fromArg = typeof tenantSlug === "string" ? tenantSlug.trim() : "";
         const slug = slugFromJwt ?? (fromArg.length > 0 ? fromArg : null);
-        set({ accessToken, refreshToken, tenantSlug: slug, role });
+        set({
+          accessToken,
+          refreshToken,
+          tenantSlug: slug,
+          role,
+          mustChangePassword: mustChangePassword === true
+        });
       },
+      setMustChangePassword: (value) => set({ mustChangePassword: value === true }),
       clearSession: () => {
         clearSessionCookie();
-        set({ accessToken: null, refreshToken: null, tenantSlug: null, role: null });
+        clearWebSessionStarted();
+        set({
+          accessToken: null,
+          refreshToken: null,
+          tenantSlug: null,
+          role: null,
+          mustChangePassword: false
+        });
       }
     }),
     {
@@ -92,7 +113,8 @@ export const useAuthStore = create<AuthState>()(
       partialize: (s) => ({
         tenantSlug: s.tenantSlug,
         role: s.role,
-        accessToken: s.accessToken
+        accessToken: s.accessToken,
+        mustChangePassword: s.mustChangePassword
       }),
       merge: (persisted, current) => {
         const p = persisted as Partial<AuthState>;
@@ -101,7 +123,8 @@ export const useAuthStore = create<AuthState>()(
           tenantSlug: typeof p.tenantSlug === "string" ? p.tenantSlug : current.tenantSlug,
           role: typeof p.role === "string" ? p.role : current.role,
           accessToken: typeof p.accessToken === "string" ? p.accessToken : current.accessToken,
-          refreshToken: current.refreshToken
+          refreshToken: current.refreshToken,
+          mustChangePassword: p.mustChangePassword === true
         } as AuthState;
         const jwtSlug = decodeAccessTokenTenantSlug(next.accessToken);
         if (jwtSlug) next.tenantSlug = jwtSlug;

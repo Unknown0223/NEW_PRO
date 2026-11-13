@@ -104,6 +104,8 @@ export type StaffRow = {
   filter_visible: boolean;
   max_sessions: number;
   active_session_count: number;
+  /** Veb kirishda Face ID majburiy */
+  require_face_login: boolean;
   kpi_color: string | null;
   agent_entitlements: AgentEntitlements;
   expeditor_assignment_rules: ExpeditorAssignmentRules;

@@ -15,6 +15,7 @@ import { Label } from "@/components/ui/label";
 import { DateTimePickerField, localValueToDatetimeInput } from "@/components/ui/datetime-popover";
 import { api } from "@/lib/api";
 import { useAuthStoreHydrated } from "@/lib/auth-store";
+import { newClientUuid } from "@/lib/client-uuid";
 import type { ClientBalanceRow } from "@/lib/client-balances-types";
 import { getUserFacingError } from "@/lib/error-utils";
 import { isDiscountSettlementPaymentLabel } from "@/lib/discount-settlement";
@@ -269,6 +270,7 @@ export function ClientBalancesBulkPaymentDialog({
         note: string | null;
         cash_desk_id: number | null;
         paid_at: string | undefined;
+        client_uuid: string;
         ledger_agent_id?: number;
         entry_kind?: "payment" | "discount_settlement";
       };
@@ -292,6 +294,7 @@ export function ClientBalancesBulkPaymentDialog({
             note,
             cash_desk_id,
             paid_at,
+            client_uuid: newClientUuid(),
             ...(isDiscount ? { entry_kind: "discount_settlement" as const } : {})
           };
           if (row.agent_id != null && row.agent_id > 0) {

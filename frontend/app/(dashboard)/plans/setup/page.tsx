@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { Suspense } from "react";
+import { AccessDeniedBanner } from "@/components/access/access-denied-banner";
 import { PlanningWorkspace } from "@/components/plans/setup/planning-workspace";
 import { useAuthStore, useAuthStoreHydrated } from "@/lib/auth-store";
 import { usePermissions } from "@/lib/use-permissions";
@@ -23,7 +24,7 @@ function PlanSetupPageInner() {
     );
   }
   if (!perms.isLoading && !perms.has("plans.ustanovka_planov.view")) {
-    return <p className="p-6 text-sm text-muted-foreground">Нет доступа к этому разделу.</p>;
+    return <AccessDeniedBanner resource="Установка планов" />;
   }
 
   return (

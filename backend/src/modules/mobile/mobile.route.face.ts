@@ -102,7 +102,7 @@ export async function registerMobileFaceRoutes(app: FastifyInstance) {
         if (msg === "IMAGE_TOO_LARGE" || msg === "IMAGE_TOO_SMALL") {
           return sendApiError(reply, request, 400, "ValidationError", "Некорректный размер изображения");
         }
-        if (msg === "FACE_IMAGE_BLANK") {
+        if (msg === "FACE_IMAGE_BLANK" || msg === "FACE_NOT_DETECTED") {
           return sendApiError(reply, request, 400, "ValidationError", "Лицо на фото нечёткое — сделайте снимок заново");
         }
         throw e;
@@ -142,7 +142,7 @@ export async function registerMobileFaceRoutes(app: FastifyInstance) {
         if (msg === "REFERENCE_MISSING") {
           return sendApiError(reply, request, 400, "ValidationError", "Нет эталонного фото — сначала загрузите его");
         }
-        if (msg === "FACE_IMAGE_BLANK") {
+        if (msg === "FACE_IMAGE_BLANK" || msg === "FACE_NOT_DETECTED") {
           return sendApiError(reply, request, 400, "ValidationError", "Лицо на фото нечёткое — сделайте снимок заново");
         }
         throw e;

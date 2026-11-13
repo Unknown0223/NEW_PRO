@@ -153,6 +153,8 @@ export function WorkSlotsWorkspace() {
   const [bulkBusy, setBulkBusy] = useState(false);
   const [confirmBulk, setConfirmBulk] = useState<"activate" | "deactivate" | "unassign" | null>(null);
   const [sessionsSlot, setSessionsSlot] = useState<WorkSlotListItem | null>(null);
+  const [faceLoginBusyId, setFaceLoginBusyId] = useState<number | null>(null);
+  const canEditSlots = usePermissions().has("work_slots.raboche_mesto.update");
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [staffImportOpen, setStaffImportOpen] = useState(false);
 
@@ -619,6 +621,7 @@ export function WorkSlotsWorkspace() {
         }}
         allOnPageSelected={allPageSelected}
         onToggleAllOnPage={togglePageSelection}
+        showSelectAllOnPage={false}
         onColumnSettings={() => setColumnDialogOpen(true)}
         onSearch={(value) => {
           setFilterDraft((prev) => ({ ...prev, search: value }));
@@ -728,6 +731,40 @@ export function WorkSlotsWorkspace() {
             resolveTerritoryLabel: resolveTerritoryDisplay,
             onOpenDetail: (id) => router.push(`/work-slots/${id}`),
             onOpenSessions: (s) => setSessionsSlot(s),
+            canToggleFace: canEditSlots && Boolean(slot.active_user_id),
+            faceToggleBusy: faceLoginBusyId === slot.active_user_id,
+            onToggleRequireFaceLogin: (s, next) => {
+              void (async () => {
+                if (!tenant || !s.active_user_id) return;
+                const kind = staffSessionsKind(s.slot_type);
+                const seg =
+                  kind === "agent"
+                    ? "agents"
+                    : kind === "supervisor"
+                      ? "supervisors"
+                      : kind === "expeditor"
+                        ? "expeditors"
+                        : kind === "collector"
+                          ? "collectors"
+                          : kind === "auditor"
+                            ? "auditors"
+                            : kind === "skladchik"
+                              ? "skladchik"
+                              : "operators";
+                setFaceLoginBusyId(s.active_user_id);
+                try {
+                  await api.patch(`/api/${tenant}/${seg}/${s.active_user_id}`, {
+                    require_face_login: next
+                  });
+                  await load();
+                } catch (e) {
+                  console.error("require_face_login", e);
+                  setToast("Не удалось сохранить «Требовать Face ID»", "error");
+                } finally {
+                  setFaceLoginBusyId(null);
+                }
+              })();
+            },
             tenantSlug: tenant
           });
         }}

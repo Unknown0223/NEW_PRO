@@ -5,8 +5,11 @@ import { readPersistedAuth } from "@/lib/persisted-auth";
 import {
   backoffMsBeforeTransientRetry,
   isIdempotentHttpMethod,
+  isTransientHttpStatus,
   shouldRetryIdempotentRequestOnce
 } from "@/lib/api-retry-policy";
+import { isErrorCode } from "@/components/errors/error-data";
+import { loginUrlWithReturn } from "@/lib/session-idle";
 
 const fromEnv = process.env.NEXT_PUBLIC_API_URL?.trim();
 
@@ -75,11 +78,11 @@ export function getRequestIdFromApiError(error: unknown): string | undefined {
   return pickRequestIdFromAxiosError(ax);
 }
 
-/** Qo‘llab-quvvatlash uchun qisqa qator (interfeys tilida); `requestId` bo‘lmasa bo‘sh. */
+/** Qo‘llab-quvvatlash uchun qisqa qator (toastga sig‘adi); `requestId` bo‘lmasa bo‘sh. */
 export function formatApiSupportReference(requestId?: string): string {
   const id = requestId?.trim();
   if (!id) return "";
-  return `Код для поддержки: ${id}`;
+  return `код: ${id}`;
 }
 
 let refreshInFlight: Promise<string | null> | null = null;
@@ -154,13 +157,11 @@ export async function restoreSessionFromCookie(): Promise<string | null> {
 
 function redirectToLoginIfBrowser(reason?: "session_ended" | "app_access_denied" | "user_not_on_slot" | "web_access_denied") {
   if (typeof window === "undefined") return;
-  const current = `${window.location.pathname}${window.location.search}`;
-  const params = new URLSearchParams({ from: current });
-  if (reason) params.set("reason", reason);
-  const next = `/login?${params.toString()}`;
-  if (!window.location.pathname.startsWith("/login")) {
-    window.location.assign(next);
-  }
+  if (window.location.pathname.startsWith("/login")) return;
+  const base = loginUrlWithReturn(window.location.pathname, window.location.search);
+  const url = new URL(base, window.location.origin);
+  if (reason) url.searchParams.set("reason", reason);
+  window.location.assign(`${url.pathname}${url.search}`);
 }
 
 export const DAY_OFF_PATH = "/day-off";
@@ -170,6 +171,33 @@ function redirectToDayOffIfBrowser() {
   const path = window.location.pathname;
   if (path.startsWith(DAY_OFF_PATH) || path.startsWith("/login")) return;
   window.location.assign(DAY_OFF_PATH);
+}
+
+let lastInfraErrorRedirectAt = 0;
+
+/** 429/502/503/504 — qayta urinishdan keyin to‘liq tizim sahifasi. */
+function redirectToSystemErrorIfBrowser(
+  status: number | undefined,
+  opts?: { retryAfter?: string; requestId?: string; url?: string }
+) {
+  if (typeof window === "undefined") return;
+  if (!isErrorCode(status) || !isTransientHttpStatus(status)) return;
+  const path = window.location.pathname;
+  if (path.startsWith("/system-error") || path.startsWith("/login")) return;
+  const url = String(opts?.url ?? "");
+  // Poll / fon so‘rovlari sahifani yormasin
+  if (
+    /me-permissions|ui-preferences|notifications|heartbeat|presence|work-slots\/live/i.test(url)
+  ) {
+    return;
+  }
+  const now = Date.now();
+  if (now - lastInfraErrorRedirectAt < 10_000) return;
+  lastInfraErrorRedirectAt = now;
+  const q = new URLSearchParams({ code: String(status) });
+  if (opts?.retryAfter) q.set("retryAfter", opts.retryAfter);
+  if (opts?.requestId) q.set("ref", opts.requestId);
+  window.location.assign(`/system-error?${q.toString()}`);
 }
 
 /** Backend «boshqa qurilmada kirildi / admin tugatdi» signali. */
@@ -277,10 +305,17 @@ api.interceptors.response.use(
       return Promise.reject(error);
     }
 
-    // Ajratilgan sessiya tugatildi (boshqa qurilmada kirildi / admin tugatdi):
-    // refresh urinmaymiz — to'g'ridan-to'g'ri chiqib, bildirishnoma bilan login.
+    // SESSION_REVOKED: avval refresh (rotation / boshqa tab). Muvaffaqiyatsiz — login.
     if (isSessionRevoked(status, body)) {
       const store = useAuthStore.getState();
+      if (original && !original._retry && !isAuthEndpointNoRefresh(original.url)) {
+        original._retry = true;
+        const refreshed = await refreshAccessTokenSingleFlight();
+        if (refreshed) {
+          if (original.headers) original.headers.Authorization = `Bearer ${refreshed}`;
+          return api(original);
+        }
+      }
       store.clearSession();
       redirectToLoginIfBrowser("session_ended");
       return Promise.reject(error);
@@ -312,6 +347,7 @@ api.interceptors.response.use(
       const refreshed = await refreshAccessTokenSingleFlight();
       if (!refreshed) {
         store.clearSession();
+        redirectToLoginIfBrowser("session_ended");
         return Promise.reject(error);
       }
       original.headers.Authorization = `Bearer ${refreshed}`;
@@ -330,6 +366,23 @@ api.interceptors.response.use(
       if (ms > 0) await new Promise((r) => setTimeout(r, ms));
       original._transientRetry = true;
       return api(original);
+    }
+
+    // Qayta urinishdan keyin ham 429/502/503/504 — to‘liq ErrorPage
+    if (original?._transientRetry && isTransientHttpStatus(status)) {
+      const retryAfterRaw =
+        error.response?.headers?.["retry-after"] ?? error.response?.headers?.["Retry-After"];
+      const retryAfter =
+        typeof retryAfterRaw === "string"
+          ? retryAfterRaw
+          : typeof retryAfterRaw === "number"
+            ? String(retryAfterRaw)
+            : undefined;
+      redirectToSystemErrorIfBrowser(status, {
+        retryAfter,
+        requestId,
+        url: original.url
+      });
     }
 
     return Promise.reject(error);

@@ -24,7 +24,14 @@ import type { SlotHistoryItem, WorkSlotListItem } from "@/lib/work-slots-types";
 import { AssignUserDialog } from "./assign-user-dialog";
 import { EditSlotDialog } from "./edit-slot-dialog";
 import { SlotWorkplaceConfigDialog } from "./slot-workplace-config-dialog";
-import { formatSlotDate, formatSlotBranches, slotTypeLabel, type SlotWorkplaceConfigTabId } from "./work-slots-utils";
+import {
+  formatSlotDate,
+  formatSlotBranches,
+  slotAuditActionLabel,
+  slotTypeLabel,
+  type SlotWorkplaceConfigTabId
+} from "./work-slots-utils";
+
 import { SlotBadge } from "./slot-badge";
 import { StaffFaceAvatar } from "@/components/staff/staff-face-avatar";
 
@@ -82,7 +89,9 @@ export function WorkSlotDetail({ slotId }: { slotId: number }) {
     try {
       const [detail, hist, debtCol, whTable, cash, refs, profile, tradeDirs] = await Promise.all([
         apiFetch<{ data: WorkSlotListItem }>(`/api/${tenant}/work-slots/${slotId}`),
-        apiFetch<{ data: SlotHistoryItem[] }>(`/api/${tenant}/work-slots/${slotId}/history?limit=30`),
+        apiFetch<{ data: SlotHistoryItem[] }>(
+          `/api/${tenant}/work-slots/${slotId}/history?limit=30`
+        ).catch(() => ({ data: [] as SlotHistoryItem[] })),
         apiFetch<{
           data: Array<{
             user_id: number;
@@ -121,6 +130,7 @@ export function WorkSlotDetail({ slotId }: { slotId: number }) {
       setSlot(detail.data);
       setHistory(hist.data ?? []);
       setDebtCollectors(debtCol.data ?? []);
+
       const catalog = profile.references?.branches ?? [];
       setBranchLookup(branchLabelLookup(catalog));
       setBranchOptions(activeBranchNamesFromProfile(catalog));
@@ -395,7 +405,7 @@ export function WorkSlotDetail({ slotId }: { slotId: number }) {
                     <TableCell className="whitespace-nowrap text-xs">
                       {formatSlotDate(h.created_at)}
                     </TableCell>
-                    <TableCell>{h.action}</TableCell>
+                    <TableCell>{slotAuditActionLabel(h.action)}</TableCell>
                     <TableCell>{h.prev_user_name ?? "—"}</TableCell>
                     <TableCell>{h.next_user_name ?? "—"}</TableCell>
                     <TableCell>{h.actor_name ?? "—"}</TableCell>

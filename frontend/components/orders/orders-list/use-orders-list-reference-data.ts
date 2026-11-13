@@ -42,16 +42,17 @@ export function useOrdersListReferenceData(
   });
 
   const agentsQ = useQuery({
-    queryKey: ["agents", tenantSlug, actorUserId, "orders-toolbar"],
+    queryKey: ["agents", tenantSlug, actorUserId, "orders-toolbar", "active"],
     enabled: Boolean(tenantSlug),
     staleTime: STALE.reference,
     queryFn: async () => {
       const { data: body } = await api.get<{ data: { id: number; fio: string; code: string | null }[] }>(
-        `/api/${tenantSlug}/agents`
+        `/api/${tenantSlug}/agents?is_active=true`
       );
       return body.data ?? [];
     }
   });
+
 
   const expeditorsQ = useQuery({
     queryKey: ["expeditors", tenantSlug, actorUserId, "orders-toolbar"],

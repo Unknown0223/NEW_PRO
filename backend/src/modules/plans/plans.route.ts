@@ -83,8 +83,21 @@ function mapSetupError(
   e: unknown
 ) {
   const msg = e instanceof Error ? e.message : "";
-  if (msg === "BAD_DIRECTION" || msg === "BAD_DECIMAL" || msg === "PLAN_TARGET_READONLY") {
-    return sendApiError(reply, request, 400, "ValidationError", msg);
+  if (
+    msg === "BAD_DIRECTION" ||
+    msg === "BAD_DECIMAL" ||
+    msg === "PLAN_TARGET_READONLY" ||
+    msg === "KPI_AGENT_NOT_LINKED"
+  ) {
+    return sendApiError(
+      reply,
+      request,
+      400,
+      "ValidationError",
+      msg === "KPI_AGENT_NOT_LINKED"
+        ? "Агент не привязан к этой KPI-группе — план нельзя менять"
+        : msg
+    );
   }
   if (msg === "NOT_FOUND") {
     return sendApiError(reply, request, 404, "NotFound", msg);

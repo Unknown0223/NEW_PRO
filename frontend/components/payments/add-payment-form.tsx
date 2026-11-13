@@ -1,13 +1,16 @@
 "use client";
 
 import { Button, buttonVariants } from "@/components/ui/button";
+import { DateTimePickerField } from "@/components/ui/datetime-popover";
 import { FilterSelect } from "@/components/ui/filter-select";
 import { GroupedNumberInput } from "@/components/ui/grouped-number-input";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { api } from "@/lib/api";
+import { newClientUuid } from "@/lib/client-uuid";
 import type { ClientRow } from "@/lib/client-types";
 import { useAuthStoreHydrated } from "@/lib/auth-store";
+import { formatNumberGrouped } from "@/lib/format-numbers";
 import { STALE } from "@/lib/query-stale";
 import { useActiveTradeDirectionsCatalog } from "@/hooks/use-active-trade-directions-catalog";
 import { cn } from "@/lib/utils";
@@ -23,6 +26,13 @@ import {
   paymentMethodSelectOptions,
   type ProfilePaymentMethodEntry
 } from "@/lib/payment-method-options";
+
+function formatDueDate(iso: string): string {
+  const ymd = iso.slice(0, 10);
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(ymd);
+  if (!m) return ymd;
+  return `${m[3]}.${m[2]}.${m[1]}`;
+}
 
 type StaffPick = { id: number; fio: string; code?: string | null };
 
@@ -330,6 +340,7 @@ export function AddPaymentForm({
         allocation_mode: AllocationMode;
         allocation_order_ids?: number[];
         allocation_agent_id?: number;
+        client_uuid?: string;
       }> = [];
 
       for (const b of blocks) {
@@ -355,6 +366,7 @@ export function AddPaymentForm({
           cash_desk_id,
           paid_at,
           allocation_mode: allocationMode,
+          client_uuid: newClientUuid(),
           ...(selectedOrderIds.length > 0 ? { allocation_order_ids: selectedOrderIds } : {}),
           ...(ledger_agent_id_locked != null ? { ledger_agent_id: ledger_agent_id_locked } : {}),
           ...(agentFilterId.trim()
@@ -389,7 +401,15 @@ export function AddPaymentForm({
         return;
       }
       if (axios.isAxiosError(e)) {
-        const code = (e.response?.data as { error?: string } | undefined)?.error;
+        const data = e.response?.data as { error?: string; message?: string } | undefined;
+        const code = data?.error;
+        if (code === "DOCUMENT_EDIT_PERIOD_LOCKED" || code === "DocumentEditPeriodLocked") {
+          setFormErr(
+            data?.message?.trim() ||
+              "Период закрыт: выбран оплаты вне разрешённого окна. Открыть доступ может администратор."
+          );
+          return;
+        }
         if (code === "BadCashDesk") {
           setFormErr("Указана несуществующая или неактивная касса.");
           return;
@@ -537,16 +557,17 @@ export function AddPaymentForm({
           ) : null}
 
           <div className="space-y-2">
-            <Label htmlFor="add-pay-order">Заказ (необязательно)</Label>
+            <Label htmlFor="add-pay-order">ID заказа (необязательно)</Label>
             <Input
               id="add-pay-order"
               inputMode="numeric"
               className="h-10 bg-background"
-              placeholder="Номер заказа"
+              placeholder="Например, 384"
               value={orderId}
               onChange={(e) => setOrderId(e.target.value)}
               disabled={submitMut.isPending}
             />
+            <p className="text-xs text-muted-foreground">Числовой ID заказа, не номер документа.</p>
           </div>
         </div>
 
@@ -575,7 +596,8 @@ export function AddPaymentForm({
               <table className="w-full text-xs">
                 <thead className="app-table-thead">
                   <tr>
-                    <th className="px-2 py-1.5 text-left">#</th>
+                    <th className="px-2 py-1.5 text-left">ID</th>
+                    <th className="px-2 py-1.5 text-left">Тип</th>
                     <th className="px-2 py-1.5 text-left">Срок</th>
                     <th className="px-2 py-1.5 text-right">Долг</th>
                   </tr>
@@ -583,14 +605,14 @@ export function AddPaymentForm({
                 <tbody>
                   {(orderAllocQ.data ?? []).length === 0 ? (
                     <tr>
-                      <td colSpan={3} className="px-2 py-2 text-center text-muted-foreground">
+                      <td colSpan={4} className="px-2 py-2 text-center text-muted-foreground">
                         Открытых заказов нет
                       </td>
                     </tr>
                   ) : (
                     (orderAllocQ.data ?? []).map((o) => {
                       const checked = selectedOrderIds.includes(o.order_id);
-                      const due = (o.consignment_due_date ?? o.created_at).slice(0, 10);
+                      const due = formatDueDate(o.consignment_due_date ?? o.created_at);
                       return (
                         <tr key={o.order_id} className="border-t">
                           <td className="px-2 py-1.5">
@@ -607,11 +629,16 @@ export function AddPaymentForm({
                                 }}
                                 disabled={submitMut.isPending}
                               />
-                              <span>{o.order_number}</span>
+                              <span className="tabular-nums font-medium">{o.order_id}</span>
                             </label>
                           </td>
-                          <td className="px-2 py-1.5">{due}</td>
-                          <td className="px-2 py-1.5 text-right tabular-nums">{o.outstanding}</td>
+                          <td className="px-2 py-1.5 whitespace-nowrap">
+                            {o.is_consignment ? "Консигнация" : "Наличные"}
+                          </td>
+                          <td className="px-2 py-1.5 tabular-nums whitespace-nowrap">{due}</td>
+                          <td className="px-2 py-1.5 text-right tabular-nums">
+                            {formatNumberGrouped(o.outstanding, { maxFractionDigits: 2 })}
+                          </td>
                         </tr>
                       );
                     })
@@ -654,13 +681,18 @@ export function AddPaymentForm({
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
               <div className="space-y-1.5">
                 <Label className="text-xs text-muted-foreground">Дата оплаты</Label>
-                <Input
-                  type="datetime-local"
-                  className="h-10 bg-background"
+                <DateTimePickerField
                   value={b.paid_at_local}
-                  onChange={(e) => updateBlock(b.key, { paid_at_local: e.target.value })}
+                  onChange={(next) => updateBlock(b.key, { paid_at_local: next })}
                   disabled={submitMut.isPending}
+                  className="w-full"
+                  timePlacement="side"
                 />
+                <p className="text-[11px] leading-snug text-muted-foreground">
+                  Если дата вне разрешённого окна — прошлое или будущее (настройка «Ограничение
+                  периода»), сохранение будет запрещено с пояснением. Администратор может временно
+                  открыть доступ.
+                </p>
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs text-muted-foreground">Направление торговли</Label>

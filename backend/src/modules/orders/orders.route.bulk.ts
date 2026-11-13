@@ -21,7 +21,10 @@ import {
   isDocumentEditPeriodLockedError,
   sendDocumentEditPeriodLocked
 } from "../../lib/document-edit-lock.http";
-import { assertDocsWritableByIds } from "../../lib/document-edit-lock.request";
+import {
+  assertDocWritableByIsoDate,
+  assertDocsWritableByIds
+} from "../../lib/document-edit-lock.request";
 import { ensureTenantContext } from "../../lib/tenant-context";
 import { sendApiError, zodValidationExtras } from "../../lib/api-error";
 import { writeApiRateLimitRouteOpts } from "../../lib/rate-limit-config";
@@ -96,6 +99,7 @@ export async function registerOrderBulkRoutes(app: FastifyInstance) {
       const actorUserId = Number.isFinite(actorSub) && actorSub > 0 ? actorSub : null;
       try {
         await assertDocsWritableByIds(request, "orders", parsed.data.order_ids);
+        await assertDocWritableByIsoDate(request, "orders", parsed.data.occurred_at);
         const result = await bulkUpdateOrderStatus(
           request.tenant!.id,
           parsed.data.order_ids,
@@ -107,7 +111,7 @@ export async function registerOrderBulkRoutes(app: FastifyInstance) {
         );
         return reply.send(result);
       } catch (e) {
-        if (isDocumentEditPeriodLockedError(e)) return sendDocumentEditPeriodLocked(reply, request);
+        if (isDocumentEditPeriodLockedError(e)) return sendDocumentEditPeriodLocked(reply, request, e);
         throw e;
       }
     }
@@ -136,7 +140,7 @@ export async function registerOrderBulkRoutes(app: FastifyInstance) {
         );
         return reply.send(result);
       } catch (e) {
-        if (isDocumentEditPeriodLockedError(e)) return sendDocumentEditPeriodLocked(reply, request);
+        if (isDocumentEditPeriodLockedError(e)) return sendDocumentEditPeriodLocked(reply, request, e);
         throw e;
       }
     }
@@ -166,7 +170,7 @@ export async function registerOrderBulkRoutes(app: FastifyInstance) {
         );
         return reply.send(result);
       } catch (e) {
-        if (isDocumentEditPeriodLockedError(e)) return sendDocumentEditPeriodLocked(reply, request);
+        if (isDocumentEditPeriodLockedError(e)) return sendDocumentEditPeriodLocked(reply, request, e);
         throw e;
       }
     }
@@ -194,7 +198,7 @@ export async function registerOrderBulkRoutes(app: FastifyInstance) {
         );
         return reply.send(result);
       } catch (e) {
-        if (isDocumentEditPeriodLockedError(e)) return sendDocumentEditPeriodLocked(reply, request);
+        if (isDocumentEditPeriodLockedError(e)) return sendDocumentEditPeriodLocked(reply, request, e);
         throw e;
       }
     }

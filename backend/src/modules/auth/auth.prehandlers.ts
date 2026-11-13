@@ -18,6 +18,7 @@ import {
   isBrowserWebRequest,
   isWebPanelDeniedRole
 } from "./web-panel-access";
+import { isAccessSidActive } from "./auth.session-sid";
 
 export type AccessJwtUser = {
   sub: string;
@@ -94,15 +95,7 @@ export async function jwtAccessVerify(request: FastifyRequest, reply: FastifyRep
     type SidCache = { ok: boolean };
     let sidRow = await getAppCache<SidCache>(sidKey);
     if (!sidRow) {
-      const sess = await prisma.refreshToken.findUnique({
-        where: { id: user.sid },
-        select: { user_id: true, revoked_at: true, expires_at: true }
-      });
-      const ok =
-        Boolean(sess) &&
-        sess!.user_id === userId &&
-        sess!.revoked_at == null &&
-        sess!.expires_at > new Date();
+      const ok = await isAccessSidActive(userId, user.sid);
       sidRow = { ok };
       await setAppCache(sidKey, sidRow, AUTH_STATUS_CACHE_TTL_SEC).catch(() => undefined);
     }

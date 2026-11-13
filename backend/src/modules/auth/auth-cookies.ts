@@ -1,9 +1,10 @@
 import type { FastifyReply, FastifyRequest } from "fastify";
 import { env } from "../../config/env";
+import { REFRESH_COOKIE_MAX_AGE_SEC } from "./session-ttl";
 
 /** HttpOnly refresh token cookie — web brauzer uchun (mobil JSON body ishlatadi). */
 export const REFRESH_COOKIE_NAME = "salec_rt";
-const REFRESH_MAX_AGE_SEC = 30 * 24 * 60 * 60;
+const REFRESH_MAX_AGE_SEC = REFRESH_COOKIE_MAX_AGE_SEC;
 
 function secureSuffix(): string {
   return env.NODE_ENV === "production" ? "; Secure" : "";

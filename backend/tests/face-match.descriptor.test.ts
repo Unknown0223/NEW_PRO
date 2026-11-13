@@ -1,63 +1,78 @@
+import fs from "fs";
+import path from "path";
 import sharp from "sharp";
 import { describe, expect, it } from "vitest";
 import { buildFaceDescriptor } from "../src/modules/mobile/face-match.descriptor";
-import { decideFaceMatch, faceMatchScore } from "../src/modules/mobile/face-match.pure";
+import {
+  decideFaceMatch,
+  euclideanDistance,
+  faceMatchScore
+} from "../src/modules/mobile/face-match.pure";
 
-async function makePhoto(seed: number): Promise<Buffer> {
-  // Distinct textured “faces” for deterministic compare tests
-  const size = 200;
-  const raw = Buffer.alloc(size * size * 3);
-  for (let y = 0; y < size; y++) {
-    for (let x = 0; x < size; x++) {
-      const i = (y * size + x) * 3;
-      raw[i] = (x * 3 + seed * 17) % 220 + 20;
-      raw[i + 1] = (y * 5 + seed * 31) % 200 + 30;
-      raw[i + 2] = ((x + y) * 2 + seed * 7) % 180 + 40;
-    }
-  }
-  // oval brighter region (pseudo-face)
-  for (let y = 40; y < 160; y++) {
-    for (let x = 50; x < 150; x++) {
-      const dx = (x - 100) / 45;
-      const dy = (y - 100) / 55;
-      if (dx * dx + dy * dy < 1) {
-        const i = (y * size + x) * 3;
-        raw[i] = Math.min(255, raw[i]! + 60 + (seed % 20));
-        raw[i + 1] = Math.min(255, raw[i + 1]! + 40);
-        raw[i + 2] = Math.min(255, raw[i + 2]! + 30);
-      }
-    }
-  }
-  return sharp(raw, { raw: { width: size, height: size, channels: 3 } })
-    .jpeg({ quality: 90 })
-    .toBuffer();
+const sampleDir = path.join(
+  process.cwd(),
+  "node_modules",
+  "@vladmandic",
+  "face-api",
+  "demo"
+);
+
+function sample(name: string): Buffer {
+  return fs.readFileSync(path.join(sampleDir, name));
 }
 
-describe("face-match.descriptor", () => {
-  it("same image matches itself above threshold", async () => {
-    const img = await makePhoto(1);
-    const a = await buildFaceDescriptor(img);
-    const b = await buildFaceDescriptor(img);
-    const score = faceMatchScore(a, b);
-    expect(score).toBeGreaterThan(0.98);
-    expect(decideFaceMatch(score)).toBe("approved");
-  });
+describe("face-match.descriptor (FaceRecognitionNet)", () => {
+  it(
+    "same face image matches itself above threshold",
+    async () => {
+      const img = sample("sample1.jpg");
+      const a = await buildFaceDescriptor(img);
+      const b = await buildFaceDescriptor(img);
+      expect(a).toHaveLength(128);
+      expect(euclideanDistance(a, b)).toBeLessThan(0.05);
+      const score = faceMatchScore(a, b);
+      expect(score).toBeGreaterThan(0.95);
+      expect(decideFaceMatch(score)).toBe("approved");
+    },
+    60_000
+  );
 
-  it("different images score lower than identical and below threshold", async () => {
-    const a = await buildFaceDescriptor(await makePhoto(1));
-    const b = await buildFaceDescriptor(await makePhoto(99));
-    const same = faceMatchScore(a, a);
-    const diff = faceMatchScore(a, b);
-    expect(same).toBeGreaterThan(diff);
-    expect(decideFaceMatch(diff)).toBe("rejected");
-  });
+  it(
+    "same person under mild jpeg recompress still matches",
+    async () => {
+      const orig = sample("sample1.jpg");
+      const recompressed = await sharp(orig).jpeg({ quality: 55 }).toBuffer();
+      const a = await buildFaceDescriptor(orig);
+      const b = await buildFaceDescriptor(recompressed);
+      const dist = euclideanDistance(a, b);
+      expect(dist).toBeLessThan(0.45);
+      expect(decideFaceMatch(faceMatchScore(a, b))).toBe("approved");
+    },
+    60_000
+  );
 
-  it("blank image throws FACE_IMAGE_BLANK", async () => {
-    const blank = await sharp({
-      create: { width: 120, height: 120, channels: 3, background: { r: 128, g: 128, b: 128 } }
-    })
-      .jpeg()
-      .toBuffer();
-    await expect(buildFaceDescriptor(blank)).rejects.toThrow(/FACE_IMAGE_BLANK/);
-  });
+  it(
+    "different people score below threshold",
+    async () => {
+      const a = await buildFaceDescriptor(sample("sample1.jpg"));
+      const b = await buildFaceDescriptor(sample("sample5.jpg"));
+      const dist = euclideanDistance(a, b);
+      expect(dist).toBeGreaterThan(0.55);
+      expect(decideFaceMatch(faceMatchScore(a, b))).toBe("rejected");
+    },
+    60_000
+  );
+
+  it(
+    "blank image throws FACE_IMAGE_BLANK or FACE_NOT_DETECTED",
+    async () => {
+      const blank = await sharp({
+        create: { width: 120, height: 120, channels: 3, background: { r: 128, g: 128, b: 128 } }
+      })
+        .jpeg()
+        .toBuffer();
+      await expect(buildFaceDescriptor(blank)).rejects.toThrow(/FACE_(IMAGE_BLANK|NOT_DETECTED)/);
+    },
+    60_000
+  );
 });

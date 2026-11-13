@@ -265,6 +265,8 @@ model Payment {
   allocations_snapshot Json?
   /// SalesDoctor kassa «create_by» ismi
   source_created_by    String?   @db.VarChar(200)
+  /// Offline/retry UUID — bir xil kalit bilan ikkinchi create qayta ishlanadi
+  client_uuid          String?   @db.VarChar(64)
   client             Client    @relation(fields: [client_id], references: [id], onDelete: Cascade)
   created_by         User?     @relation("PaymentCreator", fields: [created_by_user_id], references: [id])
   deleted_by         User?     @relation("PaymentVoidedBy", fields: [deleted_by_user_id], references: [id], onDelete: SetNull)
@@ -289,6 +291,7 @@ model Payment {
   @@index([expeditor_user_id])
   @@index([ledger_agent_id])
   @@unique([tenant_id, cash_desk_id, number])
+  @@unique([tenant_id, client_uuid])
   @@index([tenant_id, number])
   edit_grants          PaymentEditGrant[]
   bank_transfer_inbox  BankTransferInbox[]
@@ -461,6 +464,8 @@ model SalesReturn {
   date_to            DateTime?
   /// Vazvrat turi: order_full (holat o’zgartirish) yoki partial (polki — ro’yxatdan tanlab qaytarish)
   return_type        String            @default("partial") @db.VarChar(20)
+  /// Offline/retry UUID — bir xil kalit bilan ikkinchi create qayta ishlanadi
+  client_uuid        String?           @db.VarChar(64)
   lines              SalesReturnLine[]
   client             Client?           @relation(fields: [client_id], references: [id])
   created_by         User?             @relation("SalesReturnCreator", fields: [created_by_user_id], references: [id])
@@ -469,6 +474,7 @@ model SalesReturn {
   warehouse          Warehouse         @relation(fields: [warehouse_id], references: [id])
 
   @@unique([tenant_id, warehouse_id, number])
+  @@unique([tenant_id, client_uuid])
   @@index([tenant_id, created_at(sort: Desc)])
   @@index([tenant_id, order_id, status])
   @@map("sales_returns")

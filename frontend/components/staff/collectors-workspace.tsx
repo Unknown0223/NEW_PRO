@@ -18,6 +18,7 @@ import { useUserTablePrefs } from "@/hooks/use-user-table-prefs";
 import { DEFAULT_TABLE_PAGE_SIZES } from "@/lib/table-page-sizes";
 import { Pencil, KeyRound, UserMinus } from "lucide-react";
 import { WorkplaceMovedNotice } from "@/components/staff/workplace-moved-notice";
+import { StaffFaceReferencePanel } from "@/components/staff/staff-face-reference-panel";
 import { StaffPasswordChangeDialog } from "@/components/staff/staff-password-change-dialog";
 import { messageFromStaffCreateError } from "@/lib/staff-api-errors";
 import { AgentIconButton, AgentTemplateConfirmDialog } from "@/components/staff/agent-workspace-template-ui";
@@ -706,6 +707,14 @@ function CollectorEditDialog({
           <DialogTitle>Редактировать</DialogTitle>
         </DialogHeader>
         <WorkplaceMovedNotice className="mb-2" />
+        {row ? (
+          <StaffFaceReferencePanel
+            tenantSlug={tenantSlug}
+            userId={row.id}
+            enabled
+            displayName={formatPersonDisplayName(row)}
+          />
+        ) : null}
         <div className="grid gap-3 sm:grid-cols-2">
           <Input placeholder="Имя" value={first_name} onChange={(e) => setFirst(e.target.value)} />
           <Input placeholder="Фамилия" value={last_name} onChange={(e) => setLast(e.target.value)} />

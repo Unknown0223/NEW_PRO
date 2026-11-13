@@ -55,6 +55,7 @@ export const createBodySchema = z.object({
   is_active: z.boolean().optional(),
   filter_visible: z.boolean().optional(),
   max_sessions: maxSessionsValueSchema.optional(),
+  require_face_login: z.boolean().optional(),
   kpi_color: z.string().max(16).nullable().optional(),
   work_slot_id: z.number().int().positive().nullable().optional()
 });
@@ -93,6 +94,7 @@ export const patchStaffMutableBody = z.object({
   filter_visible: z.boolean().optional(),
   password: z.string().min(8).optional(),
   max_sessions: maxSessionsValueSchema.optional(),
+  require_face_login: z.boolean().optional(),
   kpi_color: z.string().max(16).nullable().optional()
 });
 

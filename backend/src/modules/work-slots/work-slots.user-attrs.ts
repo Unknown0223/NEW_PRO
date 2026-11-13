@@ -23,6 +23,7 @@ export type ActiveUserAttrsPatch = {
   position?: string | null;
   app_access?: boolean;
   max_sessions?: number;
+  require_face_login?: boolean;
 };
 
 export { buildUserTerritory, applyTerritoryFieldPatch };
@@ -40,12 +41,13 @@ export function hasWorkplaceGeoAttrsPatch(patch: ActiveUserAttrsPatch): boolean 
   );
 }
 
-/** Occupant User maydonlari — KOMANDA UI dan ko‘chirilgan (должность / app / сессии). */
+/** Occupant User maydonlari — KOMANDA UI dan ko‘chirilgan (должность / app / сессии / Face ID). */
 export function hasOccupantUserAttrsPatch(patch: ActiveUserAttrsPatch): boolean {
   return (
     patch.position !== undefined ||
     patch.app_access !== undefined ||
-    patch.max_sessions !== undefined
+    patch.max_sessions !== undefined ||
+    patch.require_face_login !== undefined
   );
 }
 
@@ -57,11 +59,15 @@ export function occupantUserUpdateData(patch: ActiveUserAttrsPatch): {
   position?: string | null;
   app_access?: boolean;
   max_sessions?: number;
+  require_face_login?: boolean;
 } {
   return {
     ...(patch.position !== undefined ? { position: patch.position?.trim() || null } : {}),
     ...(patch.app_access !== undefined ? { app_access: patch.app_access } : {}),
-    ...(patch.max_sessions !== undefined ? { max_sessions: patch.max_sessions } : {})
+    ...(patch.max_sessions !== undefined ? { max_sessions: patch.max_sessions } : {}),
+    ...(patch.require_face_login !== undefined
+      ? { require_face_login: patch.require_face_login }
+      : {})
   };
 }
 

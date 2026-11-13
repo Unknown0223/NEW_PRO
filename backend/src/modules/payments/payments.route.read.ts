@@ -140,8 +140,12 @@ export async function registerPaymentReadRoutes(app: FastifyInstance) {
         );
       }
       try {
-        if (parsed.data.paid_at) {
-          const paidAt = new Date(parsed.data.paid_at);
+        // paid_at yo‘q bo‘lsa ham «hozir» bo‘yicha tekshiramiz — create ichida eventAt = now.
+        {
+          const paidAt =
+            parsed.data.paid_at && String(parsed.data.paid_at).trim()
+              ? new Date(String(parsed.data.paid_at).trim())
+              : new Date();
           if (!Number.isNaN(paidAt.getTime())) {
             await assertDocWritableByDate(request, "payments", paidAt);
           }
@@ -156,7 +160,7 @@ export async function registerPaymentReadRoutes(app: FastifyInstance) {
         const row = await createPayment(request.tenant!.id, parsed.data, actorUserIdOrNull(request));
         return reply.status(201).send(row);
       } catch (e) {
-        if (isDocumentEditPeriodLockedError(e)) return sendDocumentEditPeriodLocked(reply, request);
+        if (isDocumentEditPeriodLockedError(e)) return sendDocumentEditPeriodLocked(reply, request, e);
         const msg = e instanceof Error ? e.message : "";
         if (msg === "AGENT_OUT_OF_SCOPE") return sendApiError(reply, request, 403, "AgentOutOfScope");
         if (msg === "BAD_CLIENT") return sendApiError(reply, request, 400, "BadClient");

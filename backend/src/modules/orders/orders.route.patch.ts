@@ -133,7 +133,7 @@ export async function registerOrderPatchRoutes(app: FastifyInstance) {
         );
         return reply.send(row);
       } catch (e) {
-        if (isDocumentEditPeriodLockedError(e)) return sendDocumentEditPeriodLocked(reply, request);
+        if (isDocumentEditPeriodLockedError(e)) return sendDocumentEditPeriodLocked(reply, request, e);
         const msg = getErrorCode(e) ?? "";
         if (msg === "NOT_FOUND") return sendApiError(reply, request, 404, "NotFound");
         if (msg === "ORDER_NOT_EDITABLE") {
@@ -221,7 +221,7 @@ export async function registerOrderPatchRoutes(app: FastifyInstance) {
         );
         return reply.send(row);
       } catch (e) {
-        if (isDocumentEditPeriodLockedError(e)) return sendDocumentEditPeriodLocked(reply, request);
+        if (isDocumentEditPeriodLockedError(e)) return sendDocumentEditPeriodLocked(reply, request, e);
         const msg = getErrorCode(e) ?? "";
         if (msg === "NOT_FOUND") return sendApiError(reply, request, 404, "NotFound");
         if (msg === "ORDER_NOT_EDITABLE") {
@@ -290,11 +290,18 @@ export async function registerOrderPatchRoutes(app: FastifyInstance) {
         }
         if (msg === "INSUFFICIENT_STOCK") {
           const ex = e as Error & { product_id?: number; available?: string; requested?: string };
-          return sendApiError(reply, request, 400, "InsufficientStock", undefined, {
-            product_id: ex.product_id,
-            available: ex.available,
-            requested: ex.requested
-          });
+          return sendApiError(
+            reply,
+            request,
+            400,
+            "InsufficientStock",
+            "На складе не хватает товара.",
+            {
+              product_id: ex.product_id,
+              available: ex.available,
+              requested: ex.requested
+            }
+          );
         }
         if (msg === "ORDER_TOTAL_BELOW_ALLOCATED") {
           const ex = e as Error & { allocated?: string; order_total?: string };

@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { Suspense } from "react";
+import { AccessDeniedBanner } from "@/components/access/access-denied-banner";
 import { DailyKpiWorkspace } from "@/components/plans/daily-kpi/daily-kpi-workspace";
 import { NAV_PERM } from "@/components/dashboard/nav-permission-keys";
 import { useAuthStore, useAuthStoreHydrated } from "@/lib/auth-store";
@@ -24,7 +25,7 @@ function DailyKpiPageInner() {
     );
   }
   if (!perms.isLoading && !NAV_PERM.dailyKpi.some((k) => perms.has(k))) {
-    return <p className="p-6 text-sm text-muted-foreground">Нет доступа к этому разделу.</p>;
+    return <AccessDeniedBanner resource="Ежедневный KPI" />;
   }
 
   return (

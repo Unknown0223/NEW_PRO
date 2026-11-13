@@ -15,3 +15,9 @@ export const authLoginBodySchema = z.object({
 export const authRefreshBodySchema = z.object({
   refreshToken: z.string().min(1).optional()
 });
+
+/** POST `/auth/change-password` — must_change_password yoki ixtiyoriy almashtirish */
+export const authChangePasswordBodySchema = z.object({
+  old_password: z.string().min(1).max(128),
+  new_password: z.string().min(8).max(128)
+});

@@ -23,6 +23,35 @@ describe("applyDeniedPermissionKeys — mayda deny umumiy view ni yopmasin", () 
     applyDeniedPermissionKeys(eff, new Set(["staff.agent.view"]));
     expect(eff.has("staff.agent.view")).toBe(false);
   });
+
+  it("legacy spisok_postuplenii deny mustaqil warehouse.postuplenie.view ni yopmasin", () => {
+    const keys = [
+      "warehouse.postuplenie.view",
+      "warehouse.postuplenie_sklada.spisok_postuplenii",
+      "warehouse.postuplenie.create"
+    ];
+    const eff = new Set(expandPermissionKeyAliases(keys));
+    const direct = new Set(keys);
+    applyDeniedPermissionKeys(eff, new Set(["warehouse.postuplenie_sklada.spisok_postuplenii"]), direct);
+    expect(eff.has("warehouse.postuplenie.view")).toBe(true);
+    expect(eff.has("warehouse.postuplenie.create")).toBe(true);
+    expect(eff.has("warehouse.postuplenie_sklada.spisok_postuplenii")).toBe(false);
+  });
+
+  it("faqat legacy spisok orqali kelgan view — spisok deny bilan o‘chadi", () => {
+    const eff = new Set(expandPermissionKeyAliases(["warehouse.postuplenie_sklada.spisok_postuplenii"]));
+    const direct = new Set(["warehouse.postuplenie_sklada.spisok_postuplenii"]);
+    applyDeniedPermissionKeys(eff, new Set(["warehouse.postuplenie_sklada.spisok_postuplenii"]), direct);
+    expect(eff.has("warehouse.postuplenie.view")).toBe(false);
+    expect(eff.has("warehouse.postuplenie_sklada.spisok_postuplenii")).toBe(false);
+  });
+
+  it("suppliers.spisok deny mustaqil postavshchik.view ni yopmasin", () => {
+    const keys = ["suppliers.postavshchik.view", "suppliers.spisok_postavshchikov"];
+    const eff = new Set(expandPermissionKeyAliases(keys));
+    applyDeniedPermissionKeys(eff, new Set(["suppliers.spisok_postavshchikov"]), new Set(keys));
+    expect(eff.has("suppliers.postavshchik.view")).toBe(true);
+  });
 });
 
 describe("expandPermissionKeyAliases — allow/deny juftliklar", () => {
@@ -31,6 +60,18 @@ describe("expandPermissionKeyAliases — allow/deny juftliklar", () => {
     const expanded = expandPermissionKeyAliases(["staff.agent.spisok_agentov"]);
     expect(expanded).toContain("staff.agent.spisok_agentov");
     expect(expanded).toContain("staff.agent.view");
+  });
+
+  it("warehouse.postuplenie.view ↔ legacy spisok_postuplenii (grant deny ni tozalaydi)", () => {
+    expect(mapLegacyKeyToStructured("warehouse.postuplenie_sklada.spisok_postuplenii")).toBe(
+      "warehouse.postuplenie.view"
+    );
+    expect(expandPermissionKeyAliases(["warehouse.postuplenie.view"])).toEqual(
+      expect.arrayContaining([
+        "warehouse.postuplenie.view",
+        "warehouse.postuplenie_sklada.spisok_postuplenii"
+      ])
+    );
   });
 
   it("structured staff.agent.activate deny MUST NOT wipe staff.agent.view", () => {

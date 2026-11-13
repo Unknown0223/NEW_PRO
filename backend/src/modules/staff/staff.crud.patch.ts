@@ -157,6 +157,7 @@ export type PatchAgentInput = {
   filter_visible?: boolean;
   password?: string;
   max_sessions?: number;
+  require_face_login?: boolean;
   kpi_color?: string | null;
   agent_entitlements?: AgentEntitlements;
   supervisor_user_id?: number | null;

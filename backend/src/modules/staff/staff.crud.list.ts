@@ -322,6 +322,7 @@ export async function listStaff(
     filter_visible: u.filter_visible,
     max_sessions: u.max_sessions ?? 1,
     active_session_count: sessMap.get(u.id) ?? 0,
+    require_face_login: u.require_face_login === true,
     kpi_color: u.kpi_color ?? null,
     agent_entitlements: parseEntitlements(u.agent_entitlements),
     expeditor_assignment_rules: parseExpeditorAssignmentRules(

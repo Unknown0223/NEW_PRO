@@ -18,6 +18,7 @@ export type WorkSlotsBulkFieldKey =
   | "label"
   | "slot_type"
   | "max_sessions"
+  | "require_face_login"
   | "territory"
   | "warehouse_id"
   | "return_warehouse_id"
@@ -25,7 +26,13 @@ export type WorkSlotsBulkFieldKey =
 
 export type WorkSlotsBulkDestructiveAction = "unassign" | "delete" | "revoke_sessions";
 
-const BASE: WorkSlotsBulkFieldKey[] = ["is_active", "branch_code", "label", "max_sessions"];
+const BASE: WorkSlotsBulkFieldKey[] = [
+  "is_active",
+  "branch_code",
+  "label",
+  "max_sessions",
+  "require_face_login"
+];
 
 /**
  * Rol bo‘yicha guruhli bog‘lanishlar (bitta manba).
@@ -119,7 +126,12 @@ export function bulkDestructiveActionsForSlotType(_slotType: WorkSlotType): Work
 
 /** «Очистить» ma’nosiz bo‘lgan maydonlar (boolean / majburiy enum). */
 export function bulkFieldAllowsClear(field: WorkSlotsBulkFieldKey): boolean {
-  return field !== "is_active" && field !== "slot_type" && field !== "max_sessions";
+  return (
+    field !== "is_active" &&
+    field !== "slot_type" &&
+    field !== "max_sessions" &&
+    field !== "require_face_login"
+  );
 }
 
 export type WorkSlotsBulkFormModes = {
@@ -129,6 +141,7 @@ export type WorkSlotsBulkFormModes = {
   label: BulkFieldMode;
   slotType: BulkFieldMode;
   maxSessions: BulkFieldMode;
+  requireFaceLogin: BulkFieldMode;
 };
 
 export const EMPTY_BULK_FORM_MODES = (): WorkSlotsBulkFormModes => ({
@@ -137,7 +150,8 @@ export const EMPTY_BULK_FORM_MODES = (): WorkSlotsBulkFormModes => ({
   directionId: "keep",
   label: "keep",
   slotType: "keep",
-  maxSessions: "keep"
+  maxSessions: "keep",
+  requireFaceLogin: "keep"
 });
 
 export type WorkSlotsBulkFormValues = {
@@ -147,6 +161,7 @@ export type WorkSlotsBulkFormValues = {
   label: string;
   slotType: WorkSlotType;
   maxSessions: number;
+  requireFaceLogin: boolean;
 };
 
 export function countBulkFormChanges(
@@ -161,6 +176,7 @@ export function countBulkFormChanges(
   if (fields.includes("label") && modes.label !== "keep") n += 1;
   if (fields.includes("slot_type") && modes.slotType === "set") n += 1;
   if (fields.includes("max_sessions") && modes.maxSessions === "set") n += 1;
+  if (fields.includes("require_face_login") && modes.requireFaceLogin === "set") n += 1;
   if (fields.includes("territory")) {
     n += [locationModes.territoryZone, locationModes.territoryOblast, locationModes.territoryCity].filter(
       (m) => m !== "keep"
@@ -266,6 +282,10 @@ export function buildBulkRequestBody(
 
   if (fields.includes("max_sessions") && modes.maxSessions === "set") {
     body.max_sessions = values.maxSessions;
+  }
+
+  if (fields.includes("require_face_login") && modes.requireFaceLogin === "set") {
+    body.require_face_login = values.requireFaceLogin;
   }
 
   const territoryFields = fields.includes("territory");

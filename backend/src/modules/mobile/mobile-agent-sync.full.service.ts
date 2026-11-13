@@ -122,8 +122,10 @@ export function compactProduct(p: {
   is_active: boolean;
   weight_kg: Prisma.Decimal | null;
   sell_code: string | null;
+  image_url?: string | null;
   updated_at: Date;
 }) {
+  const imageUrl = p.image_url?.trim() || null;
   return {
     id: p.id,
     sku: p.sku,
@@ -135,6 +137,7 @@ export function compactProduct(p: {
     is_active: p.is_active,
     weight_kg: p.weight_kg ? Number(p.weight_kg) : null,
     sell_code: p.sell_code,
+    ...(imageUrl ? { image_url: imageUrl } : {}),
     updated_at: p.updated_at
   };
 }
@@ -240,6 +243,7 @@ export async function syncFull(
         is_active: true,
         weight_kg: true,
         sell_code: true,
+        image_url: true,
         updated_at: true
       },
       take: 5000

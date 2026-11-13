@@ -1,7 +1,23 @@
 /** Pure face descriptor math — unit-testable without sharp/fs. */
 
-export const DEFAULT_FACE_MATCH_THRESHOLD = 0.88;
+/**
+ * FaceRecognitionNet uses Euclidean distance (not cosine).
+ * Match when distance ≤ ~0.55 (face-api default is 0.6; slightly stricter).
+ * API score = 1 - distance (higher is better); threshold 0.45 ⇔ distance 0.55.
+ */
+export const DEFAULT_FACE_MATCH_THRESHOLD = 0.45;
 
+export function euclideanDistance(a: number[], b: number[]): number {
+  if (a.length === 0 || b.length === 0 || a.length !== b.length) return Number.POSITIVE_INFINITY;
+  let sum = 0;
+  for (let i = 0; i < a.length; i++) {
+    const d = a[i]! - b[i]!;
+    sum += d * d;
+  }
+  return Math.sqrt(sum);
+}
+
+/** @deprecated prefer euclideanDistance for FaceRecognitionNet; kept for unit tests. */
 export function cosineSimilarity(a: number[], b: number[]): number {
   if (a.length === 0 || b.length === 0 || a.length !== b.length) return 0;
   let dot = 0;
@@ -18,11 +34,11 @@ export function cosineSimilarity(a: number[], b: number[]): number {
   return dot / (Math.sqrt(na) * Math.sqrt(nb));
 }
 
-/** Score 0..1 (cosine clipped). */
+/** Score 0..1 from Euclidean distance (higher = closer match). */
 export function faceMatchScore(reference: number[], probe: number[]): number {
-  const s = cosineSimilarity(reference, probe);
-  if (!Number.isFinite(s)) return 0;
-  return Math.max(0, Math.min(1, s));
+  const d = euclideanDistance(reference, probe);
+  if (!Number.isFinite(d)) return 0;
+  return Math.max(0, Math.min(1, 1 - d));
 }
 
 export function decideFaceMatch(

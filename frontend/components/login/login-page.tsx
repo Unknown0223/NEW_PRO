@@ -8,9 +8,17 @@ import { isWebPanelDeniedRole } from "@/lib/access-web-users";
 import { useAuthStore } from "@/lib/auth-store";
 import { describeDevice, getOrCreateDeviceId } from "@/lib/device-id";
 import { getUserFacingError, withApiSupportLine } from "@/lib/error-utils";
+import {
+  readRememberLoginPreference,
+  clearWebSessionStarted,
+  safePostLoginPath,
+  writeRememberLoginPreference
+} from "@/lib/session-idle";
+import { isFaceLoginGateResponse, type FaceLoginGateResponse } from "@/lib/face-login";
+import { FaceLoginChallengePanel } from "@/components/login/face-login-challenge-panel";
 import { isAxiosError } from "axios";
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 
 function IconBox() {
@@ -242,19 +250,61 @@ function LoginInput({
 const FEATURE_PILLS = ["Консигнация", "Бонусы", "Скидки", "Реальное время", "Складской учёт"];
 
 export function LoginPage() {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const setSession = useAuthStore((s) => s.setSession);
   const [slug, setSlug] = useState("");
   const [login, setLogin] = useState("");
   const [password, setPassword] = useState("");
   const [showPass, setShowPass] = useState(false);
+  const [remember, setRemember] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [faceGate, setFaceGate] = useState<FaceLoginGateResponse | null>(null);
   /** SSR va client vaqti farq qilmasin — faqat mount dan keyin yangilanadi. */
   const [timeLabel, setTimeLabel] = useState("");
   const sessionEnded = searchParams.get("reason") === "session_ended";
   const webAccessDenied = searchParams.get("reason") === "web_access_denied";
+
+  function finishLogin(data: {
+    accessToken: string;
+    refreshToken?: string;
+    user?: { role?: string; must_change_password?: boolean };
+  }) {
+    writeRememberLoginPreference(remember);
+    clearWebSessionStarted();
+    const mustChange = data.user?.must_change_password === true;
+    setSession({
+      accessToken: data.accessToken,
+      refreshToken: data.refreshToken ?? "",
+      tenantSlug: slug,
+      role: data.user?.role as string | undefined,
+      mustChangePassword: mustChange
+    });
+    const role = data.user?.role as string | undefined;
+    if (role && isWebPanelDeniedRole(role)) {
+      useAuthStore.getState().clearSession();
+      setFaceGate(null);
+      setError(
+        "Этот аккаунт работает только в мобильном приложении. Веб-панель недоступна."
+      );
+      return;
+    }
+    const from = searchParams.get("from");
+    const dest = mustChange ? "/change-password" : safePostLoginPath(from);
+    /* Idle logout qaytishi: `from` bor — kesh/filtrlar saqlansin. Yangi login — tozalash. */
+    if (!from) {
+      try {
+        window.localStorage.removeItem("salec:rq:v1");
+      } catch {
+        /* ignore */
+      }
+    }
+    window.location.assign(dest);
+  }
+
+  useEffect(() => {
+    setRemember(readRememberLoginPreference());
+  }, []);
 
   useEffect(() => {
     const tick = () => setTimeLabel(new Date().toLocaleTimeString("ru-RU", { hour12: false }));
@@ -276,30 +326,15 @@ export function LoginPage() {
         device_name: describeDevice(),
         user_agent: typeof navigator !== "undefined" ? navigator.userAgent.slice(0, 512) : undefined
       });
-      setSession({
-        accessToken: data.accessToken,
-        refreshToken: data.refreshToken,
-        tenantSlug: slug,
-        role: data.user?.role as string | undefined
-      });
-      const role = data.user?.role as string | undefined;
-      if (role && isWebPanelDeniedRole(role)) {
-        useAuthStore.getState().clearSession();
-        setError(
-          "Этот аккаунт работает только в мобильном приложении. Веб-панель недоступна."
-        );
+      if (isFaceLoginGateResponse(data)) {
+        setFaceGate(data);
         return;
       }
-      const from = searchParams.get("from") ?? "/dashboard";
-      const dest = from.startsWith("/") ? from : "/dashboard";
-      // Soft router.replace + refresh → «Загрузка…» osilib qoladi (RQ clear + Suspense).
-      // Hard nav: yangi QueryClient + toza bootstrap.
-      try {
-        window.localStorage.removeItem("salec:rq:v1");
-      } catch {
-        /* ignore */
+      if (!data?.accessToken) {
+        setError("Неожиданный ответ сервера при входе");
+        return;
       }
-      window.location.assign(dest);
+      finishLogin(data);
     } catch (err: unknown) {
       if (isAxiosError(err)) {
         const st = err.response?.status;
@@ -453,7 +488,9 @@ export function LoginPage() {
             {sessionEnded ? (
               <div className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
                 <span className="mt-1.5 h-2 w-2 flex-shrink-0 rounded-full bg-amber-500" />
-                <span>Ваша сессия была завершена (администратором или повторным входом). Войдите снова.</span>
+                <span>
+                  Сессия истекла или завершена (повторный вход / другое устройство). Войдите снова.
+                </span>
               </div>
             ) : null}
             {webAccessDenied ? (
@@ -465,7 +502,22 @@ export function LoginPage() {
               </div>
             ) : null}
 
-            <form className="space-y-5" onSubmit={onSubmit}>
+            {faceGate ? (
+              <FaceLoginChallengePanel
+                gate={faceGate}
+                onApproved={(tokens) => finishLogin(tokens)}
+                onCancel={() => {
+                  setFaceGate(null);
+                  setPassword("");
+                }}
+              />
+            ) : null}
+
+            <form
+              className="space-y-5"
+              onSubmit={onSubmit}
+              aria-hidden={faceGate ? true : undefined}
+            >
               <LoginInput
                 id="slug"
                 label="Дилер (slug)"
@@ -519,7 +571,8 @@ export function LoginPage() {
                   <input
                     type="checkbox"
                     className="h-4 w-4 cursor-pointer rounded border-slate-300 text-blue-600 focus:ring-blue-500"
-                    defaultChecked
+                    checked={remember}
+                    onChange={(e) => setRemember(e.target.checked)}
                   />
                   <span className="ml-2 select-none text-sm text-slate-600 transition-colors group-hover:text-slate-900">
                     Запомнить
@@ -529,7 +582,7 @@ export function LoginPage() {
 
               <button
                 type="submit"
-                disabled={loading}
+                disabled={loading || Boolean(faceGate)}
                 className="group relative flex w-full items-center justify-center gap-2 overflow-hidden rounded-xl bg-gradient-to-r from-blue-600 to-blue-700 px-4 py-3.5 text-sm font-semibold text-white shadow-lg shadow-blue-600/25 transition-all hover:from-blue-700 hover:to-blue-800 hover:shadow-xl hover:shadow-blue-600/40 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-70"
               >
                 <span className="absolute inset-0 h-full w-full -translate-x-full bg-gradient-to-r from-transparent via-white/25 to-transparent transition-transform duration-1000 group-hover:translate-x-full" />

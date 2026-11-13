@@ -21,8 +21,16 @@ function addRoleOperationKey(into: Set<string>, key: string): void {
 /**
  * Deny: o‘zi har doim o‘chadi; alias (umumiy legacy kalit, masalan `staff.agent.view`) esa faqat
  * boshqa ruxsat etilgan kalit uni talab qilmasa o‘chadi — mayda operatsiya deny butun ro‘yxatni yopmasin.
+ *
+ * `directGranted` — rol yoki shaxsiy allow dagi ANIQ kalitlar (expand qilinmagan).
+ * Legacy twin deny (`warehouse.postuplenie_sklada.spisok_postuplenii`) mustaqil
+ * `warehouse.postuplenie.view` allow/rolini o‘chirmasligi uchun.
  */
-export function applyDeniedPermissionKeys(effective: Set<string>, denied: Set<string>): void {
+export function applyDeniedPermissionKeys(
+  effective: Set<string>,
+  denied: Set<string>,
+  directGranted?: ReadonlySet<string>
+): void {
   if (denied.size === 0) return;
   for (const k of denied) effective.delete(k);
   const aliasCandidates = new Set(expandPermissionKeyAliases([...denied]).filter((k) => !denied.has(k)));
@@ -30,7 +38,9 @@ export function applyDeniedPermissionKeys(effective: Set<string>, denied: Set<st
   const supporters = [...effective].filter((k) => !aliasCandidates.has(k));
   const supported = new Set(expandPermissionKeyAliases(supporters));
   for (const k of aliasCandidates) {
-    if (!supported.has(k)) effective.delete(k);
+    if (supported.has(k)) continue;
+    if (directGranted?.has(k) && !denied.has(k)) continue;
+    effective.delete(k);
   }
 }
 
@@ -84,9 +94,12 @@ export async function resolveUserPermissionKeysSplit(
   const userPerms = userPermRows.map((up) => ({ effect: up.effect, key: up.permission.key }));
 
   const fromRole = new Set<string>();
+  /** Exact keys from role / personal allow — legacy deny alias yon-ta’siridan himoya. */
+  const directGranted = new Set<string>();
   if (roleLinks.length > 0) {
     for (const link of roleLinks) {
       for (const row of link.role.permissions) {
+        directGranted.add(row.permission.key);
         for (const k of expandPermissionKeyAliases([row.permission.key])) {
           addRoleOperationKey(fromRole, k);
         }
@@ -97,6 +110,7 @@ export async function resolveUserPermissionKeysSplit(
     const fb = map.get(fallbackRole);
     if (fb) {
       for (const row of fb.permissions) {
+        directGranted.add(row.permission.key);
         for (const k of expandPermissionKeyAliases([row.permission.key])) {
           addRoleOperationKey(fromRole, k);
         }
@@ -110,10 +124,13 @@ export async function resolveUserPermissionKeysSplit(
   for (const up of userPerms) {
     if (up.effect === "deny") denied.add(up.key);
     // Shaxsiy allow: alias expand (legacy ↔ structured) — deny bilan simmetrik.
-    if (up.effect === "allow") allowed.add(up.key);
+    if (up.effect === "allow") {
+      allowed.add(up.key);
+      directGranted.add(up.key);
+    }
   }
   for (const k of expandPermissionKeyAliases([...allowed])) addRoleOperationKey(effective, k);
-  applyDeniedPermissionKeys(effective, denied);
+  applyDeniedPermissionKeys(effective, denied, directGranted);
   stripGrantDelegationKeys(effective);
   return { fromRole, effective, userPerms };
 }
@@ -183,10 +200,12 @@ export async function getOperationsCountsForUsers(
 
   for (const { id: userId, role: fallbackRole } of rows) {
     const rolePerms = new Set<string>();
+    const directGranted = new Set<string>();
     const links = roleLinksByUser.get(userId) ?? [];
     if (links.length > 0) {
       for (const link of links) {
         for (const row of link.role.permissions) {
+          directGranted.add(row.permission.key);
           for (const k of expandPermissionKeyAliases([row.permission.key])) {
             addRoleOperationKey(rolePerms, k);
           }
@@ -194,6 +213,7 @@ export async function getOperationsCountsForUsers(
       }
     } else if (fallbackRole && allRoleByKey.has(fallbackRole)) {
       for (const row of allRoleByKey.get(fallbackRole)!.permissions) {
+        directGranted.add(row.permission.key);
         for (const k of expandPermissionKeyAliases([row.permission.key])) {
           addRoleOperationKey(rolePerms, k);
         }
@@ -204,10 +224,13 @@ export async function getOperationsCountsForUsers(
     const allowed = new Set<string>();
     for (const up of permsByUserId.get(userId) ?? []) {
       if (up.effect === "deny") denied.add(up.key);
-      if (up.effect === "allow") allowed.add(up.key);
+      if (up.effect === "allow") {
+        allowed.add(up.key);
+        directGranted.add(up.key);
+      }
     }
     for (const k of expandPermissionKeyAliases([...allowed])) addRoleOperationKey(rolePerms, k);
-    applyDeniedPermissionKeys(rolePerms, denied);
+    applyDeniedPermissionKeys(rolePerms, denied, directGranted);
     stripGrantDelegationKeys(rolePerms);
     out.set(userId, countCatalogOperations(rolePerms));
   }

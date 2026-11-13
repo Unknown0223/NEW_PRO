@@ -95,7 +95,9 @@ function goodsReceiptSaveErrorMessage(err: unknown): string {
 }
 
 export function GoodsReceiptNewWorkspace({ tenantSlug }: Props) {
-  const canConfirmReceipt = usePermissions().has("warehouse.postuplenie.status");
+  const { has } = usePermissions();
+  const canConfirmReceipt = has("warehouse.postuplenie.status");
+  const canCreateSupplier = has("suppliers.postavshchik.create");
   const router = useRouter();
   const searchParams = useSearchParams();
   const qc = useQueryClient();
@@ -614,9 +616,11 @@ export function GoodsReceiptNewWorkspace({ tenantSlug }: Props) {
               <div className="space-y-2">
                 <div className="flex items-center justify-between gap-2">
                   <Label>Поставщик</Label>
-                  <Button type="button" variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setSupplierOpen(true)}>
-                    + Новый
-                  </Button>
+                  {canCreateSupplier ? (
+                    <Button type="button" variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setSupplierOpen(true)}>
+                      + Новый
+                    </Button>
+                  ) : null}
                 </div>
                 <select
                   className={selectClass}

@@ -26,7 +26,7 @@ import {
 
 function replyWarehouseTransferError(reply: FastifyReply, request: FastifyRequest, e: unknown): boolean {
   if (isDocumentEditPeriodLockedError(e)) {
-    void sendDocumentEditPeriodLocked(reply, request);
+    void sendDocumentEditPeriodLocked(reply, request, e);
     return true;
   }
   const msg = e instanceof Error ? e.message : String(e);

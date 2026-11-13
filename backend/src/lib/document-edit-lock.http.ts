@@ -13,13 +13,16 @@ export function isDocumentEditPeriodLockedError(e: unknown): boolean {
 
 export function sendDocumentEditPeriodLocked(
   reply: FastifyReply,
-  request: FastifyRequest
+  request: FastifyRequest,
+  err?: unknown
 ) {
+  const locked = err instanceof DocumentEditPeriodLockedError ? err : null;
   return sendApiError(
     reply,
     request,
     403,
     DOCUMENT_EDIT_PERIOD_LOCKED,
-    DOCUMENT_EDIT_PERIOD_LOCKED_MESSAGE
+    locked?.userMessage?.trim() || DOCUMENT_EDIT_PERIOD_LOCKED_MESSAGE,
+    locked?.details ? { details: locked.details } : undefined
   );
 }

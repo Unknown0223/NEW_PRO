@@ -79,6 +79,7 @@ export type PatchOperatorInput = {
   filter_visible?: boolean;
   app_access?: boolean;
   max_sessions?: number;
+  require_face_login?: boolean;
   password?: string;
 };
 
@@ -118,6 +119,7 @@ export async function patchOperator(
     assertValidMaxSessions(n);
     data.max_sessions = n;
   }
+  if (input.require_face_login !== undefined) data.require_face_login = input.require_face_login;
   if (input.password !== undefined && input.password.trim().length > 0) {
     assertPasswordPolicy(input.password);
     data.password_hash = await bcrypt.hash(input.password, 12);
@@ -180,6 +182,7 @@ export type PatchSkladchikInput = {
   filter_visible?: boolean;
   app_access?: boolean;
   max_sessions?: number;
+  require_face_login?: boolean;
   password?: string;
   warehouse_ids?: number[];
   warehouse_staff_entitlements?: Record<string, boolean>;
@@ -223,6 +226,7 @@ export async function patchSkladchik(
     assertValidMaxSessions(n);
     data.max_sessions = n;
   }
+  if (input.require_face_login !== undefined) data.require_face_login = input.require_face_login;
   if (input.password !== undefined && input.password.trim().length > 0) {
     assertPasswordPolicy(input.password);
     data.password_hash = await bcrypt.hash(input.password, 12);

@@ -5,8 +5,18 @@ import { storagePut } from "../../lib/storage.service";
 import type { AgentMobileConfigV1 } from "../staff/agent-mobile-config.types";
 import { loadActiveWorkSlotsByUserIds } from "../work-slots/work-slots.query.read";
 import { buildFaceDescriptor } from "./face-match.descriptor";
+import {
+  buildLandmarkDescriptor,
+  decideLandmarkMatch,
+  landmarkMatchScore,
+  type LandmarkXY
+} from "./face-landmark-match.pure";
 import { decideFaceMatch, faceMatchScore } from "./face-match.pure";
-import { getFaceReferenceMeta, loadOrBuildReferenceDescriptor } from "./mobile-face.reference";
+import {
+  getFaceReferenceMeta,
+  loadOrBuildReferenceDescriptor,
+  readStoredLandmarkDescriptor
+} from "./mobile-face.reference";
 import {
   MAX_IMAGE_BYTES,
   REF_KEY,
@@ -167,6 +177,7 @@ export async function submitFaceVerification(
     image_base64: string;
     order_id?: number;
     client_id?: number;
+    landmarks?: LandmarkXY[] | null;
   }
 ) {
   const { buf, contentType } = decodeBase64Image(input.image_base64);
@@ -180,11 +191,16 @@ export async function submitFaceVerification(
   if (!refKey) throw new Error("REFERENCE_MISSING");
 
   let probeDesc: number[];
+  let probeDescMirror: number[] | null = null;
   try {
     probeDesc = await buildFaceDescriptor(buf);
+    // Front-camera / preview mirror: take best of raw vs horizontal flip.
+    const sharpMod = await import("sharp");
+    const flipped = await sharpMod.default(buf).flop().jpeg({ quality: 92 }).toBuffer();
+    probeDescMirror = await buildFaceDescriptor(flipped);
   } catch (e) {
     const msg = e instanceof Error ? e.message : "";
-    if (msg === "FACE_IMAGE_BLANK") throw new Error("FACE_IMAGE_BLANK");
+    if (msg === "FACE_IMAGE_BLANK" || msg === "FACE_NOT_DETECTED") throw e;
     throw e;
   }
 
@@ -192,8 +208,23 @@ export async function submitFaceVerification(
   if (!refDesc) throw new Error("REFERENCE_MISSING");
 
   const threshold = matchThreshold();
-  const score = faceMatchScore(refDesc, probeDesc);
-  const status = decideFaceMatch(score, threshold);
+  const scoreRaw = faceMatchScore(refDesc, probeDesc);
+  const scoreFlip = probeDescMirror ? faceMatchScore(refDesc, probeDescMirror) : 0;
+  const pixelScore = Math.max(scoreRaw, scoreFlip);
+
+  const refLandmarks = readStoredLandmarkDescriptor(prefs);
+  const probeLandmarks = input.landmarks?.length
+    ? buildLandmarkDescriptor(input.landmarks)
+    : null;
+  const geomScore =
+    refLandmarks && probeLandmarks ? landmarkMatchScore(refLandmarks, probeLandmarks) : 0;
+  /** Pixel — asosiy identifikatsiya. Landmark faqat qo‘shimcha tasdiq (YOLG‘IZ yetarli emas). */
+  const pixelOk = decideFaceMatch(pixelScore, threshold) === "approved";
+  const geomOk =
+    refLandmarks != null && probeLandmarks != null ? decideLandmarkMatch(geomScore) : true;
+  const score = pixelScore;
+  const status: "approved" | "rejected" =
+    pixelOk && geomOk ? "approved" : "rejected";
 
   const ext = contentType.includes("png") ? "png" : "jpg";
   const ts = Date.now();
@@ -223,6 +254,10 @@ export async function submitFaceVerification(
       meta: {
         auto: true,
         score,
+        score_raw: scoreRaw,
+        score_flip: scoreFlip,
+        score_pixel: pixelScore,
+        score_landmark: geomScore,
         threshold,
         matched_user_id: userId
       }

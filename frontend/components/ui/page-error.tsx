@@ -2,6 +2,8 @@
 
 import type { ReactNode } from "react";
 import { Button } from "@/components/ui/button";
+import { PageLoadHttpError } from "@/components/errors/page-load-http-error";
+import { errorCodeFromUnknown } from "@/lib/http-status-from-error";
 import { cn } from "@/lib/utils";
 
 type Props = {
@@ -11,17 +13,32 @@ type Props = {
   retryLabel?: string;
   action?: ReactNode;
   className?: string;
+  /** Agar HTTP status 401…504 bo‘lsa — to‘liq ErrorPage. */
+  error?: unknown;
+  resource?: string;
 };
 
-/** Sahifa yoki bo'lim yuklanmagan / xato holati (error boundary alternativasi). */
+/** Sahifa yoki bo'lim yuklanmagan / xato holati. */
 export function PageError({
   title = "Не удалось загрузить данные",
   message,
   onRetry,
   retryLabel = "Повторить",
   action,
-  className
+  className,
+  error,
+  resource
 }: Props) {
+  if (error != null && errorCodeFromUnknown(error) != null) {
+    return (
+      <PageLoadHttpError
+        error={error}
+        resource={resource}
+        onRetry={onRetry ? () => onRetry() : undefined}
+      />
+    );
+  }
+
   return (
     <div
       className={cn(

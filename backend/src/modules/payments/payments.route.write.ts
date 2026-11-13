@@ -73,6 +73,13 @@ export async function registerPaymentWriteRoutes(app: FastifyInstance) {
       }
       try {
         await assertDocWritableById(request, "payments", id);
+        // Yangi paid_at ham oynada bo‘lishi kerak — aks holda bugungi to‘lovni eski sanaga sudrab o‘tish mumkin edi.
+        if (parsed.data.paid_at != null && String(parsed.data.paid_at).trim()) {
+          const paidAt = new Date(String(parsed.data.paid_at).trim());
+          if (!Number.isNaN(paidAt.getTime())) {
+            await assertDocWritableByDate(request, "payments", paidAt, id);
+          }
+        }
         if (parsed.data.ledger_agent_id != null && parsed.data.ledger_agent_id > 0) {
           const viewer = getAccessUser(request);
           await assertOrderAgentAllowedForActor(request.tenant!.id, parsed.data.ledger_agent_id, {
@@ -83,7 +90,7 @@ export async function registerPaymentWriteRoutes(app: FastifyInstance) {
         const payload = await updatePayment(tenantId, id, parsed.data, actorUserIdOrNull(request));
         return reply.send(payload);
       } catch (e) {
-        if (isDocumentEditPeriodLockedError(e)) return sendDocumentEditPeriodLocked(reply, request);
+        if (isDocumentEditPeriodLockedError(e)) return sendDocumentEditPeriodLocked(reply, request, e);
         const msg = e instanceof Error ? e.message : "";
         if (msg === "AGENT_OUT_OF_SCOPE") return sendApiError(reply, request, 403, "AgentOutOfScope");
         if (msg === "NOT_FOUND") return sendApiError(reply, request, 404, "NotFound");
@@ -135,7 +142,7 @@ export async function registerPaymentWriteRoutes(app: FastifyInstance) {
         );
         return reply.send({ data });
       } catch (e) {
-        if (isDocumentEditPeriodLockedError(e)) return sendDocumentEditPeriodLocked(reply, request);
+        if (isDocumentEditPeriodLockedError(e)) return sendDocumentEditPeriodLocked(reply, request, e);
         const msg = e instanceof Error ? e.message : "";
         if (msg === "PAYMENT_NOT_FOUND") return sendApiError(reply, request, 404, "NotFound");
         if (msg === "PAYMENT_VOIDED") return sendApiError(reply, request, 409, "PaymentVoided");
@@ -160,7 +167,7 @@ export async function registerPaymentWriteRoutes(app: FastifyInstance) {
         const data = await confirmPendingPayment(tenantId, id, actorUserIdOrNull(request));
         return reply.send(data);
       } catch (e) {
-        if (isDocumentEditPeriodLockedError(e)) return sendDocumentEditPeriodLocked(reply, request);
+        if (isDocumentEditPeriodLockedError(e)) return sendDocumentEditPeriodLocked(reply, request, e);
         const msg = e instanceof Error ? e.message : "";
         if (msg === "NOT_FOUND") return sendApiError(reply, request, 404, "NotFound");
         if (msg === "NOT_PENDING") {
@@ -204,7 +211,7 @@ export async function registerPaymentWriteRoutes(app: FastifyInstance) {
         await rejectPendingPayment(tenantId, id, actorUserIdOrNull(request), parsed.data.reason ?? null);
         return reply.status(204).send();
       } catch (e) {
-        if (isDocumentEditPeriodLockedError(e)) return sendDocumentEditPeriodLocked(reply, request);
+        if (isDocumentEditPeriodLockedError(e)) return sendDocumentEditPeriodLocked(reply, request, e);
         const msg = e instanceof Error ? e.message : "";
         if (msg === "NOT_FOUND") return sendApiError(reply, request, 404, "NotFound");
         if (msg === "NOT_PENDING") {
@@ -256,7 +263,7 @@ export async function registerPaymentWriteRoutes(app: FastifyInstance) {
         );
         return reply.status(200).send(result);
       } catch (e) {
-        if (isDocumentEditPeriodLockedError(e)) return sendDocumentEditPeriodLocked(reply, request);
+        if (isDocumentEditPeriodLockedError(e)) return sendDocumentEditPeriodLocked(reply, request, e);
         const msg = e instanceof Error ? e.message : "";
         if (msg === "NOT_FOUND") return sendApiError(reply, request, 404, "NotFound");
         if (msg === "ALREADY_VOIDED") return sendApiError(reply, request, 409, "AlreadyVoided");
@@ -300,7 +307,7 @@ export async function registerPaymentWriteRoutes(app: FastifyInstance) {
         );
         return reply.status(201).send({ data });
       } catch (e) {
-        if (isDocumentEditPeriodLockedError(e)) return sendDocumentEditPeriodLocked(reply, request);
+        if (isDocumentEditPeriodLockedError(e)) return sendDocumentEditPeriodLocked(reply, request, e);
         const msg = e instanceof Error ? e.message : "";
         if (msg === "BAD_CLIENT") return sendApiError(reply, request, 400, "BadClient");
         if (msg === "BAD_ORDER") return sendApiError(reply, request, 400, "BadOrder");
@@ -343,7 +350,7 @@ export async function registerPaymentWriteRoutes(app: FastifyInstance) {
         );
         return reply.send(result);
       } catch (e) {
-        if (isDocumentEditPeriodLockedError(e)) return sendDocumentEditPeriodLocked(reply, request);
+        if (isDocumentEditPeriodLockedError(e)) return sendDocumentEditPeriodLocked(reply, request, e);
         throw e;
       }
     }
@@ -377,7 +384,7 @@ export async function registerPaymentWriteRoutes(app: FastifyInstance) {
         );
         return reply.send(result);
       } catch (e) {
-        if (isDocumentEditPeriodLockedError(e)) return sendDocumentEditPeriodLocked(reply, request);
+        if (isDocumentEditPeriodLockedError(e)) return sendDocumentEditPeriodLocked(reply, request, e);
         throw e;
       }
     }
@@ -412,7 +419,7 @@ export async function registerPaymentWriteRoutes(app: FastifyInstance) {
         );
         return reply.send(result);
       } catch (e) {
-        if (isDocumentEditPeriodLockedError(e)) return sendDocumentEditPeriodLocked(reply, request);
+        if (isDocumentEditPeriodLockedError(e)) return sendDocumentEditPeriodLocked(reply, request, e);
         throw e;
       }
     }

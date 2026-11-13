@@ -146,7 +146,7 @@ export const NAV_PERM = {
 
   audit: ["audit.tabel.view"],
   suspiciousLogins: ["audit.podozritelnye_vhody.view"],
-  assistant: ["dashboard.view"],
+  assistant: ["assistant.chat.view"],
   /** GPS мониторинг — kamida bitta xodim turi. */
   gpsMonitoring: [
     "gps.agenty.view",

@@ -343,6 +343,8 @@ export function OrdersListTable(props: OrdersListTableProps) {
             ) : isError ? (
               <div className="p-4 sm:p-5">
                 <PageError
+                  error={error}
+                  resource="Заказы"
                   message={getUserFacingError(error, "Не удалось загрузить заказы.")}
                   onRetry={() => void refetch()}
                 />

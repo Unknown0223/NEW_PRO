@@ -234,7 +234,12 @@ export const OrderStatusDropdown = memo(function OrderStatusDropdown({
           <span className="whitespace-nowrap">{label}</span>
         </span>
         {statusError ? (
-          <span className="max-w-[12rem] text-[10px] text-destructive">{statusError}</span>
+          <span
+            className="max-w-[14rem] text-[10px] leading-snug text-destructive"
+            title={statusError}
+          >
+            {statusError}
+          </span>
         ) : null}
       </span>
     );
@@ -356,7 +361,12 @@ export const OrderStatusDropdown = memo(function OrderStatusDropdown({
       </button>
       {typeof document !== "undefined" && menuPanel ? createPortal(menuPanel, document.body) : null}
       {statusError ? (
-        <span className="max-w-[12rem] text-[10px] text-destructive">{statusError}</span>
+        <span
+          className="max-w-[14rem] text-[10px] leading-snug text-destructive"
+          title={statusError}
+        >
+          {statusError}
+        </span>
       ) : null}
       {shelfReturnNotice ? (
         <span

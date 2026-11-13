@@ -494,7 +494,10 @@ export async function bulkPatchWorkSlots(
     ...(body.cash_desk_ids !== undefined ? { cash_desk_ids: body.cash_desk_ids } : {}),
     ...(body.position !== undefined ? { position: body.position } : {}),
     ...(body.app_access !== undefined ? { app_access: body.app_access } : {}),
-    ...(body.max_sessions !== undefined ? { max_sessions: body.max_sessions } : {})
+    ...(body.max_sessions !== undefined ? { max_sessions: body.max_sessions } : {}),
+    ...(body.require_face_login !== undefined
+      ? { require_face_login: body.require_face_login }
+      : {})
   };
 
   const hasBranchPatch = branchCodeSingle !== undefined || branchCodes.length > 0;

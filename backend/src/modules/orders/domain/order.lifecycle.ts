@@ -23,6 +23,7 @@ import {
   resolveOrderBonusesForCreate,
   type OrderAgentBonusContext
 } from "../order-bonus-apply";
+import { consumeStockOnConfirm, releaseReservedQtyClamped } from "./order.stock-lock";
 import {
   ORDER_STATUSES_EXCLUDED_FROM_CREDIT_EXPOSURE,
   statusContributesToDeliveredReceivableDebt,
@@ -222,27 +223,13 @@ export async function updateOrderStatus(
       });
 
       if (trimmed === "confirmed" && fromStatus === "new") {
-        // Rezlarga chiqarish + haqiqiy qoldiqdan ayirish
+        // Rezlarga chiqarish + haqiqiy qoldiqdan ayirish (reserved 0 dan pastga tushmaydi)
         for (const item of outboundStockItems) {
-          await tx.stock.upsert({
-            where: {
-              tenant_id_warehouse_id_product_id: {
-                tenant_id: tenantId,
-                warehouse_id: whId,
-                product_id: item.product_id
-              }
-            },
-            create: {
-              tenant_id: tenantId,
-              warehouse_id: whId,
-              product_id: item.product_id,
-              qty: new Prisma.Decimal(0),
-              reserved_qty: new Prisma.Decimal(0)
-            },
-            update: {
-              qty: { decrement: item.qty },
-              reserved_qty: { decrement: item.qty }
-            }
+          await consumeStockOnConfirm(tx, {
+            tenantId,
+            warehouseId: whId,
+            productId: item.product_id,
+            qty: item.qty
           });
         }
       } else if (trimmed === "cancelled") {
@@ -256,25 +243,32 @@ export async function updateOrderStatus(
           fromStatus
         );
         for (const item of outboundStockItems) {
-          await tx.stock.upsert({
-            where: {
-              tenant_id_warehouse_id_product_id: {
+          if (stockWasConsumed) {
+            await tx.stock.upsert({
+              where: {
+                tenant_id_warehouse_id_product_id: {
+                  tenant_id: tenantId,
+                  warehouse_id: whId,
+                  product_id: item.product_id
+                }
+              },
+              create: {
                 tenant_id: tenantId,
                 warehouse_id: whId,
-                product_id: item.product_id
-              }
-            },
-            create: {
-              tenant_id: tenantId,
-              warehouse_id: whId,
-              product_id: item.product_id,
-              qty: new Prisma.Decimal(0),
-              reserved_qty: new Prisma.Decimal(0)
-            },
-            update: stockWasConsumed
-              ? { qty: { increment: item.qty } }
-              : { reserved_qty: { decrement: item.qty } }
-          });
+                product_id: item.product_id,
+                qty: item.qty,
+                reserved_qty: new Prisma.Decimal(0)
+              },
+              update: { qty: { increment: item.qty } }
+            });
+          } else {
+            await releaseReservedQtyClamped(tx, {
+              tenantId,
+              warehouseId: whId,
+              productId: item.product_id,
+              qty: item.qty
+            });
+          }
         }
         const minusItems = items.filter((i) => !i.is_bonus && i.exchange_line_kind === "minus");
         for (const item of minusItems) {

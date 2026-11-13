@@ -45,6 +45,10 @@ export type PlanningCenterData = {
   employees: PlanningEmployee[];
   plans: PlanningPlan[];
   kpi_targets: PlanningTarget[];
+  /** user_id (string) → biriktirilgan kpi_group_id[] */
+  agent_kpi_ids: Record<string, number[]>;
+  /** Agent ro‘yxati bo‘lgan KPI guruhlari (bo‘sh guruh = hammaga ochiq) */
+  kpi_group_ids_with_agents: number[];
 };
 
 export type UserRow = {

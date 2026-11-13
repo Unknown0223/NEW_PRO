@@ -4,7 +4,7 @@
  * Plan faqat registrdagi tool’lardan iborat bo‘ladi (allow-list).
  */
 import { addDays, monthEnd, tashkentToday } from "./ai.dates";
-import { detectIntent, extractSlots, isWriteIntent } from "./ai.intent";
+import { detectIntent, extractSlots, isKnownIntent, isWriteIntent } from "./ai.intent";
 import { pNum, pStr } from "./ai.tool";
 import type { AiParams, AiPlan, AiSlots, AiToolCall } from "./ai.types";
 
@@ -261,22 +261,63 @@ export type BuiltPlan = {
   write: boolean;
 };
 
-/** Savol → intent + slot + plan. */
-export function planFromQuestion(question: string, today: string = tashkentToday()): BuiltPlan {
-  const match = detectIntent(question);
-  const slots = extractSlots(question, today);
-  const write = isWriteIntent(match.intent);
+const SLOT_KEYS = new Set([
+  "from",
+  "to",
+  "search",
+  "limit",
+  "page",
+  "status",
+  "priceType",
+  "staffKind",
+  "name",
+  "login",
+  "password",
+  "phone",
+  "role",
+  "amount",
+  "price",
+  "quantity",
+  "unit",
+  "sku",
+  "title",
+  "active",
+  "wantExport",
+  "exportFormat",
+  "order_id",
+  "return_id",
+  "product_id",
+  "branch_id",
+  "year",
+  "month"
+]);
 
+function slotsFromParams(base: AiSlots, params: Record<string, unknown>): AiSlots {
+  const next: AiSlots = { ...base };
+  for (const [key, value] of Object.entries(params)) {
+    if (!SLOT_KEYS.has(key) || value === undefined || value === null || value === "") continue;
+    (next as Record<string, unknown>)[key] = value;
+  }
+  return next;
+}
+
+function buildBuiltPlan(
+  intent: string,
+  slots: AiSlots,
+  question: string,
+  source: "rules" | "llm"
+): BuiltPlan {
+  const write = isWriteIntent(intent);
   if (write) {
-    const draft = buildWriteDraft(match.intent, slots, question);
+    const draft = buildWriteDraft(intent, slots, question);
     const params = Object.fromEntries(Object.entries(draft.params).filter(([, value]) => value !== undefined));
     return {
-      intent: match.intent,
+      intent,
       slots,
       write: true,
       plan: {
-        intent: match.intent,
-        source: "rules",
+        intent,
+        source,
         calls: draft.tool ? [{ tool: draft.tool, params }] : [],
         missing: draft.missing,
         resolve: draft.resolve,
@@ -284,19 +325,36 @@ export function planFromQuestion(question: string, today: string = tashkentToday
       }
     };
   }
-
-  const calls = buildReadCalls(match.intent, slots).slice(0, MAX_CALLS);
+  const calls = buildReadCalls(intent, slots).slice(0, MAX_CALLS);
   return {
-    intent: match.intent,
+    intent,
     slots,
     write: false,
     plan: {
-      intent: match.intent,
-      source: "rules",
+      intent,
+      source,
       calls,
       missing: calls.length ? [] : ["savol mavzusi (savdo, qarz, mijoz, xodim va h.k.)"]
     }
   };
+}
+
+/** Savol → intent + slot + plan. */
+export function planFromQuestion(question: string, today: string = tashkentToday()): BuiltPlan {
+  const match = detectIntent(question);
+  const slots = extractSlots(question, today);
+  return buildBuiltPlan(match.intent, slots, question, "rules");
+}
+
+/** LLM taklifini rules builder orqali tekshirilgan planga aylantiradi. */
+export function planFromLlmProposal(
+  question: string,
+  proposal: { intent: string; params: Record<string, unknown> },
+  today: string = tashkentToday()
+): BuiltPlan | null {
+  if (!isKnownIntent(proposal.intent)) return null;
+  const slots = slotsFromParams(extractSlots(question, today), proposal.params);
+  return buildBuiltPlan(proposal.intent, slots, question, "llm");
 }
 
 /** Plan parametrlarini tekshirish (write uchun qo‘shimcha). */

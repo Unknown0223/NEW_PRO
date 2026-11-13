@@ -210,6 +210,7 @@ export async function applyAgentPatchInDb(
     assertValidMaxSessions(n);
     data.max_sessions = n;
   }
+  if (input.require_face_login !== undefined) data.require_face_login = input.require_face_login;
   if (input.kpi_color !== undefined) data.kpi_color = input.kpi_color?.trim().slice(0, 16) || null;
   if (input.agent_entitlements !== undefined) {
     const normalized = normalizeAgentEntitlementsInput(input.agent_entitlements);

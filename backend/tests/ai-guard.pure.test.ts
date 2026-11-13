@@ -43,7 +43,10 @@ describe("gateWrite", () => {
     expect(r.allowed).toBe(false);
   });
   it("director + kalit → ruxsat bor", () => {
-    const r = gateWrite(writeTool, actor("director"), { unrestricted: false, keys: new Set(["staff.agent.create"]) });
+    const r = gateWrite(writeTool, actor("director"), {
+      unrestricted: false,
+      keys: new Set(["assistant.chat.view", "staff.agent.create"])
+    });
     expect(r.allowed).toBe(true);
   });
   it("AI_WRITE_ENABLED=0 → rad etiladi", () => {
@@ -62,6 +65,18 @@ describe("gateTool", () => {
   });
   it("admin → har doim ruxsat", () => {
     expect(gateTool(readTool, { unrestricted: true, keys: new Set() }).allowed).toBe(true);
+  });
+  it("chat+reports+domain → ruxsat", () => {
+    const keys = new Set(["assistant.chat.view", "assistant.reports.view", "reports.view"]);
+    expect(gateTool(readTool, { unrestricted: false, keys }).allowed).toBe(true);
+  });
+  it("faqat domain, chat yo‘q → rad", () => {
+    const keys = new Set(["reports.view"]);
+    expect(gateTool(readTool, { unrestricted: false, keys }).allowed).toBe(false);
+  });
+  it("chat bor, reports yo‘q → sales tool rad", () => {
+    const keys = new Set(["assistant.chat.view", "reports.view"]);
+    expect(gateTool(readTool, { unrestricted: false, keys }).allowed).toBe(false);
   });
 });
 

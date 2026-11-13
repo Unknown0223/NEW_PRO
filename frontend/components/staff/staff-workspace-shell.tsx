@@ -84,6 +84,7 @@ export function StaffWorkspaceFilterPanel({
   onPageSizeChange,
   allOnPageSelected,
   onToggleAllOnPage,
+  showSelectAllOnPage = true,
   onColumnSettings,
   onSearch,
   searchPlaceholder = "Поиск…",
@@ -103,6 +104,8 @@ export function StaffWorkspaceFilterPanel({
   onPageSizeChange: (size: number) => void;
   allOnPageSelected: boolean;
   onToggleAllOnPage: (checked: boolean) => void;
+  /** Toolbar «Выбрать все на странице» — jadval header checkboxi alohida qoladi */
+  showSelectAllOnPage?: boolean;
   onColumnSettings: () => void;
   onSearch: (value: string) => void;
   searchPlaceholder?: string;
@@ -190,16 +193,18 @@ export function StaffWorkspaceFilterPanel({
       </div>
 
       <div className="mt-4 flex flex-wrap items-center gap-2">
-        <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm text-slate-700 hover:bg-muted">
-          <input
-            type="checkbox"
-            className="h-4 w-4 rounded border-border accent-primary"
-            checked={allOnPageSelected}
-            onChange={(e) => onToggleAllOnPage(e.target.checked)}
-            aria-label="Выбрать всех на странице"
-          />
-          <span className="whitespace-nowrap text-xs sm:text-sm">Выбрать все на странице</span>
-        </label>
+        {showSelectAllOnPage ? (
+          <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm text-slate-700 hover:bg-muted">
+            <input
+              type="checkbox"
+              className="h-4 w-4 rounded border-border accent-primary"
+              checked={allOnPageSelected}
+              onChange={(e) => onToggleAllOnPage(e.target.checked)}
+              aria-label="Выбрать всех на странице"
+            />
+            <span className="whitespace-nowrap text-xs sm:text-sm">Выбрать все на странице</span>
+          </label>
+        ) : null}
         <button
           type="button"
           title="Управление столбцами"

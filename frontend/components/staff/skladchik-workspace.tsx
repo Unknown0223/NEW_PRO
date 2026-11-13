@@ -28,6 +28,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { WorkplaceMovedNotice } from "@/components/staff/workplace-moved-notice";
+import { StaffFaceReferencePanel } from "@/components/staff/staff-face-reference-panel";
 import { TableColumnSettingsDialog } from "@/components/data-table/table-column-settings-dialog";
 import { messageFromStaffCreateError } from "@/lib/staff-api-errors";
 import { useUserTablePrefs } from "@/hooks/use-user-table-prefs";
@@ -1001,6 +1002,12 @@ function WebStaffEditDialog({
             {patchBannerError}
           </p>
         ) : null}
+        <StaffFaceReferencePanel
+          tenantSlug={tenantSlug}
+          userId={row.id}
+          enabled
+          displayName={formatPersonDisplayName(row)}
+        />
         <div className="grid gap-2 text-sm">
           <label className="grid gap-1">
             <span className="text-xs text-muted-foreground">Имя *</span>

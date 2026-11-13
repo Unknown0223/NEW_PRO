@@ -102,6 +102,23 @@ export function canEmployeeSetPlan(emp: PlanningEmployee): boolean {
 }
 
 /**
+ * Agent × KPI: guruhda agent ro‘yxati bo‘lsa — faqat bog‘langanlarga input.
+ * Ro‘yxat bo‘sh yoki agent emas — ochiq (SVR/rahbar rollup).
+ */
+export function isPlanningKpiCellEditable(
+  emp: PlanningEmployee,
+  kpiGroupId: number,
+  agentKpiIds: Record<string, number[]> | undefined,
+  kpiGroupIdsWithAgents: number[] | undefined
+): boolean {
+  if (emp.role !== "agent") return true;
+  const restricted = kpiGroupIdsWithAgents ?? [];
+  if (!restricted.includes(kpiGroupId)) return true;
+  const ids = agentKpiIds?.[String(emp.id)] ?? [];
+  return ids.includes(kpiGroupId);
+}
+
+/**
  * Filial / SVR ostidagi barcha agentlarning metrika yig‘indisi (rekursiv).
  * Ota qatorda o‘z targeti 0 bo‘lsa — shu rollup ko‘rsatiladi.
  */

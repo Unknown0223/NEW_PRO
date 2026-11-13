@@ -9,6 +9,7 @@ import { cn } from "@/lib/utils";
 /** Быстрые ссылки по приоритету (см. SETTINGS_STRUCTURE_PLAN.md). */
 const PRIORITY_QUICK_LINKS: { label: string; href: string }[] = [
   { label: "Ограничение периода", href: "/settings/document-edit-lock" },
+  { label: "AI помощник", href: "/settings/ai-assistant" },
   { label: "Заказы → консигнация", href: "/settings/period/orders-consignment" },
   { label: "Начальная настройка", href: "/settings/initial-setup" },
   { label: "Миграция системы", href: "/settings/system-migration" },
@@ -32,6 +33,7 @@ export default function SettingsHubPage() {
             l.href !== "/settings/system-migration" &&
             l.href !== "/settings/initial-setup" &&
             l.href !== "/settings/document-edit-lock" &&
+            l.href !== "/settings/ai-assistant" &&
             l.href !== "/settings/period/orders-consignment"
         );
 

@@ -104,7 +104,8 @@ export function WorkSlotsBulkDialog({
     directionId: "",
     label: "",
     slotType: "agent",
-    maxSessions: 1
+    maxSessions: 1,
+    requireFaceLogin: false
   });
   const [location, setLocation] = useState<WorkSlotsLocationValues>(emptyLocation());
   const [locationModes, setLocationModes] = useState<WorkSlotsLocationBulkModes>(EMPTY_LOCATION_BULK_MODES());
@@ -135,7 +136,8 @@ export function WorkSlotsBulkDialog({
       directionId: "",
       label: "",
       slotType,
-      maxSessions: 1
+      maxSessions: 1,
+      requireFaceLogin: false
     });
     setLocation(emptyLocation());
     setLocationModes(EMPTY_LOCATION_BULK_MODES());
@@ -476,6 +478,37 @@ export function WorkSlotsBulkDialog({
                 <p className="mt-1.5 text-[11px] text-muted-foreground">
                   Применяется к сотруднику, назначенному на место. Пустые места пропускаются.
                   0 = без лимита сессий.
+                </p>
+              </WorkSlotsBulkField>
+            ) : null}
+
+            {fields.includes("require_face_login") ? (
+              <WorkSlotsBulkField
+                label="Требовать Face ID"
+                mode={formModes.requireFaceLogin}
+                onModeChange={(m) => setFormModes((prev) => ({ ...prev, requireFaceLogin: m }))}
+                disabled={Boolean(destructive) || saving}
+                allowClear={bulkFieldAllowsClear("require_face_login")}
+              >
+                <WorkSlotsMultiSelect
+                  variant="bulk"
+                  multiple={false}
+                  placeholder="Face ID"
+                  items={[
+                    { id: "on", title: "Вкл" },
+                    { id: "off", title: "Выкл" }
+                  ]}
+                  selectedValues={[formValues.requireFaceLogin ? "on" : "off"]}
+                  onChange={(next) =>
+                    setFormValues((prev) => ({
+                      ...prev,
+                      requireFaceLogin: (next[0] ?? "off") === "on"
+                    }))
+                  }
+                  disabled={Boolean(destructive) || saving}
+                />
+                <p className="mt-1.5 text-[11px] text-muted-foreground">
+                  Применяется к сотруднику, назначенному на место. Пустые места пропускаются.
                 </p>
               </WorkSlotsBulkField>
             ) : null}

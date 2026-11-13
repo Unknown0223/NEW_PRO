@@ -91,6 +91,7 @@ export type WorkSlotListItem = {
   active_user_position?: string | null;
   active_user_app_access?: boolean | null;
   active_user_max_sessions?: number | null;
+  active_user_require_face_login?: boolean | null;
   /** Occupant’s live (unrevoked, unexpired) session count. */
   active_user_active_session_count?: number;
   active_territory_zone: string | null;

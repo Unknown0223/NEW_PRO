@@ -44,6 +44,10 @@ export type PlanningCenterData = {
   employees: PlanningEmployee[];
   plans: PlanningPlan[];
   kpi_targets: PlanningTarget[];
+  /** user_id → biriktirilgan kpi_group_id[] */
+  agent_kpi_ids?: Record<string, number[]>;
+  /** Agent ro‘yxati bor KPI guruhlari (bo‘sh = hammaga ochiq) */
+  kpi_group_ids_with_agents?: number[];
 };
 
 /** API javobidagi id/parent_id ni raqamga keltiradi (daraxt `===` bog‘lanishi buzilmasin). */

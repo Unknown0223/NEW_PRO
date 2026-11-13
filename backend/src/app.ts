@@ -22,6 +22,7 @@ import { buildCorsOrigin } from "./lib/cors-options";
 import { GLOBAL_HTTP_BODY_LIMIT_BYTES } from "./lib/constants";
 import { helmetOptions } from "./lib/helmet-options";
 import { sendApiError, zodValidationExtras } from "./lib/api-error";
+import { mapPrismaToUserFacingError } from "./lib/prisma-user-facing-error";
 import { registerAllRoutes } from "./route-registry";
 import { registerPayrollMutationHook } from "./modules/payroll/payroll.auto-hooks";
 import { createRateLimitRedis } from "./lib/rate-limit-redis";
@@ -184,7 +185,17 @@ export function buildApp() {
     if (errName === "PrismaClientValidationError") {
       return sendApiError(reply, request, 400, "DatabaseValidationError", (error as Error).message);
     }
-    return sendApiError(reply, request, 500, "InternalServerError", "Непредвиденная ошибка сервера");
+    const mapped = mapPrismaToUserFacingError(error);
+    if (mapped) {
+      return sendApiError(reply, request, mapped.statusCode, mapped.error, mapped.message);
+    }
+    return sendApiError(
+      reply,
+      request,
+      500,
+      "InternalServerError",
+      "Не удалось выполнить. Повторите или обратитесь в поддержку."
+    );
   });
 
   return app;

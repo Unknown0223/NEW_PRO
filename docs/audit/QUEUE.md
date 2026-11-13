@@ -1,6 +1,6 @@
 # Tuzatish navbati (doimiy)
 
-Oxirgi yangilanish: 2026-11-11
+Oxirgi yangilanish: 2026-11-12
 
 ## Kod + prod — asosan ✅
 
@@ -15,13 +15,16 @@ Oxirgi yangilanish: 2026-11-11
 | 18 | Migrations `client_uuid` ×3 | ✅ prod |
 | 19 | Frontend deploy | ✅ |
 
-## Mobil Sa redesign (2026-11-11)
+## Mobil Sa redesign (2026-11-12)
 
 | Holat | Nima |
 |---|---|
 | ✅ | Sa design_system + motion, tezkor panel + customize, list/grid katalog |
 | ✅ | ANR yumshatish, role_guard `/settings/quick` + `/bonuses` |
-| ⏳ | Seed mijozlar, sahifa visual parity, ANR stress — batafsil: `mobile/REDESIGN_STATUS.md` |
+| ✅ | Seed agent mijozlari (`clients=8` sync) + KPI/marshrut/xarita/drawer Sa motion |
+| ✅ | Bonus ladder + shelf-return Sa motion |
+| ✅ | ANR stress smoke (sync + tab nav, `ANR_CLEAN`) |
+| ✅ | Nav sahifalar to‘liq Sa design (visits/orders/report/clients/debtors/warehouse/draft/settings/tabel/search/…) |
 
 ## Hali ochiq
 
@@ -32,7 +35,7 @@ Oxirgi yangilanish: 2026-11-11
 | C | `git filter-repo` | Private dan keyin, force-push |
 | D | Yangi OTA jks | Mavjud kalitni buzmang (telefonlar) |
 | E | TOTP / Fastify 5 | Keyingi katta PR |
-| F | Mobil redesign qoldiq | `mobile/REDESIGN_STATUS.md` — seed clients, parity |
+| F | Mobil redesign | ✅ nav + shallow `create_order` / order detail Sa* |
 
 ## Andijon (ofis)
 

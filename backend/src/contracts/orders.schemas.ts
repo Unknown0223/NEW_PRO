@@ -42,6 +42,8 @@ export const createOrderBodySchema = z
       .regex(/^\d{4}-\d{2}-\d{2}$/)
       .optional()
       .nullable(),
+    /** Zakaz sanasi/vaqti (ISO). Bo‘sh → server now. Davr cheklovi — create da tekshiriladi. */
+    created_at: z.string().max(48).optional().nullable(),
     order_type: z.enum(["order", "return", "exchange", "partial_return", "return_by_order"]).optional(),
     apply_bonus: z.boolean().optional(),
     /** `false` — chegirma qo‘llanmaydi (bonus yoqilgan bo‘lsa ham). */

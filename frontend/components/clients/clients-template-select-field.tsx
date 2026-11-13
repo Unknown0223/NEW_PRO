@@ -61,7 +61,8 @@ export function ClientsTemplateSelectField({
   disabled = false,
   searchable: searchableProp,
   searchPlaceholder,
-  compact = false
+  compact = false,
+  emptyMessage = "Нет данных"
 }: Props) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
@@ -258,7 +259,7 @@ export function ClientsTemplateSelectField({
           ) : null}
           <div className="scrollbar-none max-h-56 overflow-y-auto py-1">
             {options.length === 0 ? (
-              <div className="px-3 py-2 text-[13px] text-gray-600">Нет данных</div>
+              <div className="px-3 py-4 text-center text-[13px] text-gray-500">Нет данных</div>
             ) : filteredOptions.length === 0 ? (
               <div className="px-3 py-4 text-center text-[13px] text-gray-500">Ничего не найдено</div>
             ) : (

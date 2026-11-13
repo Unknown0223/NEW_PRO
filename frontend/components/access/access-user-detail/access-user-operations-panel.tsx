@@ -182,7 +182,16 @@ export function AccessUserOperationsPanel({ vm, filter }: { vm: AccessUserDetail
     );
   };
 
-  if (treeQ.isError) return <PageError message="Не удалось загрузить список операций." onRetry={() => void treeQ.refetch()} />;
+  if (treeQ.isError) {
+    return (
+      <PageError
+        error={treeQ.error}
+        resource="Операции"
+        message="Не удалось загрузить список операций."
+        onRetry={() => void treeQ.refetch()}
+      />
+    );
+  }
   if (treeQ.isLoading || !detail) {
     return (
       <div className="space-y-2" aria-busy="true" aria-label="Загрузка операций">

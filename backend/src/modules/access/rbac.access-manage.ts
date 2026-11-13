@@ -59,15 +59,18 @@ function buildEffectivePermissionSets(
   const out = new Map<number, Set<string>>();
   for (const { id: userId, role: fallbackRole } of rows) {
     const rolePerms = new Set<string>();
+    const directGranted = new Set<string>();
     const links = roleLinksByUser.get(userId) ?? [];
     if (links.length > 0) {
       for (const link of links) {
         for (const row of link.role.permissions) {
+          directGranted.add(row.permission.key);
           for (const k of expandPermissionKeyAliases([row.permission.key])) rolePerms.add(k);
         }
       }
     } else if (fallbackRole && allRoleByKey.has(fallbackRole)) {
       for (const row of allRoleByKey.get(fallbackRole)!.permissions) {
+        directGranted.add(row.permission.key);
         for (const k of expandPermissionKeyAliases([row.permission.key])) rolePerms.add(k);
       }
     }
@@ -75,10 +78,13 @@ function buildEffectivePermissionSets(
     const allowed = new Set<string>();
     for (const up of permsByUserId.get(userId) ?? []) {
       if (up.effect === "deny") denied.add(up.key);
-      if (up.effect === "allow") allowed.add(up.key);
+      if (up.effect === "allow") {
+        allowed.add(up.key);
+        directGranted.add(up.key);
+      }
     }
     for (const k of expandPermissionKeyAliases([...allowed])) rolePerms.add(k);
-    applyDeniedPermissionKeys(rolePerms, denied);
+    applyDeniedPermissionKeys(rolePerms, denied, directGranted);
     out.set(userId, rolePerms);
   }
   return out;

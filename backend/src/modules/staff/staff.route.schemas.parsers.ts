@@ -100,6 +100,7 @@ export const createOperatorBodySchema = z
     is_active: z.boolean().optional(),
     app_access: z.boolean().optional(),
     max_sessions: maxSessionsValueSchema.optional(),
+    require_face_login: z.boolean().optional(),
     cash_desk_id: z.number().int().positive().optional(),
     cash_desk_link_role: z.enum(["cashier", "manager", "operator"]).optional(),
     /** `operator` dan tashqari distribusiya rollari — kassa bog‘lanmasi bo‘lmasligi kerak. */
@@ -135,6 +136,7 @@ export const patchOperatorBody = z
     filter_visible: z.boolean().optional(),
     app_access: z.boolean().optional(),
     max_sessions: maxSessionsValueSchema.optional(),
+    require_face_login: z.boolean().optional(),
     password: z.string().min(8).optional()
   })
   .refine((o) => Object.keys(o).length > 0, { message: "empty" });
@@ -155,6 +157,7 @@ export const createSkladchikBodySchema = z.object({
   is_active: z.boolean().optional(),
   app_access: z.boolean().optional(),
   max_sessions: maxSessionsValueSchema.optional(),
+  require_face_login: z.boolean().optional(),
   warehouse_ids: z.array(z.number().int().positive()).optional(),
   warehouse_staff_entitlements: z.record(z.string(), z.boolean()).optional()
 });
@@ -176,6 +179,7 @@ export const patchSkladchikBody = z
     filter_visible: z.boolean().optional(),
     app_access: z.boolean().optional(),
     max_sessions: maxSessionsValueSchema.optional(),
+    require_face_login: z.boolean().optional(),
     password: z.string().min(8).optional(),
     warehouse_ids: z.array(z.number().int().positive()).optional(),
     warehouse_staff_entitlements: z.record(z.string(), z.boolean()).optional()

@@ -104,3 +104,59 @@ export async function reserveOutboundNeedMap(
     });
   }
 }
+
+/**
+ * reserved_qty ni kamaytirish — 0 dan pastga tushirmaydi
+ * (`stock_reserved_qty_nonneg`; drift / eski migratsiya keyin 500 bermaslik).
+ */
+export async function releaseReservedQtyClamped(
+  tx: Prisma.TransactionClient,
+  args: {
+    tenantId: number;
+    warehouseId: number;
+    productId: number;
+    qty: Prisma.Decimal;
+  }
+): Promise<void> {
+  if (!args.qty.gt(0)) return;
+  await tx.$executeRaw`
+    INSERT INTO stock (tenant_id, warehouse_id, product_id, qty, reserved_qty, created_at, updated_at)
+    VALUES (${args.tenantId}, ${args.warehouseId}, ${args.productId}, 0, 0, now(), now())
+    ON CONFLICT (tenant_id, warehouse_id, product_id) DO NOTHING
+  `;
+  await tx.$executeRaw`
+    UPDATE stock
+    SET reserved_qty = GREATEST(0, reserved_qty - ${args.qty}::numeric),
+        updated_at = now()
+    WHERE tenant_id = ${args.tenantId}
+      AND warehouse_id = ${args.warehouseId}
+      AND product_id = ${args.productId}
+  `;
+}
+
+/** Confirm: fizik qty ayirish + reserved ni xavfsiz bo‘shatish. */
+export async function consumeStockOnConfirm(
+  tx: Prisma.TransactionClient,
+  args: {
+    tenantId: number;
+    warehouseId: number;
+    productId: number;
+    qty: Prisma.Decimal;
+  }
+): Promise<void> {
+  if (!args.qty.gt(0)) return;
+  await tx.$executeRaw`
+    INSERT INTO stock (tenant_id, warehouse_id, product_id, qty, reserved_qty, created_at, updated_at)
+    VALUES (${args.tenantId}, ${args.warehouseId}, ${args.productId}, 0, 0, now(), now())
+    ON CONFLICT (tenant_id, warehouse_id, product_id) DO NOTHING
+  `;
+  await tx.$executeRaw`
+    UPDATE stock
+    SET qty = qty - ${args.qty}::numeric,
+        reserved_qty = GREATEST(0, reserved_qty - ${args.qty}::numeric),
+        updated_at = now()
+    WHERE tenant_id = ${args.tenantId}
+      AND warehouse_id = ${args.warehouseId}
+      AND product_id = ${args.productId}
+  `;
+}

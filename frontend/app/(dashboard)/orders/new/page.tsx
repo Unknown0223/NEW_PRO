@@ -55,14 +55,12 @@ function NewOrderContent() {
   }
   if (!perms.hasAny(...access.anyOf)) {
     return (
-      <div className="flex flex-1 items-start justify-center p-6 sm:p-10">
-        <AccessDeniedBanner
-          title="Нет доступа"
-          message={`Раздел «${access.label}» недоступен для вашей роли или прав.`}
-          secondaryHref="/access"
-          secondaryLabel="Доступ"
-        />
-      </div>
+      <AccessDeniedBanner
+        resource={access.label}
+        message={`Раздел «${access.label}» недоступен для вашей роли или прав.`}
+        secondaryHref="/access"
+        secondaryLabel="Доступ"
+      />
     );
   }
 

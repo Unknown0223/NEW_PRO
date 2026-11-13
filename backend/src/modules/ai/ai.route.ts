@@ -13,7 +13,7 @@ import { ensureTenantContext } from "../../lib/tenant-context";
 import { sendApiError } from "../../lib/api-error";
 import { jwtAccessVerify, getAccessUser } from "../../modules/auth/auth.prehandlers";
 import { AI_CONFIG } from "./ai.config";
-import { planFromQuestion, planPeriod } from "./ai.plan";
+import { planFromLlmProposal, planFromQuestion, planPeriod } from "./ai.plan";
 import { tashkentToday } from "./ai.dates";
 import { runTool } from "./ai.exec";
 import { handleConfirm } from "./ai.confirm";
@@ -23,7 +23,11 @@ import { buildCsv, buildXlsx, exportFilename } from "./ai.export";
 import { auditAi } from "./ai.audit";
 import { answerFromRun } from "./ai.answer";
 import { getTool, listCapabilities, AI_EXAMPLES } from "./ai.registry";
+import { hasAssistantChat } from "./ai.assistant-access.pure";
 import { gateWrite, loadPermissionState } from "./ai.guard";
+import { ALL_INTENT_NAMES } from "./ai.intent";
+import { proposePlanFromLlm } from "./ai.llm";
+import { registerAiProviderRoutes } from "./ai.providers.route";
 import type { AiActor, AiAnswer, AiDenied, AiTableResult, AiToolRun } from "./ai.types";
 
 const AskBody = z.object({
@@ -52,6 +56,8 @@ function bad(reply: FastifyReply, request: FastifyRequest, status: number, code:
 }
 
 export async function registerAiRoutes(app: FastifyInstance): Promise<void> {
+  await registerAiProviderRoutes(app);
+
   app.post(
     "/api/:slug/ai/ask",
     { preHandler: [jwtAccessVerify] },
@@ -59,13 +65,37 @@ export async function registerAiRoutes(app: FastifyInstance): Promise<void> {
       if (!ensureTenantContext(request, reply)) return;
       const actor = actorOf(request);
       if (!actor) return bad(reply, request, 401, "InvalidAccessUser");
+      const permState = await loadPermissionState(actor);
+      if (!hasAssistantChat(permState)) {
+        return bad(reply, request, 403, "ForbiddenPermission", "Помощник ruxsati yo‘q");
+      }
       const parsed = AskBody.safeParse(request.body);
       if (!parsed.success) {
         return bad(reply, request, 400, "ValidationError", "Savol maydoni kerak");
       }
       const { question, exportFormat } = parsed.data;
       const startedAt = Date.now();
-      const built = planFromQuestion(question ?? "", tashkentToday());
+      const today = tashkentToday();
+      const q = question ?? "";
+      let built = planFromQuestion(q, today);
+      let nluProvider: string | undefined;
+      try {
+        const llm = await proposePlanFromLlm({
+          tenantId: actor.tenantId,
+          question: q,
+          today,
+          intentCatalog: [...ALL_INTENT_NAMES]
+        });
+        if (llm) {
+          const fromLlm = planFromLlmProposal(q, llm, today);
+          if (fromLlm && (fromLlm.plan.calls.length > 0 || fromLlm.plan.missing.length > 0)) {
+            built = fromLlm;
+            nluProvider = llm.providerName;
+          }
+        }
+      } catch {
+        // LLM ixtiyoriy — rules qoladi
+      }
       const denied: AiDenied[] = [];
 
       if (built.write) {
@@ -102,8 +132,7 @@ export async function registerAiRoutes(app: FastifyInstance): Promise<void> {
         if (!tool || tool.kind !== "write") {
           return bad(reply, request, 400, "BadRequest", "Yozish buyruqi topilmadi");
         }
-        const state = await loadPermissionState(actor);
-        const allowed = gateWrite(tool, actor, state);
+        const allowed = gateWrite(tool, actor, permState);
         if (!allowed.allowed) {
           denied.push({ tool: tool.id, reason: allowed.reason ?? "Ruxsat yo‘q" });
           void auditAi({ actor, action: "ask", intent: built.intent, status: "denied", denied });
@@ -238,7 +267,8 @@ export async function registerAiRoutes(app: FastifyInstance): Promise<void> {
         intent: built.intent,
         tools: runs.map((r) => r.tool),
         status: "ok",
-        rows: answer.groups.reduce((n, g) => n + g.rows.length, 0)
+        rows: answer.groups.reduce((n, g) => n + g.rows.length, 0),
+        detail: { nlu_source: built.plan.source, nlu_provider: nluProvider }
       });
       return reply.send(answer);
     }
@@ -266,7 +296,17 @@ export async function registerAiRoutes(app: FastifyInstance): Promise<void> {
       const actor = actorOf(request);
       if (!actor) return bad(reply, request, 401, "InvalidAccessUser");
       const state = await loadPermissionState(actor);
-      return reply.send({ capabilities: listCapabilities(state), writeEnabled: AI_CONFIG.writeEnabled });
+      const chat = hasAssistantChat(state);
+      return reply.send({
+        capabilities: chat ? listCapabilities(state) : [],
+        writeEnabled: AI_CONFIG.writeEnabled,
+        features: {
+          chat,
+          reports: state.unrestricted || state.keys.has("assistant.reports.view"),
+          tasksView: state.unrestricted || state.keys.has("assistant.tasks.view"),
+          tasksCreate: state.unrestricted || state.keys.has("assistant.tasks.create")
+        }
+      });
     }
   );
 

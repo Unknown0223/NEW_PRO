@@ -109,7 +109,7 @@ export async function registerExpenseRoutes(app: FastifyInstance) {
       const data = await createExpense(request.tenant!.id, body as any, Number(jwtUser.sub));
       return reply.status(201).send(data);
     } catch (e) {
-      if (isDocumentEditPeriodLockedError(e)) return sendDocumentEditPeriodLocked(reply, request);
+      if (isDocumentEditPeriodLockedError(e)) return sendDocumentEditPeriodLocked(reply, request, e);
       if (sendExpensePayrollError(reply, request, e)) return;
       const msg = e instanceof Error ? e.message : "";
       if (msg === "AGENT_OUT_OF_SCOPE") return sendApiError(reply, request, 403, "AgentOutOfScope");
@@ -139,7 +139,7 @@ export async function registerExpenseRoutes(app: FastifyInstance) {
       const data = await updateExpense(request.tenant!.id, id, body as any, Number(jwtUser.sub));
       return reply.send(data);
     } catch (e) {
-      if (isDocumentEditPeriodLockedError(e)) return sendDocumentEditPeriodLocked(reply, request);
+      if (isDocumentEditPeriodLockedError(e)) return sendDocumentEditPeriodLocked(reply, request, e);
       if (sendExpensePayrollError(reply, request, e)) return;
       const msg = e instanceof Error ? e.message : "";
       if (msg === "AGENT_OUT_OF_SCOPE") return sendApiError(reply, request, 403, "AgentOutOfScope");
@@ -166,7 +166,7 @@ export async function registerExpenseRoutes(app: FastifyInstance) {
       );
       return reply.status(204).send();
     } catch (e) {
-      if (isDocumentEditPeriodLockedError(e)) return sendDocumentEditPeriodLocked(reply, request);
+      if (isDocumentEditPeriodLockedError(e)) return sendDocumentEditPeriodLocked(reply, request, e);
       if (sendExpensePayrollError(reply, request, e)) return;
       const msg = e instanceof Error ? e.message : "";
       if (msg === "NOT_FOUND") return sendApiError(reply, request, 404, "NotFound");
@@ -187,7 +187,7 @@ export async function registerExpenseRoutes(app: FastifyInstance) {
       await restoreExpense(request.tenant!.id, id, actorUserIdOrNull(request));
       return reply.status(204).send();
     } catch (e) {
-      if (isDocumentEditPeriodLockedError(e)) return sendDocumentEditPeriodLocked(reply, request);
+      if (isDocumentEditPeriodLockedError(e)) return sendDocumentEditPeriodLocked(reply, request, e);
       if (sendExpensePayrollError(reply, request, e)) return;
       const msg = e instanceof Error ? e.message : "";
       if (msg === "NOT_FOUND") return sendApiError(reply, request, 404, "NotFound");
@@ -206,7 +206,7 @@ export async function registerExpenseRoutes(app: FastifyInstance) {
       const data = await approveExpense(request.tenant!.id, id, Number(jwtUser.sub));
       return reply.send(data);
     } catch (e) {
-      if (isDocumentEditPeriodLockedError(e)) return sendDocumentEditPeriodLocked(reply, request);
+      if (isDocumentEditPeriodLockedError(e)) return sendDocumentEditPeriodLocked(reply, request, e);
       if (sendExpensePayrollError(reply, request, e)) return;
       throw e;
     }
@@ -227,7 +227,7 @@ export async function registerExpenseRoutes(app: FastifyInstance) {
       );
       return reply.send(data);
     } catch (e) {
-      if (isDocumentEditPeriodLockedError(e)) return sendDocumentEditPeriodLocked(reply, request);
+      if (isDocumentEditPeriodLockedError(e)) return sendDocumentEditPeriodLocked(reply, request, e);
       if (sendExpensePayrollError(reply, request, e)) return;
       throw e;
     }

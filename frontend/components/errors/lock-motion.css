@@ -1,0 +1,136 @@
+
+/* Fon: yumshoq brend nuri + juda yengil dona (grain) */
+.sa403-stage{background:
+  radial-gradient(ellipse 46% 38% at 50% 34%,rgba(30,99,201,.07),transparent 70%),
+  radial-gradient(ellipse 70% 55% at 50% 108%,rgba(22,35,63,.06),transparent 70%)}
+
+.sa403-in{animation:sa-in .55s cubic-bezier(.2,.8,.2,1) both}
+@keyframes sa-in{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+
+.sa403-art{--px:0;--py:0}
+.sa403-art svg *{transform-box:view-box}
+.sa-nopo{pointer-events:none}
+
+/* Parallaks */
+.sa-par-far{transform:translate(calc(var(--px)*-9px),calc(var(--py)*-5px));transition:transform .9s cubic-bezier(.2,.8,.2,1)}
+.sa-par-mid{transform:translate(calc(var(--px)*5px),calc(var(--py)*3px));transition:transform .9s cubic-bezier(.2,.8,.2,1)}
+.sa-par-near{transform:translate(calc(var(--px)*16px),calc(var(--py)*10px));transition:transform .9s cubic-bezier(.2,.8,.2,1)}
+.sa-par-lock{transform-origin:280px 262px;transform:translate(calc(var(--px)*10px),calc(var(--py)*6px)) rotate(calc(var(--px)*3deg));transition:transform .6s cubic-bezier(.2,.8,.2,1)}
+
+/* Intro */
+.sa-intro .sa-d4{animation:sa-d4 .85s cubic-bezier(.2,.8,.2,1) .05s both}
+.sa-intro .sa-d3{animation:sa-d3 .85s cubic-bezier(.2,.8,.2,1) .12s both}
+@keyframes sa-d4{from{opacity:0;transform:translateX(-80px)}to{opacity:1;transform:none}}
+@keyframes sa-d3{from{opacity:0;transform:translateX(80px)}to{opacity:1;transform:none}}
+.sa-intro .sa-fade{animation:sa-fade .9s ease .25s both}
+@keyframes sa-fade{from{opacity:0}to{opacity:1}}
+.sa-intro .sa-ring-in{transform-origin:280px 172px;animation:sa-ring-in 1.1s cubic-bezier(.2,.8,.2,1) .3s both}
+@keyframes sa-ring-in{from{opacity:0;transform:scale(.55) rotate(-50deg)}to{opacity:1;transform:none}}
+.sa-intro .sa-drop{animation:sa-drop 1s linear .35s both}
+@keyframes sa-drop{
+  0%{opacity:0;transform:translateY(-190px);animation-timing-function:cubic-bezier(.55,0,1,.45)}
+  45%{opacity:1;transform:translateY(0);animation-timing-function:cubic-bezier(0,.55,.45,1)}
+  60%{transform:translateY(-16px);animation-timing-function:cubic-bezier(.55,0,1,.45)}
+  75%{transform:translateY(0);animation-timing-function:cubic-bezier(0,.55,.45,1)}
+  86%{transform:translateY(-5px);animation-timing-function:cubic-bezier(.55,0,1,.45)}
+  100%{transform:translateY(0)}}
+.sa-intro .sa-shadow-in{transform-origin:280px 276px;animation:sa-shadow-in 1s linear .35s both}
+@keyframes sa-shadow-in{0%{opacity:0;transform:scale(.2)}45%{opacity:1;transform:scale(1)}60%{transform:scale(.84)}75%{transform:scale(1)}86%{transform:scale(.95)}100%{transform:scale(1)}}
+.sa-intro .sa-shk-close{animation:sa-close .3s cubic-bezier(.5,0,.6,1.7) 1.15s both}
+@keyframes sa-close{from{transform:translateY(-22px)}to{transform:translateY(0)}}
+.sa-spark{opacity:0;animation:sa-spark .55s ease-out 1.42s both}
+@keyframes sa-spark{0%{opacity:0;transform:scale(.3)}25%{opacity:1}100%{opacity:0;transform:scale(1.5)}}
+.sa-intro .sa-draw-a,.sa-intro .sa-draw-b{stroke-dasharray:1 1.5;animation:sa-draw .55s ease-out 1.55s both}
+.sa-intro .sa-draw-b{animation-duration:.4s;animation-delay:2s}
+@keyframes sa-draw{from{stroke-dashoffset:1}to{stroke-dashoffset:0}}
+.sa-intro .sa-head{transform-box:fill-box;transform-origin:60% 40%;animation:sa-pop .4s cubic-bezier(.34,1.56,.64,1) 2.32s both}
+@keyframes sa-pop{from{opacity:0;transform:scale(.2)}to{opacity:1;transform:scale(1)}}
+
+/* Idle */
+.sa-bob{animation:sa-bob 4.6s ease-in-out infinite}
+@keyframes sa-bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-5px)}}
+.sa-shadow-bob{transform-origin:280px 276px;animation:sa-shadow-bob 4.6s ease-in-out infinite}
+@keyframes sa-shadow-bob{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(.9);opacity:.7}}
+.sa-glow{transform-origin:280px 180px;animation:sa-glow 4.6s ease-in-out infinite}
+@keyframes sa-glow{0%,100%{opacity:.75;transform:scale(1)}50%{opacity:1;transform:scale(1.06)}}
+.sa-orbit{transform-origin:280px 172px;animation:sa-spin 60s linear infinite}
+.sa-radar{transform-origin:280px 172px;animation:sa-spin 5s linear infinite}
+.sa-sat{transform-origin:280px 172px;animation:sa-spin 14s linear infinite reverse}
+@keyframes sa-spin{to{transform:rotate(360deg)}}
+.sa-pk{opacity:0;transform-box:fill-box;transform-origin:50% 50%;animation:sa-pk var(--dur) cubic-bezier(.45,0,.85,.6) var(--delay) infinite}
+@keyframes sa-pk{0%{opacity:0;transform:translateX(0) scale(1)}12%{opacity:.9}84%{opacity:.9;transform:translateX(calc(var(--dx)*.94)) scale(1)}100%{opacity:0;transform:translateX(var(--dx)) scale(.15)}}
+.sa-f1{animation:sa-float 5s ease-in-out infinite}
+.sa-f2{animation:sa-float 6.4s ease-in-out .7s infinite}
+.sa-f3{animation:sa-float 5.6s ease-in-out 1.4s infinite}
+@keyframes sa-float{0%,100%{transform:translateY(0)}50%{transform:translateY(-8px)}}
+.sa-glint{animation:sa-glint 7s ease-in-out 2.45s infinite}
+@keyframes sa-glint{0%{transform:translateX(0)}16%,100%{transform:translateX(270px)}}
+.sa-floorlight{transform-origin:280px 268px;animation:sa-floorlight 4.6s ease-in-out infinite}
+@keyframes sa-floorlight{0%,100%{opacity:.6;transform:scaleX(1)}50%{opacity:1;transform:scaleX(1.08)}}
+.sa-klight{opacity:0;animation:sa-klight 2s ease-out both}
+@keyframes sa-klight{0%{opacity:0}25%{opacity:1}70%{opacity:.5}100%{opacity:0}}
+
+/* Halqa chiplari: markaz bilan birga aylanadi, lekin o‘z o‘qida qarama-qarshi aylanib tik turadi */
+.sa-chip-orbit{animation:sa-spin 26s linear infinite}
+.sa-chip-counter{animation:sa-spin 26s linear infinite reverse}
+.sa-chip{transform-box:fill-box;transform-origin:50% 50%;animation:sa-chip 13s ease-in-out infinite}
+@keyframes sa-chip{0%,100%{transform:translateY(0)}50%{transform:translateY(-4px)}}
+.sa-chip-ok,.sa-chip-deny{animation:sa-chip-swap 6.5s ease-in-out infinite}
+.sa-chip-deny{animation-name:sa-chip-swap-d}
+@keyframes sa-chip-swap{0%,42%{opacity:1}52%,92%{opacity:0}100%{opacity:1}}
+@keyframes sa-chip-swap-d{0%,42%{opacity:0}52%,92%{opacity:1}100%{opacity:0}}
+
+/* Hodisalar */
+.sa-shake{transform-origin:280px 262px;animation:sa-shake .62s cubic-bezier(.36,.07,.19,.97) both}
+@keyframes sa-shake{0%,100%{transform:none}15%{transform:translateX(-9px) rotate(-5deg)}30%{transform:translateX(8px) rotate(4deg)}45%{transform:translateX(-6px) rotate(-2.5deg)}60%{transform:translateX(4px) rotate(1.5deg)}78%{transform:translateX(-2px) rotate(-.5deg)}}
+.sa-wob{transform-origin:280px 262px;animation:sa-wob .9s ease-in-out both}
+@keyframes sa-wob{0%,100%{transform:none}20%{transform:rotate(-3deg)}40%{transform:rotate(2.4deg)}60%{transform:rotate(-1.4deg)}80%{transform:rotate(.6deg)}}
+.sa-tug{animation:sa-tug .9s ease-in-out both}
+@keyframes sa-tug{0%,100%{transform:none}15%{transform:translateY(-10px)}30%{transform:none}50%{transform:translateY(-5px)}65%{transform:none}}
+.sa-deny-fill{opacity:0;animation:sa-flash .75s ease-out both}
+@keyframes sa-flash{0%{opacity:0}18%{opacity:.38}100%{opacity:0}}
+.sa-deny-line{opacity:0;animation:sa-flash2 .75s ease-out both}
+@keyframes sa-flash2{0%{opacity:0}18%{opacity:.9}100%{opacity:0}}
+.sa-wave{opacity:0;transform-origin:280px 194px;animation:sa-wave .9s ease-out both}
+.sa-wave-intro{animation-delay:1.42s}
+@keyframes sa-wave{0%{opacity:0;transform:scale(.7)}2%{opacity:.6}100%{opacity:0;transform:scale(1.75)}}
+.sa-xbadge{transform-origin:342px 132px;animation:sa-xb 1.9s ease-out both}
+@keyframes sa-xb{0%{opacity:0;transform:scale(0)}12%{opacity:1;transform:scale(1.2)}22%{transform:scale(.95)}30%{transform:scale(1)}82%{opacity:1;transform:scale(1)}100%{opacity:0;transform:scale(.5)}}
+.sa-okbadge{transform-origin:342px 132px;animation:sa-ok .55s cubic-bezier(.34,1.56,.64,1) both}
+@keyframes sa-ok{from{opacity:0;transform:scale(0) rotate(-60deg)}to{opacity:1;transform:none}}
+.sa-brackets{transform-origin:280px 163px;animation:sa-br 1350ms ease-out both}
+@keyframes sa-br{0%{opacity:0;transform:scale(1.15)}18%{opacity:1;transform:scale(1)}80%{opacity:1}100%{opacity:0}}
+.sa-beam{animation:sa-beam 1.3s cubic-bezier(.45,0,.55,1) both}
+@keyframes sa-beam{0%{opacity:0;transform:translateY(0)}12%{opacity:1}88%{opacity:1}100%{opacity:0;transform:translateY(206px)}}
+.sa-keyhole{animation:sa-kh 2450ms ease both}
+@keyframes sa-kh{0%{opacity:0}28%{opacity:1}86%{opacity:1}100%{opacity:0}}
+.sa-key{animation:sa-key 2.4s cubic-bezier(.4,0,.2,1) both}
+@keyframes sa-key{
+  0%{opacity:0;transform:translate(170px,-80px) rotate(-30deg)}
+  14%{opacity:1}
+  40%{transform:translate(20px,0) rotate(0)}
+  50%{transform:translate(0,0) rotate(0)}
+  56%{transform:rotate(-16deg)}
+  62%{transform:rotate(12deg)}
+  68%{transform:rotate(-9deg)}
+  74%{transform:rotate(0)}
+  84%{opacity:1;transform:translate(24px,0)}
+  100%{opacity:0;transform:translate(46px,110px) rotate(80deg)}}
+
+/* Interaktiv */
+.sa-lockbtn{cursor:pointer;outline:none}
+.sa-lift{transition:transform .3s cubic-bezier(.34,1.56,.64,1)}
+.sa-lockbtn:hover .sa-lift{transform:translateY(-6px)}
+.sa-focus{opacity:0;transition:opacity .2s}
+.sa-lockbtn:focus-visible .sa-focus{opacity:.7}
+
+.sa403-bubble{position:absolute;left:50%;top:2%;z-index:5;transform:translateX(-50%);white-space:nowrap;pointer-events:none;animation:sa-bub .4s cubic-bezier(.34,1.56,.64,1) both}
+@keyframes sa-bub{from{opacity:0;transform:translate(-50%,8px) scale(.85)}to{opacity:1;transform:translate(-50%,0) scale(1)}}
+.sa403-tail{position:absolute;left:50%;bottom:-4px;width:9px;height:9px;background:inherit;border-radius:2px;transform:translateX(-50%) rotate(45deg)}
+.sa403-hint{animation:sa-fade .6s ease 3.2s both}
+.sa403-tap{animation:sa-tap 1.6s ease-in-out 3.6s infinite}
+@keyframes sa-tap{0%,100%{transform:none}50%{transform:translateY(-2px) scale(1.1)}}
+
+@media (prefers-reduced-motion:reduce){
+  .sa403-root *,.sa403-root *::before,.sa403-root *::after{animation:none!important;transition:none!important}
+}

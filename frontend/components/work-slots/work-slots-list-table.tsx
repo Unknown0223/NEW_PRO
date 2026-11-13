@@ -19,6 +19,7 @@ import { AgentIconButton } from "@/components/staff/agent-workspace-template-ui"
 import { StaffFaceAvatar } from "@/components/staff/staff-face-avatar";
 import { formatMaxSessionsLabel } from "@/lib/max-sessions";
 import type { WorkSlotListItem } from "@/lib/work-slots-types";
+import { StaffRequireFaceLoginToggle } from "@/components/staff/staff-require-face-login-toggle";
 import {
   formatSlotDate,
   formatSlotBranches,
@@ -38,6 +39,9 @@ export function renderWorkSlotDataCell(
     resolveTerritoryLabel?: (raw: string) => string;
     onOpenDetail?: (id: number) => void;
     onOpenSessions?: (slot: WorkSlotListItem) => void;
+    onToggleRequireFaceLogin?: (slot: WorkSlotListItem, next: boolean) => void;
+    faceToggleBusy?: boolean;
+    canToggleFace?: boolean;
     tenantSlug?: string;
   } = {}
 ) {
@@ -124,6 +128,20 @@ export function renderWorkSlotDataCell(
         >
           {formatMaxSessionsLabel(slot.active_user_max_sessions)}
         </button>
+      );
+    }
+    case "require_face_login": {
+      if (!slot.active_user_id) return <span className="text-muted-foreground">—</span>;
+      return (
+        <StaffRequireFaceLoginToggle
+          checked={slot.active_user_require_face_login === true}
+          disabled={!opts.canToggleFace || opts.faceToggleBusy}
+          warnNoReference={
+            slot.active_user_require_face_login === true &&
+            slot.active_user_has_face_reference !== true
+          }
+          onChange={(next) => opts.onToggleRequireFaceLogin?.(slot, next)}
+        />
       );
     }
     case "branch":

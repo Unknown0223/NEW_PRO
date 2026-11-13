@@ -5,6 +5,7 @@ import { PageHeader } from "@/components/dashboard/page-header";
 import { PageShell } from "@/components/dashboard/page-shell";
 import { DatePickerPopover, formatRuDateButton } from "@/components/ui/date-picker-popover";
 import { DateRangePopover, formatDateRangeButton } from "@/components/ui/date-range-popover";
+import { DateTimePickerField } from "@/components/ui/datetime-popover";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { FilterSelect } from "@/components/ui/filter-select";
@@ -58,6 +59,9 @@ export function OrderCreateFormSection({ vm }: { vm: OrderCreateVm }) {
     oldPrices,
     oldPricesEnabled,
     clearOldPrices,
+    orderCreatedAtLocal,
+    setOrderCreatedAtLocal,
+    isEditMode,
     errorTarget,
     localError,
     warehouseId,
@@ -169,7 +173,7 @@ export function OrderCreateFormSection({ vm }: { vm: OrderCreateVm }) {
             </p>
           </div>
 
-          <div className="mb-6 grid grid-cols-1 gap-4 lg:grid-cols-2">
+          <div className="mb-6 grid grid-cols-1 gap-4 lg:grid-cols-3">
             <div className="space-y-2" data-oc-error="client">
               <Label htmlFor="oc-client">Клиент</Label>
               <PolkiClientSearchSelect
@@ -202,17 +206,57 @@ export function OrderCreateFormSection({ vm }: { vm: OrderCreateVm }) {
                 </p>
               ) : null}
             </div>
-            <div className="space-y-2">
+            <div className="space-y-2" data-oc-error="order-date">
               <Label htmlFor="oc-order-date">Дата заказа</Label>
-              <Input
-                id="oc-order-date"
-                readOnly
-                className={cn(fieldClass, "cursor-default bg-muted/40")}
-                value={orderOpenedAt.toLocaleString("ru-RU", { dateStyle: "medium", timeStyle: "short" })}
-              />
-              <p className="text-[11px] text-muted-foreground">
-                Исторические цены — через флажок{" "}
-                <span className="font-medium text-foreground">«Старые цены»</span> ниже.
+              {isEditMode ? (
+                <Input
+                  id="oc-order-date"
+                  readOnly
+                  className={cn(fieldClass, "cursor-default bg-muted/40")}
+                  value={orderOpenedAt.toLocaleString("ru-RU", {
+                    dateStyle: "medium",
+                    timeStyle: "short"
+                  })}
+                />
+              ) : (
+                <DateTimePickerField
+                  id="oc-order-date"
+                  value={orderCreatedAtLocal}
+                  onChange={setOrderCreatedAtLocal}
+                  disabled={mutation.isPending}
+                  className="w-full"
+                  timePlacement="side"
+                />
+              )}
+              <p className="text-[11px] leading-snug text-muted-foreground">
+                {isEditMode
+                  ? "Дата создания заказа."
+                  : "Дата вне разрешённого окна (настройка «Ограничение периода») — сохранение запрещено; открыть период может администратор."}
+              </p>
+            </div>
+            <div className="space-y-2">
+              <Label>Старые цены</Label>
+              <label className="flex min-h-10 cursor-pointer items-center gap-2 rounded-md border border-input bg-background px-3 text-sm">
+                <input
+                  type="checkbox"
+                  className="size-3.5 rounded border-input"
+                  checked={oldPricesEnabled}
+                  onChange={(e) => oldPrices.onOldPricesCheckboxChange(e.target.checked)}
+                  disabled={mutation.isPending}
+                />
+                <span className="text-foreground">Включить</span>
+                {oldPricesEnabled && priceAsOf ? (
+                  <button
+                    type="button"
+                    className="ml-auto text-primary underline-offset-2 hover:underline"
+                    onClick={() => oldPrices.openOldPricesModal()}
+                  >
+                    ({formatRuDateButton(priceAsOf)})
+                  </button>
+                ) : null}
+              </label>
+              <p className="text-[11px] leading-snug text-muted-foreground">
+                Цены на выбранную дату из истории. Без истории на дату — товары без цены.
               </p>
             </div>
           </div>
@@ -448,28 +492,6 @@ export function OrderCreateFormSection({ vm }: { vm: OrderCreateVm }) {
                     </label>
                   ))}
                 </div>
-                <label className="flex cursor-pointer items-center gap-2 text-[11px] text-muted-foreground">
-                  <input
-                    type="checkbox"
-                    className="size-3.5 rounded border-input"
-                    checked={oldPricesEnabled}
-                    onChange={(e) => oldPrices.onOldPricesCheckboxChange(e.target.checked)}
-                    disabled={
-                      mutation.isPending ||
-                      (!canPickPricingAndExpeditor && !headerClientAgentLocked)
-                    }
-                  />
-                  Старые цены
-                  {oldPricesEnabled && priceAsOf ? (
-                    <button
-                      type="button"
-                      className="text-primary underline-offset-2 hover:underline"
-                      onClick={() => oldPrices.openOldPricesModal()}
-                    >
-                      ({formatRuDateButton(priceAsOf)})
-                    </button>
-                  ) : null}
-                </label>
               </div>
 
               {!isPolkiSheet ? (
@@ -720,7 +742,10 @@ export function OrderCreateFormSection({ vm }: { vm: OrderCreateVm }) {
                           name="oc-polki-price-type"
                           className="sr-only"
                           checked={priceType === t}
-                          onChange={() => setPriceType(t)}
+                          onChange={() => {
+                            clearOldPrices();
+                            setPriceType(t);
+                          }}
                           disabled={mutation.isPending || createCtxQ.isPending}
                         />
                         <span>{priceTypeDisplayLabel(t, priceTypeLabels)}</span>
@@ -746,6 +771,9 @@ export function OrderCreateFormSection({ vm }: { vm: OrderCreateVm }) {
                       </button>
                     ) : null}
                   </label>
+                  <p className="text-[11px] leading-snug text-muted-foreground">
+                    Цены на выбранную дату из истории.
+                  </p>
                 </div>
               </div>
             </div>

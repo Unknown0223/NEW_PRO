@@ -75,7 +75,8 @@ export type FaceAntifraudSettings = {
 };
 
 export const DEFAULT_FACE_ANTIFRAUD_SETTINGS: FaceAntifraudSettings = {
-  faceMatchThreshold: 0.85,
+  /** FaceRecognitionNet score = 1 − euclid; ~0.45 ⇔ distance 0.55. */
+  faceMatchThreshold: 0.45,
   sfaceThreshold: 0.45,
   livenessDirections: 4,
   requireSingleFace: true,

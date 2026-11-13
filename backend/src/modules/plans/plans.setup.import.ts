@@ -11,7 +11,11 @@ import {
 import { AUTO_CHAIN_ROLES_ABOVE_SUPERVISOR } from "./plans.setup.roles";
 import { userMatchesTradeDirection } from "./plans.setup.direction";
 import { ensurePlansAndTargets } from "./plans.setup.create";
-import { findKpiGroupAgentUserIds, findKpiGroupAgentsInDirection } from "./plans.setup.kpi-agents";
+import {
+  findKpiGroupAgentUserIds,
+  findKpiGroupAgentsInDirection,
+  loadKpiGroupAgentLinks
+} from "./plans.setup.kpi-agents";
 import {
   dec,
   getDirection,
@@ -282,11 +286,10 @@ export async function getPlanningCenter(
 
   const kpiGroupsRaw = await listKpiGroupsForDirection(tenantId, query.direction_id);
   const kpiGroupIds = kpiGroupsRaw.map((g) => g.id);
-  const kpiGroupAgentUserIds = await findKpiGroupAgentUserIds(
-    tenantId,
-    query.direction_id,
-    kpiGroupIds
-  );
+  const [kpiGroupAgentUserIds, kpiLinks] = await Promise.all([
+    findKpiGroupAgentUserIds(tenantId, query.direction_id, kpiGroupIds),
+    loadKpiGroupAgentLinks(tenantId, kpiGroupIds)
+  ]);
   const staffIds = [
     ...new Set([
       ...employees.filter((e) => e.id > 0).map((e) => e.id),
@@ -364,6 +367,8 @@ export async function getPlanningCenter(
       comment: t.comment,
       status: t.status,
       updated_at: t.updated_at.toISOString()
-    }))
+    })),
+    agent_kpi_ids: kpiLinks.agent_kpi_ids,
+    kpi_group_ids_with_agents: kpiLinks.kpi_group_ids_with_agents
   };
 }

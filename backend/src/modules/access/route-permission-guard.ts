@@ -201,7 +201,15 @@ const ROUTE_PERMISSION_RULES: RoutePermissionRule[] = [
   r(["POST"], /\/suppliers$/, "suppliers.postavshchik.create"),
   r(["PUT", "PATCH"], /\/suppliers\/:id$/, "suppliers.postavshchik.update"),
   r(["DELETE"], /\/suppliers\/:id$/, "suppliers.postavshchik.delete"),
-  r(READ, /\/suppliers(\/|$)/, "suppliers.postavshchik.view"),
+  /** Ro‘yxat: Поставщики moduli YOKI Поступление picker (ombor kirimi formasi). */
+  r(
+    READ,
+    /\/suppliers(\/|$)/,
+    "suppliers.postavshchik.view",
+    "warehouse.postuplenie.view",
+    "warehouse.postuplenie.create",
+    "warehouse.postuplenie.update"
+  ),
 
   // ─────────── Клиенты (clients) ───────────
   // Ommaviy tahrir: handler har bir maydon guruhini alohida tekshiradi (`clients/client-bulk-rbac.ts`).
@@ -264,13 +272,36 @@ const ROUTE_PERMISSION_RULES: RoutePermissionRule[] = [
   r(["POST"], /\/api\/(?::slug|[^/]+)\/products$/, "settings.tovar.create"),
   r(["PUT", "PATCH"], /\/api\/(?::slug|[^/]+)\/products\/:id$/, "settings.tovar.update"),
   r(["DELETE"], /\/api\/(?::slug|[^/]+)\/products\/:id$/, "settings.tovar.delete"),
-  r(READ, /\/api\/(?::slug|[^/]+)\/products(\/|$)/, "settings.tovar.view"),
+  /** Katalog o‘qish: Настройки→Товар YOKI ombor/buyurtma picker (Поступление, остатки, …). */
+  r(
+    READ,
+    /\/api\/(?::slug|[^/]+)\/products(\/|$)/,
+    "settings.tovar.view",
+    "warehouse.postuplenie.view",
+    "warehouse.postuplenie.create",
+    "warehouse.postuplenie.update",
+    "warehouse.ostatki.view",
+    "warehouse.peremeshchenie.view",
+    "warehouse.korrektirovka.view",
+    "warehouse.rekomendovannyy_zapas.view",
+    "warehouse.ostatki_na_datu.view",
+    "orders.zakaz.view",
+    "orders.sozdanie.create",
+    "clients.oborudovanie.view",
+    "clients.ostatki_tt.view"
+  ),
   r(WRITE, /\/settings\/profile$/, ...SETTINGS_PROFILE_WRITE_KEYS),
   r(READ, /\/settings\/profile$/, "settings.profil_kompanii.view", "settings.tipy_zadach.view", ...SETTINGS_PROFILE_WRITE_KEYS),
   r(["POST"], /\/settings\/mobile-app-release\/notify$/, "settings.mobile_app.transfer"),
   r(["POST"], /\/settings\/mobile-app-release\/upload$/, "settings.mobile_app.import"),
   r(WRITE, /\/settings\/mobile-app-release/, "settings.mobile_app.update"),
   r(READ, /\/settings\/mobile-app-release/, "settings.mobile_app.view"),
+  r(READ, /\/ai\/settings(\/|$)/, "settings.ai_assistant.view", "settings.ai_assistant.update"),
+  r(WRITE, /\/ai\/settings(\/|$)/, "settings.ai_assistant.update"),
+  r(["POST"], /\/ai\/settings\/probe$/, "settings.ai_assistant.update"),
+  r(["POST"], /\/ai\/(ask|confirm)$/, "assistant.chat.view"),
+  r(READ, /\/ai\/(capabilities|examples)$/, "assistant.chat.view"),
+  r(READ, /\/ai\/exports\//, "assistant.chat.view", "assistant.reports.view"),
   r(WRITE, /\/settings\/document-edit-lock\/grants/, "settings.document_edit_lock.assign"),
   r(READ, /\/settings\/document-edit-lock\/(search|users)$/, "settings.document_edit_lock.assign"),
   r(READ, /\/settings\/document-edit-lock\/grants$/, "settings.document_edit_lock.view", "settings.document_edit_lock.assign"),

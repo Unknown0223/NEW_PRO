@@ -50,6 +50,10 @@ export function OrderStatusDatetimeDialog({
             onChange={(e) => setValue(e.target.value)}
             disabled={isPending}
           />
+          <span className="text-[11px] leading-snug text-muted-foreground">
+            Дата вне окна «Ограничение периода» (прошлое или будущее) запрещена. Временно открыть
+            период может администратор.
+          </span>
         </label>
         <DialogFooter className="mt-2 gap-2 sm:justify-end">
           <Button type="button" variant="outline" size="sm" onClick={() => onOpenChange(false)} disabled={isPending}>

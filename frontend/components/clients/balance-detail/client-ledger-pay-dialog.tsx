@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { api } from "@/lib/api";
+import { newClientUuid } from "@/lib/client-uuid";
 import { getUserFacingError } from "@/lib/error-utils";
 import {
   defaultPaymentTypeValue,
@@ -195,6 +196,7 @@ export function ClientLedgerPayDialog({
         payment_type: pt,
         note: note.trim(),
         cash_desk_id: desk,
+        client_uuid: newClientUuid(),
         ...(paid && !Number.isNaN(paid.getTime()) ? { paid_at: paid.toISOString() } : {}),
         allocation_mode: "none",
         allocation_order_ids: [oid],

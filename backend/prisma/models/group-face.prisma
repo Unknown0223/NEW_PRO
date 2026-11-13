@@ -40,3 +40,28 @@ model FaceVerificationDailyState {
   @@unique([tenant_id, user_id, work_date])
   @@map("face_verification_daily_states")
 }
+
+/// Veb kirish Face ID challenge (webcam yoki telefon QR bridge).
+model FaceLoginChallenge {
+  id          Int       @id @default(autoincrement())
+  tenant_id   Int
+  user_id     Int
+  /// sha256(raw_token) — raw faqat clientga beriladi
+  token_hash  String    @unique @db.VarChar(64)
+  /// pending | approved | rejected | expired
+  status      String    @default("pending") @db.VarChar(24)
+  /// webcam | qr_phone
+  channel     String    @default("webcam") @db.VarChar(16)
+  directions  Json      @default("[]")
+  expires_at  DateTime
+  used_at     DateTime?
+  meta        Json      @default("{}")
+  created_at  DateTime  @default(now())
+  updated_at  DateTime  @updatedAt
+  tenant      Tenant    @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  user        User      @relation("FaceLoginChallenges", fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([tenant_id, user_id, status, created_at])
+  @@index([expires_at])
+  @@map("face_login_challenges")
+}

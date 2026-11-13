@@ -456,20 +456,24 @@ export function buildPaymentPrefillFromSelection(
 }
 
 export function rowStatusPatchError(err: unknown): string {
-  if (!axios.isAxiosError(err)) return getUserFacingError(err, "Не удалось обновить статус.");
+  if (!axios.isAxiosError(err)) return getUserFacingError(err, "Не удалось сменить статус.");
   const code = (err.response?.data as { error?: string } | undefined)?.error;
   if (code === "InvalidTransition") return "Недопустимый переход статуса.";
-  if (code === "ForbiddenRevert") return "Возврат на предыдущий этап доступен только администратору.";
-  if (code === "ForbiddenReopenCancelled") return "Повторно открыть отменённый заказ может только администратор.";
+  if (code === "ForbiddenRevert") return "Вернуть статус может только администратор.";
+  if (code === "ForbiddenReopenCancelled") return "Открыть отменённый заказ может только администратор.";
   if (code === "ForbiddenOperatorCancelLate") return "На этом этапе отмена запрещена.";
-  if (code === "ForbiddenPermission") return "Нет права на этот переход статуса (Доступ → Заявки → Статус).";
-  if (code === "ApprovalPending") return "Дождитесь цепочки согласования — текущий согласующий должен подтвердить.";
-  if (code === "ApprovalRejected") return "Согласование отклонено — требуется повторная настройка.";
+  if (code === "ForbiddenPermission") return "Нет права на смену статуса.";
+  if (code === "ApprovalPending") return "Дождитесь согласования.";
+  if (code === "ApprovalRejected") return "Согласование отклонено.";
   if (code === "NotFound") return "Заказ не найден.";
+  if (code === "StockReserveConflict" || code === "StockQtyConflict") {
+    return getUserFacingError(err, "Резерв склада сбился. Обновите и повторите.");
+  }
+  if (code === "InsufficientStock") return "На складе не хватает товара.";
   const flat = getZodFlattenFromApiErrorBody(err.response?.data);
   const hint = flat ? firstValidationUserHint(flat) : undefined;
   if (hint) return withApiSupportLine(hint, err);
-  return getUserFacingError(err, "Не удалось обновить статус.");
+  return getUserFacingError(err, "Не удалось сменить статус.");
 }
 
 export function ordersMutationFeedback(err: unknown, fallback: string): string {

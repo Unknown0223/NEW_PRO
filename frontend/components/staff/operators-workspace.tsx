@@ -39,6 +39,7 @@ import {
 } from "@/components/staff/staff-workspace-shell";
 import { StaffImportDialog } from "@/components/staff/staff-import-dialog";
 import { useStaffExcelImport } from "@/components/staff/use-staff-excel-import";
+import { StaffFaceReferencePanel } from "@/components/staff/staff-face-reference-panel";
 
 type WebStaffRow = {
   id: number;
@@ -62,8 +63,8 @@ type WebStaffRow = {
   max_sessions: number;
 };
 
-/** v2: код / должность / сессии / app_access olib tashlandi */
-const OPERATOR_TABLE_ID = "staff.operators.v2";
+/** v4: Face ID yoqish/o‘chirish faqat «Рабочее место»; etalon — tahrir dialogida */
+const OPERATOR_TABLE_ID = "staff.operators.v4";
 
 const OPERATOR_COLUMN_IDS = [
   "fio",
@@ -596,54 +597,74 @@ function WebStaffEditDialog({
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-h-[90vh] max-w-md overflow-y-auto" showCloseButton>
-        <DialogHeader>
+      <DialogContent
+        className="gap-3 overflow-hidden p-4 sm:max-w-4xl sm:p-5"
+        showCloseButton
+      >
+        <DialogHeader className="pr-8">
           <DialogTitle>Редактирование — {row.login}</DialogTitle>
         </DialogHeader>
-        <WorkplaceMovedNotice />
-        <div className="grid gap-2 text-sm">
-          <label className="grid gap-1">
-            <span className="text-xs text-muted-foreground">Имя *</span>
-            <Input value={first_name} onChange={(e) => setFirst(e.target.value)} />
-          </label>
-          <label className="grid gap-1">
-            <span className="text-xs text-muted-foreground">Фамилия</span>
-            <Input value={last_name} onChange={(e) => setLast(e.target.value)} />
-          </label>
-          <label className="grid gap-1">
-            <span className="text-xs text-muted-foreground">Отчество</span>
-            <Input value={middle_name} onChange={(e) => setMid(e.target.value)} />
-          </label>
-          <label className="grid gap-1">
-            <span className="text-xs text-muted-foreground">Логин *</span>
-            <Input
-              className="font-mono"
-              value={login}
-              onChange={(e) => setLogin(e.target.value.toLowerCase())}
-            />
-          </label>
-          <label className="grid gap-1">
-            <span className="text-xs text-muted-foreground">Телефон</span>
-            <Input value={phone} onChange={(e) => setPhone(e.target.value)} />
-          </label>
-          <label className="grid gap-1">
-            <span className="text-xs text-muted-foreground">Email</span>
-            <Input value={email} onChange={(e) => setEmail(e.target.value)} />
-          </label>
-          <label className="grid gap-1">
-            <span className="text-xs text-muted-foreground">ПИНФЛ</span>
-            <Input value={pinfl} onChange={(e) => setPinfl(e.target.value)} />
-          </label>
-          <label className="flex items-center gap-2 text-xs">
-            <input type="checkbox" checked={can_authorize} onChange={(e) => setCanAuth(e.target.checked)} />
-            Доступ для входа
-          </label>
+        <WorkplaceMovedNotice className="shrink-0" />
+        <div className="grid items-start gap-4 md:grid-cols-[minmax(240px,280px)_1fr]">
+          <StaffFaceReferencePanel
+            tenantSlug={tenantSlug}
+            userId={row.id}
+            enabled
+            displayName={formatPersonDisplayName(row)}
+            compact
+          />
+          <div className="grid gap-2 text-sm sm:grid-cols-2">
+            <label className="grid gap-1">
+              <span className="text-xs text-muted-foreground">Имя *</span>
+              <Input value={first_name} onChange={(e) => setFirst(e.target.value)} />
+            </label>
+            <label className="grid gap-1">
+              <span className="text-xs text-muted-foreground">Фамилия</span>
+              <Input value={last_name} onChange={(e) => setLast(e.target.value)} />
+            </label>
+            <label className="grid gap-1">
+              <span className="text-xs text-muted-foreground">Отчество</span>
+              <Input value={middle_name} onChange={(e) => setMid(e.target.value)} />
+            </label>
+            <label className="grid gap-1">
+              <span className="text-xs text-muted-foreground">Логин *</span>
+              <Input
+                className="font-mono"
+                value={login}
+                onChange={(e) => setLogin(e.target.value.toLowerCase())}
+              />
+            </label>
+            <label className="grid gap-1">
+              <span className="text-xs text-muted-foreground">Телефон</span>
+              <Input value={phone} onChange={(e) => setPhone(e.target.value)} />
+            </label>
+            <label className="grid gap-1">
+              <span className="text-xs text-muted-foreground">Email</span>
+              <Input value={email} onChange={(e) => setEmail(e.target.value)} />
+            </label>
+            <label className="grid gap-1 sm:col-span-2">
+              <span className="text-xs text-muted-foreground">ПИНФЛ</span>
+              <Input value={pinfl} onChange={(e) => setPinfl(e.target.value)} />
+            </label>
+            <label className="flex items-center gap-2 text-xs sm:col-span-2">
+              <input
+                type="checkbox"
+                checked={can_authorize}
+                onChange={(e) => setCanAuth(e.target.checked)}
+              />
+              Доступ для входа
+            </label>
+          </div>
         </div>
-        <DialogFooter>
+        <DialogFooter className="gap-2 sm:justify-end">
           <Button type="button" variant="outline" onClick={onClose}>
             Отмена
           </Button>
-          <Button type="button" disabled={patchMut.isPending || !login.trim()} onClick={() => patchMut.mutate()}>
+          <Button
+            type="button"
+            disabled={patchMut.isPending || !login.trim()}
+            onClick={() => patchMut.mutate()}
+          >
             {patchMut.isPending ? "…" : "Сохранить"}
           </Button>
         </DialogFooter>

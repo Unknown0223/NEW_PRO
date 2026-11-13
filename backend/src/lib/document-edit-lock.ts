@@ -33,6 +33,59 @@ const DEFAULT_DAYS: Record<DocumentEditLockSection, number> = {
   opening_balances: 30
 };
 
+const SECTION_LABEL_RU: Record<DocumentEditLockSection, string> = {
+  payments: "Оплаты",
+  orders: "Заказы",
+  returns: "Возвраты",
+  stock: "Склад",
+  expenses: "Расходы",
+  opening_balances: "Начальные остатки"
+};
+
+function ruDaysWord(n: number): string {
+  const abs = Math.abs(Math.trunc(n)) % 100;
+  const last = abs % 10;
+  if (abs > 10 && abs < 20) return "дней";
+  if (last === 1) return "день";
+  if (last >= 2 && last <= 4) return "дня";
+  return "дней";
+}
+
+function formatRuDateUtc(d: Date): string {
+  const dd = String(d.getUTCDate()).padStart(2, "0");
+  const mm = String(d.getUTCMonth() + 1).padStart(2, "0");
+  const yyyy = d.getUTCFullYear();
+  return `${dd}.${mm}.${yyyy}`;
+}
+
+/**
+ * Foydalanuvchiga tushunarli sabab: qaysi bo‘lim, necha kun, qaysi sana yopiq.
+ */
+export function buildDocumentEditPeriodLockedMessage(input: {
+  section: DocumentEditLockSection;
+  days: number;
+  documentDate: Date | null | undefined;
+}): string {
+  const sectionLabel = SECTION_LABEL_RU[input.section] ?? input.section;
+  const days = Math.max(1, Math.floor(input.days) || 1);
+  const window = `±${days} ${ruDaysWord(days)} от текущей даты`;
+  const date =
+    input.documentDate != null && !Number.isNaN(input.documentDate.getTime())
+      ? formatRuDateUtc(input.documentDate)
+      : null;
+
+  if (date) {
+    return (
+      `Дата ${date} выходит за разрешённое окно раздела «${sectionLabel}» (${window}). ` +
+      `Поэтому операция запрещена. Временно открыть период может администратор.`
+    );
+  }
+  return (
+    `Документ раздела «${sectionLabel}» закрыт ограничением периода (${window}). ` +
+    `Временно открыть доступ может администратор.`
+  );
+}
+
 export function defaultDocumentEditLockSettings(): DocumentEditLockSettings {
   const sections = {} as Record<DocumentEditLockSection, DocumentEditLockSectionConfig>;
   for (const key of DOCUMENT_EDIT_LOCK_SECTIONS) {
@@ -76,15 +129,18 @@ export function utcCalendarDaysSince(documentDate: Date, now: Date = new Date())
   return Math.floor((b - a) / 86_400_000);
 }
 
-/** Hujjat sanasi bo‘yicha oyna ochiqmi (grant/admin hisobga olinmaydi). */
+/**
+ * Hujjat sanasi bo‘yicha oyna ochiqmi (grant/admin hisobga olinmaydi).
+ * Oyna simmetrik: o‘tmish va kelajak uchun |kun farqi| < days
+ * (masalan days=1 → faqat bugun; days=3 → bugun ±2 kun).
+ */
 export function isDocumentDateWithinLockWindow(
   documentDate: Date,
   days: number,
   now: Date = new Date()
 ): boolean {
   const age = utcCalendarDaysSince(documentDate, now);
-  if (age < 0) return true;
-  return age < days;
+  return Math.abs(age) < days;
 }
 
 export function isDocumentEditLockSection(

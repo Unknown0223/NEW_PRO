@@ -80,6 +80,7 @@ export type SlotRowSource = {
       position: string | null;
       app_access: boolean;
       max_sessions: number;
+      require_face_login: boolean;
       warehouse: { id: number; name: string } | null;
       warehouse_links: Array<{ warehouse: { id: number; name: string } }>;
       cash_desk_links: Array<{ cash_desk: { id: number; name: string } }>;
@@ -154,6 +155,7 @@ export function mapSlotRow(s: SlotRowSource, lookups?: SlotNameLookups): WorkSlo
     active_user_position: u?.position ?? null,
     active_user_app_access: u != null ? u.app_access : null,
     active_user_max_sessions: u != null ? u.max_sessions : null,
+    active_user_require_face_login: u != null ? u.require_face_login === true : null,
     active_user_active_session_count: 0,
     active_territory_zone: parts.zone,
     active_territory_oblast: parts.oblast,
@@ -223,6 +225,7 @@ export const slotInclude = {
           position: true,
           app_access: true,
           max_sessions: true,
+          require_face_login: true,
           warehouse: { select: { id: true, name: true } },
           warehouse_links: {
             select: { warehouse: { select: { id: true, name: true } } }

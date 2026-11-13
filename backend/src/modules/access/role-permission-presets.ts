@@ -80,6 +80,16 @@ function clientGroupOps(): string[] {
   return CATALOG.filter((e) => e.module === "clients" && e.section.startsWith("gr_")).map((e) => e.key);
 }
 
+/** AI Помощник: chat + otchyot (vazifasiz). */
+function assistantChatReports(): string[] {
+  return uniq(sec("assistant", "chat"), sec("assistant", "reports"));
+}
+
+/** AI Помощник: chat + otchyot + vazifalar. */
+function assistantFull(): string[] {
+  return mod("assistant");
+}
+
 const ALL_ORDER_STATUS_SLUGS = ["confirmed", "picking", "delivering", "delivered", "returned", "cancelled", "revert", "reopen", "date"];
 
 /** Admin — hamma narsa + boshqaruv kalitlari. */
@@ -110,6 +120,7 @@ const PRESET_BUILDERS: Record<string, () => string[]> = {
       secOnly("staff", "konsignatsiya", ["view"]),
       secOnly("plans", "ustanovka_planov", ["view"]),
       secOnly("reports", "dnevnye_kpi_plany", ["view"]),
+      assistantChatReports(),
       tabelOwnPunch()
     ),
 
@@ -117,6 +128,7 @@ const PRESET_BUILDERS: Record<string, () => string[]> = {
     uniq(
       mod("dashboard"),
       mod("reports"),
+      assistantFull(),
       modViewOnly("orders"),
       modViewOnly("clients"),
       modViewOnly("cash"),
@@ -142,6 +154,7 @@ const PRESET_BUILDERS: Record<string, () => string[]> = {
     uniq(
       mod("dashboard"),
       mod("reports"),
+      assistantFull(),
       modViewOnly("orders"),
       modViewOnly("clients"),
       mod("plans"),
@@ -155,6 +168,7 @@ const PRESET_BUILDERS: Record<string, () => string[]> = {
     uniq(
       mod("dashboard"),
       mod("reports"),
+      assistantFull(),
       modViewOnly("orders"),
       modViewOnly("clients"),
       sec("plans", "nastroyka_utverzhdayushchih"),
@@ -168,6 +182,7 @@ const PRESET_BUILDERS: Record<string, () => string[]> = {
     uniq(
       mod("dashboard"),
       mod("reports"),
+      assistantChatReports(),
       modViewOnly("orders"),
       modViewOnly("clients"),
       mod("plans"),
@@ -181,6 +196,7 @@ const PRESET_BUILDERS: Record<string, () => string[]> = {
       secOnly("dashboard", "finansy", ["view"]),
       mod("suppliers"),
       mod("reports"),
+      assistantChatReports(),
       modViewOnly("orders"),
       sec("settings", "valyuty"),
       sec("settings", "zakrytie_perioda"),
@@ -324,6 +340,7 @@ const PRESET_BUILDERS: Record<string, () => string[]> = {
       modViewOnly("orders"),
       modViewOnly("clients"),
       mod("reports"),
+      assistantFull(),
       secOnly("plans", "ustanovka_planov", ["view", "update", "approve"]),
       secOnly("plans", "nastroyka_utverzhdayushchih", ["view"]),
       secOnly("work_slots", "raboche_mesto", ["view", "history"]),

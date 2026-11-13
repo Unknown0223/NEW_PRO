@@ -2,10 +2,8 @@ import { createHash, randomBytes, randomUUID } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import { prisma } from "../../config/database";
 import { tenantIdFrom } from "../../domain/tenant-id";
-import { toFio } from "../staff/staff.shared.helpers";
-import { isSessionLimitReached, isUnlimitedMaxSessions } from "../../lib/max-sessions";
 import { resolveTenantSlugAlias } from "../../lib/tenant-slug-alias";
-import { isSessionEnforcedRole, MOBILE_FIELD_ROLES } from "./app-access.service";
+import { MOBILE_FIELD_ROLES } from "./app-access.service";
 import { decideRefreshReuse } from "./refresh-reuse.pure";
 import {
   assertNotLocked,
@@ -13,6 +11,12 @@ import {
   recordFailedLogin,
   verifyLoginPassword
 } from "./login-credentials";
+import { issueLoginSession } from "./auth.login-session";
+import { refreshExpiresAt } from "./session-ttl";
+
+export { otherActiveSessionsWhere } from "./auth.session-where";
+export { issueLoginSession, loginAfterFaceApproved } from "./auth.login-session";
+export type { IssueSessionInput } from "./auth.login-session";
 
 type LoginInput = {
   slug: string;
@@ -24,13 +28,18 @@ type LoginInput = {
   apk_version?: string | null;
   ip_address?: string | null;
   request_origin?: string | null;
+  /** Brauzer Origin / Forwarded — Face bridge URL uchun (Host API port bo‘lishi mumkin). */
+  request_headers?: {
+    origin?: string | string[];
+    "x-forwarded-proto"?: string | string[];
+    "x-forwarded-host"?: string | string[];
+    host?: string | string[];
+  };
 };
 type RefreshInput = { refreshToken: string };
 
 /** Access JWT — qisqa muddat; refresh orqali yangilanadi (audit P1-2). */
 const ACCESS_TOKEN_TTL = "15m";
-/** Refresh sliding TTL — foydalanuvchi chiqmaguncha sessiya yashaydi. */
-const REFRESH_TOKEN_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 /**
  * Parallel refresh (bir nechta 401 bir vaqtda) — eski token rotate qilinganidan
  * keyin qisqa oynada qayta ishlatilsa yangi juftlik beriladi.
@@ -66,42 +75,11 @@ function newRefreshTokenValue(): string {
   return randomBytes(48).toString("hex");
 }
 
-function refreshExpiresAt(): Date {
-  return new Date(Date.now() + REFRESH_TOKEN_TTL_MS);
-}
-
 async function revokeRefreshFamily(familyId: string): Promise<void> {
   await prisma.refreshToken.updateMany({
     where: { family_id: familyId, revoked_at: null },
     data: { revoked_at: new Date() }
   });
-}
-
-/** Shu qurilmadan tashqari faol sessiyalar (limit hisobi). Joriy qurilmani oldin o‘chirmaymiz. */
-export function otherActiveSessionsWhere(args: {
-  userId: number;
-  tenantId: number;
-  deviceId: string | null;
-  now?: Date;
-}): {
-  user_id: number;
-  tenant_id: number;
-  revoked_at: null;
-  expires_at: { gt: Date };
-  OR?: Array<{ device_id: null } | { device_id: { not: string } }>;
-} {
-  const now = args.now ?? new Date();
-  const base = {
-    user_id: args.userId,
-    tenant_id: args.tenantId,
-    revoked_at: null,
-    expires_at: { gt: now }
-  };
-  if (!args.deviceId) return base;
-  return {
-    ...base,
-    OR: [{ device_id: null }, { device_id: { not: args.deviceId } }]
-  };
 }
 
 export async function login(app: FastifyInstance, input: LoginInput) {
@@ -139,121 +117,42 @@ export async function login(app: FastifyInstance, input: LoginInput) {
     await assertUserOnWorkSlot(tenantId, user.id, user.role);
   }
 
-  const deviceId = input.device_id?.trim().slice(0, 64) || null;
-  const now = new Date();
-  const sessionWhere = {
-    user_id: user.id,
-    tenant_id: tenantId,
-    revoked_at: null,
-    expires_at: { gt: now } as const
-  };
-
-  /* Avval limit — joriy qurilma sessiyasini o‘chirmasdan. Aks holda qayta kirish
-     muvaffaqiyatsiz bo‘lsa ham telefon sessiyasi yo‘qoladi (SESSION_REVOKED).
-     max_sessions = 0 — cheksiz. */
-  if (isSessionEnforcedRole(user.role) && !isUnlimitedMaxSessions(user.max_sessions ?? 1)) {
-    const activeSessions = await prisma.refreshToken.count({
-      where: otherActiveSessionsWhere({
-        userId: user.id,
+  /* Face ID (faqat veb): challenge approved bo‘lguncha token bermaymiz.
+     Mobil APK (apk_version bor) o‘z FaceGate (daily_login) dan foydalanadi — bu yerda o‘tkazib yuboriladi. */
+  const isMobileClient = Boolean(input.apk_version?.trim());
+  if (!isMobileClient) {
+    const { userNeedsFaceLogin, createFaceLoginChallenge } = await import("./face-login.service");
+    if (await userNeedsFaceLogin(tenantId, user.id)) {
+      const apkVersion = input.apk_version?.trim().slice(0, 64) || null;
+      return createFaceLoginChallenge({
         tenantId,
-        deviceId,
-        now
-      })
-    });
-    if (isSessionLimitReached(activeSessions, user.max_sessions)) {
-      throw new Error("SESSION_LIMIT");
-    }
-  }
-
-  const deviceName = input.device_name?.trim().slice(0, 255) || null;
-  const userAgent = input.user_agent?.trim().slice(0, 512) || null;
-  const ipAddr = input.ip_address?.trim().slice(0, 64) || null;
-  const refreshToken = newRefreshTokenValue();
-  const newHash = hashToken(refreshToken);
-  const familyId = randomUUID();
-
-  const session = await prisma.refreshToken.create({
-    data: {
-      tenant_id: tenantId,
-      user_id: user.id,
-      token_hash: newHash,
-      family_id: familyId,
-      expires_at: refreshExpiresAt(),
-      device_name: deviceName,
-      device_id: deviceId,
-      user_agent: userAgent,
-      ip_address: ipAddr
-    },
-    select: { id: true }
-  });
-
-  const accessToken = buildAccessToken(app, user, tenant.slug, {
-    deviceId,
-    sessionId: session.id
-  });
-  const tokens = { accessToken, refreshToken };
-
-  /* Yangi token yozilgach — shu qurilmadagi eskilar. Hech qachon 0 sessiya oynasi yo‘q. */
-  if (deviceId) {
-    await prisma.refreshToken.updateMany({
-      where: {
-        ...sessionWhere,
-        device_id: deviceId,
-        token_hash: { not: newHash }
-      },
-      data: { revoked_at: new Date() }
-    });
-  }
-
-  const apkVersion = input.apk_version?.trim().slice(0, 64) || null;
-  void import("../security/login-alerts.detect")
-    .then(async ({ recordLoginAndDetect }) => {
-      const { platformOfLogin } = await import("../security/login-alerts.pure");
-      await recordLoginAndDetect({
-        tenantId,
-        userId: user.id,
-        platform: platformOfLogin(apkVersion),
-        deviceId,
-        deviceName,
-        ip: ipAddr,
-        userAgent
+        tenantSlug: tenant.slug,
+        user,
+        meta: {
+          device_id: input.device_id?.trim().slice(0, 64) || null,
+          device_name: input.device_name?.trim().slice(0, 255) || null,
+          user_agent: input.user_agent?.trim().slice(0, 512) || null,
+          apk_version: apkVersion,
+          ip_address: input.ip_address?.trim().slice(0, 64) || null,
+          request_origin: input.request_origin ?? null
+        },
+        publicOrigin: input.request_origin,
+        headers: input.request_headers
       });
-    })
-    .catch(() => undefined);
-  await prisma.user.update({
-    where: { id: user.id },
-    data: {
-      ...(deviceName ? { device_name: deviceName } : {}),
-      ...(apkVersion ? { apk_version: apkVersion } : {})
     }
-  });
-
-  let app_update: Awaited<
-    ReturnType<typeof import("../mobile/app-release.service").resolveAppUpdateForTenant>
-  > | null = null;
-  if (MOBILE_FIELD_ROLES.has(user.role)) {
-    const { resolveAppUpdateForTenant } = await import("../mobile/app-release.service");
-    app_update = await resolveAppUpdateForTenant(tenantId, apkVersion, "android", {
-      origin: input.request_origin,
-      tenantSlug: tenant.slug,
-      role: user.role
-    });
   }
 
-  return {
-    ...tokens,
-    user: {
-      id: user.id,
-      name: toFio(user),
-      login: user.login,
-      role: user.role,
-      tenantId: user.tenant_id,
-      code: user.code,
-      app_access: user.app_access,
-      must_change_password: user.must_change_password === true
-    },
-    ...(app_update ? { app_update } : {})
-  };
+  return issueLoginSession(app, {
+    tenantId,
+    tenantSlug: tenant.slug,
+    user,
+    device_id: input.device_id,
+    device_name: input.device_name,
+    user_agent: input.user_agent,
+    apk_version: input.apk_version,
+    ip_address: input.ip_address,
+    request_origin: input.request_origin
+  });
 }
 
 export async function refresh(app: FastifyInstance, input: RefreshInput) {
@@ -301,6 +200,18 @@ export async function refresh(app: FastifyInstance, input: RefreshInput) {
       await assertUserOnWorkSlot(existing.tenant_id, existing.user.id, existing.user.role);
     }
 
+    /* Absolute max: oila birinchi tokenidan 1 soat — slide bilan uzaytirilmaydi. */
+    const familyFirst = await tx.refreshToken.findFirst({
+      where: { family_id: existing.family_id },
+      orderBy: { created_at: "asc" },
+      select: { created_at: true }
+    });
+    const familyStartedMs = familyFirst?.created_at.getTime() ?? existing.created_at.getTime();
+    const absoluteExpiresAt = refreshExpiresAt(familyStartedMs);
+    if (Date.now() >= absoluteExpiresAt.getTime()) {
+      throw new Error("INVALID_REFRESH");
+    }
+
     const refreshToken = newRefreshTokenValue();
     const session = await tx.refreshToken.create({
       data: {
@@ -308,7 +219,7 @@ export async function refresh(app: FastifyInstance, input: RefreshInput) {
         user_id: existing.user_id,
         token_hash: hashToken(refreshToken),
         family_id: existing.family_id,
-        expires_at: refreshExpiresAt(),
+        expires_at: absoluteExpiresAt,
         device_name: existing.device_name,
         device_id: existing.device_id,
         user_agent: existing.user_agent,
@@ -340,4 +251,14 @@ export async function logout(input: RefreshInput) {
   });
   if (!row) return;
   await revokeRefreshFamily(row.family_id);
+}
+
+/** Web/mobil: o‘z parolini almashtirish + must_change_password ni yechish. */
+export async function changeOwnPassword(
+  tenantId: number,
+  userId: number,
+  input: { old_password: string; new_password: string }
+) {
+  const { changeMobileMePassword } = await import("../mobile/mobile-profile.service");
+  return changeMobileMePassword(tenantId, userId, input);
 }

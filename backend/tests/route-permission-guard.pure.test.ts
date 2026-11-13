@@ -45,6 +45,16 @@ describe("route-permission-guard matchRule", () => {
     expect(matchRule("DELETE", "/api/:slug/suppliers/accounting/payments/:paymentId")?.anyOf).toEqual(["suppliers.oplaty.update"]);
   });
 
+  it("GET suppliers list: Поставщики view YOKI Поступление (picker)", () => {
+    expect(matchRule("GET", "/api/:slug/suppliers")?.anyOf).toEqual([
+      "suppliers.postavshchik.view",
+      "warehouse.postuplenie.view",
+      "warehouse.postuplenie.create",
+      "warehouse.postuplenie.update"
+    ]);
+    expect(matchRule("POST", "/api/:slug/suppliers")?.anyOf).toEqual(["suppliers.postavshchik.create"]);
+  });
+
   it("previously unguarded write routes are covered", () => {
     const cases: Array<[string, string, string]> = [
       ["POST", "/api/:slug/transfers", "warehouse.peremeshchenie.create"],
@@ -228,9 +238,22 @@ describe("route-permission-guard matchRule", () => {
 
     const catalog = matchRule("GET", "/api/:slug/products");
     expect(catalog?.anyOf).toContain("settings.tovar.view");
+    expect(catalog?.anyOf).toContain("warehouse.postuplenie.view");
+    expect(catalog?.anyOf).toContain("orders.zakaz.view");
 
     const catalogById = matchRule("GET", "/api/:slug/products/12");
     expect(catalogById?.anyOf).toContain("settings.tovar.view");
+    expect(catalogById?.anyOf).toContain("warehouse.postuplenie.create");
+  });
+
+  it("legacy settings.tovar_spisok → settings.tovar.view", async () => {
+    const { expandPermissionKeyAliases, mapLegacyKeyToStructured } = await import(
+      "../src/modules/access/legacy-key-map"
+    );
+    expect(mapLegacyKeyToStructured("settings.tovar_spisok")).toBe("settings.tovar.view");
+    expect(expandPermissionKeyAliases(["settings.tovar_spisok"])).toEqual(
+      expect.arrayContaining(["settings.tovar_spisok", "settings.tovar.view"])
+    );
   });
 
   it("maps bank-transfer-inbox read/import/assign to cash.perechisleniya.*", () => {

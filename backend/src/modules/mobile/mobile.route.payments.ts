@@ -103,7 +103,7 @@ export async function registerMobilePaymentRoutes(app: FastifyInstance) {
         if (isFaceGateError(e)) {
           return sendApiError(reply, request, 403, e.code, e.message);
         }
-        if (isDocumentEditPeriodLockedError(e)) return sendDocumentEditPeriodLocked(reply, request);
+        if (isDocumentEditPeriodLockedError(e)) return sendDocumentEditPeriodLocked(reply, request, e);
         const msg = e instanceof Error ? e.message : "";
         if (msg === "BAD_CLIENT") return sendApiError(reply, request, 400, "BadClient");
         if (msg === "BAD_ORDER") return sendApiError(reply, request, 400, "BadOrder");

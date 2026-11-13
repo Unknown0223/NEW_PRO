@@ -23,6 +23,8 @@ import type { AssignChecklist, StaffPick, WorkSlotListItem } from "@/lib/work-sl
 import { isOperatorLikeSlotType } from "@/lib/work-slots-types";
 import { formatSlotDate, staffApiPath } from "./work-slots-utils";
 import { SlotBadge } from "./slot-badge";
+import { SlotHistorySnippet } from "./slot-history-snippet";
+
 
 type Props = {
   open: boolean;
@@ -36,8 +38,9 @@ const CHECK_ITEMS: { id: string; label: string; testOrderLink?: boolean }[] = [
   { id: "overlap", label: "Касса/склад не пересекаются с другим рабочим местом" },
   { id: "clients", label: "Количество клиентов проверено" },
   { id: "handoff", label: "Прежний сотрудник снимается, новый подтверждён" },
-  { id: "verify", label: "История и тестовый заказ проверены", testOrderLink: true }
+  { id: "verify", label: "История замен выше проверена", testOrderLink: false }
 ];
+
 
 export function AssignUserDialog({ open, onOpenChange, tenant, slotId, onAssigned }: Props) {
   const [slot, setSlot] = useState<WorkSlotListItem | null>(null);
@@ -206,6 +209,10 @@ export function AssignUserDialog({ open, onOpenChange, tenant, slotId, onAssigne
                 ) : null}
               </div>
             </div>
+
+            {slotId != null ? (
+              <SlotHistorySnippet tenant={tenant} slotId={slotId} limit={5} />
+            ) : null}
 
             <AgentFormSection title="Новый сотрудник" icon={<Search className="h-4 w-4" />}>
               <AgentFormField label="Поиск">

@@ -254,6 +254,19 @@ export function formatSlotDate(iso: string | null | undefined): string {
   }
 }
 
+export function slotAuditActionLabel(action: string | null | undefined): string {
+  switch ((action ?? "").toLowerCase()) {
+    case "swap":
+      return "Замена";
+    case "assign":
+      return "Назначение";
+    case "unassign":
+      return "Открепление";
+    default:
+      return action?.trim() || "—";
+  }
+}
+
 export type WorkSlotsQueryFilters = {
   branch_codes?: string[];
   slot_type: WorkSlotType;
@@ -299,8 +312,8 @@ export function buildWorkSlotsQuery(filters: WorkSlotsQueryFilters): string {
 
 export type ViewMode = "grid" | "list";
 
-/** v3: sessiya ustunlari (агент jadvalidan ko‘chirilgan). */
-export const WORK_SLOTS_TABLE_ID = "work-slots.list.v3";
+/** v4: «Требовать Face ID» ustuni. */
+export const WORK_SLOTS_TABLE_ID = "work-slots.list.v4";
 
 export const WORK_SLOTS_COLUMN_IDS = [
   "code",
@@ -315,6 +328,7 @@ export const WORK_SLOTS_COLUMN_IDS = [
   "cash_desk",
   "active_sessions",
   "max_sessions",
+  "require_face_login",
   "status"
 ] as const;
 
@@ -333,6 +347,7 @@ export const WORK_SLOTS_COLUMNS: { id: WorkSlotsColumnId; label: string }[] = [
   { id: "cash_desk", label: "Касса" },
   { id: "active_sessions", label: "Количество активных сессий" },
   { id: "max_sessions", label: "Максимальное количество сессий" },
+  { id: "require_face_login", label: "Требовать Face ID" },
   { id: "status", label: "Статус" }
 ];
 

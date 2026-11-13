@@ -14,7 +14,15 @@ import {
   Upload
 } from "lucide-react";
 import { PLANNING_MONTHS } from "./planning-utils";
+import type { PlanningCompletionFilter, PlanningIssueFilter } from "./planning-scope-filters";
+import {
+  PlanningFilterDropdown,
+  PlanningSegmentFilter,
+  type PlanningFilterOption
+} from "./planning-filter-dropdown";
 import { cn } from "@/lib/utils";
+
+export type { PlanningFilterOption };
 
 interface PlanningTopBarProps {
   month: number;
@@ -23,6 +31,7 @@ interface PlanningTopBarProps {
   tradeDirections: string[];
   onMonthChange: (month: number, year: number) => void;
   onTradeDirectionChange: (name: string) => void;
+  searchQuery: string;
   onSearch: (query: string) => void;
   onRefresh: () => void;
   loading?: boolean;
@@ -31,6 +40,19 @@ interface PlanningTopBarProps {
   onDownloadTemplate?: () => void;
   onImportFile?: (file: File) => void;
   importBusy?: boolean;
+  filialOptions: PlanningFilterOption[];
+  svrOptions: PlanningFilterOption[];
+  kpiOptions: PlanningFilterOption[];
+  filialIds: number[];
+  svrIds: number[];
+  kpiIds: number[];
+  onFilialIdsChange: (ids: number[]) => void;
+  onSvrIdsChange: (ids: number[]) => void;
+  onKpiIdsChange: (ids: number[]) => void;
+  completionFilter: PlanningCompletionFilter;
+  issueFilter: PlanningIssueFilter;
+  onCompletionFilterChange: (v: PlanningCompletionFilter) => void;
+  onIssueFilterChange: (v: PlanningIssueFilter) => void;
 }
 
 export function PlanningTopBar({
@@ -40,6 +62,7 @@ export function PlanningTopBar({
   tradeDirections,
   onMonthChange,
   onTradeDirectionChange,
+  searchQuery,
   onSearch,
   onRefresh,
   loading = false,
@@ -47,9 +70,21 @@ export function PlanningTopBar({
   canImport = false,
   onDownloadTemplate,
   onImportFile,
-  importBusy = false
+  importBusy = false,
+  filialOptions,
+  svrOptions,
+  kpiOptions,
+  filialIds,
+  svrIds,
+  kpiIds,
+  onFilialIdsChange,
+  onSvrIdsChange,
+  onKpiIdsChange,
+  completionFilter,
+  issueFilter,
+  onCompletionFilterChange,
+  onIssueFilterChange
 }: PlanningTopBarProps) {
-  const [search, setSearch] = useState("");
   const [tdOpen, setTdOpen] = useState(false);
 
   const dailyHref = (() => {
@@ -88,21 +123,46 @@ export function PlanningTopBar({
           <ExternalLink className="h-3 w-3 opacity-60" />
         </Link>
       </div>
+
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2">
           <div className="relative">
             <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
             <input
               type="text"
-              placeholder="Поиск"
-              value={search}
-              onChange={(e) => {
-                setSearch(e.target.value);
-                onSearch(e.target.value);
-              }}
+              placeholder="Поиск по Ф.И.О"
+              value={searchQuery}
+              onChange={(e) => onSearch(e.target.value)}
               className="h-9 w-52 rounded-lg border border-slate-200 bg-white pl-8 pr-3 text-sm text-slate-700 outline-none placeholder:text-slate-400 focus:border-teal-500"
             />
           </div>
+          <PlanningFilterDropdown
+            label="Филиалы"
+            emptyLabel="Филиалы"
+            options={filialOptions}
+            selectedIds={filialIds}
+            onChange={(ids) => {
+              onFilialIdsChange(ids);
+              onSvrIdsChange([]);
+            }}
+            aria-label="Филиал"
+          />
+          <PlanningFilterDropdown
+            label="Супервайзеры"
+            emptyLabel="Супервайзеры"
+            options={svrOptions}
+            selectedIds={svrIds}
+            onChange={onSvrIdsChange}
+            aria-label="Супервайзер"
+          />
+          <PlanningFilterDropdown
+            label="KPI"
+            emptyLabel="KPI"
+            options={kpiOptions}
+            selectedIds={kpiIds}
+            onChange={onKpiIdsChange}
+            aria-label="KPI"
+          />
           <button
             type="button"
             onClick={onRefresh}
@@ -208,6 +268,31 @@ export function PlanningTopBar({
             )}
           </div>
         </div>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-3 border-t border-slate-100 pt-2">
+        <span className="text-[10px] font-medium uppercase tracking-wide text-slate-400">Статус</span>
+        <PlanningSegmentFilter
+          aria-label="Статус плана"
+          value={completionFilter}
+          onChange={onCompletionFilterChange}
+          options={[
+            { value: "all", label: "Все" },
+            { value: "closed", label: "Закрытые" },
+            { value: "open", label: "Незавершённые" }
+          ]}
+        />
+        <span className="text-[10px] font-medium uppercase tracking-wide text-slate-400">Проблемы</span>
+        <PlanningSegmentFilter
+          aria-label="Проблемы плана"
+          value={issueFilter}
+          onChange={onIssueFilterChange}
+          options={[
+            { value: "all", label: "Все" },
+            { value: "problem", label: "Проблемные" },
+            { value: "ok", label: "Без проблем" }
+          ]}
+        />
       </div>
     </div>
   );

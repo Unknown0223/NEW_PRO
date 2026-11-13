@@ -4,83 +4,88 @@ import Link from "next/link";
 import { ShieldOff } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button-variants";
 import { cn } from "@/lib/utils";
+import { HttpStatusScreen } from "@/components/errors/http-status-screen";
 
 type AccessDeniedBannerProps = {
-  /** Asosiy sarlavha (RU/UZ). */
   title?: string;
-  /** Tafsilot (RU/UZ). */
   message?: string;
-  /** Compact — login / inline banner. */
+  /** Compact — login / inline banner (eski card). */
   compact?: boolean;
   className?: string;
-  /** Asosiy CTA (default: home). */
   primaryHref?: string;
   primaryLabel?: string;
-  /** Ikkinchi CTA (ixtiyoriy). */
   secondaryHref?: string;
   secondaryLabel?: string;
+  /** To‘liq 403 sahifa uchun bo‘lim nomi. */
+  resource?: string;
 };
 
-const DEFAULT_TITLE = "Нет доступа";
+const DEFAULT_TITLE = "Доступ ограничен";
 const DEFAULT_MESSAGE =
-  "Доступ к этому разделу отключён или недостаточно прав. Обратитесь к администратору.";
+  "Вы на верном пути, но эта дверь пока закрыта. Для просмотра раздела нужны дополнительные права.";
 
 /**
- * Deep-link / ruxsatsiz sahifa / login denial — bir xil SalesArena soft surface.
- * (qizil “signal” emas: yumshoq card, ikonka, aniq CTA).
+ * Deep-link / ruxsatsiz sahifa — to‘liq ErrorPage 403.
+ * `compact` — login va kichik bannerlar uchun eski card.
  */
 export function AccessDeniedBanner({
   title = DEFAULT_TITLE,
   message = DEFAULT_MESSAGE,
   compact = false,
   className,
-  primaryHref = "/",
+  primaryHref = "/dashboard",
   primaryLabel = "На главную",
   secondaryHref,
-  secondaryLabel
+  secondaryLabel,
+  resource
 }: AccessDeniedBannerProps) {
+  if (!compact) {
+    return (
+      <HttpStatusScreen
+        code={403}
+        title={title}
+        message={message}
+        resource={resource}
+        homePath={primaryHref}
+        onRequestAccess={
+          secondaryHref
+            ? () => {
+                window.location.assign(secondaryHref);
+              }
+            : undefined
+        }
+        className={className}
+      />
+    );
+  }
+
   return (
     <div
       role="alert"
       className={cn(
         "relative overflow-hidden border border-border/70 bg-card text-card-foreground shadow-sm",
         "bg-[linear-gradient(165deg,oklch(0.99_0.01_175)_0%,oklch(0.97_0.02_188)_45%,oklch(0.98_0.01_200)_100%)]",
-        compact ? "rounded-xl px-4 py-3.5" : "mx-auto max-w-lg rounded-2xl px-6 py-7 sm:px-8",
+        "rounded-xl px-4 py-3.5",
         className
       )}
     >
-      <div
-        aria-hidden
-        className="pointer-events-none absolute -right-8 -top-10 h-28 w-28 rounded-full bg-primary/10 blur-2xl"
-      />
-      <div className={cn("relative flex gap-3", compact ? "items-start" : "flex-col items-stretch sm:flex-row sm:items-start sm:gap-4")}>
-        <div
-          className={cn(
-            "flex shrink-0 items-center justify-center rounded-xl border border-primary/15 bg-primary/10 text-primary",
-            compact ? "mt-0.5 h-9 w-9" : "h-11 w-11"
-          )}
-        >
-          <ShieldOff className={compact ? "h-4 w-4" : "h-5 w-5"} strokeWidth={1.75} aria-hidden />
+      <div className="relative flex items-start gap-3">
+        <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-primary/15 bg-primary/10 text-primary">
+          <ShieldOff className="h-4 w-4" strokeWidth={1.75} aria-hidden />
         </div>
         <div className="min-w-0 flex-1 space-y-2">
-          <p className={cn("font-semibold tracking-tight text-foreground", compact ? "text-sm" : "text-base")}>
-            {title}
-          </p>
-          <p className={cn("leading-relaxed text-muted-foreground", compact ? "text-xs sm:text-sm" : "text-sm")}>
-            {message}
-          </p>
-          {!compact ? (
-            <div className="flex flex-wrap gap-2 pt-2">
-              <Link href={primaryHref} className={cn(buttonVariants({ size: "sm" }), "min-w-[9rem]")}>
-                {primaryLabel}
+          <p className="text-sm font-semibold tracking-tight text-foreground">{title}</p>
+          <p className="text-xs leading-relaxed text-muted-foreground sm:text-sm">{message}</p>
+          <div className="flex flex-wrap gap-2 pt-1">
+            <Link href={primaryHref} className={cn(buttonVariants({ size: "sm" }), "min-w-[9rem]")}>
+              {primaryLabel}
+            </Link>
+            {secondaryHref && secondaryLabel ? (
+              <Link href={secondaryHref} className={buttonVariants({ size: "sm", variant: "outline" })}>
+                {secondaryLabel}
               </Link>
-              {secondaryHref && secondaryLabel ? (
-                <Link href={secondaryHref} className={buttonVariants({ size: "sm", variant: "outline" })}>
-                  {secondaryLabel}
-                </Link>
-              ) : null}
-            </div>
-          ) : null}
+            ) : null}
+          </div>
         </div>
       </div>
     </div>

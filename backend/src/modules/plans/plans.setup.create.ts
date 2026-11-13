@@ -82,7 +82,8 @@ export async function patchPlanTarget(
   actorUserId: number | null
 ): Promise<PlanningTarget> {
   const existing = await prisma.salesKpiPlanTarget.findFirst({
-    where: { id: targetId, tenant_id: tenantId }
+    where: { id: targetId, tenant_id: tenantId },
+    include: { plan: { select: { kpi_group_id: true } } }
   });
   if (!existing) throw new Error("NOT_FOUND");
 
@@ -92,6 +93,16 @@ export async function patchPlanTarget(
   });
   if (!targetUser || !canUserSetPlanTarget(targetUser.role)) {
     throw new Error("PLAN_TARGET_READONLY");
+  }
+
+  if (targetUser.role === "agent") {
+    const links = await prisma.kpiGroupAgent.findMany({
+      where: { kpi_group_id: existing.plan.kpi_group_id },
+      select: { user_id: true }
+    });
+    if (links.length > 0 && !links.some((l) => l.user_id === existing.user_id)) {
+      throw new Error("KPI_AGENT_NOT_LINKED");
+    }
   }
 
   let patch: Prisma.SalesKpiPlanTargetUncheckedUpdateInput;

@@ -170,7 +170,12 @@ export function AccessUsersSidebar({
 
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain p-2">
         {ws.usersQ.isError ? (
-          <PageError message="Не удалось загрузить пользователей." onRetry={() => void ws.usersQ.refetch()} />
+          <PageError
+            error={ws.usersQ.error}
+            resource="Пользователи"
+            message="Не удалось загрузить пользователей."
+            onRetry={() => void ws.usersQ.refetch()}
+          />
         ) : ws.usersQ.isLoading ? (
           <div className="space-y-2" aria-busy="true" aria-label="Загрузка пользователей">
             {Array.from({ length: 6 }).map((_, i) => (

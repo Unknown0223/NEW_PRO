@@ -10,9 +10,19 @@ const AUTH_COOKIE_NAME = "sd_auth";
  * Server-side cookie o'rnatilmaydi; middleware faqat mavjud cookie'ni o'qiydi.
  */
 
-/** Ochiq (autentifikatsiyasiz kiriladigan) sahifalar — faqat login. */
+/** Ochiq (autentifikatsiyasiz kiriladigan) sahifalar. */
 function isPublicPath(pathname: string): boolean {
-  return pathname === "/login" || pathname.startsWith("/login/");
+  return (
+    pathname === "/login" ||
+    pathname.startsWith("/login/") ||
+    pathname === "/system-error" ||
+    pathname.startsWith("/system-error/")
+  );
+}
+
+/** Telefon QR Face ID — login cookie siz ochiladi (dashboardga ham haydalmaydi). */
+function isFaceBridgePath(pathname: string): boolean {
+  return pathname === "/face-bridge" || pathname.startsWith("/face-bridge/");
 }
 
 /** Olib tashlangan eski sahifalar — saqlangan havolalar yangi joyga tushsin. */
@@ -67,6 +77,11 @@ export function middleware(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
+  /** QR Face ID bridge — telefon brauzerida auth siz (login sahifasiga yo‘naltirilmasin). */
+  if (isFaceBridgePath(pathname)) {
+    return NextResponse.next();
+  }
+
   /** Login sahifasi ochiq; allaqachon kirgan bo'lsa — dashboardga. */
   if (isPublicPath(pathname)) {
     if (hasFlag) return NextResponse.redirect(new URL("/dashboard", request.url));
@@ -85,7 +100,8 @@ export function middleware(request: NextRequest) {
    */
   if (!hasFlag) {
     const login = new URL("/login", request.url);
-    login.searchParams.set("from", pathname);
+    const from = `${pathname}${request.nextUrl.search || ""}`;
+    login.searchParams.set("from", from);
     return NextResponse.redirect(login);
   }
 
@@ -103,6 +119,6 @@ export const config = {
      * Icon metadata routes (`/icon`, `/apple-icon`) kengaytmasiz — auth matcher’dan
      * chiqarilmasa login HTML “favicon” bo‘lib qoladi (Chrome eski Vercel/blank tab).
      */
-    "/((?!api|auth|_next/static|_next/image|favicon\\.ico|favicon-sa\\.ico|favicon\\.svg|icon|apple-icon|apple-touch-icon|sa-favicon|sa-brand-v3|site\\.webmanifest|.*\\.(?:svg|png|jpg|jpeg|gif|webp|css|js|ps1|apk|exe|zip|woff2?|ttf|ico|map|geojson|webmanifest)$).*)"
+    "/((?!api|auth|mediapipe|_next/static|_next/image|favicon\\.ico|favicon-sa\\.ico|favicon\\.svg|icon|apple-icon|apple-touch-icon|sa-favicon|sa-brand-v3|site\\.webmanifest|.*\\.(?:svg|png|jpg|jpeg|gif|webp|css|js|wasm|task|ps1|apk|exe|zip|woff2?|ttf|ico|map|geojson|webmanifest)$).*)"
   ]
 };

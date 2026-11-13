@@ -8,6 +8,7 @@
  * Bu modul faqat metama'lumot (catalog) — DB seed `permission-catalog.service.ts` da.
  */
 import { PERMISSION_OP_LABEL_RU } from "./permission-op-labels";
+import { ASSISTANT_PERMISSION_SECTIONS } from "./permission-assistant-sections";
 import { CLIENT_PERMISSION_SECTIONS } from "./permission-client-sections";
 import { ORDER_PERMISSION_SECTIONS } from "./permission-order-sections";
 import { TABEL_GROUP_RU, TABEL_PERMISSION_SECTIONS } from "./permission-tabel-sections";
@@ -117,8 +118,9 @@ export const PERMISSION_MODULE_LABEL_RU: Record<string, string> = {
   tabel: "Табель и посещаемость",
   work_slots: "Рабочее место",
   diagnostics: "Диагностика",
-  activity: "Активность"
-}
+  activity: "Активность",
+  assistant: "Помощник (AI)"
+};
 
 export type PermissionSectionDef = {
   module: string;
@@ -159,10 +161,9 @@ export const PERMISSION_SECTIONS: PermissionSectionDef[] = [
   { module: "dashboard", section: "finansy", labelRu: "Дашборд финансов", actions: VIEW_EXPORT },
   { module: "dashboard", section: "supervayzer", labelRu: "Дашборд супервайзера", actions: VIEW_EXPORT },
   { module: "dashboard", section: "plan_fakt", labelRu: "Мониторинг продаж и планов", actions: VIEW_ONLY },
-
+  ...ASSISTANT_PERMISSION_SECTIONS,
   // ── Orders (Заявки) ────────────────────────────────────────
   ...ORDER_PERMISSION_SECTIONS,
-
   // ── Clients (Клиенты) ──────────────────────────────────────
   ...CLIENT_PERMISSION_SECTIONS,
 
@@ -287,13 +288,12 @@ export const PERMISSION_SECTIONS: PermissionSectionDef[] = [
   { module: "settings", section: "returns_filter", labelRu: "Фильтр возврата", actions: VIEW_UPDATE, treeSectionRu: SYSTEM_SETTINGS_TREE_RU },
   { module: "settings", section: "orders_consignment", labelRu: "Заказы → консигнация", actions: [...VIEW_EXPORT, "update"], treeSectionRu: SYSTEM_SETTINGS_TREE_RU },
   { module: "settings", section: "timezone", labelRu: "Часовой пояс", actions: VIEW_UPDATE, treeSectionRu: SYSTEM_SETTINGS_TREE_RU },
+  { module: "settings", section: "ai_assistant", labelRu: "AI помощник (API)", actions: VIEW_UPDATE, treeSectionRu: SYSTEM_SETTINGS_TREE_RU },
   { module: "settings", section: "initial_setup", labelRu: "Начальная настройка", actions: VIEW_EXPORT, treeSectionRu: SYSTEM_SETTINGS_TREE_RU },
-
   // ── Audit ──────────────────────────────────────────────────
   // `finance.obzor.view` — `dashboard.finansy.view` bilan bir xil sahifa (alias, `legacy-key-map.ts`).
   { module: "audit", section: "log", labelRu: "Журнал аудита (все изменения в системе)", actions: VIEW_EXPORT },
   { module: "audit", section: "podozritelnye_vhody", labelRu: "Подозрительные входы (общие устройства и IP)", actions: ["view", "update", "create", "delete", "export"] },
-
   // ── Зарплата — kalitlar eski modullarda (grantlar saqlanadi), Access UI'da alohida guruh ─
   { module: "staff", section: "zarplaty", labelRu: "Расчёт зарплаты", actions: ["view", "create", "update", "delete", "copy", "import", "assign", "status", "approve"], groupRu: PAYROLL_GROUP_RU },
   { module: "staff", section: "avans", labelRu: "Аванс (руководитель)", actions: ["view", "create", "update", "delete", "import", "status"], groupRu: PAYROLL_GROUP_RU },

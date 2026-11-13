@@ -102,7 +102,7 @@ export async function registerOrderListRoutes(app: FastifyInstance) {
         );
         return reply.send(result);
       } catch (e) {
-        if (isDocumentEditPeriodLockedError(e)) return sendDocumentEditPeriodLocked(reply, request);
+        if (isDocumentEditPeriodLockedError(e)) return sendDocumentEditPeriodLocked(reply, request, e);
         throw e;
       }
     }

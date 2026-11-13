@@ -169,7 +169,7 @@ export async function registerStockCorrectionRoutes(app: FastifyInstance) {
         );
         return reply.status(201).send(result);
       } catch (e) {
-        if (isDocumentEditPeriodLockedError(e)) return sendDocumentEditPeriodLocked(reply, request);
+        if (isDocumentEditPeriodLockedError(e)) return sendDocumentEditPeriodLocked(reply, request, e);
         const msg = e instanceof Error ? e.message : "";
         if (msg === "BAD_WAREHOUSE") return sendApiError(reply, request, 400, "BadWarehouse");
         if (msg === "BAD_PRODUCT") return sendApiError(reply, request, 400, "BadProduct");

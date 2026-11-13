@@ -1,8 +1,10 @@
 /**
  * Tanlangan sanadagi (старые цены) narxlarni aniqlash.
- * Manba: `product_price_schedules` (status=applied, effective_at ≤ as_of) + joriy `product_prices` fallback.
+ * Manba: `product_price_schedules` (status=applied, effective_at ≤ as_of)
+ * + joriy `product_prices` faqat agar yozuv as-of dan keyin yangilanmagan bo‘lsa.
  */
 import { prisma } from "../../config/database";
+import { canUseCurrentPriceAsOf } from "./product-prices.as-of.pure";
 import { PRICE_SCHEDULE_STATUS } from "./product-price-schedules.service";
 
 const YMD_RE = /^(\d{4})-(\d{2})-(\d{2})$/;
@@ -81,7 +83,16 @@ export async function resolveProductPricesAsOf(
 
   const fromCurrent = new Map<number, { price: string; currency: string }>();
   for (const row of currentRows) {
-    // Tarixiy schedule yo‘q bo‘lsa — joriy narx (yozuvlar kelajakda schedule orqali to‘planadi).
+    // Joriy narx as-of dan keyin yangilangan bo‘lsa — eski sanaga qo‘llamaymiz.
+    if (
+      !canUseCurrentPriceAsOf({
+        asOf,
+        updatedAt: row.updated_at,
+        createdAt: row.created_at
+      })
+    ) {
+      continue;
+    }
     fromCurrent.set(row.product_id, {
       price: row.price.toString(),
       currency: row.currency

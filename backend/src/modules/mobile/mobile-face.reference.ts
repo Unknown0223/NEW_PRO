@@ -1,13 +1,20 @@
 import { Readable } from "stream";
 import { prisma } from "../../config/database";
 import { storagePut, storageReadBuffer, storageDelete } from "../../lib/storage.service";
-import { buildFaceDescriptor } from "./face-match.descriptor";
+import { FACE_DESCRIPTOR_VERSION, buildFaceDescriptor } from "./face-match.descriptor";
+import {
+  buildLandmarkDescriptor,
+  parseLandmarkDescriptor,
+  type LandmarkXY
+} from "./face-landmark-match.pure";
 import { parseDescriptor } from "./face-match.pure";
 import {
   MAX_IMAGE_BYTES,
   REF_AT,
   REF_DESC,
+  REF_DESC_V,
   REF_KEY,
+  REF_LANDMARK_DESC,
   decodeBase64Image,
   readUiPrefs,
   storagePrefix,
@@ -47,13 +54,21 @@ export async function loadOrBuildReferenceDescriptor(
   expectedLen?: number
 ): Promise<number[] | null> {
   const cached = parseDescriptor(prefs[REF_DESC]);
-  if (cached && (expectedLen == null || cached.length === expectedLen)) return cached;
+  const cachedV = Number(prefs[REF_DESC_V] ?? 0);
+  if (
+    cached &&
+    cachedV === FACE_DESCRIPTOR_VERSION &&
+    (expectedLen == null || cached.length === expectedLen)
+  ) {
+    return cached;
+  }
   const key = prefs[REF_KEY];
   if (typeof key !== "string" || !key) return null;
   const buf = await storageReadBuffer(key);
   if (!buf) return null;
   const desc = await buildFaceDescriptor(buf);
   prefs[REF_DESC] = desc;
+  prefs[REF_DESC_V] = FACE_DESCRIPTOR_VERSION;
   await prisma.user.update({
     where: { id: userId },
     data: { ui_preferences: prefs as object }
@@ -64,7 +79,8 @@ export async function loadOrBuildReferenceDescriptor(
 export async function uploadFaceReference(
   tenantId: number,
   userId: number,
-  imageBase64: string
+  imageBase64: string,
+  landmarks?: LandmarkXY[] | null
 ): Promise<{ storage_key: string; uploaded_at: string }> {
   const { buf, contentType } = decodeBase64Image(imageBase64);
   let descriptor: number[];
@@ -72,9 +88,10 @@ export async function uploadFaceReference(
     descriptor = await buildFaceDescriptor(buf);
   } catch (e) {
     const msg = e instanceof Error ? e.message : "";
-    if (msg === "FACE_IMAGE_BLANK") throw new Error("FACE_IMAGE_BLANK");
+    if (msg === "FACE_IMAGE_BLANK" || msg === "FACE_NOT_DETECTED") throw e;
     throw e;
   }
+  const landmarkDesc = landmarks?.length ? buildLandmarkDescriptor(landmarks) : null;
   const ext = contentType.includes("png") ? "png" : "jpg";
   const filename = `reference.${ext}`;
   const put = await storagePut(
@@ -94,6 +111,9 @@ export async function uploadFaceReference(
   prefs[REF_KEY] = put.key;
   prefs[REF_AT] = uploadedAt;
   prefs[REF_DESC] = descriptor;
+  prefs[REF_DESC_V] = FACE_DESCRIPTOR_VERSION;
+  if (landmarkDesc) prefs[REF_LANDMARK_DESC] = landmarkDesc;
+  else delete prefs[REF_LANDMARK_DESC];
   await prisma.user.update({
     where: { id: userId },
     data: { ui_preferences: prefs as object }
@@ -119,11 +139,17 @@ export async function deleteFaceReference(tenantId: number, userId: number): Pro
   delete prefs[REF_KEY];
   delete prefs[REF_AT];
   delete prefs[REF_DESC];
+  delete prefs[REF_DESC_V];
+  delete prefs[REF_LANDMARK_DESC];
   await prisma.user.update({
     where: { id: userId },
     data: { ui_preferences: prefs as object }
   });
   return { ok: true };
+}
+
+export function readStoredLandmarkDescriptor(prefs: UiPrefs): number[] | null {
+  return parseLandmarkDescriptor(prefs[REF_LANDMARK_DESC]);
 }
 
 export async function readFaceReferenceBuffer(

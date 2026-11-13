@@ -181,6 +181,8 @@ export type CreateSalesReturnInput = {
   refusal_reason_ref?: string | null;
   /** Ixtiyoriy; bo‘sh → avto R-… */
   number?: string | null;
+  /** Offline/retry UUID */
+  client_uuid?: string | null;
   lines: { product_id: number; qty: number }[];
 };
 
@@ -190,6 +192,16 @@ export async function createSalesReturn(
   actorUserId: number | null
 ): Promise<SalesReturnListRow> {
   if (!input.lines.length) throw new Error("EMPTY_LINES");
+
+  const { normalizeClientUuid } = await import("../orders/domain/order-idempotency.pure");
+  const clientUuid = normalizeClientUuid(input.client_uuid);
+  if (clientUuid) {
+    const existing = await prisma.salesReturn.findFirst({
+      where: { tenant_id: tenantId, client_uuid: clientUuid },
+      include: salesReturnRowInclude
+    });
+    if (existing) return mapSalesReturnRow(existing);
+  }
 
   const wh = await prisma.warehouse.findFirst({
     where: { id: input.warehouse_id, tenant_id: tenantId }
@@ -244,37 +256,56 @@ export async function createSalesReturn(
   const uid =
     actorUserId != null && Number.isFinite(actorUserId) && actorUserId > 0 ? actorUserId : null;
 
-  const row = await prisma.$transaction(async (tx) => {
-    const ret = await tx.salesReturn.create({
-      data: {
-        tenant_id: tenantId,
-        number,
-        client_id: clientId,
-        order_id: orderId,
-        warehouse_id: input.warehouse_id,
-        // Zavsklad qabulini kutadi — ostatka/balans qabulda qo'llanadi.
-        status: "pending",
-        refund_amount: refund,
-        note: input.note?.trim() || null,
-        refusal_reason_ref:
-          input.refusal_reason_ref != null && String(input.refusal_reason_ref).trim()
-            ? String(input.refusal_reason_ref).trim().slice(0, 128)
-            : null,
-        created_by_user_id: uid,
-        lines: {
-          create: input.lines.map((l) => ({
-            product_id: l.product_id,
-            qty: new Prisma.Decimal(l.qty)
-          }))
+  let row;
+  try {
+    row = await prisma.$transaction(async (tx) => {
+      const ret = await tx.salesReturn.create({
+        data: {
+          tenant_id: tenantId,
+          number,
+          client_id: clientId,
+          order_id: orderId,
+          warehouse_id: input.warehouse_id,
+          // Zavsklad qabulini kutadi — ostatka/balans qabulda qo'llanadi.
+          status: "pending",
+          refund_amount: refund,
+          note: input.note?.trim() || null,
+          refusal_reason_ref:
+            input.refusal_reason_ref != null && String(input.refusal_reason_ref).trim()
+              ? String(input.refusal_reason_ref).trim().slice(0, 128)
+              : null,
+          created_by_user_id: uid,
+          client_uuid: clientUuid,
+          lines: {
+            create: input.lines.map((l) => ({
+              product_id: l.product_id,
+              qty: new Prisma.Decimal(l.qty)
+            }))
+          }
         }
-      }
-    });
+      });
 
-    return tx.salesReturn.findFirstOrThrow({
-      where: { id: ret.id },
-      include: salesReturnRowInclude
+      return tx.salesReturn.findFirstOrThrow({
+        where: { id: ret.id },
+        include: salesReturnRowInclude
+      });
     });
-  });
+  } catch (e) {
+    if (
+      clientUuid &&
+      typeof e === "object" &&
+      e != null &&
+      "code" in e &&
+      (e as { code?: string }).code === "P2002"
+    ) {
+      const existing = await prisma.salesReturn.findFirst({
+        where: { tenant_id: tenantId, client_uuid: clientUuid },
+        include: salesReturnRowInclude
+      });
+      if (existing) return mapSalesReturnRow(existing);
+    }
+    throw e;
+  }
 
   await appendTenantAuditEvent({
     tenantId,

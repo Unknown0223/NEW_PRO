@@ -4,7 +4,8 @@
 
 export const AUTH_STORAGE_KEY = "savdo-auth";
 export const AUTH_COOKIE_NAME = "sd_auth";
-const AUTH_COOKIE_MAX_AGE_SEC = 60 * 60 * 24;
+/** Middleware flag — sessiya max 1 soat bilan mos. */
+const AUTH_COOKIE_MAX_AGE_SEC = 60 * 60;
 
 function authCookieFlags(): string {
   const secure =

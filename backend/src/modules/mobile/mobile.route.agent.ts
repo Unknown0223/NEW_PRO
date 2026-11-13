@@ -1,4 +1,5 @@
 import type { FastifyInstance } from "fastify";
+import { registerMobileAgentBonusesRoute } from "./mobile-agent-bonuses.route";
 import { registerMobileAgentClientRoutes } from "./mobile.route.agent.clients";
 import { registerMobileAgentConfigRoutes } from "./mobile.route.agent.config";
 import { registerMobileAgentDashboardRoutes } from "./mobile.route.agent.dashboard";
@@ -11,4 +12,5 @@ export async function registerMobileAgentRoutes(app: FastifyInstance) {
   await registerMobileAgentOrderSyncRoutes(app);
   await registerMobileAgentDashboardRoutes(app);
   await registerMobileAgentClientRoutes(app);
+  await registerMobileAgentBonusesRoute(app);
 }

@@ -192,7 +192,7 @@ export async function openingBalanceRoutes(app: FastifyInstance) {
         );
         return reply.status(201).send(row);
       } catch (e) {
-        if (isDocumentEditPeriodLockedError(e)) return sendDocumentEditPeriodLocked(reply, request);
+        if (isDocumentEditPeriodLockedError(e)) return sendDocumentEditPeriodLocked(reply, request, e);
         const msg = e instanceof Error ? e.message : "";
         if (msg === "BAD_CLIENT") return sendApiError(reply, request, 400, "BadClient");
         if (msg === "BAD_CLIENT_AGENT") return sendApiError(reply, request, 400, "BadClientAgent");
@@ -244,7 +244,7 @@ export async function openingBalanceRoutes(app: FastifyInstance) {
               );
         return reply.send({ data: result });
       } catch (e) {
-        if (isDocumentEditPeriodLockedError(e)) return sendDocumentEditPeriodLocked(reply, request);
+        if (isDocumentEditPeriodLockedError(e)) return sendDocumentEditPeriodLocked(reply, request, e);
         throw e;
       }
     }
@@ -286,7 +286,7 @@ export async function openingBalanceRoutes(app: FastifyInstance) {
         );
         return reply.send({ data: result });
       } catch (e) {
-        if (isDocumentEditPeriodLockedError(e)) return sendDocumentEditPeriodLocked(reply, request);
+        if (isDocumentEditPeriodLockedError(e)) return sendDocumentEditPeriodLocked(reply, request, e);
         const msg = e instanceof Error ? e.message : "";
         if (msg === "EMPTY_FILE") return sendApiError(reply, request, 400, "EmptyFile");
         if (msg === "BAD_HEADERS") return sendApiError(reply, request, 400, "BadHeaders");
@@ -319,7 +319,7 @@ export async function openingBalanceRoutes(app: FastifyInstance) {
         );
         return reply.status(204).send();
       } catch (e) {
-        if (isDocumentEditPeriodLockedError(e)) return sendDocumentEditPeriodLocked(reply, request);
+        if (isDocumentEditPeriodLockedError(e)) return sendDocumentEditPeriodLocked(reply, request, e);
         const msg = e instanceof Error ? e.message : "";
         if (msg === "NOT_FOUND") return sendApiError(reply, request, 404, "NotFound");
         if (msg === "ALREADY_VOIDED") return sendApiError(reply, request, 409, "AlreadyVoided");
@@ -342,7 +342,7 @@ export async function openingBalanceRoutes(app: FastifyInstance) {
         const row = await restoreOpeningBalance(request.tenant!.id, id, actorUserIdOrNull(request));
         return reply.send(row);
       } catch (e) {
-        if (isDocumentEditPeriodLockedError(e)) return sendDocumentEditPeriodLocked(reply, request);
+        if (isDocumentEditPeriodLockedError(e)) return sendDocumentEditPeriodLocked(reply, request, e);
         const msg = e instanceof Error ? e.message : "";
         if (msg === "NOT_FOUND") return sendApiError(reply, request, 404, "NotFound");
         if (msg === "NOT_VOIDED") return sendApiError(reply, request, 409, "NotVoided");

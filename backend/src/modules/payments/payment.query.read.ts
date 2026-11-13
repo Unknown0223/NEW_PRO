@@ -250,6 +250,8 @@ export type CreatePaymentInput = {
   allocation_agent_id?: number | null;
   /** Ixtiyoriy hujjat ID (har qanday matn); bo‘sh → create dan keyin String(id) */
   number?: string | null;
+  /** Offline/retry UUID */
+  client_uuid?: string | null;
 };
 
 export async function resolveLedgerAgentId(

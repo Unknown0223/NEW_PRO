@@ -119,7 +119,7 @@ describe("getUserFacingError", () => {
       headers: { "x-request-id": "abc-xyz" },
       config: {} as never
     };
-    expect(getUserFacingError(e)).toBe("Server boom — Код для поддержки: abc-xyz");
+    expect(getUserFacingError(e)).toBe("Server boom (код: abc-xyz)");
   });
 
   it("appends support reference for server errors from JSON requestId", () => {
@@ -131,7 +131,35 @@ describe("getUserFacingError", () => {
       headers: {},
       config: {} as never
     };
-    expect(getUserFacingError(e)).toBe("Not valid — Код для поддержки: json-rid-1");
+    expect(getUserFacingError(e)).toBe("Not valid (код: json-rid-1)");
+  });
+
+  it("StockReserveConflict — short message without support noise", () => {
+    const e = new AxiosError("fail");
+    e.response = {
+      status: 409,
+      data: {
+        error: "StockReserveConflict",
+        message: "Резерв склада сбился. Обновите страницу и повторите.",
+        requestId: "req-2sn"
+      },
+      statusText: "Conflict",
+      headers: {},
+      config: {} as never
+    };
+    expect(getUserFacingError(e)).toBe("Резерв склада сбился. Обновите страницу и повторите.");
+  });
+
+  it("legacy InternalServerError text becomes short", () => {
+    const e = new AxiosError("fail");
+    e.response = {
+      status: 500,
+      data: { error: "InternalServerError", message: "Непредвиденная ошибка сервера", requestId: "req-x" },
+      statusText: "Server Error",
+      headers: {},
+      config: {} as never
+    };
+    expect(getUserFacingError(e)).toBe("Не удалось выполнить. Повторите. (код: req-x)");
   });
 
   it("friendly message when server is unreachable", () => {
@@ -162,7 +190,7 @@ describe("withApiSupportLine", () => {
       headers: { "x-request-id": "rid-99" },
       config: {} as never
     };
-    expect(withApiSupportLine("Custom", e)).toBe("Custom — Код для поддержки: rid-99");
+    expect(withApiSupportLine("Custom", e)).toBe("Custom (код: rid-99)");
   });
 
   it("returns base unchanged when no requestId", () => {

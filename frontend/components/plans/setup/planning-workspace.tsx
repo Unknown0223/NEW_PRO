@@ -17,7 +17,15 @@ import {
   returnPlanningPlansToDraft,
   type PlanningTarget
 } from "./planning-api";
-import { filterEmployeesWithAncestors } from "./planning-utils";
+import { sumDescendantAgentMetric } from "./planning-utils";
+import {
+  filterPlanningEmployeesByPlanState,
+  filterPlanningEmployeesByScope,
+  planningFilialOptions,
+  planningSvrOptions,
+  type PlanningCompletionFilter,
+  type PlanningIssueFilter
+} from "./planning-scope-filters";
 import { PlanningTopBar } from "./planning-top-bar";
 import { PlanningTable } from "./planning-table";
 import { TotalsSection } from "./totals-section";
@@ -38,6 +46,11 @@ export function PlanningWorkspace({ tenantSlug }: { tenantSlug: string }) {
   const [year, setYear] = useState(now.getFullYear());
   const [directionId, setDirectionId] = useState<number | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [filialIds, setFilialIds] = useState<number[]>([]);
+  const [svrIds, setSvrIds] = useState<number[]>([]);
+  const [kpiFilterIds, setKpiFilterIds] = useState<number[]>([]);
+  const [completionFilter, setCompletionFilter] = useState<PlanningCompletionFilter>("all");
+  const [issueFilter, setIssueFilter] = useState<PlanningIssueFilter>("all");
   const [banner, setBanner] = useState<string | null>(null);
   const [importOpen, setImportOpen] = useState(false);
   const [importRows, setImportRows] = useState<PlanImportPreviewRow[]>([]);
@@ -126,16 +139,22 @@ export function PlanningWorkspace({ tenantSlug }: { tenantSlug: string }) {
   const hasApprovedPlans = (data?.plans ?? []).some((p) => p.status === "approved");
   const selectedDirection = data?.trade_directions.find((d) => d.id === directionId);
 
-  const filteredGroups = useMemo(() => {
+  const directionGroups = useMemo(() => {
     if (!data || directionId == null) return [];
     return data.kpi_groups.filter((g) => g.trade_direction_id === directionId);
   }, [data, directionId]);
+
+  const filteredGroups = useMemo(() => {
+    if (kpiFilterIds.length === 0) return directionGroups;
+    const set = new Set(kpiFilterIds);
+    return directionGroups.filter((g) => set.has(g.id));
+  }, [directionGroups, kpiFilterIds]);
 
   useEffect(() => {
     setColumnConfigs((prev) => {
       const next = { ...prev };
       let changed = false;
-      for (const g of filteredGroups) {
+      for (const g of directionGroups) {
         if (!next[g.id]) {
           next[g.id] = { groupId: g.id, metrics: ["Сумма"] };
           changed = true;
@@ -143,12 +162,122 @@ export function PlanningWorkspace({ tenantSlug }: { tenantSlug: string }) {
       }
       return changed ? next : prev;
     });
-  }, [filteredGroups]);
+  }, [directionGroups]);
+
+  useEffect(() => {
+    setFilialIds([]);
+    setSvrIds([]);
+    setKpiFilterIds([]);
+    setSearchQuery("");
+    setCompletionFilter("all");
+    setIssueFilter("all");
+  }, [directionId]);
+
+  const filialOptions = useMemo(
+    () => (data ? planningFilialOptions(data.employees) : []),
+    [data]
+  );
+  const svrOptions = useMemo(
+    () => (data ? planningSvrOptions(data.employees, filialIds) : []),
+    [data, filialIds]
+  );
+
+  useEffect(() => {
+    if (svrIds.length === 0) return;
+    const valid = new Set(svrOptions.map((o) => o.id));
+    const next = svrIds.filter((id) => valid.has(id));
+    if (next.length !== svrIds.length) setSvrIds(next);
+  }, [svrIds, svrOptions]);
+
+  useEffect(() => {
+    if (kpiFilterIds.length === 0) return;
+    const valid = new Set(directionGroups.map((g) => g.id));
+    const next = kpiFilterIds.filter((id) => valid.has(id));
+    if (next.length !== kpiFilterIds.length) setKpiFilterIds(next);
+  }, [directionGroups, kpiFilterIds]);
+
+  const planStateMaps = useMemo(() => {
+    const statusByUserId = new Map<number, string>();
+    const mismatchByUserId = new Map<number, boolean>();
+    if (!data) return { statusByUserId, mismatchByUserId };
+
+    const groups =
+      kpiFilterIds.length > 0
+        ? data.kpi_groups.filter((g) => kpiFilterIds.includes(g.id))
+        : data.kpi_groups.filter((g) => g.trade_direction_id === directionId);
+
+    const primaryPlan = groups
+      .map((g) => data.plans.find((p) => p.kpi_group_id === g.id))
+      .find(Boolean);
+
+    for (const emp of data.employees) {
+      if (emp.role !== "agent") continue;
+      let status = "draft";
+      if (primaryPlan) {
+        const t = data.kpi_targets.find(
+          (x) => x.plan_id === primaryPlan.id && x.user_id === emp.id
+        );
+        status = t?.status ?? "draft";
+      }
+      // Bir nechta KPI: eng «yomon» status ustun
+      for (const g of groups) {
+        const plan = data.plans.find((p) => p.kpi_group_id === g.id);
+        if (!plan) continue;
+        const t = data.kpi_targets.find((x) => x.plan_id === plan.id && x.user_id === emp.id);
+        const st = t?.status ?? "draft";
+        if (st === "rejected") status = "rejected";
+        else if (status !== "rejected" && st !== "approved") status = st;
+        else if (status === "draft" && st === "approved") status = "approved";
+      }
+      statusByUserId.set(emp.id, status);
+      mismatchByUserId.set(emp.id, false);
+    }
+
+    // SVR/filial mismatch — agentlarga yopishtirmaymiz; faqat rejected agent = problem
+    // Parent mismatch: agar ota target ≠ agent yig‘indisi — ota problem, lekin filtr agentlar bo‘yicha.
+    // Muammo: rejected yoki parent ostida rollup nomuvofiqligi (agent 0, lekin ota > 0 emas).
+    for (const emp of data.employees) {
+      if (emp.role === "agent") continue;
+      for (const g of groups) {
+        const plan = data.plans.find((p) => p.kpi_group_id === g.id);
+        if (!plan) continue;
+        const own = data.kpi_targets.find((t) => t.plan_id === plan.id && t.user_id === emp.id);
+        const ownCost = Number.parseFloat(own?.cost ?? "0");
+        if (!Number.isFinite(ownCost) || ownCost === 0) continue;
+        const rollup = sumDescendantAgentMetric(emp.id, data.employees, (agentId) => {
+          const t = data.kpi_targets.find((x) => x.plan_id === plan.id && x.user_id === agentId);
+          return Number.parseFloat(t?.cost ?? "0") || 0;
+        });
+        if (Math.abs(ownCost - rollup) > 0.001) {
+          // Ostidagi agentlarni «muammoli» deb belgilash — filtrda ko‘rinsin
+          const mark = (id: number) => {
+            for (const child of data.employees.filter((e) => e.parent_id === id)) {
+              if (child.role === "agent") mismatchByUserId.set(child.id, true);
+              else mark(child.id);
+            }
+          };
+          mark(emp.id);
+        }
+      }
+    }
+
+    return { statusByUserId, mismatchByUserId };
+  }, [data, directionId, kpiFilterIds]);
 
   const filteredEmployees = useMemo(() => {
     if (!data) return [];
-    return filterEmployeesWithAncestors(data.employees, searchQuery);
-  }, [data, searchQuery]);
+    const scoped = filterPlanningEmployeesByScope(data.employees, {
+      search: searchQuery,
+      filialIds,
+      svrIds
+    });
+    return filterPlanningEmployeesByPlanState(scoped, {
+      completion: completionFilter,
+      issue: issueFilter,
+      statusByUserId: planStateMaps.statusByUserId,
+      mismatchByUserId: planStateMaps.mismatchByUserId
+    });
+  }, [data, searchQuery, filialIds, svrIds, completionFilter, issueFilter, planStateMaps]);
 
   const tradeDirectionNames = data?.trade_directions.map((d) => d.name) ?? [];
 
@@ -291,13 +420,27 @@ export function PlanningWorkspace({ tenantSlug }: { tenantSlug: string }) {
           const dir = data?.trade_directions.find((d) => d.name === name);
           if (dir) setDirectionId(dir.id);
         }}
+        searchQuery={searchQuery}
         onSearch={setSearchQuery}
         onRefresh={() => void centerQ.refetch()}
         loading={centerQ.isFetching}
-        canImport={canWrite && directionId != null && filteredGroups.length > 0}
+        canImport={canWrite && directionId != null && directionGroups.length > 0}
         onDownloadTemplate={() => void handleDownloadTemplate()}
         onImportFile={(f) => void handleImportFile(f)}
         importBusy={importBusy}
+        filialOptions={filialOptions}
+        svrOptions={svrOptions}
+        kpiOptions={directionGroups.map((g) => ({ id: g.id, name: g.name }))}
+        filialIds={filialIds}
+        svrIds={svrIds}
+        kpiIds={kpiFilterIds}
+        onFilialIdsChange={setFilialIds}
+        onSvrIdsChange={setSvrIds}
+        onKpiIdsChange={setKpiFilterIds}
+        completionFilter={completionFilter}
+        issueFilter={issueFilter}
+        onCompletionFilterChange={setCompletionFilter}
+        onIssueFilterChange={setIssueFilter}
       />
 
       {banner && (
@@ -332,13 +475,17 @@ export function PlanningWorkspace({ tenantSlug }: { tenantSlug: string }) {
             onUpdateTarget={handleUpdateTarget}
             onUpdateStatus={handleUpdateStatus}
             onUpdateComment={handleUpdateComment}
+            agentKpiIds={data.agent_kpi_ids}
+            kpiGroupIdsWithAgents={data.kpi_group_ids_with_agents}
           />
 
           <TotalsSection
-            employees={data.employees}
+            employees={filteredEmployees}
             kpiGroups={filteredGroups}
             kpiTargets={data.kpi_targets}
             plans={data.plans}
+            agentKpiIds={data.agent_kpi_ids}
+            kpiGroupIdsWithAgents={data.kpi_group_ids_with_agents}
           />
 
           <div className="flex items-center justify-end gap-3 py-2">

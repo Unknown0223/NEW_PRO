@@ -6,7 +6,8 @@ export type FaceVerifyContext =
   | "order_submit"
   | "territory_check"
   | "delivery_confirm"
-  | "payment_accept";
+  | "payment_accept"
+  | "web_login";
 
 export type FaceVerificationPolicy = {
   enabled: boolean;
@@ -20,14 +21,17 @@ export type UiPrefs = Record<string, unknown>;
 export const REF_KEY = "face_reference_storage_key";
 export const REF_AT = "face_reference_uploaded_at";
 export const REF_DESC = "face_reference_descriptor";
-export const MAX_IMAGE_BYTES = 900_000;
+export const REF_DESC_V = "face_reference_descriptor_v";
+export const REF_LANDMARK_DESC = "face_reference_landmark_descriptor";
+/** Binary max after base64 decode (client usually compresses to ≤750KB). */
+export const MAX_IMAGE_BYTES = 1_200_000;
 
 export function matchThreshold(): number {
   const raw = process.env.FACE_MATCH_THRESHOLD;
   if (raw == null || raw.trim() === "") return DEFAULT_FACE_MATCH_THRESHOLD;
   const n = Number(raw);
   if (!Number.isFinite(n)) return DEFAULT_FACE_MATCH_THRESHOLD;
-  return Math.min(0.99, Math.max(0.5, n));
+  return Math.min(0.99, Math.max(0.2, n));
 }
 
 export function readUiPrefs(raw: unknown): UiPrefs {

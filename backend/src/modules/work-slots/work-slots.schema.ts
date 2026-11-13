@@ -35,7 +35,9 @@ export const activeUserAttrsSchema = z.object({
   /** Occupant-only: User.app_access */
   app_access: z.boolean().optional(),
   /** Occupant-only: User.max_sessions (0 = cheksiz) */
-  max_sessions: maxSessionsValueSchema.optional()
+  max_sessions: maxSessionsValueSchema.optional(),
+  /** Occupant-only: User.require_face_login */
+  require_face_login: z.boolean().optional()
 });
 
 export const maxSessionsBySlotTypeBodySchema = z.object({
@@ -120,7 +122,8 @@ function hasActiveUserAttrs(o: z.infer<typeof activeUserAttrsSchema>): boolean {
     o.cash_desk_ids !== undefined ||
     o.position !== undefined ||
     o.app_access !== undefined ||
-    o.max_sessions !== undefined
+    o.max_sessions !== undefined ||
+    o.require_face_login !== undefined
   );
 }
 

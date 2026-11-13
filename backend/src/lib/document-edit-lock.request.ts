@@ -1,7 +1,11 @@
 import type { FastifyRequest } from "fastify";
 import { prisma } from "../config/database";
 import { getAccessUser } from "../modules/auth/auth.prehandlers";
-import { evaluateDocumentEditLockPure, type DocumentEditLockSection } from "./document-edit-lock";
+import {
+  buildDocumentEditPeriodLockedMessage,
+  evaluateDocumentEditLockPure,
+  type DocumentEditLockSection
+} from "./document-edit-lock";
 import {
   assertDocumentEditable,
   assertDocumentEditableById,
@@ -95,7 +99,21 @@ export async function assertDocsWritableByIds(
     });
     if (verdict === "allow") continue;
     if (grantIds?.has(id)) continue;
-    throw new DocumentEditPeriodLockedError();
+    const days = settings.sections[section]?.days ?? 1;
+    const docDate =
+      documentDate != null && !Number.isNaN(documentDate.getTime()) ? documentDate : null;
+    throw new DocumentEditPeriodLockedError(
+      buildDocumentEditPeriodLockedMessage({
+        section,
+        days,
+        documentDate: docDate
+      }),
+      {
+        section,
+        days,
+        document_date: docDate ? docDate.toISOString() : null
+      }
+    );
   }
 }
 
@@ -116,4 +134,19 @@ export async function assertDocWritableByDate(
     actorRole: user.role,
     documentKind
   });
+}
+
+/** ISO sana berilgan bo‘lsa — shu sana bo‘yicha period lock. */
+export async function assertDocWritableByIsoDate(
+  request: FastifyRequest,
+  section: DocumentEditLockSection,
+  iso: string | null | undefined,
+  documentId: number | null = null,
+  documentKind?: string | null
+): Promise<void> {
+  const raw = (iso ?? "").trim();
+  if (!raw) return;
+  const d = new Date(raw);
+  if (Number.isNaN(d.getTime())) return;
+  await assertDocWritableByDate(request, section, d, documentId, documentKind);
 }

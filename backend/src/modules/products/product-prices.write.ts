@@ -2,9 +2,116 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "../../config/database";
 import { invalidatePriceTypesCache } from "../../lib/redis-cache";
 import { appendTenantAuditEvent, AuditEntityType } from "../../lib/tenant-audit";
+import {
+  shouldSnapshotPreviousPrice,
+  snapshotEffectiveAt
+} from "./product-prices.as-of.pure";
 import { listProductPrices, type PriceRow } from "./product-prices.read";
+import { PRICE_SCHEDULE_STATUS } from "./product-price-schedules.service";
 
 export type PriceInputItem = { price_type: string; price: number };
+
+type TxClient = Prisma.TransactionClient;
+
+/** Eski narxni schedule ga yozish (старые цены uchun); keyin yangi narx yoziladi. */
+async function snapshotPreviousPricesInTx(
+  tx: TxClient,
+  input: {
+    tenantId: number;
+    priceType: string;
+    currency: string;
+    now: Date;
+    actorUserId: number | null;
+    nextByProductId: Map<number, Prisma.Decimal>;
+  }
+): Promise<void> {
+  const ids = [...input.nextByProductId.keys()];
+  if (ids.length === 0) return;
+
+  const existing = await tx.productPrice.findMany({
+    where: {
+      tenant_id: input.tenantId,
+      product_id: { in: ids },
+      price_type: input.priceType
+    },
+    select: {
+      product_id: true,
+      price: true,
+      currency: true,
+      created_at: true,
+      updated_at: true
+    }
+  });
+  if (existing.length === 0) return;
+
+  const latestSchedules = await tx.productPriceSchedule.findMany({
+    where: {
+      tenant_id: input.tenantId,
+      product_id: { in: ids },
+      price_type: input.priceType,
+      status: PRICE_SCHEDULE_STATUS.applied,
+      effective_at: { lte: input.now }
+    },
+    orderBy: [{ effective_at: "desc" }, { id: "desc" }],
+    select: { product_id: true, price: true }
+  });
+  const latestByProduct = new Map<number, string>();
+  for (const row of latestSchedules) {
+    if (latestByProduct.has(row.product_id)) continue;
+    latestByProduct.set(row.product_id, row.price.toString());
+  }
+
+  const snapshots: Array<{
+    tenant_id: number;
+    product_id: number;
+    price_type: string;
+    price: Prisma.Decimal;
+    currency: string;
+    effective_at: Date;
+    status: string;
+    applied_at: Date;
+    created_by?: number;
+  }> = [];
+
+  for (const row of existing) {
+    const next = input.nextByProductId.get(row.product_id);
+    if (next == null) continue;
+    const prev = row.price.toString();
+    const latest = latestByProduct.get(row.product_id) ?? null;
+    if (
+      !shouldSnapshotPreviousPrice({
+        previousPrice: prev,
+        nextPrice: next.toString(),
+        latestSchedulePrice: latest
+      })
+    ) {
+      continue;
+    }
+    const hasPriorSchedule = latest != null;
+    snapshots.push({
+      tenant_id: input.tenantId,
+      product_id: row.product_id,
+      price_type: input.priceType,
+      price: row.price,
+      currency: row.currency?.trim() || input.currency,
+      effective_at: snapshotEffectiveAt({
+        now: input.now,
+        createdAt: row.created_at,
+        updatedAt: row.updated_at,
+        hasPriorSchedule
+      }),
+      status: PRICE_SCHEDULE_STATUS.applied,
+      applied_at: input.now,
+      ...(input.actorUserId != null && input.actorUserId > 0
+        ? { created_by: input.actorUserId }
+        : {})
+    });
+  }
+
+  if (snapshots.length > 0) {
+    await tx.productPriceSchedule.createMany({ data: snapshots });
+  }
+}
 
 export async function syncProductPrices(
   tenantId: number,
@@ -26,6 +133,30 @@ export async function syncProductPrices(
   }
 
   await prisma.$transaction(async (tx) => {
+    const now = new Date();
+    if (items.length > 0) {
+      // Har bir tip uchun alohida eski narx snapshot.
+      const byType = new Map<string, Map<number, Prisma.Decimal>>();
+      for (const it of items) {
+        const t = it.price_type.trim();
+        let m = byType.get(t);
+        if (!m) {
+          m = new Map();
+          byType.set(t, m);
+        }
+        m.set(productId, new Prisma.Decimal(it.price));
+      }
+      for (const [priceType, nextByProductId] of byType) {
+        await snapshotPreviousPricesInTx(tx, {
+          tenantId,
+          priceType,
+          currency: "UZS",
+          now,
+          actorUserId,
+          nextByProductId
+        });
+      }
+    }
     await tx.productPrice.deleteMany({
       where: { tenant_id: tenantId, product_id: productId }
     });
@@ -38,8 +169,7 @@ export async function syncProductPrices(
         price: new Prisma.Decimal(it.price)
       }))
     });
-    // Старые цены / as-of: mahsulot sync ham tarixga yoziladi.
-    const now = new Date();
+    // Старые цены / as-of: yangi narx ham tarixga yoziladi.
     await tx.productPriceSchedule.createMany({
       data: items.map((it) => ({
         tenant_id: tenantId,
@@ -48,7 +178,7 @@ export async function syncProductPrices(
         price: new Prisma.Decimal(it.price),
         currency: "UZS",
         effective_at: now,
-        status: "applied",
+        status: PRICE_SCHEDULE_STATUS.applied,
         applied_at: now,
         created_by: actorUserId ?? undefined
       }))
@@ -149,6 +279,18 @@ export async function bulkUpsertPricesForType(
   const cur = currency.trim().toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 20) || "UZS";
 
   await prisma.$transaction(async (tx) => {
+    const nextByProductId = new Map(
+      items.map((it) => [it.product_id, new Prisma.Decimal(it.price)] as const)
+    );
+    await snapshotPreviousPricesInTx(tx, {
+      tenantId,
+      priceType: t,
+      currency: cur,
+      now,
+      actorUserId,
+      nextByProductId
+    });
+
     for (const it of items) {
       await tx.productPrice.upsert({
         where: {
@@ -171,7 +313,7 @@ export async function bulkUpsertPricesForType(
         }
       });
     }
-    // Старые цены / as-of: har bir darhol yozuv tarix sifatida saqlanadi.
+    // Старые цены / as-of: yangi narx tarix sifatida saqlanadi.
     await tx.productPriceSchedule.createMany({
       data: items.map((it) => ({
         tenant_id: tenantId,
@@ -180,7 +322,7 @@ export async function bulkUpsertPricesForType(
         price: new Prisma.Decimal(it.price),
         currency: cur,
         effective_at: now,
-        status: "applied",
+        status: PRICE_SCHEDULE_STATUS.applied,
         applied_at: now,
         created_by: actorUserId ?? undefined
       }))

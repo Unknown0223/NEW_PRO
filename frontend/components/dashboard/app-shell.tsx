@@ -345,6 +345,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const hydrated = useAuthStoreHydrated();
   const accessToken = useAuthStore((s) => s.accessToken);
+  const mustChangePassword = useAuthStore((s) => s.mustChangePassword);
   const { tenantSlug, clearSession } = useAuthStore();
   const persistRole = useEffectiveRole();
   /**
@@ -377,6 +378,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       cancelled = true;
     };
   }, [hydrated, accessToken]);
+
+  useEffect(() => {
+    if (!hydrated || !accessToken || !mustChangePassword) return;
+    if (pathname === "/change-password" || pathname === "/login") return;
+    router.replace("/change-password");
+  }, [hydrated, accessToken, mustChangePassword, pathname, router]);
 
   const mePermsQ = useQuery({
     queryKey: mePermissionsQueryKey(tenantSlug, decodeAccessTokenUserId(accessToken)),

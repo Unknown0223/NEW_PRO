@@ -6,6 +6,7 @@
  * Qatlam C: data scope — self-service rollar uchun parametrlarni majburan o‘zgartirish.
  */
 import { resolveUserPermissionKeys } from "../access/rbac.resolve";
+import { gateAssistantFeature } from "./ai.assistant-access.pure";
 import { AI_CONFIG } from "./ai.config";
 import { pNum, stripInternal, type AiToolSpec } from "./ai.tool";
 import type { AiActor, AiParams } from "./ai.types";
@@ -26,8 +27,10 @@ export async function loadPermissionState(actor: AiActor): Promise<PermissionSta
 
 export type ToolGate = { allowed: boolean; reason?: string };
 
-/** Pre-flight: tool ruxsat kalitlari foydalanuvchida bormi. */
+/** Pre-flight: AI feature (chat/reports/tasks) + tool.anyOf. */
 export function gateTool(tool: AiToolSpec, state: PermissionState): ToolGate {
+  const feature = gateAssistantFeature(tool, state);
+  if (!feature.allowed) return feature;
   if (state.unrestricted) return { allowed: true };
   if (tool.anyOf.length === 0) return { allowed: true };
   if (tool.anyOf.some((key) => state.keys.has(key))) return { allowed: true };

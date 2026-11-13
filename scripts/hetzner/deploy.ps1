@@ -66,9 +66,13 @@ function Sync-Tree {
   ) + ($ExtraExcludes | ForEach-Object { "--exclude=$_" })
 
   Write-Host "  tar: $name ..." -ForegroundColor DarkGray
-  Push-Location $LocalDir
+  # TEMP da nisbiy nom bilan yozamiz — Windows System32 tar absolut C:\ yo‘lini
+  # yoki --force-local ni ishonchli qo‘llab-quvvatlamaydi.
+  $tarName = Split-Path $tar -Leaf
+  Push-Location $env:TEMP
   try {
-    & tar -czf $tar @excludes .
+    if (Test-Path $tarName) { Remove-Item $tarName -Force }
+    & tar -czf $tarName @excludes -C $LocalDir .
     if ($LASTEXITCODE -ne 0) { throw "tar xato: $LocalDir" }
   } finally {
     Pop-Location
@@ -131,7 +135,7 @@ Remove-Item $composeTmp -Force -ErrorAction SilentlyContinue
 # 2) Build + recreate
 Write-Host "[2/3] Docker build + up..." -ForegroundColor Yellow
 $services = @()
-if (-not $SkipBackend) { $services += "backend" }
+if (-not $SkipBackend) { $services += @("backend", "worker") }
 if (-not $SkipFrontend) { $services += "frontend" }
 if (-not $SkipBot) { $services += "telegram-bot" }
 if ($services.Count -eq 0) { throw "Hech narsa build qilinmadi (SkipBackend+SkipFrontend+SkipBot)" }

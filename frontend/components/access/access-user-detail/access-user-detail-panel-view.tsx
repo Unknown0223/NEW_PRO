@@ -76,7 +76,12 @@ export function AccessUserDetailPanel({
   if (vm.detailQ.isError && !vm.user) {
     return (
       <div className="p-4">
-        <PageError message="Не удалось загрузить данные доступа пользователя." onRetry={() => void vm.detailQ.refetch()} />
+        <PageError
+          error={vm.detailQ.error}
+          resource="Доступ пользователя"
+          message="Не удалось загрузить данные доступа пользователя."
+          onRetry={() => void vm.detailQ.refetch()}
+        />
       </div>
     );
   }

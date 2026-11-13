@@ -9,10 +9,7 @@ import type { ReactNode } from "react";
 
 /**
  * Deep-link himoyasi: yon panelda yashirilgan bo‘lim URL orqali ochilganda
- * aniq «нет доступа» ko‘rsatiladi (bo‘sh shell emas).
- *
- * Muhim: faqat *birinchi* permissions yuklashda children o‘rniga spinner —
- * poll/focus refetch ochiq modal/tanlovni yopmasin.
+ * to‘liq 403 ErrorPage (bo‘sh shell emas).
  */
 export function RouteAccessGate({ children }: { children: ReactNode }) {
   const pathname = usePathname() ?? "";
@@ -28,14 +25,12 @@ export function RouteAccessGate({ children }: { children: ReactNode }) {
   const allowed = isNavItemAllowed(gated, role, perms.keys);
   if (!allowed) {
     return (
-      <div className="flex flex-1 items-start justify-center p-6 sm:p-10">
-        <AccessDeniedBanner
-          title="Нет доступа"
-          message={`Раздел «${gated.label}» недоступен для вашей роли или прав.`}
-          secondaryHref="/access"
-          secondaryLabel="Доступ"
-        />
-      </div>
+      <AccessDeniedBanner
+        resource={gated.label}
+        message={`Раздел «${gated.label}» недоступен для вашей роли или прав.`}
+        secondaryHref="/access"
+        secondaryLabel="Доступ"
+      />
     );
   }
 

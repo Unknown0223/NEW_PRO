@@ -18,11 +18,12 @@ export default function AccessHistoryPage() {
   if (gate.isLoading) return <p className="text-sm text-muted-foreground">Загрузка...</p>;
   if (!gate.allowed) {
     return (
-      <div className="flex flex-1 items-start justify-center p-8">
-        <AccessDeniedBanner
-          message="Недостаточно прав для раздела «Доступ» (нужны admin или access.upravlenie.view)."
-        />
-      </div>
+      <AccessDeniedBanner
+        resource="Доступ · История"
+        message="Недостаточно прав для раздела «Доступ» (нужны admin или access.upravlenie.view)."
+        secondaryHref="/access"
+        secondaryLabel="Доступ"
+      />
     );
   }
 

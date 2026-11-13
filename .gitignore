@@ -1,6 +1,13 @@
 # Nested clone (accidental duplicate repo folder)
 SALEC/
 
+# Flutter pub cache / local scratch (repoga kirmaydi)
+.pub-cache/
+_tmp_*
+_ai_assistant.patch
+mobile_legacy/
+
+
 # Docker Postgres ma’lumoti (infrastructure/docker-compose bind mount)
 SALES/postgres-data/
 **/postgres-data/
@@ -109,6 +116,9 @@ mobile/releases/*.apk
 mobile/android/key.properties
 mobile/android/keystore/*.jks
 mobile/android/keystore/*.keystore
+
+# MediaPipe Face Landmarker WASM + .task (sync: npm run sync:mediapipe --prefix frontend)
+frontend/public/mediapipe/
 
 # Lokal object storage / yuklangan fayllar (etalon selfie va h.k.)
 backend/uploads/

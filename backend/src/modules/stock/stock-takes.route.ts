@@ -110,7 +110,7 @@ export async function registerStockTakeRoutes(app: FastifyInstance) {
       if (!row) return sendApiError(reply, request, 404, "NotFound");
       return reply.send({ data: row });
     } catch (e) {
-      if (isDocumentEditPeriodLockedError(e)) return sendDocumentEditPeriodLocked(reply, request);
+      if (isDocumentEditPeriodLockedError(e)) return sendDocumentEditPeriodLocked(reply, request, e);
       const msg = e instanceof Error ? e.message : "";
       if (msg === "NotDraft") return sendApiError(reply, request, 409, "NotDraft");
       if (msg === "ProductNotFound") return sendApiError(reply, request, 400, "ProductNotFound");
@@ -130,7 +130,7 @@ export async function registerStockTakeRoutes(app: FastifyInstance) {
       if (!row) return sendApiError(reply, request, 404, "NotFound");
       return reply.send({ data: row });
     } catch (e) {
-      if (isDocumentEditPeriodLockedError(e)) return sendDocumentEditPeriodLocked(reply, request);
+      if (isDocumentEditPeriodLockedError(e)) return sendDocumentEditPeriodLocked(reply, request, e);
       const msg = e instanceof Error ? e.message : "";
       if (msg === "NotDraft") return sendApiError(reply, request, 409, "NotDraft");
       if (msg === "NoLines") return sendApiError(reply, request, 400, "NoLines");
@@ -151,7 +151,7 @@ export async function registerStockTakeRoutes(app: FastifyInstance) {
       if (!row) return sendApiError(reply, request, 404, "NotFound");
       return reply.send({ data: row });
     } catch (e) {
-      if (isDocumentEditPeriodLockedError(e)) return sendDocumentEditPeriodLocked(reply, request);
+      if (isDocumentEditPeriodLockedError(e)) return sendDocumentEditPeriodLocked(reply, request, e);
       const msg = e instanceof Error ? e.message : "";
       if (msg === "NotDraft") return sendApiError(reply, request, 409, "NotDraft");
       if (msg === "AlreadyCancelled") return sendApiError(reply, request, 409, "AlreadyCancelled");

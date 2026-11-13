@@ -121,6 +121,11 @@ export async function persistCreateOrderInTransaction(
     workSlotId = link?.slot_id ?? null;
   }
 
+  const createdAtRaw = (input.created_at ?? "").trim();
+  const createdAtParsed = createdAtRaw ? new Date(createdAtRaw) : null;
+  const createdAt =
+    createdAtParsed != null && !Number.isNaN(createdAtParsed.getTime()) ? createdAtParsed : null;
+
   const created = await tx.order.create({
     data: {
       tenant_id: tenantId,
@@ -134,6 +139,7 @@ export async function persistCreateOrderInTransaction(
       expeditor_user_id: expeditorUserId,
       order_type: orderType,
       status: statusForType,
+      ...(createdAt ? { created_at: createdAt } : {}),
       total_sum: paidTotal,
       bonus_sum: bonusSum,
       discount_sum: discountSum,

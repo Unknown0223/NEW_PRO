@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildDocumentEditPeriodLockedMessage,
   defaultDocumentEditLockSettings,
   evaluateDocumentEditLockPure,
   isDocumentDateWithinLockWindow,
@@ -30,12 +31,19 @@ describe("document-edit-lock pure", () => {
     const today = new Date("2026-07-11T01:00:00.000Z");
     const yesterday = new Date("2026-07-10T23:00:00.000Z");
     const twoDaysAgo = new Date("2026-07-09T12:00:00.000Z");
+    const tomorrow = new Date("2026-07-12T12:00:00.000Z");
+    const inTwoDays = new Date("2026-07-13T12:00:00.000Z");
     expect(utcCalendarDaysSince(today, now)).toBe(0);
     expect(utcCalendarDaysSince(yesterday, now)).toBe(1);
+    expect(utcCalendarDaysSince(tomorrow, now)).toBe(-1);
     expect(isDocumentDateWithinLockWindow(today, 1, now)).toBe(true);
     expect(isDocumentDateWithinLockWindow(yesterday, 1, now)).toBe(false);
+    expect(isDocumentDateWithinLockWindow(tomorrow, 1, now)).toBe(false);
+    expect(isDocumentDateWithinLockWindow(tomorrow, 2, now)).toBe(true);
     expect(isDocumentDateWithinLockWindow(twoDaysAgo, 3, now)).toBe(true);
     expect(isDocumentDateWithinLockWindow(twoDaysAgo, 2, now)).toBe(false);
+    expect(isDocumentDateWithinLockWindow(inTwoDays, 3, now)).toBe(true);
+    expect(isDocumentDateWithinLockWindow(inTwoDays, 2, now)).toBe(false);
   });
 
   it("evaluate: admin / off / window / need_grant", () => {
@@ -81,5 +89,25 @@ describe("document-edit-lock pure", () => {
         now
       })
     ).toBe("need_grant");
+  });
+
+  it("builds clear locked-period reason for users", () => {
+    const msg = buildDocumentEditPeriodLockedMessage({
+      section: "payments",
+      days: 1,
+      documentDate: new Date("2026-07-01T12:00:00.000Z")
+    });
+    expect(msg).toContain("01.07.2026");
+    expect(msg).toContain("Оплаты");
+    expect(msg).toContain("±1 день");
+    expect(msg).toContain("администратор");
+
+    const noDate = buildDocumentEditPeriodLockedMessage({
+      section: "orders",
+      days: 3,
+      documentDate: null
+    });
+    expect(noDate).toContain("Заказы");
+    expect(noDate).toContain("±3 дня");
   });
 });

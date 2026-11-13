@@ -11,8 +11,14 @@ import {
 import { catalogRoles } from "./staff.route.shared";
 import { prisma } from "../../config/database";
 
+/** ~1.2MB binary base64 (~1.6M chars) — klient siqadi, lekin Telegram clipboard katta bo‘lishi mumkin. */
 const faceReferenceBodySchema = z.object({
-  image_base64: z.string().min(80).max(900_000)
+  image_base64: z.string().min(80).max(1_800_000),
+  landmarks: z
+    .array(z.object({ x: z.number(), y: z.number() }))
+    .min(100)
+    .max(600)
+    .optional()
 });
 
 function parseUserId(raw: string): number | null {
@@ -54,15 +60,20 @@ export async function registerStaffFaceRoutes(app: FastifyInstance) {
       return sendApiError(reply, request, 404, "NotFound");
     }
     try {
-      const result = await uploadFaceReference(request.tenant!.id, userId, parsed.data.image_base64);
+      const result = await uploadFaceReference(
+        request.tenant!.id,
+        userId,
+        parsed.data.image_base64,
+        parsed.data.landmarks ?? null
+      );
       return reply.send(result);
     } catch (e) {
       const msg = e instanceof Error ? e.message : "";
       if (msg === "IMAGE_TOO_LARGE" || msg === "IMAGE_TOO_SMALL") {
         return sendApiError(reply, request, 400, "ValidationError", "Некорректный размер изображения");
       }
-      if (msg === "FACE_IMAGE_BLANK") {
-        return sendApiError(reply, request, 400, "ValidationError", "Лицо на фото нечёткое");
+      if (msg === "FACE_IMAGE_BLANK" || msg === "FACE_NOT_DETECTED") {
+        return sendApiError(reply, request, 400, "ValidationError", "Лицо на фото не найдено или нечёткое");
       }
       throw e;
     }

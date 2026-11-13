@@ -1,43 +1,41 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { cn } from "@/lib/utils";
-import { Search, FileSpreadsheet, SlidersHorizontal, ChevronDown } from "lucide-react";
+import { Search, FileSpreadsheet } from "lucide-react";
 import type { PlanningEmployee, PlanningKpiGroup, PlanningPlan, PlanningTarget } from "./planning-api";
-import { formatNumber, getPlanningRoleLabel, getRoleLabel, sumDescendantAgentMetric } from "./planning-utils";
-import { flattenPlanningTree, getPlanningParentIds, defaultExpandedPlanningNodes } from "./planning-tree";
+import {
+  buildPlanningFilialSections,
+  resolveBlockKpiGroups
+} from "./planning-blocks";
+import {
+  formatNumber,
+  getPlanningRoleLabel,
+  getRoleLabel,
+  isPlanningKpiCellEditable,
+  sumDescendantAgentMetric
+} from "./planning-utils";
 
 interface TotalsSectionProps {
   employees: PlanningEmployee[];
   kpiGroups: PlanningKpiGroup[];
   kpiTargets: PlanningTarget[];
   plans: PlanningPlan[];
+  agentKpiIds?: Record<string, number[]>;
+  kpiGroupIdsWithAgents?: number[];
 }
 
-export function TotalsSection({ employees, kpiGroups, kpiTargets, plans }: TotalsSectionProps) {
+export function TotalsSection({
+  employees,
+  kpiGroups,
+  kpiTargets,
+  plans,
+  agentKpiIds,
+  kpiGroupIdsWithAgents
+}: TotalsSectionProps) {
   const [activeTab, setActiveTab] = useState<"detailed" | "general">("detailed");
   const [activeMetric, setActiveMetric] = useState<string>("Сумма");
   const [search, setSearch] = useState("");
-  const parentIds = useMemo(() => getPlanningParentIds(employees), [employees]);
-  const [expanded, setExpanded] = useState<Set<number>>(() => new Set());
-
-  useEffect(() => {
-    setExpanded(defaultExpandedPlanningNodes(employees));
-  }, [employees]);
-
-  const flatRows = useMemo(
-    () => flattenPlanningTree(employees, expanded, search),
-    [employees, expanded, search]
-  );
-
-  const toggleExpanded = (id: number) => {
-    setExpanded((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  };
 
   const getTarget = (planId: number, userId: number) =>
     kpiTargets.find((t) => t.plan_id === planId && t.user_id === userId);
@@ -60,37 +58,35 @@ export function TotalsSection({ employees, kpiGroups, kpiTargets, plans }: Total
     }
   };
 
-  /** Qator qiymati: agent — o‘z targeti; SVR/filial — agentlar yig‘indisi (yoki o‘z targeti agar > 0). */
   const rowMetricValue = (emp: PlanningEmployee, groupId: number, metric: string): number => {
     const plan = plans.find((p) => p.kpi_group_id === groupId);
     if (!plan) return 0;
     const own = getMetricValue(getTarget(plan.id, emp.id), metric);
-    if (!parentIds.has(emp.id)) return own;
+    if (emp.role === "agent") return own;
     if (own !== 0) return own;
     return sumDescendantAgentMetric(emp.id, employees, (agentId) =>
       getMetricValue(getTarget(plan.id, agentId), metric)
     );
   };
 
-  const groupTotal = (groupId: number, metric: string) => {
-    // Faqat agentlar — double-count bo‘lmasin
-    return employees
-      .filter((e) => e.role === "agent")
-      .reduce((s, e) => {
-        const plan = plans.find((p) => p.kpi_group_id === groupId);
-        if (!plan) return s;
-        return s + getMetricValue(getTarget(plan.id, e.id), metric);
-      }, 0);
-  };
-
-  const empTotal = (emp: PlanningEmployee, metric: string) =>
-    kpiGroups.reduce((s, g) => s + rowMetricValue(emp, g.id, metric), 0);
-
-  const grandTotal = (metric: string) =>
-    kpiGroups.reduce((s, g) => s + groupTotal(g.id, metric), 0);
+  const sections = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return buildPlanningFilialSections(employees);
+    const matched = employees.filter(
+      (e) => e.name.toLowerCase().includes(q) || (e.code ?? "").toLowerCase().includes(q)
+    );
+    if (matched.length === 0) return [];
+    return buildPlanningFilialSections(mergeWithAncestors(employees, matched));
+  }, [employees, search]);
 
   const metrics = ["Сумма", "Количество", "Объем", "АКБ", "Кол-во-заказов"];
-  const metricLabel = activeMetric === "Сумма" ? "Сумма по группе KPI" : `${activeMetric} по группе KPI`;
+
+  const groupTotal = (groupId: number, metric: string, agentIds: number[]) =>
+    agentIds.reduce((s, agentId) => {
+      const plan = plans.find((p) => p.kpi_group_id === groupId);
+      if (!plan) return s;
+      return s + getMetricValue(getTarget(plan.id, agentId), metric);
+    }, 0);
 
   return (
     <div>
@@ -136,19 +132,12 @@ export function TotalsSection({ employees, kpiGroups, kpiTargets, plans }: Total
             </div>
             <button
               type="button"
-              className="flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50"
-            >
-              <SlidersHorizontal className="h-4 w-4" />
-            </button>
-            <button
-              type="button"
               className="flex h-9 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-600 hover:bg-slate-50"
             >
               <FileSpreadsheet className="h-4 w-4 text-emerald-600" />
               Excel
             </button>
           </div>
-
           <div className="flex flex-wrap items-center gap-1">
             {metrics.map((m) => (
               <button
@@ -167,92 +156,170 @@ export function TotalsSection({ employees, kpiGroups, kpiTargets, plans }: Total
         </div>
 
         {activeTab === "detailed" && (
-          <div className="overflow-x-auto">
-            <table className="w-full border-collapse text-sm">
-              <thead>
-                <tr className="border-b border-slate-200">
-                  <th className="w-[200px] px-3 py-2.5 text-left text-xs font-medium text-slate-500">Ф.И.О</th>
-                  <th className="w-[60px] px-3 py-2.5 text-left text-xs font-medium text-slate-500">Код</th>
-                  <th className="w-[90px] px-3 py-2.5 text-left text-xs font-medium text-slate-500">Роль</th>
-                  <th className="px-3 py-2.5 text-center text-xs font-medium text-slate-400" colSpan={kpiGroups.length}>
-                    {metricLabel}
-                  </th>
-                  <th className="w-[80px] px-3 py-2.5 text-right text-xs font-medium text-slate-500">Итого</th>
-                </tr>
-                <tr className="border-b border-slate-200 bg-slate-50/50">
-                  <th className="px-3 py-2" colSpan={3} />
-                  {kpiGroups.map((g) => (
-                    <th
-                      key={g.id}
-                      className="whitespace-nowrap px-3 py-2 text-center text-xs font-medium text-slate-500"
-                    >
-                      {g.name}
-                    </th>
-                  ))}
-                  <th className="px-3 py-2" />
-                </tr>
-              </thead>
-              <tbody>
-                {flatRows.map(({ emp, depth }) => {
-                  const hasChildren = parentIds.has(emp.id);
-                  const isExpanded = expanded.has(emp.id);
-                  return (
-                    <tr key={emp.id} className="border-b border-slate-50 hover:bg-slate-50/30">
-                      <td className="px-3 py-2 text-xs text-slate-700">
-                        <div
-                          className="flex items-center gap-1.5"
-                          style={{ paddingLeft: `${depth * 14}px` }}
-                        >
-                          {hasChildren ? (
-                            <button
-                              type="button"
-                              onClick={() => toggleExpanded(emp.id)}
-                              className="flex h-4 w-4 shrink-0 items-center justify-center rounded hover:bg-slate-200"
-                            >
-                              <ChevronDown
-                                className={cn(
-                                  "h-3 w-3 text-slate-500 transition-transform",
-                                  !isExpanded && "-rotate-90"
-                                )}
-                              />
-                            </button>
-                          ) : (
-                            <span className="w-4 shrink-0" />
-                          )}
-                          <span className={cn(depth === 0 && "font-semibold")}>{emp.name}</span>
-                        </div>
-                      </td>
-                      <td className="px-3 py-2 text-xs text-slate-400">{emp.code ?? "—"}</td>
-                      <td className="px-3 py-2 text-xs text-slate-500 whitespace-nowrap">{getPlanningRoleLabel(emp)}</td>
-                      {kpiGroups.map((g) => {
-                        const val = rowMetricValue(emp, g.id, activeMetric);
+          <div className="space-y-6">
+            {sections.length === 0 ? (
+              <p className="py-8 text-center text-sm text-slate-500">Нет данных для отображения.</p>
+            ) : (
+              sections.map((section) => (
+                <section key={section.key} className="space-y-3">
+                  <header className="flex flex-wrap items-baseline gap-2 border-b border-slate-200 pb-2">
+                    <h2 className="text-base font-semibold text-slate-900">{section.title}</h2>
+                    {section.subtitle ? (
+                      <span className="text-xs text-slate-500">{section.subtitle}</span>
+                    ) : null}
+                  </header>
+                  <div className="space-y-4">
+                    {section.blocks.map((block) => {
+                      const blockGroups = resolveBlockKpiGroups(
+                        block.agentIds,
+                        kpiGroups,
+                        agentKpiIds,
+                        kpiGroupIdsWithAgents
+                      );
+                      if (blockGroups.length === 0) {
                         return (
-                          <td key={g.id} className="px-3 py-2 text-center text-xs text-slate-600">
-                            {formatNumber(val)}
-                          </td>
+                          <div
+                            key={block.key}
+                            className="rounded-lg border border-dashed border-slate-200 bg-slate-50/50 px-3 py-3 text-xs text-slate-500"
+                          >
+                            <span className="font-medium text-slate-700">{block.head.name}</span>
+                            {" — нет привязанных KPI"}
+                          </div>
                         );
-                      })}
-                      <td className="px-3 py-2 text-right text-xs font-semibold text-slate-700">
-                        {formatNumber(empTotal(emp, activeMetric))}
-                      </td>
-                    </tr>
-                  );
-                })}
-                <tr className="border-t border-slate-200 bg-slate-50/80">
-                  <td className="px-3 py-2 text-xs font-semibold text-slate-700" colSpan={3}>
-                    Итого:
-                  </td>
-                  {kpiGroups.map((g) => (
-                    <td key={g.id} className="px-3 py-2 text-center text-xs font-semibold text-slate-700">
-                      {formatNumber(groupTotal(g.id, activeMetric))}
-                    </td>
-                  ))}
-                  <td className="px-3 py-2 text-right text-xs font-semibold text-slate-800">
-                    {formatNumber(grandTotal(activeMetric))}
-                  </td>
-                </tr>
-              </tbody>
-            </table>
+                      }
+                      const title =
+                        block.key.startsWith("filial-agents-")
+                          ? `${section.title} · агенты`
+                          : block.head.name;
+                      return (
+                        <div
+                          key={block.key}
+                          className="overflow-hidden rounded-lg border border-slate-200 shadow-sm"
+                        >
+                          <div className="border-b border-slate-100 bg-slate-50/90 px-3 py-2">
+                            <h3 className="text-sm font-semibold text-slate-800">{title}</h3>
+                            <p className="text-[10px] text-slate-400">
+                              KPI: {blockGroups.map((g) => g.name).join(" · ")}
+                            </p>
+                          </div>
+                          <div className="overflow-x-auto">
+                            <table className="w-max min-w-full border-collapse text-sm">
+                              <thead>
+                                <tr className="border-b border-slate-200 bg-slate-50/50">
+                                  <th className="min-w-[180px] px-3 py-2 text-left text-xs font-medium text-slate-500">
+                                    Ф.И.О
+                                  </th>
+                                  <th className="min-w-[70px] px-3 py-2 text-left text-xs font-medium text-slate-500">
+                                    Код
+                                  </th>
+                                  <th className="min-w-[100px] px-3 py-2 text-left text-xs font-medium text-slate-500">
+                                    Роль
+                                  </th>
+                                  {blockGroups.map((g) => (
+                                    <th
+                                      key={g.id}
+                                      className="whitespace-nowrap border-l border-slate-100 px-3 py-2 text-center text-xs font-medium text-slate-500"
+                                    >
+                                      {g.name}
+                                    </th>
+                                  ))}
+                                  <th className="min-w-[80px] border-l border-slate-200 px-3 py-2 text-right text-xs font-medium text-slate-500">
+                                    Итого
+                                  </th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {block.rows.map(({ emp, depth }) => {
+                                  const rowTotal = blockGroups.reduce(
+                                    (s, g) => s + rowMetricValue(emp, g.id, activeMetric),
+                                    0
+                                  );
+                                  return (
+                                    <tr
+                                      key={emp.id}
+                                      className="border-b border-slate-50 hover:bg-slate-50/30"
+                                    >
+                                      <td className="px-3 py-2 text-xs text-slate-700">
+                                        <span
+                                          className={cn(depth === 0 && "font-semibold")}
+                                          style={{ paddingLeft: depth * 12 }}
+                                        >
+                                          {emp.name}
+                                        </span>
+                                      </td>
+                                      <td className="px-3 py-2 text-xs text-slate-400">
+                                        {emp.code ?? "—"}
+                                      </td>
+                                      <td className="whitespace-nowrap px-3 py-2 text-xs text-slate-500">
+                                        {getPlanningRoleLabel(emp)}
+                                      </td>
+                                      {blockGroups.map((g) => {
+                                        const linked = isPlanningKpiCellEditable(
+                                          emp,
+                                          g.id,
+                                          agentKpiIds,
+                                          kpiGroupIdsWithAgents
+                                        );
+                                        if (!linked) {
+                                          return (
+                                            <td
+                                              key={g.id}
+                                              className="border-l border-slate-50 px-3 py-2 text-center text-xs text-slate-300"
+                                            >
+                                              —
+                                            </td>
+                                          );
+                                        }
+                                        const val = rowMetricValue(emp, g.id, activeMetric);
+                                        return (
+                                          <td
+                                            key={g.id}
+                                            className="border-l border-slate-50 px-3 py-2 text-center text-xs text-slate-600"
+                                          >
+                                            {formatNumber(val)}
+                                          </td>
+                                        );
+                                      })}
+                                      <td className="border-l border-slate-100 px-3 py-2 text-right text-xs font-semibold text-slate-700">
+                                        {formatNumber(rowTotal)}
+                                      </td>
+                                    </tr>
+                                  );
+                                })}
+                                <tr className="border-t border-slate-200 bg-slate-50/80">
+                                  <td className="px-3 py-2 text-xs font-semibold text-slate-700" colSpan={3}>
+                                    Итого блока:
+                                  </td>
+                                  {blockGroups.map((g) => (
+                                    <td
+                                      key={g.id}
+                                      className="border-l border-slate-100 px-3 py-2 text-center text-xs font-semibold text-slate-700"
+                                    >
+                                      {formatNumber(
+                                        groupTotal(g.id, activeMetric, block.agentIds)
+                                      )}
+                                    </td>
+                                  ))}
+                                  <td className="border-l border-slate-200 px-3 py-2 text-right text-xs font-semibold text-slate-800">
+                                    {formatNumber(
+                                      blockGroups.reduce(
+                                        (s, g) =>
+                                          s + groupTotal(g.id, activeMetric, block.agentIds),
+                                        0
+                                      )
+                                    )}
+                                  </td>
+                                </tr>
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </section>
+              ))
+            )}
           </div>
         )}
 
@@ -294,24 +361,6 @@ export function TotalsSection({ employees, kpiGroups, kpiTargets, plans }: Total
                     );
                   }
                 )}
-                <tr className="border-t border-slate-200 bg-slate-50/80">
-                  <td className="px-3 py-2.5 text-xs font-semibold text-slate-800">Всего</td>
-                  <td className="px-3 py-2.5 text-right text-xs font-semibold text-slate-800">
-                    {formatNumber(kpiTargets.reduce((s, t) => s + Number.parseFloat(t.cost || "0"), 0))}
-                  </td>
-                  <td className="px-3 py-2.5 text-right text-xs font-semibold text-slate-800">
-                    {formatNumber(kpiTargets.reduce((s, t) => s + Number.parseFloat(t.count || "0"), 0))}
-                  </td>
-                  <td className="px-3 py-2.5 text-right text-xs font-semibold text-slate-800">
-                    {formatNumber(kpiTargets.reduce((s, t) => s + Number.parseFloat(t.volume || "0"), 0))}
-                  </td>
-                  <td className="px-3 py-2.5 text-right text-xs font-semibold text-slate-800">
-                    {formatNumber(kpiTargets.reduce((s, t) => s + Number.parseFloat(t.acb || "0"), 0))}
-                  </td>
-                  <td className="px-3 py-2.5 text-right text-xs font-semibold text-slate-800">
-                    {formatNumber(kpiTargets.reduce((s, t) => s + (t.order_count || 0), 0))}
-                  </td>
-                </tr>
               </tbody>
             </table>
           </div>
@@ -319,4 +368,21 @@ export function TotalsSection({ employees, kpiGroups, kpiTargets, plans }: Total
       </div>
     </div>
   );
+}
+
+/** Qidiruvda topilganlar + ularning otalari (bloklar buzilmasin). */
+function mergeWithAncestors(
+  all: PlanningEmployee[],
+  matched: PlanningEmployee[]
+): PlanningEmployee[] {
+  const byId = new Map(all.map((e) => [e.id, e]));
+  const keep = new Set(matched.map((e) => e.id));
+  for (const e of matched) {
+    let pid = e.parent_id;
+    while (pid != null) {
+      keep.add(pid);
+      pid = byId.get(pid)?.parent_id ?? null;
+    }
+  }
+  return all.filter((e) => keep.has(e.id));
 }

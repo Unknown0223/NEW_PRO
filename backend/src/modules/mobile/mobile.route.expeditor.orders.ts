@@ -70,7 +70,7 @@ export async function registerMobileExpeditorOrderRoutes(app: FastifyInstance) {
         if (isFaceGateError(e)) {
           return sendApiError(reply, request, 403, e.code, e.message);
         }
-        if (isDocumentEditPeriodLockedError(e)) return sendDocumentEditPeriodLocked(reply, request);
+        if (isDocumentEditPeriodLockedError(e)) return sendDocumentEditPeriodLocked(reply, request, e);
         if (e instanceof Error && e.message === "NOT_FOUND") {
           return sendApiError(reply, request, 404, "NotFound");
         }
@@ -195,7 +195,7 @@ export async function registerMobileExpeditorOrderRoutes(app: FastifyInstance) {
         if (isFaceGateError(e)) {
           return sendApiError(reply, request, 403, e.code, e.message);
         }
-        if (isDocumentEditPeriodLockedError(e)) return sendDocumentEditPeriodLocked(reply, request);
+        if (isDocumentEditPeriodLockedError(e)) return sendDocumentEditPeriodLocked(reply, request, e);
         if (e instanceof Error && e.message === "NOT_FOUND") {
           return sendApiError(reply, request, 404, "NotFound");
         }
@@ -241,7 +241,7 @@ export async function registerMobileExpeditorOrderRoutes(app: FastifyInstance) {
         );
         return reply.send(row);
       } catch (e) {
-        if (isDocumentEditPeriodLockedError(e)) return sendDocumentEditPeriodLocked(reply, request);
+        if (isDocumentEditPeriodLockedError(e)) return sendDocumentEditPeriodLocked(reply, request, e);
         if (e instanceof Error && e.message === "NOT_FOUND") {
           return sendApiError(reply, request, 404, "NotFound");
         }
@@ -333,7 +333,7 @@ export async function registerMobileExpeditorOrderRoutes(app: FastifyInstance) {
         );
         return reply.send(row);
       } catch (e) {
-        if (isDocumentEditPeriodLockedError(e)) return sendDocumentEditPeriodLocked(reply, request);
+        if (isDocumentEditPeriodLockedError(e)) return sendDocumentEditPeriodLocked(reply, request, e);
         if (e instanceof Error && e.message === "NOT_FOUND") {
           return sendApiError(reply, request, 404, "NotFound");
         }

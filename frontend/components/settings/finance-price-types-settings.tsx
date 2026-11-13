@@ -36,7 +36,6 @@ import {
   pickZodLeaf,
   priceTypeKey,
   sortPriceTypeRows,
-  type PaymentMethodEntry,
   type PriceTypeEntry,
   type PriceTypeTenantProfile
 } from "@/components/settings/finance-price-types.model";
@@ -47,6 +46,7 @@ export function FinancePriceTypesSettings() {
   const canEdit = usePermissions().has("settings.tip_tseny.update");
   const qc = useQueryClient();
 
+  const [tab, setTab] = useState<"active" | "inactive">("active");
   const [open, setOpen] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const [name, setName] = useState("");
@@ -55,6 +55,7 @@ export function FinancePriceTypesSettings() {
   const [comment, setComment] = useState("");
   const [paymentMethodId, setPaymentMethodId] = useState("");
   const [kind, setKind] = useState<"sale" | "purchase">("sale");
+  const [active, setActive] = useState(true);
   const [manual, setManual] = useState(false);
   const [attachedOnly, setAttachedOnly] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
@@ -70,14 +71,29 @@ export function FinancePriceTypesSettings() {
     }
   });
 
-  const payList = useMemo(
-    () => profileQ.data?.references?.payment_method_entries?.filter((p) => p.active !== false) ?? [],
+  const allPayMethods = useMemo(
+    () => profileQ.data?.references?.payment_method_entries ?? [],
     [profileQ.data]
+  );
+  const payList = useMemo(
+    () => allPayMethods.filter((p) => p.active !== false),
+    [allPayMethods]
   );
 
   const rows = useMemo(() => sortPriceTypeRows(profileQ.data?.references?.price_type_entries ?? []), [profileQ.data]);
+  const filtered = useMemo(
+    () => rows.filter((x) => (tab === "active" ? x.active !== false : x.active === false)),
+    [rows, tab]
+  );
 
-  const payName = (id: string) => payList.find((p) => p.id === id)?.name ?? "—";
+  const payOptions = useMemo(() => {
+    if (!paymentMethodId) return payList;
+    if (payList.some((p) => p.id === paymentMethodId)) return payList;
+    const orphan = allPayMethods.find((p) => p.id === paymentMethodId);
+    return orphan ? [...payList, orphan] : payList;
+  }, [payList, allPayMethods, paymentMethodId]);
+
+  const payName = (id: string) => allPayMethods.find((p) => p.id === id)?.name ?? "—";
 
   const saveMut = useMutation({
     mutationFn: async (next: PriceTypeEntry[]) => {
@@ -123,6 +139,7 @@ export function FinancePriceTypesSettings() {
     setComment("");
     setPaymentMethodId(payList[0]?.id ?? "");
     setKind("sale");
+    setActive(true);
     setManual(false);
     setAttachedOnly(false);
     setServerFieldErrs({});
@@ -142,6 +159,7 @@ export function FinancePriceTypesSettings() {
     setComment(row.comment ?? "");
     setPaymentMethodId(row.payment_method_id);
     setKind(row.kind === "purchase" ? "purchase" : "sale");
+    setActive(row.active !== false);
     setManual(row.manual === true);
     setAttachedOnly(row.attached_clients_only === true);
     setServerFieldErrs({});
@@ -163,7 +181,7 @@ export function FinancePriceTypesSettings() {
       kind,
       sort_order: sortOrder.trim() ? Number(sortOrder.trim()) : null,
       comment: comment.trim() || null,
-      active: true,
+      active,
       manual,
       attached_clients_only: attachedOnly
     };
@@ -225,6 +243,29 @@ export function FinancePriceTypesSettings() {
 
       <SettingsWorkspace>
         <div className="rounded-lg border bg-card p-4">
+          <div className="mb-3 flex gap-2">
+            <button
+              type="button"
+              className={cn(
+                "rounded px-3 py-1 text-sm",
+                tab === "active" ? "bg-primary text-primary-foreground" : "bg-muted"
+              )}
+              onClick={() => setTab("active")}
+            >
+              Активный
+            </button>
+            <button
+              type="button"
+              className={cn(
+                "rounded px-3 py-1 text-sm",
+                tab === "inactive" ? "bg-primary text-primary-foreground" : "bg-muted"
+              )}
+              onClick={() => setTab("inactive")}
+            >
+              Не активный
+            </button>
+          </div>
+
           <div className="overflow-hidden rounded-md border">
             <table className="w-full text-sm">
               <thead className="app-table-thead text-left">
@@ -237,7 +278,7 @@ export function FinancePriceTypesSettings() {
                 </tr>
               </thead>
               <tbody>
-                {rows.map((r) => (
+                {filtered.map((r) => (
                   <tr key={r.id} className="border-t">
                     <td className="px-3 py-2">{r.name}</td>
                     <td className="px-3 py-2">{payName(r.payment_method_id)}</td>
@@ -262,10 +303,10 @@ export function FinancePriceTypesSettings() {
                     </td>
                   </tr>
                 ))}
-                {rows.length === 0 ? (
+                {filtered.length === 0 ? (
                   <tr>
                     <td colSpan={5} className="px-3 py-6 text-center text-muted-foreground">
-                      Нет данных
+                      {tab === "active" ? "Нет активных типов цены" : "Нет неактивных типов цены"}
                     </td>
                   </tr>
                 ) : null}
@@ -298,9 +339,10 @@ export function FinancePriceTypesSettings() {
                 value={paymentMethodId}
                 onChange={(e) => setPaymentMethodId(e.target.value)}
               >
-                {payList.map((p) => (
+                {payOptions.map((p) => (
                   <option key={p.id} value={p.id}>
                     {p.name}
+                    {p.active === false ? " (неактивен)" : ""}
                   </option>
                 ))}
               </select>
@@ -357,6 +399,16 @@ export function FinancePriceTypesSettings() {
                 <p className="text-xs text-destructive">{pickZodLeaf(serverFieldErrs, "comment")}</p>
               ) : null}
             </div>
+            <label className="flex items-center justify-between rounded-md border px-3 py-2 text-sm">
+              <span>Активный</span>
+              <input type="checkbox" checked={active} onChange={(e) => setActive(e.target.checked)} />
+            </label>
+            {pickZodLeaf(serverFieldErrs, "active") ? (
+              <p className="text-xs text-destructive">{pickZodLeaf(serverFieldErrs, "active")}</p>
+            ) : null}
+            <p className="text-[11px] leading-snug text-muted-foreground">
+              Неактивный тип цены скрывается из выбора в заказах и приходах, но остаётся в справочнике.
+            </p>
             <label className="flex items-center justify-between rounded-md border px-3 py-2 text-sm">
               <span>Ручной</span>
               <input type="checkbox" checked={manual} onChange={(e) => setManual(e.target.checked)} />

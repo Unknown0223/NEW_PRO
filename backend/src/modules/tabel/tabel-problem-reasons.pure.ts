@@ -29,7 +29,7 @@ export function punchProblemLabels(p: PunchProblemInput): string[] {
   const failed = failedCodes(p.integrity_json);
   const labels: string[] = [];
   if (p.outside_geofence || failed.has("GEOFENCE_COMMENT_REQUIRED")) labels.push("Вне гео-зоны");
-  if ((p.face_score != null && p.face_score < 0.85) || failed.has("FACE_MISMATCH")) labels.push("Лицо не совпало");
+  if ((p.face_score != null && p.face_score < 0.45) || failed.has("FACE_MISMATCH")) labels.push("Лицо не совпало");
   if (failed.has("FAKE_GPS_DETECTED")) labels.push("Fake GPS");
   if (labels.length === 0 && !p.is_valid) {
     const msg = String(asObj(p.integrity_json).failedMessage ?? "").trim();

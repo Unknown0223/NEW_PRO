@@ -52,7 +52,16 @@ export function AccessUserHistoryTab({ tenantSlug, userId }: { tenantSlug: strin
     }
   });
 
-  if (q.isError) return <PageError message="Не удалось загрузить историю изменений." onRetry={() => void q.refetch()} />;
+  if (q.isError) {
+    return (
+      <PageError
+        error={q.error}
+        resource="История доступа"
+        message="Не удалось загрузить историю изменений."
+        onRetry={() => void q.refetch()}
+      />
+    );
+  }
   if (q.isLoading) {
     return (
       <div className="space-y-2" aria-busy="true">

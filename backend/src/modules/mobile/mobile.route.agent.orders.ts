@@ -389,7 +389,7 @@ export async function registerMobileAgentOrderRoutes(app: FastifyInstance) {
         await linkOrderVisitSafe(request, userId, result.id, visit);
         return reply.status(201).send(result);
       } catch (e) {
-        if (isDocumentEditPeriodLockedError(e)) return sendDocumentEditPeriodLocked(reply, request);
+        if (isDocumentEditPeriodLockedError(e)) return sendDocumentEditPeriodLocked(reply, request, e);
         if (e instanceof OrderVisitError) return sendOrderVisitError(reply, request, e);
         const msg = getErrorCode(e) ?? "";
         if (msg === "PHOTO_REPORT_REQUIRED") {

@@ -341,6 +341,14 @@ export const settingsSections: SettingsSection[] = [
         description: "Рабочие часы / окно синхронизации — стандартные часовые пояса IANA"
       },
       {
+        title: "AI помощник",
+        slug: "ai-assistant",
+        href: "/settings/ai-assistant",
+        status: "available",
+        requiredRoles: ["admin"] as const,
+        description: "API ключи LLM: бесплатные/платные провайдеры и автоматический failover"
+      },
+      {
         title: "Начальная настройка",
         slug: "initial-setup",
         href: "/settings/initial-setup",
@@ -487,6 +495,7 @@ const SETTINGS_HREF_VIEW_PERMS: Record<string, readonly string[]> = {
   ],
   "/settings/period/orders-consignment": ["settings.orders_consignment.view"],
   "/settings/timezone": ["settings.timezone.view", "settings.timezone.update"],
+  "/settings/ai-assistant": ["settings.ai_assistant.view", "settings.ai_assistant.update"],
   "/settings/initial-setup": ["settings.initial_setup.view"],
   "/settings/system-migration": ["settings.system_migration.view"],
   "/settings/audit": ["audit.log.view"],

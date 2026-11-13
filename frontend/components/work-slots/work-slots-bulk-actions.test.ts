@@ -32,7 +32,15 @@ describe("work-slots bulk role matrix", () => {
   it("every role gets base fields including session limit", () => {
     for (const t of ALL) {
       const f = bulkFieldsForSlotType(t);
-      expect(f).toEqual(expect.arrayContaining(["is_active", "branch_code", "label", "max_sessions"]));
+      expect(f).toEqual(
+        expect.arrayContaining([
+          "is_active",
+          "branch_code",
+          "label",
+          "max_sessions",
+          "require_face_login"
+        ])
+      );
     }
   });
 
@@ -104,12 +112,49 @@ describe("work-slots bulk role matrix", () => {
     expect(bulkFieldAllowsClear("slot_type")).toBe(false);
     expect(bulkFieldAllowsClear("branch_code")).toBe(true);
     expect(bulkFieldAllowsClear("max_sessions")).toBe(false);
+    expect(bulkFieldAllowsClear("require_face_login")).toBe(false);
   });
 
   it("counts max_sessions when set", () => {
     const modes = EMPTY_BULK_FORM_MODES();
     modes.maxSessions = "set";
     expect(countBulkFormChanges(["max_sessions"], modes, EMPTY_LOCATION_BULK_MODES())).toBe(1);
+  });
+
+  it("buildBulkRequestBody sends require_face_login when set", () => {
+    const modes = EMPTY_BULK_FORM_MODES();
+    modes.requireFaceLogin = "set";
+    const values = {
+      isActive: true,
+      branchCodeList: [],
+      directionId: "",
+      label: "",
+      slotType: "agent" as const,
+      maxSessions: 1,
+      requireFaceLogin: false
+    };
+    expect(
+      buildBulkRequestBody(
+        [1, 2],
+        ["require_face_login"],
+        modes,
+        values,
+        emptyLocationValues(),
+        EMPTY_LOCATION_BULK_MODES(),
+        null
+      )
+    ).toEqual({ slot_ids: [1, 2], require_face_login: false });
+    expect(
+      buildBulkRequestBody(
+        [3],
+        ["require_face_login"],
+        modes,
+        { ...values, requireFaceLogin: true },
+        emptyLocationValues(),
+        EMPTY_LOCATION_BULK_MODES(),
+        null
+      )
+    ).toEqual({ slot_ids: [3], require_face_login: true });
   });
 
   it("buildBulkRequestBody sends max_sessions and revoke_sessions", () => {
@@ -121,7 +166,8 @@ describe("work-slots bulk role matrix", () => {
       directionId: "",
       label: "",
       slotType: "agent" as const,
-      maxSessions: 3
+      maxSessions: 3,
+      requireFaceLogin: false
     };
     expect(
       buildBulkRequestBody(

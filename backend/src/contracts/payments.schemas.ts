@@ -214,7 +214,9 @@ export const createPaymentBodySchema = z.object({
   allocation_order_ids: z.array(z.number().int().positive()).max(500).optional(),
   allocation_agent_id: z.number().int().positive().nullable().optional(),
   /** Ixtiyoriy: har qanday matnli to‘lov ID (ks_1652, PAY-9…) */
-  number: z.string().trim().min(1).max(64).optional().nullable()
+  number: z.string().trim().min(1).max(64).optional().nullable(),
+  /** Offline/retry UUID — bir xil kalit → mavjud to‘lov */
+  client_uuid: z.string().trim().uuid().max(64).optional().nullable()
 });
 
 /** PATCH `/api/:slug/payments/:id` */

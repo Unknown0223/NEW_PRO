@@ -38,7 +38,8 @@ const nextConfig = {
   transpilePackages: [
     "@tanstack/react-query",
     "@tanstack/query-core",
-    "exceljs"
+    "exceljs",
+    "@mediapipe/tasks-vision"
   ],
   /**
    * Dev: brauzer so‘rovlari `localhost:3000` orqali ketadi — API o‘chiq bo‘lsa

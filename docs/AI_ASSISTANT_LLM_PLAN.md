@@ -1,8 +1,8 @@
 # AI Assistant — LLM ulash va mukammallashtirish rejasi
 
-> **Holat (2026-11-12):** `(2).patch` loyihaga qo‘llangan — rules-based NLU + allow-list tool’lar + web chat (`/assistant`).  
-> **LLM chaqiruv kodi hali yo‘q** (faqat docs/tip: `source: "rules" | "llm"`).  
-> **Maqsad:** uy kompyuterida (LLM ishlaydigan muhitda) API key / LM Studio orqali tushunishni yaxshilash — xavfsizlikni buzmasdan.
+> **Holat (2026-11-12):** rules MVP + **web sozlama** `/settings/ai-assistant` (ko‘p provayder, AES kalit, failover).  
+> **LLM client** `ai.llm.ts` — OpenAI-compatible; birinchi muvaffaqiyatsizlikda keyingi kalitga o‘tadi.  
+> Env `ASSISTANT_API_*` — ixtiyoriy fallback (UI yo‘q bo‘lsa ham).
 
 ---
 

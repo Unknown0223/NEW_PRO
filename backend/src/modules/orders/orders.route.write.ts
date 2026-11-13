@@ -1,51 +1,28 @@
 import type { FastifyInstance } from "fastify";
 import {
-  bulkOrderExpeditorBodySchema,
-  bulkOrderNakladnoyBodySchema,
-  bulkOrderStatusBodySchema,
   createOrderBodySchema,
-  ordersListQuerySchema,
-  patchOrderLinesBodySchema,
-  patchOrderMetaBodySchema,
   patchOrderMilestoneAtBodySchema,
   patchOrderStatusBodySchema
 } from "../../contracts/orders.schemas";
-import { positiveIntPathIdParamsSchema } from "../../contracts/route-params.schemas";
 import { getErrorCode } from "../../lib/app-error";
 import {
   isDocumentEditPeriodLockedError,
   sendDocumentEditPeriodLocked
 } from "../../lib/document-edit-lock.http";
-import { assertDocWritableById } from "../../lib/document-edit-lock.request";
+import {
+  assertDocWritableByDate,
+  assertDocWritableById,
+  assertDocWritableByIsoDate
+} from "../../lib/document-edit-lock.request";
 import { ensureTenantContext } from "../../lib/tenant-context";
 import { sendApiError, zodValidationExtras } from "../../lib/api-error";
 import { writeApiRateLimitRouteOpts } from "../../lib/rate-limit-config";
 import { ADMIN_AND_OPERATOR_LIKE_ROLES } from "../../lib/tenant-user-roles";
 import { getAccessUser, jwtAccessVerify, requireRoles } from "../auth/auth.prehandlers";
-import {
-  requireIfSkladchikThenAnyEntitlement,
-  requireRolesOrSkladchikAnyEntitlement,
-  SKLADCHIK_ORDER_FLOW_ANY,
-  SKLADCHIK_ORDER_META_ANY
-} from "../staff/skladchik-access.prehandler";
-import { parseSelectedMastersFromQuery, resolveConstraintScope } from "../linkage/linkage.service";
-import { getExchangeSourceAvailability } from "./exchange-source-limits.service";
 import { resolveOrderStatusRbac, sendOrderStatusPermissionError } from "./order-status-rbac";
 import { ensureAnyPermission } from "../access/ensure-any-permission";
 import { orderCreatePermissionForType } from "./order-create-permissions";
-import { getOrderCreateCatalogBundle, getOrderCreateContextBundle } from "./order-create-context.service";
-import {
-  bulkUpdateOrderExpeditor,
-  bulkUpdateOrderStatus,
-  createOrder,
-  getOrderDetail,
-  listOrdersPaged,
-  requestBulkOrderNakladnoy,
-  updateOrderLines,
-  updateOrderMeta,
-  updateOrderMilestoneAt,
-  updateOrderStatus
-} from "./orders.service";
+import { createOrder, updateOrderMilestoneAt, updateOrderStatus } from "./orders.service";
 
 const catalogRoles = ADMIN_AND_OPERATOR_LIKE_ROLES;
 
@@ -65,6 +42,7 @@ export async function registerOrderWriteRoutes(app: FastifyInstance) {
       }
       try {
         await assertDocWritableById(request, "orders", id);
+        await assertDocWritableByIsoDate(request, "orders", parsed.data.occurred_at, id);
         const actor = getAccessUser(request);
         const actorSub = Number.parseInt(actor.sub, 10);
         const actorUserId = Number.isFinite(actorSub) && actorSub > 0 ? actorSub : null;
@@ -80,7 +58,7 @@ export async function registerOrderWriteRoutes(app: FastifyInstance) {
         );
         return reply.send(row);
       } catch (e) {
-        if (isDocumentEditPeriodLockedError(e)) return sendDocumentEditPeriodLocked(reply, request);
+        if (isDocumentEditPeriodLockedError(e)) return sendDocumentEditPeriodLocked(reply, request, e);
         const msg = getErrorCode(e) ?? "";
         if (msg === "INVALID_OCCURRED_AT") {
           return sendApiError(reply, request, 400, "InvalidOccurredAt");
@@ -130,6 +108,7 @@ export async function registerOrderWriteRoutes(app: FastifyInstance) {
       }
       try {
         await assertDocWritableById(request, "orders", id);
+        await assertDocWritableByIsoDate(request, "orders", parsed.data.occurred_at, id);
         const actor = getAccessUser(request);
         const row = await updateOrderMilestoneAt(
           request.tenant!.id,
@@ -140,7 +119,7 @@ export async function registerOrderWriteRoutes(app: FastifyInstance) {
         );
         return reply.send(row);
       } catch (e) {
-        if (isDocumentEditPeriodLockedError(e)) return sendDocumentEditPeriodLocked(reply, request);
+        if (isDocumentEditPeriodLockedError(e)) return sendDocumentEditPeriodLocked(reply, request, e);
         const msg = getErrorCode(e) ?? "";
         if (msg === "NOT_FOUND") return sendApiError(reply, request, 404, "NotFound");
         if (msg === "MILESTONE_NOT_FOUND") {
@@ -165,6 +144,12 @@ export async function registerOrderWriteRoutes(app: FastifyInstance) {
       }
       if (!(await ensureAnyPermission(request, reply, [orderCreatePermissionForType(parsed.data.order_type)]))) return;
       try {
+        const createdAtRaw = (parsed.data.created_at ?? "").trim();
+        const createdAt = createdAtRaw ? new Date(createdAtRaw) : new Date();
+        if (Number.isNaN(createdAt.getTime())) {
+          return sendApiError(reply, request, 400, "ValidationError", "Некорректная дата заказа");
+        }
+        await assertDocWritableByDate(request, "orders", createdAt);
         const viewer = getAccessUser(request);
         const row = await createOrder(request.tenant!.id, parsed.data, {
           role: viewer.role,
@@ -172,6 +157,7 @@ export async function registerOrderWriteRoutes(app: FastifyInstance) {
         });
         return reply.status(201).send(row);
       } catch (e) {
+        if (isDocumentEditPeriodLockedError(e)) return sendDocumentEditPeriodLocked(reply, request, e);
         const msg = getErrorCode(e) ?? "";
         if (msg === "BAD_CLIENT") return sendApiError(reply, request, 400, "BadClient");
         if (msg === "BAD_WAREHOUSE") return sendApiError(reply, request, 400, "BadWarehouse");
@@ -198,11 +184,18 @@ export async function registerOrderWriteRoutes(app: FastifyInstance) {
         }
         if (msg === "INSUFFICIENT_STOCK") {
           const ex = e as Error & { product_id?: number; available?: string; requested?: string };
-          return sendApiError(reply, request, 400, "InsufficientStock", undefined, {
-            product_id: ex.product_id,
-            available: ex.available,
-            requested: ex.requested
-          });
+          return sendApiError(
+            reply,
+            request,
+            400,
+            "InsufficientStock",
+            "На складе не хватает товара.",
+            {
+              product_id: ex.product_id,
+              available: ex.available,
+              requested: ex.requested
+            }
+          );
         }
         if (msg === "BAD_EXPEDITOR") {
           return sendApiError(reply, request, 400, "BadExpeditor");
