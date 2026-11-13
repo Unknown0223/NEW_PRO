@@ -3,185 +3,217 @@ import 'package:flutter/services.dart';
 
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_typography.dart';
+import '../../design_system/design_system.dart';
 
 enum PinPadVariant { onboarding, unlock }
 
 enum PinDotsVariant { onboarding, unlock }
 
-/// Bank uslubidagi raqamli klaviatura (4 xonali PIN).
+/// Shablon Auth PIN keypad — SaPressable scale-90 (har tugmada SaEnter yo‘q).
 class PinPad extends StatelessWidget {
   final void Function(String digit) onDigit;
   final VoidCallback onBackspace;
+  final VoidCallback? onBiometric;
   final bool enabled;
   final PinPadVariant variant;
+  final bool showBiometricSlot;
 
   const PinPad({
     super.key,
     required this.onDigit,
     required this.onBackspace,
+    this.onBiometric,
     this.enabled = true,
     this.variant = PinPadVariant.unlock,
+    this.showBiometricSlot = false,
   });
 
   @override
   Widget build(BuildContext context) {
-    if (variant == PinPadVariant.onboarding) {
-      return _RoundedKeypad(
-        enabled: enabled,
-        onDigit: onDigit,
-        onBackspace: onBackspace,
-        borderRadius: 18,
-        fontSize: 24,
-        borderColor: const Color(0xFFE8EEF3),
-        withShadow: true,
-      );
-    }
+    final keys = <_PadKey>[
+      for (var n = 1; n <= 9; n++) _PadKey.digit('$n'),
+      if (showBiometricSlot) const _PadKey.bio() else const _PadKey.empty(),
+      const _PadKey.digit('0'),
+      const _PadKey.back(),
+    ];
 
-    return _RoundedKeypad(
-      enabled: enabled,
-      onDigit: onDigit,
-      onBackspace: onBackspace,
-      borderRadius: 16,
-      fontSize: 22,
-      borderColor: const Color(0xFFE5EEF3),
-      withShadow: false,
-    );
-  }
-}
-
-class _RoundedKeypad extends StatelessWidget {
-  final bool enabled;
-  final void Function(String digit) onDigit;
-  final VoidCallback onBackspace;
-  final double borderRadius;
-  final double fontSize;
-  final Color borderColor;
-  final bool withShadow;
-
-  const _RoundedKeypad({
-    required this.enabled,
-    required this.onDigit,
-    required this.onBackspace,
-    required this.borderRadius,
-    required this.fontSize,
-    required this.borderColor,
-    required this.withShadow,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    const keys = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '', '0', '⌫'];
     return Center(
       child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 290),
+        constraints: const BoxConstraints(maxWidth: 280),
         child: GridView.count(
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
           crossAxisCount: 3,
-          childAspectRatio: variantAspectRatio(borderRadius),
-          mainAxisSpacing: 16,
-          crossAxisSpacing: 16,
-          children: keys.map((k) {
-            if (k.isEmpty) return const SizedBox.shrink();
-            final isBack = k == '⌫';
-            return Material(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(borderRadius),
-              child: InkWell(
-                onTap: !enabled
-                    ? null
-                    : () {
-                        HapticFeedback.lightImpact();
-                        if (isBack) {
-                          onBackspace();
-                        } else {
-                          onDigit(k);
-                        }
-                      },
-                borderRadius: BorderRadius.circular(borderRadius),
-                child: Container(
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(borderRadius),
-                    border: Border.all(color: borderColor),
-                    boxShadow: withShadow
-                        ? [
-                            BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.06),
-                              blurRadius: 10,
-                              offset: const Offset(0, 2),
-                            ),
-                          ]
-                        : null,
-                  ),
-                  child: isBack
-                      ? Icon(Icons.backspace_outlined, size: fontSize, color: AppColors.textTitle)
-                      : Text(
-                          k,
-                          style: AppTypography.headlineMedium.copyWith(
-                            fontSize: fontSize,
-                            fontWeight: FontWeight.w600,
-                            color: AppColors.textTitle,
-                          ),
-                        ),
-                ),
+          childAspectRatio: 1.35,
+          mainAxisSpacing: 10,
+          crossAxisSpacing: 12,
+          children: [
+            for (final k in keys)
+              _KeyCell(
+                keyData: k,
+                enabled: enabled,
+                onDigit: onDigit,
+                onBackspace: onBackspace,
+                onBiometric: onBiometric,
               ),
-            );
-          }).toList(),
+          ],
         ),
       ),
     );
   }
-
-  double variantAspectRatio(double radius) => radius >= 18 ? 1.15 : 1.0;
 }
 
+class _PadKey {
+  final String? digit;
+  final bool isBack;
+  final bool isBio;
+  final bool isEmpty;
+
+  const _PadKey.digit(this.digit)
+      : isBack = false,
+        isBio = false,
+        isEmpty = false;
+
+  const _PadKey.back()
+      : digit = null,
+        isBack = true,
+        isBio = false,
+        isEmpty = false;
+
+  const _PadKey.bio()
+      : digit = null,
+        isBack = false,
+        isBio = true,
+        isEmpty = false;
+
+  const _PadKey.empty()
+      : digit = null,
+        isBack = false,
+        isBio = false,
+        isEmpty = true;
+}
+
+class _KeyCell extends StatelessWidget {
+  final _PadKey keyData;
+  final bool enabled;
+  final void Function(String digit) onDigit;
+  final VoidCallback onBackspace;
+  final VoidCallback? onBiometric;
+
+  const _KeyCell({
+    required this.keyData,
+    required this.enabled,
+    required this.onDigit,
+    required this.onBackspace,
+    this.onBiometric,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (keyData.isEmpty) return const SizedBox.shrink();
+
+    final isBio = keyData.isBio;
+    final bg = isBio ? AppColors.primary.withValues(alpha: 0.13) : const Color(0xFFEEF1F5);
+
+    return SaPressable(
+      pressedScale: 0.9,
+      borderRadius: BorderRadius.circular(12),
+      onTap: !enabled && !isBio
+          ? null
+          : () {
+              HapticFeedback.lightImpact();
+              if (keyData.isBack) {
+                onBackspace();
+              } else if (isBio) {
+                onBiometric?.call();
+              } else if (keyData.digit != null) {
+                onDigit(keyData.digit!);
+              }
+            },
+      child: Container(
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: bg,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: keyData.isBack
+            ? const Icon(Icons.backspace_outlined, size: 20, color: Color(0xFF677386))
+            : isBio
+                ? const Icon(Icons.fingerprint_rounded, size: 22, color: AppColors.primary)
+                : Text(
+                    keyData.digit!,
+                    style: AppTypography.headlineMedium.copyWith(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w700,
+                      color: const Color(0xFF0E1420),
+                    ),
+                  ),
+      ),
+    );
+  }
+}
+
+/// Shablon Auth PIN slots — kvadrat + pop-in nuqta.
 class PinDots extends StatelessWidget {
   final int filled;
   final int pinLength;
   final PinDotsVariant variant;
+  final bool error;
 
   const PinDots({
     super.key,
     required this.filled,
     this.pinLength = 4,
     this.variant = PinDotsVariant.unlock,
+    this.error = false,
   });
 
   @override
   Widget build(BuildContext context) {
-    final template = variant == PinDotsVariant.onboarding || variant == PinDotsVariant.unlock;
+    final accent = error ? AppColors.error : AppColors.primary;
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: List.generate(pinLength, (i) {
-        final active = i < filled;
-        final size = template ? 16.0 : 14.0;
+        final on = i < filled;
         return AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          curve: Curves.easeOut,
-          width: size,
-          height: size,
-          margin: EdgeInsets.symmetric(horizontal: template ? 9 : 10),
+          duration: SaDurations.press,
+          curve: SaCurves.standard,
+          width: 36,
+          height: 36,
+          margin: const EdgeInsets.symmetric(horizontal: 6),
           decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: active ? AppColors.primary : const Color(0xFFD5E1EA),
-            boxShadow: active
-                ? [
-                    BoxShadow(
-                      color: AppColors.primarySoft.withValues(alpha: 0.9),
-                      blurRadius: 0,
-                      spreadRadius: 5,
-                    ),
-                  ]
-                : null,
+            color: const Color(0xFFEEF1F5),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(
+              color: error
+                  ? AppColors.error
+                  : on
+                      ? accent
+                      : Colors.transparent,
+              width: 1.5,
+            ),
           ),
+          alignment: Alignment.center,
+          child: on
+              ? SaPopIn(
+                  key: ValueKey<int>(filled * 10 + i),
+                  child: Container(
+                    width: 10,
+                    height: 10,
+                    decoration: BoxDecoration(
+                      color: accent,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                )
+              : null,
         );
       }),
     );
   }
 }
 
-/// Shablon: Touch ID tugmasi (Screen 4).
+/// Shablon: Touch ID tugmasi.
 class PinBiometricButton extends StatelessWidget {
   final String label;
   final VoidCallback? onPressed;
@@ -196,46 +228,37 @@ class PinBiometricButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Material(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          child: InkWell(
-            onTap: loading ? null : onPressed,
-            borderRadius: BorderRadius.circular(16),
-            child: Container(
-              width: 52,
-              height: 52,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: const Color(0xFFE8EEF3)),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.05),
-                    blurRadius: 8,
-                    offset: const Offset(0, 2),
-                  ),
-                ],
-              ),
-              child: loading
-                  ? const SizedBox(
-                      width: 22,
-                      height: 22,
-                      child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary),
-                    )
-                  : const Icon(Icons.fingerprint_rounded, size: 26, color: AppColors.primary),
+    return SaPressable(
+      pressedScale: 0.9,
+      onTap: loading ? null : onPressed,
+      borderRadius: BorderRadius.circular(16),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 52,
+            height: 52,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: AppColors.primary.withValues(alpha: 0.13),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: AppColors.primary.withValues(alpha: 0.35)),
             ),
+            child: loading
+                ? const SizedBox(
+                    width: 22,
+                    height: 22,
+                    child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary),
+                  )
+                : const Icon(Icons.fingerprint_rounded, size: 26, color: AppColors.primary),
           ),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          label,
-          style: AppTypography.captionSmall.copyWith(color: AppColors.textMuted),
-        ),
-      ],
+          const SizedBox(height: 4),
+          Text(
+            label,
+            style: AppTypography.captionSmall.copyWith(color: AppColors.textMuted),
+          ),
+        ],
+      ),
     );
   }
 }

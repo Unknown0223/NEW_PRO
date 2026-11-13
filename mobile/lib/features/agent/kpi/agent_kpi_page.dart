@@ -31,7 +31,7 @@ class AgentKpiPage extends ConsumerWidget {
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AgentAppBar(
-        title: 'KPI',
+        title: 'KPI paneli',
         useShellDrawer: true,
         belowTitle: dataAsync.maybeWhen(
           data: (d) => Text(
@@ -148,7 +148,7 @@ class _Body extends StatelessWidget {
             delay: SaStaggerDelay.of(3),
             child: AgentSurfaceCard(
               child: Text(
-                'Одобренных KPI-планов на месяц нет. Задайте в «Установка планов».',
+                'Bu oy uchun tasdiqlangan KPI reja yo\'q. «Reja o\'rnatish» dan bering.',
                 style: AppTypography.bodySmall.copyWith(color: AppColors.textSecondary),
               ),
             ),
@@ -226,29 +226,31 @@ class _TodayHero extends StatelessWidget {
     required this.carryForward,
   });
 
-  static const _wd = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
+  static const _wd = ['Du', 'Se', 'Ch', 'Pa', 'Ju', 'Sh', 'Ya'];
 
   @override
   Widget build(BuildContext context) {
     final maxBar = week.fold<double>(0, (m, w) => w.salesSum > m ? w.salesSum : m);
     final avg = week.isEmpty ? 0.0 : week.fold<double>(0, (s, w) => s + w.salesSum) / week.length;
     final vs = vsYesterday;
-    final vsLabel = vs == null ? null : '${vs >= 0 ? '+' : ''}${vs.toStringAsFixed(0)}% к вчерашнему дню';
+    final vsLabel = vs == null
+        ? null
+        : '${vs >= 0 ? '+' : ''}${vs.toStringAsFixed(0)}% kechaga nisbatan';
 
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [Color(0xFF07958F), Color(0xFF055B57)],
+          begin: Alignment(-0.2, -1),
+          end: Alignment(0.4, 1),
+          colors: [Color(0xFF0E1420), Color(0xFF070A12)],
         ),
         borderRadius: BorderRadius.circular(18),
         boxShadow: [
           BoxShadow(
-            color: AppColors.primary.withValues(alpha: 0.28),
-            blurRadius: 34,
-            offset: const Offset(0, 14),
+            color: Colors.black.withValues(alpha: 0.22),
+            blurRadius: 28,
+            offset: const Offset(0, 12),
           ),
         ],
       ),
@@ -263,64 +265,44 @@ class _TodayHero extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'ПРОДАЖИ СЕГОДНЯ',
+                      'BUGUNGI SAVDO',
                       style: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.8),
-                        letterSpacing: 0.6,
-                        fontWeight: FontWeight.w800,
-                        fontSize: 11,
-                      ),
-                    ),
-                    Text(
-                      '${formatMoneySpaced(sales)} сум',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 28,
-                        fontWeight: FontWeight.w800,
-                        height: 1.15,
+                        color: Colors.white.withValues(alpha: 0.5),
+                        letterSpacing: 1.2,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 10,
                       ),
                     ),
                     const SizedBox(height: 6),
-                    Text.rich(
-                      TextSpan(
-                        style: TextStyle(
-                          color: Colors.white.withValues(alpha: 0.95),
-                          fontSize: 14,
-                          fontWeight: FontWeight.w700,
-                          height: 1.25,
-                        ),
-                        children: [
-                          const TextSpan(text: 'план: '),
-                          TextSpan(
-                            text: formatMoneySpaced(plan),
-                            style: const TextStyle(fontWeight: FontWeight.w900, color: Colors.white),
-                          ),
-                          const TextSpan(text: ' сум'),
-                          if (vsLabel != null) ...[
-                            const TextSpan(text: ' · '),
-                            TextSpan(
-                              text: vsLabel,
-                              style: TextStyle(
-                                fontWeight: FontWeight.w900,
-                                color: (vs ?? 0) >= 0
-                                    ? const Color(0xFFBBF7D0)
-                                    : const Color(0xFFFECDD3),
-                              ),
-                            ),
-                          ],
-                        ],
+                    Text(
+                      '${formatMoneySpaced(sales)} so\'m',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 26,
+                        fontWeight: FontWeight.w800,
+                        height: 1.1,
+                        letterSpacing: -0.6,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      'Reja: ${formatMoneySpaced(plan)} so\'m'
+                      '${vsLabel != null ? ' · $vsLabel' : ''}',
+                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.7),
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
                     if (workingDaysTotal > 0)
                       Padding(
-                        padding: const EdgeInsets.only(top: 5),
+                        padding: const EdgeInsets.only(top: 4),
                         child: Text(
-                          'раб. дни: $workingDaysLeft/$workingDaysTotal · осталось ${formatMoneySpaced(remaining)}',
+                          'Ish kunlari: $workingDaysLeft/$workingDaysTotal · qoldi ${formatMoneySpaced(remaining)}',
                           style: TextStyle(
-                            color: Colors.white.withValues(alpha: 0.95),
-                            fontSize: 13.5,
-                            fontWeight: FontWeight.w800,
-                            height: 1.25,
+                            color: Colors.white.withValues(alpha: 0.65),
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
                           ),
                         ),
                       ),
@@ -328,12 +310,11 @@ class _TodayHero extends StatelessWidget {
                       Padding(
                         padding: const EdgeInsets.only(top: 4),
                         child: Text(
-                          'перенос: ${formatMoneySpaced(carryForward)}',
+                          'Ko\'chirma: ${formatMoneySpaced(carryForward)}',
                           style: const TextStyle(
                             color: Color(0xFFFEF08A),
-                            fontSize: 13.5,
-                            fontWeight: FontWeight.w900,
-                            height: 1.25,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w800,
                           ),
                         ),
                       ),
@@ -341,27 +322,32 @@ class _TodayHero extends StatelessWidget {
                 ),
               ),
               SizedBox(
-                width: 72,
-                height: 72,
+                width: 64,
+                height: 64,
                 child: Stack(
                   alignment: Alignment.center,
                   children: [
                     CircularProgressIndicator(
                       value: 1,
-                      strokeWidth: 10,
-                      backgroundColor: Colors.white.withValues(alpha: 0.18),
+                      strokeWidth: 5,
+                      backgroundColor: Colors.white.withValues(alpha: 0.12),
                       valueColor: const AlwaysStoppedAnimation(Colors.transparent),
                     ),
                     CircularProgressIndicator(
                       value: (pct / 100).clamp(0.0, 1.0),
-                      strokeWidth: 10,
+                      strokeWidth: 5,
                       strokeCap: StrokeCap.round,
                       backgroundColor: Colors.transparent,
-                      valueColor: const AlwaysStoppedAnimation(Colors.white),
+                      valueColor: const AlwaysStoppedAnimation(Color(0xFFC8F56A)),
                     ),
                     Text(
                       '$pct%',
-                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 18),
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 13,
+                        fontFamily: 'monospace',
+                      ),
                     ),
                   ],
                 ),
@@ -372,28 +358,29 @@ class _TodayHero extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(14),
+              color: Colors.white.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(12),
             ),
             child: Column(
               children: [
                 Row(
                   children: [
                     Text(
-                      'ПРОДАЖИ · ПОСЛЕДНИЕ 7 ДНЕЙ',
+                      'Savdo · oxirgi 7 kun',
                       style: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.8),
-                        fontSize: 10.5,
-                        fontWeight: FontWeight.w800,
+                        color: Colors.white.withValues(alpha: 0.7),
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
                       ),
                     ),
                     const Spacer(),
                     Text(
                       '∅ ${tabelCompactSum(avg)}',
                       style: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.85),
-                        fontSize: 10.5,
-                        fontWeight: FontWeight.w800,
+                        color: Colors.white.withValues(alpha: 0.75),
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        fontFamily: 'monospace',
                       ),
                     ),
                   ],
@@ -410,11 +397,12 @@ class _TodayHero extends StatelessWidget {
                           child: Container(
                             height: maxBar <= 0
                                 ? 4
-                                : (4 + (week[i].salesSum / maxBar) * 52).clamp(4.0, 56.0),
+                                : (4 + (week[i].salesSum / maxBar) * 52)
+                                    .clamp(4.0, 56.0),
                             decoration: BoxDecoration(
                               color: i == week.length - 1
-                                  ? Colors.white
-                                  : Colors.white.withValues(alpha: 0.45),
+                                  ? const Color(0xFFC8F56A)
+                                  : Colors.white.withValues(alpha: 0.35),
                               borderRadius: BorderRadius.circular(4),
                             ),
                           ),
@@ -433,8 +421,8 @@ class _TodayHero extends StatelessWidget {
                           _wd[i],
                           textAlign: TextAlign.center,
                           style: TextStyle(
-                            color: Colors.white.withValues(alpha: i == 6 ? 1 : 0.7),
-                            fontSize: 9.5,
+                            color: Colors.white.withValues(alpha: i == 6 ? 1 : 0.55),
+                            fontSize: 9,
                             fontWeight: FontWeight.w700,
                           ),
                         ),
@@ -491,12 +479,12 @@ class _VisitRouteCard extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Маршрут на сегодня',
+                        'Bugungi marshrut',
                         style: AppTypography.headlineSmall.copyWith(fontSize: 13.5),
                       ),
                       Text(
-                        '$onRoute из $stops точек'
-                        '${offRoute > 0 ? ' · вне маршрута $offRoute' : ''}',
+                        '$onRoute / $stops nuqta'
+                        '${offRoute > 0 ? ' · marshrutdan tashqari $offRoute' : ''}',
                         style: AppTypography.captionSmall.copyWith(
                           color: AppColors.textMuted,
                           fontSize: 11.5,
@@ -543,9 +531,9 @@ class _VisitRouteCard extends StatelessWidget {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                _legend(AppColors.success, 'Посещено $onRoute'),
-                _legend(const Color(0xFFF59E0B), 'Вне маршрута $offRoute'),
-                _legend(const Color(0xFFE5EDF3), 'Осталось $remaining'),
+                _legend(AppColors.success, 'Tashrif $onRoute'),
+                _legend(const Color(0xFFF59E0B), 'Tashqari $offRoute'),
+                _legend(const Color(0xFFE5EDF3), 'Qoldi $remaining'),
               ],
             ),
           ],
@@ -654,7 +642,7 @@ class _MetricTile extends StatelessWidget {
             style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
           ),
           Text(
-            'план: $target',
+            'reja: $target',
             style: const TextStyle(fontSize: 10, color: AppColors.textMuted),
           ),
           const SizedBox(height: 6),

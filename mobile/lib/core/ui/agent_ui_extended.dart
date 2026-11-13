@@ -151,19 +151,26 @@ class _AgentDayTabsState extends ConsumerState<AgentDayTabs> {
       });
     }
 
+    // Shablon: Hammasi / Du Se Ch Pa Ju Sh Ya
+    const uzDays = ['Hammasi', 'Du', 'Se', 'Ch', 'Pa', 'Ju', 'Sh', 'Ya'];
+    final labels = List<String>.generate(
+      days.length,
+      (i) => i < uzDays.length ? uzDays[i] : days[i],
+    );
+
     return Padding(
-      padding: EdgeInsets.fromLTRB(12, widget.topPadding, 12, 12),
+      padding: EdgeInsets.fromLTRB(12, widget.topPadding.clamp(0, 8), 12, 8),
       child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
         physics: const BouncingScrollPhysics(),
         clipBehavior: Clip.none,
         child: Row(
-          children: List.generate(days.length, (i) {
+          children: List.generate(labels.length, (i) {
             final active = i == selected;
             final isAll = i == 0;
             return Padding(
               key: _chipKeys[i],
-              padding: EdgeInsets.only(right: i < days.length - 1 ? 8 : 0),
+              padding: EdgeInsets.only(right: i < labels.length - 1 ? 8 : 0),
               child: Material(
                 color: active ? AppColors.primaryDark : AppColors.surfaceVariant,
                 borderRadius: BorderRadius.circular(99),
@@ -174,19 +181,19 @@ class _AgentDayTabsState extends ConsumerState<AgentDayTabs> {
                     duration: const Duration(milliseconds: 220),
                     curve: Curves.easeOutCubic,
                     constraints: BoxConstraints(
-                      minWidth: isAll ? 52 : 44,
-                      minHeight: 44,
+                      minWidth: isAll ? 56 : 40,
+                      minHeight: 40,
                     ),
                     padding: EdgeInsets.symmetric(horizontal: isAll ? 12 : 0),
                     alignment: Alignment.center,
                     child: AnimatedDefaultTextStyle(
                       duration: const Duration(milliseconds: 220),
                       style: TextStyle(
-                        fontSize: isAll ? 13 : 14,
+                        fontSize: isAll ? 12 : 13,
                         fontWeight: FontWeight.w800,
                         color: active ? Colors.white : AppColors.textSecondary,
                       ),
-                      child: Text(days[i]),
+                      child: Text(labels[i]),
                     ),
                   ),
                 ),

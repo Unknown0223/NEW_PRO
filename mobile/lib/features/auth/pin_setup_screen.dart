@@ -10,7 +10,7 @@ import '../../design_system/design_system.dart';
 import 'auth_provider.dart';
 import 'pin_pad.dart';
 
-/// Birinchi marta slug/login/paroldan keyin — mahalliy ilova parolini o‘rnatish.
+/// PIN o‘rnatish — barqaror layout (LayoutBuilder/IntrinsicHeight yo‘q).
 class PinSetupScreen extends ConsumerStatefulWidget {
   const PinSetupScreen({super.key});
 
@@ -24,13 +24,27 @@ class _PinSetupScreenState extends ConsumerState<PinSetupScreen> {
   String _confirm = '';
   bool _confirmStep = false;
   bool _busy = false;
+  bool _mismatch = false;
+  bool _shakePin = false;
 
-  void _reset() {
+  void _reset({bool mismatch = false}) {
     setState(() {
       _first = '';
       _confirm = '';
       _confirmStep = false;
+      _mismatch = mismatch;
     });
+    if (mismatch) {
+      setState(() => _shakePin = true);
+      Future<void>.delayed(const Duration(milliseconds: 520), () {
+        if (mounted) {
+          setState(() {
+            _mismatch = false;
+            _shakePin = false;
+          });
+        }
+      });
+    }
   }
 
   Future<void> _finishSetup() async {
@@ -46,6 +60,7 @@ class _PinSetupScreenState extends ConsumerState<PinSetupScreen> {
   void _onDigit(String d) {
     if (_busy) return;
     setState(() {
+      _mismatch = false;
       if (!_confirmStep) {
         if (_first.length >= _pinLen) return;
         _first += d;
@@ -58,7 +73,7 @@ class _PinSetupScreenState extends ConsumerState<PinSetupScreen> {
             _finishSetup();
           } else {
             showAgentToast(context, 'PIN не совпадает. Повторите.', accentColor: AppColors.error);
-            _reset();
+            _reset(mismatch: true);
           }
         }
       }
@@ -68,6 +83,7 @@ class _PinSetupScreenState extends ConsumerState<PinSetupScreen> {
   void _backspace() {
     if (_busy) return;
     setState(() {
+      _mismatch = false;
       if (_confirmStep) {
         if (_confirm.isNotEmpty) {
           _confirm = _confirm.substring(0, _confirm.length - 1);
@@ -87,91 +103,116 @@ class _PinSetupScreenState extends ConsumerState<PinSetupScreen> {
     final step = _confirmStep ? 2 : 1;
 
     return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: AppColors.background,
-        elevation: 0,
-        scrolledUnderElevation: 0,
-        centerTitle: true,
-        title: Text(
-          S.pinSecurity,
-          style: AppTypography.headlineMedium.copyWith(
-            fontWeight: FontWeight.w700,
-            color: AppColors.textTitle,
+      backgroundColor: Colors.white,
+      body: Stack(
+        fit: StackFit.expand,
+        children: [
+          const IgnorePointer(
+            child: SaBrandWave(topFraction: 0.88, animate: true),
           ),
-        ),
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_rounded, color: AppColors.textMuted),
-          onPressed: _busy
-              ? null
-              : () {
-                  if (context.canPop()) {
-                    context.pop();
-                  } else {
-                    context.go('/login');
-                  }
-                },
-        ),
-      ),
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 26),
-          child: Column(
-            children: [
-              const SizedBox(height: 38),
-              SaEnter(
-                preset: SaMotionPreset.spring,
-                child: Column(
-                  children: [
-                    Text(
-                      step == 1 ? S.pinCreate : S.pinConfirmTitle,
-                      style: AppTypography.headlineMedium.copyWith(
-                        fontSize: 22,
-                        fontWeight: FontWeight.w800,
-                        color: AppColors.textTitle,
+          SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 26),
+              child: Column(
+                children: [
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      IconButton(
+                        onPressed: _busy
+                            ? null
+                            : () {
+                                if (context.canPop()) {
+                                  context.pop();
+                                } else {
+                                  context.go('/login');
+                                }
+                              },
+                        style: IconButton.styleFrom(
+                          backgroundColor: const Color(0xFFEEF1F5),
+                          foregroundColor: const Color(0xFF0E1420),
+                        ),
+                        icon: const Icon(Icons.arrow_back_rounded, size: 20),
                       ),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      S.pinSubtitle,
-                      style: AppTypography.bodyMedium.copyWith(
-                        fontSize: 13.5,
-                        color: AppColors.textMuted,
+                      const SizedBox(width: 8),
+                      const SaBrandMark(size: 28, draw: false),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const SaBrandWordmark(size: 14),
+                            Text(
+                              S.pinSecurity.toUpperCase(),
+                              style: const TextStyle(
+                                fontSize: 8,
+                                letterSpacing: 1.4,
+                                fontWeight: FontWeight.w700,
+                                color: Color(0xFF7A8697),
+                                fontFamily: 'monospace',
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
-                      textAlign: TextAlign.center,
+                    ],
+                  ),
+                  const SizedBox(height: 32),
+                  Text(
+                    step == 1 ? S.pinCreate : S.pinConfirmTitle,
+                    style: AppTypography.headlineMedium.copyWith(
+                      fontSize: 22,
+                      fontWeight: FontWeight.w800,
+                      color: const Color(0xFF0E1420),
                     ),
-                  ],
-                ),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    S.pinSubtitle,
+                    style: AppTypography.bodyMedium.copyWith(
+                      fontSize: 13.5,
+                      color: const Color(0xFF677386),
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 28),
+                  SaAuthShake(
+                    shake: _shakePin,
+                    child: PinDots(
+                      filled: filled,
+                      pinLength: _pinLen,
+                      variant: PinDotsVariant.onboarding,
+                      error: _mismatch,
+                    ),
+                  ),
+                  if (_busy)
+                    const Padding(
+                      padding: EdgeInsets.only(top: 16),
+                      child: SizedBox(
+                        width: 22,
+                        height: 22,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2.5,
+                          color: AppColors.primary,
+                        ),
+                      ),
+                    ),
+                  const Spacer(),
+                  PinPad(
+                    enabled: !_busy,
+                    variant: PinPadVariant.onboarding,
+                    onDigit: _onDigit,
+                    onBackspace: _backspace,
+                  ),
+                  const SizedBox(height: 16),
+                  AgentRoleBadge(label: S.pinStepLabel(step)),
+                  const SizedBox(height: 20),
+                ],
               ),
-              const SizedBox(height: 34),
-              SaEnter(
-                delay: SaStaggerDelay.of(1),
-                preset: SaMotionPreset.rise,
-                child: PinDots(
-                  filled: filled,
-                  pinLength: _pinLen,
-                  variant: PinDotsVariant.onboarding,
-                ),
-              ),
-              if (_busy)
-                const Padding(
-                  padding: EdgeInsets.only(top: 24),
-                  child: CircularProgressIndicator(color: AppColors.primary),
-                ),
-              const Spacer(),
-              PinPad(
-                enabled: !_busy,
-                variant: PinPadVariant.onboarding,
-                onDigit: _onDigit,
-                onBackspace: _backspace,
-              ),
-              const SizedBox(height: 28),
-              AgentRoleBadge(label: S.pinStepLabel(step)),
-              const SizedBox(height: 24),
-            ],
+            ),
           ),
-        ),
+        ],
       ),
     );
   }

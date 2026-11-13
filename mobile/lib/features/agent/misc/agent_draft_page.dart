@@ -41,7 +41,7 @@ class _AgentDraftPageState extends ConsumerState<AgentDraftPage> {
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AgentAppBar(
-        title: count > 0 ? '${S.draft} ($count)' : S.draft,
+        title: count > 0 ? 'Qoralamalar ($count)' : 'Qoralamalar',
         showBack: true,
         showSyncCountdown: false,
         onBack: () {

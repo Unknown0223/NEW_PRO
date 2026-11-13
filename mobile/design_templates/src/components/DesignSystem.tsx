@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { accents, motionPresets, palette, typeScale } from "../data/design";
 import { CopyButton, Reveal, SectionHead, useToast } from "./ui";
+import { saveText } from "../utils/zip";
 import { cn } from "../utils/cn";
 
 const tabs = [
@@ -58,14 +59,8 @@ export default function DesignSystem({ embedded = false }: { embedded?: boolean 
       radii: radii.map(({ name, v, use }) => ({ name, value: v, use })),
       spacing: spaces,
     };
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "salec-design-tokens.json";
-    a.click();
-    URL.revokeObjectURL(url);
-    toast("salec-design-tokens.json yuklab olindi");
+    const res = saveText(JSON.stringify(data, null, 2), "salec-design-tokens.json", "application/json");
+    toast(res.ok ? "salec-design-tokens.json yuklab olindi" : "Yangi oynada ochildi");
   };
 
   return (

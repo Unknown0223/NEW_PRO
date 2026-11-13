@@ -26,7 +26,7 @@ class AgentKpiDiagnosticsDaysPage extends ConsumerWidget {
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AgentAppBar(
-        title: 'Дни месяца',
+        title: 'Kunlar diagnostikasi',
         showBack: true,
         belowTitle: dataAsync.maybeWhen(
           data: (d) => Text(

@@ -7,6 +7,7 @@ import '../../../core/auth/session.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/ui/quick_panel_sheet.dart';
+import '../../../design_system/design_system.dart';
 import '../../agent/orders/order_create_models.dart' show formatMoneySpaced;
 import '../config/expeditor_config_enforcement.dart';
 import '../expeditor_providers.dart';
@@ -22,6 +23,8 @@ Future<void> _openSync(BuildContext context, WidgetRef ref) async {
   if (full == null || !context.mounted) return;
   context.push('/exp-manual-sync?full=${full ? 1 : 0}');
 }
+
+final GlobalKey<ScaffoldState> expeditorHomeScaffoldKey = GlobalKey<ScaffoldState>();
 
 class ExpeditorHomePage extends ConsumerWidget {
   const ExpeditorHomePage({super.key});
@@ -42,17 +45,32 @@ class ExpeditorHomePage extends ConsumerWidget {
     final policy = ExpeditorConfigPolicy.fromMobileConfig(mobileConfig);
     final dash = ref.watch(expeditorDashboardProvider);
 
+    final now = TimeOfDay.now();
+    final clock =
+        '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
+
     return Scaffold(
+      key: expeditorHomeScaffoldKey,
       backgroundColor: AppColors.background,
       drawer: const ExpeditorDrawer(),
-      appBar: AppBar(
-        title: const Text('Главная'),
-        actions: const [
-          QuickPanelAction(),
-          ExpeditorNotificationsBell(),
-        ],
-      ),
-      body: RefreshIndicator(
+      body: Column(
+        children: [
+          SaGlobalChromeBar(
+            roleLabel: 'Dastavka',
+            syncClock: clock,
+            onMenu: () => expeditorHomeScaffoldKey.currentState?.openDrawer(),
+            onSync: () => _openSync(context, ref),
+            onQuick: () => showQuickPanelSheet(context),
+          ),
+          const Align(
+            alignment: Alignment.centerRight,
+            child: Padding(
+              padding: EdgeInsets.only(right: 8),
+              child: ExpeditorNotificationsBell(),
+            ),
+          ),
+          Expanded(
+            child: RefreshIndicator(
         onRefresh: () async {
           ref.invalidate(expeditorDashboardProvider);
           await ref.read(expeditorDashboardProvider.future);
@@ -84,191 +102,240 @@ class ExpeditorHomePage extends ConsumerWidget {
             return ListView(
               padding: const EdgeInsets.fromLTRB(12, 12, 12, 130),
               children: [
-                Card(
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text('Дневной отчёт на сегодня',
-                            style: AppTypography.titleMedium,),
-                        const SizedBox(height: 12),
-                        Center(
-                          child: SizedBox(
-                            width: 132,
-                            height: 132,
-                            child: Stack(
-                              alignment: Alignment.center,
-                              children: [
-                                SizedBox(
-                                  width: 132,
-                                  height: 132,
-                                  child: CircularProgressIndicator(
-                                    value: (perf / 100).clamp(0.0, 1.0),
-                                    strokeWidth: 12,
-                                    color: AppColors.expeditorAccent,
-                                    backgroundColor: AppColors.expeditorAccent
-                                        .withValues(alpha: 0.15),
+                SaEnter(
+                  preset: SaMotionPreset.rise,
+                  child: Card(
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              const Expanded(
+                                child: Text(
+                                  'Дневной отчёт на сегодня',
+                                  style: AppTypography.titleMedium,
+                                ),
+                              ),
+                              SaLiveDot(color: AppColors.expeditorAccent, size: 6),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+                          Center(
+                            child: SizedBox(
+                              width: 132,
+                              height: 132,
+                              child: Stack(
+                                alignment: Alignment.center,
+                                children: [
+                                  SizedBox(
+                                    width: 132,
+                                    height: 132,
+                                    child: TweenAnimationBuilder<double>(
+                                      tween: Tween(
+                                        begin: 0,
+                                        end: (perf / 100).clamp(0.0, 1.0),
+                                      ),
+                                      duration: SaDurations.data,
+                                      curve: SaCurves.standard,
+                                      builder: (_, v, __) => CircularProgressIndicator(
+                                        value: v,
+                                        strokeWidth: 12,
+                                        color: AppColors.expeditorAccent,
+                                        backgroundColor: AppColors.expeditorAccent
+                                            .withValues(alpha: 0.15),
+                                      ),
+                                    ),
                                   ),
-                                ),
-                                Column(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Text('${perf.toInt()}%',
-                                        style: AppTypography.headlineMedium,),
-                                    const Text('УСПЕВАЕМОСТЬ',
+                                  Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      SaCountUp(
+                                        value: perf,
+                                        format: (v) => '${v.toInt()}%',
+                                        style: AppTypography.headlineMedium,
+                                      ),
+                                      const Text(
+                                        'УСПЕВАЕМОСТЬ',
                                         style: TextStyle(
-                                            fontSize: 12,
-                                            fontWeight: FontWeight.w700,
-                                            color: AppColors.textSecondary,),),
-                                  ],
-                                ),
-                              ],
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w700,
+                                          color: AppColors.textSecondary,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ),
                             ),
                           ),
-                        ),
-                        const SizedBox(height: 12),
-                        Row(
-                          children: [
-                            Expanded(
+                          const SizedBox(height: 12),
+                          Row(
+                            children: [
+                              Expanded(
                                 child: _MiniStat(
-                                    'Посещено',
-                                    '$visited / $total',
-                                    Icons.check_circle,
-                                    AppColors.success,),),
-                            const SizedBox(width: 8),
-                            Expanded(
+                                  'Посещено',
+                                  '$visited / $total',
+                                  Icons.check_circle,
+                                  AppColors.success,
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
                                 child: _MiniStat(
-                                    'Осталось',
-                                    '$remaining / $total',
-                                    Icons.location_on,
-                                    AppColors.error,),),
-                          ],
-                        ),
-                        const SizedBox(height: 12),
-                        Text(
+                                  'Осталось',
+                                  '$remaining / $total',
+                                  Icons.location_on,
+                                  AppColors.error,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+                          Text(
                             'Синхронизация: ${_fmtSync(d['last_sync_at']?.toString())}',
                             style: AppTypography.bodySmall
-                                .copyWith(color: AppColors.textSecondary),),
-                        const SizedBox(height: 8),
-                        SizedBox(
-                          width: double.infinity,
-                          child: ElevatedButton(
-                            onPressed: () => _openSync(context, ref),
-                            style: ElevatedButton.styleFrom(
-                                backgroundColor: AppColors.expeditorAccent,),
-                            child: const Text('Синхронизация'),
+                                .copyWith(color: AppColors.textSecondary),
                           ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Card(
-                  child: Padding(
-                    padding: const EdgeInsets.all(14),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text('Оплаты', style: AppTypography.titleMedium),
-                        const SizedBox(height: 6),
-                        Text(
-                          paymentsSummary,
-                          style: AppTypography.bodyMedium
-                              .copyWith(color: AppColors.textSecondary),
-                        ),
-                        const SizedBox(height: 10),
-                        if (policy.paymentsEnabled)
+                          const SizedBox(height: 8),
                           SizedBox(
                             width: double.infinity,
-                            child: OutlinedButton(
-                              onPressed: () =>
-                                  showExpeditorPaymentsSheet(context),
-                              style: OutlinedButton.styleFrom(
-                                foregroundColor: AppColors.expeditorAccent,
-                                side: const BorderSide(color: AppColors.border),
-                                padding:
-                                    const EdgeInsets.symmetric(vertical: 12),
+                            child: SaPressable(
+                              child: ElevatedButton(
+                                onPressed: () => _openSync(context, ref),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: AppColors.expeditorAccent,
+                                ),
+                                child: const Text('Синхронизация'),
                               ),
-                              child: const Text('Информация оплаты'),
                             ),
                           ),
-                      ],
+                        ],
+                      ),
                     ),
                   ),
                 ),
                 const SizedBox(height: 12),
-                Card(
-                  child: Padding(
-                    padding: const EdgeInsets.all(14),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text('Отчет по отгрузкам',
-                            style: AppTypography.headlineSmall,),
-                        const SizedBox(height: 10),
-                        ExpeditorHomeReportTable(
+                SaEnter(
+                  delay: SaStaggerDelay.of(1),
+                  preset: SaMotionPreset.rise,
+                  child: Card(
+                    child: Padding(
+                      padding: const EdgeInsets.all(14),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text('Оплаты', style: AppTypography.titleMedium),
+                          const SizedBox(height: 6),
+                          Text(
+                            paymentsSummary,
+                            style: AppTypography.bodyMedium
+                                .copyWith(color: AppColors.textSecondary),
+                          ),
+                          const SizedBox(height: 10),
+                          if (policy.paymentsEnabled)
+                            SizedBox(
+                              width: double.infinity,
+                              child: OutlinedButton(
+                                onPressed: () =>
+                                    showExpeditorPaymentsSheet(context),
+                                style: OutlinedButton.styleFrom(
+                                  foregroundColor: AppColors.expeditorAccent,
+                                  side: const BorderSide(color: AppColors.border),
+                                  padding:
+                                      const EdgeInsets.symmetric(vertical: 12),
+                                ),
+                                child: const Text('Информация оплаты'),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                SaEnter(
+                  delay: SaStaggerDelay.of(2),
+                  preset: SaMotionPreset.rise,
+                  child: Card(
+                    child: Padding(
+                      padding: const EdgeInsets.all(14),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Отчет по отгрузкам',
+                            style: AppTypography.headlineSmall,
+                          ),
+                          const SizedBox(height: 10),
+                          ExpeditorHomeReportTable(
                             rows: rows
                                 .map((e) => Map<String, dynamic>.from(e))
-                                .toList(),),
-                        const SizedBox(height: 8),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: OutlinedButton(
-                                onPressed: () =>
-                                    showExpeditorDeliveryByClientsSheet(
-                                        context,),
-                                style: OutlinedButton.styleFrom(
-                                  foregroundColor: AppColors.textPrimary,
-                                  side:
-                                      const BorderSide(color: AppColors.border),
-                                  padding:
-                                      const EdgeInsets.symmetric(vertical: 10),
-                                ),
-                                child: const Row(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    Text('По клиентам',
+                                .toList(),
+                          ),
+                          const SizedBox(height: 8),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: OutlinedButton(
+                                  onPressed: () =>
+                                      showExpeditorDeliveryByClientsSheet(
+                                    context,
+                                  ),
+                                  style: OutlinedButton.styleFrom(
+                                    foregroundColor: AppColors.textPrimary,
+                                    side: const BorderSide(color: AppColors.border),
+                                    padding: const EdgeInsets.symmetric(vertical: 10),
+                                  ),
+                                  child: const Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Text(
+                                        'По клиентам',
                                         style: TextStyle(
-                                            fontSize: 15,
-                                            fontWeight: FontWeight.w700,),),
-                                    SizedBox(width: 4),
-                                    Icon(Icons.chevron_right, size: 20),
-                                  ],
+                                          fontSize: 15,
+                                          fontWeight: FontWeight.w700,
+                                        ),
+                                      ),
+                                      SizedBox(width: 4),
+                                      Icon(Icons.chevron_right, size: 20),
+                                    ],
+                                  ),
                                 ),
                               ),
-                            ),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: OutlinedButton(
-                                onPressed: () =>
-                                    showExpeditorDeliveryByProductsSheet(
-                                        context,),
-                                style: OutlinedButton.styleFrom(
-                                  foregroundColor: AppColors.textPrimary,
-                                  side:
-                                      const BorderSide(color: AppColors.border),
-                                  padding:
-                                      const EdgeInsets.symmetric(vertical: 10),
-                                ),
-                                child: const Row(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    Text('По продуктам',
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: OutlinedButton(
+                                  onPressed: () =>
+                                      showExpeditorDeliveryByProductsSheet(
+                                    context,
+                                  ),
+                                  style: OutlinedButton.styleFrom(
+                                    foregroundColor: AppColors.textPrimary,
+                                    side: const BorderSide(color: AppColors.border),
+                                    padding: const EdgeInsets.symmetric(vertical: 10),
+                                  ),
+                                  child: const Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Text(
+                                        'По продуктам',
                                         style: TextStyle(
-                                            fontSize: 15,
-                                            fontWeight: FontWeight.w700,),),
-                                    SizedBox(width: 4),
-                                    Icon(Icons.chevron_right, size: 20),
-                                  ],
+                                          fontSize: 15,
+                                          fontWeight: FontWeight.w700,
+                                        ),
+                                      ),
+                                      SizedBox(width: 4),
+                                      Icon(Icons.chevron_right, size: 20),
+                                    ],
+                                  ),
                                 ),
                               ),
-                            ),
-                          ],
-                        ),
-                      ],
+                            ],
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ),
@@ -278,6 +345,9 @@ class ExpeditorHomePage extends ConsumerWidget {
           loading: () => const Center(child: CircularProgressIndicator()),
           error: (e, _) => Center(child: Text('Ошибка: $e')),
         ),
+      ),
+          ),
+        ],
       ),
     );
   }

@@ -2,14 +2,16 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../../core/l10n/app_strings_ru.dart';
-import 'manual_sync_runner.dart';
+import 'package:go_router/go_router.dart';
+
+import '../../../core/auth/session.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/ui/agent_ui.dart';
 import '../../../design_system/design_system.dart';
+import 'manual_sync_runner.dart';
 
-/// Sinxronizatsiya tanlash (shablon SyncSheet).
+/// Shablon SyncSheet — 3 jarayon (Rol / Oddiy / To‘liq) + BrandSync animatsiya.
 class SyncBottomSheet extends ConsumerWidget {
   const SyncBottomSheet({super.key});
 
@@ -24,7 +26,12 @@ class SyncBottomSheet extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-  final scheme = Theme.of(context).colorScheme;
+    final scheme = Theme.of(context).colorScheme;
+    final roleWord = saBrandSyncRoleWord(ref.watch(sessionProvider).user?.role);
+    final now = TimeOfDay.now();
+    final clock =
+        '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
+
     return SaPopIn(
       child: Container(
         decoration: BoxDecoration(
@@ -34,59 +41,137 @@ class SyncBottomSheet extends ConsumerWidget {
         child: SafeArea(
           top: false,
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(0, 8, 0, 16),
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
             child: Column(
               mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 const AgentSheetHandle(),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  child: Stack(
-                    alignment: Alignment.center,
-                    children: [
-                      Text(
-                        S.syncTitle,
-                        style: AppTypography.headlineMedium.copyWith(fontWeight: FontWeight.w800),
-                      ),
-                      Align(
-                        alignment: Alignment.centerRight,
-                        child: SaPressable(
-                          onTap: () => Navigator.pop(context),
-                          borderRadius: BorderRadius.circular(99),
-                          child: Material(
-                            color: AppColors.surfaceVariant,
-                            shape: const CircleBorder(),
-                            child: const SizedBox(
-                              width: 28,
-                              height: 28,
-                              child: Icon(Icons.close, size: 18, color: AppColors.textSecondary),
+                const SizedBox(height: 4),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Sinxronlash',
+                            style: AppTypography.headlineMedium.copyWith(
+                              fontWeight: FontWeight.w800,
                             ),
                           ),
-                        ),
+                          Text(
+                            '3 xil alohida jarayon',
+                            style: AppTypography.caption.copyWith(
+                              color: AppColors.textMuted,
+                            ),
+                          ),
+                        ],
                       ),
-                    ],
+                    ),
+                    SaPressable(
+                      onTap: () => Navigator.pop(context),
+                      borderRadius: BorderRadius.circular(10),
+                      child: Container(
+                        width: 36,
+                        height: 36,
+                        decoration: BoxDecoration(
+                          color: AppColors.surfaceVariant,
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: const Icon(Icons.close, size: 18, color: AppColors.textSecondary),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                SaEnter(
+                  preset: SaMotionPreset.rise,
+                  child: _SyncOptionCard(
+                    icon: Icons.badge_outlined,
+                    title: 'Rol kartasi',
+                    sub: 'Rasm, raqam va ruxsatlar',
+                    badge: '$roleWord animatsiyasi bilan',
+                    onTap: () => _run(context, ref, full: false, identity: true),
                   ),
                 ),
                 const SizedBox(height: 8),
-                _SyncRow(
-                  icon: Icons.cloud_download_outlined,
-                  title: 'Полная синхронизация',
-                  subtitle: 'Каталог, заказы и обмен с сервером',
-                  onTap: () => _run(context, ref, full: true),
+                SaEnter(
+                  delay: SaStaggerDelay.of(1),
+                  preset: SaMotionPreset.rise,
+                  child: _SyncOptionCard(
+                    icon: Icons.sync_rounded,
+                    title: 'Oddiy sinxron',
+                    sub: "Faqat o'zgargan yozuvlar",
+                    badge: '$roleWord animatsiyasi bilan',
+                    onTap: () => _run(context, ref, full: false),
+                  ),
                 ),
-                const Divider(height: 1, color: AppColors.borderLight),
-                _SyncRow(
-                  icon: Icons.sync,
-                  title: 'Обычная синхронизация',
-                  subtitle: 'Изменения с последней синхронизации',
-                  onTap: () => _run(context, ref, full: false),
+                const SizedBox(height: 8),
+                SaEnter(
+                  delay: SaStaggerDelay.of(2),
+                  preset: SaMotionPreset.rise,
+                  child: _SyncOptionCard(
+                    icon: Icons.layers_outlined,
+                    title: 'Hammasini sinxronlash',
+                    sub: "To'liq kesh va foto",
+                    badge: '$roleWord animatsiyasi bilan',
+                    highlighted: true,
+                    onTap: () => _run(context, ref, full: true),
+                  ),
                 ),
-                const Divider(height: 1, color: AppColors.borderLight),
-                _SyncRow(
-                  icon: Icons.photo_library_outlined,
-                  title: 'Синхронизация фото',
-                  subtitle: 'Накопленные фото — без ограничения по времени',
-                  onTap: () => _runPhotos(context),
+                const SizedBox(height: 10),
+                SaEnter(
+                  delay: SaStaggerDelay.of(3),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: AppColors.border),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.wifi_rounded, size: 16, color: AppColors.primary),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'Oflayn kesh tayyor',
+                            style: AppTypography.caption.copyWith(
+                              color: AppColors.textMuted,
+                            ),
+                          ),
+                        ),
+                        Text(
+                          clock,
+                          style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w800,
+                            fontFamily: 'monospace',
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                SaEnter(
+                  delay: SaStaggerDelay.of(4),
+                  child: OutlinedButton.icon(
+                    onPressed: () {
+                      Navigator.pop(context);
+                      context.push('/manual-sync?full=1');
+                    },
+                    icon: const Icon(Icons.refresh_rounded, size: 18),
+                    label: const Text('Sinxron ekranini ochish'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.primary,
+                      side: const BorderSide(color: AppColors.border),
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                    ),
+                  ),
                 ),
               ],
             ),
@@ -96,63 +181,95 @@ class SyncBottomSheet extends ConsumerWidget {
     );
   }
 
-  void _run(BuildContext context, WidgetRef ref, {required bool full}) {
-    // Sheet dispose qiladi — WidgetRef ishlatilmasin; container ildiz Scope dan olinadi.
+  void _run(
+    BuildContext context,
+    WidgetRef ref, {
+    required bool full,
+    bool identity = false,
+  }) {
     final container = ProviderScope.containerOf(context);
     Navigator.pop(context);
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      unawaited(startManualSyncWithContainer(container, full: full));
-    });
-  }
-
-  void _runPhotos(BuildContext context) {
-    final container = ProviderScope.containerOf(context);
-    Navigator.pop(context);
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      unawaited(startPhotoSyncWithContainer(container));
+      unawaited(
+        startManualSyncWithContainer(
+          container,
+          full: full,
+          identity: identity,
+        ),
+      );
     });
   }
 }
 
-class _SyncRow extends StatelessWidget {
+
+class _SyncOptionCard extends StatelessWidget {
   final IconData icon;
   final String title;
-  final String? subtitle;
+  final String sub;
+  final String badge;
   final VoidCallback onTap;
+  final bool highlighted;
 
-  const _SyncRow({
+  const _SyncOptionCard({
     required this.icon,
     required this.title,
-    this.subtitle,
+    required this.sub,
+    required this.badge,
     required this.onTap,
+    this.highlighted = false,
   });
 
   @override
   Widget build(BuildContext context) {
+    const accent = AppColors.primary;
     return SaPressable(
       onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+      borderRadius: BorderRadius.circular(14),
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: highlighted ? accent.withValues(alpha: 0.08) : AppColors.surface,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: highlighted ? accent.withValues(alpha: 0.28) : AppColors.border,
+          ),
+        ),
         child: Row(
           children: [
-            Icon(icon, color: AppColors.teal700, size: 24),
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: accent.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(icon, color: accent, size: 20),
+            ),
             const SizedBox(width: 12),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
-                  if (subtitle != null)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 2),
-                      child: Text(
-                        subtitle!,
-                        style: AppTypography.caption.copyWith(color: AppColors.textMuted),
-                      ),
+                  Text(
+                    title,
+                    style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+                  ),
+                  Text(
+                    sub,
+                    style: AppTypography.caption.copyWith(color: AppColors.textMuted),
+                  ),
+                  Text(
+                    badge,
+                    style: AppTypography.caption.copyWith(
+                      color: accent,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 10,
                     ),
+                  ),
                 ],
               ),
             ),
+            const Icon(Icons.chevron_right, color: AppColors.textMuted),
           ],
         ),
       ),

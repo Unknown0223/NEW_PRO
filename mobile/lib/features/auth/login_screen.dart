@@ -24,7 +24,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   bool _remember = true;
   bool _shownInitialError = false;
   bool _touched = false;
-  bool _showForm = false;
+  bool _shakeForm = false;
 
   static const _fieldBg = Color(0xFFEEF1F5);
   static const _ink = Color(0xFF0E1420);
@@ -34,8 +34,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   @override
   void initState() {
     super.initState();
-    // Butun ekranni FadeTransition qilmaymiz — oq ekranda osilib qolardi.
-    _showForm = true;
     WidgetsBinding.instance.addPostFrameCallback((_) => _showPendingAuthError());
   }
 
@@ -75,9 +73,19 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   String? get _passErr =>
       _touched && _pass.text.length < 6 ? 'Parol kamida 6 belgidan iborat' : null;
 
+  void _bumpForm() {
+    setState(() => _shakeForm = true);
+    Future<void>.delayed(const Duration(milliseconds: 460), () {
+      if (mounted) setState(() => _shakeForm = false);
+    });
+  }
+
   void _submit() {
     setState(() => _touched = true);
-    if (_slugErr != null || _loginErr != null || _passErr != null) return;
+    if (_slugErr != null || _loginErr != null || _passErr != null) {
+      _bumpForm();
+      return;
+    }
     ref.read(authStateProvider.notifier).login(
           slug: _slug.text.trim(),
           login: _login.text.trim(),
@@ -106,7 +114,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     return Scaffold(
       backgroundColor: Colors.white,
       resizeToAvoidBottomInset: true,
-      body: Stack(
+      body: SaLaunchZoom(
+        child: Stack(
           children: [
             const Positioned.fill(
               child: RepaintBoundary(
@@ -127,7 +136,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
                       child: Column(
                         children: [
-                          const SaBrandMark(size: 64, draw: false),
+                          const SaBrandMark(size: 64, draw: true),
                           const SizedBox(height: 12),
                           SaEnter(
                             delay: const Duration(milliseconds: 40),
@@ -145,7 +154,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                               ),
                             ),
                           ),
-                          if (_showForm) ..._form(loading),
+                          SaAuthShake(
+                            shake: _shakeForm,
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: _form(loading),
+                            ),
+                          ),
                           if (kDebugMode || isLocalApiEnv()) ...[
                             const SizedBox(height: 12),
                             Text(
@@ -208,6 +223,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             ),
           ],
         ),
+      ),
     );
   }
 

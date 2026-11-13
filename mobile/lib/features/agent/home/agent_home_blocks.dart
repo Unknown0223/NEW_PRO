@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/theme/app_colors.dart';
+import '../../../core/ui/agent_ui.dart';
 import '../../../design_system/design_system.dart';
 import 'agent_home_sections.dart';
 
@@ -99,50 +100,60 @@ class _HomeSalesChartState extends State<HomeSalesChart> {
                 for (var i = 0; i < series.length; i++) ...[
                   if (i > 0) const SizedBox(width: 6),
                   Expanded(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.max,
-                      children: [
-                        Text(
-                          '${series[i].v}',
-                          style: TextStyle(
-                            fontSize: 8,
-                            fontWeight: FontWeight.w800,
-                            height: 1,
-                            fontFamily: 'monospace',
-                            color: series[i].v == peak ? _iris : AppColors.textMuted,
+                    child: SaPressable(
+                      onTap: () {
+                        final est = (series[i].v * 18400).round();
+                        showAgentToast(
+                          context,
+                          '${series[i].d}: ${homeFmtMoney(est.toDouble())} so‘m',
+                          accentColor: _iris,
+                        );
+                      },
+                      child: Column(
+                        mainAxisSize: MainAxisSize.max,
+                        children: [
+                          Text(
+                            '${series[i].v}',
+                            style: TextStyle(
+                              fontSize: 8,
+                              fontWeight: FontWeight.w800,
+                              height: 1,
+                              fontFamily: 'monospace',
+                              color: series[i].v == peak ? _iris : AppColors.textMuted,
+                            ),
                           ),
-                        ),
-                        const SizedBox(height: 2),
-                        Expanded(
-                          child: LayoutBuilder(
-                            builder: (context, c) {
-                              final h = (c.maxHeight * (series[i].v / peak).clamp(0.12, 1.0))
-                                  .clamp(4.0, c.maxHeight);
-                              return Align(
-                                alignment: Alignment.bottomCenter,
-                                child: SaBarGrow(
-                                  height: h,
-                                  width: c.maxWidth,
-                                  color: series[i].v == peak
-                                      ? _iris
-                                      : _iris.withValues(alpha: 0.35),
-                                  delay: Duration(milliseconds: 40 * i),
-                                ),
-                              );
-                            },
+                          const SizedBox(height: 2),
+                          Expanded(
+                            child: LayoutBuilder(
+                              builder: (context, c) {
+                                final h = (c.maxHeight * (series[i].v / peak).clamp(0.12, 1.0))
+                                    .clamp(4.0, c.maxHeight);
+                                return Align(
+                                  alignment: Alignment.bottomCenter,
+                                  child: SaBarGrow(
+                                    height: h,
+                                    width: c.maxWidth,
+                                    color: series[i].v == peak
+                                        ? _iris
+                                        : _iris.withValues(alpha: 0.35),
+                                    delay: Duration(milliseconds: 55 * i),
+                                  ),
+                                );
+                              },
+                            ),
                           ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          series[i].d,
-                          style: TextStyle(
-                            fontSize: 8,
-                            fontWeight: FontWeight.w600,
-                            height: 1,
-                            color: series[i].v == peak ? _iris : AppColors.textMuted,
+                          const SizedBox(height: 2),
+                          Text(
+                            series[i].d,
+                            style: TextStyle(
+                              fontSize: 8,
+                              fontWeight: FontWeight.w600,
+                              height: 1,
+                              color: series[i].v == peak ? _iris : AppColors.textMuted,
+                            ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
                   ),
                 ],

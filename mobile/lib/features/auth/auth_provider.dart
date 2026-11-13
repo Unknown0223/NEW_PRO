@@ -1004,7 +1004,8 @@ class AuthNotifier extends StateNotifier<AuthState> {
         _session.markBootstrapped();
         await AppDatabase().recordSyncToday();
         state = state.copyWith(bootstrapStep: BootstrapStep.done, status: AuthStatus.syncComplete);
-        unawaited(Future<void>.delayed(const Duration(milliseconds: 600), () {
+        // RoleWelcome (~2.2s) ko‘rinsin — UI finishBootstrap chaqirmasa ham.
+        unawaited(Future<void>.delayed(const Duration(milliseconds: 2800), () {
           if (state.status == AuthStatus.syncComplete) finishBootstrap();
         }));
         return;
@@ -1076,8 +1077,8 @@ class AuthNotifier extends StateNotifier<AuthState> {
       _session.markBootstrapped();
       state = state.copyWith(bootstrapStep: BootstrapStep.done, status: AuthStatus.syncComplete);
       unawaited(_bootstrapPostSyncServices());
-      // «Продолжить» bosilmasa ham kirish — oq/spinnerda qolmasin.
-      unawaited(Future<void>.delayed(const Duration(milliseconds: 900), () {
+      // RoleWelcome (~2.2s) + «o‘tkazib yuborish» — oq/spinnerda qolmasin.
+      unawaited(Future<void>.delayed(const Duration(milliseconds: 2800), () {
         if (state.status == AuthStatus.syncComplete) {
           finishBootstrap();
           unawaited(_resumeDeferredAppUpdateSoon());

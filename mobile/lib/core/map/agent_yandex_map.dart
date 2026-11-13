@@ -317,7 +317,7 @@ class AgentYandexMapState extends State<AgentYandexMap> {
                   const CircularProgressIndicator(color: AppColors.primary),
                   const SizedBox(height: 16),
                   Text(
-                    'Загрузка карты Yandex…',
+                    'Yandex xarita yuklanmoqda…',
                     style: AppTypography.caption.copyWith(color: AppColors.textMuted),
                   ),
                 ],
@@ -336,7 +336,7 @@ class AgentYandexMapState extends State<AgentYandexMap> {
                     const Icon(Icons.map_outlined, size: 48, color: AppColors.textMuted),
                     const SizedBox(height: 12),
                     Text(
-                      'Не удалось загрузить карту Yandex',
+                      'Yandex xaritani yuklab bo\'lmadi',
                       textAlign: TextAlign.center,
                       style: AppTypography.bodyMedium.copyWith(fontWeight: FontWeight.w600),
                     ),

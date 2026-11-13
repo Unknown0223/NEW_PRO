@@ -28,6 +28,8 @@ class ManualSyncState {
   final ManualSyncStatus status;
   final int phaseIndex;
   final bool full;
+  /// Shablon «Rol kartasi» — BrandSync identity variant.
+  final bool identity;
   final double progress;
   final int ordersSent;
   final int ordersPendingStart;
@@ -43,6 +45,7 @@ class ManualSyncState {
     this.status = ManualSyncStatus.idle,
     this.phaseIndex = 0,
     this.full = false,
+    this.identity = false,
     this.progress = 0,
     this.ordersSent = 0,
     this.ordersPendingStart = 0,
@@ -119,10 +122,27 @@ class ManualSyncState {
     return status == ManualSyncStatus.success ? '0' : '—';
   }
 
+  /// Shablon `BrandSync` qadamlari — identity / quick / full.
+  int get brandSyncStepCount {
+    if (identity) return 4;
+    return full ? 7 : 4;
+  }
+
+  /// UI qadam indeksi (0…count−1; success da barchasi belgilangan).
+  int get brandSyncStepIndex {
+    final n = brandSyncStepCount;
+    if (status == ManualSyncStatus.success) return n;
+    if (identity) {
+      return phaseIndex.clamp(0, n - 1);
+    }
+    return (progress * n).floor().clamp(0, n - 1);
+  }
+
   ManualSyncState copyWith({
     ManualSyncStatus? status,
     int? phaseIndex,
     bool? full,
+    bool? identity,
     double? progress,
     int? ordersSent,
     int? ordersPendingStart,
@@ -139,6 +159,7 @@ class ManualSyncState {
         status: status ?? this.status,
         phaseIndex: phaseIndex ?? this.phaseIndex,
         full: full ?? this.full,
+        identity: identity ?? this.identity,
         progress: progress ?? this.progress,
         ordersSent: ordersSent ?? this.ordersSent,
         ordersPendingStart: ordersPendingStart ?? this.ordersPendingStart,
@@ -160,23 +181,62 @@ class ManualSyncNotifier extends StateNotifier<ManualSyncState> {
   bool get isRunning => state.status == ManualSyncStatus.running;
 
   double _progressForPhase(int phase) {
-    if (phase <= 0) return 0.18;
-    if (phase <= 1) return 0.42;
-    if (phase <= 3) return 0.68;
-    if (phase < 5) return 0.88;
+    // Bosqichlar tekis o‘ssin — eski «18% da qotib qolish» hissi yo‘qoladi.
+    if (phase <= 0) return 0.22;
+    if (phase == 1) return 0.40;
+    if (phase == 2) return 0.55;
+    if (phase == 3) return 0.72;
+    if (phase == 4) return 0.88;
     return 0.97;
   }
 
-  Future<void> run({required bool full}) async {
+  Future<void> run({required bool full, bool identity = false}) async {
     if (isRunning) return;
 
     final suppression = _ref.read(appLockSuppressionProvider.notifier);
     suppression.begin();
     try {
-      await _runInner(full: full);
+      if (identity) {
+        await _runIdentity();
+      } else {
+        await _runInner(full: full);
+      }
     } finally {
       suppression.end();
     }
+  }
+
+  /// Shablon «Rol kartasi» — config yangilash + BrandSync identity animatsiya.
+  Future<void> _runIdentity() async {
+    state = const ManualSyncState(
+      status: ManualSyncStatus.running,
+      phaseIndex: 0,
+      identity: true,
+      progress: 0.05,
+    );
+    try {
+      await _ref.read(authStateProvider.notifier).refreshMobileConfig();
+    } catch (_) {
+      // Animatsiya davom etadi — offline bo‘lsa ham UI yakunlanadi.
+    }
+    if (!mounted) return;
+    const steps = 4;
+    for (var i = 1; i <= steps; i++) {
+      await Future<void>.delayed(const Duration(milliseconds: 460));
+      if (!mounted || state.status != ManualSyncStatus.running) return;
+      state = state.copyWith(
+        phaseIndex: i,
+        progress: i / steps,
+      );
+    }
+    if (!mounted) return;
+    state = ManualSyncState(
+      status: ManualSyncStatus.success,
+      phaseIndex: steps,
+      identity: true,
+      progress: 1,
+      finishedAt: DateTime.now(),
+    );
   }
 
   Future<void> _runInner({required bool full}) async {

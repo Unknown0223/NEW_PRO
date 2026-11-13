@@ -125,7 +125,7 @@ class _QuickPanelSettingsPageState
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AgentAppBar(
-        title: 'Быстрое меню',
+        title: 'Tezkor menyu',
         showBack: true,
         useShellDrawer: false,
         showQuickPanel: false,

@@ -36,7 +36,11 @@ class _SaBrandMarkState extends State<SaBrandMark>
   @override
   void initState() {
     super.initState();
-    _c = AnimationController(vsync: this, duration: SaDurations.emphatic);
+    _c = AnimationController(
+      vsync: this,
+      animationBehavior: AnimationBehavior.preserve,
+      duration: SaDurations.emphatic,
+    );
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       if (!widget.draw || saReduceMotion(context)) {
@@ -198,7 +202,11 @@ class _SaBrandWaveState extends State<SaBrandWave>
   @override
   void initState() {
     super.initState();
-    _c = AnimationController(vsync: this, duration: SaDurations.screen);
+    _c = AnimationController(
+      vsync: this,
+      animationBehavior: AnimationBehavior.preserve,
+      duration: SaDurations.screen,
+    );
     _top = Tween<double>(begin: 0.92, end: widget.topFraction).animate(
       CurvedAnimation(parent: _c, curve: SaCurves.standard),
     );
@@ -220,33 +228,29 @@ class _SaBrandWaveState extends State<SaBrandWave>
 
   @override
   Widget build(BuildContext context) {
+    // LayoutBuilder ishlatilmaydi — PIN/Stack ichida layout loop chiqarmasligi uchun.
     return AnimatedBuilder(
       animation: _top,
       builder: (context, _) {
-        return LayoutBuilder(
-          builder: (context, c) {
-            final top = c.maxHeight * _top.value;
-            return Stack(
+        final heightFactor = (1.0 - _top.value).clamp(0.08, 1.0);
+        return Align(
+          alignment: Alignment.bottomCenter,
+          child: FractionallySizedBox(
+            widthFactor: 1,
+            heightFactor: heightFactor,
+            alignment: Alignment.bottomCenter,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Positioned(
-                  left: 0,
-                  right: 0,
-                  top: top,
-                  bottom: 0,
-                  child: Column(
-                    children: [
-                      SizedBox(
-                        height: 72,
-                        width: double.infinity,
-                        child: CustomPaint(painter: _WavePainter()),
-                      ),
-                      Expanded(child: Container(color: SaBrand.blue)),
-                    ],
-                  ),
+                SizedBox(
+                  height: 72,
+                  width: double.infinity,
+                  child: CustomPaint(painter: _WavePainter()),
                 ),
+                const Expanded(child: ColoredBox(color: SaBrand.blue)),
               ],
-            );
-          },
+            ),
+          ),
         );
       },
     );

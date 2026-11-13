@@ -89,7 +89,7 @@ class _StartVisitScreenState extends ConsumerState<StartVisitScreen> {
         }
         out.add({
           'id': cid,
-          'name': raw['client_name']?.toString() ?? 'Клиент #$cid',
+          'name': raw['client_name']?.toString() ?? 'Mijoz #$cid',
           'client_code': raw['client_code'],
           'latitude': raw['latitude'],
           'longitude': raw['longitude'],
@@ -190,7 +190,7 @@ class _StartVisitScreenState extends ConsumerState<StartVisitScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.background,
-      appBar: const AgentAppBar(title: S.startVisit, showBack: true),
+      appBar: const AgentAppBar(title: 'Vizitni boshlash', showBack: true),
       body: SaEnter(
         preset: SaMotionPreset.rise,
         child: _loading

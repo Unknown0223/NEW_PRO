@@ -24,24 +24,16 @@ class SaEnter extends StatefulWidget {
 
 class _SaEnterState extends State<SaEnter> with SingleTickerProviderStateMixin {
   late final AnimationController _c;
-  late final Animation<double> _fade;
-  late final Animation<Offset> _slide;
-  late final Animation<double> _scale;
   bool _ready = false;
 
   @override
   void initState() {
     super.initState();
-    // Yengil au-in: fade + kichik slide (scale faqat spring).
-    _c = AnimationController(vsync: this, duration: widget.preset.duration);
-    final curve = CurvedAnimation(parent: _c, curve: widget.preset.curve);
-    _fade = curve;
-    final dy = widget.preset == SaMotionPreset.screen ? 0.03 : 0.04;
-    _slide = Tween<Offset>(begin: Offset(0, dy), end: Offset.zero).animate(curve);
-    _scale = Tween<double>(
-      begin: widget.preset == SaMotionPreset.spring ? 0.92 : 1,
-      end: 1,
-    ).animate(curve);
+    _c = AnimationController(
+      vsync: this,
+      animationBehavior: AnimationBehavior.preserve,
+      duration: widget.preset.duration,
+    );
     WidgetsBinding.instance.addPostFrameCallback((_) => _start());
   }
 
@@ -52,7 +44,6 @@ class _SaEnterState extends State<SaEnter> with SingleTickerProviderStateMixin {
       setState(() => _ready = true);
       return;
     }
-    // Soft: biroz qisqaroq
     final d = saDuration(context, widget.preset.duration);
     _c.duration = d <= Duration.zero ? widget.preset.duration : d;
     if (widget.delay > Duration.zero) {
@@ -72,21 +63,43 @@ class _SaEnterState extends State<SaEnter> with SingleTickerProviderStateMixin {
   @override
   Widget build(BuildContext context) {
     if (!widget.enabled || saReduceMotion(context)) return widget.child;
-    // Birinchi kadrda ko‘rinmasin (opacity 0), keyin au-in.
     if (!_ready && _c.value == 0) {
       return Opacity(opacity: 0, child: widget.child);
     }
-    // Spring: fade+scale; qolganlari: fade+slide (arzonroq).
-    final body = widget.preset == SaMotionPreset.spring
-        ? FadeTransition(
-            opacity: _fade,
-            child: ScaleTransition(scale: _scale, child: widget.child),
-          )
-        : FadeTransition(
-            opacity: _fade,
-            child: SlideTransition(position: _slide, child: widget.child),
+    // CSS: rise-in translateY(14px); screen-in + scale(0.988); pop-in scale(0.9).
+    return RepaintBoundary(
+      child: AnimatedBuilder(
+        animation: _c,
+        builder: (context, child) {
+          // SaCurves.pop (1.56) overshoot — Opacity faqat 0..1.
+          final t = widget.preset.curve.transform(_c.value.clamp(0.0, 1.0));
+          final opacity = t.clamp(0.0, 1.0);
+          if (widget.preset == SaMotionPreset.spring) {
+            final s = 0.9 + 0.1 * t;
+            return Opacity(
+              opacity: opacity,
+              child: Transform.scale(scale: s, child: child),
+            );
+          }
+          const fromY = 14.0;
+          final scale = widget.preset == SaMotionPreset.screen
+              ? (0.988 + 0.012 * t.clamp(0.0, 1.0))
+              : 1.0;
+          return Opacity(
+            opacity: opacity,
+            child: Transform.translate(
+              offset: Offset(0, fromY * (1 - opacity)),
+              child: Transform.scale(
+                scale: scale,
+                alignment: Alignment.topCenter,
+                child: child,
+              ),
+            ),
           );
-    return RepaintBoundary(child: body);
+        },
+        child: widget.child,
+      ),
+    );
   }
 }
 
@@ -136,7 +149,8 @@ class SaPressable extends StatefulWidget {
     super.key,
     required this.child,
     this.onTap,
-    this.pressedScale = 0.985,
+    /// Shablon `active:scale-[0.98]` / `0.99`
+    this.pressedScale = 0.98,
     this.borderRadius,
   });
 
@@ -196,15 +210,17 @@ class SaPopIn extends StatefulWidget {
 class _SaPopInState extends State<SaPopIn> with SingleTickerProviderStateMixin {
   late final AnimationController _c;
   late final Animation<double> _scale;
-  late final Animation<double> _fade;
 
   @override
   void initState() {
     super.initState();
-    _c = AnimationController(vsync: this, duration: SaDurations.emphatic);
+    _c = AnimationController(
+      vsync: this,
+      animationBehavior: AnimationBehavior.preserve,
+      duration: SaDurations.emphatic,
+    );
     final curved = CurvedAnimation(parent: _c, curve: SaCurves.pop);
     _scale = Tween<double>(begin: 0.9, end: 1).animate(curved);
-    _fade = curved;
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!mounted) return;
       if (widget.delay > Duration.zero) {
@@ -228,9 +244,17 @@ class _SaPopInState extends State<SaPopIn> with SingleTickerProviderStateMixin {
   @override
   Widget build(BuildContext context) {
     if (saReduceMotion(context)) return widget.child;
-    return FadeTransition(
-      opacity: _fade,
-      child: ScaleTransition(scale: _scale, child: widget.child),
+    // Pop curve overshoot — FadeTransition opacity clamp qilinadi.
+    return AnimatedBuilder(
+      animation: _c,
+      builder: (context, child) {
+        final t = SaCurves.pop.transform(_c.value.clamp(0.0, 1.0));
+        return Opacity(
+          opacity: t.clamp(0.0, 1.0),
+          child: Transform.scale(scale: _scale.value, child: child),
+        );
+      },
+      child: widget.child,
     );
   }
 }
@@ -259,8 +283,11 @@ class _SaShimmerState extends State<SaShimmer>
   @override
   void initState() {
     super.initState();
-    _c = AnimationController(vsync: this, duration: SaDurations.shimmer)
-      ..repeat();
+    _c = AnimationController(
+      vsync: this,
+      animationBehavior: AnimationBehavior.preserve,
+      duration: SaDurations.shimmer,
+    )..repeat();
   }
 
   @override
@@ -328,8 +355,11 @@ class _SaLivePulseState extends State<SaLivePulse>
   @override
   void initState() {
     super.initState();
-    _c = AnimationController(vsync: this, duration: SaDurations.pulse)
-      ..repeat();
+    _c = AnimationController(
+      vsync: this,
+      animationBehavior: AnimationBehavior.preserve,
+      duration: SaDurations.pulse,
+    )..repeat();
   }
 
   @override
@@ -410,7 +440,11 @@ class _SaCountUpState extends State<SaCountUp>
   @override
   void initState() {
     super.initState();
-    _c = AnimationController(vsync: this, duration: widget.duration);
+    _c = AnimationController(
+      vsync: this,
+      animationBehavior: AnimationBehavior.preserve,
+      duration: widget.duration,
+    );
     _anim = Tween<double>(begin: 0, end: widget.value.toDouble())
         .animate(CurvedAnimation(parent: _c, curve: SaCurves.enter));
     _c.forward();
@@ -476,7 +510,11 @@ class _SaBarGrowState extends State<SaBarGrow>
   @override
   void initState() {
     super.initState();
-    _c = AnimationController(vsync: this, duration: SaDurations.data);
+    _c = AnimationController(
+      vsync: this,
+      animationBehavior: AnimationBehavior.preserve,
+      duration: SaDurations.data,
+    );
     Future<void>.delayed(widget.delay, () {
       if (mounted) _c.forward();
     });
@@ -514,6 +552,100 @@ class _SaBarGrowState extends State<SaBarGrow>
                 ),
               ),
             ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+/// CSS `.live-dot` — faol vizit / sync pulse (2000ms).
+class SaLiveDot extends StatefulWidget {
+  final Color color;
+  final double size;
+
+  const SaLiveDot({
+    super.key,
+    required this.color,
+    this.size = 6,
+  });
+
+  @override
+  State<SaLiveDot> createState() => _SaLiveDotState();
+}
+
+class _SaLiveDotState extends State<SaLiveDot>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _c;
+
+  @override
+  void initState() {
+    super.initState();
+    _c = AnimationController(
+      vsync: this,
+      animationBehavior: AnimationBehavior.preserve,
+      duration: SaDurations.pulse,
+    );
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (saReduceMotion(context)) {
+        _c.value = 1;
+      } else {
+        _c.repeat();
+      }
+    });
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (saReduceMotion(context)) {
+      _c.stop();
+      _c.value = 1;
+    } else if (!_c.isAnimating && _c.value < 1) {
+      _c.repeat();
+    }
+  }
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: widget.size * 2.2,
+      height: widget.size * 2.2,
+      child: AnimatedBuilder(
+        animation: _c,
+        builder: (context, _) {
+          final t = saReduceMotion(context) ? 0.0 : _c.value;
+          final ring = (t < 0.5 ? t * 2 : (1 - t) * 2).clamp(0.0, 1.0);
+          return Stack(
+            alignment: Alignment.center,
+            children: [
+              Opacity(
+                opacity: 0.35 * (1 - ring),
+                child: Container(
+                  width: widget.size * (1 + ring * 1.6),
+                  height: widget.size * (1 + ring * 1.6),
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: widget.color,
+                  ),
+                ),
+              ),
+              Container(
+                width: widget.size,
+                height: widget.size,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: widget.color,
+                ),
+              ),
+            ],
           );
         },
       ),
@@ -565,6 +697,138 @@ class _SaTiltState extends State<SaTilt> {
         transformAlignment: Alignment.center,
         child: widget.child,
       ),
+    );
+  }
+}
+
+/// Shablon `.auth-shake` — login/PIN xato holati.
+class SaAuthShake extends StatefulWidget {
+  final Widget child;
+  final bool shake;
+
+  const SaAuthShake({
+    super.key,
+    required this.child,
+    required this.shake,
+  });
+
+  @override
+  State<SaAuthShake> createState() => _SaAuthShakeState();
+}
+
+class _SaAuthShakeState extends State<SaAuthShake>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _c;
+  late final Animation<double> _offset;
+
+  @override
+  void initState() {
+    super.initState();
+    _c = AnimationController(
+      vsync: this,
+      animationBehavior: AnimationBehavior.preserve,
+      duration: const Duration(milliseconds: 420),
+    );
+    _offset = TweenSequence<double>([
+      TweenSequenceItem(tween: Tween(begin: 0.0, end: -2.0), weight: 10),
+      TweenSequenceItem(tween: Tween(begin: -2.0, end: 4.0), weight: 10),
+      TweenSequenceItem(tween: Tween(begin: 4.0, end: -6.0), weight: 10),
+      TweenSequenceItem(tween: Tween(begin: -6.0, end: 6.0), weight: 10),
+      TweenSequenceItem(tween: Tween(begin: 6.0, end: -6.0), weight: 10),
+      TweenSequenceItem(tween: Tween(begin: -6.0, end: 6.0), weight: 10),
+      TweenSequenceItem(tween: Tween(begin: 6.0, end: -2.0), weight: 10),
+      TweenSequenceItem(tween: Tween(begin: -2.0, end: 0.0), weight: 30),
+    ]).animate(CurvedAnimation(parent: _c, curve: const Cubic(0.36, 0.07, 0.19, 0.97)));
+  }
+
+  @override
+  void didUpdateWidget(covariant SaAuthShake oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.shake && !oldWidget.shake) {
+      _c.forward(from: 0);
+    }
+  }
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (saReduceMotion(context)) return widget.child;
+    return AnimatedBuilder(
+      animation: _offset,
+      builder: (context, child) => Transform.translate(
+        offset: Offset(_offset.value, 0),
+        child: child,
+      ),
+      child: widget.child,
+    );
+  }
+}
+
+/// Shablon `.launch-zoom` — auth kirish scale.
+class SaLaunchZoom extends StatefulWidget {
+  final Widget child;
+
+  const SaLaunchZoom({super.key, required this.child});
+
+  @override
+  State<SaLaunchZoom> createState() => _SaLaunchZoomState();
+}
+
+class _SaLaunchZoomState extends State<SaLaunchZoom>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _c;
+  late final Animation<double> _scale;
+  late final Animation<double> _opacity;
+
+  @override
+  void initState() {
+    super.initState();
+    _c = AnimationController(
+      vsync: this,
+      animationBehavior: AnimationBehavior.preserve,
+      duration: SaDurations.launchZoom,
+    );
+    final curved = CurvedAnimation(parent: _c, curve: SaCurves.standard);
+    _scale = Tween<double>(begin: 0.7, end: 1).animate(curved);
+    _opacity = Tween<double>(begin: 0.2, end: 1).animate(curved);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (saReduceMotion(context)) {
+        _c.value = 1;
+        return;
+      }
+      _c.forward();
+    });
+  }
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (saReduceMotion(context)) return widget.child;
+    return AnimatedBuilder(
+      animation: _c,
+      builder: (context, child) {
+        final opacity = _opacity.value.clamp(0.0, 1.0);
+        return Opacity(
+          opacity: opacity,
+          child: Transform.scale(
+            scale: _scale.value,
+            alignment: const Alignment(0, 0.62),
+            child: child,
+          ),
+        );
+      },
+      child: widget.child,
     );
   }
 }

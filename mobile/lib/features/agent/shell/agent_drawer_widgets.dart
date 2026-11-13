@@ -7,6 +7,31 @@ import 'agent_menu_config.dart';
 const kAgentMenuIris = Color(0xFF5548F0);
 const kAgentMenuIrisEnd = Color(0xFF3B2BD9);
 
+/// Shablon drawer — bo‘lim sarlavhasi.
+class AgentMenuGroupHeader extends StatelessWidget {
+  final String title;
+  final int count;
+
+  const AgentMenuGroupHeader({super.key, required this.title, required this.count});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(4, 12, 4, 6),
+      child: Text(
+        '${title.toUpperCase()} · $count',
+        style: const TextStyle(
+          fontSize: 10,
+          fontWeight: FontWeight.w700,
+          letterSpacing: 0.8,
+          color: AppColors.textMuted,
+          fontFamily: 'monospace',
+        ),
+      ),
+    );
+  }
+}
+
 class AgentMenuHeaderCard extends StatelessWidget {
   final String name;
   final String subtitle;

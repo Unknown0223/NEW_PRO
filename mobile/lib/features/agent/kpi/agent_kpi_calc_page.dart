@@ -26,7 +26,7 @@ class AgentKpiCalcPage extends ConsumerWidget {
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AgentAppBar(
-        title: 'KPI · Месяц',
+        title: 'KPI · Oylik hisob',
         showBack: true,
         belowTitle: Text(
           'Месячный расчёт · ${tabelMonthTitle(month)}',

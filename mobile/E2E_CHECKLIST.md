@@ -1,5 +1,21 @@
 # Mobil E2E checklist
 
+Redesign branch: `feature/mobile-ui-redesign`  
+Legacy kundalik: `mobile_legacy/`  
+**Merge `main` ga:** faqat barcha rol bandlari yashil + redesign smoke.
+
+## Redesign UI smoke (shablon parity)
+
+- [x] Login BrandWave / stagger
+- [x] PIN setup/unlock (slot + press)
+- [x] GlobalChrome: hamburger chap, sync o‘ng (agent/exp/sv home)
+- [x] Sync sheet: Rol / Oddiy / Hammasi + oflayn qator
+- [x] SaBrandSync + RoadScene (agent overlay / bootstrap / ekspeditor)
+- [x] Home stagger + drawer guruhlari
+- [x] OrderFlow rail (create order)
+- [x] RoleWelcome (bootstrap success)
+- [ ] Emulator smoke: login → welcome → home → sync sheet → BrandSync (qo‘lda)
+
 ## Agent (`test1` / `agent` / `111111` yoki `demo_agent_sample` / `Parol123!`)
 
 - [x] Login, bootstrap, bosh sahifa KPI serverdan
@@ -26,6 +42,7 @@
 
 - [ ] Login, yetkazishlar ro‘yxati serverdan
 - [ ] Buyurtma detail → «Yetkazildi» status
+- [x] Home GlobalChrome + SaBrandSync (UI wiring)
 
 ## Supervayzer
 
@@ -33,6 +50,7 @@
 - [ ] Vizitlar ro‘yxati
 - [ ] Agentlar GPS ro‘yxati
 - [ ] Dashboard mahsulotlar
+- [x] Home GlobalChrome (UI wiring)
 
 ## Avtomatik
 

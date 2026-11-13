@@ -53,12 +53,12 @@ class _AgentDebtorsByOrdersPageState extends ConsumerState<AgentDebtorsByOrdersP
         .toList();
   }
 
-  String _orderTitle(OrderDebtRow row) => 'Заказ №${row.orderNumber.isNotEmpty ? row.orderNumber : row.orderId}';
+  String _orderTitle(OrderDebtRow row) => 'Buyurtma №${row.orderNumber.isNotEmpty ? row.orderNumber : row.orderId}';
 
   String _orderTitleFromDetail(AgentOrderHistoryRow o) {
     final n = o.number?.trim();
     final num = (n != null && n.isNotEmpty) ? n : '${o.id}';
-    return 'Заказ №$num';
+    return 'Buyurtma №$num';
   }
 
   String _formatBonusSummary(AgentOrderHistoryRow o) {
@@ -74,7 +74,7 @@ class _AgentDebtorsByOrdersPageState extends ConsumerState<AgentDebtorsByOrdersP
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AgentAppBar(
-        title: 'Должники по заказам',
+        title: 'Buyurtma bo\'yicha qarz',
         useShellDrawer: true,
         showBack: true,
         actions: [
@@ -95,7 +95,7 @@ class _AgentDebtorsByOrdersPageState extends ConsumerState<AgentDebtorsByOrdersP
                 children: [
                   SizedBox(
                     height: MediaQuery.sizeOf(context).height * 0.45,
-                    child: AgentEmptyState.fill(message: S.emptyDebtors),
+                    child: AgentEmptyState.fill(message: 'Qarzdorlar yo\'q'),
                   ),
                 ],
               ),
@@ -124,7 +124,7 @@ class _AgentDebtorsByOrdersPageState extends ConsumerState<AgentDebtorsByOrdersP
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         const Text(
-                          'Общие долги:',
+                          'Jami qarz:',
                           style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: AppColors.textMuted),
                         ),
                         Text(
@@ -140,7 +140,7 @@ class _AgentDebtorsByOrdersPageState extends ConsumerState<AgentDebtorsByOrdersP
                   child: Padding(
                     padding: const EdgeInsets.only(top: 8, bottom: 8, left: 4),
                     child: Text(
-                      'Найдено: ${result.data.length}',
+                      'Topildi: ${result.data.length}',
                       style: AppTypography.caption.copyWith(fontWeight: FontWeight.w700, color: AppColors.textSecondary),
                     ),
                   ),

@@ -31,7 +31,7 @@ Future<void> _showError(BuildContext context, String title, String message) {
     builder: (ctx) => AlertDialog(
       title: Text(title),
       content: Text(message),
-      actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Понятно'))],
+      actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Tushundim'))],
     ),
   );
 }
@@ -62,17 +62,16 @@ Future<T> _withProgress<T>(BuildContext context, String label, Future<T> Functio
   }
 }
 
-/// «Начать визит»: sozlama to‘siqlari, boshqa faol vizit, to‘liq GPS tekshiruvi
-/// (yoqilgan, aniq, yangi fix, soxta GPS yo‘q, radius), trekni yoqish, lokal + server yozuvi.
+/// Vizitni boshlash: sozlama to‘siqlari, boshqa faol vizit, GPS tekshiruvi.
 Future<bool> startAgentVisit(BuildContext context, WidgetRef ref, Map<String, dynamic> client) async {
   final rawId = client['id'];
   if (rawId is! num) return false;
   final clientId = rawId.toInt();
-  final name = client['name']?.toString() ?? 'Клиент';
+  final name = client['name']?.toString() ?? 'Mijoz';
 
   final block = await evaluateAgentOrderGuards(ref, clientId: clientId);
   if (block != null) {
-    if (context.mounted) await _showError(context, 'Визит недоступен', block.message);
+    if (context.mounted) await _showError(context, 'Vizit mumkin emas', block.message);
     return false;
   }
 
@@ -83,11 +82,11 @@ Future<bool> startAgentVisit(BuildContext context, WidgetRef ref, Map<String, dy
     final open = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Есть незавершённый визит'),
-        content: Text('Сначала завершите визит у «${active.clientName}».'),
+        title: const Text('Tugallanmagan vizit bor'),
+        content: Text('Avval «${active.clientName}» dagi vizitni yakunlang.'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Отмена')),
-          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Открыть визит')),
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Bekor qilish')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Vizitni ochish')),
         ],
       ),
     );
@@ -103,11 +102,11 @@ Future<bool> startAgentVisit(BuildContext context, WidgetRef ref, Map<String, dy
   final clientLng = (client['longitude'] as num?)?.toDouble();
   final geo = await _withProgress(
     context,
-    'Проверяем геолокацию…',
+    'Joylashuv tekshirilmoqda…',
     () => checkVisitGeo(config: cfg, clientLat: clientLat, clientLng: clientLng),
   );
   if (!geo.ok) {
-    if (context.mounted) await _showError(context, 'Визит не начат', geo.error ?? 'Нет координат');
+    if (context.mounted) await _showError(context, 'Vizit boshlanmadi', geo.error ?? 'Koordinatalar yo\'q');
     return false;
   }
   final pos = geo.position!;
@@ -146,7 +145,7 @@ Future<bool> startAgentVisit(BuildContext context, WidgetRef ref, Map<String, dy
         stack: st,
         module: ErrorModules.visits,
         code: 'VisitCreateFailed',
-        message: 'Визит: создание на сервере не удалось (сохранён локально)',
+        message: 'Vizit: serverda yaratilmadi (lokal saqlandi)',
         path: '/mobile/field/visits',
         payload: {'client_id': clientId},
         severity: 'warning',
@@ -172,7 +171,7 @@ Future<bool> startAgentVisit(BuildContext context, WidgetRef ref, Map<String, dy
   return true;
 }
 
-/// Zakaz faqat faol vizit ichida: vizit bo‘lmasa — «Начать визит» taklifi va to‘liq tekshiruv.
+/// Zakaz faqat faol vizit ichida.
 Future<bool> ensureActiveVisitForOrder(
   BuildContext context,
   WidgetRef ref,
@@ -182,15 +181,15 @@ Future<bool> ensureActiveVisitForOrder(
   if (rawId is! num) return false;
   if (await findActiveVisit(clientId: rawId.toInt()) != null) return true;
   if (!context.mounted) return false;
-  final name = client['name']?.toString() ?? 'клиента';
+  final name = client['name']?.toString() ?? 'mijoz';
   final start = await showDialog<bool>(
     context: context,
     builder: (ctx) => AlertDialog(
-      title: const Text('Нужен визит'),
-      content: Text('Заказ оформляется только в рамках визита.\nНачать визит у «$name»?'),
+      title: const Text('Vizit kerak'),
+      content: Text('Buyurtma faqat vizit doirasida beriladi.\n«$name» uchun vizit boshlansinmi?'),
       actions: [
-        TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Отмена')),
-        FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Начать визит')),
+        TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Bekor qilish')),
+        FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Vizitni boshlash')),
       ],
     ),
   );
@@ -198,13 +197,13 @@ Future<bool> ensureActiveVisitForOrder(
   return startAgentVisit(context, ref, client);
 }
 
-/// Zakaz tasdiqlanayotganda: GPS qayta tekshiriladi va koordinata vizit yozuviga qo‘shiladi.
+/// Zakaz tasdiqlanayotganda GPS qayta tekshiriladi.
 Future<String?> recordOrderPositionForVisit(WidgetRef ref, Map<String, dynamic> client) async {
   final rawId = client['id'];
-  if (rawId is! num) return 'Клиент не выбран';
+  if (rawId is! num) return 'Mijoz tanlanmagan';
   final clientId = rawId.toInt();
   final active = await findActiveVisit(clientId: clientId);
-  if (active == null || active.id == null) return 'Заказ оформляется только в рамках визита';
+  if (active == null || active.id == null) return 'Buyurtma faqat vizit doirasida beriladi';
   final geo = await checkVisitGeo(
     config: ref.read(sessionProvider).mobileConfig,
     clientLat: (client['latitude'] as num?)?.toDouble(),
@@ -234,6 +233,5 @@ Future<String?> recordOrderPositionForVisit(WidgetRef ref, Map<String, dynamic> 
   return null;
 }
 
-/// Server payload `visit`: zakaz yaratilgan vaqtgacha boshlangan oxirgi vizit.
 Future<Map<String, dynamic>?> orderVisitPayload(int clientId, {DateTime? at}) =>
     AppDatabase().findVisitGeoForClient(clientId, at: at);

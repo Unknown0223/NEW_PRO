@@ -1,4 +1,4 @@
-export type ViewKey = "rollar" | "prototip" | "katalog" | "dizayn" | "harakat" | "tezlik" | "audit" | "flutter";
+export type ViewKey = "rollar" | "prototip" | "katalog" | "dizayn" | "harakat" | "tezlik" | "audit" | "flutter" | "fullstack";
 
 export const workspaceViews: {
   key: ViewKey;
@@ -16,6 +16,7 @@ export const workspaceViews: {
   { key: "tezlik", label: "Unumdorlik", short: "Tezlik", icon: "gauge", group: "Tizim", hint: "60 FPS va optimizatsiyalar" },
   { key: "audit", label: "Audit & qamrov", short: "Audit", icon: "audit", group: "Tizim", hint: "Repo ekranlari, topilmalar va tuzatishlar" },
   { key: "flutter", label: "Flutter paket", short: "Flutter", icon: "code", group: "Tizim", hint: "Loyihaga tayyor kod · 14 fayl" },
+  { key: "fullstack", label: "Full stack", short: "Stack", icon: "stack", group: "Tizim", hint: "Backend + API + Flutter klient" },
 ];
 
 export type RoleKey = "agent" | "expeditor" | "supervisor" | "cashier";
@@ -860,6 +861,50 @@ export const templates: Template[] = [
   {
     id: "t23", role: "shared", no: "23", title: "Vazifalar", subtitle: "Topshiriq, muddat, holat",
     category: "Sozlama", status: "Yangi", screen: "tasks", kind: "tasks", tags: ["kanban", "deadline", "comments"], effort: "1 kun",
+  },
+  {
+    id: "t24", role: "shared", no: "24", title: "To'liq menyu", subtitle: "18 band, barcha ekran va shablonlar",
+    category: "Sozlama", status: "Tayyor", screen: "menu", kind: "settings", tags: ["drawer", "18-items", "role-aware"], effort: "1 kun",
+  },
+  {
+    id: "t25", role: "agent", no: "25", title: "Tabel va detallar", subtitle: "7 holat kodi, kalendar, kunlik jadval",
+    category: "Analitika", status: "Yangi", screen: "tabel", kind: "tabel", tags: ["7-status", "calendar", "day-sheet"], effort: "1.5 kun",
+  },
+  {
+    id: "t26", role: "agent", no: "26", title: "Vazvrat va S polki", subtitle: "To'liq, qisman, polkadan + almashtirish",
+    category: "Operatsiya", status: "Yangi", screen: "shelf-return", kind: "delivery", tags: ["s-polki", "exchange", "reason-cards"], effort: "1.5 kun",
+  },
+  {
+    id: "t27", role: "shared", no: "27", title: "Kirish animatsiyasi", subtitle: "Brend to'lqini va rolga mos sahna",
+    category: "Onboarding", status: "Yangi", screen: "bootstrap", kind: "login", tags: ["splash", "role-scene", "brand"], effort: "1 kun",
+  },
+  {
+    id: "t28", role: "agent", no: "28", title: "Buyurtmalar va detal", subtitle: "Holat filtri, timeline, 5 daqiqalik oyna",
+    category: "Operatsiya", status: "Yangi", screen: "orders", kind: "inbox", tags: ["status", "timeline", "edit-window"], effort: "1.5 kun",
+  },
+  {
+    id: "t29", role: "agent", no: "29", title: "Bonuslar va hisobot", subtitle: "Zinapoya, aksiya tarixi, hafta/oy yakuni",
+    category: "Analitika", status: "Yangi", screen: "bonuses", kind: "kpi", tags: ["ladder", "export", "chart"], effort: "1 kun",
+  },
+  {
+    id: "t30", role: "agent", no: "30", title: "Xarita va kunlik reja", subtitle: "Marshrut pinlari, vaqt chizig'i, route KPI",
+    category: "Operatsiya", status: "Tayyor", screen: "map", kind: "map", tags: ["map", "route", "kpi"], effort: "1.5 kun",
+  },
+  {
+    id: "t31", role: "agent", no: "31", title: "Mijoz kartasi va yangi nuqta", subtitle: "Balans, foto, ledger hamda GPS'li ro'yxatga olish",
+    category: "Operatsiya", status: "Yangi", screen: "client-detail", kind: "client", tags: ["ledger", "gps", "inn"], effort: "2 kun",
+  },
+  {
+    id: "t32", role: "agent", no: "32", title: "Qidiruv va KPI hisob", subtitle: "Global qidiruv, premiya, kunlar diagnostikasi",
+    category: "Analitika", status: "Yangi", screen: "search", kind: "kpi", tags: ["search", "premium", "diagnostics"], effort: "1.5 kun",
+  },
+  {
+    id: "t33", role: "expeditor", no: "33", title: "Nakladnoy va rekvizit", subtitle: "Hujjatlar ro'yxati, filtr va to'lov QR",
+    category: "Operatsiya", status: "Yangi", screen: "exp-invoices", kind: "inbox", tags: ["invoice", "qr", "filter"], effort: "1.5 kun",
+  },
+  {
+    id: "t34", role: "shared", no: "34", title: "Vazifa CRUD va ruxsatlar", subtitle: "Yaratish, izohlar, ruxsat gate, sync yakuni",
+    category: "Sozlama", status: "Yangi", screen: "task-create", kind: "tasks", tags: ["crud", "comments", "permissions"], effort: "1.5 kun",
   },
 ];
 

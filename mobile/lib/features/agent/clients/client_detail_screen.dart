@@ -444,7 +444,7 @@ class _ClientDetailScreenState extends ConsumerState<ClientDetailScreen> {
     }
     if (_client == null) {
       return Scaffold(
-        appBar: AgentAppBar(title: 'Ошибка', showBack: true),
+        appBar: AgentAppBar(title: 'Xatolik', showBack: true),
         body: const Center(child: Text('Клиент не найден')),
       );
     }

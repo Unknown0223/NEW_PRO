@@ -34,7 +34,7 @@ class _AgentTabelDetailPageState extends ConsumerState<AgentTabelDetailPage> {
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AgentAppBar(
-        title: 'Табель · Детали',
+        title: 'Tabel · Detallar',
         showBack: true,
         belowTitle: Align(
           alignment: Alignment.centerLeft,
@@ -157,7 +157,7 @@ class _AgentTabelDetailPageState extends ConsumerState<AgentTabelDetailPage> {
       child: Row(
         children: [
           _chip(
-            label: 'Все',
+            label: 'Barchasi',
             selected: _filter == null,
             onTap: () => setState(() => _filter = null),
           ),
@@ -280,7 +280,7 @@ class _AgentTabelDetailPageState extends ConsumerState<AgentTabelDetailPage> {
               padding: EdgeInsets.symmetric(vertical: 22),
               child: Center(
                 child: Text(
-                  'Нет дней по этому фильтру',
+                  'Bu filtr bo\'yicha kunlar yo\'q',
                   style: TextStyle(fontSize: 12.5, color: AppColors.textMuted),
                 ),
               ),
@@ -449,7 +449,7 @@ class _AgentTabelDetailPageState extends ConsumerState<AgentTabelDetailPage> {
           ),
           const SizedBox(height: 4),
           Text(
-            'Итого: ${tabelFmtTotal(counts.workedTotal)}',
+            'Jami: ${tabelFmtTotal(counts.workedTotal)}',
             style: const TextStyle(
               fontSize: 12,
               fontWeight: FontWeight.w700,

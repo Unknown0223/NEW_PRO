@@ -31,7 +31,7 @@ class AgentOrderDetailPage extends ConsumerWidget {
       appBar: AgentAppBar(
         title: detailAsync.maybeWhen(
           data: (o) => _orderTitle(o),
-          orElse: () => 'Заказ #$orderId',
+          orElse: () => 'Buyurtma №$orderId',
         ),
         showBack: true,
         actions: [
@@ -111,7 +111,7 @@ class AgentOrderDetailPage extends ConsumerWidget {
 String _orderTitle(AgentOrderHistoryRow o) {
   final n = o.number?.trim();
   final num = (n != null && n.isNotEmpty) ? n : '${o.id}';
-  return 'Заказ #$num';
+  return 'Buyurtma №$num';
 }
 
 String _formatQty(double v) {

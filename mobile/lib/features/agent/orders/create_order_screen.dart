@@ -57,6 +57,7 @@ import 'held_orders_provider.dart';
 import 'held_order_sync_sheet.dart';
 import '../home/last_created_order_banner.dart';
 import 'orders_providers.dart';
+import 'order_flow_rail.dart';
 import 'van_selling_payment_sheet.dart';
 
 /// Yangi zakaz — referens ketma-ketlik:
@@ -2402,8 +2403,13 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
     final photoRequired =
         ref.watch(sessionProvider).mobileConfig?.photo.requiredForOrder ?? false;
     final title = _step == _CreateStep.categoryProducts
-        ? (_openCategory?.name ?? S.productsTitle)
-        : S.orderAddTitle;
+        ? (_openCategory?.name ?? 'Mahsulotlar')
+        : 'Buyurtma qo\'shish';
+    final railIndex = OrderFlowRail.railIndexFor(
+      pickingClient: _step == _CreateStep.pickClient && _effectiveClientId <= 0,
+      onProducts: _step == _CreateStep.categoryProducts,
+      setupDone: _setupShown,
+    );
 
     return PopScope(
       canPop: _step == _CreateStep.pickClient ||
@@ -2452,21 +2458,33 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
           ],
         ],
       ),
-      body: Stack(
+      body: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          if (_bootstrappingInitialClient)
-            const Center(child: CircularProgressIndicator())
-          else if (_step == _CreateStep.pickClient && _effectiveClientId <= 0)
-            _buildPickClient()
-          else if (_step == _CreateStep.categories)
-            _buildCategories(photoRequired: photoRequired)
-          else
-            _buildCategoryProducts(photoRequired: photoRequired),
-          if (_loading)
-            const ColoredBox(
-              color: Color(0x88FFFFFF),
-              child: Center(child: CircularProgressIndicator()),
+          if (!_bootstrappingInitialClient)
+            SaEnter(
+              preset: SaMotionPreset.rise,
+              child: OrderFlowRail(activeIndex: railIndex),
             ),
+          Expanded(
+            child: Stack(
+              children: [
+                if (_bootstrappingInitialClient)
+                  const Center(child: CircularProgressIndicator())
+                else if (_step == _CreateStep.pickClient && _effectiveClientId <= 0)
+                  _buildPickClient()
+                else if (_step == _CreateStep.categories)
+                  _buildCategories(photoRequired: photoRequired)
+                else
+                  _buildCategoryProducts(photoRequired: photoRequired),
+                if (_loading)
+                  const ColoredBox(
+                    color: Color(0x88FFFFFF),
+                    child: Center(child: CircularProgressIndicator()),
+                  ),
+              ],
+            ),
+          ),
         ],
       ),
     ),

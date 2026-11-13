@@ -124,7 +124,7 @@ class AgentVisitsPage extends ConsumerWidget {
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AgentAppBar(
-        title: S.visits,
+        title: 'Vizitlar',
         useShellDrawer: true,
         actions: [
           AgentIconButton(icon: Icons.search, onPressed: () => context.push('/search?from=/visits')),
@@ -188,7 +188,7 @@ class AgentVisitsPage extends ConsumerWidget {
           ),
         ],
       ),
-      floatingActionButton: GestureDetector(
+      floatingActionButton: SaPressable(
         onTap: () => context.push('/visits/start'),
         child: Container(
           width: 58,

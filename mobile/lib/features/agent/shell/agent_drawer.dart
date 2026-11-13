@@ -105,6 +105,17 @@ class _AgentDrawerState extends ConsumerState<AgentDrawer> {
         : menu
             .where((m) => '${m.label} ${m.sub}'.toLowerCase().contains(q))
             .toList();
+    final drawerRows = <Object>[];
+    var lastGroup = '';
+  for (final m in filtered) {
+    final g = m.group;
+    if (q.isEmpty && g != lastGroup) {
+      final n = filtered.where((x) => x.group == g).length;
+      drawerRows.add(AgentMenuGroupHeader(title: g, count: n));
+      lastGroup = g;
+    }
+    drawerRows.add(m);
+  }
 
     final agentName = (user?.name ?? '').trim();
     final displayName = agentName.isEmpty ? 'Agent' : agentName;
@@ -155,10 +166,18 @@ class _AgentDrawerState extends ConsumerState<AgentDrawer> {
             Expanded(
               child: ListView.builder(
                 padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-                itemCount: filtered.length + 2,
+                itemCount: drawerRows.length + 2,
                 itemBuilder: (context, i) {
-                  if (i < filtered.length) {
-                    final m = filtered[i];
+                  if (i < drawerRows.length) {
+                    final row = drawerRows[i];
+                    if (row is AgentMenuGroupHeader) {
+                      return SaEnter(
+                        delay: SaStaggerDelay.of(i % 8),
+                        preset: SaMotionPreset.rise,
+                        child: row,
+                      );
+                    }
+                    final m = row as AgentMenuItem;
                     return Padding(
                       padding: const EdgeInsets.only(bottom: 6),
                       child: SaEnter(
@@ -171,7 +190,7 @@ class _AgentDrawerState extends ConsumerState<AgentDrawer> {
                       ),
                     );
                   }
-                  if (i == filtered.length) {
+                  if (i == drawerRows.length) {
                     return Padding(
                       padding: const EdgeInsets.only(bottom: 6, top: 4),
                       child: SaEnter(
@@ -182,6 +201,7 @@ class _AgentDrawerState extends ConsumerState<AgentDrawer> {
                             sub: 'APK versiyasini tekshirish',
                             route: '',
                             icon: Icons.system_update_outlined,
+                            group: 'Tizim',
                           ),
                           onTap: _checkingUpdate ? null : _onCheckUpdate,
                           loading: _checkingUpdate,

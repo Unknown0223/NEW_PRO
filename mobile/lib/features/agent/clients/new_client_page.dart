@@ -456,14 +456,14 @@ class _NewClientPageState extends ConsumerState<NewClientPage> {
     final canCreate = cfg.canCreate;
     if (!canCreate) {
       return const Scaffold(
-        appBar: AgentAppBar(title: 'Новая торговая точка', showBack: true),
+        appBar: AgentAppBar(title: 'Yangi savdo nuqtasi', showBack: true),
         body: Center(child: Text('Создание новой точки запрещено настройками.')),
       );
     }
 
     return Scaffold(
       backgroundColor: AppColors.background,
-      appBar: const AgentAppBar(title: 'Новая торговая точка', showBack: true),
+      appBar: const AgentAppBar(title: 'Yangi savdo nuqtasi', showBack: true),
       body: Column(
         children: [
           Expanded(

@@ -8,6 +8,7 @@ class AgentMenuItem {
   final String sub;
   final String route;
   final IconData icon;
+  final String group;
   final bool soon;
   final String? badge;
   final bool Function(MobileConfig? config)? visible;
@@ -17,11 +18,22 @@ class AgentMenuItem {
     required this.sub,
     required this.route,
     required this.icon,
+    required this.group,
     this.soon = false,
     this.badge,
     this.visible,
   });
 }
+
+/// Shablon `GlobalChrome` — bo‘lim sarlavhalari.
+const kAgentMenuGroupOrder = <String>[
+  'Asosiy',
+  'Savdo va buyurtma',
+  'KPI va marshrut',
+  'Moliya',
+  'Jarayon',
+  'Tizim',
+];
 
 /// Shablon tartibida menyu.
 List<AgentMenuItem> agentMenuItems(MobileConfig? config) {
@@ -31,18 +43,21 @@ List<AgentMenuItem> agentMenuItems(MobileConfig? config) {
       sub: 'Kunlik reja va faol vizit',
       route: '/home',
       icon: Icons.home_outlined,
+      group: 'Asosiy',
     ),
     const AgentMenuItem(
       label: 'Yangi nuqta qo‘shish',
       sub: 'GPS + INN bilan ro‘yxatga olish',
       route: '/clients/new',
       icon: Icons.person_add_alt_1_outlined,
+      group: 'Savdo va buyurtma',
     ),
     AgentMenuItem(
       label: 'Almashtirish so‘rovi',
       sub: 'Tovarni boshqasiga almashtirish',
       route: '/orders/special?mode=exchange',
       icon: Icons.swap_horiz_outlined,
+      group: 'Savdo va buyurtma',
       visible: (c) => c?.misc.allowExchangeRequest == true,
     ),
     AgentMenuItem(
@@ -51,80 +66,85 @@ List<AgentMenuItem> agentMenuItems(MobileConfig? config) {
       route: '/orders/special?mode=shelf-return',
       icon: Icons.undo_outlined,
       badge: 'S polki',
+      group: 'Savdo va buyurtma',
       visible: (c) => c?.orders.allowReturnFromShelf == true,
-    ),
-    const AgentMenuItem(
-      label: 'KPI ko‘rsatkichlar',
-      sub: 'Bugungi va oylik bonus zinapoyasi',
-      route: '/kpi',
-      icon: Icons.auto_awesome_outlined,
-    ),
-    const AgentMenuItem(
-      label: 'Mening bonuslarim',
-      sub: 'Bonus zinapoyasi va hisob',
-      route: '/bonuses',
-      icon: Icons.card_giftcard_outlined,
-    ),
-    const AgentMenuItem(
-      label: 'Kunlik marshrut rejasi',
-      sub: 'Дневной план · vizitlar',
-      route: '/kpi/route',
-      icon: Icons.map_outlined,
-    ),
-    const AgentMenuItem(
-      label: 'Hisobotlar',
-      sub: 'Savdo, qaytarish, balans',
-      route: '/report',
-      icon: Icons.description_outlined,
     ),
     const AgentMenuItem(
       label: 'Savdo nuqtalari',
       sub: 'Mijozlar · qarz nazorati',
       route: '/clients',
       icon: Icons.storefront_outlined,
+      group: 'Savdo va buyurtma',
     ),
     const AgentMenuItem(
-      label: 'Maosh',
-      sub: 'Hisoblangan oylik va avans',
-      route: '',
-      soon: true,
-      icon: Icons.payments_outlined,
+      label: 'KPI ko‘rsatkichlar',
+      sub: 'Bugungi va oylik bonus zinapoyasi',
+      route: '/kpi',
+      icon: Icons.auto_awesome_outlined,
+      group: 'KPI va marshrut',
+    ),
+    const AgentMenuItem(
+      label: 'Mening bonuslarim',
+      sub: 'Bonus zinapoyasi va hisob',
+      route: '/bonuses',
+      icon: Icons.card_giftcard_outlined,
+      group: 'KPI va marshrut',
+    ),
+    const AgentMenuItem(
+      label: 'Kunlik marshrut rejasi',
+      sub: 'Дневной план · vizitlar',
+      route: '/kpi/route',
+      icon: Icons.map_outlined,
+      group: 'KPI va marshrut',
+    ),
+    const AgentMenuItem(
+      label: 'Hisobotlar',
+      sub: 'Savdo, qaytarish, balans',
+      route: '/report',
+      icon: Icons.description_outlined,
+      group: 'KPI va marshrut',
     ),
     const AgentMenuItem(
       label: 'Qarzdorlar',
       sub: 'Mijozlar qarzi va to‘lovlar',
       route: '/debtors',
       icon: Icons.people_outline,
+      group: 'Moliya',
     ),
     const AgentMenuItem(
       label: 'Buyurtma bo‘yicha qarzlar',
       sub: 'Nakladnoy kesimida',
       route: '/debtors-by-orders',
       icon: Icons.person_outline,
+      group: 'Moliya',
     ),
     const AgentMenuItem(
       label: 'Ombor qoldiqlari',
       sub: 'Остатки на складе',
       route: '/warehouse-stock',
       icon: Icons.warehouse_outlined,
+      group: 'Moliya',
     ),
     const AgentMenuItem(
       label: 'Qoralama',
       sub: 'Tugallanmagan buyurtmalar',
       route: '/draft',
       icon: Icons.inbox_outlined,
+      group: 'Moliya',
     ),
     const AgentMenuItem(
       label: 'Vazifalar',
       sub: 'Supervayzer topshiriqlari',
       route: '/tasks',
       icon: Icons.task_alt_outlined,
+      group: 'Jarayon',
     ),
     const AgentMenuItem(
       label: 'Mening lokatsiyam',
       sub: 'GPS xarita va geofence',
       route: '/map',
       icon: Icons.my_location_outlined,
+      group: 'Jarayon',
     ),
     const AgentMenuItem(
       label: 'Tabel',
@@ -132,18 +152,29 @@ List<AgentMenuItem> agentMenuItems(MobileConfig? config) {
       route: '/tabel',
       icon: Icons.calendar_month_outlined,
       badge: 'Yangi',
+      group: 'Jarayon',
     ),
     const AgentMenuItem(
       label: 'Davomat',
       sub: 'Face ID / Selfie · kelish-ketish',
       route: '/attendance',
       icon: Icons.face_retouching_natural,
+      group: 'Jarayon',
+    ),
+    const AgentMenuItem(
+      label: 'Maosh',
+      sub: 'Hisoblangan oylik va avans',
+      route: '',
+      soon: true,
+      icon: Icons.payments_outlined,
+      group: 'Tizim',
     ),
     const AgentMenuItem(
       label: 'Sozlamalar',
       sub: 'Tema, sinxron, til, PIN',
       route: '/settings',
       icon: Icons.settings_outlined,
+      group: 'Tizim',
     ),
   ];
   return items.where((it) => it.visible?.call(config) ?? true).toList();

@@ -1,282 +1,282 @@
-/// Ruscha matnlar (develop-flutter-mobile-frontend shablon).
+/// UI matnlari (shablon o‘zbekcha; fayl nomi tarixiy).
 abstract final class S {
-  static const navHome = 'Главная';
-  static const navVisits = 'Визиты';
-  static const navOrders = 'Заказы';
+  static const navHome = 'Bosh sahifa';
+  static const navVisits = 'Vizitlar';
+  static const navOrders = 'Buyurtmalar';
   static const navKpi = 'KPI';
-  static const navDailyPlan = 'Дневной план';
-  static const navReports = 'Отчёты';
-  static const navPoints = 'Тор. точки';
-  static const outlets = 'Торговые точки';
-  static const searchOutlet = 'Поиск по названию или коду...';
-  static const staleCatalog = 'Каталог устарел — синхронизируйте';
-  static const withDebt = 'С долгом';
-  static const cancel = 'Отмена';
-  static const save = 'Сохранить';
+  static const navDailyPlan = 'Kunlik reja';
+  static const navReports = 'Hisobotlar';
+  static const navPoints = 'Nuqtalar';
+  static const outlets = 'Savdo nuqtalari';
+  static const searchOutlet = 'Nom yoki kod bo\'yicha qidirish…';
+  static const staleCatalog = 'Katalog eskirgan — sinxronlang';
+  static const withDebt = 'Qarzi bor';
+  static const cancel = 'Bekor';
+  static const save = 'Saqlash';
 
-  static const home = 'Главная';
-  static const visits = 'Визиты';
-  static const visitsDisabled = 'Визиты отключены в настройках';
-  static const dailyReport = 'Ежедневный отчёт';
-  static const mandatorySync = 'Обязательная синхронизация:';
-  static const visited = 'Посещено';
-  static const remaining = 'Осталось';
-  static const unsyncedPhotos = 'Несинхр. фото';
-  static const syncedPhotos = 'Синхр. фото';
-  static const photoSyncStatus = 'Статус фото';
-  static const photoSyncOk = 'Синхронизировано';
-  static const photoSyncPending = 'В очереди';
-  static const photoSyncFailed = 'Ошибка отправки';
-  static const lastSync = 'Последняя синхронизация';
-  static const sync = 'Синхронизация';
-  static const ordersSumToday = 'Сумма заказов сегодня';
-  static const productsVolumeToday = 'Объём товаров сегодня';
-  static String orderCreatedBanner(String number) => 'Заказ №$number создан';
-  static const orderCreatedBannerHint = 'Заказ успешно отправлен';
+  static const home = 'Bosh sahifa';
+  static const visits = 'Vizitlar';
+  static const visitsDisabled = 'Vizitlar sozlamada o\'chirilgan';
+  static const dailyReport = 'Kunlik hisobot';
+  static const mandatorySync = 'Majburiy sinxron:';
+  static const visited = 'Tashrif';
+  static const remaining = 'Qoldi';
+  static const unsyncedPhotos = 'Sinx. qilinmagan foto';
+  static const syncedPhotos = 'Sinx. foto';
+  static const photoSyncStatus = 'Foto holati';
+  static const photoSyncOk = 'Sinxronlandi';
+  static const photoSyncPending = 'Navbatda';
+  static const photoSyncFailed = 'Yuborish xatosi';
+  static const lastSync = 'Oxirgi sinxron';
+  static const sync = 'Sinxronlash';
+  static const ordersSumToday = 'Bugungi buyurtmalar summasi';
+  static const productsVolumeToday = 'Bugungi tovar hajmi';
+  static String orderCreatedBanner(String number) => 'Buyurtma №$number yaratildi';
+  static const orderCreatedBannerHint = 'Buyurtma muvaffaqiyatli yuborildi';
 
-  static const visitOrder = 'Добавить заказ';
-  static const visitComplete = 'Завершить визит';
-  static const visitInProgressTitle = 'Визит';
-  static const visitActiveLive = 'Визит активен · LIVE';
-  static const visitEndHint = '↓ затем откроется окно редактирования на 5 минут';
-  static const noOrderToday = 'сегодня нет заказа';
-  static const photoReport = 'Фотоотчёт';
-  static const createOrderAction = 'Создать заказ';
-  static const sendHeldOrderNow = 'Отправить сейчас';
-  static const refusalAction = 'Отказ';
-  static const supervisionChecklist = 'Чек-лист супервизии';
-  static const draftBadge = 'Черновик';
-  static const visitedBadge = '✓ Посещено';
-  static const visitRefuse = 'Отказ от визита';
-  static const refuseReason = 'Причина отказа';
-  static const startVisit = 'Начать визит';
+  static const visitOrder = 'Buyurtma qo\'shish';
+  static const visitComplete = 'Vizitni yakunlash';
+  static const visitInProgressTitle = 'Vizit';
+  static const visitActiveLive = 'Vizit faol · LIVE';
+  static const visitEndHint = '↓ keyin 5 daqiqalik tahrir oynasi ochiladi';
+  static const noOrderToday = 'bugun buyurtma yo\'q';
+  static const photoReport = 'Foto hisobot';
+  static const createOrderAction = 'Buyurtma yaratish';
+  static const sendHeldOrderNow = 'Hozir yuborish';
+  static const refusalAction = 'Rad etish';
+  static const supervisionChecklist = 'Superviziya chek-list';
+  static const draftBadge = 'Qoralama';
+  static const visitedBadge = '✓ Tashrif';
+  static const visitRefuse = 'Vizitni rad etish';
+  static const refuseReason = 'Rad sababi';
+  static const startVisit = 'Vizitni boshlash';
 
-  static const syncTitle = 'Синхронизация';
-  static const performance = 'Эффективность';
-  static const byRoute = 'По маршруту';
-  static const offRoute = 'Вне маршрута';
-  /// «Осталось» kartochkasi — marshrutdan tashqari qolganlar (takrorlanmasin).
-  static const remainingOnRoute = 'Ост. по марш.';
-  static const remainingOffRoute = 'Ост. вне марш.';
-  /// Hafta kuni qisqacha: 1=ПН … 7=ВС (`weekDays` bilan bir xil).
+  static const syncTitle = 'Sinxronlash';
+  static const performance = 'Samaradorlik';
+  static const byRoute = 'Marshrut bo\'yicha';
+  static const offRoute = 'Marshrutdan tashqari';
+  static const remainingOnRoute = 'Marshrutda qoldi';
+  static const remainingOffRoute = 'Tashqarida qoldi';
   static String weekdayShort(int weekday) {
     if (weekday >= 1 && weekday <= 7) return weekDays[weekday];
     return '—';
   }
 
-  /// Chap: bugungi haqiqiy kun bo‘yicha 1 oylik ne-poseshcheniya.
   static String dormantNotVisitedToday(int weekday) =>
-      'Не посещ. ${weekdayShort(weekday)}, 1 мес';
+      'Tashrif yo\'q ${weekdayShort(weekday)}, 1 oy';
 
-  /// O‘ng: noyob mijozlar — 30 kun ichida tashrifsiz (ОКБ).
-  static const dormantNotVisitedMonth = 'Не посещ., 1 мес';
-  static const syncWindowEndsIn = 'До конца синхронизации';
-  static const syncWindowStartsIn = 'До включения синхронизации';
-  static const syncWindowEndsShort = 'до откл.';
-  static const syncWindowStartsShort = 'до вкл.';
-  static const syncIn = 'до откл.';
+  static const dormantNotVisitedMonth = 'Tashrif yo\'q, 1 oy';
+  static const syncWindowEndsIn = 'Sinxron tugashiga';
+  static const syncWindowStartsIn = 'Sinxron yoqilishiga';
+  static const syncWindowEndsShort = 'gacha o\'ch.';
+  static const syncWindowStartsShort = 'gacha yoq.';
+  static const syncIn = 'gacha o\'ch.';
   static const syncWindowTooltipEnds =
-      'Осталось времени до отключения синхронизации. Успейте отправить данные.';
+      'Sinxron o\'chishiga qolgan vaqt. Ma\'lumotlarni yuboring.';
   static const syncWindowTooltipStarts =
-      'Синхронизация сейчас выключена. Через указанное время снова станет доступна.';
-  static const syncWindowAlertTitle = 'Синхронизация';
+      'Sinxron hozir o\'chirilgan. Ko\'rsatilgan vaqtdan keyin yoqiladi.';
+  static const syncWindowAlertTitle = 'Sinxronlash';
   static const syncWindowTenMinAlert =
-      'До отключения синхронизации осталось 10 минут. Отправьте данные сейчас.';
+      'Sinxron o\'chishiga 10 daqiqa qoldi. Ma\'lumotlarni hozir yuboring.';
   static const syncNotificationPermissionHint =
-      'Разрешите уведомления — напомним за 10 минут до отключения синхронизации и о новых версиях.';
-  static const checkAppUpdate = 'Проверить обновление';
-  static const appUpdateChecking = 'Проверяем обновление…';
+      'Bildirishnomaga ruxsat bering — sinxron o\'chishidan 10 daqiqa oldin eslatamiz.';
+  static const checkAppUpdate = 'Yangilanishni tekshirish';
+  static const appUpdateChecking = 'Yangilanish tekshirilmoqda…';
   static String appUpdateAlreadyLatest(String current) =>
-      'У вас актуальная версия: $current';
-  static const appUpdateCheckFailed = 'Не удалось проверить обновление. Проверьте интернет.';
+      'Sizda eng so\'nggi versiya: $current';
+  static const appUpdateCheckFailed =
+      'Yangilanishni tekshirib bo\'lmadi. Internetni tekshiring.';
   static const noVisitsPlannedToday =
-      'На сегодня нет точек в плане. Назначьте дни посещения в веб-панели.';
+      'Bugun rejada nuqta yo\'q. Veb-panelda tashrif kunlarini belgilang.';
   static const noVisitScheduleHint =
-      'Дни посещения не назначены — показаны все торговые точки.';
+      'Tashrif kunlari belgilanmagan — barcha savdo nuqtalari ko\'rsatiladi.';
   static String appUpdateNotificationBody(String latest, String current) =>
       latest.isEmpty
-          ? 'Доступна новая версия Sales Arena. Текущая: $current. Откройте приложение для установки.'
-          : 'Sales Arena $latest доступна. У вас: $current. Нажмите, чтобы обновить.';
+          ? 'Sales Arena yangi versiyasi chiqdi. Hozirgi: $current.'
+          : 'Sales Arena $latest chiqdi. Sizda: $current.';
   static String appUpdateNotificationAfterSync(String latest) =>
       latest.isEmpty
-          ? 'Синхронизация завершена. Доступна новая версия Sales Arena — данные уже отправлены.'
-          : 'Синхронизация завершена. Установите Sales Arena $latest — данные уже отправлены.';
-  static const appUpdateTitle = 'Обновление Sales Arena';
-  static const appUpdateTitleRequired = 'Требуется обновление Sales Arena';
+          ? 'Sinxron tugadi. Sales Arena yangi versiyasi bor.'
+          : 'Sinxron tugadi. Sales Arena $latest ni o\'rnating.';
+  static const appUpdateTitle = 'Sales Arena yangilanishi';
+  static const appUpdateTitleRequired = 'Sales Arena yangilanishi shart';
   static const appUpdateAfterSyncHint =
-      'Синхронизация завершена — данные отправлены на сервер. '
-      'После обновления сохранятся: локальный кеш, PIN и пароль для входа.';
+      'Sinxron tugadi — ma\'lumotlar serverga yuborildi. '
+      'Yangilanishdan keyin mahalliy kesh, PIN va parol saqlanadi.';
   static const appUpdateBeforeInstallHint =
-      'Перед обновлением несинхронизированные заказы и фотоотчёты будут отправлены на сервер. '
-      'После установки сохранятся: локальный кеш, PIN и пароль для входа.';
-  static const visitStatusVisited = 'Посещено';
-  static const visitStatusNotVisited = 'Не посещено';
-  static const visitPresenceFilter = 'Статус посещения';
-  static const shownOnMap = 'Показано на карте';
-  static const notShownOnMap = 'Не показано на карте';
-  static const mapPointsTitle = 'Торговые точки';
-  static const clientsWithDebts = 'Клиенты с долгами';
-  static const filter = 'Фильтр';
-  static const dayAll = 'Все';
-  static const empty = 'Нет данных';
-  static const emptyOrders = 'Нет заказов';
-  static const emptyVisitPoints = 'Нет точек для визита на этот день';
-  static const emptyVisitOpenAll = 'Показать всех клиентов';
-  static const emptyVisitHasClientsHint = 'Клиенты загружены, но на этот день план пуст';
-  static const emptyOutlets = 'Нет торговых точек';
-  static const emptyOutletsForDay = 'Нет торговых точек на этот день';
-  static const emptyDebtors = 'Нет должников';
-  static const emptyStock = 'Нет остатков на складе';
-  static const emptyRoutePoints = 'Нет точек на этот день';
-  static const emptyMapPoints = 'Нет точек с координатами';
-  static const emptySearch = 'Ничего не найдено';
-  static const emptyReport = 'Нет продаж за месяц';
-  static const emptyClients = 'Нет прикреплённых клиентов';
-  static const emptyPhotos = 'Нет фотографий';
-  static const emptyProducts = 'Товары не найдены';
-  static const emptyCategories = 'Категории товаров не найдены';
-  static const emptyDeliveries = 'Нет доставок';
-  static const emptyVehicleStock = 'В машине нет товаров';
-  static const emptySupervisorVisits = 'Нет визитов';
-  static const emptySupervisorAgents = 'Нет данных GPS агентов';
-  static const emptyStartVisitClients = 'Нет торговых точек для визита';
-  static const emptyDraft = 'Нет черновиков';
-  static const emptyClientOrders = 'Нет заказов за месяц';
-  static const emptyClientSearch = 'Клиент не найден';
-  static const gpsOn = 'GPS включён';
-  static const gpsActive = 'GPS активен';
-  static const gpsAccuracy = 'Точность';
-  static const gpsStarting = 'GPS запускается…';
+      'Yangilashdan oldin oflayn buyurtma va fotolar yuboriladi. '
+      'O\'rnatishdan keyin kesh, PIN va parol saqlanadi.';
+  static const visitStatusVisited = 'Tashrif qilingan';
+  static const visitStatusNotVisited = 'Tashrif yo\'q';
+  static const visitPresenceFilter = 'Tashrif holati';
+  static const shownOnMap = 'Xaritada';
+  static const notShownOnMap = 'Xaritada yo\'q';
+  static const mapPointsTitle = 'Savdo nuqtalari';
+  static const clientsWithDebts = 'Qarzdor mijozlar';
+  static const filter = 'Filtr';
+  static const dayAll = 'Hammasi';
+  static const empty = 'Ma\'lumot yo\'q';
+  static const emptyOrders = 'Buyurtma yo\'q';
+  static const emptyVisitPoints = 'Bu kun uchun vizit nuqtasi yo\'q';
+  static const emptyVisitOpenAll = 'Barcha mijozlarni ko\'rsatish';
+  static const emptyVisitHasClientsHint =
+      'Mijozlar yuklangan, lekin bu kun rejasi bo\'sh';
+  static const emptyOutlets = 'Savdo nuqtasi yo\'q';
+  static const emptyOutletsForDay = 'Bu kun uchun savdo nuqtasi yo\'q';
+  static const emptyDebtors = 'Qarzdorlar yo\'q';
+  static const emptyStock = 'Omborda qoldiq yo\'q';
+  static const emptyRoutePoints = 'Bu kun uchun nuqta yo\'q';
+  static const emptyMapPoints = 'Koordinatali nuqta yo\'q';
+  static const emptySearch = 'Hech narsa topilmadi';
+  static const emptyReport = 'Oy uchun savdo yo\'q';
+  static const emptyClients = 'Biriktirilgan mijoz yo\'q';
+  static const emptyPhotos = 'Foto yo\'q';
+  static const emptyProducts = 'Mahsulot topilmadi';
+  static const emptyCategories = 'Kategoriya topilmadi';
+  static const emptyDeliveries = 'Yetkazish yo\'q';
+  static const emptyVehicleStock = 'Mashinada tovar yo\'q';
+  static const emptySupervisorVisits = 'Vizit yo\'q';
+  static const emptySupervisorAgents = 'Agent GPS ma\'lumoti yo\'q';
+  static const emptyStartVisitClients = 'Vizit uchun nuqta yo\'q';
+  static const emptyDraft = 'Qoralama yo\'q';
+  static const emptyClientOrders = 'Oy uchun buyurtma yo\'q';
+  static const emptyClientSearch = 'Mijoz topilmadi';
+  static const gpsOn = 'GPS yoqilgan';
+  static const gpsActive = 'GPS faol';
+  static const gpsAccuracy = 'Aniqlik';
+  static const gpsStarting = 'GPS ishga tushmoqda…';
 
   static const appName = 'Sales Arena';
-  static const loginTitle = 'Вход в систему';
-  static const loginSubtitle = 'Мобильное приложение Sales Arena';
-  static const companySlug = 'Компания';
-  static const companyHint = 'Код дилера';
-  static const login = 'Логин';
-  static const loginHint = 'Логин';
-  static const password = 'Пароль';
-  static const signIn = 'Войти';
-  static const connecting = 'Подключение…';
-  static const help = 'Помощь';
-  static const support = 'Техподдержка';
-  static const fillAllFields = 'Заполните все поля';
+  static const loginTitle = 'Tizimga kirish';
+  static const loginSubtitle = 'Sales Arena mobil ilovasi';
+  static const companySlug = 'Kompaniya';
+  static const companyHint = 'Diler kodi';
+  static const login = 'Login';
+  static const loginHint = 'Login';
+  static const password = 'Parol';
+  static const signIn = 'Kirish';
+  static const connecting = 'Ulanmoqda…';
+  static const help = 'Yordam';
+  static const support = 'Texyordam';
+  static const fillAllFields = 'Barcha maydonlarni to\'ldiring';
 
-  static const pinSecurity = 'Безопасность';
-  static const pinCreate = 'Создайте PIN-код';
-  static const pinConfirmTitle = 'Подтвердите PIN';
-  static const pinSubtitle = '4 цифры для быстрого входа';
-  static String pinStepLabel(int step) => 'Шаг $step из 2 · $pinConfirmTitle';
+  static const pinSecurity = 'Xavfsizlik';
+  static const pinCreate = 'PIN yarating';
+  static const pinConfirmTitle = 'PINni tasdiqlang';
+  static const pinSubtitle = 'Tezkor kirish uchun 4 raqam';
+  static String pinStepLabel(int step) => 'Qadam $step / 2 · $pinConfirmTitle';
 
-  static const pinEnter = 'Введите PIN';
+  static const pinEnter = 'PINni kiriting';
   static const touchId = 'Touch ID';
 
-  static const fullSync = 'Полная синхронизация';
-  static const firstLaunch = 'Первый запуск';
-  static const syncRecordsLabel = '847 записей';
-  static const syncDataUpdated = 'Данные обновлены';
-  static const syncAllDone = '100% · все 847 записи';
+  static const fullSync = 'To\'liq sinxronlash';
+  static const firstLaunch = 'Birinchi ishga tushirish';
+  static const syncRecordsLabel = '847 yozuv';
+  static const syncDataUpdated = 'Ma\'lumotlar yangilandi';
+  static const syncAllDone = '100% · barcha 847 yozuv';
   static const syncProgressHint =
-      'Данные отправляются на сервер. Не закрывайте приложение до завершения.';
-  static const syncOrdersSent = 'Заказы отправлено';
-  static const syncPhotosUpload = 'Фото выгрузка';
-  static const syncClients = 'Клиенты';
-  static String syncRecordsCount(int n) => '$n записей';
-  static const readyBadge = 'ГОТОВО';
+      'Ma\'lumotlar serverga yuborilmoqda. Ilovani yopmang.';
+  static const syncOrdersSent = 'Buyurtmalar yuborildi';
+  static const syncPhotosUpload = 'Foto yuklash';
+  static const syncClients = 'Mijozlar';
+  static String syncRecordsCount(int n) => '$n yozuv';
+  static const readyBadge = 'TAYYOR';
 
-  static const weekDays = ['Все', 'ПН', 'ВТ', 'СР', 'ЧТ', 'ПТ', 'СБ', 'ВС'];
+  static const weekDays = ['Hammasi', 'Du', 'Se', 'Ch', 'Pa', 'Ju', 'Sh', 'Ya'];
 
-  // Buyurtma yaratish (referens «Добавить заказ»)
-  static const orderAddTitle = 'Добавить заказ';
-  static const orderSetup = 'Параметры заказа';
-  static const orderWarehouse = 'Склад';
-  static const orderPriceType = 'Тип цены';
-  static const orderDiscount = 'Скидка (%)';
-  static const orderComment = 'Комментарий';
-  static const orderCommentHint = 'Опционально…';
-  static const orderConsignment = 'Консигнация';
-  static const orderConsignmentDue = 'Срок оплаты';
-  static const orderShipmentDate = 'Дата отгрузки';
-  static const orderNoConsignmentLimit = 'У вас нет лимита';
-  static const creditLimit = 'Кредитный лимит';
-  static const limitRemaining = 'Осталось';
-  static const consignmentLimit = 'Лимит консигнации';
-  static const consignmentLimitExceeded = 'Превышен лимит консигнации';
-  static const consignmentNotAvailable = 'Консигнация недоступна для вашего профиля';
+  static const orderAddTitle = 'Buyurtma qo\'shish';
+  static const orderSetup = 'Buyurtma parametrlari';
+  static const orderWarehouse = 'Ombor';
+  static const orderPriceType = 'Narx turi';
+  static const orderDiscount = 'Skidka (%)';
+  static const orderComment = 'Izoh';
+  static const orderCommentHint = 'Ixtiyoriy…';
+  static const orderConsignment = 'Konsignatsiya';
+  static const orderConsignmentDue = 'To\'lov muddati';
+  static const orderShipmentDate = 'Yuklash sanasi';
+  static const orderNoConsignmentLimit = 'Limitingiz yo\'q';
+  static const creditLimit = 'Kredit limiti';
+  static const limitRemaining = 'Qoldi';
+  static const consignmentLimit = 'Konsignatsiya limiti';
+  static const consignmentLimitExceeded = 'Konsignatsiya limiti oshib ketdi';
+  static const consignmentNotAvailable =
+      'Konsignatsiya profilingiz uchun mavjud emas';
   static const consignmentClientDisabled =
-      'Консигнация для этого клиента запрещена администратором';
+      'Bu mijoz uchun konsignatsiya admin tomonidan taqiqlangan';
   static const consignmentBlockedByDebt =
-      'Консигнация запрещена: у клиента есть долг по консигнации';
+      'Konsignatsiya taqiqlangan: mijozda konsignatsiya qarzi bor';
   static const orderBlockedByDebt =
-      'Обычный заказ запрещён: у клиента есть долг. Снимите долг или обратитесь к администратору';
-  static const close = 'Закрыть';
-  static const continueBtn = 'Продолжить';
-  static const continueArrow = 'Продолжить →';
-  static const categoryProductsCount = 'товаров';
-  static const finish = 'Завершить';
-  static const editOrderSetup = 'Изменить основные данные';
-  static const clientLabel = 'Клиент';
-  static const selectClient = 'Выберите клиента';
-  static const syncFirst = 'Сначала выполните синхронизацию';
-  static const selectedProducts = 'Выбрано товаров';
-  static const total = 'Итого';
-  static const draft = 'Черновик';
-  static const orderDraftSaved = 'Заказ сохранен в черновик';
-  static const orderExitTitle = 'Выйти из добавления заказа?';
-  static const orderExitSubtitle = 'Заказ не сохранён. Сохранить как черновик перед выходом?';
-  static const orderExitSave = 'Сохранить и выйти';
-  static const orderExitDiscard = 'Выйти без сохранения';
-  static const orderAddOrder = 'Добавить заказ';
-  static const inStock = 'В наличие';
-  static const outOfStock = 'Остаток нет';
-  static const price = 'Цена';
-  static const unitPcs = 'Шт';
-  static const no = 'Нет';
-  static const productsTitle = 'Товары';
-  static const retry = 'Повторить';
-  static const bonusAddTitle = 'Добавление';
-  static const bonusDiscountAddTitle = 'Добавить бонус и скидку';
-  static const bonusSection = 'Бонус';
-  static const discountSection = 'Скидка';
-  static const bonusAuto = 'Авто';
-  static const bonusNone = 'Без бонуса';
-  static const discountAuto = 'Авто';
-  static const discountNone = 'Без скидки';
-  static const discountManual = 'Выбрать скидку';
-  static const bonusPickAssortment = 'Выбрать ассортимента';
-  static const bonusQtyLabel = 'Количество бонусов';
-  static const bonusEarnedHint = 'По заказу положено';
-  static const bonusSelectProduct = 'Выберите бонусный товар';
-  static const bonusDistributeHint = 'Распределите бонусы по товарам';
-  static const bonusEditGifts = 'Изменить состав';
-  static const bonusQtyShort = 'Кол-во';
-  static const bonusStockAvailable = 'Доступно для бонуса';
-  static const bonusStockShortage = 'Не хватает';
-  static const bonusStockInsufficient = 'Недостаточно товара на складе для бонуса';
-  static const bonusShortageCommentPrefix = 'Бонус — недостаток на складе';
-  static const discountShortageCommentPrefix = 'Скидка';
-  static const warehouseStock = 'На складе';
-  static const emptyBonuses = 'Нет бонусов';
-  /// Aktiv bonus qoidasi yo‘q yoki savat shartga yetmagan.
+      'Oddiy buyurtma taqiqlangan: mijozda qarz bor. Qarzni yoping yoki adminga murojaat qiling';
+  static const close = 'Yopish';
+  static const continueBtn = 'Davom etish';
+  static const continueArrow = 'Davom etish →';
+  static const categoryProductsCount = 'mahsulot';
+  static const finish = 'Yakunlash';
+  static const editOrderSetup = 'Asosiy ma\'lumotlarni o\'zgartirish';
+  static const clientLabel = 'Mijoz';
+  static const selectClient = 'Mijozni tanlang';
+  static const syncFirst = 'Avval sinxronlang';
+  static const selectedProducts = 'Tanlangan mahsulotlar';
+  static const total = 'Jami';
+  static const draft = 'Qoralama';
+  static const orderDraftSaved = 'Buyurtma qoralamaga saqlandi';
+  static const orderExitTitle = 'Buyurtmadan chiqilsinmi?';
+  static const orderExitSubtitle =
+      'Buyurtma saqlanmagan. Chiqishdan oldin qoralama qilinsinmi?';
+  static const orderExitSave = 'Saqlab chiqish';
+  static const orderExitDiscard = 'Saqlamasdan chiqish';
+  static const orderAddOrder = 'Buyurtma qo\'shish';
+  static const inStock = 'Omborda bor';
+  static const outOfStock = 'Qoldiq yo\'q';
+  static const price = 'Narx';
+  static const unitPcs = 'Dona';
+  static const no = 'Yo\'q';
+  static const productsTitle = 'Mahsulotlar';
+  static const retry = 'Qayta urinish';
+  static const bonusAddTitle = 'Qo\'shish';
+  static const bonusDiscountAddTitle = 'Bonus va skidka';
+  static const bonusSection = 'Bonus';
+  static const discountSection = 'Skidka';
+  static const bonusAuto = 'Avto';
+  static const bonusNone = 'Bonussiz';
+  static const discountAuto = 'Avto';
+  static const discountNone = 'Skidkasiz';
+  static const discountManual = 'Skidka tanlash';
+  static const bonusPickAssortment = 'Assortiment tanlash';
+  static const bonusQtyLabel = 'Bonus miqdori';
+  static const bonusEarnedHint = 'Buyurtma bo\'yicha tegishli';
+  static const bonusSelectProduct = 'Bonus mahsulotini tanlang';
+  static const bonusDistributeHint = 'Bonuslarni mahsulotlarga taqsimlang';
+  static const bonusEditGifts = 'Tarkibni o\'zgartirish';
+  static const bonusQtyShort = 'Soni';
+  static const bonusStockAvailable = 'Bonus uchun mavjud';
+  static const bonusStockShortage = 'Yetarli emas';
+  static const bonusStockInsufficient =
+      'Bonus uchun omborda tovar yetarli emas';
+  static const bonusShortageCommentPrefix = 'Bonus — omborda kamchilik';
+  static const discountShortageCommentPrefix = 'Skidka';
+  static const warehouseStock = 'Omborda';
+  static const emptyBonuses = 'Bonus yo\'q';
   static const emptyBonusesNoActive =
-      'Нет активного бонуса для этого заказа';
-  static const emptyDiscounts = 'Нет скидок';
-  static const discountNotApplied = 'Скидка не будет применена к заказу';
-  static const discountCashDeskMissing = 'Касса для оплаты скидки не настроена';
-  static const discountLinkBonusRequired = 'Выберите связанный бонус для применения скидки';
-  static const noCategory = 'Без категории';
-  static const selectBtn = 'Выбрать';
+      'Bu buyurtma uchun faol bonus yo\'q';
+  static const emptyDiscounts = 'Skidka yo\'q';
+  static const discountNotApplied = 'Skidka buyurtmaga qo\'llanilmaydi';
+  static const discountCashDeskMissing = 'Skidka uchun kassa sozlanmagan';
+  static const discountLinkBonusRequired =
+      'Skidka uchun bog\'langan bonusni tanlang';
+  static const noCategory = 'Kategoriyasiz';
+  static const selectBtn = 'Tanlash';
   static const bonusPreviewFailed =
-      'Не удалось загрузить правила — выберите «Авто» или «Без бонуса»';
+      'Qoidalarni yuklab bo\'lmadi — «Avto» yoki «Bonussiz» ni tanlang';
   static const bonusFillIncomplete =
-      'Заполните все положенные бонусы полностью';
+      'Barcha tegishli bonuslarni to\'liq to\'ldiring';
   static const bonusStrategyChoiceRequired =
-      'Выберите правила стратегии бонусов';
+      'Bonus strategiya qoidalarini tanlang';
   static const linkedBonusDiscountHint =
-      'Бонус и скидка связаны — можно использовать оба';
+      'Bonus va skidka bog\'langan — ikkalasini ham ishlatish mumkin';
   static const exclusiveBonusDiscountHint =
-      'Можно выбрать только бонус или скидку';
-  static const selectCategory = 'Выберите категорию';
-  /** Fotootchet: spravochnik «Причины фотоотчёта». */
-  static const selectPhotoReason = 'Выберите причину фото';
+      'Faqat bonus yoki skidkani tanlash mumkin';
+  static const selectCategory = 'Kategoriyani tanlang';
+  /// Foto hisobot sabablari spravochnigi.
+  static const selectPhotoReason = 'Foto sababini tanlang';
 }

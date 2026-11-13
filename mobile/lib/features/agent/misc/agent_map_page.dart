@@ -53,7 +53,7 @@ class _AgentMapPageState extends ConsumerState<AgentMapPage> {
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AgentAppBar(
-        title: S.mapPointsTitle,
+        title: 'Xarita',
         showBack: true,
         actions: [
           AgentIconButton(icon: Icons.filter_list, onPressed: () => AgentFilterSheet.show(context)),
@@ -97,7 +97,7 @@ class _AgentMapPageState extends ConsumerState<AgentMapPage> {
                 Padding(
                   padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
                   child: Text(
-                    'На карте ${mapStops.length} из ${stops.length} точек (ограничено для скорости)',
+                    'Xaritada ${mapStops.length} / ${stops.length} nuqta (tezlik uchun cheklangan)',
                     style: AppTypography.caption.copyWith(color: AppColors.info),
                   ),
                 ),
@@ -123,9 +123,9 @@ class _AgentMapPageState extends ConsumerState<AgentMapPage> {
                   child: Text(
                     localFallback
                         ? (routeDateLabel != null
-                            ? 'Маршрут ($routeDateLabel): ${routeLine.length} точек от вашей геолокации'
-                            : 'Маршрут: ${routeLine.length} точек от вашей геолокации')
-                        : 'Маршрут: ${routeLine.length} точек (оптимальный порядок)',
+                            ? 'Marshrut ($routeDateLabel): ${routeLine.length} nuqta · geolokatsiyadan'
+                            : 'Marshrut: ${routeLine.length} nuqta · geolokatsiyadan')
+                        : 'Marshrut: ${routeLine.length} nuqta (optimal tartib)',
                     style: AppTypography.caption.copyWith(color: AppColors.success),
                   ),
                 )
@@ -134,8 +134,8 @@ class _AgentMapPageState extends ConsumerState<AgentMapPage> {
                   padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
                   child: Text(
                     routeDateLabel != null
-                        ? 'Маршрут ($routeDateLabel) не запланирован — нет доступных точек'
-                        : 'Нет доступных точек для маршрута (лимит или пауза после визита)',
+                        ? 'Marshrut ($routeDateLabel) rejalashtirilmagan — nuqta yo\'q'
+                        : 'Marshrut uchun nuqta yo\'q (limit yoki vizitdan keyin pauza)',
                     style: AppTypography.caption.copyWith(color: AppColors.warning),
                   ),
                 ),
@@ -145,7 +145,13 @@ class _AgentMapPageState extends ConsumerState<AgentMapPage> {
                   clipBehavior: Clip.none,
                   children: [
                     if (stops.isEmpty && !waitingGps)
-                      Center(child: AgentEmptyState(message: onWeekdayPlan ? 'Нет точек в маршруте на этот день' : S.emptyMapPoints))
+                      Center(
+                        child: AgentEmptyState(
+                          message: onWeekdayPlan
+                              ? 'Bugun marshrutda nuqta yo\'q'
+                              : 'Koordinatali nuqtalar yo\'q',
+                        ),
+                      )
                     else if (waitingGps)
                       const Center(child: CircularProgressIndicator(color: AppColors.primary))
                     else
@@ -167,21 +173,6 @@ class _AgentMapPageState extends ConsumerState<AgentMapPage> {
                           if (client != null) setState(() => _selectedClient = client);
                         },
                       ),
-                    Positioned(
-                      right: 12,
-                      top: 12,
-                      child: SaEnter(
-                        preset: SaMotionPreset.rise,
-                        child: _MapControl(
-                          icon: Icons.info_outline,
-                          onTap: () {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('Яндекс Карты — торговые точки')),
-                            );
-                          },
-                        ),
-                      ),
-                    ),
                     Positioned(
                       right: 12,
                       bottom: 63,
@@ -395,7 +386,7 @@ class _MapStatsBar extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(S.visited, style: AppTypography.caption.copyWith(color: AppColors.textMuted)),
+                        Text('Tashrif', style: AppTypography.caption.copyWith(color: AppColors.textMuted)),
                         const SizedBox(height: 8),
                         Text(
                           '$visited / $totalOnMap',
@@ -419,7 +410,7 @@ class _MapStatsBar extends StatelessWidget {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                S.notShownOnMap,
+                                'Xaritada yo\'q',
                                 style: AppTypography.caption.copyWith(color: AppColors.textMuted),
                               ),
                               const SizedBox(height: 8),
@@ -476,7 +467,7 @@ class _OutletDetailBar extends ConsumerWidget {
           children: [
             Row(
               children: [
-                Text('Подробно', style: AppTypography.headlineMedium.copyWith(fontWeight: FontWeight.w800)),
+                Text('Batafsil', style: AppTypography.headlineMedium.copyWith(fontWeight: FontWeight.w800)),
                 const Spacer(),
                 IconButton(icon: const Icon(Icons.close, size: 20), onPressed: onClose),
               ],
@@ -515,7 +506,7 @@ class _OutletDetailBar extends ConsumerWidget {
             Row(
               children: [
                 Expanded(
-                  child: AgentSecondaryButton(label: 'Подробно', onPressed: onDetails),
+                  child: AgentSecondaryButton(label: 'Batafsil', onPressed: onDetails),
                 ),
                 const SizedBox(width: 8),
                 _ActionIcon(icon: Icons.alt_route, onTap: onRoute),
@@ -526,7 +517,7 @@ class _OutletDetailBar extends ConsumerWidget {
                     final phone = client['phone']?.toString();
                     if (!hasDialablePhone(phone)) {
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Нет номера телефона')),
+                        const SnackBar(content: Text('Telefon raqami yo\'q')),
                       );
                       return;
                     }

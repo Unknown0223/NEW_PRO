@@ -2,11 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/api/mobile_api.dart';
+import '../../../core/config/mobile_config.dart';
+import '../../../core/config/sync_window_countdown.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../design_system/design_system.dart';
-import '../shell/agent_scaffold_key.dart';
 import 'agent_home_blocks.dart';
+import 'agent_home_extras.dart';
 import 'agent_home_sections.dart';
 import 'home_visit_metrics_provider.dart';
 
@@ -21,8 +23,16 @@ class AgentHomeDashboard extends StatelessWidget {
   final int syncedPhotos;
   final String lastSyncLabel;
   final bool syncAllowed;
+  final bool syncing;
+  final SyncConfig syncConfig;
   final VoidCallback onSync;
   final VoidCallback? onOpenNotifications;
+  final double debtTotal;
+  final int debtClients;
+  final double debt0to7;
+  final double debt8to30;
+  final double debt30plus;
+  final int warehouseLowSku;
 
   const AgentHomeDashboard({
     super.key,
@@ -35,8 +45,16 @@ class AgentHomeDashboard extends StatelessWidget {
     required this.syncedPhotos,
     required this.lastSyncLabel,
     required this.syncAllowed,
+    required this.syncConfig,
     required this.onSync,
+    this.syncing = false,
     this.onOpenNotifications,
+    this.debtTotal = 0,
+    this.debtClients = 0,
+    this.debt0to7 = 0,
+    this.debt8to30 = 0,
+    this.debt30plus = 0,
+    this.warehouseLowSku = 0,
   });
 
   static const _irisEnd = Color(0xFF3B2BD9);
@@ -152,26 +170,44 @@ class AgentHomeDashboard extends StatelessWidget {
         SaEnter(
           delay: SaStaggerDelay.of(5),
           preset: SaMotionPreset.rise,
-          child: const HomeDebtCard(
-            total: 0,
-            clients: 0,
-            d0to7: 0,
-            d8to30: 0,
-            d30plus: 0,
+          child: HomeDebtCard(
+            total: debtTotal,
+            clients: debtClients,
+            d0to7: debt0to7,
+            d8to30: debt8to30,
+            d30plus: debt30plus,
           ),
         ),
         const SizedBox(height: 10),
         SaEnter(
           delay: SaStaggerDelay.of(6),
           preset: SaMotionPreset.rise,
-          child: _routeRow(context, visited: visited, left: left, total: total),
+          child: const HomeTasksCard(),
         ),
         const SizedBox(height: 10),
         SaEnter(
           delay: SaStaggerDelay.of(7),
           preset: SaMotionPreset.rise,
+          child: const HomeTopProductsCard(),
+        ),
+        const SizedBox(height: 10),
+        SaEnter(
+          delay: SaStaggerDelay.of(8),
+          preset: SaMotionPreset.rise,
+          child: HomeAttendanceStockRow(lowSkuCount: warehouseLowSku),
+        ),
+        const SizedBox(height: 10),
+        SaEnter(
+          delay: SaStaggerDelay.of(9),
+          preset: SaMotionPreset.rise,
+          child: _routeRow(context, visited: visited, left: left, total: total),
+        ),
+        const SizedBox(height: 10),
+        SaEnter(
+          delay: SaStaggerDelay.of(10),
+          preset: SaMotionPreset.rise,
           child: HomeSyncFooter(
-            syncing: false,
+            syncing: syncing,
             syncAllowed: syncAllowed,
             lastSyncLabel: lastSyncLabel,
             pendingPhotos: pendingPhotos,
@@ -184,28 +220,47 @@ class AgentHomeDashboard extends StatelessWidget {
   }
 
   Widget _header(BuildContext context) {
+    // Menyu/sync faqat SaGlobalChromeBar da — bu yerda ikkilanish bo‘lmasin.
     return Row(
       children: [
-        Container(
-          width: 36,
-          height: 36,
-          alignment: Alignment.center,
-          decoration: const BoxDecoration(
-            shape: BoxShape.circle,
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [Color(0xFF6A5BFF), _irisEnd],
+        Stack(
+          clipBehavior: Clip.none,
+          children: [
+            Container(
+              width: 36,
+              height: 36,
+              alignment: Alignment.center,
+              decoration: const BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [Color(0xFF6A5BFF), _irisEnd],
+                ),
+              ),
+              child: Text(
+                _initials,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w800,
+                  fontSize: 12,
+                ),
+              ),
             ),
-          ),
-          child: Text(
-            _initials,
-            style: const TextStyle(
-              color: Colors.white,
-              fontWeight: FontWeight.w800,
-              fontSize: 12,
+            Positioned(
+              right: -1,
+              bottom: -1,
+              child: Container(
+                width: 10,
+                height: 10,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF22B573),
+                  shape: BoxShape.circle,
+                  border: Border.all(color: AppColors.background, width: 2),
+                ),
+              ),
             ),
-          ),
+          ],
         ),
         const SizedBox(width: 10),
         Expanded(
@@ -233,28 +288,33 @@ class AgentHomeDashboard extends StatelessWidget {
             ],
           ),
         ),
-        _roundIcon(Icons.menu_rounded, () => openAgentMenu(context)),
+        SyncWindowCountdownStrip(syncConfig: syncConfig, inline: true),
         const SizedBox(width: 6),
         _roundIcon(Icons.notifications_none_rounded, onOpenNotifications),
-        const SizedBox(width: 6),
-        _roundIcon(Icons.sync_rounded, syncAllowed ? onSync : null),
       ],
     );
   }
 
-  Widget _roundIcon(IconData icon, VoidCallback? onTap) {
+  Widget _roundIcon(IconData icon, VoidCallback? onTap, {bool spinning = false}) {
     return SaPressable(
       onTap: onTap,
       borderRadius: BorderRadius.circular(10),
       child: Container(
         width: 34,
         height: 34,
+        alignment: Alignment.center,
         decoration: BoxDecoration(
           color: AppColors.surface,
           borderRadius: BorderRadius.circular(10),
           border: Border.all(color: AppColors.border),
         ),
-        child: Icon(icon, size: 16, color: AppColors.textPrimary),
+        child: spinning
+            ? const SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF5548F0)),
+              )
+            : Icon(icon, size: 16, color: AppColors.textPrimary),
       ),
     );
   }

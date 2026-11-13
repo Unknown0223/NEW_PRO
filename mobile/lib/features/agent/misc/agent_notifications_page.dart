@@ -487,7 +487,7 @@ class _AgentNotificationsPageState extends ConsumerState<AgentNotificationsPage>
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AgentAppBar(
-        title: 'Уведомления',
+        title: 'Bildirishnomalar',
         useShellDrawer: true,
         showBack: true,
         actions: [
@@ -568,7 +568,7 @@ class _AgentNotificationsPageState extends ConsumerState<AgentNotificationsPage>
                 child: Padding(
                 padding: const EdgeInsets.only(top: 48),
                 child: AgentEmptyState.fill(
-                  message: 'Нет уведомлений',
+                  message: 'Bildirishnoma yo\'q',
                   action: SaPrimaryButton(
                     label: 'К заказам',
                     onPressed: () => context.go('/orders'),

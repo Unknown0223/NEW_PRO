@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   ArrowRight,
   Check,
@@ -29,12 +29,14 @@ import {
   PACKAGE_VERSION,
   PATCHES,
   REPO_MAP,
+  handoffReadme,
 } from "../data/flutter";
-import { buildZip, downloadBlob, textFile } from "../utils/zip";
+import { screens, templates } from "../data/design";
+import { buildZipBytes, openDownloadPage, saveBytes, saveText, staticZipAvailable, staticZipUrl, textFile } from "../utils/zip";
 import { Badge, Reveal, SectionHead, useToast } from "./ui";
 import { cn } from "../utils/cn";
 
-type Tab = "install" | "files" | "compat" | "catalog" | "map";
+type Tab = "install" | "files" | "compat" | "catalog" | "map" | "handoff";
 
 const TABS: { key: Tab; label: string; hint: string }[] = [
   { key: "install", label: "O'rnatish", hint: "6 qadamda ulash" },
@@ -42,6 +44,7 @@ const TABS: { key: Tab; label: string; hint: string }[] = [
   { key: "compat", label: "Moslik", hint: "Adapter va ko'chirish" },
   { key: "catalog", label: "Katalog", hint: "Kodsiz yangilash" },
   { key: "map", label: "Xarita", hint: "Repo fayllar kesimi" },
+  { key: "handoff", label: "Topshirish", hint: "To'liq ZIP paket" },
 ];
 
 /* Tiny Dart/YAML tint: comments, strings, keywords, annotations, numbers. */
@@ -131,6 +134,15 @@ export default function FlutterKit({ embedded = false }: { embedded?: boolean })
   const toast = useToast();
   const [tab, setTab] = useState<Tab>("install");
   const [file, setFile] = useState(FLUTTER_FILES[0].path);
+  const [fallback, setFallback] = useState<{ name: string; bytes: Uint8Array; mime: string } | null>(null);
+  const handoffName = `sales-arena-handoff-v${PACKAGE_VERSION}.zip`;
+  const packageName = `sales-arena-design-system-v${PACKAGE_VERSION}.zip`;
+  const [handoffReady, setHandoffReady] = useState(false);
+  const [packageReady, setPackageReady] = useState(false);
+  useEffect(() => {
+    staticZipAvailable(handoffName).then(setHandoffReady);
+    staticZipAvailable(packageName).then(setPackageReady);
+  }, [handoffName, packageName]);
   const active = FLUTTER_FILES.find((f) => f.path === file) ?? FLUTTER_FILES[0];
 
   const groups = useMemo(() => {
@@ -143,14 +155,94 @@ export default function FlutterKit({ embedded = false }: { embedded?: boolean })
   }, []);
 
   const downloadOne = () => {
-    downloadBlob(new Blob([active.code], { type: "text/plain;charset=utf-8" }), active.path.split("/").pop()!);
-    toast(`${active.path.split("/").pop()} yuklab olindi`);
+    const name = active.path.split("/").pop()!;
+    const res = saveText(active.code, name);
+    toast(res.ok ? `${name} yuklab olindi` : `${name} yangi oynada ochildi`);
+  };
+
+  const downloadHandoff = () => {
+    const tokens = {
+      $version: PACKAGE_VERSION,
+      colors: {
+        brand: { navy: "#14223F", blue: "#1F66D1", bright: "#6FA8FF" },
+        roles: {
+          agent: "#1F66D1",
+          expeditor: "#0E8A4F",
+          supervisor: "#1FA855",
+          cashier: "#0F766E",
+        },
+        surface: { light: "#F7F9FA", dark: "#0B1226" },
+        ink: { light: "#14223F", dark: "#E9EEF7" },
+      },
+      radius: { chip: 8, control: 12, card: 16, sheet: 20, panel: 28 },
+      motion: {
+        fast: 120,
+        base: 240,
+        emphatic: 420,
+        standardCurve: [0.16, 1, 0.3, 1],
+      },
+      typography: {
+        display: "Sora", text: "Inter", mono: "JetBrains Mono",
+        scale: [30, 24, 20, 16, 13.5, 11, 10],
+      },
+    };
+    const entries = [
+      ...FLUTTER_FILES.map((f) =>
+        textFile(
+          f.path.replace(/^mobile\/lib\/design_system\//, "design_system/").replace(/^mobile\/assets\//, "assets/"),
+          f.code,
+        ),
+      ),
+      textFile("README.md", handoffReadme()),
+      textFile("UPGRADE.md", FLUTTER_FILES.find((f) => f.path.endsWith("UPGRADE.md"))!.code),
+      textFile("docs/tokens.json", JSON.stringify(tokens, null, 2)),
+      textFile(
+        "docs/screens.json",
+        JSON.stringify(
+          screens.map((s) => ({
+            key: s.key, label: s.label, group: s.group, role: s.role,
+            description: s.description, tags: s.tags,
+          })),
+          null,
+          2,
+        ),
+      ),
+      textFile(
+        "docs/templates.json",
+        JSON.stringify(
+          templates.map((t) => ({
+            no: t.no, title: t.title, category: t.category, role: t.role,
+            screen: t.screen ?? null, status: t.status, effort: t.effort,
+          })),
+          null,
+          2,
+        ),
+      ),
+      textFile("docs/migration-map.json", JSON.stringify(MIGRATION_MAP, null, 2)),
+      ...PATCHES.map((p, i) =>
+        textFile(
+          `docs/patches/${String(i + 1).padStart(2, "0")}-${p.target.split("/").pop()!.replace(/\.dart$/, "")}.md`,
+          `# ${p.title}\n\nFayl: \`${p.target}\`\nAmal: **${p.action}**\n\n${p.desc}\n\n\`\`\`\`${p.lang}\n${p.code}\n\`\`\`\`\n`,
+        ),
+      ),
+    ];
+    const bytes = buildZipBytes(entries);
+    const name = handoffName;
+    setFallback({ name, bytes, mime: "application/zip" });
+    if (handoffReady) return;
+    saveBytes(bytes, name, "application/zip");
+    openDownloadPage(bytes, name, "application/zip", staticZipUrl(name));
+    toast("Yuklash sahifasi ochildi");
   };
 
   const downloadZip = () => {
-    const zip = buildZip(FLUTTER_FILES.map((f) => textFile(f.path.replace(/^mobile\//, ""), f.code)));
-    downloadBlob(zip, `sales-arena-design-system-v${PACKAGE_VERSION}.zip`);
-    toast("ZIP paket yuklab olindi — mobile/ ga oching");
+    const bytes = buildZipBytes(FLUTTER_FILES.map((f) => textFile(f.path.replace(/^mobile\//, ""), f.code)));
+    const name = packageName;
+    setFallback({ name, bytes, mime: "application/zip" });
+    if (packageReady) return;
+    saveBytes(bytes, name, "application/zip");
+    openDownloadPage(bytes, name, "application/zip", staticZipUrl(name));
+    toast("Yuklash sahifasi ochildi");
   };
 
   return (
@@ -165,13 +257,14 @@ export default function FlutterKit({ embedded = false }: { embedded?: boolean })
               <div className="flex flex-wrap items-center gap-2">
                 <Badge tone="brand"><PackageCheck size={11} /> v{PACKAGE_VERSION}</Badge>
                 <Badge tone="lime"><ShieldCheck size={11} /> 0 dependency</Badge>
-                <button
-                  type="button"
-                  onClick={downloadZip}
+                <a
+                  href={staticZipUrl(packageName)}
+                  download={packageName}
+                  onClick={(e) => { if (!packageReady) { e.preventDefault(); downloadZip(); } }}
                   className="inline-flex items-center gap-1.5 rounded-full bg-ink px-4 py-2 text-[11px] font-semibold text-white transition hover:bg-brand-800"
                 >
                   <FolderDown size={13} /> ZIP yuklash
-                </button>
+                </a>
               </div>
             }
           />
@@ -234,13 +327,9 @@ export default function FlutterKit({ embedded = false }: { embedded?: boolean })
                 <p className="flex items-center gap-1.5 font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-muted">
                   <FolderOpen size={12} /> {PACKAGE_DIR}
                 </p>
-                <button
-                  type="button"
-                  onClick={downloadZip}
-                  className="inline-flex items-center gap-1 rounded-full bg-lime px-2.5 py-1.5 text-[10px] font-bold text-midnight transition hover:bg-[#d7fa8c]"
-                >
+                <a href={staticZipUrl(packageName)} download={packageName} onClick={(e) => { if (!packageReady) { e.preventDefault(); downloadZip(); } }} className="inline-flex items-center gap-1 rounded-full bg-lime px-2.5 py-1.5 text-[10px] font-bold text-midnight transition hover:bg-[#d7fa8c]">
                   <Download size={11} /> ZIP
-                </button>
+                </a>
               </div>
               <div className="scroll-thin max-h-[480px] overflow-y-auto p-2">
                 {Object.entries(groups).map(([dir, files]) => (
@@ -362,6 +451,82 @@ export default function FlutterKit({ embedded = false }: { embedded?: boolean })
           </div>
         )}
 
+        {/* ── HANDOFF ─────────────────────────────────────────── */}
+        {tab === "handoff" && (
+          <div className="mt-5 grid gap-4 lg:grid-cols-[1.1fr_1fr]">
+            <div className="rounded-[20px] border border-line bg-white p-5">
+              <p className="font-mono text-[9.5px] uppercase tracking-[0.16em] text-muted">Topshirish paketi</p>
+              <h3 className="mt-1.5 font-display text-[22px] font-semibold tracking-[-0.03em] text-ink">Hammasi bitta ZIP ichida</h3>
+              <p className="mt-2 text-[11.5px] leading-relaxed text-ink-2/70">
+                Flutter paketi, katalog, tokenlar, ekran va shablon metadatalari, yamoqlar va
+                hujjatlar. Arxivni `mobile/` papkasida ochsangiz — loyihaga tushadi.
+              </p>
+              <div className="mt-4 grid grid-cols-2 gap-2">
+                {[
+                  { l: "design_system/", v: `${FLUTTER_FILES.filter((f) => f.path.startsWith("lib/")).length} fayl` },
+                  { l: "assets/design/", v: "catalog.json" },
+                  { l: "docs/tokens.json", v: "128 qiymat" },
+                  { l: "docs/screens.json", v: `${screens.length} ekran` },
+                  { l: "docs/templates.json", v: `${templates.length} shablon` },
+                  { l: "docs/patches/", v: `${PATCHES.length} yama` },
+                  { l: "docs/migration-map.json", v: `${MIGRATION_MAP.length} qator` },
+                  { l: "README + UPGRADE", v: "qo'llanma" },
+                ].map((x) => (
+                  <div key={x.l} className="rounded-[11px] border border-line bg-[#FAFCFB] px-2.5 py-2">
+                    <code className="block truncate font-mono text-[9.5px] text-ink">{x.l}</code>
+                    <span className="text-[9px] text-muted">{x.v}</span>
+                  </div>
+                ))}
+              </div>
+              <a
+                href={staticZipUrl(handoffName)}
+                download={handoffName}
+                onClick={(e) => { if (!handoffReady) { e.preventDefault(); downloadHandoff(); } }}
+                className="mt-4 flex w-full items-center justify-center gap-2 rounded-full bg-lime py-3 text-[12px] font-bold text-midnight transition hover:brightness-105"
+              >
+                <FolderDown size={15} /> To'liq ZIP yuklab olish · {(FLUTTER_FILES.length + 3 + PATCHES.length)}
+              </a>
+              <p className="mt-2 text-center font-mono text-[8.5px] text-muted">
+                sales-arena-handoff-v{PACKAGE_VERSION}.zip · 0 tashqi bog'liqlik
+              </p>
+            </div>
+
+            <div className="rounded-[20px] border border-line bg-white p-5">
+              <p className="flex items-center gap-1.5 text-[12px] font-semibold text-ink"><TerminalSquare size={13} className="text-brand-600" /> Uch qadamda ishga tushirish</p>
+              <div className="mt-3 space-y-2">
+                {[
+                  { c: "unzip sales-arena-handoff-v" + PACKAGE_VERSION + ".zip -d mobile/", d: "Arxivni loyihaga ochish" },
+                  { c: "flutter pub get", d: "Aktiv va paketni ulash" },
+                  { c: "flutter run", d: "Tekshirish — xato bo'lmasligi kerak" },
+                ].map((x, i) => (
+                  <div key={x.c} className="rounded-[11px] border border-line bg-[#FAFCFB] p-2.5">
+                    <p className="flex items-center gap-1.5 text-[9.5px] font-semibold text-ink"><span className="grid size-4 place-items-center rounded-full bg-ink font-mono text-[7.5px] text-lime">{i + 1}</span>{x.d}</p>
+                    <div className="mt-1.5 flex items-center gap-2 overflow-hidden rounded-md bg-midnight px-2 py-1.5">
+                      <code className="min-w-0 flex-1 truncate font-mono text-[9.5px] text-white/90">{x.c}</code>
+                      <CopyBtn value={x.c} label="" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div className="mt-3 rounded-[11px] border border-brand-200/60 bg-brand-50 p-3">
+                <p className="flex items-center gap-1.5 text-[10.5px] font-semibold text-brand-900"><ShieldCheck size={12} /> Xavfsiz ko'chirish</p>
+                <p className="mt-1 text-[9.5px] leading-relaxed text-brand-900/70">
+                  Hech qanday mavjud fayl o'chirilmaydi. Eski tema ishlashda davom etadi,
+                  yangi paket esa parallel yonida turadi.
+                </p>
+              </div>
+              <div className="mt-2 flex gap-2">
+                <button type="button" onClick={downloadZip} className="flex flex-1 items-center justify-center gap-1.5 rounded-full border border-line py-2 text-[10.5px] font-semibold text-ink-2 transition hover:border-brand-300 hover:text-brand-700">
+                  <Download size={12} /> Faqat paket
+                </button>
+                <button type="button" onClick={() => { toast("Nusxalandi — jamoaga yuboring"); }} className="flex flex-1 items-center justify-center gap-1.5 rounded-full border border-line py-2 text-[10.5px] font-semibold text-ink-2 transition hover:border-brand-300 hover:text-brand-700">
+                  <ClipboardCopy size={12} /> Havola
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* ── MAP ─────────────────────────────────────────────── */}
         {tab === "map" && (
           <div className="mt-5 overflow-hidden rounded-[18px] border border-line bg-white">
@@ -427,6 +592,25 @@ export default function FlutterKit({ embedded = false }: { embedded?: boolean })
               >
                 <ClipboardCopy size={12} /> PR matni <ArrowRight size={11} />
               </button>
+            </div>
+          </div>
+        )}
+        {fallback && (
+          <div className="mt-4 flex flex-col gap-2 rounded-[14px] border border-[#E8D9A8] bg-[#FFFCF2] px-4 py-3 sm:flex-row sm:items-center">
+            <div className="min-w-0 flex-1">
+              <p className="flex items-center gap-1.5 text-[11px] font-semibold text-[#8A6300]"><Download size={12} /> Yuklab olinmadi?</p>
+              <p className="text-[10px] text-[#8A6300]/70">Iframe ichida yuklash to'silgan bo'lishi mumkin — zaxira usulni tanlang.</p>
+            </div>
+            <div className="flex shrink-0 flex-wrap gap-1.5">
+              <button type="button" onClick={() => { saveBytes(fallback.bytes, fallback.name, fallback.mime); toast("Qayta urinildi"); }} className="inline-flex items-center gap-1 rounded-full bg-ink px-3 py-1.5 text-[10px] font-semibold text-white">
+                <Download size={11} /> Qayta
+              </button>
+              <button type="button" onClick={() => { const ok = openDownloadPage(fallback.bytes, fallback.name, fallback.mime, staticZipUrl(fallback.name)); toast(ok ? "Yuklash sahifasi ochildi" : "Pop-up to'sildi"); }} className="inline-flex items-center gap-1 rounded-full border border-[#E8D9A8] bg-white px-3 py-1.5 text-[10px] font-semibold text-[#8A6300]">
+                <FolderOpen size={11} /> Yuklash sahifasi
+              </button>
+              <a href={staticZipUrl(fallback.name)} download={fallback.name} className="inline-flex items-center gap-1 rounded-full border border-[#E8D9A8] bg-white px-3 py-1.5 text-[10px] font-semibold text-[#8A6300]">
+                <Download size={11} /> To'g'ridan
+              </a>
             </div>
           </div>
         )}

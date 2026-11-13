@@ -34,22 +34,33 @@ void _showSyncSnack(String msg, {Color? color}) {
 Future<void> startManualSyncWithContainer(
   ProviderContainer container, {
   required bool full,
+  bool identity = false,
 }) async {
   try {
-    final policy =
-        await container.read(authStateProvider.notifier).refreshConfigAndEvaluateSyncPolicy();
-    if (!policy.allowed) {
-      final slot = container.read(sessionProvider).user?.workSlotCode?.trim();
-      final base = policy.denialMessage ?? 'Синхронизация недоступна';
-      final msg = (slot != null && slot.isNotEmpty) ? '$base · Рабочее место: $slot' : base;
-      if (kDebugMode) {
-        debugPrint('startManualSync denied: $msg');
+    // Identity — faqat rol kartasi; synс oynasi cheklovi qo‘llanmaydi.
+    if (!identity) {
+      final policy = await container
+          .read(authStateProvider.notifier)
+          .refreshConfigAndEvaluateSyncPolicy();
+      if (!policy.allowed) {
+        final slot = container.read(sessionProvider).user?.workSlotCode?.trim();
+        final base = policy.denialMessage ?? 'Синхронизация недоступна';
+        final msg =
+            (slot != null && slot.isNotEmpty) ? '$base · Рабочее место: $slot' : base;
+        if (kDebugMode) {
+          debugPrint('startManualSync denied: $msg');
+        }
+        _showSyncSnack(msg, color: AppColors.warning);
+        return;
       }
-      _showSyncSnack(msg, color: AppColors.warning);
-      return;
     }
     if (container.read(manualSyncProvider.notifier).isRunning) return;
-    unawaited(container.read(manualSyncProvider.notifier).run(full: full));
+    unawaited(
+      container.read(manualSyncProvider.notifier).run(
+            full: full,
+            identity: identity,
+          ),
+    );
   } catch (e, st) {
     if (kDebugMode) {
       debugPrint('startManualSync error: $e\n$st');
@@ -61,7 +72,7 @@ Future<void> startManualSyncWithContainer(
       code: 'ManualSyncStartFailed',
       message: 'Синхронизация: не удалось начать',
       path: '/mobile/sync',
-      payload: {'full': full},
+      payload: {'full': full, 'identity': identity},
     );
     _showSyncSnack(UserFacingError.toast(e, action: 'Не удалось начать синхронизацию'), color: AppColors.error);
   }

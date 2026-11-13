@@ -91,7 +91,7 @@ class _AgentWarehouseStockPageState extends ConsumerState<AgentWarehouseStockPag
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AgentAppBar(
-        title: 'Остатки на складе',
+        title: 'Ombor qoldiqlari',
         useShellDrawer: true,
         showBack: true,
         actions: [
@@ -108,7 +108,7 @@ class _AgentWarehouseStockPageState extends ConsumerState<AgentWarehouseStockPag
               children: [
                 Text(e.toString(), textAlign: TextAlign.center, style: const TextStyle(color: AppColors.error)),
                 const SizedBox(height: 16),
-                FilledButton(onPressed: () => _refreshStock(force: true), child: const Text('Повторить')),
+                FilledButton(onPressed: () => _refreshStock(force: true), child: const Text('Qayta urinish')),
               ],
             ),
           ),
@@ -118,7 +118,7 @@ class _AgentWarehouseStockPageState extends ConsumerState<AgentWarehouseStockPag
                   .where((w) => w['id'] == view.warehouseId)
                   .map((w) => w['name']?.toString())
                   .firstOrNull ??
-              'Склад';
+              'Ombor';
 
           return Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -164,7 +164,7 @@ class _AgentWarehouseStockPageState extends ConsumerState<AgentWarehouseStockPag
                           children: [
                             SizedBox(
                               height: MediaQuery.sizeOf(context).height * 0.45,
-                              child: AgentEmptyState.fill(message: S.emptyStock),
+                              child: AgentEmptyState.fill(message: 'Omborda qoldiq yo\'q'),
                             ),
                           ],
                         )

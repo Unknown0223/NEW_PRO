@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../../core/api/mobile_api.dart';
+import '../../../core/api/mobile_api.dart' show AgentDashboardResult, DebtorClient;
 import '../../../core/auth/session.dart';
 import '../../../core/config/mobile_config.dart';
 import '../../../core/config/mobile_config_policy.dart';
@@ -15,12 +15,19 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/time/work_region_time.dart';
 import '../../../core/ui/agent_ui.dart';
+import '../../../core/ui/quick_panel_sheet.dart';
+import '../../../design_system/design_system.dart';
 import '../../auth/auth_provider.dart';
+import '../shell/agent_scaffold_key.dart';
 import '../sync/sync_bottom_sheet.dart';
+import '../clients/agent_debtors_page.dart';
 import '../visits/visit_stats_helper.dart';
+import '../warehouse/warehouse_stock_providers.dart';
+import '../../../core/clients/agent_outlet_filters_provider.dart';
 import '../../../core/sync/sync_data_refresh.dart';
 import 'agent_dashboard_provider.dart';
 import 'agent_home_dashboard.dart';
+import 'agent_home_extras.dart';
 import 'home_visit_metrics_provider.dart';
 import 'last_created_order_banner.dart';
 import 'sync_count_provider.dart';
@@ -58,6 +65,7 @@ class _AgentHomePageState extends ConsumerState<AgentHomePage> {
   Timer? _syncPolicyPoll;
   /// Birinchi kadrlar bo‘shalsin — dashboard/metrics/API birdaniga ANR beradi.
   bool _heavyProvidersReady = false;
+  bool _syncing = false;
 
   @override
   void initState() {
@@ -197,6 +205,24 @@ class _AgentHomePageState extends ConsumerState<AgentHomePage> {
     final createdBanner = ref.watch(lastCreatedOrderBannerProvider);
     final dash = dashAsync.valueOrNull;
     final metrics = metricsAsync.valueOrNull;
+    final debtList = _heavyProvidersReady
+        ? (ref.watch(debtorsProvider).valueOrNull ?? const <DebtorClient>[])
+        : const <DebtorClient>[];
+    final ledger = _heavyProvidersReady
+        ? ref.watch(clientAgentLedgerBalancesProvider).valueOrNull
+        : null;
+    double debtBalance(DebtorClient c) =>
+        ledger != null ? (ledger[c.id] ?? 0) : c.balance;
+    final debtSum = summarizeDebts(debtList, debtBalance);
+    final stockView = _heavyProvidersReady ? ref.watch(warehouseStockProvider).valueOrNull : null;
+    var lowSku = 0;
+    if (stockView != null) {
+      for (final cat in stockView.categories) {
+        for (final line in cat.items) {
+          if (line.count == S.outOfStock) lowSku++;
+        }
+      }
+    }
     final syncCfg = session.mobileConfig?.sync ?? const SyncConfig();
     final syncCountAsync = ref.watch(syncCountTodayProvider);
     final mustSync = syncCountAsync.maybeWhen(
@@ -206,34 +232,67 @@ class _AgentHomePageState extends ConsumerState<AgentHomePage> {
     final syncPolicy = evaluateSyncPolicy(syncCfg);
     final syncAllowed = syncPolicy.allowed;
 
-    // Shablon HomeDashboard: AppBar yo‘q — header dashboard ichida.
+    final now = TimeOfDay.now();
+    final clock =
+        '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
+
+    // Shablon: GlobalChrome + HomeDashboard.
     return Scaffold(
       backgroundColor: AppColors.background,
-      body: SafeArea(
-        bottom: false,
-        child: RefreshIndicator(
+      body: Column(
+        children: [
+          SaGlobalChromeBar(
+            roleLabel: 'Agent',
+            syncClock: clock,
+            syncReady: syncAllowed,
+            onMenu: () => agentShellScaffoldKey.currentState?.openDrawer(),
+            onSync: syncAllowed
+                ? () => SyncBottomSheet.show(context)
+                : () => unawaited(_tryRefreshAndOpenSync()),
+            onQuick: () => showQuickPanelSheet(context),
+          ),
+          Expanded(
+            child: RefreshIndicator(
         onRefresh: () async {
-          await ref.read(authStateProvider.notifier).refreshMobileConfig();
-          final freshCfg = ref.read(sessionProvider).mobileConfig?.sync ?? const SyncConfig();
-          final policy = evaluateSyncPolicy(freshCfg);
-          if (!policy.allowed) {
-            if (!context.mounted) return;
-            showAgentToast(
-                context,
-                policy.denialMessage ?? syncWindowMessage(freshCfg),
-                accentColor: AppColors.warning,
-            );
-            return;
-          }
-          final forceCatalog = await AppDatabase().needsFullClientCatalogResync();
-          final r = await ref.read(authStateProvider.notifier).resync(
-                full: false,
-                forceClientCatalog: forceCatalog,
+          setState(() => _syncing = true);
+          try {
+            await ref.read(authStateProvider.notifier).refreshMobileConfig();
+            final freshCfg = ref.read(sessionProvider).mobileConfig?.sync ?? const SyncConfig();
+            final policy = evaluateSyncPolicy(freshCfg);
+            if (!policy.allowed) {
+              if (!context.mounted) return;
+              showAgentToast(
+                  context,
+                  policy.denialMessage ?? syncWindowMessage(freshCfg),
+                  accentColor: AppColors.warning,
               );
-          invalidateSyncedData(ref.invalidate);
-          if (!context.mounted) return;
-          if (!r.ok && r.error != null) {
-            showAgentToast(context, r.error!, accentColor: AppColors.error);
+              return;
+            }
+            final forceCatalog = await AppDatabase().needsFullClientCatalogResync();
+            final r = await ref.read(authStateProvider.notifier).resync(
+                  full: false,
+                  forceClientCatalog: forceCatalog,
+                );
+            invalidateSyncedData(ref.invalidate);
+            if (!context.mounted) return;
+            if (r.ok) {
+              ref.invalidate(homeStatsProvider);
+              final freshStats = await ref.read(homeStatsProvider.future);
+              if (!context.mounted) return;
+              final orders = freshStats['orders'] ?? 0;
+              final photos = ref.read(syncedPhotoCountTodayProvider).valueOrNull ??
+                  freshStats['synced_photos'] ??
+                  0;
+              showAgentToast(
+                context,
+                'Sinxronlandi · $orders buyurtma · $photos foto',
+                accentColor: AppColors.success,
+              );
+            } else if (r.error != null) {
+              showAgentToast(context, r.error!, accentColor: AppColors.error);
+            }
+          } finally {
+            if (mounted) setState(() => _syncing = false);
           }
         },
         child: SingleChildScrollView(
@@ -318,7 +377,7 @@ class _AgentHomePageState extends ConsumerState<AgentHomePage> {
                   final n = (session.user?.name ?? '').trim();
                   return n.isEmpty ? 'Agent' : n;
                 }(),
-                dateLine: _formatSync(DateTime.now().toUtc().toIso8601String()),
+                dateLine: homeDashboardDateLine(),
                 dash: dash,
                 metrics: metrics,
                 localClients: statsAsync.valueOrNull?['clients'] ?? 0,
@@ -330,15 +389,25 @@ class _AgentHomePageState extends ConsumerState<AgentHomePage> {
                     0,
                 lastSyncLabel: _formatSync(session.lastSyncAt),
                 syncAllowed: syncAllowed,
+                syncing: _syncing,
+                syncConfig: syncCfg,
                 onSync: syncAllowed
                     ? () => SyncBottomSheet.show(context)
                     : () => unawaited(_tryRefreshAndOpenSync()),
                 onOpenNotifications: () => context.push('/notifications'),
+                debtTotal: debtSum.total,
+                debtClients: debtSum.clients,
+                debt0to7: debtSum.d0,
+                debt8to30: debtSum.d8,
+                debt30plus: debtSum.d30,
+                warehouseLowSku: lowSku,
               ),
             ],
           ),
         ),
       ),
+          ),
+        ],
       ),
     );
   }

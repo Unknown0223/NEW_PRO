@@ -85,13 +85,13 @@ class _VisitInProgressScreenState extends ConsumerState<VisitInProgressScreen> {
       await ref.read(heldOrderSchedulerProvider).submitNow(heldId);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Заказ отправлен'), backgroundColor: AppColors.success),
+        const SnackBar(content: Text('Buyurtma yuborildi'), backgroundColor: AppColors.success),
       );
       await _load();
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Не удалось отправить заказ'), backgroundColor: AppColors.error),
+        const SnackBar(content: Text('Buyurtmani yuborib bo\'lmadi'), backgroundColor: AppColors.error),
       );
     } finally {
       if (mounted) setState(() => _sendingHeld = false);
@@ -110,15 +110,15 @@ class _VisitInProgressScreenState extends ConsumerState<VisitInProgressScreen> {
       final send = await showDialog<bool>(
         context: context,
         builder: (ctx) => AlertDialog(
-          title: const Text('Есть заказ в ожидании'),
+          title: const Text('Kutilayotgan buyurtma bor'),
           content: Text(
             held.length == 1
-                ? 'Отправить заказ на сервер перед завершением визита?'
-                : 'Отправить ${held.length} заказа на сервер перед завершением визита?',
+                ? 'Vizitni tugatishdan oldin buyurtmani serverga yuborilsinmi?'
+                : 'Vizitni tugatishdan oldin ${held.length} ta buyurtma serverga yuborilsinmi?',
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Позже')),
-            TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Отправить')),
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Keyinroq')),
+            TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Yuborish')),
           ],
         ),
       );
@@ -156,7 +156,7 @@ class _VisitInProgressScreenState extends ConsumerState<VisitInProgressScreen> {
     );
     if (row != null && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Фотоотчет сохранён'), backgroundColor: AppColors.success),
+        const SnackBar(content: Text('Foto hisobot saqlandi'), backgroundColor: AppColors.success),
       );
     }
   }
@@ -176,7 +176,7 @@ class _VisitInProgressScreenState extends ConsumerState<VisitInProgressScreen> {
             if (mounted) {
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(
-                  content: Text('Сначала добавьте фотоотчет перед отказом'),
+                  content: Text('Rad etishdan oldin foto hisobot qo\'shing'),
                   backgroundColor: AppColors.warning,
                 ),
               );
@@ -187,7 +187,7 @@ class _VisitInProgressScreenState extends ConsumerState<VisitInProgressScreen> {
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(
-                content: Text('Фотоотчёт не проверен — проверьте интернет'),
+                content: Text('Foto hisobot tekshirilmadi — internetni tekshiring'),
                 backgroundColor: AppColors.warning,
               ),
             );
@@ -202,7 +202,7 @@ class _VisitInProgressScreenState extends ConsumerState<VisitInProgressScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Нет причин отказа — синхронизируйте справочник'),
+            content: Text('Rad etish sabablari yo\'q — ma\'lumotnomani sinxronlang'),
             backgroundColor: AppColors.warning,
           ),
         );
@@ -235,7 +235,7 @@ class _VisitInProgressScreenState extends ConsumerState<VisitInProgressScreen> {
         );
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Отказ не сохранён: ${e.message}'), backgroundColor: AppColors.error),
+            SnackBar(content: Text('Rad etish saqlanmadi: ${e.message}'), backgroundColor: AppColors.error),
           );
         }
       } catch (e, st) {
@@ -271,8 +271,8 @@ class _VisitInProgressScreenState extends ConsumerState<VisitInProgressScreen> {
     if (client == null || visit == null) {
       return Scaffold(
         backgroundColor: AppColors.background,
-        appBar: const AgentAppBar(title: S.visitInProgressTitle, showBack: true),
-        body: AgentEmptyState.fill(message: 'Активный визит не найден'),
+        appBar: const AgentAppBar(title: 'Vizit', showBack: true),
+        body: AgentEmptyState.fill(message: 'Faol vizit topilmadi'),
       );
     }
 
@@ -299,13 +299,13 @@ class _VisitInProgressScreenState extends ConsumerState<VisitInProgressScreen> {
     final gps = ref.watch(gpsTrackerProvider);
     final pos = gps.lastPosition;
     final gpsLine = pos != null
-        ? 'GPS: ${pos.latitude.toStringAsFixed(3)}°N ${pos.longitude.toStringAsFixed(3)}°E · точн. ${pos.accuracy.round()}м'
+        ? 'GPS: ${pos.latitude.toStringAsFixed(3)}°N ${pos.longitude.toStringAsFixed(3)}°E · aniqlik ${pos.accuracy.round()} m'
         : S.gpsStarting;
 
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AgentAppBar(
-        title: S.visitInProgressTitle,
+        title: 'Vizit',
         showBack: true,
         belowTitle: Text(
           name,
@@ -354,7 +354,7 @@ class _VisitInProgressScreenState extends ConsumerState<VisitInProgressScreen> {
             alignment: Alignment.bottomCenter,
             child: AgentVisitActionsSheet(
               clientName: name,
-              subtitle: category.isNotEmpty ? 'Категория $category' : '',
+              subtitle: category.isNotEmpty ? 'Toifa $category' : '',
               createOrderEnabled: ref.watch(sessionProvider).permissions.canCreateOrders,
               supervisionEnabled: _supervisionEnabled,
               onPhotoReport: _addPhotoReport,
@@ -368,7 +368,7 @@ class _VisitInProgressScreenState extends ConsumerState<VisitInProgressScreen> {
               onSendHeldOrder: held == null ? null : () => _sendHeldOrderNow(held.id),
               heldOrderHint: held == null
                   ? null
-                  : 'Ожидает · ${formatHeldCountdown(held.remaining())}',
+                  : 'Kutilmoqda · ${formatHeldCountdown(held.remaining())}',
               sendHeldBusy: _sendingHeld,
               onRefusal: _pickRefusal,
               onSupervision: () async {
@@ -377,7 +377,7 @@ class _VisitInProgressScreenState extends ConsumerState<VisitInProgressScreen> {
                 final result = await VisitSupervisionSheet.show(context, supervision);
                 if (result != null && mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Чек-лист сохранён'), backgroundColor: AppColors.success),
+                    const SnackBar(content: Text('Tekshiruv ro\'yxati saqlandi'), backgroundColor: AppColors.success),
                   );
                 }
               },

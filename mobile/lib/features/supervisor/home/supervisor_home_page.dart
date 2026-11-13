@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -6,6 +8,7 @@ import 'package:intl/intl.dart';
 import '../../../core/format/money_display.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
+import '../../../design_system/design_system.dart';
 import '../../auth/auth_provider.dart';
 import '../shared/supervisor_api_parse.dart';
 import '../shared/supervisor_ui.dart';
@@ -55,42 +58,55 @@ class _SupervisorHomePageState extends ConsumerState<SupervisorHomePage> with Si
     final teamKpiAsync = ref.watch(supervisorTeamKpiProvider);
     final dateLabel = DateFormat('dd.MM.yyyy').format(DateTime.now());
 
+    Future<void> resyncHome() async {
+      final ok = (await ref.read(authStateProvider.notifier).resync()).ok;
+      ref.invalidate(supervisorSummaryProvider);
+      ref.invalidate(supervisorProductsProvider);
+      ref.invalidate(supervisorTeamKpiProvider);
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(ok ? 'Синхронизировано' : 'Ошибка синхронизации')),
+        );
+      }
+    }
+
     return Scaffold(
       backgroundColor: AppColors.background,
-      appBar: supervisorAppBar(
-        context,
-        title: 'Главная',
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.insights_outlined),
-            tooltip: 'KPI',
-            onPressed: () => context.push('/sv-kpi'),
+      body: Column(
+        children: [
+          supervisorGlobalChrome(context, onSync: () => unawaited(resyncHome())),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(8, 0, 8, 4),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    'Главная',
+                    style: AppTypography.titleMedium.copyWith(fontWeight: FontWeight.w800),
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.insights_outlined),
+                  tooltip: 'KPI',
+                  onPressed: () => context.push('/sv-kpi'),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.filter_list_rounded),
+                  onPressed: () {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          'Период: сегодня (${DateFormat('dd.MM.yyyy').format(DateTime.now())})',
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ],
+            ),
           ),
-          IconButton(
-            icon: const Icon(Icons.filter_list_rounded),
-            onPressed: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('Период: сегодня (${DateFormat('dd.MM.yyyy').format(DateTime.now())})')),
-              );
-            },
-          ),
-          IconButton(
-            icon: const Icon(Icons.sync),
-            onPressed: () async {
-              final ok = (await ref.read(authStateProvider.notifier).resync()).ok;
-              ref.invalidate(supervisorSummaryProvider);
-              ref.invalidate(supervisorProductsProvider);
-              ref.invalidate(supervisorTeamKpiProvider);
-              if (context.mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text(ok ? 'Синхронизировано' : 'Ошибка синхронизации')),
-                );
-              }
-            },
-          ),
-        ],
-      ),
-      body: RefreshIndicator(
+          Expanded(
+            child: RefreshIndicator(
         color: accent,
         onRefresh: () async {
           ref.invalidate(supervisorSummaryProvider);
@@ -138,43 +154,46 @@ class _SupervisorHomePageState extends ConsumerState<SupervisorHomePage> with Si
             return ListView(
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
               children: [
-                SvCard(
-                  child: Row(
-                    children: [
-                      Container(
-                        width: 44,
-                        height: 44,
-                        decoration: BoxDecoration(
-                          color: accent.withValues(alpha: 0.12),
-                          borderRadius: BorderRadius.circular(10),
+                SaEnter(
+                  preset: SaMotionPreset.rise,
+                  child: SvCard(
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 44,
+                          height: 44,
+                          decoration: BoxDecoration(
+                            color: accent.withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Icon(Icons.payments_outlined, color: accent),
                         ),
-                        child: Icon(Icons.payments_outlined, color: accent),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              children: [
-                                const Expanded(
-                                  child: Text('Сумма заявок', style: AppTypography.caption),
-                                ),
-                                Text(dateLabel, style: AppTypography.caption.copyWith(color: AppColors.textMuted)),
-                              ],
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              '${_fmtMoney(salesSum)} сум',
-                              style: AppTypography.headlineSmall.copyWith(
-                                color: accent,
-                                fontWeight: FontWeight.w800,
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  const Expanded(
+                                    child: Text('Сумма заявок', style: AppTypography.caption),
+                                  ),
+                                  Text(dateLabel, style: AppTypography.caption.copyWith(color: AppColors.textMuted)),
+                                ],
                               ),
-                            ),
-                          ],
+                              const SizedBox(height: 4),
+                              Text(
+                                '${_fmtMoney(salesSum)} сум',
+                                style: AppTypography.headlineSmall.copyWith(
+                                  color: accent,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
                 const SizedBox(height: 12),
@@ -188,78 +207,103 @@ class _SupervisorHomePageState extends ConsumerState<SupervisorHomePage> with Si
                         (team.monthPlan > 0 ? ((team.monthFact / team.monthPlan) * 100).round() : 0);
                     return Padding(
                       padding: const EdgeInsets.only(bottom: 12),
-                      child: SvCard(
-                        onTap: () => context.push('/sv-kpi'),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: Text(
-                                    'KPI план · ${team.agentCount} агент(ов)',
-                                    style: AppTypography.titleMedium.copyWith(fontWeight: FontWeight.w700),
+                      child: SaEnter(
+                        delay: SaStaggerDelay.of(1),
+                        preset: SaMotionPreset.rise,
+                        child: SvCard(
+                          onTap: () => context.push('/sv-kpi'),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      'KPI план · ${team.agentCount} агент(ов)',
+                                      style: AppTypography.titleMedium.copyWith(fontWeight: FontWeight.w700),
+                                    ),
+                                  ),
+                                  SaCountUp(
+                                    value: tPct,
+                                    format: (v) => '${v.round()}%',
+                                    style: TextStyle(fontWeight: FontWeight.w900, color: accent),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 6),
+                              Text(
+                                'Сегодня: ${formatMoneySpaced(team.todaySales)} / ${formatMoneySpaced(team.todayPlan)}',
+                                style: AppTypography.caption,
+                              ),
+                              Text(
+                                'Месяц: ${formatMoneySpaced(team.monthFact)} / ${formatMoneySpaced(team.monthPlan)} · $mPct%',
+                                style: AppTypography.caption,
+                              ),
+                              const SizedBox(height: 8),
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(6),
+                                child: TweenAnimationBuilder<double>(
+                                  tween: Tween(begin: 0, end: (tPct / 100).clamp(0.0, 1.0)),
+                                  duration: SaDurations.data,
+                                  curve: SaCurves.standard,
+                                  builder: (_, v, __) => LinearProgressIndicator(
+                                    value: v,
+                                    minHeight: 7,
+                                    backgroundColor: accent.withValues(alpha: 0.12),
+                                    valueColor: AlwaysStoppedAnimation(accent),
                                   ),
                                 ),
-                                Text('$tPct%', style: TextStyle(fontWeight: FontWeight.w900, color: accent)),
-                              ],
-                            ),
-                            const SizedBox(height: 6),
-                            Text(
-                              'Сегодня: ${formatMoneySpaced(team.todaySales)} / ${formatMoneySpaced(team.todayPlan)}',
-                              style: AppTypography.caption,
-                            ),
-                            Text(
-                              'Месяц: ${formatMoneySpaced(team.monthFact)} / ${formatMoneySpaced(team.monthPlan)} · $mPct%',
-                              style: AppTypography.caption,
-                            ),
-                            const SizedBox(height: 8),
-                            ClipRRect(
-                              borderRadius: BorderRadius.circular(6),
-                              child: LinearProgressIndicator(
-                                value: (tPct / 100).clamp(0.0, 1.0),
-                                minHeight: 7,
-                                backgroundColor: accent.withValues(alpha: 0.12),
-                                valueColor: AlwaysStoppedAnimation(accent),
                               ),
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
                       ),
                     );
                   },
                 ),
-                SvCard(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('Категории по заявкам', style: AppTypography.titleMedium.copyWith(fontWeight: FontWeight.w700)),
-                      const SizedBox(height: 10),
-                      if (categories.isEmpty)
-                        Text(
-                          'За выбранный день продаж по категориям нет',
-                          style: AppTypography.caption.copyWith(color: AppColors.textMuted),
-                        )
-                      else
-                        ...categories.take(6).map((c) => _CategoryBar(name: c.$1, pct: c.$2, accent: accent)),
-                    ],
+                SaEnter(
+                  delay: SaStaggerDelay.of(2),
+                  preset: SaMotionPreset.rise,
+                  child: SvCard(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Категории по заявкам', style: AppTypography.titleMedium.copyWith(fontWeight: FontWeight.w700)),
+                        const SizedBox(height: 10),
+                        if (categories.isEmpty)
+                          Text(
+                            'За выбранный день продаж по категориям нет',
+                            style: AppTypography.caption.copyWith(color: AppColors.textMuted),
+                          )
+                        else
+                          ...categories.take(6).map((c) => _CategoryBar(name: c.$1, pct: c.$2, accent: accent)),
+                      ],
+                    ),
                   ),
                 ),
                 const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Expanded(child: _KpiCircle(value: _fmtPct(visitPctSafe), label: 'Посещения (по визитам)', color: AppColors.warning)),
-                    const SizedBox(width: 8),
-                    Expanded(child: _KpiCircle(value: _fmtPct(successPctSafe), label: 'Успешные визиты', color: accent)),
-                  ],
+                SaEnter(
+                  delay: SaStaggerDelay.of(3),
+                  preset: SaMotionPreset.rise,
+                  child: Row(
+                    children: [
+                      Expanded(child: _KpiCircle(value: _fmtPct(visitPctSafe), label: 'Посещения (по визитам)', color: AppColors.warning)),
+                      const SizedBox(width: 8),
+                      Expanded(child: _KpiCircle(value: _fmtPct(successPctSafe), label: 'Успешные визиты', color: accent)),
+                    ],
+                  ),
                 ),
                 const SizedBox(height: 8),
-                Row(
-                  children: [
-                    Expanded(child: _KpiCircle(value: _fmtPct(photoPctSafe), label: 'Фото отчеты', color: const Color(0xFFF97316))),
-                    const SizedBox(width: 8),
-                    Expanded(child: _KpiCircle(value: _fmtPct(gpsPctSafe), label: 'Посещения (по GPS)', color: AppColors.info)),
-                  ],
+                SaEnter(
+                  delay: SaStaggerDelay.of(4),
+                  preset: SaMotionPreset.rise,
+                  child: Row(
+                    children: [
+                      Expanded(child: _KpiCircle(value: _fmtPct(photoPctSafe), label: 'Фото отчеты', color: const Color(0xFFF97316))),
+                      const SizedBox(width: 8),
+                      Expanded(child: _KpiCircle(value: _fmtPct(gpsPctSafe), label: 'Посещения (по GPS)', color: AppColors.info)),
+                    ],
+                  ),
                 ),
                 const SizedBox(height: 8),
                 Text(
@@ -267,17 +311,21 @@ class _SupervisorHomePageState extends ConsumerState<SupervisorHomePage> with Si
                   style: AppTypography.caption.copyWith(color: AppColors.textSecondary),
                 ),
                 const SizedBox(height: 12),
-                TabBar(
-                  controller: _tabs,
-                  labelColor: accent,
-                  unselectedLabelColor: AppColors.textSecondary,
-                  indicatorColor: accent,
-                  labelStyle: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
-                  tabs: const [
-                    Tab(text: 'По категориям'),
-                    Tab(text: 'Продажа ТП'),
-                    Tab(text: 'Визиты'),
-                  ],
+                SaEnter(
+                  delay: SaStaggerDelay.of(5),
+                  preset: SaMotionPreset.rise,
+                  child: TabBar(
+                    controller: _tabs,
+                    labelColor: accent,
+                    unselectedLabelColor: AppColors.textSecondary,
+                    indicatorColor: accent,
+                    labelStyle: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
+                    tabs: const [
+                      Tab(text: 'По категориям'),
+                      Tab(text: 'Продажа ТП'),
+                      Tab(text: 'Визиты'),
+                    ],
+                  ),
                 ),
                 SizedBox(
                   height: 260,
@@ -294,6 +342,9 @@ class _SupervisorHomePageState extends ConsumerState<SupervisorHomePage> with Si
             );
           },
         ),
+            ),
+          ),
+        ],
       ),
     );
   }

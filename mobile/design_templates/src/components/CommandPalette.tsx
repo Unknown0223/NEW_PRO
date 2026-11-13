@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowRight,
   Code2,
+  Server,
   CornerDownLeft,
   Gauge,
   ClipboardCheck,
@@ -36,6 +37,7 @@ const viewIcons: Record<string, LucideIcon> = {
   gauge: Gauge,
   audit: ClipboardCheck,
   code: Code2,
+  stack: Server,
 };
 
 type Item = {

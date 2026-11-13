@@ -51,6 +51,9 @@ Future<void> main() async {
       return true;
     };
 
+    // Motion Lab default: full (emulyator scale=0 ni yengadi).
+    SaMotionSettings.level.value = SaMotionLevel.full;
+    saApplyMotionScheduler(SaMotionLevel.full);
     runApp(const ProviderScope(child: SalesDocApp()));
     // DB ochishni birinchi kadrdan keyinga — cold start ANR kamayadi.
     unawaited(_initServerClockPersistence());

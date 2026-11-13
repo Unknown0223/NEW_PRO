@@ -79,29 +79,31 @@ class HomePlanHero extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 10),
-                    Text.rich(
-                      TextSpan(
-                        children: [
-                          TextSpan(
-                            text: '$pct',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 28,
-                              fontWeight: FontWeight.w800,
-                              height: 1,
-                              letterSpacing: -1,
-                            ),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        SaCountUp(
+                          value: pct,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 28,
+                            fontWeight: FontWeight.w800,
+                            height: 1,
+                            letterSpacing: -1,
                           ),
-                          TextSpan(
-                            text: '%',
+                        ),
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 2, left: 1),
+                          child: Text(
+                            '%',
                             style: TextStyle(
                               color: Colors.white.withValues(alpha: 0.7),
                               fontSize: 14,
                               fontWeight: FontWeight.w700,
                             ),
                           ),
-                        ],
-                      ),
+                        ),
+                      ],
                     ),
                     const SizedBox(height: 6),
                     Text(

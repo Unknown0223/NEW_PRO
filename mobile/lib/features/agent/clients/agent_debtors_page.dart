@@ -46,7 +46,7 @@ class AgentDebtorsPage extends ConsumerWidget {
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AgentAppBar(
-        title: 'Должники',
+        title: 'Qarzdorlar',
         useShellDrawer: true,
         showBack: true,
         actions: [
@@ -67,7 +67,7 @@ class AgentDebtorsPage extends ConsumerWidget {
                 children: [
                   SizedBox(
                     height: MediaQuery.sizeOf(context).height * 0.45,
-                    child: AgentEmptyState.fill(message: S.emptyDebtors),
+                    child: AgentEmptyState.fill(message: 'Qarzdorlar yo\'q'),
                   ),
                 ],
               ),
@@ -87,7 +87,7 @@ class AgentDebtorsPage extends ConsumerWidget {
                 SaEnter(
                   preset: SaMotionPreset.rise,
                   child: AgentBalanceBanner(
-                    label: 'Общий долг:',
+                    label: 'Jami qarz:',
                     value: formatMoneyUz(total),
                   ),
                 ),
@@ -96,7 +96,7 @@ class AgentDebtorsPage extends ConsumerWidget {
                   child: Padding(
                     padding: const EdgeInsets.only(bottom: 8, left: 4, top: 4),
                     child: Text(
-                      'Найдено: ${visible.length}',
+                      'Topildi: ${visible.length}',
                       style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.textSecondary),
                     ),
                   ),

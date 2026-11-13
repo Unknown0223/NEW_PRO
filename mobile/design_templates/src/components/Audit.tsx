@@ -6,6 +6,7 @@ import {
 import { auditModules, findings, moduleOf, repoScreens, repoStats, type Coverage } from "../data/audit";
 import { screens, type ScreenKey } from "../data/design";
 import { Badge, Reveal, SectionHead, useToast } from "./ui";
+import { saveText } from "../utils/zip";
 import { cn } from "../utils/cn";
 
 const SEV: Record<string, { label: string; fg: string; bg: string; icon: LucideIcon }> = {
@@ -98,13 +99,8 @@ export default function Audit({ onOpenScreen }: { onOpenScreen: (s: ScreenKey) =
       findings,
       checks: checks.map((c) => ({ id: c.id, label: c.label, passed: results[c.id] ?? null })),
     };
-    const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: "application/json" }));
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "sales-arena-audit.json";
-    a.click();
-    URL.revokeObjectURL(url);
-    toast("Audit hisoboti yuklab olindi");
+    const res = saveText(JSON.stringify(data, null, 2), "sales-arena-audit.json", "application/json");
+    toast(res.ok ? "Audit hisoboti yuklab olindi" : "Yangi oynada ochildi");
   };
 
   return (

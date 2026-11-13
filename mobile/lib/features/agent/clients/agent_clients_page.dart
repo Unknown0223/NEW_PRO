@@ -113,7 +113,7 @@ class _AgentClientsPageState extends ConsumerState<AgentClientsPage> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(policy.denialMessage ?? 'Синхронизация недоступна'),
+            content: Text(policy.denialMessage ?? 'Sinxronlash mumkin emas'),
             backgroundColor: AppColors.warning,
           ),
         );
@@ -134,8 +134,8 @@ class _AgentClientsPageState extends ConsumerState<AgentClientsPage> {
       }
       final err = result.error ?? '';
       final msg = ok
-          ? 'Клиенты обновлены (${result.clients})'
-          : (err.isNotEmpty ? err : 'Ошибка синхронизации');
+          ? 'Mijozlar yangilandi (${result.clients})'
+          : (err.isNotEmpty ? err : 'Sinxronlash xatosi');
       if (!silent || !ok) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -162,7 +162,7 @@ class _AgentClientsPageState extends ConsumerState<AgentClientsPage> {
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AgentAppBar(
-        title: S.outlets,
+        title: 'Savdo nuqtalari',
         useShellDrawer: true,
         actions: [
           AgentIconButton(icon: Icons.search, onPressed: () => context.push('/search?from=/clients')),
@@ -302,7 +302,7 @@ class _AgentClientsPageState extends ConsumerState<AgentClientsPage> {
                     child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                   )
                 : const Icon(Icons.sync),
-            label: const Text('Синхронизация'),
+            label: const Text('Sinxronlash'),
           ),
         ),
       );
@@ -355,7 +355,7 @@ class _AgentClientsPageState extends ConsumerState<AgentClientsPage> {
 class _OutletCategoryChips extends ConsumerWidget {
   const _OutletCategoryChips();
 
-  static final _filters = [S.dayAll, 'A', 'B', 'C', S.withDebt, 'Сброс'];
+  static final _filters = [S.dayAll, 'A', 'B', 'C', S.withDebt, 'Tozalash'];
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -380,7 +380,7 @@ class _OutletCategoryChips extends ConsumerWidget {
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Row(
         children: _filters.map((f) {
-          final isReset = f == 'Сброс';
+          final isReset = f == 'Tozalash';
           final isActive = isReset ? filtersActive : activeLabel == f;
           return Padding(
             padding: const EdgeInsets.only(right: 8),

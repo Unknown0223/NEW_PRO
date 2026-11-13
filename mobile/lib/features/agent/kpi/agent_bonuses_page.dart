@@ -126,7 +126,7 @@ class _AgentBonusesPageState extends ConsumerState<AgentBonusesPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.background,
-      appBar: const AgentAppBar(title: 'Мои бонусы', showBack: true),
+      appBar: const AgentAppBar(title: 'Mening bonuslarim', showBack: true),
       body: RefreshIndicator(
         onRefresh: _load,
         child: ListView(

@@ -70,7 +70,7 @@ class _AgentMiscOrdersPageState extends ConsumerState<AgentMiscOrdersPage> {
         ? cfg?.misc.allowExchangeRequest == true
         : cfg?.orders.allowReturnFromShelf == true;
 
-    final title = _isExchange ? 'Запрос на обмен' : 'Возврат с полки';
+    final title = _isExchange ? 'Almashtirish (Obmen)' : 'Vazvrat · S polki';
 
     return Scaffold(
       backgroundColor: AppColors.background,

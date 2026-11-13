@@ -14,7 +14,7 @@ import '../../design_system/design_system.dart';
 import 'auth_provider.dart';
 import 'pin_pad.dart';
 
-/// Mahalliy qulf — PIN darhol ochadi; biometrik ixtiyoriy (telefon skaneri).
+/// Shablon Auth PIN unlock — BrandWave + square dots + bio keypad.
 class PinUnlockScreen extends ConsumerStatefulWidget {
   const PinUnlockScreen({super.key});
 
@@ -26,10 +26,10 @@ class _PinUnlockScreenState extends ConsumerState<PinUnlockScreen> {
   static const _pinLen = 4;
   String _pin = '';
   bool _bioEnabled = false;
-  String _bioLabel = S.touchId;
   bool _bioInProgress = false;
   bool _pinUnlocking = false;
   bool _initialized = false;
+  bool _errorShake = false;
   int _bioGeneration = 0;
 
   @override
@@ -43,18 +43,13 @@ class _PinUnlockScreenState extends ConsumerState<PinUnlockScreen> {
     final prefs = ref.read(biometricPreferencesProvider);
     final enabled = await prefs.isEnabled();
     final available = enabled && await ref.read(biometricServiceProvider).isAvailable();
-    final label = available
-        ? await ref.read(biometricServiceProvider).getBiometricLabel()
-        : S.touchId;
 
     if (!mounted) return;
     setState(() {
       _bioEnabled = available;
-      _bioLabel = label;
       _initialized = true;
     });
 
-    // Avto-biometrik — foydalanuvchi PIN terayotganda bekor qilinadi.
     if (available) {
       await Future<void>.delayed(const Duration(milliseconds: 350));
       if (!mounted || _pin.isNotEmpty || _pinUnlocking) return;
@@ -86,10 +81,12 @@ class _PinUnlockScreenState extends ConsumerState<PinUnlockScreen> {
 
   Future<void> _onDigit(String d) async {
     if (_pinUnlocking || _pin.length >= _pinLen) return;
-    // PIN kiritilayotganda biometrik kutish PIN padni bloklamasligi kerak.
     _cancelBiometricPrompt();
     final next = _pin + d;
-    setState(() => _pin = next);
+    setState(() {
+      _pin = next;
+      _errorShake = false;
+    });
     if (next.length != _pinLen) return;
 
     setState(() => _pinUnlocking = true);
@@ -100,15 +97,21 @@ class _PinUnlockScreenState extends ConsumerState<PinUnlockScreen> {
       setState(() {
         _pin = '';
         _pinUnlocking = false;
+        _errorShake = true;
+      });
+      Future<void>.delayed(const Duration(milliseconds: 520), () {
+        if (mounted) setState(() => _errorShake = false);
       });
     }
-    // ready/loading — ekran almashtiriladi; state tozalash shart emas.
   }
 
   void _backspace() {
     if (_pinUnlocking || _pin.isEmpty) return;
     _cancelBiometricPrompt();
-    setState(() => _pin = _pin.substring(0, _pin.length - 1));
+    setState(() {
+      _pin = _pin.substring(0, _pin.length - 1);
+      _errorShake = false;
+    });
   }
 
   String _userSubtitle(SessionState session) {
@@ -136,6 +139,7 @@ class _PinUnlockScreenState extends ConsumerState<PinUnlockScreen> {
         setState(() {
           _pin = '';
           _pinUnlocking = false;
+          _errorShake = true;
         });
       }
     });
@@ -143,118 +147,133 @@ class _PinUnlockScreenState extends ConsumerState<PinUnlockScreen> {
     final session = ref.watch(sessionProvider);
     final auth = ref.watch(authStateProvider);
     final userSubtitle = _userSubtitle(session);
+    final initials = () {
+      final n = session.user?.name.trim() ?? '';
+      if (n.isEmpty) return 'SA';
+      final parts = n.split(RegExp(r'\s+'));
+      if (parts.length >= 2) {
+        return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
+      }
+      return n.substring(0, n.length.clamp(0, 2)).toUpperCase();
+    }();
 
     return Scaffold(
-      backgroundColor: AppColors.background,
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 26),
-          child: Column(
-            children: [
-              const SizedBox(height: 56),
-              SaEnter(
-                preset: SaMotionPreset.spring,
-                child: Column(
-                  children: [
-                    Container(
-                      width: 58,
-                      height: 58,
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(18),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.08),
-                            blurRadius: 24,
-                            offset: const Offset(0, 8),
-                          ),
-                        ],
-                      ),
-                      child: const Icon(
-                        Icons.lock_rounded,
-                        size: 26,
-                        color: AppColors.primary,
-                      ),
-                    ),
-                    const SizedBox(height: 18),
-                    Text(
-                      S.pinEnter,
-                      style: AppTypography.headlineMedium.copyWith(
-                        fontSize: 22,
-                        fontWeight: FontWeight.w800,
-                        color: AppColors.textTitle,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                    if (userSubtitle.isNotEmpty) ...[
-                      const SizedBox(height: 4),
-                      Text(
-                        userSubtitle,
-                        style: AppTypography.bodyMedium.copyWith(
-                          fontSize: 13,
-                          color: AppColors.textMuted,
+      backgroundColor: Colors.white,
+      body: Stack(
+        fit: StackFit.expand,
+        children: [
+          const IgnorePointer(
+            child: SaBrandWave(topFraction: 0.88, animate: true),
+          ),
+          SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 26),
+              child: Column(
+                children: [
+                  const SizedBox(height: 20),
+                  Row(
+                    children: [
+                      Container(
+                        width: 40,
+                        height: 40,
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          color: SaBrand.navy,
+                          borderRadius: BorderRadius.circular(99),
                         ),
-                        textAlign: TextAlign.center,
+                        child: Text(
+                          initials,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w800,
+                            fontSize: 13,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const SaBrandWordmark(size: 16),
+                            if (userSubtitle.isNotEmpty)
+                              Text(
+                                userSubtitle,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: AppTypography.bodyMedium.copyWith(
+                                  fontSize: 12,
+                                  color: const Color(0xFF677386),
+                                ),
+                              ),
+                          ],
+                        ),
                       ),
                     ],
-                  ],
-                ),
-              ),
-              const SizedBox(height: 30),
-              SaEnter(
-                delay: SaStaggerDelay.of(1),
-                preset: SaMotionPreset.rise,
-                child: PinDots(
-                  filled: _pin.length,
-                  pinLength: _pinLen,
-                  variant: PinDotsVariant.unlock,
-                ),
-              ),
-              if (auth.error != null) ...[
-                const SizedBox(height: 12),
-                Text(
-                  auth.error!,
-                  textAlign: TextAlign.center,
-                  style: AppTypography.bodySmall.copyWith(color: AppColors.error),
-                ),
-              ],
-              const SizedBox(height: 38),
-              if (!_initialized)
-                const SizedBox(height: 248)
-              else
-                PinPad(
-                  // Biometrik dialog ochiq bo‘lsa ham PIN terish mumkin.
-                  enabled: !_pinUnlocking,
-                  variant: PinPadVariant.unlock,
-                  onDigit: (d) {
-                    unawaited(_onDigit(d));
-                  },
-                  onBackspace: _backspace,
-                ),
-              const SizedBox(height: 22),
-              if (_bioEnabled)
-                PinBiometricButton(
-                  label: _bioLabel,
-                  loading: _bioInProgress && !_pinUnlocking,
-                  onPressed: () => _tryBiometric(),
-                ),
-              const Spacer(),
-              SaPressable(
-                onTap: _pinUnlocking
-                    ? null
-                    : () => ref.read(authStateProvider.notifier).logout(),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  child: Text(
-                    'Выйти',
-                    style: AppTypography.bodySmall.copyWith(color: AppColors.textMuted),
                   ),
-                ),
+                  const SizedBox(height: 36),
+                  Text(
+                    S.pinEnter,
+                    style: AppTypography.headlineMedium.copyWith(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w800,
+                      color: const Color(0xFF0E1420),
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 22),
+                  SaAuthShake(
+                    shake: _errorShake,
+                    child: PinDots(
+                      filled: _pin.length,
+                      pinLength: _pinLen,
+                      variant: PinDotsVariant.unlock,
+                      error: _errorShake || auth.error != null,
+                    ),
+                  ),
+                  if (auth.error != null) ...[
+                    const SizedBox(height: 10),
+                    Text(
+                      auth.error!,
+                      textAlign: TextAlign.center,
+                      style: AppTypography.bodySmall.copyWith(color: AppColors.error),
+                    ),
+                  ] else if (_bioInProgress && !_pinUnlocking) ...[
+                    const SizedBox(height: 10),
+                    Text(
+                      'Biometrika tekshirilmoqda…',
+                      textAlign: TextAlign.center,
+                      style: AppTypography.bodySmall.copyWith(color: const Color(0xFF677386)),
+                    ),
+                  ],
+                  const Spacer(),
+                  if (!_initialized)
+                    const SizedBox(height: 220)
+                  else
+                    PinPad(
+                      enabled: !_pinUnlocking,
+                      variant: PinPadVariant.unlock,
+                      showBiometricSlot: _bioEnabled,
+                      onBiometric: () => unawaited(_tryBiometric()),
+                      onDigit: (d) => unawaited(_onDigit(d)),
+                      onBackspace: _backspace,
+                    ),
+                  const SizedBox(height: 18),
+                  TextButton(
+                    onPressed: _pinUnlocking
+                        ? null
+                        : () => ref.read(authStateProvider.notifier).logout(),
+                    child: Text(
+                      'Выйти',
+                      style: AppTypography.bodySmall.copyWith(color: const Color(0xFF677386)),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                ],
               ),
-              const SizedBox(height: 8),
-            ],
+            ),
           ),
-        ),
+        ],
       ),
     );
   }

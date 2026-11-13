@@ -11,6 +11,7 @@ import '../../../core/api/field_api.dart';
 import '../../../core/auth/session.dart';
 import '../../../core/ui/quick_panel_sheet.dart';
 import '../../../core/utils/external_actions.dart';
+import '../../../design_system/design_system.dart';
 
 /// «Скоро» — dialog (faqat haqiqatan yo‘q funksiyalar).
 Future<void> showSupervisorSoon(BuildContext context, {String? feature}) {
@@ -55,6 +56,25 @@ class SvSoonBadge extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Shablon `GlobalChrome` — bosh sahifa ustuni (agent/expeditor uslubi).
+Widget supervisorGlobalChrome(
+  BuildContext context, {
+  VoidCallback? onSync,
+  bool syncReady = true,
+}) {
+  final now = TimeOfDay.now();
+  final clock =
+      '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
+  return SaGlobalChromeBar(
+    roleLabel: 'Nazorat',
+    syncClock: clock,
+    syncReady: syncReady,
+    onMenu: () => context.push('/sv-menu'),
+    onSync: onSync,
+    onQuick: () => showQuickPanelSheet(context),
+  );
 }
 
 PreferredSizeWidget supervisorAppBar(
@@ -188,13 +208,10 @@ class SvCard extends StatelessWidget {
       child: child,
     );
     if (onTap == null) return body;
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(14),
-        child: body,
-      ),
+    return SaPressable(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(14),
+      child: body,
     );
   }
 }

@@ -58,7 +58,7 @@ class _AgentKpiRoutePageState extends ConsumerState<AgentKpiRoutePage> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Text('Выберите месяц', style: AppTypography.headlineSmall.copyWith(fontSize: 16)),
+                Text('Oyni tanlang', style: AppTypography.headlineSmall.copyWith(fontSize: 16)),
                 const SizedBox(height: 10),
                 for (final m in months)
                   ListTile(
@@ -148,7 +148,7 @@ class _AgentKpiRoutePageState extends ConsumerState<AgentKpiRoutePage> {
     final code = (d.agentCode ?? '').trim().isNotEmpty
         ? d.agentCode!.trim()
         : fallbackCode.trim();
-    if (name.isEmpty && code.isEmpty) return 'Месячный отчёт KPI';
+    if (name.isEmpty && code.isEmpty) return 'Oylik KPI hisobot';
     if (code.isEmpty) return name;
     if (name.isEmpty) return code;
     return '$name · $code';
@@ -199,7 +199,7 @@ class _MonthBody extends StatelessWidget {
             children: [
               Expanded(
                 child: Text(
-                  'KPI · план на сегодня',
+                  'KPI · bugungi reja',
                   style: AppTypography.headlineSmall.copyWith(fontSize: 14),
                 ),
               ),
@@ -212,7 +212,7 @@ class _MonthBody extends StatelessWidget {
                   tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                 ),
                 child: const Text(
-                  'Подробнее →',
+                  'Batafsil →',
                   style: TextStyle(fontWeight: FontWeight.w800, fontSize: 12.5),
                 ),
               ),
@@ -226,8 +226,8 @@ class _MonthBody extends StatelessWidget {
             child: AgentSurfaceCard(
               child: Text(
                 data.hasPlans
-                    ? 'Нет активных групп KPI.'
-                    : 'Одобренных KPI-планов на месяц нет.',
+                    ? 'Faol KPI guruhlari yo\'q.'
+                    : 'Oy uchun tasdiqlangan KPI rejalar yo\'q.',
                 style: AppTypography.bodySmall.copyWith(color: AppColors.textSecondary),
               ),
             ),
@@ -348,7 +348,7 @@ class _TodaySalesHero extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'ПРОДАЖИ СЕГОДНЯ',
+                          'BUGUNGI SAVDO',
                           style: TextStyle(
                             color: Colors.white.withValues(alpha: 0.92),
                             fontSize: 12.5,
@@ -368,7 +368,7 @@ class _TodaySalesHero extends StatelessWidget {
                         ),
                         const SizedBox(height: 6),
                         Text(
-                          'нужно: ${formatMoneySpaced(plan)} сум',
+                          'kerak: ${formatMoneySpaced(plan)} so\'m',
                           style: const TextStyle(
                             color: Colors.white,
                             fontSize: 15,
@@ -378,7 +378,7 @@ class _TodaySalesHero extends StatelessWidget {
                         if (vs != null) ...[
                           const SizedBox(height: 3),
                           Text(
-                            '${vs >= 0 ? '+' : ''}${vs.toStringAsFixed(1)}% к вчерашнему дню',
+                            '${vs >= 0 ? '+' : ''}${vs.toStringAsFixed(1)}% kechagiga nisbatan',
                             style: TextStyle(
                               color: vs >= 0 ? AppColors.kpiChartGreen : const Color(0xFFFECACA),
                               fontSize: 13.5,
@@ -393,7 +393,7 @@ class _TodaySalesHero extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
                       Text(
-                        'ИСПОЛНЕНИЕ',
+                        'BAJARILISH',
                         style: TextStyle(
                           color: Colors.white.withValues(alpha: 0.92),
                           fontSize: 11.5,
@@ -409,7 +409,7 @@ class _TodaySalesHero extends StatelessWidget {
                         ),
                       ),
                       Text(
-                        '$workLeft/$workTotal раб. дн.',
+                        '$workLeft/$workTotal ish kuni',
                         style: const TextStyle(
                           color: Colors.white,
                           fontSize: 13,
@@ -435,18 +435,18 @@ class _TodaySalesHero extends StatelessWidget {
                 children: [
                   Expanded(
                     child: _HeroStat(
-                      overSum > 0 ? 'перевыполнение' : 'осталось',
+                      overSum > 0 ? 'ortiqcha' : 'qoldi',
                       overSum > 0 ? '+${formatMoneySpaced(overSum)}' : formatMoneySpaced(remaining),
                     ),
                   ),
                   Expanded(
-                    child: _HeroStat('перенос', carryForward > 0 ? formatMoneySpaced(carryForward) : '0'),
+                    child: _HeroStat('ko\'chirish', carryForward > 0 ? formatMoneySpaced(carryForward) : '0'),
                   ),
                 ],
               ),
               const SizedBox(height: 10),
               Text(
-                'месяц: ${formatMoneySpaced(monthFact)} / ${formatMoneySpaced(monthPlan)}'
+                'oy: ${formatMoneySpaced(monthFact)} / ${formatMoneySpaced(monthPlan)}'
                 '${monthPct != null ? ' · ${kpiPctInt(monthPct)}%' : ''}',
                 style: const TextStyle(
                   color: Colors.white,
@@ -598,7 +598,7 @@ class _KpiTile extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           const Text(
-            'Факт',
+            'Fakt',
             style: TextStyle(
               fontSize: 12,
               fontWeight: FontWeight.w800,
@@ -617,7 +617,7 @@ class _KpiTile extends StatelessWidget {
           ),
           const SizedBox(height: 5),
           Text(
-            'план ${kpiFormatPrimary(dayPlan, metric)}',
+            'reja ${kpiFormatPrimary(dayPlan, metric)}',
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: const TextStyle(
@@ -628,7 +628,7 @@ class _KpiTile extends StatelessWidget {
           ),
           if (dayOver > 0)
             Text(
-              'пере+ ${kpiFormatPrimary(dayOver, metric)}',
+              'ortiq +${kpiFormatPrimary(dayOver, metric)}',
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(
@@ -639,7 +639,7 @@ class _KpiTile extends StatelessWidget {
             )
           else
             Text(
-              'ост. ${kpiFormatPrimary(dayRem, metric)}',
+              'qoldiq ${kpiFormatPrimary(dayRem, metric)}',
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
@@ -660,7 +660,7 @@ class _KpiTile extends StatelessWidget {
           ),
           const SizedBox(height: 7),
           Text(
-            'мес. ${kpiFormatPrimary(monthFact, metric)} / ${kpiFormatPrimary(monthPlan, metric)}'
+            'oy ${kpiFormatPrimary(monthFact, metric)} / ${kpiFormatPrimary(monthPlan, metric)}'
             ' · ${kpiPctInt(group.executionPct)}%',
             maxLines: 2,
             overflow: TextOverflow.ellipsis,

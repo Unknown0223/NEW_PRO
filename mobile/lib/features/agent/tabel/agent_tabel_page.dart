@@ -36,7 +36,7 @@ class AgentTabelPage extends ConsumerWidget {
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AgentAppBar(
-        title: 'Табель · ${tabelMonthTitle(month)}',
+        title: 'Tabel · ${tabelMonthTitle(month)}',
         showBack: true,
         belowTitle: _MonthSwitcher(
           month: month,
@@ -203,7 +203,7 @@ class _SummaryCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            '${tabelMonthTitle(month)} · Итого',
+            '${tabelMonthTitle(month)} · Jami',
             style: const TextStyle(
               fontSize: 13,
               fontWeight: FontWeight.w800,
@@ -224,18 +224,18 @@ class _SummaryCard extends StatelessWidget {
           const SizedBox(height: 14),
           Row(
             children: [
-              _stat('${counts.worked}', 'Работал'),
-              _stat('${counts.absent}', 'Отсутствовал'),
-              _stat('${counts.holiday}', 'Выходной'),
-              _stat('${counts.halfDay}', 'Полдня'),
+              _stat('${counts.worked}', 'Ishlagan'),
+              _stat('${counts.absent}', 'Kelmagan'),
+              _stat('${counts.holiday}', 'Dam olish'),
+              _stat('${counts.halfDay}', 'Yarim kun'),
             ],
           ),
           const SizedBox(height: 12),
           Row(
             children: [
-              _stat('${counts.vacation}', 'Отпуск'),
-              _stat('${counts.sick}', 'Больничный'),
-              _stat('${counts.trip}', 'Командировка'),
+              _stat('${counts.vacation}', 'Ta\'til'),
+              _stat('${counts.sick}', 'Kasallik'),
+              _stat('${counts.trip}', 'Xizmat safari'),
               const Expanded(child: SizedBox.shrink()),
             ],
           ),
@@ -305,7 +305,7 @@ class _CalendarCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Календарь',
+            'Kalendar',
             style: AppTypography.headlineSmall
                 .copyWith(fontWeight: FontWeight.w900, fontSize: 17),
           ),
@@ -467,7 +467,7 @@ class _LegendCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Text(
-            'Легенда',
+            'Belgilar',
             style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900),
           ),
           const SizedBox(height: 10),
@@ -545,7 +545,7 @@ class _RecentDaysCard extends StatelessWidget {
             const Padding(
               padding: EdgeInsets.symmetric(vertical: 8),
               child: Text(
-                'Нет данных',
+                'Ma\'lumot yo\'q',
                 style: TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.w700,
@@ -655,7 +655,7 @@ class _RecentDaysCard extends StatelessWidget {
     if (comment.isNotEmpty) return comment;
     if (meta.backend == 'worked' || meta.backend == 'half_day') {
       final parts = <String>[];
-      if (d.visits > 0) parts.add('${d.visits} точек');
+      if (d.visits > 0) parts.add('${d.visits} nuqta');
       if (d.sales != 0) parts.add('${tabelCompactSum(d.sales)} сум');
       if (parts.isEmpty) return meta.label;
       return parts.join(' · ');
