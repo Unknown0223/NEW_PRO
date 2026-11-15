@@ -1,0 +1,160 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", "Segoe UI", Arial, sans-serif;
+  --color-brand-50: #eff8f4;
+  --color-brand-100: #dceee6;
+  --color-brand-200: #b6dccb;
+  --color-brand-500: #39836a;
+  --color-brand-600: #28735b;
+  --color-brand-700: #205e4b;
+  --color-brand-800: #1d4c40;
+  --color-brand-900: #173f38;
+  --color-canvas: #f5f7f6;
+}
+
+:root {
+  color-scheme: light;
+  font-family: var(--font-sans);
+  color: #243b34;
+  background: #f5f7f6;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+}
+body {
+  margin: 0;
+  min-width: 360px;
+}
+@layer base {
+  button,
+  input,
+  select,
+  textarea {
+    font: inherit;
+  }
+}
+button,
+select {
+  cursor: pointer;
+}
+button:disabled {
+  cursor: not-allowed;
+}
+button,
+a,
+input,
+select,
+textarea {
+  outline-offset: 3px;
+}
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid #39836a;
+}
+input[type="checkbox"],
+input[type="radio"] {
+  accent-color: #28735b;
+}
+input[type="number"] {
+  -moz-appearance: textfield;
+}
+input::-webkit-inner-spin-button,
+input::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+select {
+  appearance: auto;
+}
+::selection {
+  background: #b6dccb;
+}
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #c8d5ce transparent;
+}
+
+@layer components {
+  .card {
+    @apply rounded-xl border border-[#e1e8e3] bg-white shadow-[0_2px_5px_0_rgba(25,55,40,0.025)];
+  }
+  .field {
+    @apply h-10 w-full rounded-lg border border-[#dce4df] bg-white px-3 text-[13px] text-[#263e35] transition focus:border-brand-500 focus:ring-2 focus:ring-brand-100;
+  }
+  .field-label {
+    @apply mb-1.5 block text-[11px] font-semibold tracking-[0.025em] text-[#738078];
+  }
+  .btn {
+    @apply inline-flex h-9 shrink-0 items-center justify-center gap-2 rounded-lg border px-3.5 text-xs font-semibold transition disabled:opacity-40;
+  }
+  .btn-primary {
+    @apply border-brand-700 bg-brand-700 text-white shadow-xs hover:bg-brand-800;
+  }
+  .btn-secondary {
+    @apply border-[#dce4df] bg-white text-[#42584e] hover:border-brand-200 hover:bg-brand-50;
+  }
+  .btn-ghost {
+    @apply border-transparent bg-transparent text-[#63766b] hover:bg-[#edf2ee];
+  }
+  .btn-danger {
+    @apply border-red-200 bg-red-50 text-red-700 hover:bg-red-100;
+  }
+  .icon-btn {
+    @apply inline-flex size-7 items-center justify-center rounded-md text-[#87958c] transition hover:bg-[#edf2ee] hover:text-brand-700 disabled:opacity-25;
+  }
+  .badge {
+    @apply inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] leading-4 font-semibold whitespace-nowrap;
+  }
+  .section-title {
+    @apply text-sm font-semibold tracking-[-0.015em] text-[#263e35];
+  }
+  .table-head {
+    @apply border-y border-[#e5ebe7] bg-[#f8faf9] text-[10px] font-semibold tracking-[0.045em] text-[#7a887f] uppercase;
+  }
+}
+
+@keyframes enter {
+  from {
+    opacity: 0;
+    transform: translateY(5px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.animate-enter {
+  animation: enter 0.2s ease-out;
+}
+.numeric {
+  font-variant-numeric: tabular-nums;
+}
+.sidebar-pattern {
+  background-image: radial-gradient(ellipse at 0% 0%, rgb(102 163 125 / 15%), transparent 65%);
+}
+@keyframes expand-side {
+  from {
+    opacity: 0;
+    transform: translateX(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+.animate-expand {
+  animation: expand-side 0.18s ease-out;
+}
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
+}
