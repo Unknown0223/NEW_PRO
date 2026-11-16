@@ -48,10 +48,11 @@ function Sync-Tree {
   $tar = Join-Path $env:TEMP "salec-deploy-$name.tar.gz"
   if (Test-Path $tar) { Remove-Item $tar -Force }
 
+  # `dist` umumiy exclude qilinmaydi: vendor/plans-proposal va vendor/pivot-engine
+  # Docker build uchun dist/index.js shart (eski --exclude=dist yangi vendorni bo‘sh qoldirardi).
   $excludes = @(
     "--exclude=node_modules",
     "--exclude=.next",
-    "--exclude=dist",
     "--exclude=coverage",
     "--exclude=.git",
     "--exclude=.turbo",
