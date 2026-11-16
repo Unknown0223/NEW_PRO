@@ -159,9 +159,9 @@ export function OrderPaymentWorkspace({ tenantSlug }: Props) {
     mutationFn: async () => {
       if (!clientIdParam && orderIdsParam.length === 0) throw new Error("NO_CLIENT");
       const deskRaw = filters.cashDeskId.trim();
-      const deskId = deskRaw ? Number.parseInt(deskRaw, 10) : null;
-      const cash_desk_id =
-        deskId != null && Number.isFinite(deskId) && deskId > 0 ? deskId : null;
+      const deskId = deskRaw ? Number.parseInt(deskRaw, 10) : NaN;
+      if (!Number.isFinite(deskId) || deskId < 1) throw new Error("NO_CASH_DESK");
+      const cash_desk_id = deskId;
       const paid_at = toIsoFromLocal(filters.paidAtLocal);
 
       const methodById = new Map(paymentMethods.map((m) => [m.id, m]));
@@ -211,8 +211,16 @@ export function OrderPaymentWorkspace({ tenantSlug }: Props) {
         setFormErr("Сумма оплаты по заказу не может превышать сумму заказа.");
         return;
       }
+      if (e instanceof Error && e.message === "NO_CASH_DESK") {
+        setFormErr("Выберите кассу.");
+        return;
+      }
       if (axios.isAxiosError(e)) {
         const code = (e.response?.data as { error?: string } | undefined)?.error;
+        if (code === "CashDeskRequired") {
+          setFormErr("Выберите кассу.");
+          return;
+        }
         if (code === "BadCashDesk") {
           setFormErr("Указана несуществующая или неактивная касса.");
           return;

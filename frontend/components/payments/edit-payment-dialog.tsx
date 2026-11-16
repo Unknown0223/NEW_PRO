@@ -208,9 +208,10 @@ export function EditPaymentDialog({
   const filteredCashDesks = useMemo(() => {
     const all = cashDesksQ.data ?? [];
     const scope = linkageQ.data;
-    if (!scope?.constrained) return all;
+    if (!scope?.constrained || scope.cash_desk_ids.length === 0) return all;
     const allowed = new Set(scope.cash_desk_ids);
-    return all.filter((d) => allowed.has(d.id));
+    const hit = all.filter((d) => allowed.has(d.id));
+    return hit.length > 0 ? hit : all;
   }, [cashDesksQ.data, linkageQ.data]);
   const filteredExpeditors = useMemo(() => {
     const all = expeditorsQ.data ?? [];
@@ -233,7 +234,7 @@ export function EditPaymentDialog({
     setFieldErrs({});
   }, [open, p, payOpts]);
   useEffect(() => {
-    if (!cashDeskId.trim()) return;
+    if (!cashDeskId.trim() || filteredCashDesks.length === 0) return;
     if (!filteredCashDesks.some((d) => String(d.id) === cashDeskId.trim())) {
       setCashDeskId("");
       setSelectionNotice("Выбор кассы обновлён: неподходящее значение удалено.");

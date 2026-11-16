@@ -180,6 +180,9 @@ export async function registerPaymentWriteRoutes(app: FastifyInstance) {
           );
         }
         if (msg === "BAD_ENTRY_KIND") return sendApiError(reply, request, 400, "BadEntryKind");
+        if (msg === "CASH_DESK_REQUIRED") {
+          return sendApiError(reply, request, 400, "CashDeskRequired", "Выберите кассу");
+        }
         throw e;
       }
     }
@@ -315,6 +318,9 @@ export async function registerPaymentWriteRoutes(app: FastifyInstance) {
         if (msg === "BAD_PAYMENT_TYPE") return sendApiError(reply, request, 400, "BadPaymentType");
         if (msg === "NO_LINES") return sendApiError(reply, request, 400, "NoLines");
         if (msg === "BAD_CASH_DESK") return sendApiError(reply, request, 400, "BadCashDesk");
+        if (msg === "CASH_DESK_REQUIRED") {
+          return sendApiError(reply, request, 400, "CashDeskRequired", "Выберите кассу");
+        }
         if (msg === "BRANCH_SCOPE_VIOLATION") {
           return sendApiError(reply, request, 403, "BranchScopeViolation");
         }

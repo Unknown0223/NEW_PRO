@@ -80,6 +80,9 @@ export async function createPayment(
       isDiscountSettlement ? "discount_payment" : "client_payment"
     );
     cashDeskId = input.cash_desk_id;
+  } else if (!isDiscountSettlement) {
+    // Web «Оплаты клиентов» kassasiz saqlamasin — ro‘yxatda «—» chiqardi.
+    throw new Error("CASH_DESK_REQUIRED");
   }
 
   let expeditorId: number | null = null;

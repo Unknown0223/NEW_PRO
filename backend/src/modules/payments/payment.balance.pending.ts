@@ -40,6 +40,7 @@ export async function confirmPendingPayment(
     if (!p) throw new Error("NOT_FOUND");
     if (String(p.entry_kind ?? "payment") !== "payment") throw new Error("BAD_ENTRY_KIND");
     if (p.workflow_status !== "pending_confirmation") throw new Error("NOT_PENDING");
+    if (p.cash_desk_id == null || p.cash_desk_id < 1) throw new Error("CASH_DESK_REQUIRED");
 
     const amountDec = p.amount;
     const eventAt = p.paid_at ?? new Date();
