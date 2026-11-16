@@ -40,9 +40,14 @@ for (const dest of targets) {
   const pkgPath = join(dest, "package.json");
   const pkg = JSON.parse(readFileSync(pkgPath, "utf8"));
   delete pkg.type;
+  delete pkg.dependencies;
+  delete pkg.devDependencies;
+  delete pkg.peerDependencies;
   if (pkg.scripts) {
     delete pkg.scripts.prepare;
     delete pkg.scripts.build;
+    delete pkg.scripts.test;
+    delete pkg.scripts.typecheck;
   }
   pkg.main = "./dist/index.js";
   pkg.types = "./dist/index.d.ts";
