@@ -52,10 +52,12 @@ import {
 } from "./visits-2-report.service";
 import { ensureTenantContext } from "../../lib/tenant-context";
 import { registerGpsDeliveryRoutesReports } from "./reports.route.gps";
+import { registerP1ReportRoutes } from "./reports.route.p1";
 import { createReportRouteGuards, parseReportQueryOr400, reportQueryRaw } from "./reports.route.shared";
 
 export async function registerReportsSpecializedRoutes(app: FastifyInstance, guards: ReturnType<typeof createReportRouteGuards> = createReportRouteGuards()) {
   const { reportViewPreHandler, reportExportPreHandler, incomeViewPreHandler, incomeExportPreHandler } = guards;
+  registerP1ReportRoutes(app, guards);
 
   app.get("/api/:slug/reports/client-sales-2/filter-options", { preHandler: reportViewPreHandler }, async (request, reply) => {
     if (!ensureTenantContext(request, reply)) return;

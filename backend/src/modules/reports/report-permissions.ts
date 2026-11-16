@@ -8,6 +8,7 @@ export const REPORT_PAGE_PERMISSIONS: ReadonlyArray<{ path: string; section: str
   { path: "client-sales-2", section: "reports.prodazhi_klientov_2", export: true },
   { path: "client-sales-4", section: "reports.prodazhi_klientov_4", export: true },
   { path: "product-sales", section: "reports.prodazhi_tovarov", export: true },
+  { path: "p1", section: "reports.p1", export: true },
   { path: "expeditor-returns", section: "reports.vozvrat_ekspeditora", export: true },
   { path: "visits-2", section: "reports.vizity", export: true },
   { path: "visit-totals", section: "reports.itogi_vizitov", export: true }

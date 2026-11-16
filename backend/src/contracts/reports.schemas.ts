@@ -16,6 +16,8 @@ import { parseVisits2Query } from "../modules/reports/visits-2-report.service";
 import type { Visits2Filters } from "../modules/reports/visits-2-report.service";
 import { parseVisitTotalsQuery } from "../modules/reports/visit-totals-report.service";
 import type { VisitTotalsFilters } from "../modules/reports/visit-totals-report.service";
+import { parseP1ReportQuery } from "../modules/reports/p1-report.service";
+import type { P1ReportFilters } from "../modules/reports/p1-report.service";
 
 const queryRecord = z.record(z.string(), z.union([z.string(), z.undefined()]).optional());
 
@@ -188,4 +190,10 @@ export const visits2QuerySchema = queryRecord.transform((q) =>
 export type { VisitTotalsFilters };
 export const visitTotalsQuerySchema = queryRecord.transform((q) =>
   parseVisitTotalsQuery(q as Record<string, string | undefined>)
+);
+
+/** GET `/api/:slug/reports/p1` */
+export type { P1ReportFilters };
+export const p1ReportQuerySchema = queryRecord.transform((q) =>
+  parseP1ReportQuery(q as Record<string, string | undefined>)
 );

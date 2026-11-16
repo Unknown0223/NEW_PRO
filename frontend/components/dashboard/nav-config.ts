@@ -469,6 +469,7 @@ export const dashboardReportsNav: { sectionTitle: string; items: NavItem[] } = {
       showIfAnyPermission: [...NAV_PERM.reportClientSales4]
     },
     { href: "/reports/product-sales", label: "Продажи по товарам", showIfAnyPermission: [...NAV_PERM.reportProductSales] },
+    { href: "/reports/p1", label: "P1 отчёт", showIfAnyPermission: [...NAV_PERM.reportP1] },
     {
       href: "/reports/expeditor-returns",
       label: "Возврат экспедитора",

@@ -6,6 +6,8 @@ const COVERED_SAMPLES: Array<{ method: string; path: string; key: string }> = [
   { method: "GET", path: "/api/:slug/dashboard/sales/summary", key: "dashboard.prodazhi.view" },
   { method: "GET", path: "/api/:slug/reports/wdr/builder", key: "reports.konstruktor.view" },
   { method: "GET", path: "/api/:slug/reports/product-sales", key: "reports.prodazhi_tovarov.view" },
+  { method: "GET", path: "/api/:slug/reports/p1", key: "reports.p1.view" },
+  { method: "GET", path: "/api/:slug/reports/p1/export", key: "reports.p1.export" },
   { method: "GET", path: "/api/:slug/bonus-rules", key: "settings.bonusy.view" },
   { method: "GET", path: "/api/:slug/bonus-rules", key: "settings.skidki.view" },
   { method: "POST", path: "/api/:slug/bonus-rules", key: "settings.bonusy.create" },

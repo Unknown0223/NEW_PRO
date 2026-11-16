@@ -185,6 +185,8 @@ export const PERMISSION_OP_LABEL_RU: Record<string, string> = {
   "reports.prodazhi_klientov_4.export": "Выгрузка «Продажи по клиентам 4» в Excel",
   "reports.prodazhi_tovarov.view": "Открыть отчёт «Продажи по товарам»",
   "reports.prodazhi_tovarov.export": "Выгрузка «Продажи по товарам» в Excel",
+  "reports.p1.view": "Открыть отчёт «P1 отчёт»",
+  "reports.p1.export": "Выгрузка «P1 отчёт» в Excel",
   "reports.vozvrat_ekspeditora.view": "Открыть отчёт «Возврат экспедитора»",
   "reports.vozvrat_ekspeditora.export": "Выгрузка «Возврат экспедитора» в Excel",
   "reports.vizity.view": "Открыть отчёт «По визитам 2.0»",
