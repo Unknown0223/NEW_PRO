@@ -106,8 +106,7 @@ function buildPaymentListOrderBy(q: PaymentListQuery): Prisma.PaymentOrderByWith
 }
 
 /**
- * To‘lovlar ro‘yxatidagi «Баланс» — web «Общий» (ledger_net) bilan bir xil:
- * to‘lov/refund − yetkazilgan qarz (allocation/refund hisobga olinadi).
+ * To‘lovlar ro‘yxatidagi «Баланс» — mijoz kartasidagi «Общий» (ledger card net) bilan bir xil.
  * Eski formula `cb.balance − SUM(order.total)` to‘lovlarni ikki marta ayirib yolg‘on qarz berardi.
  */
 async function clientCardBalanceById(
@@ -116,67 +115,10 @@ async function clientCardBalanceById(
 ): Promise<Map<number, string>> {
   const ids = [...new Set(clientIds.filter((id) => Number.isFinite(id) && id > 0))];
   if (ids.length === 0) return new Map();
-  const { ORDER_STATUSES_OUTSTANDING_RECEIVABLE } = await import("../orders/order-status");
-  const { PAYMENT_COUNTS_FOR_RECEIVABLE_NET } = await import(
-    "../client-balances/client-balances.constants"
-  );
-  const receivable = [...ORDER_STATUSES_OUTSTANDING_RECEIVABLE];
-  const rows = await prisma.$queryRaw<Array<{ client_id: number; bal: Prisma.Decimal }>>`
-    SELECT u.client_id,
-      (
-        SUM(CASE WHEN u.payment_amount IS NOT NULL AND u.payment_amount > 0 THEN u.payment_amount ELSE 0 END)
-        - SUM(CASE WHEN u.debt_amount IS NOT NULL AND u.debt_amount <> 0 THEN ABS(u.debt_amount) ELSE 0 END)
-      )::decimal(15,2) AS bal
-    FROM (
-      SELECT
-        o.client_id,
-        (-(o.total_sum))::decimal(15,2) AS debt_amount,
-        NULL::decimal(15,2) AS payment_amount
-      FROM orders o
-      WHERE o.tenant_id = ${tenantId}
-        AND o.client_id IN (${Prisma.join(ids)})
-        AND o.order_type = 'order'
-        AND o.status IN (${Prisma.join(receivable)})
-
-      UNION ALL
-
-      SELECT
-        p.client_id,
-        CASE WHEN p.entry_kind = 'client_expense' THEN p.amount ELSE NULL END,
-        CASE WHEN p.entry_kind IN ('payment', 'refund') THEN p.amount ELSE NULL END
-      FROM client_payments p
-      WHERE p.tenant_id = ${tenantId}
-        AND p.client_id IN (${Prisma.join(ids)})
-        AND p.deleted_at IS NULL
-        ${PAYMENT_COUNTS_FOR_RECEIVABLE_NET}
-
-      UNION ALL
-
-      SELECT
-        o.client_id,
-        NULL::decimal(15,2),
-        o.total_sum
-      FROM orders o
-      WHERE o.tenant_id = ${tenantId}
-        AND o.client_id IN (${Prisma.join(ids)})
-        AND o.order_type IN ('return', 'return_by_order', 'partial_return')
-        AND o.status IN ('delivered', 'returned')
-        AND COALESCE(o.total_sum, 0) > 0
-        AND NOT EXISTS (
-          SELECT 1 FROM client_payments p
-          WHERE p.tenant_id = o.tenant_id
-            AND p.client_id = o.client_id
-            AND p.deleted_at IS NULL
-            AND p.entry_kind = 'refund'
-            AND COALESCE(p.workflow_status, 'confirmed') NOT IN ('pending_confirmation', 'rejected', 'deleted')
-            AND p.order_id = o.id
-        )
-    ) u
-    GROUP BY u.client_id
-  `;
+  const { loadLedgerCardNetByClient } = await import("../client-balances/client-balances.ledger");
+  const net = await loadLedgerCardNetByClient(tenantId, ids);
   const out = new Map<number, string>();
-  for (const id of ids) out.set(id, "0");
-  for (const r of rows) out.set(Number(r.client_id), r.bal.toString());
+  for (const id of ids) out.set(id, (net.get(id) ?? new Prisma.Decimal(0)).toString());
   return out;
 }
 
