@@ -3,6 +3,7 @@ import {
   mergeBranchCodesForScope,
   mergeGeoStaffIds,
   mergeTerritoryTermsForScope,
+  mergeCashDeskIdsForScope,
   mergeWarehouseIdsForScope
 } from "../src/modules/access/access-scope-from-slot";
 import { resolveStaffVisibilityByExplicitAndGeo } from "../src/modules/access/access-staff-scope";
@@ -29,10 +30,20 @@ describe("access-scope-from-slot", () => {
     expect(terms.some((t) => t.trim().toLowerCase() === "f")).toBe(false);
   });
 
-  it("merges warehouse ids", () => {
+  it("intersects warehouse ids when Dostup links and slot both set", () => {
     expect(
       mergeWarehouseIdsForScope([1, 2], { warehouse_id: 2, warehouse_ids: [3, 1] }).sort()
-    ).toEqual([1, 2, 3]);
+    ).toEqual([1, 2]);
+  });
+
+  it("uses Dostup warehouse links when slot empty", () => {
+    expect(mergeWarehouseIdsForScope([8], { warehouse_ids: [] })).toEqual([8]);
+  });
+
+  it("intersects cash desk ids when both sources set", () => {
+    expect(
+      mergeCashDeskIdsForScope([9], { cash_desk_id: 2, cash_desk_ids: [9, 2, 1] })
+    ).toEqual([9]);
   });
 
   it("merges geo staff ids (union within geo only)", () => {
