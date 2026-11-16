@@ -202,14 +202,14 @@ export const PERMISSION_SECTIONS: PermissionSectionDef[] = [
   { module: "suppliers", section: "postavshchik", labelRu: "Поставщики", actions: ["view", "create", "update", "delete", "export", "history"] },
   { module: "suppliers", section: "oplaty", labelRu: "Оплаты поставщикам", actions: ["view", "create", "update", "export"] },
   { module: "suppliers", section: "balansy", labelRu: "Начальные балансы и акт сверки с поставщиком", actions: VIEW_EXPORT },
-
   // ── Plans (Планы) ──────────────────────────────────────────
   { module: "plans", section: "nastroyka_utverzhdayushchih", labelRu: "Настройка утверждающих", actions: ["view", "update"] },
   { module: "plans", section: "ustanovka_planov", labelRu: "Установка планов", actions: ["view", "create", "update", "approve"] },
-
+  { module: "plans", section: "taklifiy_reja", labelRu: "Предлагаемый план", actions: ["view", "update", "approve", "export"] },
   // ── Reports (Отчёт) — har bir hisobot sahifasi alohida ─────
   { module: "reports", section: "zakazy_agentov", labelRu: "Заказы по агентам", actions: VIEW_ONLY },
   { module: "reports", section: "gps", labelRu: "Отчёт по GPS (маршруты доставки)", actions: VIEW_EXPORT },
+
   { module: "reports", section: "prodazhi_klientov_2", labelRu: "Продажи по клиентам 2", actions: VIEW_EXPORT },
   { module: "reports", section: "prodazhi_klientov_4", labelRu: "Продажи по клиентам 4", actions: VIEW_EXPORT },
   { module: "reports", section: "prodazhi_tovarov", labelRu: "Продажи по товарам", actions: VIEW_EXPORT },

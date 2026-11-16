@@ -1,6 +1,7 @@
 {
   "compilerOptions": {
-    "target": "ES2017",
+    "target": "ES2020",
+
     "lib": [
       "dom",
       "esnext"
@@ -25,11 +26,19 @@
       "@/*": [
         "./*"
       ],
+      "@taklifiy/*": [
+        "./components/plans/taklifiy-reja/*"
+      ],
+      "@salec/plans-proposal": [
+        "./vendor/plans-proposal/src/index.ts",
+        "../packages/plans-proposal/src/index.ts"
+      ],
       "@shared/*": [
         "./shared/*",
         "../shared/*"
       ]
     }
+
   },
   "include": [
     "next-env.d.ts",

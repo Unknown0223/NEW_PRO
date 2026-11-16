@@ -519,10 +519,27 @@ export const dashboardPlansNav: { sectionTitle: string; items: NavItem[] } = {
       showIfAnyPermission: ["plans.ustanovka_planov.view"]
     },
     {
+      href: "/plans/taklifiy-reja",
+      label: "Предлагаемый план",
+      showIfAnyPermission: ["plans.taklifiy_reja.view"]
+    },
+    {
+      href: "/plans/taklifiy-reja/natijalar",
+      label: "Анализ обоснования",
+      showIfAnyPermission: ["plans.taklifiy_reja.view"]
+    },
+    {
+      href: "/plans/taklifiy-reja/draft",
+      label: "Общий черновик",
+      showIfAnyPermission: ["plans.taklifiy_reja.view"]
+    },
+    {
       href: "/plans/approvers",
       label: "Настройка утверждающих",
       showIfAnyPermission: ["plans.nastroyka_utverzhdayushchih.view"]
     }
+
+
   ]
 };
 

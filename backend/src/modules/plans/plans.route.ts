@@ -40,6 +40,8 @@ import { getDailyKpiOverview } from "./plans.daily-kpi.service";
 import { getDailyKpiDayMatrix } from "./plans.daily-kpi.day-matrix";
 import { getDailyKpiAgentDetail } from "./plans.daily-kpi.detail";
 import { resolveDailyKpiAllowedAgentIds } from "./plans.daily-kpi.scope";
+import { registerProposalRoutes } from "./proposals/proposals.routes";
+
 
 function dailyKpiAllowedAgentIds(request: Parameters<typeof getAccessUser>[0]) {
   const user = getAccessUser(request);
@@ -366,4 +368,8 @@ export async function registerPlansRoutes(app: FastifyInstance) {
       return mapSetupError(reply, request, e);
     }
   });
+
+  // Taklifiy reja API (context / calculate / draft / apply / export)
+  await registerProposalRoutes(app);
 }
+

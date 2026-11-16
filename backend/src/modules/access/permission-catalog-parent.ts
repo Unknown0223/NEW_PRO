@@ -61,18 +61,24 @@ function staffSectionParentLabel(section: string): string | null {
 
 /**
  * Legacy `plans.otchety.*` tarixan «Планы / Отчеты» ostida edi — aslida otchot/konstruktor.
- * Haqiqiy plan bo‘limlari: Установка планов, Настройка утверждающих.
+ * Haqiqiy plan bo‘limlari: Установка планов, Настройка утверждающих, Предлагаемый план.
  */
 function plansSectionParentLabel(section: string): string | null {
   const s = section.trim();
   if (/Конструктор\s+отч[её]тов/i.test(s) || /\/\s*Конструктор/i.test(s)) {
     return "Отчёт · Конструктор отчётов";
   }
-  if (/Отч[её]т/i.test(s) && !/Установка\s+планов/i.test(s) && !/утверждающ/i.test(s)) {
+  if (
+    /Отч[её]т/i.test(s) &&
+    !/Установка\s+планов/i.test(s) &&
+    !/утверждающ/i.test(s) &&
+    !/Предлагаем/i.test(s)
+  ) {
     return "Отчёт · Отчеты";
   }
   if (/Установка\s+планов/i.test(s)) return "Планы · Установка планов";
   if (/утверждающ/i.test(s)) return "Планы · Настройка утверждающих";
+  if (/Предлагаем/i.test(s) || /taklifiy/i.test(s)) return "Планы · Предлагаемый план";
   if (/^Планы(\s*\/|\s*$)/i.test(s)) return "Планы";
   return null;
 }

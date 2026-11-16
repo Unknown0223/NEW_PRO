@@ -112,3 +112,71 @@ model SalesKpiPlanTarget {
   @@index([work_slot_id])
   @@map("sales_kpi_plan_targets")
 }
+
+/// Taklifiy reja — davr × yo‘nalish uchun umumiy draft (rasmiy targetlardan ajratilgan).
+model SalesPlanProposal {
+  id                 Int      @id @default(autoincrement())
+  tenant_id          Int
+  target_year        Int
+  target_month       Int
+  source_year        Int
+  source_month       Int
+  trade_direction_id Int
+  metric             String   @default("cost") @db.VarChar(16)
+  status             String   @default("draft") @db.VarChar(32)
+  name               String?  @db.VarChar(160)
+  config             Json     @default("{}")
+  snapshot_hash      String?  @db.VarChar(64)
+  version            Int      @default(1)
+  idempotency_key    String?  @db.VarChar(64)
+  created_by         Int?
+  updated_by         Int?
+  applied_by         Int?
+  applied_at         DateTime?
+  created_at         DateTime @default(now())
+  updated_at         DateTime @updatedAt
+
+  tenant          Tenant                   @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  trade_direction TradeDirection           @relation(fields: [trade_direction_id], references: [id], onDelete: Cascade)
+  creator         User?                    @relation("SalesPlanProposalCreator", fields: [created_by], references: [id], onDelete: SetNull)
+  editor          User?                    @relation("SalesPlanProposalEditor", fields: [updated_by], references: [id], onDelete: SetNull)
+  applier         User?                    @relation("SalesPlanProposalApplier", fields: [applied_by], references: [id], onDelete: SetNull)
+  rows            SalesPlanProposalRow[]
+
+  @@unique([tenant_id, trade_direction_id, target_year, target_month, metric], map: "sales_plan_proposals_unique")
+  @@index([tenant_id, status])
+  @@index([tenant_id, trade_direction_id, target_year, target_month])
+  @@map("sales_plan_proposals")
+}
+
+model SalesPlanProposalRow {
+  id              Int      @id @default(autoincrement())
+  tenant_id       Int
+  proposal_id     Int
+  user_id         Int
+  work_slot_id    Int?
+  kpi_group_id    Int
+  source_fact     Decimal? @db.Decimal(18, 2)
+  source_plan     Decimal? @db.Decimal(18, 2)
+  base_value      Decimal? @db.Decimal(18, 2)
+  proposed_value  Decimal? @db.Decimal(18, 2)
+  manual_value    Decimal? @db.Decimal(18, 2)
+  manual_reason   String?
+  excluded        Boolean  @default(false)
+  ready           Boolean  @default(false)
+  issues          Json     @default("[]")
+  resolved_rule   Json?
+  updated_at      DateTime @updatedAt
+
+  tenant    Tenant            @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  proposal  SalesPlanProposal @relation(fields: [proposal_id], references: [id], onDelete: Cascade)
+  user      User              @relation("SalesPlanProposalRowUser", fields: [user_id], references: [id], onDelete: Cascade)
+  work_slot WorkSlot?         @relation(fields: [work_slot_id], references: [id], onDelete: SetNull)
+  kpi_group KpiGroup          @relation(fields: [kpi_group_id], references: [id], onDelete: Cascade)
+
+  @@unique([proposal_id, user_id, kpi_group_id], map: "sales_plan_proposal_rows_unique")
+  @@index([tenant_id, proposal_id])
+  @@index([tenant_id, user_id])
+  @@map("sales_plan_proposal_rows")
+}
+

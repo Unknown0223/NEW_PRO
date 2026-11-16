@@ -101,9 +101,9 @@ Write-Host "  $HostName  →  https://salesarena.sale" -ForegroundColor Cyan
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host ""
 
-# 0) pivot-engine (frontend Docker vendor)
+# 0) vendor packages (Docker build context)
 if (-not $SkipFrontend -and -not $SkipPivotSync) {
-  Write-Host "[0/3] pivot-engine sync..." -ForegroundColor Yellow
+  Write-Host "[0/4] pivot-engine sync..." -ForegroundColor Yellow
   Push-Location (Join-Path $Root "frontend")
   try {
     & node "scripts\sync-pivot-engine.mjs"
@@ -111,6 +111,11 @@ if (-not $SkipFrontend -and -not $SkipPivotSync) {
   } finally {
     Pop-Location
   }
+}
+if (-not $SkipBackend -or -not $SkipFrontend) {
+  Write-Host "[0/4] plans-proposal vendor sync..." -ForegroundColor Yellow
+  & node (Join-Path $Root "scripts\sync-plans-proposal.mjs")
+  if ($LASTEXITCODE -ne 0) { throw "plans-proposal sync xato" }
 }
 
 # 1) Kod sync ( .env.production serverda qoladi )

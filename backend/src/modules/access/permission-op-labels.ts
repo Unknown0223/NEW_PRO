@@ -168,6 +168,13 @@ export const PERMISSION_OP_LABEL_RU: Record<string, string> = {
   "plans.ustanovka_planov.create": "Создать план",
   "plans.ustanovka_planov.update": "Сохранить и отправить на утверждение",
   "plans.ustanovka_planov.approve": "Подтвердить / вернуть для редактирования",
+  "plans.taklifiy_reja.view":
+    "Открыть «Предлагаемый план» (расчёт, результаты, общий черновик)",
+  "plans.taklifiy_reja.update":
+    "Изменить черновик: KPI, веса, ячейки, настройки и сохранение",
+  "plans.taklifiy_reja.approve":
+    "Утвердить и применить предлагаемый план к целевым планам сотрудников",
+  "plans.taklifiy_reja.export": "Выгрузка предлагаемого плана в CSV/Excel",
 
   "reports.zakazy_agentov.view": "Открыть отчёт «Заказы по агентам»",
   "reports.gps.view": "Открыть «Отчёт по GPS» (маршруты доставщиков по дням)",

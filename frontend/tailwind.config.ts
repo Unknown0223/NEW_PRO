@@ -40,12 +40,24 @@ const config: Config = {
           DEFAULT: "var(--destructive)",
           foreground: "var(--destructive-foreground)"
         },
+        brand: {
+          50: "#eff8f4",
+          100: "#dceee6",
+          200: "#b6dccb",
+          500: "#39836a",
+          600: "#28735b",
+          700: "#205e4b",
+          800: "#1d4c40",
+          900: "#173f38"
+        },
+        canvas: "#f5f7f6",
         pine: {
           950: "#06231f",
           900: "#0a332e",
           800: "#0e453e",
           700: "#11564d"
         },
+
         "teal-brand": "#0f9e8e",
         "teal-deep": "#0b7c70",
         paper: "#eef2f0",
@@ -72,9 +84,11 @@ const config: Config = {
         display: ["var(--font-sans)", "system-ui", "sans-serif"]
       },
       boxShadow: {
+        xs: "0 1px 2px 0 rgb(0 0 0 / 0.05)",
         panel: "0 1px 3px 0 rgb(0 0 0 / 0.06), 0 1px 2px -1px rgb(0 0 0 / 0.06)",
         "panel-md": "0 4px 6px -1px rgb(0 0 0 / 0.07), 0 2px 4px -2px rgb(0 0 0 / 0.06)"
       },
+
       borderRadius: {
         lg: "var(--radius)",
         md: "calc(var(--radius) - 2px)",

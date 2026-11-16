@@ -139,9 +139,13 @@ describe("takliflarning o‘zini oqlashi (backtest)", () => {
     expect(DEFAULT_OUTCOME_TOLERANCE).toBe(5);
   });
 
-  it("noto‘g‘ri chegara va bo‘sh datasetni rad etadi", () => {
+  it("noto‘g‘ri chegara rad etadi; bo‘sh dataset — bo‘sh hisobot", () => {
     const { input } = setup();
     expect(() => buildOutcomeReport({ ...input, tolerancePercent: -1 })).toThrow("chegarasi");
-    expect(() => buildOutcomeReport({ ...input, datasets: [] })).toThrow("Kamida bitta");
+    const empty = buildOutcomeReport({ ...input, datasets: [] });
+    expect(empty.cells).toEqual([]);
+    expect(empty.comparedCells).toBe(0);
+    expect(empty.summaries.length).toBeGreaterThan(0);
   });
 });
+

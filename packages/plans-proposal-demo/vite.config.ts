@@ -27,6 +27,14 @@ const forceDownload: Plugin = {
 
 export default defineConfig({
   plugins: [react(), tailwindcss(), forceDownload],
+  base: process.env.TAKLIFIY_EMBED === "1" ? "/taklifiy-reja/" : "/",
+  build: {
+    outDir:
+      process.env.TAKLIFIY_EMBED === "1"
+        ? path.resolve(dirname, "../../frontend/public/taklifiy-reja")
+        : "dist",
+    emptyOutDir: true
+  },
   resolve: {
     alias: {
       "@": path.resolve(dirname, "src"),
@@ -40,3 +48,4 @@ export default defineConfig({
     allowedHosts: [".e2b.app"]
   }
 });
+

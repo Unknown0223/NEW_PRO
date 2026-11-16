@@ -213,3 +213,6 @@ frontend/components/tabel/tabel-requests-clearance-workspace.tsx
 frontend/components/tabel/tabel-shifts-corrections-workspace.tsx
 frontend/components/timesheet/timesheet-table.tsx
 frontend/components/timesheet/timesheet-shared.ts
+frontend/components/settings/finance-price-types-settings.tsx
+frontend/components/login/face-liveness-panel.tsx
+docs/audit/AUDIT-2026-11.md

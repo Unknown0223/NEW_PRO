@@ -200,7 +200,16 @@ Sinov matritsasi: 4 formula × (hammaga / tanlangan / filial / SVR) × (to‘liq
 
 ## 8. Ishga tushirish va fayllar
 
-- Web demo: `packages/plans-proposal-demo` — `npm run dev` (port 5175).
+- Web demo (alohida): `packages/plans-proposal-demo` — `npm run plans:proposal:demo` (port 5175).
+- Panel (native Next): `frontend/components/plans/taklifiy-reja` + sahifalar:
+  - `/plans/taklifiy-reja` — Hisob-kitob
+  - `/plans/taklifiy-reja/natijalar` — Oqlash tahlili
+  - `/plans/taklifiy-reja/draft` — Umumiy draft
+
+- Qayta port: `npm run sync:taklifiy --prefix frontend` (`port-taklifiy-reja.mjs`).
 - Hisob yadrosi: `packages/plans-proposal` — `npm test`, `npm run typecheck`.
 - Demo batafsil: `packages/plans-proposal-demo/README.md`.
-- P0 ataylab backend/DB yozmaydi. Production integratsiya P1–P2 da amalga oshiriladi.
+- RBAC: `plans.taklifiy_reja.view|update|approve|export` (Планы menyusi).
+- P0 ataylab backend/DB yozmaydi. Production API integratsiya P1–P2 da amalga oshiriladi.
+
+

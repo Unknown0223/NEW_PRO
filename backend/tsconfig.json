@@ -11,8 +11,9 @@
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
-    "types": ["node", "vitest/globals"]
+    "types": ["node", "vitest/globals"],
   },
   "include": ["src/**/*.ts", "shared/**/*.ts"],
+
   "exclude": ["tests", "vitest.config.ts", "dist", "node_modules", "../archive/**"]
 }

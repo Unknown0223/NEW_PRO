@@ -178,7 +178,32 @@ export function buildOutcomeReport(input: OutcomeInput): OutcomeReport {
   const tolerance = input.tolerancePercent ?? DEFAULT_OUTCOME_TOLERANCE;
   if (!Number.isFinite(tolerance) || tolerance < 0 || tolerance > 1000)
     throw new Error("Baholash chegarasi 0–1000 foiz oralig‘ida bo‘lishi kerak");
-  if (!input.datasets.length) throw new Error("Kamida bitta KPI dataset kerak");
+  if (!input.datasets.length) {
+    return {
+      target: input.context.target,
+      source: input.context.source,
+      tolerancePercent: tolerance,
+      methods: OUTCOME_METHODS,
+      cells: [],
+      summaries: OUTCOME_METHODS.map((method) => ({
+        id: method.id,
+        name: method.name,
+        description: method.description,
+        cells: 0,
+        compared: 0,
+        justified: 0,
+        over: 0,
+        under: 0,
+        noData: 0,
+        accuracyPercent: null,
+        meanAbsErrorPercent: null,
+        predictedTotal: "0",
+        actualTotal: "0",
+        verdict: "no_data" as const
+      })),
+      comparedCells: 0
+    };
+  }
   const byMethod = new Map<OutcomeMethodId, Map<number, Map<string, Money | null>>>();
   for (const method of OUTCOME_METHODS) {
     const perKpi = new Map<number, Map<string, Money | null>>();

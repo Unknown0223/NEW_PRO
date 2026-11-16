@@ -32,6 +32,11 @@ function mod(module: string): string[] {
   return CATALOG.filter((e) => e.module === module).map((e) => e.key);
 }
 
+/** Plans moduli — taklifiy_reja faqat admin presetida (hozircha). */
+function plansExceptTaklifiy(): string[] {
+  return mod("plans").filter((k) => !k.includes(".taklifiy_reja."));
+}
+
 /** Modul bo'yicha faqat ko'rish (+copy, Excel) kalitlari. */
 function modViewOnly(module: string): string[] {
   return CATALOG.filter((e) => e.module === module && (e.action === "view" || e.action === "copy" || e.action === "export")).map(
@@ -139,6 +144,7 @@ const PRESET_BUILDERS: Record<string, () => string[]> = {
       mod("audit"),
       sec("plans", "ustanovka_planov"),
       secOnly("work_slots", "raboche_mesto", ["view", "history", "update"]),
+
       secOnly("staff", "agent", ["activate", "deactivate"]),
       secOnly("staff", "sotrudniki", ["activate", "deactivate"]),
       secOnly("staff", "zarplaty", ["view", "copy", "approve", "status"]),
@@ -157,7 +163,7 @@ const PRESET_BUILDERS: Record<string, () => string[]> = {
       assistantFull(),
       modViewOnly("orders"),
       modViewOnly("clients"),
-      mod("plans"),
+      plansExceptTaklifiy(),
       secOnly("work_slots", "raboche_mesto", ["view", "update", "history"]),
       sec("staff", "zadachi_spisok"),
       sec("staff", "avans"),
@@ -178,6 +184,7 @@ const PRESET_BUILDERS: Record<string, () => string[]> = {
       tabelLeadView()
     ),
 
+
   commercial_director: () =>
     uniq(
       mod("dashboard"),
@@ -185,7 +192,7 @@ const PRESET_BUILDERS: Record<string, () => string[]> = {
       assistantChatReports(),
       modViewOnly("orders"),
       modViewOnly("clients"),
-      mod("plans"),
+      plansExceptTaklifiy(),
       tabelLeadView()
     ),
 
