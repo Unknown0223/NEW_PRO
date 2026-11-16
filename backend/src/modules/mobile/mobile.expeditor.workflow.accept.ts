@@ -4,8 +4,6 @@
 import { prisma } from "../../config/database";
 import { profilePhotoMobileUrl } from "../clients/client-profile-photo.pure";
 import { tenantSlug } from "../clients/client-profile-photo.service";
-import { Prisma } from "@prisma/client";
-import { loadDeliveryDebtByClient, mergeLedgerWithUnpaidDelivered } from "../client-balances/client-balances.delivery";
 import { getClientBalanceLedger } from "../clients/client-balance-ledger.get";
 import { loadTenantLedgerPaymentContext } from "../clients/client-balance-ledger.helpers";
 import { resolvePaymentMethodRefToLabel } from "../tenant-settings/finance-refs";
@@ -97,22 +95,21 @@ export async function getMobileExpeditorClientDetail(
   });
   if (!client) return null;
 
-  const balRow = await prisma.clientBalance.findFirst({
-    where: { tenant_id: tenantId, client_id: clientId },
-    select: { balance: true }
+  // Web «Общий» bilan bir xil: vedomost net (to‘lov − qarz), mergeLedger emas.
+  // mergeLedgerWithUnpaidDelivered allocate qilinmagan eski to‘lovlarda yolg‘on qarz beradi.
+  const ledgerRes = await getClientBalanceLedger(tenantId, clientId, {
+    page: 1,
+    limit: 1
   });
-  const ledger = balRow?.balance ?? new Prisma.Decimal(0);
-  const deliveryMap = await loadDeliveryDebtByClient(tenantId, [clientId]);
-  const merged = mergeLedgerWithUnpaidDelivered(ledger, deliveryMap.get(clientId));
-  const totalBalance = Number(merged);
+  const totalBalance = Number.parseFloat(ledgerRes.ledger_net_balance || ledgerRes.account_balance || "0");
 
-  // «Оплата» — mijoz bo'yicha to'lov tarixi (kim qabul qilganidan qat'i nazar).
+  // «Оплата» — mijoz bo'yicha to'lov tarixi (order_id bo‘sh bo‘lsa ham).
   const payments = await prisma.payment.findMany({
     where: {
       tenant_id: tenantId,
+      client_id: clientId,
       deleted_at: null,
-      entry_kind: "payment",
-      order: { client_id: clientId }
+      entry_kind: "payment"
     },
     select: {
       id: true,

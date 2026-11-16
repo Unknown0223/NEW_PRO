@@ -321,12 +321,21 @@ export function AddPaymentForm({
       const order_id =
         oid != null && Number.isFinite(oid) && oid > 0 ? oid : null;
 
+      const filterAgentRaw = agentFilterId.trim();
+      const filterAgentParsed = filterAgentRaw ? Number.parseInt(filterAgentRaw, 10) : NaN;
+      const filterAgentId =
+        Number.isFinite(filterAgentParsed) && filterAgentParsed > 0 ? filterAgentParsed : undefined;
+
       const laRawLocked = ledgerAgentUserId.trim();
       const laParsedLocked = laRawLocked ? Number.parseInt(laRawLocked, 10) : NaN;
-      const ledger_agent_id_locked =
+      const ledgerFromCard =
         clientPickerLocked && Number.isFinite(laParsedLocked) && laParsedLocked > 0
           ? laParsedLocked
           : undefined;
+      // Tanlangan ochiq zakaz(lar) yoki agent filtri — ledger ni mijozning joriy agentiga yopishtirmaymiz.
+      const ledger_agent_id =
+        filterAgentId ??
+        (selectedOrderIds.length > 0 ? undefined : ledgerFromCard);
 
       const payloads: Array<{
         client_id: number;
@@ -368,10 +377,8 @@ export function AddPaymentForm({
           allocation_mode: allocationMode,
           client_uuid: newClientUuid(),
           ...(selectedOrderIds.length > 0 ? { allocation_order_ids: selectedOrderIds } : {}),
-          ...(ledger_agent_id_locked != null ? { ledger_agent_id: ledger_agent_id_locked } : {}),
-          ...(agentFilterId.trim()
-            ? { allocation_agent_id: Number.parseInt(agentFilterId.trim(), 10) }
-            : {})
+          ...(ledger_agent_id != null ? { ledger_agent_id } : {}),
+          ...(filterAgentId != null ? { allocation_agent_id: filterAgentId } : {})
         });
       }
 

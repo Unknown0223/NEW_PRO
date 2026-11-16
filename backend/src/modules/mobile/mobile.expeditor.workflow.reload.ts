@@ -3,7 +3,6 @@
  */
 import { prisma } from "../../config/database";
 import { Prisma } from "@prisma/client";
-import { loadDeliveryDebtByClient, mergeLedgerWithUnpaidDelivered } from "../client-balances/client-balances.delivery";
 import { loadTenantLedgerPaymentContext } from "../clients/client-balance-ledger.helpers";
 import { updateOrderStatus } from "../orders/domain/order.lifecycle";
 import { resolvePaymentMethodRefToLabel } from "../tenant-settings/finance-refs";
@@ -239,14 +238,9 @@ export async function getMobileExpeditorClientBalanceDetail(
   _expeditorUserId: number,
   clientId: number
 ) {
-  const balRow = await prisma.clientBalance.findFirst({
-    where: { tenant_id: tenantId, client_id: clientId },
-    select: { balance: true }
-  });
-  const ledger = balRow?.balance ?? new Prisma.Decimal(0);
-  const deliveryMap = await loadDeliveryDebtByClient(tenantId, [clientId]);
-  const merged = mergeLedgerWithUnpaidDelivered(ledger, deliveryMap.get(clientId));
-  const total = Number(merged);
+  const { getClientBalanceLedger } = await import("../clients/client-balance-ledger.get");
+  const ledgerRes = await getClientBalanceLedger(tenantId, clientId, { page: 1, limit: 1 });
+  const total = Number.parseFloat(ledgerRes.ledger_net_balance || ledgerRes.account_balance || "0");
 
   const orders = await prisma.order.findMany({
     where: {
