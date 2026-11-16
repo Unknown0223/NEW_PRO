@@ -119,7 +119,7 @@ export async function createPayment(
     orderAgentId = ordAgent?.agent_id ?? null;
   }
 
-  // ledger_agent berilmasa — bitta allocation/order agentiga yozamiz (mijozning joriy agenti emas).
+  // ledger_agent berilmasa: avvalo zakaz/allocation agenti, oxirida mijoz agenti (muzlatiladi).
   if (ledgerAgentId == null) {
     if (orderAgentId != null && orderAgentId > 0) {
       ledgerAgentId = orderAgentId;
@@ -140,6 +140,9 @@ export async function createPayment(
         )
       ];
       if (agents.length === 1) ledgerAgentId = agents[0]!;
+    }
+    if (ledgerAgentId == null && client.agent_id != null && client.agent_id > 0) {
+      ledgerAgentId = client.agent_id;
     }
   }
 
