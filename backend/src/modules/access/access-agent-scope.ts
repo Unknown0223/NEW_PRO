@@ -8,6 +8,7 @@ import {
   buildScopedStaffDirectoryWhere,
   isOrderAgentAllowedForActor,
   resolveStaffVisibilityByDimensions,
+  shouldRelaxTerritoryStaffFilter,
   uniquePositiveIds,
   type AccessAgentScope,
   type ScopedReportActor
@@ -36,7 +37,8 @@ export {
   resolveAllowedAgentIdsForActor,
   resolveStaffVisibilityByDimensions,
   resolveStaffVisibilityByExplicitAndGeo,
-  resolveVisibleStaffIds
+  resolveVisibleStaffIds,
+  shouldRelaxTerritoryStaffFilter
 } from "./access-staff-scope";
 
 export type LoadAccessScopeOpts = {
@@ -304,18 +306,24 @@ export async function loadAccessDataScope(
   );
   const territoryStaff = mergeGeoStaffIds(territoryStaffIds, termStaffIds);
   let territoryRestricts = territory_ids.length > 0 || territoryTerms.length > 0;
-  // Hudud chegarasi hamma faol xodimga bog‘langan bo‘lsa, bu shaxsiy filtr emas.
-  // Filial biriktirilganida kesishma viloyat ma’lumotini yashirmasin.
-  if (
-    territoryRestricts &&
-    branchCodes.length > 0 &&
-    branchStaffIds.length > 0 &&
-    territoryStaff.length > 0
-  ) {
-    const activeStaff = await prisma.user.count({
-      where: { tenant_id: tenantId, is_active: true }
-    });
-    if (activeStaff > 0 && territoryStaff.length >= Math.ceil(activeStaff * 0.85)) {
+  // Hudud katalogining deyarli hammasi yoki geo orqali deyarli barcha hodimlar —
+  // shaxsiy filtr emas (profil «ANDIJON…» + 100% hudud bog‘lanishi jamoani siqmasin).
+  if (territoryRestricts) {
+    const [activeStaff, totalTerritories] = await Promise.all([
+      prisma.user.count({ where: { tenant_id: tenantId, is_active: true } }),
+      territory_ids.length > 0
+        ? prisma.territory.count({ where: { tenant_id: tenantId, deleted_at: null } })
+        : Promise.resolve(0)
+    ]);
+    if (
+      shouldRelaxTerritoryStaffFilter({
+        linkedTerritoryCount: territory_ids.length,
+        totalTerritoryCount: totalTerritories,
+        territoryStaffCount: territoryStaff.length,
+        activeStaffCount: activeStaff,
+        hasBranchBinding: branchCodes.length > 0 && branchStaffIds.length > 0
+      })
+    ) {
       territoryRestricts = false;
     }
   }

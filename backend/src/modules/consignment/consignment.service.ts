@@ -1,6 +1,10 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "../../config/database";
 import { appendTenantAuditEvent, AuditEntityType } from "../../lib/tenant-audit";
+import {
+  isSupervisorRole,
+  supervisorDisplayNameOrNull
+} from "../access/access-supervisor-display";
 import { buildScopedAgentDirectoryWhereForActor } from "../access/access-agent-scope";
 import { ORDER_STATUSES_CONSIGNMENT_LIMIT_EXPOSURE } from "../orders/order-status";
 import {
@@ -343,7 +347,7 @@ export async function listConsignmentAgents(
 
   const users = await prisma.user.findMany({
     where,
-    include: { supervisor: { select: { name: true } } },
+    include: { supervisor: { select: { name: true, role: true } } },
     orderBy: [{ code: "asc" }, { id: "asc" }]
   });
 
@@ -388,8 +392,8 @@ export async function listConsignmentAgents(
       consignment_close_day: closeSchedule.day,
       consignment_close_hour: closeSchedule.hour,
       consignment_close_minute: closeSchedule.minute,
-      supervisor_user_id: u.supervisor_user_id,
-      supervisor_name: u.supervisor?.name ?? null,
+      supervisor_user_id: isSupervisorRole(u.supervisor?.role) ? u.supervisor_user_id : null,
+      supervisor_name: supervisorDisplayNameOrNull(u.supervisor),
       outstanding_debt: outstanding.toString(),
       remaining_limit: remaining
     });

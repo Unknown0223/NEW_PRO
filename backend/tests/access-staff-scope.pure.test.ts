@@ -8,6 +8,7 @@ import {
   resolveAllowedAgentIdsForActor,
   resolveStaffVisibilityByExplicitAndGeo,
   resolveVisibleStaffIds,
+  shouldRelaxTerritoryStaffFilter,
   type ScopedReportActor
 } from "../src/modules/access/access-staff-scope";
 import { mergeDirectoryAllowedIds, isDirectoryIdAllowed } from "../src/modules/access/access-directory-scope";
@@ -46,6 +47,44 @@ describe("resolveVisibleStaffIds — hodim ∩ hudud", () => {
         hasGeoBinding: true
       })
     ).toEqual([2]);
+  });
+});
+
+describe("shouldRelaxTerritoryStaffFilter", () => {
+  it("deyarli barcha hududlar bog‘langan — filtr yo‘q", () => {
+    expect(
+      shouldRelaxTerritoryStaffFilter({
+        linkedTerritoryCount: 221,
+        totalTerritoryCount: 221,
+        territoryStaffCount: 15,
+        activeStaffCount: 114,
+        hasBranchBinding: true
+      })
+    ).toBe(true);
+  });
+
+  it("qisman hudud — filtr saqlanadi", () => {
+    expect(
+      shouldRelaxTerritoryStaffFilter({
+        linkedTerritoryCount: 10,
+        totalTerritoryCount: 221,
+        territoryStaffCount: 15,
+        activeStaffCount: 114,
+        hasBranchBinding: true
+      })
+    ).toBe(false);
+  });
+
+  it("geo orqali deyarli barcha faol hodimlar + filial — filtr yo‘q", () => {
+    expect(
+      shouldRelaxTerritoryStaffFilter({
+        linkedTerritoryCount: 0,
+        totalTerritoryCount: 0,
+        territoryStaffCount: 100,
+        activeStaffCount: 114,
+        hasBranchBinding: true
+      })
+    ).toBe(true);
   });
 });
 

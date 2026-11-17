@@ -18,9 +18,9 @@ function dimSql(dim: Dim) {
   }
   if (dim === "supervisor") {
     return {
-      name: Prisma.sql`COALESCE(NULLIF(TRIM(s.name), ''), '—')`,
+      name: Prisma.sql`COALESCE(NULLIF(TRIM(s.name), ''), 'Без супервайзера')`,
       code: Prisma.sql`COALESCE(NULLIF(TRIM(s.code), ''), '')`,
-      join: Prisma.sql`LEFT JOIN users s ON s.id = u.supervisor_user_id`
+      join: Prisma.sql`LEFT JOIN users s ON s.id = u.supervisor_user_id AND lower(s.role) = 'supervisor'`
     };
   }
   return {

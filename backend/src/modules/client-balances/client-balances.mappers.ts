@@ -1,4 +1,5 @@
 import { Prisma } from "@prisma/client";
+import { supervisorDisplayNameOrNull } from "../access/access-supervisor-display";
 import { agentInclude } from "./client-balances.constants";
 import {
   mergeLedgerWithUnpaidDelivered,
@@ -88,7 +89,7 @@ export function mapClientRow(
     agent_name: ag?.name ?? null,
     agent_code: ag?.code ?? null,
     agent_tags: tags,
-    supervisor_name: ag?.supervisor?.name ?? null,
+    supervisor_name: supervisorDisplayNameOrNull(ag?.supervisor),
     trade_direction: td,
     inn: c.inn,
     phone: c.phone,
@@ -151,7 +152,7 @@ export function mapDeliveryOrderRow(
     agent_name: ag?.name ?? null,
     agent_code: ag?.code ?? null,
     agent_tags: tags,
-    supervisor_name: ag?.supervisor?.name ?? null,
+    supervisor_name: supervisorDisplayNameOrNull(ag?.supervisor),
     trade_direction: td,
     inn: c.inn,
     phone: c.phone,

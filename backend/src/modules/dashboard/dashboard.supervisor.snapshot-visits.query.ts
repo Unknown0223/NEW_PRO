@@ -353,8 +353,8 @@ export async function fetchSupervisorVisitAndSalesRaw(
       k.agent_id,
       ua.name AS agent_name,
       ua.code AS agent_code,
-      ua.supervisor_user_id AS supervisor_id,
-      us.name AS supervisor_name,
+      us.id AS supervisor_id,
+      COALESCE(NULLIF(TRIM(us.name), ''), 'Без супервайзера') AS supervisor_name,
       COALESCE(pc.planned_visits, 0)::bigint AS planned_visits,
       COALESCE(vpc.visited_planned, 0)::bigint AS visited_planned,
       COALESCE(vc.visited_total, 0)::bigint AS visited_total,
@@ -381,7 +381,7 @@ export async function fetchSupervisorVisitAndSalesRaw(
       COALESCE(opha.photo_ct, 0)::bigint AS out_photo
     FROM keys k
     JOIN users ua ON ua.id = k.agent_id
-    LEFT JOIN users us ON us.id = ua.supervisor_user_id
+    LEFT JOIN users us ON us.id = ua.supervisor_user_id AND lower(us.role) = 'supervisor'
     LEFT JOIN planned_cnt pc ON pc.agent_id = k.agent_id
     LEFT JOIN visit_cnt vc ON vc.agent_id = k.agent_id
     LEFT JOIN gps_cnt gc ON gc.agent_id = k.agent_id

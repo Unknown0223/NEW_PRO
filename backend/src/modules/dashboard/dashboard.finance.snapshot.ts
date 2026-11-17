@@ -296,7 +296,7 @@ export async function getFinanceDashboardSnapshot(
         c.id AS client_id,
         c.name AS client_name,
         ag.name AS agent_name,
-        su.name AS supervisor_name,
+        COALESCE(NULLIF(TRIM(su.name), ''), 'Без супервайзера') AS supervisor_name,
         COALESCE(NULLIF(TRIM(c.region), ''), NULLIF(TRIM(c.city), ''), NULLIF(TRIM(c.zone), '')) AS territory,
         COALESCE(cb.balance, 0)::numeric(15,2) AS ledger_balance,
         COALESCE(db.delivered_debt, 0)::numeric(15,2) AS delivered_debt,
@@ -305,7 +305,7 @@ export async function getFinanceDashboardSnapshot(
       LEFT JOIN client_balances cb ON cb.client_id = c.id AND cb.tenant_id = ${tenantId}
       LEFT JOIN debt_by_client db ON db.client_id = c.id
       LEFT JOIN users ag ON ag.id = c.agent_id
-      LEFT JOIN users su ON su.id = ag.supervisor_user_id
+      LEFT JOIN users su ON su.id = ag.supervisor_user_id AND lower(su.role) = 'supervisor'
       WHERE ${clientFilter}
         AND LEAST(COALESCE(cb.balance, 0), -COALESCE(db.delivered_debt, 0)) < 0
       ORDER BY effective_balance ASC

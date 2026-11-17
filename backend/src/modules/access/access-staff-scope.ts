@@ -108,6 +108,36 @@ export function resolveStaffVisibilityByDimensions(dims: StaffVisibilityDimensio
 }
 
 /**
+ * Hudud filtri «shaxsiy» emas — katalogning deyarli hammasi biriktirilgan
+ * yoki geo orqali deyarli barcha faol hodimlar chiqadi.
+ * (Masalan: 221/221 hudud + profil «ANDIJON…» — filial/hodim kesishmasini Andijonga siqmasin.)
+ */
+export function shouldRelaxTerritoryStaffFilter(input: {
+  linkedTerritoryCount: number;
+  totalTerritoryCount: number;
+  territoryStaffCount: number;
+  activeStaffCount: number;
+  hasBranchBinding: boolean;
+}): boolean {
+  const linked = Math.max(0, input.linkedTerritoryCount);
+  const totalTerr = Math.max(0, input.totalTerritoryCount);
+  if (totalTerr > 0 && linked >= Math.ceil(totalTerr * 0.85)) {
+    return true;
+  }
+  const terrStaff = Math.max(0, input.territoryStaffCount);
+  const active = Math.max(0, input.activeStaffCount);
+  if (
+    input.hasBranchBinding &&
+    terrStaff > 0 &&
+    active > 0 &&
+    terrStaff >= Math.ceil(active * 0.85)
+  ) {
+    return true;
+  }
+  return false;
+}
+
+/**
  * `null` — cheklov yo‘q (admin).
  * `[]` — hech narsa ko‘rinmasin.
  */

@@ -97,7 +97,7 @@ async function loadAgents(tenantId: number, directionId: number, kpiGroupIds: nu
     },
     select: {
       ...USER_SELECT,
-      supervisor: { select: { id: true, name: true, login: true } }
+      supervisor: { select: { id: true, name: true, login: true, role: true } }
     }
   });
   return rows.filter(
@@ -260,8 +260,14 @@ export async function buildProposalContext(
         role: a.role,
         branchId: 0,
         branch: (a.branch ?? "").trim() || "—",
-        supervisorId: a.supervisor_user_id,
-        supervisor: a.supervisor ? personName(a.supervisor) : "—",
+        supervisorId:
+          a.supervisor && String(a.supervisor.role ?? "").toLowerCase() === "supervisor"
+            ? a.supervisor_user_id
+            : null,
+        supervisor:
+          a.supervisor && String(a.supervisor.role ?? "").toLowerCase() === "supervisor"
+            ? personName(a.supervisor)
+            : "Без супервайзера",
         linked,
         active: true,
         fact: hasFact

@@ -1,5 +1,6 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "../../config/database";
+import { supervisorDisplayNameOrNull } from "../access/access-supervisor-display";
 import { ORDER_STATUSES_OUTSTANDING_RECEIVABLE } from "../orders/order-status";
 import {
   buildSummaryOverpaymentsByType,
@@ -47,7 +48,7 @@ const agentSelect = {
     consignment: true,
     trade_direction: true,
     supervisor_user_id: true,
-    supervisor: { select: { name: true } },
+    supervisor: { select: { name: true, role: true } },
     trade_direction_row: { select: { name: true } }
   }
 } as const;
@@ -337,7 +338,7 @@ export async function listConsignmentBalancesReport(
       is_active: c.is_active,
       agent_name: ag?.name ?? null,
       agent_code: ag?.code ?? null,
-      supervisor_name: ag?.supervisor?.name ?? null,
+      supervisor_name: supervisorDisplayNameOrNull(ag?.supervisor),
       company_name: c.legal_name,
       trade_direction: td,
       inn: c.inn,
