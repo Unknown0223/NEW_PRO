@@ -31,7 +31,9 @@ const nextConfig = {
   },
   experimental: {
     /** Dev HMR va prod bundle: faqat ishlatilgan ikonka / modul tarmoqlari */
-    optimizePackageImports: ["lucide-react", "recharts"]
+    optimizePackageImports: ["lucide-react", "recharts"],
+    /** next upgrade --agent=security (16.4.2 → 16.4.6) */
+    agentUpgrade: "security"
   },
   // @tanstack/query-core sinf ichidagi #private maydonlarni loyiha SWC orqali maqsad brauzerga moslashtiradi
   // (aks holda ba’zi muhitlarda "Invalid or unexpected token" / layout.js xatosi).

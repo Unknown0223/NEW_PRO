@@ -7,13 +7,10 @@
     "dev:clean": "node clean-next.cjs && cross-env NEXT_IGNORE_INCORRECT_LOCKFILE=1 node scripts/next-dev-wasm.cjs dev --webpack -H 127.0.0.1 -p 3000",
     "clean": "node clean-next.cjs",
     "build": "node scripts/sync-pivot-engine.mjs && next build --webpack",
-
     "predev": "node scripts/sync-pivot-engine.mjs && node scripts/sync-mediapipe-assets.mjs",
     "sync:pivot-engine": "node scripts/sync-pivot-engine.mjs",
     "sync:mediapipe": "node scripts/sync-mediapipe-assets.mjs",
     "sync:taklifiy": "node scripts/port-taklifiy-reja.mjs",
-
-
     "start": "next start -H 0.0.0.0",
     "lint": "eslint .",
     "lint:errors": "eslint . --quiet",
@@ -52,7 +49,6 @@
     "@radix-ui/react-select": "^2.2.6",
     "@salec/pivot-engine": "file:vendor/pivot-engine",
     "@salec/plans-proposal": "file:./vendor/plans-proposal",
-
     "@tanstack/query-sync-storage-persister": "^5.100.9",
     "@tanstack/react-query": "^5.95.2",
     "@tanstack/react-query-persist-client": "^5.100.9",
@@ -66,7 +62,7 @@
     "jspdf-autotable": "^5.0.9",
     "leaflet": "^1.9.4",
     "lucide-react": "^1.7.0",
-    "next": "^16.4.2",
+    "next": "16.4.6",
     "polygon-clipping": "^0.15.7",
     "qrcode": "^1.5.4",
     "react": "^18",
