@@ -3,7 +3,7 @@ import { ArrowRight, Check, Loader2, RotateCcw } from "lucide-react";
 import { roles, type RoleKey } from "../../data/design";
 import { cn } from "../../utils/cn";
 import { AUTH_ACCOUNTS } from "./AuthScreen";
-import { BrandMark, BrandWave, BrandWordmark } from "./Brand";
+import { BrandWave, BrandWordmark } from "./Brand";
 import type { Props } from "./PhoneScreens";
 import { RoadScene, SPLASH_META } from "./SplashArt";
 
@@ -58,7 +58,8 @@ export function RoleWelcome({ t, accent, ctx }: Props) {
   const items = BOOT_ITEMS[role];
 
   const [run, setRun] = useState(0);
-  const [revealed, setRevealed] = useState(fast);
+  // Ko‘k BrandMark splash olib tashlandi — darhol road/checklist.
+  const [revealed, setRevealed] = useState(true);
   const [step, setStep] = useState(0);
   const [leaving, setLeaving] = useState(false);
   const ctxRef = useRef(ctx);
@@ -69,10 +70,7 @@ export function RoleWelcome({ t, accent, ctx }: Props) {
   useEffect(() => {
     setStep(0);
     setLeaving(false);
-    setRevealed(fast);
-    if (fast) return;
-    const id = setTimeout(() => setRevealed(true), 1150);
-    return () => clearTimeout(id);
+    setRevealed(true);
   }, [run, fast, role]);
 
   useEffect(() => {
@@ -102,7 +100,6 @@ export function RoleWelcome({ t, accent, ctx }: Props) {
     <div className="relative flex h-full flex-col overflow-hidden" style={{ background: paper }} data-welcome-role={role} data-welcome-step={step} data-welcome-leaving={leaving ? "1" : "0"}>
       <div className="relative z-[5] flex items-center justify-between px-4 pt-2.5">
         <span className="flex items-center gap-1.5">
-          <BrandMark size={22} radius={130} />
           <BrandWordmark size={13} tone={t.isDark ? "dark" : "light"} />
         </span>
         <span className="flex items-center gap-1 rounded-full px-2 py-1 text-[7.5px] font-bold" style={{ background: t.accSoft, color: t.accInk }}>
@@ -165,14 +162,7 @@ export function RoleWelcome({ t, accent, ctx }: Props) {
         </button>
       </div>
 
-      <BrandWave top={revealed ? "100%" : "-160px"} />
-      <div className="au-fade pointer-events-none absolute inset-0 z-20 grid place-items-center" style={{ opacity: revealed ? 0 : 1 }}>
-        <div className="flex flex-col items-center">
-          <BrandMark key={run} size={84} bare draw={!fast} />
-          <span className="block"><BrandWordmark size={24} tone="onBrand" /></span>
-          <span className="mt-2 text-[9px] text-white/80">{roleDef.name} ish joyi ochilmoqda…</span>
-        </div>
-      </div>
+      <BrandWave top="100%" />
     </div>
   );
 }

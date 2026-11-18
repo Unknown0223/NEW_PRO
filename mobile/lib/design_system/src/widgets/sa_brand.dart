@@ -12,8 +12,8 @@ class SaBrand {
   static const Color bright = SaColors.brightSky;
 }
 
-/// Navy tile + zig-zag + ko‘k strelka (+ ixtiyoriy draw animatsiya).
-class SaBrandMark extends StatefulWidget {
+/// Eski dumaloq brend mark — splash olib tashlandi, joy saqlanadi (bo‘sh).
+class SaBrandMark extends StatelessWidget {
   final double size;
   final bool bare;
   final bool draw;
@@ -26,115 +26,9 @@ class SaBrandMark extends StatefulWidget {
   });
 
   @override
-  State<SaBrandMark> createState() => _SaBrandMarkState();
-}
-
-class _SaBrandMarkState extends State<SaBrandMark>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _c;
-
-  @override
-  void initState() {
-    super.initState();
-    _c = AnimationController(
-      vsync: this,
-      animationBehavior: AnimationBehavior.preserve,
-      duration: SaDurations.emphatic,
-    );
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      if (!widget.draw || saReduceMotion(context)) {
-        _c.value = 1;
-      } else {
-        _c.forward();
-      }
-    });
-  }
-
-  @override
-  void dispose() {
-    _c.dispose();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      width: widget.size,
-      height: widget.size,
-      child: AnimatedBuilder(
-        animation: _c,
-        builder: (_, __) => CustomPaint(
-          painter: _BrandMarkPainter(
-            bare: widget.bare,
-            progress: Curves.easeOutCubic.transform(_c.value),
-          ),
-        ),
-      ),
-    );
+    return SizedBox(width: size, height: size);
   }
-}
-
-class _BrandMarkPainter extends CustomPainter {
-  final bool bare;
-  final double progress;
-  const _BrandMarkPainter({required this.bare, required this.progress});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final s = size.width / 512;
-    if (!bare) {
-      final r = RRect.fromRectAndRadius(
-        Rect.fromLTWH(0, 0, size.width, size.height),
-        Radius.circular(116 * s),
-      );
-      canvas.drawRRect(r, Paint()..color = SaBrand.navy);
-    }
-
-    final zig = Paint()
-      ..color = Colors.white
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 36 * s
-      ..strokeCap = StrokeCap.round
-      ..strokeJoin = StrokeJoin.round;
-    final zigPath = Path()
-      ..moveTo(148 * s, 330 * s)
-      ..lineTo(200 * s, 256 * s)
-      ..lineTo(248 * s, 290 * s);
-    final zigMetric = zigPath.computeMetrics().first;
-    canvas.drawPath(
-      zigMetric.extractPath(0, zigMetric.length * progress.clamp(0, 1)),
-      zig,
-    );
-
-    if (progress < 0.35) return;
-    final t = ((progress - 0.35) / 0.65).clamp(0.0, 1.0);
-    final arrowColor = bare ? Colors.white : SaBrand.blue;
-    final arrow = Paint()
-      ..color = arrowColor
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 36 * s
-      ..strokeCap = StrokeCap.round;
-    final p0 = Offset(248 * s, 292 * s);
-    final p1 = Offset(336 * s, 194 * s);
-    canvas.drawLine(p0, Offset.lerp(p0, p1, t)!, arrow);
-
-    if (t > 0.85) {
-      final head = Path()
-        ..moveTo(282 * s, 188 * s)
-        ..lineTo(356 * s, 174 * s)
-        ..lineTo(328 * s, 242 * s)
-        ..close();
-      canvas.drawPath(
-        head,
-        Paint()..color = arrowColor.withValues(alpha: ((t - 0.85) / 0.15).clamp(0, 1)),
-      );
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant _BrandMarkPainter old) =>
-      old.bare != bare || old.progress != progress;
 }
 
 enum SaBrandTone { light, dark, onBrand }
