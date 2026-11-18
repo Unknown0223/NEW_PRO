@@ -83,13 +83,20 @@ export const READ_TOOLS_OPS: AiToolSpec[] = [
     schema: z.object({ limit, page, search, from: ymd.optional(), to: ymd.optional() }),
     path: (p) =>
       `/payments${qs({ page: pStr(p, "page") ?? 1, limit: pStr(p, "limit") ?? 30, from: pStr(p, "from"), to: pStr(p, "to") })}`,
-    format: (payload) =>
-      genericTable(payload, {
+    format: (payload) => {
+      const rows = pickRows(payload);
+      const totalSum = rows.reduce((sum, row) => sum + (Number(row.amount) || 0), 0);
+      const table = genericTable(payload, {
         title: "To‘lovlar",
-        preferred: ["paid_at", "created_at", "client_name", "agent_name", "amount", "payment_type"],
-        maxRows: 50,
+        preferred: ["paid_at", "created_at", "client_name", "agent_name", "amount", "payment_type", "cash_desk_name"],
+        maxRows: 500,
         source: "/payments"
-      })
+      });
+      return {
+        ...table,
+        summary: `${rows.length} ta to‘lov · jami ${money(totalSum)}`
+      };
+    }
   },
   {
     id: "clients.list",

@@ -20,7 +20,11 @@ export const AI_CONFIG = {
   get writeEnabled(): boolean {
     return flag(process.env.AI_WRITE_ENABLED, true);
   },
-  /** Jadvaldagi maksimal qator. */
+  /** Chatdagi jadval preview (undan oshsa — qisqa + Excel). */
+  get chatPreviewRows(): number {
+    return num(process.env.AI_CHAT_PREVIEW_ROWS, 10);
+  },
+  /** Jadvaldagi maksimal qator (tool format / ichki). */
   get maxRows(): number {
     return num(process.env.AI_MAX_ROWS, 50);
   },

@@ -158,7 +158,8 @@ export async function registerAiRoutes(app: FastifyInstance): Promise<void> {
           toolId: r.tool,
           run: { tool: r.tool, status: "ok", statusCode: 200, payload: r.payload, message: undefined, durationMs: 0 },
           intent: "export",
-          slots: {}
+          slots: {},
+          maxRows: AI_CONFIG.maxExportRows
         }).groups?.[0];
         if (!g) return [];
         return [{ title: g.title, summary: g.summary ?? "", columns: g.columns, rows: g.rows }];

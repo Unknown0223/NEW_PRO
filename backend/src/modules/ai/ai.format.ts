@@ -17,6 +17,9 @@ const COLUMN_LABELS: Record<string, string> = {
   number: "Raqam",
   name: "Nomi",
   client_name: "Mijoz",
+  client_legal_name: "Yuridik nom",
+  client_code: "Mijoz kodi",
+  client_id: "Mijoz ID",
   agent_name: "Agent",
   expeditor_name: "Ekspeditor",
   fio: "F.I.SH",
@@ -37,6 +40,8 @@ const COLUMN_LABELS: Record<string, string> = {
   date: "Sana",
   created_at: "Sana",
   paid_at: "To‘lov sanasi",
+  payment_type: "To‘lov turi",
+  cash_desk_name: "Kassa",
   category: "Kategoriya",
   is_active: "Faol",
   expense_type: "Rasm turi",
@@ -105,8 +110,17 @@ function chooseColumns(rows: Array<Record<string, unknown>>, preferred: string[]
   const first = rows[0] ?? {};
   const available = Object.keys(first).filter((key) => !isSecretKey(key) && isPrimitive(first[key]));
   const picked = preferred.filter((key) => available.includes(key));
-  const extra = available.filter((key) => !picked.includes(key) && !key.startsWith("_"));
-  const result = [...picked, ...extra].slice(0, 6);
+  const rankedExtra = available
+    .filter((key) => !picked.includes(key) && !key.startsWith("_"))
+    .sort((a, b) => {
+      const score = (key: string) =>
+        (MONEY_KEY.test(key) ? 8 : 0) +
+        (DATE_KEY.test(key) ? 4 : 0) +
+        (/(name|status|type|phone)/i.test(key) ? 2 : 0) -
+        (ID_KEY.test(key) ? 3 : 0);
+      return score(b) - score(a);
+    });
+  const result = [...picked, ...rankedExtra].slice(0, 6);
   return result.length ? result : available.slice(0, 4);
 }
 

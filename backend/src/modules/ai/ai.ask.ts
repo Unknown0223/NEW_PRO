@@ -80,6 +80,7 @@ export async function handleAiAsk(input: {
     runs.push({ tool: tool.id, run });
     if (run.status === "error" || run.status === "denied") break;
   }
+  const previewRows = AI_CONFIG.chatPreviewRows;
   const last = runs[runs.length - 1];
   const first = answerFromRun({
     actor,
@@ -88,11 +89,19 @@ export async function handleAiAsk(input: {
       last?.run ??
       ({ tool: "", status: "error", statusCode: 404, message: "Buyruq bajarilmadi", durationMs: 0 } satisfies AiToolRun),
     intent: built.intent,
-    slots: {}
+    slots: {},
+    maxRows: previewRows
   });
   const groups: AiTableResult[] = runs.flatMap((r) => {
     if (r.run.status !== "ok" || !r.run.payload) return [];
-    const g = answerFromRun({ actor, toolId: r.tool, run: r.run, intent: built.intent, slots: {} }).groups?.[0];
+    const g = answerFromRun({
+      actor,
+      toolId: r.tool,
+      run: r.run,
+      intent: built.intent,
+      slots: {},
+      maxRows: previewRows
+    }).groups?.[0];
     if (!g) return [];
     return [
       {
@@ -100,7 +109,7 @@ export async function handleAiAsk(input: {
         summary: g.summary ?? "",
         columns: g.columns,
         rows: g.rows,
-        truncated: false
+        truncated: Boolean(g.truncated)
       }
     ];
   });
@@ -109,7 +118,7 @@ export async function handleAiAsk(input: {
     summary: g.summary ?? "",
     columns: g.columns,
     rows: g.rows,
-    truncated: false
+    truncated: Boolean(g.truncated)
   }));
   const answer: AiAnswer = {
     title: first.title,
@@ -123,24 +132,27 @@ export async function handleAiAsk(input: {
       tools: runs.map((r) => r.tool),
       durationMs: Date.now() - startedAt,
       period: planPeriod(built.plan),
-      truncated: groups.some((g) => Boolean(g.truncated))
+      truncated: groups.some((g) => Boolean(g.truncated)) || Boolean(first.truncated)
     }
   };
-  if (exportFormat && runs.length) {
+  /* 10+ qator yoki truncated → avtomatik Excel (batafsil). */
+  const wantExport = Boolean(exportFormat) || answer.meta.truncated || answer.groups.some((g) => g.rows.length >= previewRows);
+  if (wantExport && runs.length) {
     if (actor.userId == null) return bad(401, "InvalidAccessUser");
+    const fmt = exportFormat ?? "xlsx";
     const exportPayload: TokenPayload = {
       kind: "export",
       jti: newJti(),
       sub: actor.userId,
       tid: actor.tenantId,
       tool: "__export__",
-      params: { fmt: exportFormat },
+      params: { fmt },
       calls: runs.map((r) => ({ tool: r.tool, params: {} })),
       iat: Date.now(),
       exp: Date.now() + AI_CONFIG.exportTtlSec * 1000
     };
     answer.export = {
-      format: exportFormat,
+      format: fmt,
       url: `/api/${encodeURIComponent(actor.tenantSlug)}/ai/exports/${signToken(exportPayload)}`,
       rows: answer.groups.reduce((n, g) => n + g.rows.length, 0),
       truncated: answer.meta.truncated

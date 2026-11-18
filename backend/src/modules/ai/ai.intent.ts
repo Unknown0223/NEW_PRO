@@ -46,7 +46,11 @@ const READ_INTENTS: IntentSpec[] = [
   { name: "finance.expenses", kind: "read", keywords: ["rasxod", "xarajat", "расход", "затрат", "expense"] },
   { name: "finance.cash_desks", kind: "read", keywords: ["kassa", "касса", "кассы", "cash desk", "naqd qoldiq"] },
   { name: "orders.list", kind: "read", keywords: ["buyurtma", "заказ", "заказы", "order"] },
-  { name: "payments.list", kind: "read", keywords: ["to'lov", "tulov", "платеж", "платёж", "оплата", "payment"] },
+  {
+    name: "payments.list",
+    kind: "read",
+    keywords: ["to'lov", "tolov", "tulov", "to'lovlar", "tolovlar", "платеж", "платёж", "оплата", "payment", "payments"]
+  },
   { name: "clients.list", kind: "read", keywords: ["mijoz", "клиент", "клиенты", "client", "kontragent"] },
   { name: "products.list", kind: "read", keywords: ["mahsulot", "tovar", "товар", "nomenklatura", "product", "skular"] },
   { name: "stock.balances", kind: "read", keywords: ["ombor", "qoldiq", "склад", "остаток", "остатки", "stock", "zapas"] },
