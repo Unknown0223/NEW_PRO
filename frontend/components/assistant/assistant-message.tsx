@@ -75,11 +75,10 @@ export function AssistantMessage({
     );
   }
 
-  const lead = answer.summary[0] || message.text;
-  const paragraphs = [
-    ...answer.summary.slice(1),
-    ...answer.lines
-  ].filter(Boolean);
+  /* summary va lines ko‘pincha bir xil — ikkalasini qo‘shib takrorlamaslik. */
+  const textBlocks = (answer.summary.length ? answer.summary : answer.lines).filter(Boolean);
+  const lead = textBlocks[0] || message.text;
+  const paragraphs = textBlocks.slice(1);
   const sources = answer.meta?.tools?.length
     ? answer.meta.tools
     : answer.intent

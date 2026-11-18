@@ -56,7 +56,22 @@ const READ_INTENTS: IntentSpec[] = [
   {
     name: "help.capabilities",
     kind: "read",
-    keywords: ["nima qila olasan", "yordam", "help", "imkoniyat", "что ты умеешь", "помощь", "qanday savol"]
+    keywords: [
+      "nima qila olasan",
+      "yordam",
+      "help",
+      "imkoniyat",
+      "что ты умеешь",
+      "помощь",
+      "qanday savol",
+      "salom",
+      "assalomu",
+      "assalom",
+      "hello",
+      "привет",
+      "здравствуй",
+      "добрый день"
+    ]
   }
 ];
 
