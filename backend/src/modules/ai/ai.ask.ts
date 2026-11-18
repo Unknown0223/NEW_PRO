@@ -7,6 +7,7 @@ import { runTool } from "./ai.exec";
 import { signToken, newJti, type TokenPayload } from "./ai.token";
 import { auditAi } from "./ai.audit";
 import { answerForEmptyPlan, answerFromRun } from "./ai.answer";
+import { pickRows } from "./ai.format";
 import { getTool, listCapabilities } from "./ai.registry";
 import { gateWrite, loadPermissionState, type PermissionState } from "./ai.guard";
 import { ALL_INTENT_NAMES } from "./ai.intent";
@@ -73,11 +74,21 @@ export async function handleAiAsk(input: {
   }
 
   const runs: Array<{ tool: string; run: AiToolRun }> = [];
+  let defaultCashDeskId: string | undefined;
   for (const call of calls) {
     const tool = getTool(call.tool);
     if (!tool) continue;
-    const run = await runTool(app, actor, tool, call.params);
+    const params = { ...call.params };
+    if (tool.id === "finance.cashflow" && !params.cash_desk_id && defaultCashDeskId) {
+      params.cash_desk_id = defaultCashDeskId;
+    }
+    const run = await runTool(app, actor, tool, params);
     runs.push({ tool: tool.id, run });
+    if (tool.id === "finance.cash_desks" && run.status === "ok") {
+      const desks = pickRows(run.payload);
+      const firstId = desks[0]?.id;
+      if (firstId != null && firstId !== "") defaultCashDeskId = String(firstId);
+    }
     if (run.status === "error" || run.status === "denied") break;
   }
   const previewRows = AI_CONFIG.chatPreviewRows;

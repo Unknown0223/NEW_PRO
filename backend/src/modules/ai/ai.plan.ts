@@ -91,7 +91,11 @@ function buildReadCalls(intent: string, slots: AiSlots): AiToolCall[] {
     case "finance.receivables":
       return [readCall("finance.receivables", { limit, search })];
     case "finance.cashflow":
-      return [readCall("finance.cashflow", { from: period.from, to: period.to })];
+      /* API cash_desk_id talab qiladi — avval kassalar, keyin birinchi kassa bilan hisobot. */
+      return [
+        readCall("finance.cash_desks", {}),
+        readCall("finance.cashflow", { from: period.from, to: period.to })
+      ];
     case "finance.expenses":
       return [
         readCall("finance.expenses", { from: period.from, to: period.to, limit }),

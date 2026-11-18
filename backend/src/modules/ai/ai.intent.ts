@@ -40,7 +40,20 @@ const READ_INTENTS: IntentSpec[] = [
   { name: "inventory.turnover", kind: "read", keywords: ["ombor aylanishi", "sotuv aylanishi", "склад оборот", "turnover"] },
   { name: "price.as-of", kind: "read", keywords: ["narx bo'yicha sana", "narx as_of", "narx sana bo'yicha", "цена на дату", "price as of"] },
   { name: "finance.receivables", kind: "read", keywords: ["qarz", "qarzdor", "долг", "должник", "дебитор", "задолженность", "receivable", "nasiya"] },
-  { name: "finance.cashflow", kind: "read", keywords: ["pul oqimi", "kassa oqimi", "cash flow", "движение денег", "денежный поток"] },
+  {
+    name: "finance.cashflow",
+    kind: "read",
+    keywords: [
+      "pul oqimi",
+      "kassa oqimi",
+      "kassa oqimi hisoboti",
+      "cash flow",
+      "движение денег",
+      "денежный поток",
+      "дДС",
+      "dds"
+    ]
+  },
   { name: "finance.pnl", kind: "read", keywords: ["foyda", "zarar", "прибыль", "убыток", "pnl", "rentabellik", "рентабельность"] },
   { name: "finance.expenses_summary", kind: "read", keywords: ["rasxod jami", "xarajat jami", "расходы итог", "сумма расходов"] },
   { name: "finance.expenses", kind: "read", keywords: ["rasxod", "xarajat", "расход", "затрат", "expense"] },
