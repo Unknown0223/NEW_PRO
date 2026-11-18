@@ -1,5 +1,6 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "../../config/database";
+import { supervisorDisplayNameOrNull } from "../access/access-supervisor-display";
 import { ORDER_STATUSES_OUTSTANDING_RECEIVABLE } from "../orders/order-status";
 import {
   paymentTypesFromMethodEntries,
@@ -57,7 +58,14 @@ export async function listClientBalancesReportMain(
     select: {
       id: true,
       agent_id: true,
-      agent: { select: { id: true, name: true, code: true } },
+      agent: {
+        select: {
+          id: true,
+          name: true,
+          code: true,
+          supervisor: { select: { name: true, role: true } }
+        }
+      },
       client_balances: { take: 1, select: { balance: true } }
     }
   });
@@ -236,6 +244,11 @@ export async function listClientBalancesReportMain(
       agentRows.sort((a, b) => {
         const an = (a.agent_name ?? "").localeCompare(b.agent_name ?? "", "ru");
         return an * sortDir;
+      });
+    } else if (sortBy === "agent_code") {
+      agentRows.sort((a, b) => {
+        const cmp = (a.agent_code ?? "").localeCompare(b.agent_code ?? "", "ru");
+        return cmp * sortDir;
       });
     } else if (sortBy.startsWith("pay:")) {
       agentRows.sort((a, b) =>
@@ -425,6 +438,17 @@ export async function listClientBalancesReportMain(
   const ledgerById = new Map(
     allClientsLedger.map((x) => [x.id, x.client_balances[0]?.balance ?? new Prisma.Decimal(0)])
   );
+  const clientMetaById = new Map(allClientsLedger.map((x) => [x.id, x]));
+  const clientTextSortKey = (id: number, key: string): string => {
+    const c = clientMetaById.get(id);
+    if (!c) return "";
+    if (key === "agent_name") return (c.agent?.name ?? "").trim();
+    if (key === "agent_code") return (c.agent?.code ?? "").trim();
+    if (key === "supervisor" || key === "supervisor_name") {
+      return (supervisorDisplayNameOrNull(c.agent?.supervisor) ?? "").trim();
+    }
+    return "";
+  };
   if (q.view === "clients" && (sortBy === "balance" || sortBy.startsWith("pay:"))) {
     if (sortBy === "balance") {
       sortedIds = [...ids].sort((a, b) => {
@@ -469,6 +493,17 @@ export async function listClientBalancesReportMain(
         return compareNumForSort(aVal, bVal, sortDir);
       });
     }
+  } else if (
+    q.view === "clients" &&
+    (sortBy === "agent_name" ||
+      sortBy === "agent_code" ||
+      sortBy === "supervisor" ||
+      sortBy === "supervisor_name")
+  ) {
+    sortedIds = [...ids].sort((a, b) => {
+      const cmp = clientTextSortKey(a, sortBy).localeCompare(clientTextSortKey(b, sortBy), "ru");
+      return cmp * sortDir;
+    });
   }
 
   const total = ids.length;

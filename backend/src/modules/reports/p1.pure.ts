@@ -1,18 +1,19 @@
 import type { P1Metric, P1MonthCol, P1Row } from "./p1.types";
 
-const MONTH_SHORT = [
-  "Jan",
-  "Feb",
-  "Mar",
-  "Apr",
-  "May",
-  "Jun",
-  "Jul",
-  "Aug",
-  "Sep",
-  "Oct",
-  "Nov",
-  "Dec"
+/** Ruscha oy nomlari — Excel P1 shabloni bilan mos. */
+const MONTH_RU = [
+  "Янв",
+  "Фев",
+  "Мар",
+  "Апр",
+  "Май",
+  "Июн",
+  "Июл",
+  "Авг",
+  "Сен",
+  "Окт",
+  "Ноя",
+  "Дек"
 ] as const;
 
 export const P1_RETURN_ORDER_TYPES = ["return", "return_by_order", "partial_return"] as const;
@@ -21,8 +22,13 @@ export function monthKey(year: number, month: number): string {
   return `${year}-${String(month).padStart(2, "0")}`;
 }
 
+/** To‘liq yil: «Фев 2025», «Фев 2026» — '25/'26 chalkashligisiz. */
 export function monthLabel(year: number, month: number): string {
-  return `${MONTH_SHORT[month - 1]}'${String(year).slice(-2)}`;
+  return `${MONTH_RU[month - 1]} ${year}`;
+}
+
+export function monthPeriodLabel(month: number): string {
+  return MONTH_RU[month - 1] ?? String(month);
 }
 
 export function quarterKey(year: number, q: number): string {
@@ -31,6 +37,14 @@ export function quarterKey(year: number, q: number): string {
 
 export function yearKey(year: number): string {
   return `${year}-Y`;
+}
+
+export function quarterLabel(year: number, q: number): string {
+  return `${q} кв. ${year}`;
+}
+
+export function yearSummaryLabel(year: number): string {
+  return `Итого ${year}`;
 }
 
 export function buildP1MonthColumns(year: number, compareYear: number): P1MonthCol[] {
@@ -56,14 +70,14 @@ export function buildP1MonthColumns(year: number, compareYear: number): P1MonthC
         key: quarterKey(compareYear, q),
         year: compareYear,
         month: q,
-        label: `Q${q}'${String(compareYear).slice(-2)}`,
+        label: quarterLabel(compareYear, q),
         kind: "quarter"
       });
       cols.push({
         key: quarterKey(year, q),
         year,
         month: q,
-        label: `Q${q}'${String(year).slice(-2)}`,
+        label: quarterLabel(year, q),
         kind: "quarter"
       });
     }
@@ -72,14 +86,14 @@ export function buildP1MonthColumns(year: number, compareYear: number): P1MonthC
     key: yearKey(compareYear),
     year: compareYear,
     month: 0,
-    label: `Summary ${compareYear}`,
+    label: yearSummaryLabel(compareYear),
     kind: "year"
   });
   cols.push({
     key: yearKey(year),
     year,
     month: 0,
-    label: `Summary ${year}`,
+    label: yearSummaryLabel(year),
     kind: "year"
   });
   return cols;

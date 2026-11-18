@@ -30,6 +30,7 @@ type FilterOptions = {
 
 type P1Payload = {
   year: number;
+  compare_year: number;
   date_type: DateType;
   months: P1MonthCol[];
   rows: P1Row[];
@@ -251,7 +252,7 @@ export default function P1ReportPage() {
           {canExport ? (
             <Button type="button" variant="outline" size="sm" className="h-8 text-xs" onClick={() => void onExport()}>
               <FileSpreadsheet className="mr-1 h-3.5 w-3.5" />
-              Excel
+              Выгрузка Excel
             </Button>
           ) : null}
         </div>
@@ -293,7 +294,7 @@ export default function P1ReportPage() {
               </select>
             </label>
             <label className="text-[11px] text-muted-foreground">
-              Сравнить с
+              Прошлый год
               <select
                 className={cn(filterSelectClassName, FILTER_TRIGGER, "mt-0.5")}
                 value={draft.compare_year}
@@ -340,14 +341,14 @@ export default function P1ReportPage() {
 
           <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border/60 pt-1.5">
             <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
-              <label className="inline-flex cursor-pointer items-center gap-1.5">
+              <label className="inline-flex cursor-pointer items-center gap-1.5" title="Рост или падение относительно прошлого года">
                 <input
                   type="checkbox"
                   className="accent-primary"
                   checked={showYoy}
                   onChange={(e) => setShowYoy(e.target.checked)}
                 />
-                YoY %
+                % к прошлому году
               </label>
               <label className="inline-flex cursor-pointer items-center gap-1.5">
                 <input
@@ -382,6 +383,7 @@ export default function P1ReportPage() {
           rows={reportQ.data?.rows ?? []}
           months={visibleMonths}
           year={Number(applied.year)}
+          compareYear={Number(applied.compare_year)}
           showYoy={showYoy}
           loading={reportQ.isLoading}
           emptyHint={

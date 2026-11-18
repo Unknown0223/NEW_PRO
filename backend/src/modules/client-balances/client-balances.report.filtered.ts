@@ -1,5 +1,6 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "../../config/database";
+import { supervisorDisplayNameOrNull } from "../access/access-supervisor-display";
 import { ORDER_STATUSES_OUTSTANDING_RECEIVABLE } from "../orders/order-status";
 import {
   paymentTypesFromMethodEntries,
@@ -57,6 +58,14 @@ export async function listClientBalancesReportFiltered(
       select: {
         id: true,
         name: true,
+        agent: {
+          select: {
+            id: true,
+            name: true,
+            code: true,
+            supervisor: { select: { name: true, role: true } }
+          }
+        },
         client_balances: { take: 1, select: { balance: true } }
       },
       orderBy: { name: "asc" }
@@ -104,6 +113,14 @@ export async function listClientBalancesReportFiltered(
     const sortBy = q.sort_by?.trim() ?? "";
     const sortDir = readSortDir(q);
     let orderedEligible = eligible;
+    const textOf = (row: (typeof eligible)[number], key: string): string => {
+      if (key === "agent_name") return (row.agent?.name ?? "").trim();
+      if (key === "agent_code") return (row.agent?.code ?? "").trim();
+      if (key === "supervisor" || key === "supervisor_name") {
+        return (supervisorDisplayNameOrNull(row.agent?.supervisor) ?? "").trim();
+      }
+      return "";
+    };
     if (sortBy === "balance") {
       orderedEligible = [...eligible].sort((a, b) => {
         const aBal = Number(netOf(a.id).toString());
@@ -129,6 +146,16 @@ export async function listClientBalancesReportFiltered(
         const aVal = moneySortValueFromPaymentAmounts(aAmounts, sortBy, sprLabels);
         const bVal = moneySortValueFromPaymentAmounts(bAmounts, sortBy, sprLabels);
         return compareNumForSort(aVal, bVal, sortDir);
+      });
+    } else if (
+      sortBy === "agent_name" ||
+      sortBy === "agent_code" ||
+      sortBy === "supervisor" ||
+      sortBy === "supervisor_name"
+    ) {
+      orderedEligible = [...eligible].sort((a, b) => {
+        const cmp = textOf(a, sortBy).localeCompare(textOf(b, sortBy), "ru");
+        return cmp * sortDir;
       });
     }
 

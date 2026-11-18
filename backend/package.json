@@ -53,6 +53,7 @@
     "db:seed": "prisma db seed && npm run rbac:migrate-crud",
     "mobile:perms": "tsx scripts/ensure-mobile-role-permissions.ts",
     "rbac:ensure": "tsx scripts/ensure-rbac-tenant.ts",
+    "rbac:merge-defaults": "tsx scripts/merge-role-default-keys.ts",
     "rbac:migrate-crud": "tsx scripts/migrate-permissions-to-crud.ts test1",
     "rbac:migrate-legacy": "tsx scripts/migrate-legacy-permissions.ts test1",
     "dostup:verify": "npm run rbac:migrate-crud && vitest run tests/route-permission-guard.pure.test.ts tests/route-permission-coverage.pure.test.ts tests/rbac.permissions.pure.test.ts tests/access-api.integration.test.ts tests/rbac-enforcement.integration.test.ts tests/contract-smoke.integration.rbac.test.ts",
