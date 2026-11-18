@@ -1,4 +1,4 @@
-import 'dart:async';
+﻿import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -60,7 +60,8 @@ class _RoleWelcomeScreenState extends ConsumerState<RoleWelcomeScreen> {
     ],
   };
 
-  bool _revealed = false;
+  // Ko‘k dumaloq brend ikonka splash yo‘q — darhol road animatsiya.
+  final bool _revealed = true;
   bool _leaving = false;
   int _step = 0;
   Timer? _stepTimer;
@@ -81,14 +82,10 @@ class _RoleWelcomeScreenState extends ConsumerState<RoleWelcomeScreen> {
   @override
   void initState() {
     super.initState();
-    Future<void>.delayed(
-      const Duration(milliseconds: 1150),
-      () {
-        if (!mounted) return;
-        setState(() => _revealed = true);
-        _scheduleStep();
-      },
-    );
+    // Eski blue+SaBrandMark intro olib tashlandi — road checklist boshlanadi.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _scheduleStep();
+    });
   }
 
   void _scheduleStep() {
@@ -158,35 +155,12 @@ class _RoleWelcomeScreenState extends ConsumerState<RoleWelcomeScreen> {
       body: Stack(
         fit: StackFit.expand,
         children: [
-          // Brand flood (login wave) → drain
-          if (!_revealed)
-            Positioned.fill(
-              child: IgnorePointer(
-                child: ColoredBox(
-                  color: SaBrand.blue,
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const SaBrandMark(size: 84, draw: true),
-                      const SizedBox(height: 10),
-                      const SaBrandWordmark(
-                        size: 24,
-                        tone: SaBrandTone.onBrand,
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        '$roleTitle ish joyi ochilmoqda…',
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.white.withValues(alpha: 0.8),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
+          // To‘lqin animatsiya (dumaloq brend ikonkasiz)
+          const Positioned.fill(
+            child: IgnorePointer(
+              child: SaBrandWave(topFraction: 0.78, animate: true),
             ),
+          ),
 
           AnimatedOpacity(
             duration: const Duration(milliseconds: 420),
@@ -199,8 +173,6 @@ class _RoleWelcomeScreenState extends ConsumerState<RoleWelcomeScreen> {
                     padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
                     child: Row(
                       children: [
-                        const SaBrandMark(size: 22, draw: false),
-                        const SizedBox(width: 6),
                         const SaBrandWordmark(size: 13),
                         const Spacer(),
                         Container(

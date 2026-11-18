@@ -8,6 +8,7 @@ import '../../core/api/api_exceptions.dart';
 import '../../core/api/auth_api.dart';
 import '../../core/auth/app_lock.dart';
 import '../../core/auth/app_pin_store.dart';
+import '../../core/auth/biometric_login_attempt.dart';
 import '../../core/auth/biometric_service.dart';
 import '../../core/auth/biometric_preferences.dart';
 import '../../core/auth/session_expired.dart';
@@ -276,6 +277,26 @@ class AuthNotifier extends StateNotifier<AuthState> {
     return true;
   }
 
+  /// Login ekrani Face ID: sessiya + biometriya bo‘lsa ochadi; aks holda sababni qaytaradi.
+  Future<BiometricLoginAttempt> tryLoginScreenBiometric() async {
+    final bio = _ref.read(biometricServiceProvider);
+    if (!await bio.isAvailable()) return BiometricLoginAttempt.notAvailable;
+    if (!await _ref.read(biometricPreferencesProvider).isEnabled()) {
+      return BiometricLoginAttempt.notEnabled;
+    }
+    if (!await _canAppLock()) return BiometricLoginAttempt.noSession;
+
+    final ok = await bio.authenticate(
+      reason: 'Sales Arena ga kirish',
+      biometricOnly: true,
+    );
+    if (!ok) return BiometricLoginAttempt.failed;
+
+    _pinFailCount = 0;
+    await _finishLocalUnlock();
+    return BiometricLoginAttempt.success;
+  }
+
   /// Mahalliy qulfdan tez ochish — UI darhol ochiladi, API fonda.
   Future<void> _finishLocalUnlock() async {
     if (_session.state.bootstrapped && _session.state.user != null) {
@@ -502,6 +523,17 @@ class AuthNotifier extends StateNotifier<AuthState> {
 
   Future<void> checkSession() async {
     // Status `initial` qoladi → splash (login miltillamasin).
+    // Failsafe: osilib qolsa 8s dan keyin login.
+    unawaited(
+      Future<void>.delayed(
+        const Duration(seconds: 8),
+        () {
+          if (state.status == AuthStatus.initial) {
+            state = const AuthState(status: AuthStatus.unauthenticated);
+          }
+        },
+      ),
+    );
     try {
       await _ref.read(appPinStoreProvider).warmCache();
       final hasTokens = await restoreTokens(_ref);
@@ -1004,8 +1036,8 @@ class AuthNotifier extends StateNotifier<AuthState> {
         _session.markBootstrapped();
         await AppDatabase().recordSyncToday();
         state = state.copyWith(bootstrapStep: BootstrapStep.done, status: AuthStatus.syncComplete);
-        // RoleWelcome (~2.2s) ko‘rinsin — UI finishBootstrap chaqirmasa ham.
-        unawaited(Future<void>.delayed(const Duration(milliseconds: 2800), () {
+        // RoleWelcome (ikonkasiz) — UI finishBootstrap chaqirmasa ham.
+        unawaited(Future<void>.delayed(const Duration(milliseconds: 3200), () {
           if (state.status == AuthStatus.syncComplete) finishBootstrap();
         }));
         return;
@@ -1077,11 +1109,10 @@ class AuthNotifier extends StateNotifier<AuthState> {
       _session.markBootstrapped();
       state = state.copyWith(bootstrapStep: BootstrapStep.done, status: AuthStatus.syncComplete);
       unawaited(_bootstrapPostSyncServices());
-      // RoleWelcome (~2.2s) + «o‘tkazib yuborish» — oq/spinnerda qolmasin.
-      unawaited(Future<void>.delayed(const Duration(milliseconds: 2800), () {
+      // RoleWelcome (ikonkasiz road animatsiya) — oq/spinnerda qolmasin.
+      unawaited(Future<void>.delayed(const Duration(milliseconds: 3200), () {
         if (state.status == AuthStatus.syncComplete) {
           finishBootstrap();
-          unawaited(_resumeDeferredAppUpdateSoon());
         }
       }));
     } on UnauthorizedException catch (e) {

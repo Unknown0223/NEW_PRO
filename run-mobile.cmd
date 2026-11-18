@@ -1,5 +1,5 @@
 @echo off
 chcp 65001 >nul
-REM Mobil ilovani ishga tushirish (repo ildizidan).
-cd /d "%~dp0mobile"
+REM Asosiy mobil = SalesDoc Legacy (mobile_legacy). Redesign: mobile\start-mobile.cmd
+cd /d "%~dp0mobile_legacy"
 call start-mobile.cmd

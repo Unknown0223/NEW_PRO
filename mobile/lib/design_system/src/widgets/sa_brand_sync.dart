@@ -225,8 +225,6 @@ class _Header extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(16, 8, 12, 0),
       child: Row(
         children: [
-          const SaBrandMark(size: 28, draw: true),
-          const SizedBox(width: 8),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,

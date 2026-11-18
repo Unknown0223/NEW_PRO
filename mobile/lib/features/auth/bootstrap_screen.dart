@@ -8,7 +8,7 @@ import '../../design_system/design_system.dart';
 import 'auth_provider.dart';
 import 'role_welcome_screen.dart';
 
-/// Bootstrap — `SaBrandSync` + muvaffaqiyatdan keyin `RoleWelcome`.
+/// Bootstrap — sync animatsiya + RoleWelcome (dumaloq brend ikonkasiz).
 class BootstrapScreen extends ConsumerWidget {
   const BootstrapScreen({super.key});
 
