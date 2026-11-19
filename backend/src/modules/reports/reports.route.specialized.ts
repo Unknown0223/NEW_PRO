@@ -59,6 +59,7 @@ import { registerExpeditorShipmentsReportRoutes } from "./reports.route.expedito
 import { registerExcelExportReportRoutes } from "./reports.route.excel-export";
 import { registerInventoryReportRoutes } from "./reports.route.inventory";
 import { registerPhotoReportRoutes } from "./reports.route.photo";
+import { registerTasksReportRoutes } from "./reports.route.tasks";
 import { createReportRouteGuards, parseReportQueryOr400, reportQueryRaw } from "./reports.route.shared";
 
 export async function registerReportsSpecializedRoutes(app: FastifyInstance, guards: ReturnType<typeof createReportRouteGuards> = createReportRouteGuards()) {
@@ -70,6 +71,7 @@ export async function registerReportsSpecializedRoutes(app: FastifyInstance, gua
   registerExcelExportReportRoutes(app, guards);
   registerInventoryReportRoutes(app, guards);
   registerPhotoReportRoutes(app, guards);
+  registerTasksReportRoutes(app, guards);
 
   app.get("/api/:slug/reports/product-sales/filter-options", { preHandler: reportViewPreHandler }, async (request, reply) => {
     if (!ensureTenantContext(request, reply)) return;

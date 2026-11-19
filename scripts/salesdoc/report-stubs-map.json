@@ -2,11 +2,6 @@
   "_comment": "Loyihadagi REPORT_MENU_STUBS ↔ SalesDoc menyu qidiruv kalitlari. URL'lar probe skripti bilan to‘ldiriladi.",
   "stubs": [
     {
-      "slug": "tasks",
-      "label": "Отчёт по задачам",
-      "search": ["по задачам", "задач", "tasks report"]
-    },
-    {
       "slug": "feedback",
       "label": "Отчёт обратной связи (бот акт сверки)",
       "search": ["обратной связи", "акт сверки", "feedback"]

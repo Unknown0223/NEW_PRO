@@ -33,6 +33,8 @@ export const EXTRA_OP_LABEL_RU: Record<string, string> = {
   "reports.po_inventaryu.export": "Выгрузка «По инвентарю» в Excel",
   "reports.fotootchyoty.view": "Открыть отчёт «Фотоотчёты»",
   "reports.fotootchyoty.export": "Выгрузка «Фотоотчёты» в Excel",
+  "reports.otchet_po_zadacham.view": "Открыть отчёт «По задачам»",
+  "reports.otchet_po_zadacham.export": "Выгрузка «По задачам» в Excel",
   "staff.agent.export": "Выгрузка агентов в Excel",
   "staff.ekspeditor.export": "Выгрузка экспедиторов в Excel",
   "staff.supervayzer.export": "Выгрузка супервайзеров в Excel",
