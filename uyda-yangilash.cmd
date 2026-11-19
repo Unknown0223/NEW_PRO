@@ -11,17 +11,18 @@ if errorlevel 1 (
 )
 
 for /f "delims=" %%b in ('git rev-parse --abbrev-ref HEAD') do set "BR=%%b"
-if /i "%BR%"=="HEAD" (
-  echo Detached HEAD. main ga o'tamiz...
+if /i not "%BR%"=="main" (
+  echo Joriy branch: %BR% — uy sinxron uchun main ga o'tamiz...
   git checkout main
-  if errorlevel 1 exit /b 1
-  set "BR=main"
+  if errorlevel 1 (
+    echo Xato: git checkout main
+    exit /b 1
+  )
 )
 
-echo Joriy branch: %BR%
-git pull --ff-only origin %BR%
+git pull --ff-only origin main
 if errorlevel 1 (
-  echo pull --ff-only yiqildi. Qo'lda: git pull origin %BR%
+  echo pull --ff-only yiqildi. Qo'lda: git pull origin main
   exit /b 1
 )
 
@@ -56,7 +57,7 @@ if not "%FG%"=="0" (
 
 :done
 echo.
-echo Tayyor. Mobil: .\run-mobile.cmd
+echo Tayyor (branch: main). Mobil: .\run-mobile.cmd
 echo Hujjat: docs\UYDA-GIT-SINXRON.md
 endlocal
 exit /b 0

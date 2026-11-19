@@ -1,7 +1,7 @@
 # Architecture deepen — reja va holat
 
 **Sana:** 2026-11-19  
-**Branch:** `feature/mobile-ui-redesign`  
+**Branch:** `main` (merge: `feature/mobile-ui-redesign`)  
 **Maqsad:** shallow/god-modulllarni deep module + thin adapter/composer ga aylantirish (GLOSSARY + ADR).
 
 ## Reja (#1 → #4)
