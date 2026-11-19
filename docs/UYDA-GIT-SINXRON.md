@@ -66,8 +66,8 @@ APK ni gitga qo‘ymaymiz — uyda `flutter build apk` yoki `mobile\build-apk-lo
 
 ## Branch eslatma
 
-- Kundalik ish / uy sinxroni: **`main`**
-- Agar faqat redesign feature kerak bo‘lsa: `git checkout feature/mobile-ui-redesign && git pull`
+- Uy sinxroni va kundalik yangilash: **faqat `main`** (`uyda-yangilash.cmd` ham `main`ga o‘tkazadi).
+- Redesign va deepen ishlari **allaqachon `main`da** — alohida feature branch kerak emas.
 
 ## Reja holati (qayerdamiz)
 
