@@ -177,7 +177,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           children: [
             const Positioned.fill(
               child: RepaintBoundary(
-                child: IgnorePointer(child: CustomPaint(painter: _DotGridPainter())),
+                child: IgnorePointer(child: CustomPaint(painter: SaDotGridPainter())),
               ),
             ),
             Positioned.fill(
@@ -605,20 +605,4 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   }
 }
 
-class _DotGridPainter extends CustomPainter {
-  const _DotGridPainter();
 
-  @override
-  void paint(Canvas canvas, Size size) {
-    final p = Paint()..color = const Color(0xFF14223F).withValues(alpha: 0.06);
-    const step = 18.0;
-    for (var y = 0.0; y < size.height; y += step) {
-      for (var x = 0.0; x < size.width; x += step) {
-        canvas.drawCircle(Offset(x, y), 0.8, p);
-      }
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
-}
