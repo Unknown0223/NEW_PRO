@@ -14,9 +14,15 @@ npm run db:deploy && npm run db:seed && npm run dev
 
 # 3. Frontend
 cd frontend && npm ci && npm run dev
+
+# 4. Mobile (Flutter) — monorepo ichida `mobile/`
+cd mobile && cp .env.example .env && flutter pub get
+# yoki ildizdan: .\run-mobile.cmd
 ```
 
-Batafsil: [docs/ONBOARDING.md](docs/ONBOARDING.md)
+**Uyda GitHub dan yangilash** (backend + frontend + **mobile** birga): `.\uyda-yangilash.cmd` — [docs/UYDA-GIT-SINXRON.md](docs/UYDA-GIT-SINXRON.md)
+
+Batafsil: [docs/ONBOARDING.md](docs/ONBOARDING.md) · mobil: [mobile/README.md](mobile/README.md)
 
 ## Struktura
 

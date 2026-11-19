@@ -59,6 +59,13 @@ Lock: `skills-lock.json` · Nusxa: `.agents/skills/`
 5. **Ishchi oqim (shu reja uchun):**  
    `improve-codebase-architecture` → tanlov → `grill-with-docs` → (ixtiyoriy `to-spec`/`to-tickets`) → `implement` (TDD) → `code-review` → `retro`.
 
+## Mobil + uyda Git sinxron
+
+- Manba: monorepo `mobile/` (Flutter) — `main` da; `git pull` bilan keladi.
+- Skript: ildizda `uyda-yangilash.cmd` → pull + `flutter pub get`.
+- Yo‘riqnoma: [docs/UYDA-GIT-SINXRON.md](../UYDA-GIT-SINXRON.md)
+- Redesign holat: [mobile/REDESIGN_STATUS.md](../../mobile/REDESIGN_STATUS.md)
+
 ## Asosiy hujjatlar
 
 - `GLOSSARY.md` — domain + kelishuvlar  
