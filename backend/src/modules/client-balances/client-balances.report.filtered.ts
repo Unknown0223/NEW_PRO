@@ -1,25 +1,9 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "../../config/database";
 import { supervisorDisplayNameOrNull } from "../access/access-supervisor-display";
-import { ORDER_STATUSES_OUTSTANDING_RECEIVABLE } from "../orders/order-status";
-import {
-  paymentTypesFromMethodEntries,
-  resolveCurrencyEntries,
-  resolvePaymentMethodEntries,
-  resolvePaymentMethodRefToLabel,
-  type PaymentMethodEntryDto
-} from "../tenant-settings/finance-refs";
-import type {
-  AgentBalanceRow,
-  ClientBalanceListQuery,
-  ClientBalanceListResponse,
-  ClientBalanceRow
-} from "./client-balances.types";
+import type { ClientBalanceListResponse, ClientBalanceRow } from "./client-balances.types";
 import { agentInclude } from "./client-balances.constants";
-import { buildOrderCreatedLocalDateClause } from "./client-balances.date";
 import { buildClientWhere } from "./client-balances.where";
-import type { DeliveryDebtInfo } from "./client-balances.delivery";
-import { makePerfMarker, parseIsoDateEndUtc } from "./client-balances.date";
 import {
   loadPaymentNetNormByClient,
   loadTenantPaymentRefs,
@@ -33,16 +17,9 @@ import {
   paymentAmountsNetMinusUnpaid,
   readSortDir
 } from "./client-balances.payments.util";
-import {
-  loadLastDeliveryByClient,
-  loadLastPaymentByClient,
-  loadLedgerCardNetByClient
-} from "./client-balances.ledger";
-import {
-  loadDeliveryDebtByClient,
-  loadUnpaidDeliveredOrderDebtRows
-} from "./client-balances.delivery";
-import { mapClientRow, mapDeliveryOrderRow } from "./client-balances.mappers";
+import { loadLastDeliveryByClient, loadLastPaymentByClient } from "./client-balances.ledger";
+import { loadClientBalanceView } from "./client-balance-view";
+import { mapClientRow } from "./client-balances.mappers";
 import { loadConsignmentDueByClient } from "./client-balances.consignment-due";
 import type { ClientBalancesReportContext } from "./client-balances.report.context";
 import { loadDebtSplitByClient } from "./client-debt-by-agent";
@@ -72,11 +49,8 @@ export async function listClientBalancesReportFiltered(
     });
     const baseIds = allMinimal.map((c) => c.id);
     perf("clients-balance-filter.base-loaded", { baseIds: baseIds.length, filter: bfEarly });
-    const [deliveryMap, cardNetByClient] = await Promise.all([
-      loadDeliveryDebtByClient(tenantId, baseIds, odFrom, odTo),
-      loadLedgerCardNetByClient(tenantId, baseIds, asOfEnd)
-    ]);
-    perf("clients-balance-filter.derived-loaded", { deliveryMap: deliveryMap.size });
+    const cardNetByClient = await loadClientBalanceView(tenantId, baseIds, "card_net", { asOfEnd });
+    perf("clients-balance-filter.derived-loaded", { cardNet: cardNetByClient.size });
 
     const netOf = (id: number) => cardNetByClient.get(id) ?? new Prisma.Decimal(0);
 

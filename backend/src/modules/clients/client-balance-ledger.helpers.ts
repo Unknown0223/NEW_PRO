@@ -7,10 +7,6 @@ import {
   resolvePaymentMethodRefToLabel,
   type PaymentMethodEntryDto
 } from "../tenant-settings/finance-refs";
-import {
-  loadDeliveryDebtByClient,
-  mergeLedgerWithUnpaidDelivered
-} from "../client-balances/client-balances.service";
 import { ORDER_STATUSES_OUTSTANDING_RECEIVABLE } from "../orders/order-status";
 
 import type { ClientBalancePaymentTypeSummary, ClientLedgerQuery, ClientLedgerRow } from "./client-balance-ledger.types";

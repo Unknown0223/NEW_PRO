@@ -18,7 +18,7 @@ import {
 } from "./client-balances.service";
 import { tashkentDayEndUtc, tashkentDayStartUtc } from "./client-balances.date";
 import { consignmentMatchSql, effectiveDueSql } from "./client-balances.consignment-due";
-import { loadLedgerCardNetByClient } from "./client-balances.ledger";
+import { loadClientBalanceView } from "./client-balance-view";
 
 const LARGE_CLIENT_IDS_CHUNK = 10000;
 const BALANCE_PERF_LOG = process.env.BALANCE_PERF_LOG === "1";
@@ -239,7 +239,7 @@ export async function listConsignmentBalancesReport(
   perf("debt-map-loaded", { debtClients: debtMap.size });
 
   const eligible = ids.filter((id) => debtMap.has(id));
-  const cardNetByClient = await loadLedgerCardNetByClient(tenantId, eligible);
+  const cardNetByClient = await loadClientBalanceView(tenantId, eligible, "card_net");
   let cardNetSum = new Prisma.Decimal(0);
   for (const id of eligible) cardNetSum = cardNetSum.add(cardNetByClient.get(id) ?? new Prisma.Decimal(0));
 

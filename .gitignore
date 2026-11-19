@@ -139,3 +139,9 @@ backend/tmp/
 # Preview orqali yuklab olish uchun vaqtinchalik ZIP nusxalari (repo ga kirmaydi)
 packages/plans-proposal-demo/public/SALEC-*.zip
 packages/plans-proposal-demo/public/SALEC-*.txt
+
+# Root source ZIP arxivlari — repoda saqlanmaydi (xavfsizlik)
+/SALEC-*.zip
+
+tmp/
+

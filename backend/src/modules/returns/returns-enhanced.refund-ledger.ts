@@ -1,4 +1,5 @@
 import { Prisma, type PrismaClient } from "@prisma/client";
+import { applyDelta } from "../client-balances/client-balance-mutator";
 import { R } from "./returns-enhanced.helpers";
 
 export const RETURN_REFUND_MOVEMENT_NOTE = "Возврат";
@@ -61,18 +62,12 @@ export async function applyClientReturnRefund(
   });
 
   if (!opts?.skipBalance) {
-    const bal = await tx.clientBalance.upsert({
-      where: { tenant_id_client_id: { tenant_id: tenantId, client_id: clientId } },
-      create: { tenant_id: tenantId, client_id: clientId, balance: refund },
-      update: { balance: { increment: refund } }
-    });
-    await tx.clientBalanceMovement.create({
-      data: {
-        client_balance_id: bal.id,
-        delta: refund,
-        note: opts?.returnNumber?.trim() ? `Vazvrat: ${opts.returnNumber.trim()}` : note,
-        user_id: uid
-      }
+    await applyDelta(tx, {
+      tenantId,
+      clientId,
+      delta: refund,
+      note: opts?.returnNumber?.trim() ? `Vazvrat: ${opts.returnNumber.trim()}` : note,
+      userId: uid
     });
   }
 

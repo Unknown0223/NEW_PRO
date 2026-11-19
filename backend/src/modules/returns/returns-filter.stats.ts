@@ -8,10 +8,8 @@ import {
 import { returnFilterMetaEnriched, type ReturnFilterStats } from "./returns-filter.explain";
 import type { ReturnFilterMeta } from "./returns-filter.types";
 import { POLKI_SOURCE_ORDER_STATUS } from "./returns-enhanced.client-data.shared";
-import {
-  loadDeliveryDebtByClient,
-  mergeLedgerWithUnpaidDelivered
-} from "../client-balances/client-balances.service";
+import { loadClientBalanceView } from "../client-balances/client-balance-view";
+import { loadDeliveryDebtByClient } from "../client-balances/client-balances.service";
 import { computeLedgerRunningBalance } from "./returns-filter.balance-zero";
 
 async function countDeliveredOrders(
@@ -36,18 +34,19 @@ export async function buildReturnFilterMetaForClient(
 ): Promise<{ window: Awaited<ReturnType<typeof resolveReturnEligibleWindow>>; meta: ReturnFilterMeta }> {
   const window = await resolveReturnEligibleWindow(tenantId, clientId, now);
 
-  const [bal, deliveryMap, ledgerNet] = await Promise.all([
+  const [bal, deliveryMap, ledgerNet, balanceByClient] = await Promise.all([
     prisma.clientBalance.findUnique({
       where: { tenant_id_client_id: { tenant_id: tenantId, client_id: clientId } },
       select: { balance: true }
     }),
     loadDeliveryDebtByClient(tenantId, [clientId]),
-    computeLedgerRunningBalance(tenantId, clientId, now)
+    computeLedgerRunningBalance(tenantId, clientId, now),
+    loadClientBalanceView(tenantId, [clientId], "ledger_merged")
   ]);
 
   const ledgerBalance = bal?.balance ?? new Prisma.Decimal(0);
   const deliveryInfo = deliveryMap.get(clientId);
-  const accountBalance = mergeLedgerWithUnpaidDelivered(ledgerBalance, deliveryInfo);
+  const accountBalance = balanceByClient.get(clientId) ?? new Prisma.Decimal(0);
 
   let deliveredInPeriod: number | null = null;
   if (window.settings.period_enabled) {

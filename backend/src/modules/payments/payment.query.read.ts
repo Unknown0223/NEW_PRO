@@ -21,6 +21,7 @@ import {
   mapPaymentToListRow,
   paymentListInclude
 } from "./payment.query.mappers";
+import { loadClientBalanceView } from "../client-balances/client-balance-view";
 
 export async function getPaymentDetail(
   tenantId: number,
@@ -115,8 +116,7 @@ async function clientCardBalanceById(
 ): Promise<Map<number, string>> {
   const ids = [...new Set(clientIds.filter((id) => Number.isFinite(id) && id > 0))];
   if (ids.length === 0) return new Map();
-  const { loadLedgerCardNetByClient } = await import("../client-balances/client-balances.ledger");
-  const net = await loadLedgerCardNetByClient(tenantId, ids);
+  const net = await loadClientBalanceView(tenantId, ids, "card_net");
   const out = new Map<number, string>();
   for (const id of ids) out.set(id, (net.get(id) ?? new Prisma.Decimal(0)).toString());
   return out;

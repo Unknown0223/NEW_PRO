@@ -18,6 +18,11 @@ import type { PaymentDetailPayload, UpdatePaymentInput } from "./payment.query.t
 import { getPaymentDetail, resolveLedgerAgentId } from "./payment.query.read";
 import { paymentListInclude } from "./payment.query.mappers";
 import { completeActivePaymentEditGrantsInTx } from "./payment-edit-grants.service";
+import { applyDelta } from "../client-balances/client-balance-mutator";
+import {
+  deltaForPaymentAmountEdit,
+  isNeverPostedWorkflow
+} from "./payment-balance.adapters";
 
 export async function updatePayment(
   tenantId: number,
@@ -121,27 +126,17 @@ export async function updatePayment(
       }
     }
 
-    if (!oldAmount.equals(nextAmount)) {
-      const bal = await tx.clientBalance.findUnique({
-        where: { tenant_id_client_id: { tenant_id: tenantId, client_id: existing.client_id } }
+    // Pending/rejected — balans hech qachon post bo‘lmagan; faqat qator summasi o‘zgaradi.
+    const movementDelta = deltaForPaymentAmountEdit(ek, oldAmount, nextAmount);
+    if (movementDelta != null && !isNeverPostedWorkflow(existing.workflow_status)) {
+      const kindLabel = ek === "client_expense" ? "Расход" : "Оплата";
+      await applyDelta(tx, {
+        tenantId,
+        clientId: existing.client_id,
+        delta: movementDelta,
+        note: `${kindLabel} #${paymentId}: изменение суммы`,
+        userId: uid
       });
-      if (bal) {
-        const isExpense = ek === "client_expense";
-        const movementDelta = isExpense ? oldAmount.sub(nextAmount) : nextAmount.sub(oldAmount);
-        await tx.clientBalance.update({
-          where: { id: bal.id },
-          data: { balance: { increment: movementDelta } }
-        });
-        const kindLabel = isExpense ? "Расход" : "Оплата";
-        await tx.clientBalanceMovement.create({
-          data: {
-            client_balance_id: bal.id,
-            delta: movementDelta,
-            note: `${kindLabel} #${paymentId}: изменение суммы`,
-            user_id: uid
-          }
-        });
-      }
     }
 
     const data: Prisma.PaymentUncheckedUpdateInput = {};

@@ -29,6 +29,7 @@ import {
   finalizePaymentNumber,
   resolvePaymentDocNumber
 } from "./payment.create.helpers";
+import { postConfirmedPaymentAmount } from "./payment-balance.adapters";
 export { createClientExpense } from "./payment.create.expense";
 import { createClientExpense } from "./payment.create.expense";
 
@@ -204,20 +205,13 @@ export async function createPayment(
 
       await finalizePaymentNumber(tx, p.id, requestedNumber);
 
-      const bal = await tx.clientBalance.upsert({
-        where: { tenant_id_client_id: { tenant_id: tenantId, client_id: input.client_id } },
-        create: { tenant_id: tenantId, client_id: input.client_id, balance: amountDec },
-        update: { balance: { increment: amountDec } }
-      });
-      await tx.clientBalanceMovement.create({
-        data: {
-          client_balance_id: bal.id,
-          delta: amountDec,
-          note: isDiscountSettlement
-            ? paymentNote ?? `Оплата скидки #${p.id}`
-            : `Оплата #${p.id}${input.order_id ? ` (заказ #${input.order_id})` : ""}`,
-          user_id: uid
-        }
+      await postConfirmedPaymentAmount(tx, {
+        tenantId,
+        payment: p,
+        note: isDiscountSettlement
+          ? paymentNote ?? `Оплата скидки #${p.id}`
+          : `Оплата #${p.id}${input.order_id ? ` (заказ #${input.order_id})` : ""}`,
+        userId: uid
       });
 
       return tx.payment.findFirstOrThrow({

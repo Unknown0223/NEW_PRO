@@ -8,7 +8,8 @@ import {
   compareNumForSort,
   readSortDir
 } from "./client-balances.payments.util";
-import { loadLastPaymentByClient, loadLedgerCardNetByClient } from "./client-balances.ledger";
+import { loadLastPaymentByClient } from "./client-balances.ledger";
+import { loadClientBalanceView } from "./client-balance-view";
 import { loadUnpaidDeliveredOrderDebtRows } from "./client-balances.delivery";
 import { mapDeliveryOrderRow } from "./client-balances.mappers";
 import { loadConsignmentDueByClient } from "./client-balances.consignment-due";
@@ -47,7 +48,9 @@ export async function listClientBalancesReportDelivery(
   const sliceClientIds = [...new Set(pageSlice.map((r) => r.client_id))];
 
   const deliveryClientIds = [...new Set(orderRows.map((r) => r.client_id))];
-  const cardNetByClient = await loadLedgerCardNetByClient(tenantId, deliveryClientIds, asOfEnd);
+  const cardNetByClient = await loadClientBalanceView(tenantId, deliveryClientIds, "card_net", {
+    asOfEnd
+  });
   let cardNetSum = new Prisma.Decimal(0);
   for (const id of deliveryClientIds) {
     cardNetSum = cardNetSum.add(cardNetByClient.get(id) ?? new Prisma.Decimal(0));

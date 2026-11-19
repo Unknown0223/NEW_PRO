@@ -5,10 +5,7 @@ import {
   parseYearMonth,
   utcMonthStart
 } from "../consignment/consignment.service";
-import {
-  loadDeliveryDebtByClient,
-  mergeLedgerWithUnpaidDelivered
-} from "../client-balances/client-balances.service";
+import { loadClientBalanceView } from "../client-balances/client-balance-view";
 import {
   ORDER_STATUSES_EXCLUDED_FROM_CREDIT_EXPOSURE,
   ORDER_STATUSES_OUTSTANDING_RECEIVABLE
@@ -69,7 +66,7 @@ export async function getMobileOrderClientFinance(
   agentUserId: number,
   clientId: number
 ): Promise<MobileOrderClientFinance | null> {
-  const [client, agg, balRow, deliveryMap, agent, hasConsignmentDebt] = await Promise.all([
+  const [client, agg, balanceByClient, agent, hasConsignmentDebt] = await Promise.all([
     prisma.client.findFirst({
       where: { id: clientId, tenant_id: tenantId, merged_into_client_id: null },
       select: {
@@ -88,11 +85,7 @@ export async function getMobileOrderClientFinance(
       },
       _sum: { total_sum: true }
     }),
-    prisma.clientBalance.findUnique({
-      where: { tenant_id_client_id: { tenant_id: tenantId, client_id: clientId } },
-      select: { balance: true }
-    }),
-    loadDeliveryDebtByClient(tenantId, [clientId]),
+    loadClientBalanceView(tenantId, [clientId], "ledger_merged"),
     prisma.user.findFirst({
       where: { id: agentUserId, tenant_id: tenantId, role: "agent", is_active: true },
       select: {
@@ -107,8 +100,7 @@ export async function getMobileOrderClientFinance(
   if (!client) return null;
 
   const creditLimit = client.credit_limit;
-  const ledger = balRow?.balance ?? new Prisma.Decimal(0);
-  const accountBalance = mergeLedgerWithUnpaidDelivered(ledger, deliveryMap.get(clientId));
+  const accountBalance = balanceByClient.get(clientId) ?? new Prisma.Decimal(0);
   const openOrders = agg._sum.total_sum ?? new Prisma.Decimal(0);
   const headroom = creditLimit.add(accountBalance);
 

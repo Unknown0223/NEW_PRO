@@ -1,7 +1,6 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "../../config/database";
-import { invalidateStock } from "../../lib/redis-cache";
-import { appendTenantAuditEvent, AuditEntityType } from "../../lib/tenant-audit";
+import { assertAvailable } from "./stock-reservation";
 
 type AssertTransferRow = {
   id: number;
@@ -39,7 +38,10 @@ export function validateWarehouseDisjoint(input: { source_warehouse_id: number; 
   }
 }
 
-/** Mavjud = qty − reserved_qty; ko‘chirish miqdori shundan oshmasin (draft yaratish / yangilash / start). */
+/**
+ * Thin adapter: transfer lines → StockReservation.assertAvailable.
+ * reserved_qty yozilmaydi; API xato formati `INSUFFICIENT_STOCK:product=…` saqlanadi.
+ */
 export async function assertSourceStockForLines(
   tenantId: number,
   sourceWarehouseId: number,
@@ -54,31 +56,29 @@ export async function assertSourceStockForLines(
   )}) AND tenant_id = ${tenantId}`;
   if (products.length !== productIds.length) throw new Error("BAD_PRODUCT");
 
+  const needByProduct = new Map<number, Prisma.Decimal>();
   for (const line of lines) {
     const delta = new Prisma.Decimal(line.qty);
     if (delta.lte(0)) throw new Error("BAD_QTY");
+    const cur = needByProduct.get(line.product_id) ?? new Prisma.Decimal(0);
+    needByProduct.set(line.product_id, cur.add(delta));
+  }
 
-    const stock = await prisma.$queryRaw<
-      { qty: Prisma.Decimal; reserved_qty: Prisma.Decimal }[]
-    >`
-      SELECT qty, reserved_qty FROM stock
-      WHERE tenant_id = ${tenantId}
-        AND warehouse_id = ${sourceWarehouseId}
-        AND product_id = ${line.product_id}
-    `;
-
-    const reservedRaw = stock[0]?.reserved_qty ?? new Prisma.Decimal(0);
-    const reserved = reservedRaw.lt(0) ? new Prisma.Decimal(0) : reservedRaw;
-    const available = stock[0]
-      ? stock[0].qty.minus(reserved)
-      : new Prisma.Decimal(0);
-
-    if (available.lt(delta)) {
-      const productInfo = products.find((p) => p.id === line.product_id);
+  try {
+    await assertAvailable(prisma, {
+      tenantId,
+      warehouseId: sourceWarehouseId,
+      needByProduct
+    });
+  } catch (e) {
+    const err = e as Error & { product_id?: number; available?: string; requested?: string };
+    if (err?.message === "INSUFFICIENT_STOCK" && err.product_id != null) {
+      const productInfo = products.find((p) => p.id === err.product_id);
       throw new Error(
-        `INSUFFICIENT_STOCK:product=${productInfo?.sku ?? line.product_id}:need=${delta}:have=${available}`
+        `INSUFFICIENT_STOCK:product=${productInfo?.sku ?? err.product_id}:need=${err.requested ?? "?"}:have=${err.available ?? "?"}`
       );
     }
+    throw e;
   }
 }
 

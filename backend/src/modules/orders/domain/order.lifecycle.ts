@@ -23,7 +23,7 @@ import {
   resolveOrderBonusesForCreate,
   type OrderAgentBonusContext
 } from "../order-bonus-apply";
-import { consumeStockOnConfirm, releaseReservedQtyClamped } from "./order.stock-lock";
+import { consume, release, reserve } from "../../stock/stock-reservation";
 import {
   ORDER_STATUSES_EXCLUDED_FROM_CREDIT_EXPOSURE,
   statusContributesToDeliveredReceivableDebt,
@@ -50,10 +50,6 @@ import {
   DEFAULT_NAKLADNOY_BUILD_OPTIONS
 } from "../order-nakladnoy-xlsx";
 import { buildNakladnoyPdf } from "../order-nakladnoy-pdf";
-import {
-  loadDeliveryDebtByClient,
-  mergeLedgerWithUnpaidDelivered
-} from "../../client-balances/client-balances.service";
 import { resolvePaymentMethodRefToLabel } from "../../tenant-settings/finance-refs";
 import { loadPaymentMethodEntriesForResolve } from "../../tenant-settings/tenant-settings.service";
 import { prepareExchangeOrderLines } from "../exchange-order-create";
@@ -222,16 +218,15 @@ export async function updateOrderStatus(
         return true;
       });
 
+      const needByProduct = new Map<number, Prisma.Decimal>();
+      for (const item of outboundStockItems) {
+        const cur = needByProduct.get(item.product_id) ?? new Prisma.Decimal(0);
+        needByProduct.set(item.product_id, cur.add(item.qty));
+      }
+
       if (trimmed === "confirmed" && fromStatus === "new") {
         // Rezlarga chiqarish + haqiqiy qoldiqdan ayirish (reserved 0 dan pastga tushmaydi)
-        for (const item of outboundStockItems) {
-          await consumeStockOnConfirm(tx, {
-            tenantId,
-            warehouseId: whId,
-            productId: item.product_id,
-            qty: item.qty
-          });
-        }
+        await consume(tx, { tenantId, warehouseId: whId, needByProduct });
       } else if (trimmed === "cancelled") {
         // Bekor qilish faza'ga bog'liq (aks holda reserved manfiyga tushib,
         // "Доступно для продаж" noto'g'ri oshib ketadi):
@@ -242,8 +237,8 @@ export async function updateOrderStatus(
         const stockWasConsumed = ["confirmed", "picking", "delivering", "delivered"].includes(
           fromStatus
         );
-        for (const item of outboundStockItems) {
-          if (stockWasConsumed) {
+        if (stockWasConsumed) {
+          for (const item of outboundStockItems) {
             await tx.stock.upsert({
               where: {
                 tenant_id_warehouse_id_product_id: {
@@ -261,14 +256,9 @@ export async function updateOrderStatus(
               },
               update: { qty: { increment: item.qty } }
             });
-          } else {
-            await releaseReservedQtyClamped(tx, {
-              tenantId,
-              warehouseId: whId,
-              productId: item.product_id,
-              qty: item.qty
-            });
           }
+        } else {
+          await release(tx, { tenantId, warehouseId: whId, needByProduct });
         }
         const minusItems = items.filter((i) => !i.is_bonus && i.exchange_line_kind === "minus");
         for (const item of minusItems) {
@@ -293,28 +283,8 @@ export async function updateOrderStatus(
           });
         }
       } else if (fromStatus === "cancelled" && trimmed === "new") {
-        // Qayta tiklash: rezervni qo'shish
-        for (const item of outboundStockItems) {
-          await tx.stock.upsert({
-            where: {
-              tenant_id_warehouse_id_product_id: {
-                tenant_id: tenantId,
-                warehouse_id: whId,
-                product_id: item.product_id
-              }
-            },
-            create: {
-              tenant_id: tenantId,
-              warehouse_id: whId,
-              product_id: item.product_id,
-              qty: new Prisma.Decimal(0),
-              reserved_qty: item.qty
-            },
-            update: {
-              reserved_qty: { increment: item.qty }
-            }
-          });
-        }
+        // Qayta tiklash: StockReservation.reserve (FOR UPDATE + available)
+        await reserve(tx, { tenantId, warehouseId: whId, needByProduct });
         const minusItemsReopen = items.filter((i) => !i.is_bonus && i.exchange_line_kind === "minus");
         for (const item of minusItemsReopen) {
           await tx.stock.upsert({

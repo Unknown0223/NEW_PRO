@@ -4,6 +4,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "../../config/database";
 import { getRedisForApp, invalidateStock } from "../../lib/redis-cache";
 import { appendTenantAuditEvent, AuditEntityType } from "../../lib/tenant-audit";
+import { assertAvailable } from "./stock-reservation";
 
 export type StockReceiptInput = {
   warehouse_id: number;
@@ -168,10 +169,22 @@ export async function applyStockAdjustmentInTx(
     }
   });
   const before = row?.qty ?? new Prisma.Decimal(0);
-  const reserved = row?.reserved_qty ?? new Prisma.Decimal(0);
   const after = before.add(delta);
   if (after.lt(0)) throw new Error("NEGATIVE_QTY");
-  if (after.lt(reserved)) throw new Error("BELOW_RESERVED");
+  if (delta.lt(0)) {
+    try {
+      await assertAvailable(tx, {
+        tenantId,
+        warehouseId: input.warehouse_id,
+        needByProduct: new Map([[input.product_id, delta.abs()]])
+      });
+    } catch (e) {
+      if ((e as Error)?.message === "INSUFFICIENT_STOCK") {
+        throw new Error("BELOW_RESERVED");
+      }
+      throw e;
+    }
+  }
 
   await tx.stock.upsert({
     where: {

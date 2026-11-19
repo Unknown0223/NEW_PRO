@@ -3,6 +3,7 @@ import { prisma } from "../../config/database";
 
 import { appendClientAuditLog } from "../clients/clients.service";
 import { invalidateDashboard } from "../../lib/redis-cache";
+import { applyDelta } from "../client-balances/client-balance-mutator";
 import { createPayment } from "../payments/payment.create";
 import { deletePayment, restorePayment } from "../payments/payment.balance.void";
 import type { CreateOpeningBalanceInput, OpeningBalanceListRow } from "./opening-balances.types";
@@ -211,25 +212,21 @@ export async function deleteOpeningBalance(
       }
     });
   } else {
-    // Legacy yozuvlar (to‘lovsiz) — eski reverse delta.
+    // Legacy yozuvlar (to‘lovsiz) — reverse delta orqali applyDelta.
     await prisma.$transaction(async (tx) => {
       const amountDec = entry.amount;
       const reverseDelta = entry.balance_type === "surplus" ? amountDec.neg() : amountDec;
       const bal = await tx.clientBalance.findUnique({
         where: { tenant_id_client_id: { tenant_id: tenantId, client_id: entry.client_id } }
       });
+      // Qator bo‘lmasa — hech qachon post bo‘lmagan; invent qilmaymiz.
       if (bal) {
-        await tx.clientBalance.update({
-          where: { id: bal.id },
-          data: { balance: { increment: reverseDelta } }
-        });
-        await tx.clientBalanceMovement.create({
-          data: {
-            client_balance_id: bal.id,
-            delta: reverseDelta,
-            note: `Начальный баланс #${entry.id} в архив`,
-            user_id: uid
-          }
+        await applyDelta(tx, {
+          tenantId,
+          clientId: entry.client_id,
+          delta: reverseDelta,
+          note: `Начальный баланс #${entry.id} в архив`,
+          userId: uid
         });
       }
       await tx.clientOpeningBalanceEntry.update({
@@ -283,18 +280,12 @@ export async function restoreOpeningBalance(
     await prisma.$transaction(async (tx) => {
       const amountDec = entry.amount;
       const delta = entry.balance_type === "surplus" ? amountDec : amountDec.neg();
-      const bal = await tx.clientBalance.upsert({
-        where: { tenant_id_client_id: { tenant_id: tenantId, client_id: entry.client_id } },
-        create: { tenant_id: tenantId, client_id: entry.client_id, balance: delta },
-        update: { balance: { increment: delta } }
-      });
-      await tx.clientBalanceMovement.create({
-        data: {
-          client_balance_id: bal.id,
-          delta,
-          note: `Начальный баланс #${entry.id} восстановлен`,
-          user_id: uid
-        }
+      await applyDelta(tx, {
+        tenantId,
+        clientId: entry.client_id,
+        delta,
+        note: `Начальный баланс #${entry.id} восстановлен`,
+        userId: uid
       });
       await tx.clientOpeningBalanceEntry.update({
         where: { id: entryId },

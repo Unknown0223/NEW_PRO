@@ -5,10 +5,7 @@ import {
   orderMerchandiseNetReceivable,
   type OrderMerchandiseRuleHint
 } from "../order-merchandise-net";
-import {
-  loadDeliveryDebtByClient,
-  mergeLedgerWithUnpaidDelivered
-} from "../../client-balances/client-balances.service";
+import { loadClientBalanceView } from "../../client-balances/client-balance-view";
 
 type OrderFinanceSlice = {
   id: number;
@@ -69,7 +66,7 @@ export async function loadOrdersFinanceEnrichment(
   const clientIds = [...new Set(slices.map((s) => s.client_id))];
   const ruleIds = [...new Set(slices.flatMap((s) => s.applied_auto_bonus_rule_ids))];
 
-  const [allocRows, statusRows, balRows, deliveryByClient, rulesById] = await Promise.all([
+  const [allocRows, statusRows, balanceByClient, rulesById] = await Promise.all([
     prisma.$queryRaw<Array<{ order_id: number; alloc: Prisma.Decimal }>>`
       SELECT order_id, COALESCE(SUM(amount), 0)::decimal(15,2) AS alloc
       FROM payment_allocations
@@ -84,11 +81,7 @@ export async function loadOrdersFinanceEnrichment(
         AND to_status IN ('delivering', 'delivered')
       GROUP BY order_id, to_status
     `,
-    prisma.clientBalance.findMany({
-      where: { tenant_id: tenantId, client_id: { in: clientIds } },
-      select: { client_id: true, balance: true }
-    }),
-    loadDeliveryDebtByClient(tenantId, clientIds),
+    loadClientBalanceView(tenantId, clientIds, "ledger_merged"),
     loadMerchandiseRulesById(tenantId, ruleIds)
   ]);
 
@@ -105,11 +98,6 @@ export async function loadOrdersFinanceEnrichment(
     shippedDelivered.set(r.order_id, cur);
   }
 
-  const balByClient = new Map<number, Prisma.Decimal>();
-  for (const b of balRows) {
-    balByClient.set(b.client_id, b.balance);
-  }
-
   for (const s of slices) {
     const allocated = allocByOrder.get(s.id) ?? new Prisma.Decimal(0);
     let debt: string | null = null;
@@ -123,9 +111,7 @@ export async function loadOrdersFinanceEnrichment(
       const unpaid = merchandiseNet.sub(allocated);
       debt = (unpaid.gt(0) ? unpaid : new Prisma.Decimal(0)).toString();
     }
-    const ledger = balByClient.get(s.client_id) ?? new Prisma.Decimal(0);
-    const blend = deliveryByClient.get(s.client_id);
-    const displayBal = mergeLedgerWithUnpaidDelivered(ledger, blend);
+    const displayBal = balanceByClient.get(s.client_id) ?? new Prisma.Decimal(0);
     const times = shippedDelivered.get(s.id);
     out.set(s.id, {
       debt,

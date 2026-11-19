@@ -48,10 +48,7 @@ import {
   DEFAULT_NAKLADNOY_BUILD_OPTIONS
 } from "../order-nakladnoy-xlsx";
 import { buildNakladnoyPdf } from "../order-nakladnoy-pdf";
-import {
-  loadDeliveryDebtByClient,
-  mergeLedgerWithUnpaidDelivered
-} from "../../client-balances/client-balances.service";
+import { loadClientBalanceView } from "../../client-balances/client-balance-view";
 import { resolvePaymentMethodRefToLabel } from "../../tenant-settings/finance-refs";
 import { loadPaymentMethodEntriesForResolve } from "../../tenant-settings/tenant-settings.service";
 import { prepareExchangeOrderLines } from "../exchange-order-create";
@@ -335,11 +332,8 @@ export async function createOrder(
   const detail = await enrichOrderDetailRow(tenantId, order as unknown as OrderDetailLoaded, viewerRole);
 
   // Finance — post-commit hisoblash (yangi zakaz kiritilgan joriy holatni qaytarish)
-  const balRow = await prisma.clientBalance.findUnique({
-    where: { tenant_id_client_id: { tenant_id: tenantId, client_id: client.id } },
-    select: { balance: true }
-  });
-  const accountBalance = balRow?.balance ?? new Prisma.Decimal(0);
+  const balanceByClient = await loadClientBalanceView(tenantId, [client.id], "ledger_merged");
+  const accountBalance = balanceByClient.get(client.id) ?? new Prisma.Decimal(0);
   const creditLimit = client.credit_limit;
   const headroom = creditLimit.add(accountBalance);
   const agg = await prisma.order.aggregate({

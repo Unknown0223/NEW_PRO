@@ -1,7 +1,7 @@
 /** Order create workspace — pure utility functions. */
 import type { ProductRow } from "@/lib/product-types";
+import { ORDER_STATUS_LABELS } from "@/lib/order-status";
 import type { PolkiClientItem, PolkiPairRowModel, PolkiOrderPickRow } from "./types";
-import { ORDER_STATUS_LABEL_RU } from "./constants";
 
 export function parsePriceAmount(s: string): number {
   const n = Number.parseFloat(String(s).replace(/\s/g, "").replace(",", "."));
@@ -37,9 +37,10 @@ export function formatPolkiPieceQty(n: number): string {
   return q > 0 ? String(q) : "";
 }
 
+/** ADR-008: SSOT = `lib/order-status` ORDER_STATUS_LABELS (list kanonik). */
 export function orderStatusLabelRu(status: string): string {
   const k = status.trim().toLowerCase();
-  return ORDER_STATUS_LABEL_RU[k] ?? status;
+  return ORDER_STATUS_LABELS[k] ?? status;
 }
 
 export function currentMonthEndIsoDate(): string {

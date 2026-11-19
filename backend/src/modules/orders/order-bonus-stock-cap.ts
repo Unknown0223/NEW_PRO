@@ -1,4 +1,5 @@
 import { Prisma } from "@prisma/client";
+import { assertAvailable, loadAvailableByProduct } from "../stock/stock-reservation";
 import { roundOrderMoney } from "./domain/order.detail-mappers";
 import type { CreateOrderPaidBundle } from "./domain/order.create-tx.bonus";
 
@@ -16,6 +17,9 @@ export type BonusStockCapResult = {
   shortageComment: string | null;
 };
 
+/**
+ * Paid qatorlar — assertAvailable; bonus — Available qoldig‘iga qarab soft-cap.
+ */
 export async function capBonusCreatesToStock(
   tx: Prisma.TransactionClient,
   tenantId: number,
@@ -42,38 +46,22 @@ export async function capBonusCreatesToStock(
   const productIds = [
     ...new Set([...paidNeed.keys(), ...bonusCreates.map((b) => b.product_id)])
   ];
-  const stockRows = await tx.stock.findMany({
-    where: { tenant_id: tenantId, warehouse_id: warehouseId, product_id: { in: productIds } },
-    select: { product_id: true, qty: true, reserved_qty: true }
-  });
-  const stockMap = new Map(stockRows.map((s) => [s.product_id, s]));
 
-  for (const [productId, needQty] of paidNeed) {
-    const row = stockMap.get(productId);
-    const qty = row?.qty ?? new Prisma.Decimal(0);
-    const reservedRaw = row?.reserved_qty ?? new Prisma.Decimal(0);
-    const reserved = reservedRaw.lt(0) ? new Prisma.Decimal(0) : reservedRaw;
-    const available = qty.sub(reserved);
-    if (available.lt(needQty)) {
-      const err = new Error("INSUFFICIENT_STOCK") as Error & {
-        product_id: number;
-        available: string;
-        requested: string;
-      };
-      err.product_id = productId;
-      err.available = available.toString();
-      err.requested = needQty.toString();
-      throw err;
-    }
-  }
+  await assertAvailable(tx, {
+    tenantId,
+    warehouseId,
+    needByProduct: paidNeed
+  });
+
+  const availableByProduct = await loadAvailableByProduct(tx, {
+    tenantId,
+    warehouseId,
+    productIds
+  });
 
   const bonusRoom = new Map<number, Prisma.Decimal>();
   for (const productId of productIds) {
-    const row = stockMap.get(productId);
-    const qty = row?.qty ?? new Prisma.Decimal(0);
-    const reservedRaw = row?.reserved_qty ?? new Prisma.Decimal(0);
-    const reserved = reservedRaw.lt(0) ? new Prisma.Decimal(0) : reservedRaw;
-    const available = qty.sub(reserved);
+    const available = availableByProduct.get(productId) ?? new Prisma.Decimal(0);
     const paid = paidNeed.get(productId) ?? new Prisma.Decimal(0);
     const room = available.sub(paid);
     bonusRoom.set(productId, room.gt(0) ? room : new Prisma.Decimal(0));

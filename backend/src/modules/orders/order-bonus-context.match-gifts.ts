@@ -16,6 +16,7 @@ import {
   ruleMatchesOrderAgentScope,
   ruleMatchesOrderProductScope
 } from "./order-bonus-context.match-scope";
+import { loadAvailableByProduct } from "../stock/stock-reservation";
 
 export async function loadAvailableQtyByProductId(
   tx: Prisma.TransactionClient,
@@ -27,18 +28,14 @@ export async function loadAvailableQtyByProductId(
   if (warehouseId == null || warehouseId < 1 || ids.length === 0) {
     return new Map();
   }
-  const rows = await tx.stock.findMany({
-    where: { tenant_id: tenantId, warehouse_id: warehouseId, product_id: { in: ids } },
-    select: { product_id: true, qty: true, reserved_qty: true }
+  const available = await loadAvailableByProduct(tx, {
+    tenantId,
+    warehouseId,
+    productIds: ids
   });
   const map = new Map<number, number>();
-  for (const s of rows) {
-    // Manfiy reserved (eski/buzuq ma'lumot) mavjudlikni oshirmasin.
-    const free = Number(s.qty) - Math.max(0, Number(s.reserved_qty));
-    map.set(s.product_id, Math.max(0, free));
-  }
   for (const id of ids) {
-    if (!map.has(id)) map.set(id, 0);
+    map.set(id, Number(available.get(id) ?? 0));
   }
   return map;
 }
