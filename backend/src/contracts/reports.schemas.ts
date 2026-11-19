@@ -3,11 +3,25 @@ import { parseAgentOrdersQuery } from "../modules/reports/agent-orders-report.se
 import type { AgentOrdersFilters } from "../modules/reports/agent-orders-report.service";
 import { parseClientSales2Query } from "../modules/reports/client-sales-2-report.service";
 import type { ClientSales2Filters } from "../modules/reports/client-sales-2-report.service";
+import { parseClientSales3Query } from "../modules/reports/client-sales-3-report.service";
+import type { ClientSales3Filters } from "../modules/reports/client-sales-3-report.service";
 import { parseClientSales4Query } from "../modules/reports/client-sales-4-report.service";
 import type { ClientSales4Filters } from "../modules/reports/client-sales-4-report.service";
 import { parseIncomeReportQuery } from "../modules/reports/income-report.service";
 import { parseExpeditorReturnsQuery } from "../modules/reports/expeditor-returns-report.service";
 import type { ExpeditorReturnsFilters } from "../modules/reports/expeditor-returns-report.service";
+import { parseShelfReturnsQuery } from "../modules/reports/shelf-returns-report.service";
+import type { ShelfReturnsFilters } from "../modules/reports/shelf-returns-report.service";
+import { parseOrderQtyQuery } from "../modules/reports/order-qty-report.service";
+import type { OrderQtyFilters } from "../modules/reports/order-qty-report.service";
+import { parseSku3Query } from "../modules/reports/sku-3-report.service";
+import type { Sku3Filters } from "../modules/reports/sku-3-report.service";
+import { parseExpeditorShipmentsQuery } from "../modules/reports/expeditor-shipments-report.service";
+import type { ExpeditorShipmentsFilters } from "../modules/reports/expeditor-shipments-report.service";
+import { parseExcelExportQuery } from "../modules/reports/excel-export-report.service";
+import type { ExcelExportFilters } from "../modules/reports/excel-export-report.service";
+import { parseInventoryQuery } from "../modules/reports/inventory-report.service";
+import type { InventoryFilters } from "../modules/reports/inventory-report.service";
 import { parseOrderDebtsListQuery } from "../modules/reports/order-debts-report.service";
 import type { OrderDebtsListQuery } from "../modules/reports/order-debts-report.service";
 import { parseProductSalesReportQuery } from "../modules/reports/product-sales-report.service";
@@ -156,6 +170,12 @@ export const clientSales2QuerySchema = queryRecord.transform((q) =>
   parseClientSales2Query(q as Record<string, string | undefined>)
 );
 
+/** GET `/api/:slug/reports/client-sales-3` */
+export type { ClientSales3Filters };
+export const clientSales3QuerySchema = queryRecord.transform((q) =>
+  parseClientSales3Query(q as Record<string, string | undefined>)
+);
+
 /** GET `/api/:slug/reports/client-sales-4` */
 export type { ClientSales4Filters };
 export const clientSales4QuerySchema = queryRecord.transform((q) =>
@@ -178,6 +198,42 @@ export const productSalesReportQuerySchema = queryRecord.transform((q) =>
 export type { ExpeditorReturnsFilters };
 export const expeditorReturnsQuerySchema = queryRecord.transform((q) =>
   parseExpeditorReturnsQuery(q as Record<string, string | undefined>)
+);
+
+/** GET `/api/:slug/reports/shelf-returns` */
+export type { ShelfReturnsFilters };
+export const shelfReturnsQuerySchema = queryRecord.transform((q) =>
+  parseShelfReturnsQuery(q as Record<string, string | undefined>)
+);
+
+/** GET `/api/:slug/reports/order-qty` */
+export type { OrderQtyFilters };
+export const orderQtyQuerySchema = queryRecord.transform((q) =>
+  parseOrderQtyQuery(q as Record<string, string | undefined>)
+);
+
+/** GET `/api/:slug/reports/sku-3` */
+export type { Sku3Filters };
+export const sku3QuerySchema = queryRecord.transform((q) =>
+  parseSku3Query(q as Record<string, string | undefined>)
+);
+
+/** GET `/api/:slug/reports/expeditor-shipments` */
+export type { ExpeditorShipmentsFilters };
+export const expeditorShipmentsQuerySchema = queryRecord.transform((q) =>
+  parseExpeditorShipmentsQuery(q as Record<string, string | undefined>)
+);
+
+/** GET `/api/:slug/reports/excel-export` */
+export type { ExcelExportFilters };
+export const excelExportQuerySchema = queryRecord.transform((q) =>
+  parseExcelExportQuery(q as Record<string, string | undefined>)
+);
+
+/** GET `/api/:slug/reports/inventory` */
+export type { InventoryFilters };
+export const inventoryQuerySchema = queryRecord.transform((q) =>
+  parseInventoryQuery(q as Record<string, string | undefined>)
 );
 
 /** GET `/api/:slug/reports/visits-2` */

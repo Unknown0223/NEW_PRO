@@ -1,12 +1,5 @@
 /** SalesDoc «Отчёты» menyusida bor, loyihada hali ishlamagan sahifalar. */
 export const REPORT_MENU_STUBS: Array<{ slug: string; label: string }> = [
-  { slug: "client-sales-3", label: "Продажи по клиентам 3" },
-  { slug: "order-qty", label: "Отчет по количеству заказов" },
-  { slug: "sku-3", label: "По Sku 3.0" },
-  { slug: "expeditor-shipments", label: "Отгрузки по экспедиторам" },
-  { slug: "shelf-returns", label: "Отчет по возвратам (возврат с полки)" },
-  { slug: "excel-export", label: "Excel экспорт" },
-  { slug: "inventory", label: "По инвентарю" },
   { slug: "photo", label: "Фотоотчёты" },
   { slug: "tasks", label: "Отчёт по задачам" },
   { slug: "feedback", label: "Отчёт обратной связи (бот акт сверки)" },

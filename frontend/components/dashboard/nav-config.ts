@@ -464,6 +464,11 @@ export const dashboardReportsNav: { sectionTitle: string; items: NavItem[] } = {
       showIfAnyPermission: [...NAV_PERM.reportClientSales2]
     },
     {
+      href: "/reports/client-sales-3",
+      label: "Продажи по клиентам 3",
+      showIfAnyPermission: [...NAV_PERM.reportClientSales3]
+    },
+    {
       href: "/reports/client-sales-4",
       label: "Продажи по клиентам 4",
       showIfAnyPermission: [...NAV_PERM.reportClientSales4]
@@ -474,6 +479,36 @@ export const dashboardReportsNav: { sectionTitle: string; items: NavItem[] } = {
       href: "/reports/expeditor-returns",
       label: "Возврат экспедитора",
       showIfAnyPermission: [...NAV_PERM.reportExpeditorReturns]
+    },
+    {
+      href: "/reports/shelf-returns",
+      label: "Отчет по возвратам (возврат с полки)",
+      showIfAnyPermission: [...NAV_PERM.reportShelfReturns]
+    },
+    {
+      href: "/reports/order-qty",
+      label: "Отчет по количеству заказов",
+      showIfAnyPermission: [...NAV_PERM.reportOrderQty]
+    },
+    {
+      href: "/reports/sku-3",
+      label: "По Sku 3.0",
+      showIfAnyPermission: [...NAV_PERM.reportSku3]
+    },
+    {
+      href: "/reports/expeditor-shipments",
+      label: "Отгрузки по экспедиторам",
+      showIfAnyPermission: [...NAV_PERM.reportExpeditorShipments]
+    },
+    {
+      href: "/reports/excel-export",
+      label: "Excel экспорт",
+      showIfAnyPermission: [...NAV_PERM.reportExcelExport]
+    },
+    {
+      href: "/reports/inventory",
+      label: "По инвентарю",
+      showIfAnyPermission: [...NAV_PERM.reportInventory]
     },
     { href: "/reports/visits-2", label: "По визитам 2.0", showIfAnyPermission: [...NAV_PERM.reportVisits2] },
     { href: "/reports/visit-totals", label: "Итоги визитов", showIfAnyPermission: [...NAV_PERM.reportVisitTotals] },

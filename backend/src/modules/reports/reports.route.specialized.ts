@@ -1,17 +1,17 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import type {
-  ClientSales2Filters,
-  ClientSales4Filters,
   ExpeditorReturnsFilters,
+  OrderQtyFilters,
   ProductSalesReportFilters,
+  ShelfReturnsFilters,
   Visits2Filters,
   VisitTotalsFilters
 } from "../../contracts/reports.schemas";
 import {
-  clientSales2QuerySchema,
-  clientSales4QuerySchema,
   expeditorReturnsQuerySchema,
+  orderQtyQuerySchema,
   productSalesReportQuerySchema,
+  shelfReturnsQuerySchema,
   visits2QuerySchema,
   visitTotalsQuerySchema
 } from "../../contracts/reports.schemas";
@@ -19,22 +19,22 @@ import { sendApiError } from "../../lib/api-error";
 import { actorUserIdOrNull } from "../../lib/request-actor";
 import { getAccessUser } from "../auth/auth.prehandlers";
 import {
-  exportClientSales2Xlsx,
-  getClientSales2FilterOptions,
-  getClientSales2Report
-} from "./client-sales-2-report.service";
-import {
-  exportClientSales4Xlsx,
-  getClientSales4FilterOptions,
-  getClientSales4Report
-} from "./client-sales-4-report.service";
-import {
   exportExpeditorReturnsXlsx,
   getExpeditorReturnsByClients,
   getExpeditorReturnsByProducts,
   getExpeditorReturnsFilterOptions,
   getExpeditorReturnsOrders
 } from "./expeditor-returns-report.service";
+import {
+  exportShelfReturnsXlsx,
+  getShelfReturnsFilterOptions,
+  getShelfReturnsReport
+} from "./shelf-returns-report.service";
+import {
+  exportOrderQtyXlsx,
+  getOrderQtyFilterOptions,
+  getOrderQtyReport
+} from "./order-qty-report.service";
 import {
   exportProductSalesReportXlsx,
   getProductSalesReport,
@@ -51,99 +51,23 @@ import {
   getVisits2Report
 } from "./visits-2-report.service";
 import { ensureTenantContext } from "../../lib/tenant-context";
+import { registerClientSalesReportRoutes } from "./reports.route.client-sales";
 import { registerGpsDeliveryRoutesReports } from "./reports.route.gps";
 import { registerP1ReportRoutes } from "./reports.route.p1";
+import { registerSku3ReportRoutes } from "./reports.route.sku-3";
+import { registerExpeditorShipmentsReportRoutes } from "./reports.route.expeditor-shipments";
+import { registerExcelExportReportRoutes } from "./reports.route.excel-export";
+import { registerInventoryReportRoutes } from "./reports.route.inventory";
 import { createReportRouteGuards, parseReportQueryOr400, reportQueryRaw } from "./reports.route.shared";
 
 export async function registerReportsSpecializedRoutes(app: FastifyInstance, guards: ReturnType<typeof createReportRouteGuards> = createReportRouteGuards()) {
   const { reportViewPreHandler, reportExportPreHandler, incomeViewPreHandler, incomeExportPreHandler } = guards;
   registerP1ReportRoutes(app, guards);
-
-  app.get("/api/:slug/reports/client-sales-2/filter-options", { preHandler: reportViewPreHandler }, async (request, reply) => {
-    if (!ensureTenantContext(request, reply)) return;
-    const u = getAccessUser(request);
-    const data = await getClientSales2FilterOptions(request.tenant!.id, {
-      userId: actorUserIdOrNull(request),
-      role: u.role
-    });
-    return reply.send({ data });
-  });
-
-  app.get("/api/:slug/reports/client-sales-2/export", { preHandler: reportExportPreHandler }, async (request, reply) => {
-    if (!ensureTenantContext(request, reply)) return;
-    const q = request.query as Record<string, string | undefined>;
-    const u = getAccessUser(request);
-    const { buffer, total, truncated } = await exportClientSales2Xlsx(request.tenant!.id, q, {
-      userId: actorUserIdOrNull(request),
-      role: u.role
-    });
-    return reply
-      .header("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
-      .header("Content-Disposition", 'attachment; filename="prodazhi-po-klientam-2.xlsx"')
-      .header("X-Export-Truncated", truncated ? "1" : "0")
-      .header("X-Export-Total", String(total))
-      .send(buffer);
-  });
-
-  app.get("/api/:slug/reports/client-sales-2", { preHandler: reportViewPreHandler }, async (request, reply) => {
-    if (!ensureTenantContext(request, reply)) return;
-    const q = parseReportQueryOr400<ClientSales2Filters>(
-      reply,
-      request,
-      clientSales2QuerySchema,
-      reportQueryRaw(request)
-    );
-    if (!q) return;
-    const u = getAccessUser(request);
-    const data = await getClientSales2Report(request.tenant!.id, q, {
-      userId: actorUserIdOrNull(request),
-      role: u.role
-    });
-    return reply.send({ data });
-  });
-
-  app.get("/api/:slug/reports/client-sales-4/filter-options", { preHandler: reportViewPreHandler }, async (request, reply) => {
-    if (!ensureTenantContext(request, reply)) return;
-    const u = getAccessUser(request);
-    const data = await getClientSales4FilterOptions(request.tenant!.id, {
-      userId: actorUserIdOrNull(request),
-      role: u.role
-    });
-    return reply.send({ data });
-  });
-
-  app.get("/api/:slug/reports/client-sales-4/export", { preHandler: reportExportPreHandler }, async (request, reply) => {
-    if (!ensureTenantContext(request, reply)) return;
-    const q = request.query as Record<string, string | undefined>;
-    const u = getAccessUser(request);
-    const { buffer, total, truncated } = await exportClientSales4Xlsx(request.tenant!.id, q, {
-      userId: actorUserIdOrNull(request),
-      role: u.role
-    });
-    return reply
-      .header("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
-      .header("Content-Disposition", 'attachment; filename="prodazhi-po-klientam-4.xlsx"')
-      .header("X-Export-Truncated", truncated ? "1" : "0")
-      .header("X-Export-Total", String(total))
-      .send(buffer);
-  });
-
-  app.get("/api/:slug/reports/client-sales-4", { preHandler: reportViewPreHandler }, async (request, reply) => {
-    if (!ensureTenantContext(request, reply)) return;
-    const q = parseReportQueryOr400<ClientSales4Filters>(
-      reply,
-      request,
-      clientSales4QuerySchema,
-      reportQueryRaw(request)
-    );
-    if (!q) return;
-    const u = getAccessUser(request);
-    const data = await getClientSales4Report(request.tenant!.id, q, {
-      userId: actorUserIdOrNull(request),
-      role: u.role
-    });
-    return reply.send({ data });
-  });
+  registerClientSalesReportRoutes(app, guards);
+  registerSku3ReportRoutes(app, guards);
+  registerExpeditorShipmentsReportRoutes(app, guards);
+  registerExcelExportReportRoutes(app, guards);
+  registerInventoryReportRoutes(app, guards);
 
   app.get("/api/:slug/reports/product-sales/filter-options", { preHandler: reportViewPreHandler }, async (request, reply) => {
     if (!ensureTenantContext(request, reply)) return;
@@ -259,6 +183,87 @@ export async function registerReportsSpecializedRoutes(app: FastifyInstance, gua
     );
     if (!q) return;
     const data = await getExpeditorReturnsByClients(request.tenant!.id, q, {
+      userId: actorUserIdOrNull(request),
+      role: u.role
+    });
+    return reply.send({ data });
+  });
+
+  app.get("/api/:slug/reports/shelf-returns/filter-options", { preHandler: reportViewPreHandler }, async (request, reply) => {
+    if (!ensureTenantContext(request, reply)) return;
+    const u = getAccessUser(request);
+    const data = await getShelfReturnsFilterOptions(request.tenant!.id, {
+      userId: actorUserIdOrNull(request),
+      role: u.role
+    });
+    return reply.send({ data });
+  });
+
+  app.get("/api/:slug/reports/shelf-returns/export", { preHandler: reportExportPreHandler }, async (request, reply) => {
+    if (!ensureTenantContext(request, reply)) return;
+    const q = request.query as Record<string, string | undefined>;
+    const u = getAccessUser(request);
+    const { buffer, total, truncated } = await exportShelfReturnsXlsx(request.tenant!.id, q, {
+      userId: actorUserIdOrNull(request),
+      role: u.role
+    });
+    return reply
+      .header("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+      .header("Content-Disposition", 'attachment; filename="vozvrat-s-polki.xlsx"')
+      .header("X-Export-Truncated", truncated ? "1" : "0")
+      .header("X-Export-Total", String(total))
+      .send(buffer);
+  });
+
+  app.get("/api/:slug/reports/shelf-returns", { preHandler: reportViewPreHandler }, async (request, reply) => {
+    if (!ensureTenantContext(request, reply)) return;
+    const q = parseReportQueryOr400<ShelfReturnsFilters>(
+      reply,
+      request,
+      shelfReturnsQuerySchema,
+      reportQueryRaw(request)
+    );
+    if (!q) return;
+    const u = getAccessUser(request);
+    const data = await getShelfReturnsReport(request.tenant!.id, q, {
+      userId: actorUserIdOrNull(request),
+      role: u.role
+    });
+    return reply.send({ data });
+  });
+
+  app.get("/api/:slug/reports/order-qty/filter-options", { preHandler: reportViewPreHandler }, async (request, reply) => {
+    if (!ensureTenantContext(request, reply)) return;
+    const u = getAccessUser(request);
+    const data = await getOrderQtyFilterOptions(request.tenant!.id, {
+      userId: actorUserIdOrNull(request),
+      role: u.role
+    });
+    return reply.send({ data });
+  });
+
+  app.get("/api/:slug/reports/order-qty/export", { preHandler: reportExportPreHandler }, async (request, reply) => {
+    if (!ensureTenantContext(request, reply)) return;
+    const q = request.query as Record<string, string | undefined>;
+    const u = getAccessUser(request);
+    const { buffer, total, truncated } = await exportOrderQtyXlsx(request.tenant!.id, q, {
+      userId: actorUserIdOrNull(request),
+      role: u.role
+    });
+    return reply
+      .header("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+      .header("Content-Disposition", 'attachment; filename="kolichestvo-zakazov.xlsx"')
+      .header("X-Export-Truncated", truncated ? "1" : "0")
+      .header("X-Export-Total", String(total))
+      .send(buffer);
+  });
+
+  app.get("/api/:slug/reports/order-qty", { preHandler: reportViewPreHandler }, async (request, reply) => {
+    if (!ensureTenantContext(request, reply)) return;
+    const q = parseReportQueryOr400<OrderQtyFilters>(reply, request, orderQtyQuerySchema, reportQueryRaw(request));
+    if (!q) return;
+    const u = getAccessUser(request);
+    const data = await getOrderQtyReport(request.tenant!.id, q, {
       userId: actorUserIdOrNull(request),
       role: u.role
     });
