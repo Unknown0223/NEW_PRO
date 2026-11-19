@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -10,7 +12,7 @@ import '../../core/ui/agent_ui.dart';
 import '../../design_system/design_system.dart';
 import 'auth_provider.dart';
 
-/// Shablon `AuthScreen` — launch-zoom + au-in + BrandWave.
+/// Shablon `AuthScreen` — launch settle + BrandWave rise + cover flood.
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
   @override
@@ -27,6 +29,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   bool _touched = false;
   bool _shakeForm = false;
   bool _faceIdBusy = false;
+  SaAuthEntranceStage _stage = SaAuthEntranceStage.launch;
+  Timer? _launchTimer;
 
   static const _fieldBg = Color(0xFFEEF1F5);
   static const _ink = Color(0xFF0E1420);
@@ -37,9 +41,16 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) => _showPendingAuthError());
+    _launchTimer = Timer(saAuthEntranceLaunchHold, () {
+      if (!mounted || _stage != SaAuthEntranceStage.launch) return;
+      setState(() => _stage = SaAuthEntranceStage.form);
+    });
   }
 
   void _presentError(UserFacingError info) {
+    if (_stage == SaAuthEntranceStage.cover) {
+      setState(() => _stage = SaAuthEntranceStage.form);
+    }
     if (info.isLoginAuthSnack) {
       showAuthBottomToast(context, info.snackbarText, accentColor: AppColors.error);
       return;
@@ -62,6 +73,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
   @override
   void dispose() {
+    _launchTimer?.cancel();
     _slug.dispose();
     _login.dispose();
     _pass.dispose();
@@ -82,12 +94,17 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     });
   }
 
-  void _submit() {
+  Future<void> _submit() async {
     setState(() => _touched = true);
     if (_slugErr != null || _loginErr != null || _passErr != null) {
       _bumpForm();
       return;
     }
+    if (_stage == SaAuthEntranceStage.launch) {
+      _launchTimer?.cancel();
+    }
+    // Cover flood — muvaffaqiyat/loading paytida; xato bo‘lsa formaga qaytadi.
+    setState(() => _stage = SaAuthEntranceStage.cover);
     ref.read(authStateProvider.notifier).login(
           slug: _slug.text.trim(),
           login: _login.text.trim(),
@@ -102,7 +119,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         await ref.read(authStateProvider.notifier).tryLoginScreenBiometric();
     if (!mounted) return;
     setState(() => _faceIdBusy = false);
-    if (result == BiometricLoginAttempt.success) return;
+    if (result == BiometricLoginAttempt.success) {
+      setState(() => _stage = SaAuthEntranceStage.cover);
+      return;
+    }
     showAuthBottomToast(context, result.toastUz, accentColor: AppColors.error);
   }
 
@@ -119,18 +139,35 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     final auth = ref.watch(authStateProvider);
     final loading =
         auth.status == AuthStatus.loading || auth.status == AuthStatus.bootstrapping;
+    final launch = _stage == SaAuthEntranceStage.launch;
+    final cover = _stage == SaAuthEntranceStage.cover;
+    final form = _stage == SaAuthEntranceStage.form;
+    final waveTop = saAuthEntranceWaveTop(_stage);
+    final bottomInset = MediaQuery.viewInsetsOf(context).bottom;
+    final h = MediaQuery.sizeOf(context).height;
 
     ref.listen<AuthState>(authStateProvider, (prev, next) {
-      if (next.error == null || prev?.error == next.error) return;
-      final info = next.errorInfo ?? UserFacingError.tryParseLegacy(next.error);
-      if (info != null) {
-        _presentError(info);
-      } else {
-        showAuthBottomToast(context, next.error!, accentColor: AppColors.error);
+      if (next.error != null && prev?.error != next.error) {
+        final info = next.errorInfo ?? UserFacingError.tryParseLegacy(next.error);
+        if (info != null) {
+          _presentError(info);
+        } else {
+          if (_stage == SaAuthEntranceStage.cover) {
+            setState(() => _stage = SaAuthEntranceStage.form);
+          }
+          showAuthBottomToast(context, next.error!, accentColor: AppColors.error);
+        }
+        return;
+      }
+      // Muvaffaqiyatli auth — cover flood ushlab tursin (loading → authenticated).
+      if (prev?.status == AuthStatus.unauthenticated &&
+          (next.status == AuthStatus.loading ||
+              next.status == AuthStatus.authenticated ||
+              next.status == AuthStatus.bootstrapping) &&
+          _stage != SaAuthEntranceStage.cover) {
+        setState(() => _stage = SaAuthEntranceStage.cover);
       }
     });
-
-    final bottomInset = MediaQuery.viewInsetsOf(context).bottom;
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -143,105 +180,163 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 child: IgnorePointer(child: CustomPaint(painter: _DotGridPainter())),
               ),
             ),
-            const Positioned.fill(
+            Positioned.fill(
               child: RepaintBoundary(
-                child: SaBrandWave(topFraction: 0.70, animate: true),
+                child: SaBrandWave(topFraction: waveTop, animate: true),
               ),
             ),
-            SafeArea(
-              child: Column(
-                children: [
-                  Expanded(
-                    child: SingleChildScrollView(
-                      padding: EdgeInsets.fromLTRB(24, 28, 24, 16 + bottomInset),
-                      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-                      child: Column(
-                        children: [
-                          const SaBrandMark(size: 64, draw: true),
-                          const SizedBox(height: 12),
-                          SaEnter(
-                            delay: const Duration(milliseconds: 40),
-                            child: const SaBrandWordmark(size: 26),
-                          ),
-                          const SizedBox(height: 8),
-                          SaEnter(
-                            delay: const Duration(milliseconds: 80),
-                            child: const Text(
-                              'Savdo jamoasi uchun mobil ilova',
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: _sub,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                          ),
-                          SaAuthShake(
-                            shake: _shakeForm,
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              children: _form(loading),
-                            ),
-                          ),
-                          if (kDebugMode || isLocalApiEnv()) ...[
-                            const SizedBox(height: 12),
-                            Text(
-                              apiEnvDisplayLabel(),
-                              textAlign: TextAlign.center,
-                              style: TextStyle(
-                                fontSize: 10,
-                                fontWeight: FontWeight.w600,
-                                color: Colors.orange.shade800,
-                              ),
-                            ),
-                          ],
-                          const SizedBox(height: 120),
-                        ],
+
+            // Brand lockup — launch markazda, formada tepada kichrayadi.
+            AnimatedPositioned(
+              duration: SaDurations.screen,
+              curve: SaCurves.standard,
+              left: 0,
+              right: 0,
+              top: cover ? h * 0.28 : (launch ? h * 0.32 : 48),
+              child: AnimatedOpacity(
+                duration: SaDurations.base,
+                opacity: cover ? 0 : 1,
+                child: AnimatedScale(
+                  duration: SaDurations.screen,
+                  curve: SaCurves.standard,
+                  scale: launch ? 1 : 0.66,
+                  child: Column(
+                    children: [
+                      const SaBrandMark(size: 64, draw: true),
+                      const SizedBox(height: 10),
+                      const SaEnter(
+                        delay: Duration(milliseconds: 40),
+                        child: SaBrandWordmark(size: 26),
                       ),
-                    ),
+                      AnimatedOpacity(
+                        duration: SaDurations.base,
+                        opacity: launch ? 1 : 0,
+                        child: const Padding(
+                          padding: EdgeInsets.only(top: 8),
+                          child: Text(
+                            'Savdo jamoasi uchun mobil ilova',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: _sub,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
-                  SaEnter(
-                    delay: const Duration(milliseconds: 200),
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
-                      child: Column(
-                        children: [
-                          Text.rich(
-                            TextSpan(
-                              style: TextStyle(
-                                fontSize: 11,
-                                color: Colors.white.withValues(alpha: 0.85),
-                              ),
-                              children: const [
-                                TextSpan(text: 'Hisobingiz yo‘qmi? '),
-                                TextSpan(
-                                  text: 'Administratorga murojaat qiling.',
+                ),
+              ),
+            ),
+
+            if (form)
+              SafeArea(
+                child: Column(
+                  children: [
+                    Expanded(
+                      child: SingleChildScrollView(
+                        padding: EdgeInsets.fromLTRB(24, 132, 24, 16 + bottomInset),
+                        keyboardDismissBehavior:
+                            ScrollViewKeyboardDismissBehavior.onDrag,
+                        child: SaAuthShake(
+                          shake: _shakeForm,
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              ..._form(loading),
+                              if (kDebugMode || isLocalApiEnv()) ...[
+                                const SizedBox(height: 12),
+                                Text(
+                                  apiEnvDisplayLabel(),
+                                  textAlign: TextAlign.center,
                                   style: TextStyle(
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.w800,
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w600,
+                                    color: Colors.orange.shade800,
                                   ),
                                 ),
                               ],
-                            ),
-                            textAlign: TextAlign.center,
+                              const SizedBox(height: 120),
+                            ],
                           ),
-                          const SizedBox(height: 6),
+                        ),
+                      ),
+                    ),
+                    SaEnter(
+                      delay: const Duration(milliseconds: 200),
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
+                        child: Column(
+                          children: [
+                            Text.rich(
+                              TextSpan(
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: Colors.white.withValues(alpha: 0.85),
+                                ),
+                                children: const [
+                                  TextSpan(text: 'Hisobingiz yo‘qmi? '),
+                                  TextSpan(
+                                    text: 'Administratorga murojaat qiling.',
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.w800,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              textAlign: TextAlign.center,
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              'Yordam · Texnik qo‘llab-quvvatlash',
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w700,
+                                color: Colors.white.withValues(alpha: 0.95),
+                                decoration: TextDecoration.underline,
+                                decorationColor: Colors.white70,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+            // Cover flood — brend ustida mark + «Kirish tasdiqlandi».
+            if (cover)
+              Positioned.fill(
+                child: IgnorePointer(
+                  child: Center(
+                    child: SaEnter(
+                      delay: const Duration(milliseconds: 120),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const SaBrandMark(size: 72, bare: true, draw: false),
+                          const SizedBox(height: 8),
+                          const SaBrandWordmark(
+                            size: 22,
+                            tone: SaBrandTone.onBrand,
+                          ),
+                          const SizedBox(height: 12),
                           Text(
-                            'Yordam · Texnik qo‘llab-quvvatlash',
+                            loading ? 'Kirish tasdiqlandi…' : 'Kirish tasdiqlandi',
                             style: TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w700,
-                              color: Colors.white.withValues(alpha: 0.95),
-                              decoration: TextDecoration.underline,
-                              decorationColor: Colors.white70,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.white.withValues(alpha: 0.85),
                             ),
                           ),
                         ],
                       ),
                     ),
                   ),
-                ],
+                ),
               ),
-            ),
           ],
         ),
       ),
@@ -250,7 +345,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
   List<Widget> _form(bool loading) {
     return [
-      const SizedBox(height: 28),
       SaEnter(
         delay: const Duration(milliseconds: 50),
         child: _field(
@@ -340,9 +434,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         ),
       ),
       const SizedBox(height: 14),
-      SaEnter(
-        delay: const Duration(milliseconds: 180),
-        child: const Text.rich(
+      const SaEnter(
+        delay: Duration(milliseconds: 180),
+        child: Text.rich(
           TextSpan(
             style: TextStyle(fontSize: 10, height: 1.45, color: _sub),
             children: [

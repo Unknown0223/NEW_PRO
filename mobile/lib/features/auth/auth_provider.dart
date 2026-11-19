@@ -670,6 +670,9 @@ class AuthNotifier extends StateNotifier<AuthState> {
         state = const AuthState(status: AuthStatus.pinSetup);
         return;
       }
+      // AuthScreen cover flood (~900ms) — login to‘lqini ko‘rinsin, keyin BrandSync.
+      await Future<void>.delayed(const Duration(milliseconds: 900));
+      if (state.status != AuthStatus.authenticated) return;
       await _bootstrap();
     } on NetworkException {
       _setError(UserFacingError.serverUnreachable(context: 'Не удалось войти в систему.'));

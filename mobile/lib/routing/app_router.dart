@@ -209,9 +209,12 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         return isBoot ? null : '/bootstrap';
       }
 
-      if (s == AuthStatus.authenticated ||
-          s == AuthStatus.bootstrapping ||
-          s == AuthStatus.syncComplete) {
+      // authenticated: login cover flood tugaguncha /login da qoladi.
+      if (s == AuthStatus.authenticated) {
+        return isLogin ? null : '/bootstrap';
+      }
+
+      if (s == AuthStatus.bootstrapping || s == AuthStatus.syncComplete) {
         return isBoot ? null : '/bootstrap';
       }
 

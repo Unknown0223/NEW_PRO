@@ -197,7 +197,8 @@ class SaBrandWave extends StatefulWidget {
 class _SaBrandWaveState extends State<SaBrandWave>
     with SingleTickerProviderStateMixin {
   late final AnimationController _c;
-  late final Animation<double> _top;
+  late Animation<double> _top;
+  double _fromTop = 1.0;
 
   @override
   void initState() {
@@ -205,19 +206,41 @@ class _SaBrandWaveState extends State<SaBrandWave>
     _c = AnimationController(
       vsync: this,
       animationBehavior: AnimationBehavior.preserve,
-      duration: SaDurations.screen,
+      duration: SaDurations.data,
     );
-    _top = Tween<double>(begin: 0.92, end: widget.topFraction).animate(
-      CurvedAnimation(parent: _c, curve: SaCurves.standard),
-    );
+    // Launch: to‘lqin pastda (top=1) → form/cover ga ko‘tariladi.
+    _fromTop = widget.topFraction >= 0.99 ? widget.topFraction : 1.0;
+    _bindTween(begin: _fromTop, end: widget.topFraction);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      if (!widget.animate || saReduceMotion(context)) {
-        _c.value = 1;
-      } else {
-        _c.forward();
-      }
+      _run();
     });
+  }
+
+  void _bindTween({required double begin, required double end}) {
+    _top = Tween<double>(begin: begin, end: end).animate(
+      CurvedAnimation(parent: _c, curve: SaCurves.standard),
+    );
+  }
+
+  void _run() {
+    if (!widget.animate || saReduceMotion(context)) {
+      _c.value = 1;
+      return;
+    }
+    _c.forward(from: 0);
+  }
+
+  @override
+  void didUpdateWidget(covariant SaBrandWave oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.topFraction == widget.topFraction &&
+        oldWidget.animate == widget.animate) {
+      return;
+    }
+    final begin = _top.value;
+    _bindTween(begin: begin, end: widget.topFraction);
+    _run();
   }
 
   @override
@@ -232,7 +255,11 @@ class _SaBrandWaveState extends State<SaBrandWave>
     return AnimatedBuilder(
       animation: _top,
       builder: (context, _) {
-        final heightFactor = (1.0 - _top.value).clamp(0.08, 1.0);
+        final top = _top.value.clamp(0.0, 1.0);
+        final heightFactor = (1.0 - top).clamp(0.0, 1.0);
+        if (heightFactor <= 0.001) {
+          return const SizedBox.shrink();
+        }
         return Align(
           alignment: Alignment.bottomCenter,
           child: FractionallySizedBox(

@@ -19,6 +19,7 @@ export 'src/widgets/sa_sheet.dart';
 export 'src/widgets/sa_sync_view.dart';
 export 'src/widgets/sa_motion.dart';
 export 'src/widgets/sa_brand.dart';
+export 'src/widgets/sa_auth_entrance.dart';
 export 'src/widgets/sa_brand_sync.dart';
 export 'src/widgets/sa_brand_sync_road.dart';
 export 'src/widgets/sa_global_chrome.dart';
