@@ -81,6 +81,7 @@ export const NAV_PERM = {
   reportExpeditorShipments: ["reports.otgruzki_ekspeditorov.view"],
   reportExcelExport: ["reports.excel_eksport.view"],
   reportInventory: ["reports.po_inventaryu.view"],
+  reportPhoto: ["reports.fotootchyoty.view"],
   reportVisits2: ["reports.vizity.view"],
   reportVisitTotals: ["reports.itogi_vizitov.view"],
   /** Istalgan hisobot — «Настройки отчетов» (shaxsiy menyu) uchun. */
@@ -99,6 +100,7 @@ export const NAV_PERM = {
     "reports.otgruzki_ekspeditorov.view",
     "reports.excel_eksport.view",
     "reports.po_inventaryu.view",
+    "reports.fotootchyoty.view",
     "reports.vizity.view",
     "reports.itogi_vizitov.view",
     "reports.dnevnye_kpi_plany.view",

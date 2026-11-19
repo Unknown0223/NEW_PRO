@@ -22,6 +22,8 @@ import { parseExcelExportQuery } from "../modules/reports/excel-export-report.se
 import type { ExcelExportFilters } from "../modules/reports/excel-export-report.service";
 import { parseInventoryQuery } from "../modules/reports/inventory-report.service";
 import type { InventoryFilters } from "../modules/reports/inventory-report.service";
+import { parsePhotoReportQuery } from "../modules/reports/photo-report.service";
+import type { PhotoReportFilters } from "../modules/reports/photo-report.service";
 import { parseOrderDebtsListQuery } from "../modules/reports/order-debts-report.service";
 import type { OrderDebtsListQuery } from "../modules/reports/order-debts-report.service";
 import { parseProductSalesReportQuery } from "../modules/reports/product-sales-report.service";
@@ -234,6 +236,12 @@ export const excelExportQuerySchema = queryRecord.transform((q) =>
 export type { InventoryFilters };
 export const inventoryQuerySchema = queryRecord.transform((q) =>
   parseInventoryQuery(q as Record<string, string | undefined>)
+);
+
+/** GET `/api/:slug/reports/photo` */
+export type { PhotoReportFilters };
+export const photoReportQuerySchema = queryRecord.transform((q) =>
+  parsePhotoReportQuery(q as Record<string, string | undefined>)
 );
 
 /** GET `/api/:slug/reports/visits-2` */

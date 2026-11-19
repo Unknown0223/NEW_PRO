@@ -17,6 +17,7 @@ export const REPORT_PAGE_PERMISSIONS: ReadonlyArray<{ path: string; section: str
   { path: "expeditor-shipments", section: "reports.otgruzki_ekspeditorov", export: true },
   { path: "excel-export", section: "reports.excel_eksport", export: true },
   { path: "inventory", section: "reports.po_inventaryu", export: true },
+  { path: "photo", section: "reports.fotootchyoty", export: true },
   { path: "visits-2", section: "reports.vizity", export: true },
   { path: "visit-totals", section: "reports.itogi_vizitov", export: true }
 ];
