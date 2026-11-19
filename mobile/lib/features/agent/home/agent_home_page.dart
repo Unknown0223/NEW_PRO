@@ -4,53 +4,45 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../../core/api/mobile_api.dart' show AgentDashboardResult, DebtorClient;
+import '../../../core/api/mobile_api.dart';
 import '../../../core/auth/session.dart';
 import '../../../core/config/mobile_config.dart';
 import '../../../core/config/mobile_config_policy.dart';
 import '../../../core/config/sync_policy_provider.dart';
 import '../../../core/database/app_database.dart';
-import '../../../core/l10n/app_strings_ru.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/time/work_region_time.dart';
-import '../../../core/ui/agent_ui.dart';
-import '../../../core/ui/quick_panel_sheet.dart';
-import '../../../design_system/design_system.dart';
 import '../../auth/auth_provider.dart';
-import '../shell/agent_scaffold_key.dart';
+import '../../../core/l10n/app_strings_ru.dart';
+import '../../../core/ui/agent_ui.dart';
+import '../../../core/ui/agent_ui_extended.dart';
+import '../misc/agent_notifications_page.dart';
+import '../shell/agent_app_bar.dart';
 import '../sync/sync_bottom_sheet.dart';
-import '../clients/agent_debtors_page.dart';
 import '../visits/visit_stats_helper.dart';
-import '../warehouse/warehouse_stock_providers.dart';
-import '../../../core/clients/agent_outlet_filters_provider.dart';
 import '../../../core/sync/sync_data_refresh.dart';
 import 'agent_dashboard_provider.dart';
-import 'agent_home_dashboard.dart';
-import 'agent_home_extras.dart';
 import 'home_visit_metrics_provider.dart';
 import 'last_created_order_banner.dart';
 import 'sync_count_provider.dart';
 
+String planDashboardLine(AgentDashboardResult dash, String? planVersion) {
+  final base =
+      'Reja: ${dash.planSum.toStringAsFixed(0)} · Buyurtma: ${dash.ordersSumToday.toStringAsFixed(0)}';
+  final v = planVersion?.trim();
+  if (v == null || v.isEmpty) return base;
+  return '$base · v$v';
+}
+
 final homeStatsProvider = FutureProvider<Map<String, int>>((ref) async {
   final db = AppDatabase();
-  final counts = await Future.wait([
-    db.clientCount(),
-    db.productCount(),
-    db.orderCount(),
-    db.pendingCount(),
-    db.pendingPhotoReportCount(),
-    db.getPhotosSyncedToday(),
-    db.failedPhotoReportCount(),
-  ]);
   return {
-    'clients': counts[0],
-    'products': counts[1],
-    'orders': counts[2],
-    'pending': counts[3],
-    'pending_photos': counts[4],
-    'synced_photos': counts[5],
-    'failed_photos': counts[6],
+    'clients': await db.clientCount(),
+    'products': await db.productCount(),
+    'orders': await db.orderCount(),
+    'pending': await db.pendingCount(),
+    'pending_photos': await db.pendingPhotoReportCount(),
   };
 });
 
@@ -63,36 +55,14 @@ class AgentHomePage extends ConsumerStatefulWidget {
 
 class _AgentHomePageState extends ConsumerState<AgentHomePage> {
   Timer? _syncPolicyPoll;
-  /// Birinchi kadrlar bo‘shalsin — dashboard/metrics/API birdaniga ANR beradi.
-  bool _heavyProvidersReady = false;
-  bool _syncing = false;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      // Avval UI chizilsin; keyin og‘ir provayderlar + tarmoq.
-      unawaited(
-        Future<void>.delayed(const Duration(milliseconds: 1800), () {
-          if (!mounted) return;
-          setState(() => _heavyProvidersReady = true);
-          refreshVisitStatsProviders(ref.invalidate);
-        }),
-      );
-      unawaited(
-        Future<void>.delayed(const Duration(seconds: 3), () async {
-          if (!mounted) return;
-          await _refreshSyncConfigOnOpen();
-        }),
-      );
-      // Bootstrap tugagach darhol ikkinchi sync — kirishda osilib qoladi.
-      // Faqat uzoqroq kutib, yumshoq tekshiruv.
-      unawaited(
-        Future<void>.delayed(const Duration(minutes: 2), () async {
-          if (!mounted) return;
-          await _fixStaleClientCatalog();
-        }),
-      );
+      refreshVisitStatsProviders(ref.invalidate);
+      unawaited(_refreshSyncConfigOnOpen());
+      _fixStaleClientCatalog();
     });
   }
 
@@ -152,14 +122,6 @@ class _AgentHomePageState extends ConsumerState<AgentHomePage> {
     final syncCfg = ref.read(sessionProvider).mobileConfig?.sync ?? const SyncConfig();
     if (!evaluateSyncPolicy(syncCfg).allowed) return;
     final db = AppDatabase();
-    // Yangi bootstrap sync endigina bo‘lsa — katalogni yana tortmaslik.
-    final lastSyncRaw = await db.getSyncMeta('last_sync_at');
-    final lastSync = DateTime.tryParse(lastSyncRaw ?? '');
-    if (lastSync != null &&
-        DateTime.now().toUtc().difference(lastSync.toUtc()) <
-            const Duration(minutes: 10)) {
-      return;
-    }
     if (!await db.needsFullClientCatalogResync()) return;
 
     // Bir kunda bir marta majburiy katalog — har home ochilishda to‘liq sync emas.
@@ -196,33 +158,15 @@ class _AgentHomePageState extends ConsumerState<AgentHomePage> {
 
     final session = ref.watch(sessionProvider);
     final statsAsync = ref.watch(homeStatsProvider);
-    final dashAsync = _heavyProvidersReady
-        ? ref.watch(agentDashboardProvider)
-        : const AsyncValue<AgentDashboardResult>.loading();
-    final metricsAsync = _heavyProvidersReady
-        ? ref.watch(homeVisitMetricsProvider)
-        : const AsyncValue<HomeVisitMetrics>.loading();
+    final dashAsync = ref.watch(agentDashboardProvider);
+    final metricsAsync = ref.watch(homeVisitMetricsProvider);
     final createdBanner = ref.watch(lastCreatedOrderBannerProvider);
     final dash = dashAsync.valueOrNull;
     final metrics = metricsAsync.valueOrNull;
-    final debtList = _heavyProvidersReady
-        ? (ref.watch(debtorsProvider).valueOrNull ?? const <DebtorClient>[])
-        : const <DebtorClient>[];
-    final ledger = _heavyProvidersReady
-        ? ref.watch(clientAgentLedgerBalancesProvider).valueOrNull
-        : null;
-    double debtBalance(DebtorClient c) =>
-        ledger != null ? (ledger[c.id] ?? 0) : c.balance;
-    final debtSum = summarizeDebts(debtList, debtBalance);
-    final stockView = _heavyProvidersReady ? ref.watch(warehouseStockProvider).valueOrNull : null;
-    var lowSku = 0;
-    if (stockView != null) {
-      for (final cat in stockView.categories) {
-        for (final line in cat.items) {
-          if (line.count == S.outOfStock) lowSku++;
-        }
-      }
-    }
+    final showPlan = session.mobileConfig?.outlet.showPlanInReports ?? false;
+    final performance = (metrics != null && metrics.total > 0)
+        ? metrics.onRoute / metrics.total
+        : 0.0;
     final syncCfg = session.mobileConfig?.sync ?? const SyncConfig();
     final syncCountAsync = ref.watch(syncCountTodayProvider);
     final mustSync = syncCountAsync.maybeWhen(
@@ -232,72 +176,48 @@ class _AgentHomePageState extends ConsumerState<AgentHomePage> {
     final syncPolicy = evaluateSyncPolicy(syncCfg);
     final syncAllowed = syncPolicy.allowed;
 
-    final now = TimeOfDay.now();
-    final clock =
-        '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
-
-    // Shablon: GlobalChrome + HomeDashboard.
     return Scaffold(
       backgroundColor: AppColors.background,
-      body: Column(
-        children: [
-          SaGlobalChromeBar(
-            roleLabel: 'Agent',
-            syncClock: clock,
-            syncReady: syncAllowed,
-            onMenu: () => agentShellScaffoldKey.currentState?.openDrawer(),
-            onSync: syncAllowed
-                ? () => SyncBottomSheet.show(context)
-                : () => unawaited(_tryRefreshAndOpenSync()),
-            onQuick: () => showQuickPanelSheet(context),
+      appBar: AgentAppBar(
+        title: S.home,
+        useShellDrawer: true,
+        actions: [
+          const AgentNotificationsBell(),
+          AgentIconButton(
+            icon: Icons.map_outlined,
+            onPressed: () => context.go('/map'),
           ),
-          Expanded(
-            child: RefreshIndicator(
+        ],
+      ),
+      body: RefreshIndicator(
         onRefresh: () async {
-          setState(() => _syncing = true);
-          try {
-            await ref.read(authStateProvider.notifier).refreshMobileConfig();
-            final freshCfg = ref.read(sessionProvider).mobileConfig?.sync ?? const SyncConfig();
-            final policy = evaluateSyncPolicy(freshCfg);
-            if (!policy.allowed) {
-              if (!context.mounted) return;
-              showAgentToast(
-                  context,
-                  policy.denialMessage ?? syncWindowMessage(freshCfg),
-                  accentColor: AppColors.warning,
-              );
-              return;
-            }
-            final forceCatalog = await AppDatabase().needsFullClientCatalogResync();
-            final r = await ref.read(authStateProvider.notifier).resync(
-                  full: false,
-                  forceClientCatalog: forceCatalog,
-                );
-            invalidateSyncedData(ref.invalidate);
+          await ref.read(authStateProvider.notifier).refreshMobileConfig();
+          final freshCfg = ref.read(sessionProvider).mobileConfig?.sync ?? const SyncConfig();
+          final policy = evaluateSyncPolicy(freshCfg);
+          if (!policy.allowed) {
             if (!context.mounted) return;
-            if (r.ok) {
-              ref.invalidate(homeStatsProvider);
-              final freshStats = await ref.read(homeStatsProvider.future);
-              if (!context.mounted) return;
-              final orders = freshStats['orders'] ?? 0;
-              final photos = ref.read(syncedPhotoCountTodayProvider).valueOrNull ??
-                  freshStats['synced_photos'] ??
-                  0;
-              showAgentToast(
+            showAgentToast(
                 context,
-                'Sinxronlandi · $orders buyurtma · $photos foto',
-                accentColor: AppColors.success,
+                policy.denialMessage ?? syncWindowMessage(freshCfg),
+                accentColor: AppColors.warning,
+            );
+            return;
+          }
+          final forceCatalog = await AppDatabase().needsFullClientCatalogResync();
+          final r = await ref.read(authStateProvider.notifier).resync(
+                full: false,
+                forceClientCatalog: forceCatalog,
               );
-            } else if (r.error != null) {
-              showAgentToast(context, r.error!, accentColor: AppColors.error);
-            }
-          } finally {
-            if (mounted) setState(() => _syncing = false);
+          invalidateSyncedData(ref.invalidate);
+          if (!context.mounted) return;
+          if (!r.ok && r.error != null) {
+            showAgentToast(context, r.error!, accentColor: AppColors.error);
           }
         },
         child: SingleChildScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 28),
+          // Pastki nav + markaziy tugma ustiga chiqib ketmasin (shablon).
+          padding: const EdgeInsets.fromLTRB(12, 12, 12, 140),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -368,44 +288,219 @@ class _AgentHomePageState extends ConsumerState<AgentHomePage> {
                 Padding(
                   padding: const EdgeInsets.only(bottom: 8),
                   child: Text(
-                    syncWindowMessage(syncCfg),
+                    [
+                      syncWindowMessage(syncCfg),
+                      if (session.user?.workSlotCode != null &&
+                          session.user!.workSlotCode!.trim().isNotEmpty)
+                        'Slot: ${session.user!.workSlotCode}',
+                      'Web → Рабочее место → Синхронизация oynasini tekshiring va Сохранить bosing, keyin shu yerda qayta urinib ko‘ring.',
+                    ].join('\n'),
                     style: AppTypography.caption.copyWith(color: AppColors.warning),
                   ),
                 ),
-              AgentHomeDashboard(
-                userName: () {
-                  final n = (session.user?.name ?? '').trim();
-                  return n.isEmpty ? 'Agent' : n;
-                }(),
-                dateLine: homeDashboardDateLine(),
-                dash: dash,
-                metrics: metrics,
-                localClients: statsAsync.valueOrNull?['clients'] ?? 0,
-                pendingPhotos: ref.watch(pendingPhotoCountProvider).valueOrNull ??
-                    statsAsync.valueOrNull?['pending_photos'] ??
-                    0,
-                syncedPhotos: ref.watch(syncedPhotoCountTodayProvider).valueOrNull ??
-                    statsAsync.valueOrNull?['synced_photos'] ??
-                    0,
-                lastSyncLabel: _formatSync(session.lastSyncAt),
-                syncAllowed: syncAllowed,
-                syncing: _syncing,
-                syncConfig: syncCfg,
-                onSync: syncAllowed
-                    ? () => SyncBottomSheet.show(context)
-                    : () => unawaited(_tryRefreshAndOpenSync()),
-                onOpenNotifications: () => context.push('/notifications'),
-                debtTotal: debtSum.total,
-                debtClients: debtSum.clients,
-                debt0to7: debtSum.d0,
-                debt8to30: debtSum.d8,
-                debt30plus: debtSum.d30,
-                warehouseLowSku: lowSku,
+              AgentSurfaceCard(
+                padding: const EdgeInsets.all(12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(Icons.pie_chart_outline, size: 24, color: AppColors.textPrimary),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            S.dailyReport,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: AppTypography.headlineSmall.copyWith(
+                              fontSize: 20,
+                              fontWeight: FontWeight.w800,
+                              color: AppColors.textHeadline,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    Container(
+                      padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+                      decoration: BoxDecoration(
+                        color: AppColors.surfaceMuted,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Column(
+                        children: [
+                          AgentProgressGauge(percent: performance),
+                          if (showPlan && dash != null) ...[
+                            const SizedBox(height: 8),
+                            Text(
+                              planDashboardLine(dash, session.mobileConfig?.outlet.planVersion),
+                              style: AppTypography.bodySmall.copyWith(
+                                fontSize: 14,
+                                color: AppColors.textMenu,
+                              ),
+                              textAlign: TextAlign.center,
+                            ),
+                          ],
+                          const SizedBox(height: 4),
+                          Builder(
+                            builder: (context) {
+                              final visited = metrics?.onRoute ?? metrics?.visited ?? dash?.visitsToday ?? 0;
+                              final total = metrics?.total ?? dash?.clientsCount ?? 0;
+                              final left = metrics?.remainingOnRoute ?? (total - visited).clamp(0, 999999);
+                              final offRouteVisited = metrics?.offRoute ?? 0;
+                              final offRouteRemaining = metrics?.remainingOffRoute ?? 0;
+                              final dormantOnWeekday = metrics?.dormantOnWeekday ?? 0;
+                              final todayWd = serverTodayWeekday();
+                              final showOffRoute = total > 0 && (offRouteVisited > 0 || offRouteRemaining > 0);
+                              return IntrinsicHeight(
+                                child: Row(
+                                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                                  children: [
+                                    Expanded(
+                                      child: AgentVisitMetric(
+                                        positive: true,
+                                        title: S.visited,
+                                        main: '$visited / $total',
+                                        showOnRouteSubRow: false,
+                                        showOutsideSubRow: showOffRoute,
+                                        outsideValue: '$offRouteVisited',
+                                        extraLabel: S.dormantNotVisitedToday(todayWd),
+                                        extraValue: '$dormantOnWeekday',
+                                      ),
+                                    ),
+                                    const SizedBox(width: 4),
+                                    Expanded(
+                                      child: AgentVisitMetric(
+                                        positive: false,
+                                        title: S.remaining,
+                                        main: '$left / $total',
+                                        showOnRouteSubRow: false,
+                                        showOutsideSubRow: showOffRoute,
+                                        outsideLabel: S.remainingOffRoute,
+                                        outsideValue: '$offRouteRemaining',
+                                        extraLabel: S.dormantNotVisitedMonth,
+                                        extraValue: '${metrics?.dormantUnique ?? 0}',
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              );
+                            },
+                          ),
+                          if (metrics?.noVisitsPlannedToday == true) ...[
+                            const SizedBox(height: 8),
+                            Text(
+                              S.noVisitsPlannedToday,
+                              textAlign: TextAlign.center,
+                              style: AppTypography.caption.copyWith(
+                                fontSize: 13,
+                                color: AppColors.warning,
+                              ),
+                            ),
+                          ] else if (metrics?.noVisitScheduleConfigured == true &&
+                              (statsAsync.valueOrNull?['clients'] ?? 0) > 0) ...[
+                            const SizedBox(height: 8),
+                            Text(
+                              S.noVisitScheduleHint,
+                              textAlign: TextAlign.center,
+                              style: AppTypography.caption.copyWith(
+                                fontSize: 13,
+                                color: AppColors.textMuted,
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    statsAsync.when(
+                        data: (s) => Column(
+                          children: [
+                            _infoRow(
+                              S.unsyncedPhotos,
+                              '${ref.watch(pendingPhotoCountProvider).valueOrNull ?? s['pending_photos'] ?? 0}',
+                            ),
+                            _infoRow(S.lastSync, _formatSync(session.lastSyncAt)),
+                            _infoRow('Клиенты (лок.)', '${s['clients'] ?? 0}'),
+                          ],
+                        ),
+                        loading: () => const Padding(
+                          padding: EdgeInsets.all(8),
+                          child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+                        ),
+                        error: (_, __) => const SizedBox.shrink(),
+                      ),
+                    const SizedBox(height: 12),
+                    AgentPrimaryButton(
+                      label: S.sync,
+                      height: 44,
+                      onPressed: syncAllowed
+                          ? () => SyncBottomSheet.show(context)
+                          : () => unawaited(_tryRefreshAndOpenSync()),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 12),
+              statsAsync.when(
+                data: (s) => Row(
+                  children: [
+                    Expanded(
+                      child: InkWell(
+                        onTap: () => context.push('/orders'),
+                        borderRadius: BorderRadius.circular(16),
+                        child: AgentMiniSummary(
+                          title: S.ordersSumToday,
+                          value: _formatSum(dash?.ordersSumToday ?? 0),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: AgentMiniSummary(
+                        title: S.productsVolumeToday,
+                        value: '${s['products'] ?? 0}',
+                      ),
+                    ),
+                  ],
+                ),
+                loading: () => const SizedBox(height: 72),
+                error: (_, __) => const SizedBox.shrink(),
               ),
             ],
           ),
         ),
       ),
+    );
+  }
+
+  String _formatSum(double v) {
+    if (v >= 1e6) return '${(v / 1e6).toStringAsFixed(1)}M';
+    if (v >= 1e3) return '${(v / 1e3).toStringAsFixed(0)}K';
+    return v.toStringAsFixed(0);
+  }
+
+  Widget _infoRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 5),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              label,
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: AppColors.textMenu),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Flexible(
+            child: Text(
+              value,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.end,
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: AppColors.textPrimary),
+            ),
           ),
         ],
       ),

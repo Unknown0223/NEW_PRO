@@ -19,7 +19,7 @@ final agentRouteStartProvider = FutureProvider<RouteMapStop?>((ref) async {
     if (last != null && (last.latitude != 0 || last.longitude != 0)) {
       // Tez yo‘l: last-known yetarli — currentPosition kutmaslik.
       return RouteMapStop(
-        name: 'Начало маршрута',
+        name: 'Boshlanish',
         latitude: last.latitude,
         longitude: last.longitude,
         orderIndex: 0,
@@ -35,7 +35,7 @@ final agentRouteStartProvider = FutureProvider<RouteMapStop?>((ref) async {
 
     if (pos.latitude == 0 && pos.longitude == 0) return null;
     return RouteMapStop(
-      name: 'Начало маршрута',
+      name: 'Boshlanish',
       latitude: pos.latitude,
       longitude: pos.longitude,
       orderIndex: 0,

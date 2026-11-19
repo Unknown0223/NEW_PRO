@@ -9,7 +9,6 @@ import '../../../core/format/money_display.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/ui/agent_ui.dart';
-import '../../../design_system/design_system.dart';
 import 'held_order_model.dart';
 import 'held_order_timing.dart';
 import 'held_orders_provider.dart';
@@ -216,16 +215,15 @@ class _HeldOrderSyncSheetState extends ConsumerState<HeldOrderSyncSheet> {
             : 'Отложить ещё $delayMin мин');
 
     final homeLabel = _homeSecondsLeft > 0
-        ? 'На главную ($_homeSecondsLeft)'
-        : 'На главную';
+        ? 'Asosiy sahifaga ($_homeSecondsLeft)'
+        : 'Asosiy sahifaga';
 
     final bottom = MediaQuery.paddingOf(context).bottom;
 
-    return SaPopIn(
-      child: Container(
+    return Container(
       decoration: const BoxDecoration(
         color: AppColors.surface,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(SaRadius.sheet)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       padding: EdgeInsets.fromLTRB(16, 8, 16, 12 + bottom),
       child: Column(
@@ -281,7 +279,7 @@ class _HeldOrderSyncSheetState extends ConsumerState<HeldOrderSyncSheet> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const Text(
-                      'Окно редактирования открыто',
+                      'Редактировка ойнаси очиқ',
                       style: TextStyle(
                         fontSize: 15,
                         fontWeight: FontWeight.w800,
@@ -290,9 +288,9 @@ class _HeldOrderSyncSheetState extends ConsumerState<HeldOrderSyncSheet> {
                     ),
                     const SizedBox(height: 6),
                     Text(
-                      'Если в товарах, бонусе или скидке есть ошибка, '
-                      'исправьте её в течение ${delayMin <= 0 ? 1 : delayMin} мин. '
-                      'Отправить сразу — «Отправить сейчас».',
+                      'Агар товар, бонус ёки скидкада хато бўлса, '
+                      '${delayMin <= 0 ? 1 : delayMin} дақиқа ичида тузатинг. '
+                      'Дарҳол юбориш — «Отправить сейчас».',
                       style: AppTypography.caption.copyWith(
                         color: AppColors.textMuted,
                         height: 1.35,
@@ -328,9 +326,9 @@ class _HeldOrderSyncSheetState extends ConsumerState<HeldOrderSyncSheet> {
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    'Если в течение $countdown не внести изменения, заказ будет '
-                    'автоматически синхронизирован и отправлен на сервер. '
-                    'Он также отображается в списке ожидающих заказов и в уведомлениях.',
+                    'Агар $countdown ичида ўзгартиш киритилмаса, заказ автоматик '
+                    'синхрон қилиниб серверга юборилади. '
+                    'Бу kutish zakazlar ro‘yxati va bildirishnomalarda ham ko‘rinadi.',
                     style: AppTypography.caption.copyWith(
                       color: const Color(0xFF92400E),
                       height: 1.35,
@@ -373,25 +371,25 @@ class _HeldOrderSyncSheetState extends ConsumerState<HeldOrderSyncSheet> {
             ],
           ),
           const SizedBox(height: 16),
-          SaPrimaryButton(
-            label: 'Отправить сейчас',
-            loading: _sending,
+          AgentPrimaryButton(
+            label: _sending ? 'Отправка…' : 'Отправить сейчас',
+            height: 48,
             onPressed: (_sending || _postponing) ? null : _submitNow,
           ),
           const SizedBox(height: 8),
-          SaGhostButton(
+          AgentSecondaryButton(
             label: 'Редактировать',
             onPressed: (_sending || _postponing)
                 ? null
                 : () => _closeSheet(HeldOrderSyncAction.edit),
           ),
           const SizedBox(height: 8),
-          SaGhostButton(
+          AgentSecondaryButton(
             label: postponeLabel,
             onPressed: (_postponing || _sending) ? null : _postpone,
           ),
           const SizedBox(height: 8),
-          SaGhostButton(
+          AgentSecondaryButton(
             label: homeLabel,
             onPressed: _sending
                 ? null
@@ -399,7 +397,6 @@ class _HeldOrderSyncSheetState extends ConsumerState<HeldOrderSyncSheet> {
           ),
         ],
       ),
-    ),
     );
   }
 }
@@ -443,7 +440,7 @@ class _CountdownRing extends StatelessWidget {
               ),
               const SizedBox(height: 2),
               Text(
-                'осталось',
+                'қолди',
                 style: AppTypography.caption.copyWith(
                   color: AppColors.textMuted,
                   fontWeight: FontWeight.w600,
@@ -476,7 +473,7 @@ class _MiniStatCard extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
       decoration: BoxDecoration(
         color: bg,
-        borderRadius: BorderRadius.circular(SaRadius.control),
+        borderRadius: BorderRadius.circular(12),
         border: Border.all(color: border),
       ),
       child: Column(

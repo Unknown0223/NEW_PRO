@@ -9,7 +9,6 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/ui/agent_ui.dart';
 import '../../../core/ui/agent_ui_extended.dart';
-import '../../../design_system/design_system.dart';
 import '../home/home_visit_metrics_provider.dart';
 import '../shell/agent_app_bar.dart';
 import '../tabel/tabel_format.dart';
@@ -31,7 +30,7 @@ class AgentKpiPage extends ConsumerWidget {
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AgentAppBar(
-        title: 'KPI paneli',
+        title: 'KPI',
         useShellDrawer: true,
         belowTitle: dataAsync.maybeWhen(
           data: (d) => Text(
@@ -111,46 +110,36 @@ class _Body extends StatelessWidget {
 
     return ListView(
       physics: const AlwaysScrollableScrollPhysics(),
-      padding: const EdgeInsets.fromLTRB(14, 12, 14, 140),
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 32),
       children: [
-        SaEnter(
-          preset: SaMotionPreset.rise,
-          child: _TodayHero(
-            sales: data.todaySalesSum,
-            plan: data.todayPlanDaySum,
-            pct: todayPct,
-            remaining: data.todayRemainingSum,
-            vsYesterday: data.todayVsYesterdayPct,
-            week: data.week,
-            workingDaysLeft: data.dailyRoute.remainingWorkingDays,
-            workingDaysTotal: data.dailyRoute.workingDaysTotal,
-            carryForward: data.dailyRoute.carryForwardSum,
-          ),
+        _TodayHero(
+          sales: data.todaySalesSum,
+          plan: data.todayPlanDaySum,
+          pct: todayPct,
+          remaining: data.todayRemainingSum,
+          vsYesterday: data.todayVsYesterdayPct,
+          week: data.week,
+          workingDaysLeft: data.dailyRoute.remainingWorkingDays,
+          workingDaysTotal: data.dailyRoute.workingDaysTotal,
+          carryForward: data.dailyRoute.carryForwardSum,
         ),
         const SizedBox(height: 12),
-        SaEnter(
-          delay: SaStaggerDelay.of(1),
-          preset: SaMotionPreset.rise,
-          child: _VisitRouteCard(
-            onRoute: onRoute,
-            offRoute: offRoute,
-            remaining: remaining,
-            stops: stops > 0 ? stops : 12,
-            pct: kpiPctInt(visitPct ?? data.todayExecutionPct),
-            onOpen: () => context.go('/kpi/route'),
-          ),
+        _VisitRouteCard(
+          onRoute: onRoute,
+          offRoute: offRoute,
+          remaining: remaining,
+          stops: stops > 0 ? stops : 12,
+          pct: kpiPctInt(visitPct ?? data.todayExecutionPct),
+          onOpen: () => context.go('/kpi/route'),
         ),
         const SizedBox(height: 12),
         ..._kpiGroupGrid(context, data),
         if (!data.hasPlans) ...[
           const SizedBox(height: 12),
-          SaEnter(
-            delay: SaStaggerDelay.of(3),
-            child: AgentSurfaceCard(
-              child: Text(
-                'Bu oy uchun tasdiqlangan KPI reja yo\'q. «Reja o\'rnatish» dan bering.',
-                style: AppTypography.bodySmall.copyWith(color: AppColors.textSecondary),
-              ),
+          AgentSurfaceCard(
+            child: Text(
+              'Одобренных KPI-планов на месяц нет. Задайте в «Установка планов».',
+              style: AppTypography.bodySmall.copyWith(color: AppColors.textSecondary),
             ),
           ),
         ],
@@ -168,21 +157,17 @@ class _Body extends StatelessWidget {
       final right = i + 1 < groups.length ? groups[i + 1] : null;
       tiles.add(const SizedBox(height: 10));
       tiles.add(
-        SaEnter(
-          delay: SaStaggerDelay.of(2 + (i ~/ 2)),
-          preset: SaMotionPreset.rise,
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(child: _groupTile(left, i)),
-              const SizedBox(width: 10),
-              Expanded(
-                child: right != null
-                    ? _groupTile(right, i + 1)
-                    : const SizedBox.shrink(),
-              ),
-            ],
-          ),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(child: _groupTile(left, i)),
+            const SizedBox(width: 10),
+            Expanded(
+              child: right != null
+                  ? _groupTile(right, i + 1)
+                  : const SizedBox.shrink(),
+            ),
+          ],
         ),
       );
     }
@@ -226,31 +211,29 @@ class _TodayHero extends StatelessWidget {
     required this.carryForward,
   });
 
-  static const _wd = ['Du', 'Se', 'Ch', 'Pa', 'Ju', 'Sh', 'Ya'];
+  static const _wd = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
 
   @override
   Widget build(BuildContext context) {
     final maxBar = week.fold<double>(0, (m, w) => w.salesSum > m ? w.salesSum : m);
     final avg = week.isEmpty ? 0.0 : week.fold<double>(0, (s, w) => s + w.salesSum) / week.length;
     final vs = vsYesterday;
-    final vsLabel = vs == null
-        ? null
-        : '${vs >= 0 ? '+' : ''}${vs.toStringAsFixed(0)}% kechaga nisbatan';
+    final vsLabel = vs == null ? null : '${vs >= 0 ? '+' : ''}${vs.toStringAsFixed(0)}% vs вчера';
 
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         gradient: const LinearGradient(
-          begin: Alignment(-0.2, -1),
-          end: Alignment(0.4, 1),
-          colors: [Color(0xFF0E1420), Color(0xFF070A12)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFF07958F), Color(0xFF055B57)],
         ),
         borderRadius: BorderRadius.circular(18),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.22),
-            blurRadius: 28,
-            offset: const Offset(0, 12),
+            color: AppColors.primary.withValues(alpha: 0.28),
+            blurRadius: 34,
+            offset: const Offset(0, 14),
           ),
         ],
       ),
@@ -265,44 +248,64 @@ class _TodayHero extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'BUGUNGI SAVDO',
+                      'ПРОДАЖИ СЕГОДНЯ',
                       style: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.5),
-                        letterSpacing: 1.2,
-                        fontWeight: FontWeight.w700,
-                        fontSize: 10,
+                        color: Colors.white.withValues(alpha: 0.8),
+                        letterSpacing: 0.6,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 11,
                       ),
                     ),
-                    const SizedBox(height: 6),
                     Text(
-                      '${formatMoneySpaced(sales)} so\'m',
+                      '${formatMoneySpaced(sales)} сум',
                       style: const TextStyle(
                         color: Colors.white,
-                        fontSize: 26,
+                        fontSize: 28,
                         fontWeight: FontWeight.w800,
-                        height: 1.1,
-                        letterSpacing: -0.6,
+                        height: 1.15,
                       ),
                     ),
                     const SizedBox(height: 6),
-                    Text(
-                      'Reja: ${formatMoneySpaced(plan)} so\'m'
-                      '${vsLabel != null ? ' · $vsLabel' : ''}',
-                      style: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.7),
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
+                    Text.rich(
+                      TextSpan(
+                        style: TextStyle(
+                          color: Colors.white.withValues(alpha: 0.95),
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                          height: 1.25,
+                        ),
+                        children: [
+                          const TextSpan(text: 'план: '),
+                          TextSpan(
+                            text: formatMoneySpaced(plan),
+                            style: const TextStyle(fontWeight: FontWeight.w900, color: Colors.white),
+                          ),
+                          const TextSpan(text: ' сум'),
+                          if (vsLabel != null) ...[
+                            const TextSpan(text: ' · '),
+                            TextSpan(
+                              text: vsLabel,
+                              style: TextStyle(
+                                fontWeight: FontWeight.w900,
+                                color: (vs ?? 0) >= 0
+                                    ? const Color(0xFFBBF7D0)
+                                    : const Color(0xFFFECDD3),
+                              ),
+                            ),
+                          ],
+                        ],
                       ),
                     ),
                     if (workingDaysTotal > 0)
                       Padding(
-                        padding: const EdgeInsets.only(top: 4),
+                        padding: const EdgeInsets.only(top: 5),
                         child: Text(
-                          'Ish kunlari: $workingDaysLeft/$workingDaysTotal · qoldi ${formatMoneySpaced(remaining)}',
+                          'раб. дни: $workingDaysLeft/$workingDaysTotal · осталось ${formatMoneySpaced(remaining)}',
                           style: TextStyle(
-                            color: Colors.white.withValues(alpha: 0.65),
-                            fontSize: 11,
-                            fontWeight: FontWeight.w600,
+                            color: Colors.white.withValues(alpha: 0.95),
+                            fontSize: 13.5,
+                            fontWeight: FontWeight.w800,
+                            height: 1.25,
                           ),
                         ),
                       ),
@@ -310,11 +313,12 @@ class _TodayHero extends StatelessWidget {
                       Padding(
                         padding: const EdgeInsets.only(top: 4),
                         child: Text(
-                          'Ko\'chirma: ${formatMoneySpaced(carryForward)}',
+                          'перенос: ${formatMoneySpaced(carryForward)}',
                           style: const TextStyle(
                             color: Color(0xFFFEF08A),
-                            fontSize: 12,
-                            fontWeight: FontWeight.w800,
+                            fontSize: 13.5,
+                            fontWeight: FontWeight.w900,
+                            height: 1.25,
                           ),
                         ),
                       ),
@@ -322,32 +326,27 @@ class _TodayHero extends StatelessWidget {
                 ),
               ),
               SizedBox(
-                width: 64,
-                height: 64,
+                width: 72,
+                height: 72,
                 child: Stack(
                   alignment: Alignment.center,
                   children: [
                     CircularProgressIndicator(
                       value: 1,
-                      strokeWidth: 5,
-                      backgroundColor: Colors.white.withValues(alpha: 0.12),
+                      strokeWidth: 10,
+                      backgroundColor: Colors.white.withValues(alpha: 0.18),
                       valueColor: const AlwaysStoppedAnimation(Colors.transparent),
                     ),
                     CircularProgressIndicator(
                       value: (pct / 100).clamp(0.0, 1.0),
-                      strokeWidth: 5,
+                      strokeWidth: 10,
                       strokeCap: StrokeCap.round,
                       backgroundColor: Colors.transparent,
-                      valueColor: const AlwaysStoppedAnimation(Color(0xFFC8F56A)),
+                      valueColor: const AlwaysStoppedAnimation(Colors.white),
                     ),
                     Text(
                       '$pct%',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w800,
-                        fontSize: 13,
-                        fontFamily: 'monospace',
-                      ),
+                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 18),
                     ),
                   ],
                 ),
@@ -358,29 +357,28 @@ class _TodayHero extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.08),
-              borderRadius: BorderRadius.circular(12),
+              color: Colors.white.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(14),
             ),
             child: Column(
               children: [
                 Row(
                   children: [
                     Text(
-                      'Savdo · oxirgi 7 kun',
+                      'ПРОДАЖИ · ПОСЛЕДНИЕ 7 ДНЕЙ',
                       style: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.7),
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
+                        color: Colors.white.withValues(alpha: 0.8),
+                        fontSize: 10.5,
+                        fontWeight: FontWeight.w800,
                       ),
                     ),
                     const Spacer(),
                     Text(
                       '∅ ${tabelCompactSum(avg)}',
                       style: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.75),
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
-                        fontFamily: 'monospace',
+                        color: Colors.white.withValues(alpha: 0.85),
+                        fontSize: 10.5,
+                        fontWeight: FontWeight.w800,
                       ),
                     ),
                   ],
@@ -397,12 +395,11 @@ class _TodayHero extends StatelessWidget {
                           child: Container(
                             height: maxBar <= 0
                                 ? 4
-                                : (4 + (week[i].salesSum / maxBar) * 52)
-                                    .clamp(4.0, 56.0),
+                                : (4 + (week[i].salesSum / maxBar) * 52).clamp(4.0, 56.0),
                             decoration: BoxDecoration(
                               color: i == week.length - 1
-                                  ? const Color(0xFFC8F56A)
-                                  : Colors.white.withValues(alpha: 0.35),
+                                  ? Colors.white
+                                  : Colors.white.withValues(alpha: 0.45),
                               borderRadius: BorderRadius.circular(4),
                             ),
                           ),
@@ -421,8 +418,8 @@ class _TodayHero extends StatelessWidget {
                           _wd[i],
                           textAlign: TextAlign.center,
                           style: TextStyle(
-                            color: Colors.white.withValues(alpha: i == 6 ? 1 : 0.55),
-                            fontSize: 9,
+                            color: Colors.white.withValues(alpha: i == 6 ? 1 : 0.7),
+                            fontSize: 9.5,
                             fontWeight: FontWeight.w700,
                           ),
                         ),
@@ -464,79 +461,82 @@ class _VisitRouteCard extends StatelessWidget {
       return const Color(0xFFE5EDF3);
     });
 
-    return SaPressable(
-      onTap: onOpen,
-      borderRadius: BorderRadius.circular(16),
-      child: AgentSurfaceCard(
-        padding: const EdgeInsets.all(14),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Bugungi marshrut',
-                        style: AppTypography.headlineSmall.copyWith(fontSize: 13.5),
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onOpen,
+        borderRadius: BorderRadius.circular(16),
+        child: AgentSurfaceCard(
+          padding: const EdgeInsets.all(14),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Маршрут на сегодня',
+                          style: AppTypography.headlineSmall.copyWith(fontSize: 13.5),
+                        ),
+                        Text(
+                          '$onRoute из $stops точек'
+                          '${offRoute > 0 ? ' · вне маршрута $offRoute' : ''}',
+                          style: AppTypography.captionSmall.copyWith(
+                            color: AppColors.textMuted,
+                            fontSize: 11.5,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: AppColors.primarySoft,
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(
+                      '$pct%',
+                      style: AppTypography.captionSmall.copyWith(
+                        color: AppColors.primary,
+                        fontWeight: FontWeight.w800,
                       ),
-                      Text(
-                        '$onRoute / $stops nuqta'
-                        '${offRoute > 0 ? ' · marshrutdan tashqari $offRoute' : ''}',
-                        style: AppTypography.captionSmall.copyWith(
-                          color: AppColors.textMuted,
-                          fontSize: 11.5,
+                    ),
+                  ),
+                  const Icon(Icons.chevron_right, size: 20, color: AppColors.textMuted),
+                ],
+              ),
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  for (var i = 0; i < segs.length; i++) ...[
+                    if (i > 0) const SizedBox(width: 4),
+                    Expanded(
+                      child: Container(
+                        height: 10,
+                        decoration: BoxDecoration(
+                          color: segs[i],
+                          borderRadius: BorderRadius.circular(3),
                         ),
                       ),
-                    ],
-                  ),
-                ),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: AppColors.primarySoft,
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Text(
-                    '$pct%',
-                    style: AppTypography.captionSmall.copyWith(
-                      color: AppColors.primary,
-                      fontWeight: FontWeight.w800,
                     ),
-                  ),
-                ),
-                const Icon(Icons.chevron_right, size: 20, color: AppColors.textMuted),
-              ],
-            ),
-            const SizedBox(height: 10),
-            Row(
-              children: [
-                for (var i = 0; i < segs.length; i++) ...[
-                  if (i > 0) const SizedBox(width: 4),
-                  Expanded(
-                    child: Container(
-                      height: 10,
-                      decoration: BoxDecoration(
-                        color: segs[i],
-                        borderRadius: BorderRadius.circular(3),
-                      ),
-                    ),
-                  ),
+                  ],
                 ],
-              ],
-            ),
-            const SizedBox(height: 8),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                _legend(AppColors.success, 'Tashrif $onRoute'),
-                _legend(const Color(0xFFF59E0B), 'Tashqari $offRoute'),
-                _legend(const Color(0xFFE5EDF3), 'Qoldi $remaining'),
-              ],
-            ),
-          ],
+              ),
+              const SizedBox(height: 8),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  _legend(AppColors.success, 'Посещено $onRoute'),
+                  _legend(const Color(0xFFF59E0B), 'Вне маршрута $offRoute'),
+                  _legend(const Color(0xFFE5EDF3), 'Осталось $remaining'),
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -642,7 +642,7 @@ class _MetricTile extends StatelessWidget {
             style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
           ),
           Text(
-            'reja: $target',
+            'план: $target',
             style: const TextStyle(fontSize: 10, color: AppColors.textMuted),
           ),
           const SizedBox(height: 6),

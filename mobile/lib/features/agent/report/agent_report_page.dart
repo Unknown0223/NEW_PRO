@@ -6,7 +6,6 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/ui/agent_ui.dart';
 import '../../../core/ui/agent_ui_extended.dart';
-import '../../../design_system/design_system.dart';
 import '../../../core/api/mobile_api.dart';
 import '../shell/agent_app_bar.dart';
 import '../home/home_visit_metrics_provider.dart';
@@ -65,7 +64,7 @@ class _AgentReportPageState extends ConsumerState<AgentReportPage> {
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AgentAppBar(
-        title: 'Hisobotlar',
+        title: 'Отчёты',
         useShellDrawer: true,
         actions: [
           AgentIconButton(icon: Icons.filter_alt_outlined, showDot: true, onPressed: () => AgentFilterSheet.show(context)),
@@ -87,15 +86,9 @@ class _AgentReportPageState extends ConsumerState<AgentReportPage> {
                     physics: const AlwaysScrollableScrollPhysics(),
                     padding: const EdgeInsets.fromLTRB(12, 12, 12, 140),
                     children: [
-                      SaEnter(
-                        preset: SaMotionPreset.rise,
-                        child: _statGrid(salesTotals),
-                      ),
+                      _statGrid(salesTotals),
                       const SizedBox(height: 12),
-                      SaEnter(
-                        delay: SaStaggerDelay.of(1),
-                        child: const AgentEmptyState(message: 'Oy uchun savdo yo\'q'),
-                      ),
+                      const AgentEmptyState(message: S.emptyReport),
                     ],
                   );
                 }
@@ -104,15 +97,9 @@ class _AgentReportPageState extends ConsumerState<AgentReportPage> {
                   physics: const AlwaysScrollableScrollPhysics(),
                   padding: const EdgeInsets.fromLTRB(12, 12, 12, 140),
                   children: [
-                    SaEnter(
-                      preset: SaMotionPreset.rise,
-                      child: _statGrid(salesTotals),
-                    ),
+                    _statGrid(salesTotals),
                     const SizedBox(height: 12),
-                    SaEnter(
-                      delay: SaStaggerDelay.of(1),
-                      preset: SaMotionPreset.rise,
-                      child: AgentSurfaceCard(
+                    AgentSurfaceCard(
                       padding: EdgeInsets.zero,
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -120,7 +107,7 @@ class _AgentReportPageState extends ConsumerState<AgentReportPage> {
                           Padding(
                             padding: const EdgeInsets.fromLTRB(14, 14, 14, 8),
                             child: Text(
-                              'Kategoriyalar bo\'yicha savdo',
+                              'Продажи по категориям',
                               style: AppTypography.headlineSmall.copyWith(fontWeight: FontWeight.w800, fontSize: 14),
                             ),
                           ),
@@ -132,7 +119,6 @@ class _AgentReportPageState extends ConsumerState<AgentReportPage> {
                           for (final item in visible) _categoryRow(item),
                         ],
                       ),
-                    ),
                     ),
                   ],
                 );
@@ -156,10 +142,10 @@ class _AgentReportPageState extends ConsumerState<AgentReportPage> {
 
     return AgentReportStatGrid(
       items: [
-        (label: 'Savdo', value: _fmtSum(totals.sum)),
-        (label: 'Hajm', value: '${_fmtQty(totals.qty)} dona'),
+        (label: 'Продажи', value: _fmtSum(totals.sum)),
+        (label: 'Объём', value: '${_fmtQty(totals.qty)} шт'),
         (label: 'KPI', value: kpi),
-        (label: 'Tashriflar', value: visitLabel),
+        (label: 'Визиты', value: visitLabel),
       ],
     );
   }
@@ -173,14 +159,14 @@ class _AgentReportPageState extends ConsumerState<AgentReportPage> {
         const Expanded(
           flex: 7,
           child: Text(
-            'Kategoriya',
+            'Категория',
             style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: AppColors.textMuted),
           ),
         ),
         SizedBox(
           width: _qtyColWidth,
           child: const Text(
-            'Soni',
+            'Кол-во',
             textAlign: TextAlign.right,
             style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: AppColors.textMuted),
           ),
@@ -189,7 +175,7 @@ class _AgentReportPageState extends ConsumerState<AgentReportPage> {
         const Expanded(
           flex: _sumColFlex,
           child: Text(
-            'Summa',
+            'Сумма',
             textAlign: TextAlign.right,
             style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: AppColors.textMuted),
           ),

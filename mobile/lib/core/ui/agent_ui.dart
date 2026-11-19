@@ -1,10 +1,8 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 
 import '../l10n/app_strings_ru.dart';
 import '../errors/user_facing_error.dart';
-import '../../design_system/design_system.dart';
+import '../theme/app_colors.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_typography.dart';
 import 'client_photo_thumb.dart';
@@ -178,7 +176,10 @@ class AgentHamburger extends StatelessWidget {
             clipBehavior: Clip.none,
             alignment: Alignment.center,
             children: [
-              const Icon(Icons.menu, size: 22, color: AppColors.textPrimary),
+              CustomPaint(
+                size: const Size(18, 14),
+                painter: _AgentHamburgerPainter(),
+              ),
               if (badge != null && badge! > 0)
                 Positioned(
                   top: -3,
@@ -444,7 +445,7 @@ class AgentSurfaceCard extends StatelessWidget {
       padding: padding ?? const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: AppColors.surface,
-        borderRadius: BorderRadius.circular(SaRadius.card),
+        borderRadius: BorderRadius.circular(16),
       ),
       child: child,
     );
@@ -464,32 +465,27 @@ class AgentPrimaryButton extends StatelessWidget {
     this.onPressed,
     this.height = 39,
     this.color,
-    this.borderRadius = SaRadius.control,
+    this.borderRadius = 10,
   });
 
   @override
   Widget build(BuildContext context) {
-    final radius = borderRadius >= SaRadius.card - 4 ? SaRadius.control : borderRadius;
-    return SaPressable(
-      child: SizedBox(
-        width: double.infinity,
-        height: height,
-        child: ElevatedButton(
-          onPressed: onPressed,
-          style: ElevatedButton.styleFrom(
-            backgroundColor: color ?? Theme.of(context).colorScheme.primary,
-            disabledBackgroundColor: const Color(0xFFCBD5E1),
-            disabledForegroundColor: Colors.white,
-            foregroundColor: Colors.white,
-            elevation: onPressed == null ? 0 : 4,
-            shadowColor: onPressed == null
-                ? Colors.transparent
-                : (color ?? AppColors.primary).withValues(alpha: 0.25),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(radius)),
-            textStyle: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700, letterSpacing: 0.2),
-          ),
-          child: Text(label),
+    return SizedBox(
+      width: double.infinity,
+      height: height,
+      child: ElevatedButton(
+        onPressed: onPressed,
+        style: ElevatedButton.styleFrom(
+          backgroundColor: color ?? AppColors.primary,
+          disabledBackgroundColor: const Color(0xFFCBD5E1),
+          disabledForegroundColor: Colors.white,
+          foregroundColor: Colors.white,
+          elevation: onPressed == null ? 0 : 4,
+          shadowColor: onPressed == null ? Colors.transparent : AppColors.primary.withValues(alpha: 0.25),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(borderRadius)),
+          textStyle: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700, letterSpacing: 0.2),
         ),
+        child: Text(label),
       ),
     );
   }
@@ -547,13 +543,12 @@ class AgentOutletCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SaPressable(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(SaRadius.card),
-      child: Material(
+    return Material(
       color: AppColors.surface,
-      borderRadius: BorderRadius.circular(SaRadius.card),
-      clipBehavior: Clip.antiAlias,
+      borderRadius: BorderRadius.circular(16),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
         child: Padding(
           padding: const EdgeInsets.all(16),
           child: Column(
@@ -647,14 +642,13 @@ class AgentWarningBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SaPressable(
+    return GestureDetector(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(SaRadius.control),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
         decoration: BoxDecoration(
           color: AppColors.warningSoft,
-          borderRadius: BorderRadius.circular(SaRadius.control),
+          borderRadius: BorderRadius.circular(14),
           border: Border.all(color: const Color(0xFFFED7AA)),
         ),
         child: Row(
@@ -802,7 +796,7 @@ class AgentMenuTile extends StatelessWidget {
 /// Agent roli badge (shablon teal).
 class AgentRoleBadge extends StatelessWidget {
   final String label;
-  const AgentRoleBadge({super.key, this.label = 'Агент'});
+  const AgentRoleBadge({super.key, this.label = 'Agent'});
 
   @override
   Widget build(BuildContext context) {
@@ -1133,10 +1127,7 @@ Future<T?> showAgentSheet<T>(BuildContext context, {required Widget child, doubl
   );
 }
 
-OverlayEntry? _agentToastEntry;
-Timer? _agentToastTimer;
-
-/// Toast — ekranning tepasi, status qatori ostida.
+/// Toast — ekran **tepasida** (pastki tugmalar / Итого panelini yopmaydi).
 void showAgentToast(
   BuildContext context,
   String message, {
@@ -1144,42 +1135,31 @@ void showAgentToast(
   Color accentColor = AppColors.warning,
 }) {
   final text = UserFacingError.stripTechnical(message);
-  final overlay = Overlay.maybeOf(context, rootOverlay: true);
-  if (overlay == null) return;
-  ScaffoldMessenger.maybeOf(context)?.hideCurrentSnackBar();
-  _agentToastTimer?.cancel();
-  _agentToastEntry?.remove();
-  _agentToastEntry = null;
-
-  late final OverlayEntry entry;
-  var closed = false;
-  void close() {
-    if (closed) return;
-    closed = true;
-    _agentToastTimer?.cancel();
-    if (entry.mounted) entry.remove();
-    if (identical(_agentToastEntry, entry)) _agentToastEntry = null;
-    onDismiss?.call();
-  }
-
-  entry = OverlayEntry(
-    builder: (ctx) {
-      final top = MediaQuery.paddingOf(ctx).top + 8;
-      return Positioned(
-        top: top,
-        left: 12,
-        right: 12,
-        child: _AgentSnackContent(
-          message: text,
-          accentColor: accentColor,
-          onDismiss: close,
-        ),
-      );
-    },
+  final messenger = ScaffoldMessenger.of(context);
+  final mq = MediaQuery.of(context);
+  final top = mq.padding.top;
+  // Floating SnackBar default pastga yopishadi — margin bilan tepaga ko‘taramiz.
+  final bottomMargin = (mq.size.height - top - 112).clamp(80.0, mq.size.height);
+  messenger.hideCurrentSnackBar();
+  messenger.showSnackBar(
+    SnackBar(
+      elevation: 0,
+      backgroundColor: Colors.transparent,
+      padding: EdgeInsets.zero,
+      margin: EdgeInsets.fromLTRB(12, 0, 12, bottomMargin),
+      behavior: SnackBarBehavior.floating,
+      dismissDirection: DismissDirection.up,
+      duration: const Duration(seconds: 5),
+      content: _AgentSnackContent(
+        message: text,
+        accentColor: accentColor,
+        onDismiss: () {
+          messenger.hideCurrentSnackBar();
+          onDismiss?.call();
+        },
+      ),
+    ),
   );
-  _agentToastEntry = entry;
-  overlay.insert(entry);
-  _agentToastTimer = Timer(const Duration(seconds: 5), close);
 }
 
 /// Login / sessiya xatolari — ekran **pastida** (rasmdagi qorong‘i bar + chap qizil chiziq).

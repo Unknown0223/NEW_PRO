@@ -17,8 +17,6 @@ import '../gps/gps_ping_queue.dart';
 import '../time/work_region_time.dart';
 import 'photo_report_queue.dart';
 import 'sync_payload_parser.dart';
-import '../../features/agent/home/agent_home_page.dart';
-import '../../features/agent/home/sync_count_provider.dart';
 import '../../features/shared/services/sync_service.dart';
 
 /// Sync engine — full/delta sync + offline queue flush
@@ -113,14 +111,10 @@ class SyncEngine {
   }
 
   /// Sync + SQLite yangilash (parse isolate + bitta tranzaksiya).
-  ///
-  /// [awaitFlush]: bootstrapda false — offline/foto/GPS UI ni bloklamasdan
-  /// `_bootstrapPostSyncServices` / keyingi sync da ketadi.
   Future<ParsedSyncPayload> pullSync({
     String? lastSyncAt,
     void Function(int phase)? onPhase,
     bool forceClientsCatalog = false,
-    bool awaitFlush = true,
   }) async {
     onPhase?.call(0);
     final deviceFuture = MobileDeviceInfo.syncPayload();
@@ -157,11 +151,8 @@ class SyncEngine {
     );
 
     onPhase?.call(5);
-    if (awaitFlush) {
-      // Navbat + foto + GPS to‘liq tugaguncha kutamiz — aks holda «OK» erta chiqadi.
-      await Future.wait([offlineFuture, photoFuture, gpsFuture]);
-    }
-    // awaitFlush=false: future lar fonda davom etadi (unawaited).
+    // Navbat + foto + GPS to‘liq tugaguncha kutamiz — aks holda «OK» erta chiqadi.
+    await Future.wait([offlineFuture, photoFuture, gpsFuture]);
     return payload;
   }
 
@@ -187,18 +178,13 @@ class SyncEngine {
           failed++;
           continue;
         }
-        final clientId = item['client_id'] as int;
-        final createdAt = DateTime.tryParse(item['created_at']?.toString() ?? '');
         await _mobileApi.enqueueOrder(
           _slug,
-          clientId: clientId,
+          clientId: item['client_id'] as int,
           warehouseId: warehouseId,
           items: items,
           priceType: item['price_type']?.toString(),
           comment: item['comment']?.toString(),
-          visit: await _db.findVisitGeoForClient(clientId, at: createdAt),
-          createdAt: createdAt,
-          clientUuid: item['client_uuid']?.toString(),
         );
 
         await _db.markQueueItemSent(item['id'] as int);
@@ -333,11 +319,6 @@ final autoFlushProvider = Provider<void>((ref) {
       final photoPending = await AppDatabase().pendingPhotoReportCount();
       if (photoPending > 0) {
         await syncEngine.flushPendingPhotoReports(photoConfig: photoCfg);
-        // UI (Главная / Уведомления) yangilansin — aks holda «Синхр. фото» 0 qoladi.
-        ref.invalidate(pendingPhotoCountProvider);
-        ref.invalidate(syncedPhotoCountTodayProvider);
-        ref.invalidate(failedPhotoCountProvider);
-        ref.invalidate(homeStatsProvider);
       }
       if (!policy.allowed) return;
       final count = await syncEngine.pendingCount();

@@ -308,7 +308,7 @@ class _ClientVisitCard extends StatelessWidget {
             ],
           ),
         ),
-        Text('${formatMoneySpaced(orderSum)} сум',
+        Text("${formatMoneySpaced(orderSum)} So'm",
             style: const TextStyle(
                 fontSize: 15,
                 fontWeight: FontWeight.w800,
@@ -383,7 +383,7 @@ class _ClientVisitCard extends StatelessWidget {
                     Expanded(
                       child: _MiniStat(
                         label: 'Баланс',
-                        value: '${formatMoneySpaced(balance)} сум',
+                        value: "${formatMoneySpaced(balance)} So'm",
                         valueColor:
                             isDebt ? AppColors.error : AppColors.textPrimary,
                         showChevron: true,
@@ -394,7 +394,7 @@ class _ClientVisitCard extends StatelessWidget {
                     Expanded(
                       child: _MiniStat(
                         label: 'Заказ на сумму',
-                        value: '${formatMoneySpaced(orderSum)} сум',
+                        value: "${formatMoneySpaced(orderSum)} So'm",
                         valueColor: AppColors.expeditorAccent,
                       ),
                     ),

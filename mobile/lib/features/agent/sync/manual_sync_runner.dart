@@ -12,10 +12,8 @@ import '../../../core/sync/photo_report_queue.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/errors/user_facing_error.dart';
 import '../../auth/auth_provider.dart';
-import '../home/agent_home_page.dart';
 import '../home/sync_count_provider.dart';
 import '../shell/agent_scaffold_key.dart';
-import '../visits/visit_stats_helper.dart';
 import 'manual_sync_provider.dart';
 
 void _showSyncSnack(String msg, {Color? color}) {
@@ -34,33 +32,22 @@ void _showSyncSnack(String msg, {Color? color}) {
 Future<void> startManualSyncWithContainer(
   ProviderContainer container, {
   required bool full,
-  bool identity = false,
 }) async {
   try {
-    // Identity — faqat rol kartasi; synс oynasi cheklovi qo‘llanmaydi.
-    if (!identity) {
-      final policy = await container
-          .read(authStateProvider.notifier)
-          .refreshConfigAndEvaluateSyncPolicy();
-      if (!policy.allowed) {
-        final slot = container.read(sessionProvider).user?.workSlotCode?.trim();
-        final base = policy.denialMessage ?? 'Синхронизация недоступна';
-        final msg =
-            (slot != null && slot.isNotEmpty) ? '$base · Рабочее место: $slot' : base;
-        if (kDebugMode) {
-          debugPrint('startManualSync denied: $msg');
-        }
-        _showSyncSnack(msg, color: AppColors.warning);
-        return;
+    final policy =
+        await container.read(authStateProvider.notifier).refreshConfigAndEvaluateSyncPolicy();
+    if (!policy.allowed) {
+      final slot = container.read(sessionProvider).user?.workSlotCode?.trim();
+      final base = policy.denialMessage ?? 'Синхронизация недоступна';
+      final msg = (slot != null && slot.isNotEmpty) ? '$base · Slot: $slot' : base;
+      if (kDebugMode) {
+        debugPrint('startManualSync denied: $msg');
       }
+      _showSyncSnack(msg, color: AppColors.warning);
+      return;
     }
     if (container.read(manualSyncProvider.notifier).isRunning) return;
-    unawaited(
-      container.read(manualSyncProvider.notifier).run(
-            full: full,
-            identity: identity,
-          ),
-    );
+    unawaited(container.read(manualSyncProvider.notifier).run(full: full));
   } catch (e, st) {
     if (kDebugMode) {
       debugPrint('startManualSync error: $e\n$st');
@@ -72,7 +59,7 @@ Future<void> startManualSyncWithContainer(
       code: 'ManualSyncStartFailed',
       message: 'Синхронизация: не удалось начать',
       path: '/mobile/sync',
-      payload: {'full': full, 'identity': identity},
+      payload: {'full': full},
     );
     _showSyncSnack(UserFacingError.toast(e, action: 'Не удалось начать синхронизацию'), color: AppColors.error);
   }
@@ -83,7 +70,7 @@ Future<void> startPhotoSyncWithContainer(ProviderContainer container) async {
   try {
     final slug = container.read(sessionProvider).tenantSlug ?? '';
     if (slug.isEmpty) {
-      _showSyncSnack('Компания не выбрана', color: AppColors.error);
+      _showSyncSnack('Нет tenant', color: AppColors.error);
       return;
     }
     final pending = await AppDatabase().pendingPhotoReportCount();
@@ -98,10 +85,6 @@ Future<void> startPhotoSyncWithContainer(ProviderContainer container) async {
       photoConfig: container.read(sessionProvider).mobileConfig?.photo,
     );
     container.invalidate(pendingPhotoCountProvider);
-    container.invalidate(syncedPhotoCountTodayProvider);
-    container.invalidate(failedPhotoCountProvider);
-    container.invalidate(homeStatsProvider);
-    refreshVisitStatsProviders(container.invalidate);
     if (result.failed > 0 && result.sent == 0) {
       _showSyncSnack(
         'Фото не отправлены ($pending). Проверьте интернет.',

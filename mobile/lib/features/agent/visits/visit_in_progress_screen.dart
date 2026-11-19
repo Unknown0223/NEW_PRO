@@ -18,7 +18,6 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/ui/agent_ui_extended.dart';
 import '../../../core/ui/agent_visit_ui.dart';
-import '../../../design_system/design_system.dart';
 import '../../../core/ui/client_photo_thumb.dart';
 import '../clients/client_photo_report_flow.dart';
 import '../orders/held_order_model.dart';
@@ -85,13 +84,13 @@ class _VisitInProgressScreenState extends ConsumerState<VisitInProgressScreen> {
       await ref.read(heldOrderSchedulerProvider).submitNow(heldId);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Buyurtma yuborildi'), backgroundColor: AppColors.success),
+        const SnackBar(content: Text('Заказ отправлен'), backgroundColor: AppColors.success),
       );
       await _load();
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Buyurtmani yuborib bo\'lmadi'), backgroundColor: AppColors.error),
+        const SnackBar(content: Text('Не удалось отправить заказ'), backgroundColor: AppColors.error),
       );
     } finally {
       if (mounted) setState(() => _sendingHeld = false);
@@ -110,15 +109,15 @@ class _VisitInProgressScreenState extends ConsumerState<VisitInProgressScreen> {
       final send = await showDialog<bool>(
         context: context,
         builder: (ctx) => AlertDialog(
-          title: const Text('Kutilayotgan buyurtma bor'),
+          title: const Text('Есть заказ в ожидании'),
           content: Text(
             held.length == 1
-                ? 'Vizitni tugatishdan oldin buyurtmani serverga yuborilsinmi?'
-                : 'Vizitni tugatishdan oldin ${held.length} ta buyurtma serverga yuborilsinmi?',
+                ? 'Отправить заказ на сервер перед завершением визита?'
+                : 'Отправить ${held.length} заказа на сервер перед завершением визита?',
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Keyinroq')),
-            TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Yuborish')),
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Позже')),
+            TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Отправить')),
           ],
         ),
       );
@@ -156,7 +155,7 @@ class _VisitInProgressScreenState extends ConsumerState<VisitInProgressScreen> {
     );
     if (row != null && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Foto hisobot saqlandi'), backgroundColor: AppColors.success),
+        const SnackBar(content: Text('Фотоотчет сохранён'), backgroundColor: AppColors.success),
       );
     }
   }
@@ -169,14 +168,11 @@ class _VisitInProgressScreenState extends ConsumerState<VisitInProgressScreen> {
       if (slug.isNotEmpty && _visit?.clientId != null) {
         try {
           final photos = await ref.read(mobileApiProvider).getClientPhotoReports(slug, _visit!.clientId!);
-          if (!hasPhotoReportToday(
-            photos,
-            ownerUserId: ref.read(sessionProvider).user?.id,
-          )) {
+          if (!hasPhotoReportToday(photos)) {
             if (mounted) {
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(
-                  content: Text('Rad etishdan oldin foto hisobot qo\'shing'),
+                  content: Text('Сначала добавьте фотоотчет перед отказом'),
                   backgroundColor: AppColors.warning,
                 ),
               );
@@ -184,15 +180,7 @@ class _VisitInProgressScreenState extends ConsumerState<VisitInProgressScreen> {
             return;
           }
         } catch (_) {
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Foto hisobot tekshirilmadi — internetni tekshiring'),
-                backgroundColor: AppColors.warning,
-              ),
-            );
-          }
-          return;
+          // Network xato — offline da davom etiladi.
         }
       }
     }
@@ -202,7 +190,7 @@ class _VisitInProgressScreenState extends ConsumerState<VisitInProgressScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Rad etish sabablari yo\'q — ma\'lumotnomani sinxronlang'),
+            content: Text('Нет причин отказа — синхронизируйте справочник'),
             backgroundColor: AppColors.warning,
           ),
         );
@@ -235,7 +223,7 @@ class _VisitInProgressScreenState extends ConsumerState<VisitInProgressScreen> {
         );
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Rad etish saqlanmadi: ${e.message}'), backgroundColor: AppColors.error),
+            SnackBar(content: Text('Rad saqlanmadi: ${e.message}'), backgroundColor: AppColors.error),
           );
         }
       } catch (e, st) {
@@ -271,8 +259,8 @@ class _VisitInProgressScreenState extends ConsumerState<VisitInProgressScreen> {
     if (client == null || visit == null) {
       return Scaffold(
         backgroundColor: AppColors.background,
-        appBar: const AgentAppBar(title: 'Vizit', showBack: true),
-        body: AgentEmptyState.fill(message: 'Faol vizit topilmadi'),
+        appBar: const AgentAppBar(title: S.visitInProgressTitle, showBack: true),
+        body: AgentEmptyState.fill(message: 'Активный визит не найден'),
       );
     }
 
@@ -299,13 +287,13 @@ class _VisitInProgressScreenState extends ConsumerState<VisitInProgressScreen> {
     final gps = ref.watch(gpsTrackerProvider);
     final pos = gps.lastPosition;
     final gpsLine = pos != null
-        ? 'GPS: ${pos.latitude.toStringAsFixed(3)}°N ${pos.longitude.toStringAsFixed(3)}°E · aniqlik ${pos.accuracy.round()} m'
+        ? 'GPS: ${pos.latitude.toStringAsFixed(3)}°N ${pos.longitude.toStringAsFixed(3)}°E · точн. ${pos.accuracy.round()}м'
         : S.gpsStarting;
 
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AgentAppBar(
-        title: 'Vizit',
+        title: S.visitInProgressTitle,
         showBack: true,
         belowTitle: Text(
           name,
@@ -313,26 +301,19 @@ class _VisitInProgressScreenState extends ConsumerState<VisitInProgressScreen> {
         ),
       ),
       body: Stack(
-          children: [
-            ListView(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 360),
-              children: [
-                SaEnter(
-                  preset: SaMotionPreset.spring,
-                  child: AgentLiveStopwatch(startSeconds: visitElapsedSeconds(visit.startTime)),
-                ),
+        children: [
+          ListView(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 360),
+            children: [
+              AgentLiveStopwatch(startSeconds: visitElapsedSeconds(visit.startTime)),
               const SizedBox(height: 12),
-              SaEnter(
-                delay: SaStaggerDelay.of(1),
-                preset: SaMotionPreset.rise,
-                child: AgentVisitOutletCard(
+              AgentVisitOutletCard(
                 name: name,
                 code: code.isEmpty ? '—' : code,
                 grade: category.isEmpty ? 'B' : category,
                 photoUrl: firstClientPhotoUrl(client),
                 balanceAmount: balanceAmount,
                 hasDraft: hasDraft,
-              ),
               ),
               const SizedBox(height: 8),
               Row(
@@ -354,7 +335,7 @@ class _VisitInProgressScreenState extends ConsumerState<VisitInProgressScreen> {
             alignment: Alignment.bottomCenter,
             child: AgentVisitActionsSheet(
               clientName: name,
-              subtitle: category.isNotEmpty ? 'Toifa $category' : '',
+              subtitle: [code, category.isNotEmpty ? 'Категория $category' : null].whereType<String>().where((s) => s.isNotEmpty).join(' · '),
               createOrderEnabled: ref.watch(sessionProvider).permissions.canCreateOrders,
               supervisionEnabled: _supervisionEnabled,
               onPhotoReport: _addPhotoReport,
@@ -368,7 +349,7 @@ class _VisitInProgressScreenState extends ConsumerState<VisitInProgressScreen> {
               onSendHeldOrder: held == null ? null : () => _sendHeldOrderNow(held.id),
               heldOrderHint: held == null
                   ? null
-                  : 'Kutilmoqda · ${formatHeldCountdown(held.remaining())}',
+                  : 'Ожидает · ${formatHeldCountdown(held.remaining())}',
               sendHeldBusy: _sendingHeld,
               onRefusal: _pickRefusal,
               onSupervision: () async {
@@ -377,15 +358,15 @@ class _VisitInProgressScreenState extends ConsumerState<VisitInProgressScreen> {
                 final result = await VisitSupervisionSheet.show(context, supervision);
                 if (result != null && mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Tekshiruv ro\'yxati saqlandi'), backgroundColor: AppColors.success),
+                    const SnackBar(content: Text('Checklist saqlandi'), backgroundColor: AppColors.success),
                   );
                 }
               },
               onComplete: () => _completeVisit(refused: false),
             ),
           ),
-          ],
-        ),
+        ],
+      ),
     );
   }
 }

@@ -31,7 +31,7 @@ void main() {
         name: 'New',
         phone: '901112233',
       ),
-      contains('телефон'),
+      contains('telefon'),
     );
   });
 
@@ -42,7 +42,7 @@ void main() {
         name: 'Other name',
         inn: '123456789',
       ),
-      contains('ИНН'),
+      contains('INN'),
     );
   });
 
@@ -56,7 +56,7 @@ void main() {
         zone: 'Z1',
         city: 'Chilonzor',
       ),
-      contains('уже существует'),
+      contains('mavjud'),
     );
   });
 
@@ -84,24 +84,6 @@ void main() {
         excludeClientId: 1,
       ),
       isNull,
-    );
-  });
-
-  test('inactive duplicate uses statusi nofaol message', () {
-    expect(
-      findLocalClientDuplicateMessage(
-        [
-          {
-            'id': 9,
-            'name': 'Old Shop',
-            'phone': '+998901112233',
-            'is_active': 0,
-          },
-        ],
-        name: 'New',
-        phone: '901112233',
-      ),
-      kClientDuplicateInactiveMessage,
     );
   });
 }

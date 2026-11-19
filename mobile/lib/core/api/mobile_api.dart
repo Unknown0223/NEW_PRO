@@ -33,7 +33,7 @@ class MobileApi {
   }
 
   /// Login oldidan versiya siyosati (public endpoint).
-  Future<AppUpdateInfo?> fetchAppRelease(String slug, String version, {String? role}) async {
+  Future<AppUpdateInfo?> fetchAppRelease(String slug, String version) async {
     try {
       final r = await _dio.get(
         '/api/mobile/app-release',
@@ -41,7 +41,6 @@ class MobileApi {
           'slug': slug,
           'version': version,
           'platform': 'android',
-          if (role != null && role.isNotEmpty) 'role': role,
         },
       );
       final data = r.data;
@@ -283,46 +282,6 @@ class MobileApi {
     }
   }
 
-  Future<List<Map<String, dynamic>>> listInAppNotifications(
-    String slug, {
-    bool unreadOnly = false,
-    int limit = 40,
-  }) async {
-    try {
-      final r = await _dio.get(
-        '/api/$slug/notifications',
-        queryParameters: {
-          if (unreadOnly) 'unread_only': 'true',
-          'limit': limit,
-        },
-      );
-      final data = r.data;
-      final list = data is Map ? (data['data'] as List? ?? const []) : const [];
-      return list
-          .whereType<Map>()
-          .map((e) => Map<String, dynamic>.from(e))
-          .toList();
-    } on DioException catch (e) {
-      throw _map(e);
-    }
-  }
-
-  Future<void> markInAppNotificationRead(String slug, int id) async {
-    try {
-      await _dio.patch('/api/$slug/notifications/$id/read', data: _jsonBody());
-    } on DioException catch (e) {
-      throw _map(e);
-    }
-  }
-
-  Future<void> markAllInAppNotificationsRead(String slug) async {
-    try {
-      await _dio.post('/api/$slug/notifications/read-all', data: _jsonBody());
-    } on DioException catch (e) {
-      throw _map(e);
-    }
-  }
-
   Future<List<DebtorClient>> getDebtors(String slug) async {
     try {
       final r = await _dio.get('/api/$slug/mobile/clients/debtors');
@@ -369,9 +328,6 @@ class MobileApi {
     required List items,
     String? priceType,
     String? comment,
-    Map<String, dynamic>? visit,
-    DateTime? createdAt,
-    String? clientUuid,
   }) async {
     try {
       final r = await _dio.post('/api/$slug/mobile/orders/enqueue', data: {
@@ -380,9 +336,7 @@ class MobileApi {
         'items': items,
         if (priceType != null) 'price_type': priceType,
         if (comment != null) 'comment': comment,
-        if (visit != null) 'visit': visit,
-        if (clientUuid != null && clientUuid.isNotEmpty) 'client_uuid': clientUuid,
-        'offline_created_at': (createdAt ?? DateTime.now()).toUtc().toIso8601String(),
+        'offline_created_at': DateTime.now().toUtc().toIso8601String(),
       },);
       return r.data;
     } on DioException catch (e) { throw _map(e); }
@@ -523,14 +477,12 @@ class ClientPhotoReport {
   final String imageUrl;
   final String? caption;
   final int? orderId;
-  final int? createdByUserId;
   final String createdAt;
   const ClientPhotoReport({
     required this.id,
     required this.imageUrl,
     this.caption,
     this.orderId,
-    this.createdByUserId,
     required this.createdAt,
   });
   factory ClientPhotoReport.fromJson(Map<String, dynamic> j) => ClientPhotoReport(
@@ -538,7 +490,6 @@ class ClientPhotoReport {
         imageUrl: j['image_url']?.toString() ?? '',
         caption: j['caption']?.toString(),
         orderId: (j['order_id'] as num?)?.toInt(),
-        createdByUserId: (j['created_by_user_id'] as num?)?.toInt(),
         createdAt: j['created_at']?.toString() ?? '',
       );
 }
@@ -1695,7 +1646,6 @@ class DebtorClient {
   final double currentDebt;
   final double openingDebt;
   final bool debtCollectionOnly;
-  final String? photoUrl;
 
   DebtorClient({
     required this.id,
@@ -1708,7 +1658,6 @@ class DebtorClient {
     this.currentDebt = 0,
     this.openingDebt = 0,
     this.debtCollectionOnly = false,
-    this.photoUrl,
   });
 
   factory DebtorClient.fromJson(Map<String, dynamic> j) => DebtorClient(
@@ -1722,7 +1671,6 @@ class DebtorClient {
         currentDebt: (j['current_debt'] as num?)?.toDouble() ?? 0,
         openingDebt: (j['opening_debt'] as num?)?.toDouble() ?? 0,
         debtCollectionOnly: j['debt_collection_only'] == true,
-        photoUrl: j['photo_url']?.toString(),
       );
 }
 

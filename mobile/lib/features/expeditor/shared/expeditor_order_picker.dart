@@ -41,9 +41,7 @@ class ExpeditorOrderPicker extends ConsumerWidget {
           }
           if (onlyWithDebt) {
             filtered = filtered.where((o) {
-              final raw = o['debt'];
-              if (raw == null) return true;
-              final debt = double.tryParse(raw.toString()) ?? 0;
+              final debt = double.tryParse(o['debt']?.toString() ?? '') ?? 0;
               return debt > 0;
             }).toList();
           }
@@ -81,7 +79,7 @@ class ExpeditorOrderPicker extends ConsumerWidget {
           );
         },
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(child: Text('Ошибка: $e')),
+        error: (e, _) => Center(child: Text('Xato: $e')),
       ),
     );
   }

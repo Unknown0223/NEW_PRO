@@ -8,15 +8,12 @@ import '../../../core/api/mobile_api.dart';
 import '../../../core/auth/session.dart';
 import '../../../core/config/sync_window_countdown.dart';
 import '../../../core/notifications/notifications_day_rollover.dart';
-import '../../../core/notifications/server_in_app_notifications_provider.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/time/server_clock.dart';
 import '../../../core/time/work_region_time.dart';
 import '../../../core/ui/agent_ui.dart';
 import '../../../core/ui/agent_ui_extended.dart';
-import '../../../design_system/design_system.dart';
-import '../home/sync_count_provider.dart';
 import '../orders/held_order_model.dart' show HeldOrder, formatHeldCountdown;
 import '../orders/held_orders_provider.dart';
 import '../orders/held_order_sync_sheet.dart';
@@ -33,7 +30,7 @@ export '../../../core/notifications/notifications_day_rollover.dart'
 
 enum _NotifFilter { all, urgent, orders, system }
 
-enum _NotifKind { urgentHeld, urgentVisit, sync, debt, draft, serverInApp, photoPending, photoSynced }
+enum _NotifKind { urgentHeld, urgentVisit, sync, debt, draft }
 
 class _NotifItem {
   final String id;
@@ -47,8 +44,6 @@ class _NotifItem {
   final Duration? syncLeft;
   final bool syncIsWindowEnd;
   final double syncProgress;
-  final InAppNotificationRow? server;
-  final int? photoCount;
 
   const _NotifItem({
     required this.id,
@@ -62,8 +57,6 @@ class _NotifItem {
     this.syncLeft,
     this.syncIsWindowEnd = true,
     this.syncProgress = 0,
-    this.server,
-    this.photoCount,
   });
 }
 
@@ -75,8 +68,7 @@ class AgentNotificationsBell extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final held = ref.watch(heldOrderCountProvider).valueOrNull ?? 0;
     final drafts = ref.watch(orderDraftListProvider).valueOrNull?.length ?? 0;
-    final pendingPhotos = ref.watch(pendingPhotoCountProvider).valueOrNull ?? 0;
-    final count = held + drafts + pendingPhotos;
+    final count = held + drafts;
 
     return Stack(
       clipBehavior: Clip.none,
@@ -259,15 +251,6 @@ class _AgentNotificationsPageState extends ConsumerState<AgentNotificationsPage>
       ...ref.read(notificationsReadIdsProvider),
       ...ids,
     };
-    final session = ref.read(sessionProvider);
-    final slug = session.tenantSlug?.trim() ?? '';
-    if (slug.isNotEmpty) {
-      unawaited(
-        ref.read(mobileApiProvider).markAllInAppNotificationsRead(slug).then((_) {
-          ref.invalidate(serverInAppNotificationsProvider);
-        }).catchError((_) {}),
-      );
-    }
     showAgentToast(context, 'Все отмечены прочитанными', accentColor: AppColors.primary);
   }
 
@@ -313,47 +296,9 @@ class _AgentNotificationsPageState extends ConsumerState<AgentNotificationsPage>
     required List<VisitRecord> visits,
     required List<OrderDebtRow> debts,
     required List<OrderDraftListEntry> drafts,
-    required List<InAppNotificationRow> server,
-    required int pendingPhotos,
-    required int syncedPhotosToday,
   }) {
     final items = <_NotifItem>[];
     final today = serverTodayKey();
-
-    if (pendingPhotos > 0) {
-      items.add(
-        _NotifItem(
-          id: 'photo_pending',
-          kind: _NotifKind.photoPending,
-          filter: _NotifFilter.urgent,
-          sortWeight: 15,
-          photoCount: pendingPhotos,
-        ),
-      );
-    }
-    if (syncedPhotosToday > 0) {
-      items.add(
-        _NotifItem(
-          id: 'photo_synced_today',
-          kind: _NotifKind.photoSynced,
-          filter: _NotifFilter.system,
-          sortWeight: 250,
-          photoCount: syncedPhotosToday,
-        ),
-      );
-    }
-
-    for (final n in server) {
-      items.add(
-        _NotifItem(
-          id: 'server_${n.id}',
-          kind: _NotifKind.serverInApp,
-          filter: _NotifFilter.system,
-          sortWeight: n.isUnread ? 10 : 700,
-          server: n,
-        ),
-      );
-    }
 
     // Held: faol (pending) — kun filterisiz; DB o‘chirilmaydi.
     for (final h in held) {
@@ -456,9 +401,6 @@ class _AgentNotificationsPageState extends ConsumerState<AgentNotificationsPage>
     final drafts = ref.watch(orderDraftListProvider).valueOrNull ?? const [];
     final visits = ref.watch(visitsTodayProvider).valueOrNull ?? const [];
     final debts = ref.watch(orderDebtsByOrdersProvider).valueOrNull?.data ?? const [];
-    final server = ref.watch(serverInAppNotificationsProvider).valueOrNull ?? const [];
-    final pendingPhotos = ref.watch(pendingPhotoCountProvider).valueOrNull ?? 0;
-    final syncedPhotosToday = ref.watch(syncedPhotoCountTodayProvider).valueOrNull ?? 0;
     final readIds = ref.watch(notificationsReadIdsProvider);
     final syncState = ref.watch(manualSyncProvider);
 
@@ -467,9 +409,6 @@ class _AgentNotificationsPageState extends ConsumerState<AgentNotificationsPage>
       visits: visits,
       debts: debts,
       drafts: drafts,
-      server: server,
-      pendingPhotos: pendingPhotos,
-      syncedPhotosToday: syncedPhotosToday,
     );
     final debtCount = _count(_NotifFilter.orders, items);
     final chipDefs = <(_NotifFilter, String)>[
@@ -487,7 +426,7 @@ class _AgentNotificationsPageState extends ConsumerState<AgentNotificationsPage>
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AgentAppBar(
-        title: 'Bildirishnomalar',
+        title: 'Уведомления',
         useShellDrawer: true,
         showBack: true,
         actions: [
@@ -522,26 +461,17 @@ class _AgentNotificationsPageState extends ConsumerState<AgentNotificationsPage>
           ref.invalidate(orderDraftListProvider);
           ref.invalidate(visitsTodayProvider);
           ref.invalidate(orderDebtsByOrdersProvider);
-          ref.invalidate(serverInAppNotificationsProvider);
-          ref.invalidate(pendingPhotoCountProvider);
-          ref.invalidate(syncedPhotoCountTodayProvider);
-          ref.invalidate(failedPhotoCountProvider);
           _refreshSync();
           await Future.wait([
             ref.read(heldOrdersProvider.future),
             ref.read(orderDraftListProvider.future),
-            ref.read(serverInAppNotificationsProvider.future),
-            ref.read(pendingPhotoCountProvider.future),
-            ref.read(syncedPhotoCountTodayProvider.future),
           ]);
         },
         child: ListView(
           physics: const AlwaysScrollableScrollPhysics(),
-          padding: const EdgeInsets.fromLTRB(12, 4, 12, 140),
+          padding: const EdgeInsets.fromLTRB(12, 4, 12, 100),
           children: [
-            SaEnter(
-              preset: SaMotionPreset.rise,
-              child: SizedBox(
+            SizedBox(
               height: 40,
               child: ListView.separated(
                 scrollDirection: Axis.horizontal,
@@ -560,63 +490,36 @@ class _AgentNotificationsPageState extends ConsumerState<AgentNotificationsPage>
                 },
               ),
             ),
-            ),
             const SizedBox(height: 14),
             if (visible.isEmpty)
-              SaEnter(
-                delay: SaStaggerDelay.of(1),
-                child: Padding(
+              Padding(
                 padding: const EdgeInsets.only(top: 48),
                 child: AgentEmptyState.fill(
-                  message: 'Bildirishnoma yo\'q',
-                  action: SaPrimaryButton(
+                  message: 'Нет уведомлений',
+                  action: AgentPrimaryButton(
                     label: 'К заказам',
+                    height: 48,
                     onPressed: () => context.go('/orders'),
                   ),
                 ),
-              ),
               )
             else
-              for (var ni = 0; ni < visible.length; ni++)
-                Builder(
-                  builder: (context) {
-                    final item = visible[ni];
-                    return SaEnter(
-                      delay: SaStaggerDelay.of(1 + ni),
-                      preset: SaMotionPreset.rise,
-                      child: _NotifCard(
-                        item: item,
-                        unread: item.kind == _NotifKind.serverInApp
-                            ? (item.server?.isUnread ?? !readIds.contains(item.id))
-                            : !readIds.contains(item.id),
-                        syncRunning: syncState.status == ManualSyncStatus.running,
-                        syncUiProgress: syncState.progress,
-                        debtDays: _debtDays,
-                        onMarkRead: () {
-                          ref.read(notificationsReadIdsProvider.notifier).state = {
-                            ...ref.read(notificationsReadIdsProvider),
-                            item.id,
-                          };
-                          final server = item.server;
-                          if (server != null && server.isUnread) {
-                            final slug = ref.read(sessionProvider).tenantSlug?.trim() ?? '';
-                            if (slug.isNotEmpty) {
-                              unawaited(
-                                ref
-                                    .read(mobileApiProvider)
-                                    .markInAppNotificationRead(slug, server.id)
-                                    .then((_) => ref.invalidate(serverInAppNotificationsProvider))
-                                    .catchError((_) {}),
-                              );
-                            }
-                          }
-                        },
-                        onCancelHeld: item.held != null ? () => _cancelHeld(item.held!.id) : null,
-                        onSendHeldNow: item.held != null ? () => _sendHeldNow(item.held!.id) : null,
-                        onSyncNow: () => startManualSync(context, ref, full: false),
-                      ),
-                    );
+              for (final item in visible)
+                _NotifCard(
+                  item: item,
+                  unread: !readIds.contains(item.id),
+                  syncRunning: syncState.status == ManualSyncStatus.running,
+                  syncUiProgress: syncState.progress,
+                  debtDays: _debtDays,
+                  onMarkRead: () {
+                    ref.read(notificationsReadIdsProvider.notifier).state = {
+                      ...ref.read(notificationsReadIdsProvider),
+                      item.id,
+                    };
                   },
+                  onCancelHeld: item.held != null ? () => _cancelHeld(item.held!.id) : null,
+                  onSendHeldNow: item.held != null ? () => _sendHeldNow(item.held!.id) : null,
+                  onSyncNow: () => startManualSync(context, ref, full: false),
                 ),
           ],
         ),
@@ -759,185 +662,7 @@ class _NotifCard extends StatelessWidget {
             context.push('/orders/create?client_id=${item.draft!.draft.clientId}');
           },
         );
-      case _NotifKind.serverInApp:
-        final n = item.server!;
-        return _ServerInAppCard(
-          row: n,
-          unread: unread,
-          onTap: () {
-            onMarkRead();
-            final href = n.linkHref?.trim() ?? '';
-            if (href.startsWith('/clients/') || href.startsWith('/tasks/')) {
-              context.push(href);
-            }
-          },
-        );
-      case _NotifKind.photoPending:
-        return _PhotoSyncStatusCard(
-          title: 'Несинхр. фото',
-          body: 'В очереди: ${item.photoCount ?? 0}. Нажмите, чтобы отправить.',
-          unread: unread,
-          accent: AppColors.warning,
-          icon: Icons.cloud_upload_outlined,
-          onTap: () {
-            onMarkRead();
-            onSyncNow();
-          },
-        );
-      case _NotifKind.photoSynced:
-        return _PhotoSyncStatusCard(
-          title: 'Синхр. фото сегодня',
-          body: 'Успешно отправлено: ${item.photoCount ?? 0}',
-          unread: unread,
-          accent: AppColors.success,
-          icon: Icons.cloud_done_outlined,
-          onTap: onMarkRead,
-        );
     }
-  }
-}
-
-class _PhotoSyncStatusCard extends StatelessWidget {
-  final String title;
-  final String body;
-  final bool unread;
-  final Color accent;
-  final IconData icon;
-  final VoidCallback onTap;
-
-  const _PhotoSyncStatusCard({
-    required this.title,
-    required this.body,
-    required this.unread,
-    required this.accent,
-    required this.icon,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
-      child: Material(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(14),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(14),
-          onTap: onTap,
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Container(
-                  width: 40,
-                  height: 40,
-                  decoration: BoxDecoration(
-                    color: accent.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Icon(icon, color: accent, size: 22),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              title,
-                              style: AppTypography.labelLarge.copyWith(fontWeight: FontWeight.w800),
-                            ),
-                          ),
-                          if (unread) const _UnreadDot(),
-                        ],
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        body,
-                        style: AppTypography.bodySmall.copyWith(color: AppColors.textSecondary),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _ServerInAppCard extends StatelessWidget {
-  final InAppNotificationRow row;
-  final bool unread;
-  final VoidCallback onTap;
-
-  const _ServerInAppCard({
-    required this.row,
-    required this.unread,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
-      child: Material(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(14),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(14),
-          onTap: onTap,
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Container(
-                  width: 40,
-                  height: 40,
-                  decoration: BoxDecoration(
-                    color: AppColors.primary.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: const Icon(Icons.person_add_alt_1, color: AppColors.primary, size: 22),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              row.title,
-                              style: AppTypography.labelLarge.copyWith(fontWeight: FontWeight.w800),
-                            ),
-                          ),
-                          if (unread) const _UnreadDot(),
-                        ],
-                      ),
-                      if ((row.body ?? '').trim().isNotEmpty) ...[
-                        const SizedBox(height: 4),
-                        Text(
-                          row.body!.trim(),
-                          style: AppTypography.bodySmall.copyWith(color: AppColors.textSecondary),
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
   }
 }
 

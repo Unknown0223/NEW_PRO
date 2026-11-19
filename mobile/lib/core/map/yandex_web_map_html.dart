@@ -121,7 +121,7 @@ String buildYandexWebMapHtml({
 </head>
 <body>
   <div id="map"></div>
-  <div id="err">Не удалось загрузить карту Yandex. Проверьте интернет.</div>
+  <div id="err">Yandex xarita yuklanmadi. Internetni tekshiring.</div>
   <script>
     var STOPS = $stopsJson;
     var ROUTE = $routeJson;
@@ -383,18 +383,18 @@ String buildYandexWebMapHtml({
       var start = pts[0];
       var finish = pts[pts.length - 1];
       var startPm = new ymaps.Placemark([start.lat, start.lon], {
-        hintContent: start.isStart ? 'Старт' : (start.name || 'Старт'),
+        hintContent: start.isStart ? 'Boshlanish' : (start.name || 'Boshlanish'),
         iconCaption: 'A',
-        balloonContent: '<b>Старт</b><br/>' + (start.name || '')
+        balloonContent: '<b>Boshlanish</b><br/>' + (start.name || '')
       }, { preset: 'islands#darkGreenCircleDotIconWithCaption', zIndex: 700 });
       map.geoObjects.add(startPm);
       endpointMarkers.push(startPm);
 
       if (pts.length > 1) {
         var endPm = new ymaps.Placemark([finish.lat, finish.lon], {
-          hintContent: finish.isEnd ? 'Финиш' : (finish.name || 'Финиш'),
+          hintContent: finish.isEnd ? 'Yakun' : (finish.name || 'Yakun'),
           iconCaption: 'B',
-          balloonContent: '<b>Финиш</b><br/>' + (finish.name || '')
+          balloonContent: '<b>Yakun</b><br/>' + (finish.name || '')
         }, { preset: 'islands#redCircleDotIconWithCaption', zIndex: 700 });
         map.geoObjects.add(endPm);
         endpointMarkers.push(endPm);
@@ -410,7 +410,7 @@ String buildYandexWebMapHtml({
         if (s.order) {
           props.iconCaption = String(s.order);
           props.balloonContent = '<div style="font-family:system-ui,sans-serif;padding:4px 0">' +
-            '<b>' + s.name + '</b><br/><span style="color:#64748b">№ ' + s.order + ' в маршруте</span></div>';
+            '<b>' + s.name + '</b><br/><span style="color:#64748b">№ ' + s.order + ' marshrutda</span></div>';
         }
         var opts = clientMarkerOptions(s);
         if (s.order) {

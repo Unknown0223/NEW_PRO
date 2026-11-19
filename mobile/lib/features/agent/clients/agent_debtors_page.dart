@@ -5,12 +5,10 @@ import 'package:intl/intl.dart';
 
 import '../../../core/api/mobile_api.dart';
 import '../../../core/auth/session.dart';
-import '../../../core/clients/agent_outlet_filters_provider.dart';
 import '../../../core/l10n/app_strings_ru.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/ui/agent_ui.dart';
 import '../../../core/ui/agent_ui_extended.dart';
-import '../../../design_system/design_system.dart';
 import '../../auth/auth_provider.dart';
 import '../shell/agent_app_bar.dart';
 import '../orders/order_create_models.dart' show formatMoneyUz;
@@ -36,17 +34,11 @@ class AgentDebtorsPage extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final debtorsAsync = ref.watch(debtorsProvider);
-    final ledger = ref.watch(clientAgentLedgerBalancesProvider).valueOrNull;
-
-    double shownBalance(DebtorClient c) {
-      if (ledger == null) return c.balance;
-      return ledger[c.id] ?? 0;
-    }
 
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AgentAppBar(
-        title: 'Qarzdorlar',
+        title: 'Должники',
         useShellDrawer: true,
         showBack: true,
         actions: [
@@ -58,70 +50,53 @@ class AgentDebtorsPage extends ConsumerWidget {
           if (rows.isEmpty) {
             return RefreshIndicator(
               color: AppColors.primary,
-              onRefresh: () async {
-                ref.invalidate(debtorsProvider);
-                ref.invalidate(clientAgentLedgerBalancesProvider);
-              },
+              onRefresh: () async => ref.invalidate(debtorsProvider),
               child: ListView(
                 physics: const AlwaysScrollableScrollPhysics(),
                 children: [
                   SizedBox(
                     height: MediaQuery.sizeOf(context).height * 0.45,
-                    child: AgentEmptyState.fill(message: 'Qarzdorlar yo\'q'),
+                    child: AgentEmptyState.fill(message: S.emptyDebtors),
                   ),
                 ],
               ),
             );
           }
-          final visible = rows.where((c) => shownBalance(c) < -0.01).toList();
-          final total = visible.fold<double>(0, (s, c) => s + shownBalance(c).abs());
+          final total = rows.fold<double>(0, (s, c) => s + c.balance.abs());
           return RefreshIndicator(
             color: AppColors.primary,
-            onRefresh: () async {
-              ref.invalidate(debtorsProvider);
-              ref.invalidate(clientAgentLedgerBalancesProvider);
-            },
+            onRefresh: () async => ref.invalidate(debtorsProvider),
             child: ListView(
-              padding: const EdgeInsets.fromLTRB(12, 12, 12, 140),
+              padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
               children: [
-                SaEnter(
-                  preset: SaMotionPreset.rise,
-                  child: AgentBalanceBanner(
-                    label: 'Jami qarz:',
-                    value: formatMoneyUz(total),
+                AgentBalanceBanner(
+                  label: 'Общий долг:',
+                  value: formatMoneyUz(total),
+                ),
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8, left: 4, top: 4),
+                  child: Text(
+                    'Найдено: ${rows.length}',
+                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.textSecondary),
                   ),
                 ),
-                SaEnter(
-                  delay: SaStaggerDelay.of(1),
-                  child: Padding(
-                    padding: const EdgeInsets.only(bottom: 8, left: 4, top: 4),
-                    child: Text(
-                      'Topildi: ${visible.length}',
-                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.textSecondary),
-                    ),
-                  ),
-                ),
-                for (var i = 0; i < visible.length; i++)
-                  SaEnter(
-                    delay: SaStaggerDelay.of(2 + i),
-                    preset: SaMotionPreset.rise,
-                    child: Builder(
-                      builder: (context) {
-                        final c = visible[i];
-                        final balance = shownBalance(c);
-                        return AgentDebtorCard(
-                          name: c.name,
-                          photoUrl: c.photoUrl,
-                          balance: _formatBalance(balance),
-                          balanceAmount: balance,
-                          overdue: _formatOverdue(c.overdueAt),
-                          openingDebt: c.openingDebt > 0.01 ? _formatBalance(c.openingDebt) : null,
-                          debtCollectionOnly: c.debtCollectionOnly,
-                          onTap: () => context.push('/clients/${c.id}'),
-                        );
-                      },
-                    ),
-                  ),
+                ...rows.map((c) {
+                  final fromOps = c.balance.abs() - c.openingDebt;
+                  return AgentDebtorCard(
+                    name: c.name,
+                    balance: _formatBalance(c.balance),
+                    balanceAmount: c.balance,
+                    overdue: _formatOverdue(c.overdueAt),
+                    openingDebt: c.openingDebt > 0.01 ? _formatBalance(c.openingDebt) : null,
+                    enteredDebt: c.openingDebt > 0.01 && fromOps > 0.01
+                        ? _formatBalance(fromOps)
+                        : null,
+                    legacyDebt: c.legacyDebt > 0.01 ? _formatBalance(c.legacyDebt) : null,
+                    currentDebt: c.currentDebt > 0.01 ? _formatBalance(c.currentDebt) : null,
+                    debtCollectionOnly: c.debtCollectionOnly,
+                    onTap: () => context.push('/clients/${c.id}'),
+                  );
+                }),
               ],
             ),
           );

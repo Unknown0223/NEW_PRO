@@ -13,7 +13,6 @@ import '../../../core/theme/app_typography.dart';
 import '../../../core/ui/agent_ui.dart';
 import '../../../core/ui/agent_ui_extended.dart';
 import '../../../core/ui/agent_visit_ui.dart';
-import '../../../design_system/design_system.dart';
 import '../clients/agent_clients_outlet_list.dart';
 import '../shell/agent_app_bar.dart';
 
@@ -115,6 +114,7 @@ class AgentVisitsPage extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final config = ref.watch(sessionProvider).mobileConfig;
+    final visitStartEndEnabled = config?.misc.visitStartEndEnabled ?? true;
     final activeVisits = ref.watch(visitsTodayProvider).valueOrNull?.where((v) => v.status == 'in_progress').toList() ?? [];
     final weekdayTab = ref.watch(outletWeekdayTabProvider);
     final filtersActive = weekdayTab > 0 ||
@@ -124,7 +124,7 @@ class AgentVisitsPage extends ConsumerWidget {
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AgentAppBar(
-        title: 'Vizitlar',
+        title: S.visits,
         useShellDrawer: true,
         actions: [
           AgentIconButton(icon: Icons.search, onPressed: () => context.push('/search?from=/visits')),
@@ -150,57 +150,52 @@ class AgentVisitsPage extends ConsumerWidget {
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          if (!visitStartEndEnabled)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
+              child: Text(
+                'Старт/стоп визита отключён в настройках — точки маршрута доступны',
+                style: AppTypography.caption.copyWith(color: AppColors.textMuted),
+              ),
+            ),
           if (activeVisits.isNotEmpty)
-            SaEnter(
-              preset: SaMotionPreset.rise,
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
-                child: _ActiveVisitPill(
-                  visit: activeVisits.first,
-                  onTap: () {
-                    final id = activeVisits.first.clientId;
-                    if (id != null) context.push('/visits/active/$id');
-                  },
-                ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
+              child: _ActiveVisitPill(
+                visit: activeVisits.first,
+                onTap: () {
+                  final id = activeVisits.first.clientId;
+                  if (id != null) context.push('/visits/active/$id');
+                },
               ),
             ),
           if (config?.gps.trackingEnabled == true) ...[
             const SizedBox(height: 10),
-            SaEnter(
-              delay: SaStaggerDelay.of(1),
-              preset: SaMotionPreset.rise,
-              child: const AgentVisitGpsBanner(),
-            ),
+            const AgentVisitGpsBanner(),
           ],
           const SizedBox(height: 12),
-          SaEnter(
-            delay: SaStaggerDelay.of(2),
-            preset: SaMotionPreset.rise,
-            child: const AgentVisitsWeekTabs(),
-          ),
+          const AgentVisitsWeekTabs(),
           const SizedBox(height: 12),
-          Expanded(
-            child: SaEnter(
-              delay: SaStaggerDelay.of(3),
-              preset: SaMotionPreset.rise,
-              child: const AgentClientsOutletList(visitsMode: true),
-            ),
+          const Expanded(
+            child: AgentClientsOutletList(visitsMode: true),
           ),
         ],
       ),
-      floatingActionButton: SaPressable(
-        onTap: () => context.push('/visits/start'),
-        child: Container(
-          width: 58,
-          height: 58,
-          decoration: BoxDecoration(
-            color: AppColors.primary,
-            shape: BoxShape.circle,
-            boxShadow: AppColors.fabShadow,
-          ),
-          child: const Icon(Icons.play_arrow_rounded, color: Colors.white, size: 28),
-        ),
-      ),
+      floatingActionButton: visitStartEndEnabled
+          ? GestureDetector(
+              onTap: () => context.push('/visits/start'),
+              child: Container(
+                width: 58,
+                height: 58,
+                decoration: BoxDecoration(
+                  color: AppColors.primary,
+                  shape: BoxShape.circle,
+                  boxShadow: AppColors.fabShadow,
+                ),
+                child: const Icon(Icons.play_arrow_rounded, color: Colors.white, size: 28),
+              ),
+            )
+          : null,
     );
   }
 }
@@ -213,7 +208,7 @@ class _ActiveVisitPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SaPressable(
+    return GestureDetector(
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),

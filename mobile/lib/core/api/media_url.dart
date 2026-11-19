@@ -28,8 +28,7 @@ Uint8List? decodeDataImageUrl(String raw) {
 }
 
 /// `data:image/...;base64,...` yoki tarmoq URL dan rasm ko‘rsatadi.
-/// Baytlar bir marta ochiladi — ota vidjet qayta chizilganda rasm pirpiramaydi.
-class MediaImage extends StatefulWidget {
+class MediaImage extends StatelessWidget {
   final String source;
   final double? width;
   final double? height;
@@ -46,62 +45,38 @@ class MediaImage extends StatefulWidget {
   });
 
   @override
-  State<MediaImage> createState() => _MediaImageState();
-}
-
-class _MediaImageState extends State<MediaImage> {
-  Uint8List? _bytes;
-
-  @override
-  void initState() {
-    super.initState();
-    _bytes = decodeDataImageUrl(widget.source);
-  }
-
-  @override
-  void didUpdateWidget(MediaImage oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.source != widget.source) {
-      _bytes = decodeDataImageUrl(widget.source);
-    }
-  }
-
-  int? _cachePx(double? logical) {
-    if (logical == null || !logical.isFinite || logical <= 0) return null;
-    final dpr = MediaQuery.devicePixelRatioOf(context);
-    return (logical * dpr).round().clamp(1, 2048);
-  }
-
-  @override
   Widget build(BuildContext context) {
-    final onError = widget.errorBuilder ??
+    final onError = errorBuilder ??
         (_, __, ___) => Container(
-              width: widget.width,
-              height: widget.height,
+              width: width,
+              height: height,
               color: const Color(0xFFE2E8F0),
               child: const Center(child: Icon(Icons.broken_image_outlined)),
             );
 
-    if (_bytes != null) {
+    final bytes = decodeDataImageUrl(source);
+    if (bytes != null) {
       return Image.memory(
-        _bytes!,
-        width: widget.width,
-        height: widget.height,
-        fit: widget.fit,
-        gaplessPlayback: true,
+        bytes,
+        width: width,
+        height: height,
+        fit: fit,
         errorBuilder: onError,
       );
     }
 
+    final dpr = MediaQuery.devicePixelRatioOf(context);
+    final cacheW = width != null ? (width! * dpr).round().clamp(1, 2048) : null;
+    final cacheH = height != null ? (height! * dpr).round().clamp(1, 2048) : null;
+
     return Image.network(
-      resolveMediaUrl(widget.source),
-      width: widget.width,
-      height: widget.height,
-      fit: widget.fit,
-      gaplessPlayback: true,
+      resolveMediaUrl(source),
+      width: width,
+      height: height,
+      fit: fit,
       errorBuilder: onError,
-      cacheWidth: _cachePx(widget.width),
-      cacheHeight: _cachePx(widget.height),
+      cacheWidth: cacheW,
+      cacheHeight: cacheH,
       filterQuality: FilterQuality.low,
     );
   }

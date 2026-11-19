@@ -192,7 +192,7 @@ class _AppUpdateDialogState extends State<_AppUpdateDialog> with WidgetsBindingO
     setState(() {
       _waitingInstall = false;
       _status =
-          'Ещё не установлено (сейчас: $current). Нажмите «Обновить» ещё раз и подтвердите «Обновить» в окне Android.';
+          'Hali o‘rnatilmadi (hozir: $current). «Обновить» ni qayta bosing va Android oynasida «Yangilash» ni tasdiqlang.';
     });
   }
 
@@ -202,23 +202,23 @@ class _AppUpdateDialogState extends State<_AppUpdateDialog> with WidgetsBindingO
     }
     final raw = e.toString();
     final lower = raw.toLowerCase();
-    if (lower.contains('signature_mismatch') || lower.contains('boshqa kalit') || lower.contains('другим ключом')) {
+    if (lower.contains('signature_mismatch') || lower.contains('boshqa kalit')) {
       return raw.replaceFirst(RegExp(r'^Exception:\s*'), '');
     }
     if (lower.contains('404') || lower.contains('apknotfound')) {
-      return 'APK не найден на сервере (404). Администратору нужно заново загрузить APK '
-          'в разделе «Мобильное приложение».';
+      return 'APK serverda topilmadi (404). Administrator «Mobil ilova» bo‘limida '
+          'APK ni qayta yuklashi kerak.';
     }
     if (lower.contains('tenantnotfound')) {
-      return 'Код компании не найден. Войдите снова или обратитесь к администратору.';
+      return 'Kompaniya kodi topilmadi. Qayta kiring yoki administrator bilan bog‘laning.';
     }
     if (lower.contains('connection') || lower.contains('socket') || lower.contains('timeout')) {
-      return 'Ошибка сети. Проверьте интернет и попробуйте ещё раз.';
+      return 'Tarmoq xatosi. Internetni tekshiring va qayta urinib ko‘ring.';
     }
     if (raw.length > 180) {
-      return 'Не удалось скачать. Попробуйте ещё раз или обратитесь к администратору.';
+      return 'Yuklab bo‘lmadi. Qayta urinib ko‘ring yoki administratorga murojaat qiling.';
     }
-    return 'Ошибка: $raw';
+    return 'Xato: $raw';
   }
 
   Future<void> _enterSignatureRecovery(AppUpdateSignatureException e) async {
@@ -234,7 +234,7 @@ class _AppUpdateDialogState extends State<_AppUpdateDialog> with WidgetsBindingO
     setState(() {
       _busy = true;
       _waitingInstall = false;
-      _status = 'Сохранение APK в папку «Загрузки»…';
+      _status = 'APK Downloads papkasiga saqlanmoqda…';
     });
 
     try {
@@ -242,12 +242,12 @@ class _AppUpdateDialogState extends State<_AppUpdateDialog> with WidgetsBindingO
       if (!mounted) return;
       final name = exported['displayName'] ?? 'SalesArena-update.apk';
       final msg =
-          'Ключ подписи не совпадает — обычное обновление невозможно.\n'
-          'APK сохранён: Downloads/$name\n\n'
-          '1) «Удалить приложение» — подтвердите\n'
-          '2) Откройте $name в папке Downloads и установите\n\n'
-          'Важно: сначала удалите приложение, затем откройте APK.\n'
-          'Данные хранятся на сервере — логин и PIN нужно будет настроить заново.';
+          'Kalit mos emas — oddiy yangilash ishlamaydi.\n'
+          'APK saqlandi: Downloads/$name\n\n'
+          '1) «Ilovani o‘chirish» — tasdiqlang\n'
+          '2) Downloads dagi $name ni ochib o‘rnating\n\n'
+          'Muhim: avval o‘chiring, keyin APK ni oching.\n'
+          'Ma’lumotlar serverda — login va PIN qayta sozlanadi.';
       setState(() {
         _busy = false;
         _signatureRecovery = true;
@@ -265,8 +265,8 @@ class _AppUpdateDialogState extends State<_AppUpdateDialog> with WidgetsBindingO
       setState(() {
         _busy = false;
         _status =
-            '${e.message}\n\nНе удалось сохранить APK в Downloads: $err. '
-            'Установите вручную через файловый менеджер.';
+            '${e.message}\n\nAPK ni Downloads ga saqlab bo‘lmadi: $err. '
+            'Fayl menejeridan qo‘lda o‘rnating.';
       });
     }
   }
@@ -283,9 +283,9 @@ class _AppUpdateDialogState extends State<_AppUpdateDialog> with WidgetsBindingO
     setState(() {
       _busy = true;
       _status =
-          'Если приложение ещё установлено — сначала удалите его.\n'
-          'Если удалено — будет установлен Downloads/'
-          '${_exportedDisplayName ?? 'SalesArena-update.apk'}…';
+          'Agar ilova hali o‘rnatilgan bo‘lsa — avval o‘chiring.\n'
+          'O‘chirilgan bo‘lsa Downloads/'
+          '${_exportedDisplayName ?? 'SalesArena-update.apk'} o‘rnatiladi…';
     });
     final ok = await AppUpdateInstaller.installExportedApk(
       uri: _exportedUri,
@@ -296,9 +296,9 @@ class _AppUpdateDialogState extends State<_AppUpdateDialog> with WidgetsBindingO
       _busy = false;
       _waitingInstall = false;
       _status = ok
-          ? (_recoveryMessage ?? 'Окно установки открыто.')
-          : 'Не удалось открыть установку. Откройте '
-              '${_exportedDisplayName ?? 'SalesArena-update.apk'} из папки Downloads.';
+          ? (_recoveryMessage ?? 'O‘rnatish oynasi ochildi.')
+          : 'O‘rnatish ochilmadi. Downloads papkasidan '
+              '${_exportedDisplayName ?? 'SalesArena-update.apk'} ni oching.';
     });
   }
 
@@ -308,7 +308,7 @@ class _AppUpdateDialogState extends State<_AppUpdateDialog> with WidgetsBindingO
       _busy = true;
       _progress = 0;
       _waitingInstall = false;
-      _status = widget.inApp ? 'Загрузка…' : null;
+      _status = widget.inApp ? 'Yuklanmoqda…' : null;
     });
 
     if (widget.inApp) {
@@ -319,7 +319,7 @@ class _AppUpdateDialogState extends State<_AppUpdateDialog> with WidgetsBindingO
             if (!mounted) return;
             setState(() {
               _progress = p;
-              _status = 'Загрузка ${(p * 100).toStringAsFixed(0)}%';
+              _status = 'Yuklanmoqda ${(p * 100).toStringAsFixed(0)}%';
             });
           },
         );
@@ -329,8 +329,8 @@ class _AppUpdateDialogState extends State<_AppUpdateDialog> with WidgetsBindingO
             _busy = false;
             _waitingInstall = true;
             _status =
-                'Открыто окно установки Android. Нажмите «Обновить» / «Установить». '
-                'После установки приложение откроется снова — PIN и кэш сохранятся.';
+                'Android o‘rnatish oynasi ochildi. «Yangilash» / «Установить» ni bosing. '
+                'O‘rnatilgach ilova qayta ochiladi — PIN va kesh saqlanadi.';
           });
           if (!widget.blocking) {
             Navigator.pop(context, true);
@@ -340,7 +340,7 @@ class _AppUpdateDialogState extends State<_AppUpdateDialog> with WidgetsBindingO
         setState(() {
           _busy = false;
           _status =
-              'Не удалось скачать/установить. Включите в настройках разрешение «Установка из неизвестных источников» и попробуйте ещё раз.';
+              'Yuklab/o‘rnatib bo‘lmadi. Sozlamalarda «Noma’lum manbalardan o‘rnatish» ruxsatini yoqing va qayta urinib ko‘ring.';
         });
       } on AppUpdateSignatureException catch (e) {
         if (!mounted) return;
@@ -386,7 +386,7 @@ class _AppUpdateDialogState extends State<_AppUpdateDialog> with WidgetsBindingO
       if (widget.blocking) {
         setState(() {
           _waitingInstall = true;
-          _status = 'Скачайте и установите APK в браузере, затем снова откройте приложение.';
+          _status = 'Brauzerda APK ni yuklab o‘rnating, keyin ilovani qayta oching.';
         });
       } else {
         Navigator.pop(context, true);
@@ -402,7 +402,7 @@ class _AppUpdateDialogState extends State<_AppUpdateDialog> with WidgetsBindingO
       child: AlertDialog(
         title: Text(
           _signatureRecovery
-              ? 'Требуется переустановка'
+              ? 'Qayta o‘rnatish kerak'
               : (widget.blocking ? S.appUpdateTitleRequired : S.appUpdateTitle),
         ),
         content: SingleChildScrollView(
@@ -464,21 +464,21 @@ class _AppUpdateDialogState extends State<_AppUpdateDialog> with WidgetsBindingO
           if (_signatureRecovery) ...[
             TextButton(
               onPressed: _busy ? null : _openDownloadsFolder,
-              child: const Text('Открыть Downloads'),
+              child: const Text('Downloads ochish'),
             ),
             TextButton(
               onPressed: _busy ? null : _installExported,
-              child: const Text('Установить APK'),
+              child: const Text('APK o‘rnatish'),
             ),
             ElevatedButton(
               onPressed: _busy ? null : _requestUninstall,
-              child: const Text('Удалить приложение'),
+              child: const Text('Ilovani o‘chirish'),
             ),
           ] else ...[
             if (widget.blocking && !_busy)
               TextButton(
                 onPressed: () => Navigator.pop(context, false),
-                child: const Text('Выйти'),
+                child: const Text('Chiqish'),
               ),
             if (!widget.blocking && !_busy)
               TextButton(

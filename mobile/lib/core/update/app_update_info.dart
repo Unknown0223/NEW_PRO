@@ -107,9 +107,9 @@ bool get preferStoreUpdate {
 
 String storeUpdateHint(AppUpdateInfo info) {
   if (info.storeUrlAndroid != null || info.storeUrlIos != null) {
-    return Platform.isIOS ? 'Обновите через App Store' : 'Обновите через Google Play';
+    return Platform.isIOS ? 'App Store orqali yangilang' : 'Google Play orqali yangilang';
   }
-  return 'Скачайте и установите новый APK';
+  return 'Yangi APK yuklab oling va o\'rnating';
 }
 
 /// Qo‘lda «Проверить обновление» natijasi.

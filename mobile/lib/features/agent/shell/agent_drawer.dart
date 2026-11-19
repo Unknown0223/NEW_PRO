@@ -1,24 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-
 import '../../../core/app/app_build_info.dart';
 import '../../../core/auth/session.dart';
 import '../../../core/l10n/app_strings_ru.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
-import '../../../core/time/work_region_time.dart';
 import '../../../core/ui/agent_ui.dart';
-import '../../../core/update/app_update_info.dart';
-import '../../../design_system/design_system.dart';
 import '../../auth/auth_provider.dart';
-import '../orders/create_order_exit_guard.dart';
-import '../warehouse/warehouse_stock_providers.dart';
+import '../../../core/update/app_update_info.dart';
 import 'agent_display_title.dart';
-import 'agent_drawer_widgets.dart';
 import 'agent_menu_config.dart';
+import '../warehouse/warehouse_stock_providers.dart';
+import '../orders/create_order_exit_guard.dart';
 
-/// Shablon `MenuScreen` — gradient profil, qidiruv, kartalar + stagger.
+/// Menyu ekrani — salec-agent-mobile-ui-design shablon.
 class AgentDrawer extends ConsumerStatefulWidget {
   const AgentDrawer({super.key});
 
@@ -28,8 +24,6 @@ class AgentDrawer extends ConsumerStatefulWidget {
 
 class _AgentDrawerState extends ConsumerState<AgentDrawer> {
   bool _checkingUpdate = false;
-  final _search = TextEditingController();
-  String _query = '';
 
   @override
   void initState() {
@@ -40,14 +34,10 @@ class _AgentDrawerState extends ConsumerState<AgentDrawer> {
     });
   }
 
-  @override
-  void dispose() {
-    _search.dispose();
-    super.dispose();
-  }
-
   void _soonSnack() {
-    showAgentToast(context, '«Maosh» moduli keyingi yangilanishda chiqadi');
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Скоро будет доступно')),
+    );
   }
 
   Future<void> _onCheckUpdate() async {
@@ -73,57 +63,41 @@ class _AgentDrawerState extends ConsumerState<AgentDrawer> {
     }
   }
 
-  Future<void> _go(String path) async {
-    if (path.isEmpty) {
-      Navigator.pop(context);
-      return;
-    }
-    final router = GoRouter.of(context);
-    final loc = GoRouterState.of(context).uri.path;
-    final container = ProviderScope.containerOf(context);
-    Navigator.pop(context);
-    await WidgetsBinding.instance.endOfFrame;
-    await leaveCreateOrderThenGo(
-      container: container,
-      go: router.go,
-      path: path,
-      currentLocation: loc,
-      onSameLocation: (p) {
-        container.read(agentRouteReselectProvider.notifier).state = p;
-      },
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final session = ref.watch(sessionProvider);
     final user = session.user;
-    final menu = agentMenuItems(session.mobileConfig);
-    final q = _query.trim().toLowerCase();
-    final filtered = q.isEmpty
-        ? menu
-        : menu
-            .where((m) => '${m.label} ${m.sub}'.toLowerCase().contains(q))
-            .toList();
-    final drawerRows = <Object>[];
-    var lastGroup = '';
-  for (final m in filtered) {
-    final g = m.group;
-    if (q.isEmpty && g != lastGroup) {
-      final n = filtered.where((x) => x.group == g).length;
-      drawerRows.add(AgentMenuGroupHeader(title: g, count: n));
-      lastGroup = g;
-    }
-    drawerRows.add(m);
-  }
+    final config = session.mobileConfig;
+    final menu = agentMenuItems(config);
 
     final agentName = (user?.name ?? '').trim();
-    final displayName = agentName.isEmpty ? 'Agent' : agentName;
-    final tenant = session.tenantName?.trim().isNotEmpty == true
+    final agentCode = user?.code?.trim();
+    final tenantLabel = session.tenantName?.trim().isNotEmpty == true
         ? session.tenantName!
-        : (session.tenantSlug ?? '');
-    final syncAt = formatWorkRegionDateTime(session.lastSyncAt);
-    final syncShort = syncAt.length > 5 ? syncAt.substring(syncAt.length - 5) : syncAt;
+        : 'Сервер: ${session.tenantSlug ?? "-"}';
+
+    Future<void> go(String path) async {
+      if (path.isEmpty) {
+        Navigator.pop(context);
+        return;
+      }
+      // Drawer `pop` qilingach bu widget unmount bo‘ladi — router/container
+      // ni oldindan olamiz, aks holda modal javobidan keyin `go` chaqirilmaydi.
+      final router = GoRouter.of(context);
+      final loc = GoRouterState.of(context).uri.path;
+      final container = ProviderScope.containerOf(context);
+      Navigator.pop(context);
+      await WidgetsBinding.instance.endOfFrame;
+      await leaveCreateOrderThenGo(
+        container: container,
+        go: router.go,
+        path: path,
+        currentLocation: loc,
+        onSameLocation: (p) {
+          container.read(agentRouteReselectProvider.notifier).state = p;
+        },
+      );
+    }
 
     return Drawer(
       backgroundColor: AppColors.background,
@@ -133,121 +107,150 @@ class _AgentDrawerState extends ConsumerState<AgentDrawer> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Padding(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-              child: Column(
+              padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  SaEnter(
-                    preset: SaMotionPreset.rise,
-                    child: AgentMenuHeaderCard(
-                      name: displayName,
-                      subtitle: 'Agent · $tenant · Sync $syncShort',
-                      initials: agentMenuInitials(name: agentName, code: user?.code),
-                      onProfile: () => _go('/profile'),
-                      onClose: () => Navigator.pop(context),
-                    ),
+                  AgentIconButton(icon: Icons.arrow_back, onPressed: () => Navigator.pop(context)),
+                  AgentIconButton(icon: Icons.edit_outlined, onPressed: () => go('/profile')),
+                ],
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      AgentMenuAvatar(name: agentName, code: agentCode),
+                      const SizedBox(width: 14),
+                      ConstrainedBox(
+                        constraints: BoxConstraints(
+                          maxWidth: MediaQuery.sizeOf(context).width - 40 - 62 - 14,
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                              if (agentCode != null && agentCode.isNotEmpty)
+                                Text(
+                                  agentCode,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    fontSize: 20,
+                                    fontWeight: FontWeight.w800,
+                                    letterSpacing: 0.3,
+                                    color: AppColors.textTitle,
+                                  ),
+                                ),
+                              Text(
+                                agentName.isEmpty ? 'Агент' : agentName,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontSize: 17,
+                                  fontWeight: FontWeight.w700,
+                                  height: 1.25,
+                                  color: AppColors.textTitle,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                tenantLabel,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: AppTypography.bodyMedium.copyWith(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                  color: AppColors.textMuted,
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: 10),
-                  SaEnter(
-                    delay: SaStaggerDelay.of(1),
-                    preset: SaMotionPreset.rise,
-                    child: AgentMenuSearchField(
-                      controller: _search,
-                      onChanged: (v) => setState(() => _query = v),
-                      onClear: () {
-                        _search.clear();
-                        setState(() => _query = '');
-                      },
+                  const SizedBox(height: 12),
+                  const Center(child: AgentRoleBadge(label: 'Агент')),
+                ],
+                ),
+              ),
+            const SizedBox(height: 14),
+            Expanded(
+              child: ListView(
+                padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+                children: [
+                  AgentSurfaceCard(
+                    padding: EdgeInsets.zero,
+                    child: Column(
+                      children: [
+                        for (var i = 0; i < menu.length; i++)
+                          AgentMenuTile(
+                            icon: _iconFor(menu[i].label),
+                            label: menu[i].label,
+                            badge: menu[i].soon ? 'скоро' : null,
+                            showDivider: i > 0,
+                            onTap: menu[i].soon ? _soonSnack : () => go(menu[i].route),
+                          ),
+                        AgentMenuTile(
+                          icon: Icons.system_update_outlined,
+                          label: _checkingUpdate ? S.appUpdateChecking : S.checkAppUpdate,
+                          iconColor: AppColors.info,
+                          loading: _checkingUpdate,
+                          onTap: _checkingUpdate ? null : _onCheckUpdate,
+                        ),
+                        AgentMenuTile(
+                          icon: Icons.logout,
+                          label: 'Выйти',
+                          destructive: true,
+                          onTap: () async {
+                            Navigator.pop(context);
+                            await ref.read(authStateProvider.notifier).logout();
+                          },
+                        ),
+                      ],
                     ),
                   ),
                 ],
               ),
             ),
-            const SizedBox(height: 8),
-            Expanded(
-              child: ListView.builder(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-                itemCount: drawerRows.length + 2,
-                itemBuilder: (context, i) {
-                  if (i < drawerRows.length) {
-                    final row = drawerRows[i];
-                    if (row is AgentMenuGroupHeader) {
-                      return SaEnter(
-                        delay: SaStaggerDelay.of(i % 8),
-                        preset: SaMotionPreset.rise,
-                        child: row,
-                      );
-                    }
-                    final m = row as AgentMenuItem;
-                    return Padding(
-                      padding: const EdgeInsets.only(bottom: 6),
-                      child: SaEnter(
-                        delay: SaStaggerDelay.of(i % 8),
-                        preset: SaMotionPreset.rise,
-                        child: AgentMenuRowCard(
-                          item: m,
-                          onTap: m.soon ? _soonSnack : () => _go(m.route),
-                        ),
-                      ),
-                    );
-                  }
-                  if (i == drawerRows.length) {
-                    return Padding(
-                      padding: const EdgeInsets.only(bottom: 6, top: 4),
-                      child: SaEnter(
-                        delay: SaStaggerDelay.of(2),
-                        child: AgentMenuRowCard(
-                          item: AgentMenuItem(
-                            label: _checkingUpdate ? S.appUpdateChecking : S.checkAppUpdate,
-                            sub: 'APK versiyasini tekshirish',
-                            route: '',
-                            icon: Icons.system_update_outlined,
-                            group: 'Tizim',
-                          ),
-                          onTap: _checkingUpdate ? null : _onCheckUpdate,
-                          loading: _checkingUpdate,
-                        ),
-                      ),
-                    );
-                  }
-                  return SaEnter(
-                    delay: SaStaggerDelay.of(3),
-                    child: AgentMenuLogoutRow(
-                      onTap: () async {
-                        Navigator.pop(context);
-                        await ref.read(authStateProvider.notifier).logout();
-                      },
-                    ),
-                  );
-                },
-              ),
-            ),
             Padding(
-              padding: const EdgeInsets.only(bottom: 10),
+              padding: const EdgeInsets.symmetric(vertical: 12),
               child: Column(
                 children: [
                   Image.asset(
                     'assets/brand/header_logo.png',
-                    height: 22,
+                    height: 28,
                     fit: BoxFit.contain,
+                    filterQuality: FilterQuality.high,
                     errorBuilder: (_, __, ___) => Text(
                       S.appName,
-                      style: AppTypography.caption.copyWith(
+                      textAlign: TextAlign.center,
+                      style: AppTypography.bodyMedium.copyWith(
                         color: AppColors.textMuted,
+                        fontSize: 14,
                         fontWeight: FontWeight.w700,
                       ),
                     ),
                   ),
-                  const SizedBox(height: 4),
+                  const SizedBox(height: 6),
                   FutureBuilder<String>(
                     future: AppBuildInfo.versionWithBuild(),
-                    builder: (_, snap) => Text(
-                      'v${snap.data ?? '…'}',
-                      style: AppTypography.caption.copyWith(
-                        color: AppColors.textMuted,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
+                    builder: (context, snap) {
+                      final v = snap.data ?? '…';
+                      return Text(
+                        'v$v',
+                        textAlign: TextAlign.center,
+                        style: AppTypography.bodyMedium.copyWith(
+                          color: AppColors.textMuted,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      );
+                    },
                   ),
                 ],
               ),
@@ -256,5 +259,31 @@ class _AgentDrawerState extends ConsumerState<AgentDrawer> {
         ),
       ),
     );
+  }
+
+  IconData _iconFor(String label) {
+    if (label.contains('Главная')) return Icons.home_outlined;
+    if (label.contains('торговую')) return Icons.add_business_outlined;
+    if (label.contains('Заказы')) return Icons.shopping_cart_outlined;
+    if (label.contains('обмен') || label.contains('Almashinuv')) return Icons.swap_horiz_outlined;
+    if (label.contains('полки') || label.contains('Polkadan')) return Icons.undo_outlined;
+    if (label == 'KPI') return Icons.insights_outlined;
+    if (label.contains('Дневной план') || label.contains('Диагностика')) {
+      return Icons.calendar_view_day_outlined;
+    }
+    if (label.contains('Отчёт')) return Icons.bar_chart_outlined;
+    if (label.contains('Торговые точки') || label == 'Тор. точки') {
+      return Icons.storefront_outlined;
+    }
+    if (label.contains('Зарплата')) return Icons.payments_outlined;
+    if (label.contains('Должники по')) return Icons.person_outline;
+    if (label.contains('Должники')) return Icons.people_outline;
+    if (label.contains('складе')) return Icons.inventory_2_outlined;
+    if (label.contains('Черновик')) return Icons.drafts_outlined;
+    if (label.contains('Задачи')) return Icons.task_alt_outlined;
+    if (label.contains('локация')) return Icons.my_location_outlined;
+    if (label.contains('Табель') || label.contains('jadval')) return Icons.assignment_outlined;
+    if (label.contains('Настройки')) return Icons.settings_outlined;
+    return Icons.chevron_right;
   }
 }

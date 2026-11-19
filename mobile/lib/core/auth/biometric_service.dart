@@ -33,7 +33,7 @@ class BiometricService {
   }
 
   Future<bool> authenticate({
-    String reason = 'Подтвердите вход в систему',
+    String reason = 'Tizimga kirishni tasdiqlang',
     bool biometricOnly = false,
   }) async {
     try {

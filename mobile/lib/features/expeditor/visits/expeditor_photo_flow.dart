@@ -101,20 +101,17 @@ Future<ClientPhotoReport?> captureAndUploadExpeditorPhoto({
   final caption = category ?? await pickExpeditorPhotoCategory(context);
   if (caption == null || !context.mounted) return null;
 
-  final photo = await withAppLockSuppressed(ref, () async {
-    final cam = await Permission.camera.request();
-    if (!cam.isGranted) return null;
-    return ref.read(photoServiceProvider).takeClientPhoto();
-  });
-  if (photo == null || !context.mounted) {
-    if (photo == null && context.mounted) {
-      final cam = await Permission.camera.status;
-      if (!cam.isGranted) showAgentToast(context, 'Нужно разрешение на камеру');
-    }
+  final cam = await Permission.camera.request();
+  if (!cam.isGranted) {
+    if (context.mounted) showAgentToast(context, 'Нужно разрешение на камеру');
     return null;
   }
 
-  await markExternalCaptureSkipLock(ttl: const Duration(minutes: 5));
+  final photo = await withAppLockSuppressed(
+    ref,
+    () => ref.read(photoServiceProvider).takeClientPhoto(),
+  );
+  if (photo == null || !context.mounted) return null;
 
   final b64 = await encodeClientPhotoBase64(
     photo.filePath,
@@ -128,14 +125,12 @@ Future<ClientPhotoReport?> captureAndUploadExpeditorPhoto({
   }
 
   try {
-    final uploaded = await ref.read(mobileApiProvider).postClientPhotoReport(
+    return await ref.read(mobileApiProvider).postClientPhotoReport(
           slug,
           clientId,
           imageBase64: b64,
           caption: caption,
         );
-    await clearExternalCaptureSkipLock();
-    return uploaded;
   } catch (e) {
     if (context.mounted) showAgentToast(context, 'Фото не загружено: $e');
     return null;
@@ -155,20 +150,17 @@ Future<ClientPhotoReport?> replaceExpeditorPhoto({
       : (await pickExpeditorPhotoCategory(context));
   if (caption == null || !context.mounted) return null;
 
-  final photo = await withAppLockSuppressed(ref, () async {
-    final cam = await Permission.camera.request();
-    if (!cam.isGranted) return null;
-    return ref.read(photoServiceProvider).takeClientPhoto();
-  });
-  if (photo == null || !context.mounted) {
-    if (photo == null && context.mounted) {
-      final cam = await Permission.camera.status;
-      if (!cam.isGranted) showAgentToast(context, 'Нужно разрешение на камеру');
-    }
+  final cam = await Permission.camera.request();
+  if (!cam.isGranted) {
+    if (context.mounted) showAgentToast(context, 'Нужно разрешение на камеру');
     return null;
   }
 
-  await markExternalCaptureSkipLock(ttl: const Duration(minutes: 5));
+  final photo = await withAppLockSuppressed(
+    ref,
+    () => ref.read(photoServiceProvider).takeClientPhoto(),
+  );
+  if (photo == null || !context.mounted) return null;
 
   final b64 = await encodeClientPhotoBase64(
     photo.filePath,
@@ -185,14 +177,12 @@ Future<ClientPhotoReport?> replaceExpeditorPhoto({
     await ref
         .read(mobileApiProvider)
         .deleteClientPhotoReport(slug, clientId, existing.id);
-    final uploaded = await ref.read(mobileApiProvider).postClientPhotoReport(
+    return await ref.read(mobileApiProvider).postClientPhotoReport(
           slug,
           clientId,
           imageBase64: b64,
           caption: caption,
         );
-    await clearExternalCaptureSkipLock();
-    return uploaded;
   } catch (e) {
     if (context.mounted) showAgentToast(context, 'Фото не обновлено: $e');
     return null;

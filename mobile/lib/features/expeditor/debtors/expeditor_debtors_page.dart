@@ -8,7 +8,6 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/time/work_region_time.dart';
 import '../../../core/ui/agent_ui_extended.dart';
-import '../../../core/ui/client_photo_thumb.dart';
 import '../../../core/format/money_display.dart';
 import '../../agent/orders/order_create_models.dart' show formatMoneyUz;
 import '../config/expeditor_config_enforcement.dart';
@@ -94,7 +93,7 @@ class ExpeditorDebtorsPage extends ConsumerWidget {
                         Text('Общий баланс:',
                             style: AppTypography.bodyMedium
                                 .copyWith(color: AppColors.textSecondary),),
-                        Text('-${formatMoneyUz(total)} сум',
+                        Text('-${formatMoneyUz(total)} So\'m',
                             style: const TextStyle(
                                 fontWeight: FontWeight.w800,
                                 color: AppColors.error,),),
@@ -224,7 +223,7 @@ class _DebtorCard extends StatelessWidget {
                           style: AppTypography.bodyMedium
                               .copyWith(color: AppColors.textMuted),),
                       const Spacer(),
-                      Text('${formatMoneyUz(balance)} сум',
+                      Text("${formatMoneyUz(balance)} So'm",
                           style: TextStyle(
                               fontWeight: FontWeight.w800,
                               color: colorForClientBalance(balance),

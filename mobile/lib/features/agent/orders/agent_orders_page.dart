@@ -5,25 +5,24 @@ import 'package:intl/intl.dart';
 
 import '../../../core/api/mobile_api.dart';
 import '../../../core/auth/session.dart';
+import '../../../core/orders/order_status_labels.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/time/work_region_time.dart';
 import '../../../core/ui/agent_ui.dart';
 import '../../../core/ui/agent_ui_extended.dart';
-import '../../../design_system/design_system.dart';
 import '../../auth/auth_provider.dart';
 import '../../../core/sync/sync_data_refresh.dart';
 import '../../../core/sync/sync_engine.dart';
 import '../shell/agent_app_bar.dart';
-import 'held_order_model.dart' show HeldOrder, formatHeldCountdown;
+import 'held_order_model.dart' show formatHeldCountdown;
 import 'held_orders_provider.dart';
 import 'held_order_sync_sheet.dart';
-import '../orders/order_create_models.dart' show formatMoneyUz;
+import '../orders/order_create_models.dart' show formatMoneyUz, formatDebtMoney;
 import 'order_draft_list.dart';
 import 'order_draft_provider.dart';
 import 'orders_providers.dart';
 
-/// Shablon `ExtraScreens.OrdersScreen` — filter chip + ixcham kartalar.
 class AgentOrdersPage extends ConsumerStatefulWidget {
   const AgentOrdersPage({super.key});
 
@@ -31,11 +30,7 @@ class AgentOrdersPage extends ConsumerStatefulWidget {
   ConsumerState<AgentOrdersPage> createState() => _AgentOrdersPageState();
 }
 
-enum _OrderFilter { all, yangi, tasdiqlangan, yolda, yetkazildi }
-
 class _AgentOrdersPageState extends ConsumerState<AgentOrdersPage> {
-  _OrderFilter _filter = _OrderFilter.all;
-
   DateTime _dateFromKey(String key) {
     final parts = key.split('-');
     if (parts.length == 3) {
@@ -57,8 +52,7 @@ class _AgentOrdersPageState extends ConsumerState<AgentOrdersPage> {
       lastDate: workRegionNow(),
     );
     if (picked == null) return;
-    ref.read(ordersHistoryDateProvider.notifier).state =
-        ordersHistoryDateKey(picked);
+    ref.read(ordersHistoryDateProvider.notifier).state = ordersHistoryDateKey(picked);
   }
 
   void _selectToday() {
@@ -69,7 +63,6 @@ class _AgentOrdersPageState extends ConsumerState<AgentOrdersPage> {
 
   void _resetFilters() {
     _selectToday();
-    setState(() => _filter = _OrderFilter.all);
     ref.invalidate(ordersListProvider);
     ref.invalidate(heldOrdersProvider);
   }
@@ -90,64 +83,31 @@ class _AgentOrdersPageState extends ConsumerState<AgentOrdersPage> {
     invalidateSyncedData(ref.invalidate);
   }
 
-  String _uzStatus(String status) {
-    switch (status.trim().toLowerCase()) {
-      case 'new':
-        return 'Yangi';
-      case 'confirmed':
-        return 'Tasdiqlangan';
-      case 'picking':
-      case 'delivering':
-        return "Yo'lda";
-      case 'delivered':
-        return 'Yetkazildi';
-      case 'cancelled':
-      case 'returned':
-        return 'Bekor';
-      default:
-        return status.isEmpty ? '—' : status;
-    }
+  String _agentSubtitle(SessionState session) {
+    final u = session.user;
+    if (u == null) return '';
+    final code = u.code?.trim();
+    if (code != null && code.isNotEmpty) return '${u.name} · $code';
+    return u.name;
   }
 
-  Color _uzStatusColor(String status) {
-    switch (status.trim().toLowerCase()) {
-      case 'new':
-        return const Color(0xFFE0A023);
-      case 'confirmed':
-        return const Color(0xFF3E9BFF);
-      case 'picking':
-      case 'delivering':
-        return const Color(0xFF8B5CF6);
-      case 'delivered':
-        return const Color(0xFF22B573);
-      default:
-        return const Color(0xFF94A3B8);
-    }
-  }
-
-  bool _matchesFilter(AgentOrderHistoryRow o) {
-    final s = o.status.trim().toLowerCase();
-    switch (_filter) {
-      case _OrderFilter.all:
-        return true;
-      case _OrderFilter.yangi:
-        return s == 'new';
-      case _OrderFilter.tasdiqlangan:
-        return s == 'confirmed';
-      case _OrderFilter.yolda:
-        return s == 'picking' || s == 'delivering';
-      case _OrderFilter.yetkazildi:
-        return s == 'delivered';
-    }
+  double _dayDebt(List<AgentOrderHistoryRow> orders, OrderDebtsListResult? debts) {
+    if (debts == null || debts.data.isEmpty) return 0;
+    final ids = orders.map((o) => o.id).toSet();
+    return debts.data
+        .where((d) => ids.contains(d.orderId))
+        .fold<double>(0, (s, d) => s + d.remainder);
   }
 
   @override
   Widget build(BuildContext context) {
     ref.watch(heldOrderSchedulerProvider);
+    // Countdown matni yangilansin; DB har soniyada o‘qilmasin.
     ref.watch(heldOrderTickProvider);
     final session = ref.watch(sessionProvider);
     final canCreate = session.permissions.canCreateOrders;
     final ordersAsync = ref.watch(ordersListProvider);
+    final debtsAsync = ref.watch(orderDebtsByOrdersProvider);
     final heldAsync = ref.watch(heldOrdersProvider);
     final pendingAsync = ref.watch(pendingCountProvider);
     final heldCount = heldAsync.valueOrNull?.length ?? 0;
@@ -163,211 +123,192 @@ class _AgentOrdersPageState extends ConsumerState<AgentOrdersPage> {
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AgentAppBar(
-        title: 'Mening buyurtmalarim',
+        title: 'Мои заказы',
         useShellDrawer: true,
         showBack: false,
-        showQuickPanel: true,
-        belowTitle: ordersAsync.maybeWhen(
-          data: (orders) {
-            final sum = orders.fold<double>(0, (s, o) => s + o.totalSum);
-            final n = orders.length + heldOrders.length;
-            return Text(
-              '${isToday ? 'Bugun' : dateLabel} · $n ta · ${formatMoneyUz(sum)} so\'m',
-              style: AppTypography.caption.copyWith(
-                color: AppColors.textMuted,
-                fontWeight: FontWeight.w600,
-                fontSize: 11,
-              ),
-            );
-          },
-          orElse: () => Text(
-            isToday ? 'Bugun · $dateLabel' : dateLabel,
-            style: AppTypography.caption.copyWith(
-              color: AppColors.textMuted,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ),
+        belowTitle: _agentSubtitle(session).isNotEmpty
+            ? Padding(
+                padding: const EdgeInsets.only(left: 4),
+                child: Text(
+                  _agentSubtitle(session),
+                  style: AppTypography.caption.copyWith(color: AppColors.textMuted, fontWeight: FontWeight.w600),
+                ),
+              )
+            : null,
         actions: [
           if (pendingCount > 0)
             Padding(
               padding: const EdgeInsets.only(right: 4),
               child: Center(
                 child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   decoration: BoxDecoration(
                     color: AppColors.warning.withValues(alpha: 0.15),
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: Text(
-                    '$pendingCount oflayn',
-                    style: const TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.warning,
-                    ),
+                    '$pendingCount офлайн',
+                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.warning),
                   ),
                 ),
               ),
             ),
-          SaPressable(
-            pressedScale: 0.9,
-            borderRadius: BorderRadius.circular(10),
-            onTap: canCreate ? () => context.push('/orders/create') : null,
-            child: Container(
-              width: 34,
-              height: 34,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: AppColors.surface,
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: AppColors.border),
-              ),
-              child: const Icon(Icons.edit_outlined, size: 16),
-            ),
-          ),
+          AgentIconButton(icon: Icons.search, onPressed: () => context.push('/search?from=/orders')),
         ],
       ),
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+          Container(
+            color: AppColors.surface,
+            padding: const EdgeInsets.fromLTRB(12, 8, 4, 8),
             child: Row(
               children: [
                 Expanded(
                   child: Text(
-                    isToday ? 'Bugun · $dateLabel' : dateLabel,
-                    style: AppTypography.bodySmall
-                        .copyWith(fontWeight: FontWeight.w700),
+                    isToday ? 'Сегодня · $dateLabel' : dateLabel,
+                    style: AppTypography.bodySmall.copyWith(fontWeight: FontWeight.w700),
                   ),
                 ),
-                SaPressable(
-                  onTap: _resetFilters,
+                TextButton(
+                  onPressed: _resetFilters,
                   child: Text(
-                    'Reset',
+                    isToday ? 'Сброс' : 'Сброс · Сегодня',
                     style: TextStyle(
                       fontWeight: FontWeight.w700,
-                      fontSize: 12,
                       color: isToday ? AppColors.textMuted : AppColors.primary,
                     ),
                   ),
                 ),
-                const SizedBox(width: 8),
-                SaPressable(
-                  pressedScale: 0.9,
-                  onTap: _pickDate,
-                  borderRadius: BorderRadius.circular(10),
-                  child: Container(
-                    width: 34,
-                    height: 34,
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      color: AppColors.surface,
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: AppColors.border),
-                    ),
-                    child: const Icon(Icons.calendar_today_outlined, size: 15),
-                  ),
+                IconButton(
+                  icon: const Icon(Icons.calendar_today_outlined),
+                  tooltip: 'Выбрать дату',
+                  onPressed: _pickDate,
                 ),
-              ],
-            ),
-          ),
-          SizedBox(
-            height: 44,
-            child: ListView(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
-              children: [
-                for (final f in _OrderFilter.values) ...[
-                  _FilterChip(
-                    label: switch (f) {
-                      _OrderFilter.all => 'Barchasi',
-                      _OrderFilter.yangi => 'Yangi',
-                      _OrderFilter.tasdiqlangan => 'Tasdiqlangan',
-                      _OrderFilter.yolda => "Yo'lda",
-                      _OrderFilter.yetkazildi => 'Yetkazildi',
-                    },
-                    selected: _filter == f,
-                    onTap: () => setState(() => _filter = f),
-                  ),
-                  const SizedBox(width: 6),
-                ],
               ],
             ),
           ),
           Expanded(
             child: ordersAsync.when(
               data: (orders) {
-                final filtered = orders.where(_matchesFilter).toList();
+                final debts = debtsAsync.valueOrNull;
+                final totalSum = orders.fold<double>(0, (s, o) => s + o.totalSum);
+                final inProgress = orders.where((o) {
+                  final st = o.status.toLowerCase();
+                  return !st.contains('deliver') && !st.contains('достав') && !st.contains('cancel');
+                }).length;
+                final dayDebt = _dayDebt(orders, debts);
+                final debtLabel = dayDebt > 0 ? formatMoneyUz(dayDebt) : '0';
+
                 return RefreshIndicator(
                   color: AppColors.primary,
                   onRefresh: _refresh,
                   child: ListView(
                     physics: const AlwaysScrollableScrollPhysics(),
-                    padding: const EdgeInsets.fromLTRB(12, 8, 12, 100),
+                    padding: const EdgeInsets.fromLTRB(12, 12, 12, 100),
                     children: [
-                      if (heldOrders.isNotEmpty &&
-                          _filter == _OrderFilter.all) ...[
-                        SaEnter(
-                          preset: SaMotionPreset.rise,
-                          child: Padding(
-                            padding: const EdgeInsets.only(bottom: 8),
-                            child: Text(
-                              'Kutish oynasi (${heldOrders.length})',
-                              style: AppTypography.bodySmall
-                                  .copyWith(fontWeight: FontWeight.w800),
-                            ),
+                      GestureDetector(
+                        onTap: _pickDate,
+                        child: AgentOrdersHeroCard(
+                          totalSum: formatMoneyUz(totalSum + heldOrders.fold(0.0, (s, h) => s + h.estimatedTotal)),
+                          totalCount: orders.length + heldOrders.length,
+                          inProgressCount: inProgress + heldOrders.length,
+                          debtLabel: debtLabel,
+                        ),
+                      ),
+                      if (heldOrders.isNotEmpty) ...[
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 8),
+                          child: Text(
+                            'Ожидают отправки (${heldOrders.length}) — таймер синхронизации',
+                            style: AppTypography.bodySmall.copyWith(fontWeight: FontWeight.w800),
                           ),
                         ),
-                        for (var hi = 0; hi < heldOrders.length; hi++)
-                          SaEnter(
-                            delay: SaStaggerDelay.of(1 + hi),
-                            preset: SaMotionPreset.rise,
-                            child: _heldCard(heldOrders[hi]),
-                          ),
                       ],
-                      if (_filter == _OrderFilter.all)
-                        const OrderDraftListSection(
-                          padding: EdgeInsets.only(bottom: 10),
-                          shrinkWrap: true,
-                          physics: NeverScrollableScrollPhysics(),
-                        ),
-                      if (filtered.isEmpty &&
-                          (heldOrders.isEmpty ||
-                              _filter != _OrderFilter.all) &&
-                          (draftCount == 0 || _filter != _OrderFilter.all))
-                        SaEnter(
-                          preset: SaMotionPreset.rise,
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 48),
-                            child: Text(
-                              _filter == _OrderFilter.all
-                                  ? 'Buyurtma yo\'q · $dateLabel'
-                                  : 'Bu holatda buyurtma yo\'q',
-                              textAlign: TextAlign.center,
-                              style: AppTypography.bodySmall.copyWith(
-                                color: AppColors.textMuted,
-                                fontWeight: FontWeight.w600,
+                      for (final h in heldOrders)
+                        AgentHeldOrderCard(
+                          clientName: h.clientName,
+                          countdown: formatHeldCountdown(h.remaining()),
+                          sumLabel: formatMoneyUz(h.estimatedTotal),
+                          itemCount: h.itemCount,
+                          onTap: () async {
+                            final delayMin = ref.read(sessionProvider).mobileConfig?.sync.postOrderDelayMinutes ??
+                                h.submitAt.difference(h.createdAt).inMinutes.clamp(1, 59);
+                            final action = await showHeldOrderSyncSheet(
+                              context,
+                              order: h,
+                              delayMinutes: delayMin,
+                            );
+                            if (!context.mounted) return;
+                            if (action == HeldOrderSyncAction.edit) {
+                              context.push('/orders/create?held_id=${h.id}');
+                            } else if (action == HeldOrderSyncAction.goHome) {
+                              context.go('/home');
+                            } else if (action == HeldOrderSyncAction.sent) {
+                              showAgentToast(
+                                context,
+                                'Заказ отправлен',
+                                accentColor: AppColors.success,
+                              );
+                            }
+                          },
+                          onCancel: () async {
+                            final ok = await showDialog<bool>(
+                              context: context,
+                              builder: (ctx) => AlertDialog(
+                                title: const Text('Отменить заказ?'),
+                                content: const Text(
+                                  'Заказ не будет отправлен на сервер и удалится с устройства.',
+                                ),
+                                actions: [
+                                  TextButton(
+                                    onPressed: () => Navigator.pop(ctx, false),
+                                    child: const Text('Нет'),
+                                  ),
+                                  TextButton(
+                                    onPressed: () => Navigator.pop(ctx, true),
+                                    child: const Text('Да, отменить'),
+                                  ),
+                                ],
                               ),
-                            ),
+                            );
+                            if (ok != true) return;
+                            await ref.read(heldOrderSchedulerProvider).cancelHeldOrder(h.id);
+                            if (context.mounted) {
+                              showAgentToast(
+                                context,
+                                'Заказ отменён',
+                                accentColor: AppColors.warning,
+                              );
+                            }
+                          },
+                        ),
+                      const OrderDraftListSection(
+                        padding: EdgeInsets.only(bottom: 10),
+                        shrinkWrap: true,
+                        physics: NeverScrollableScrollPhysics(),
+                      ),
+                      if (orders.isEmpty && heldOrders.isEmpty && draftCount == 0)
+                        SizedBox(
+                          height: MediaQuery.sizeOf(context).height * 0.22,
+                          child: AgentEmptyState.fill(
+                            message: 'Нет заказов за $dateLabel',
+                            action: canCreate
+                                ? AgentPrimaryButton(
+                                    label: 'Новый заказ',
+                                    height: 48,
+                                    onPressed: () => context.push('/orders/create'),
+                                  )
+                                : null,
                           ),
                         )
                       else
-                        for (var oi = 0; oi < filtered.length; oi++)
-                          SaEnter(
-                            delay: SaStaggerDelay.of(2 + oi),
-                            preset: SaMotionPreset.rise,
-                            child: _templateOrderCard(filtered[oi]),
-                          ),
+                        for (final o in orders) _orderCard(o, debts),
                     ],
                   ),
                 );
               },
-              loading: () => const Center(
-                child: CircularProgressIndicator(color: AppColors.primary),
-              ),
+              loading: () => const Center(child: CircularProgressIndicator(color: AppColors.primary)),
               error: (e, _) => AgentErrorPanel(
                 error: e,
                 onRetry: _refresh,
@@ -378,250 +319,80 @@ class _AgentOrdersPageState extends ConsumerState<AgentOrdersPage> {
               ),
             ),
           ),
-          if (canCreate)
-            SafeArea(
-              top: false,
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-                child: SaPressable(
-                  pressedScale: 0.97,
-                  onTap: () => context.push('/orders/create'),
-                  borderRadius: BorderRadius.circular(11),
-                  child: Container(
-                    width: double.infinity,
-                    alignment: Alignment.center,
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(11),
-                      gradient: const LinearGradient(
-                        colors: [Color(0xFF6A5BFF), Color(0xFF5548F0)],
-                      ),
-                    ),
-                    child: const Text(
-                      '+ Yangi buyurtma',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w800,
-                        fontSize: 13,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
         ],
       ),
+      floatingActionButton: canCreate
+          ? FloatingActionButton(
+              backgroundColor: AppColors.primary,
+              onPressed: () => context.push('/orders/create'),
+              child: const Icon(Icons.add, color: Colors.white),
+            )
+          : null,
     );
   }
 
-  Widget _heldCard(HeldOrder h) {
-    return AgentHeldOrderCard(
-      clientName: h.clientName,
-      countdown: formatHeldCountdown(h.remaining()),
-      sumLabel: formatMoneyUz(h.estimatedTotal),
-      itemCount: h.itemCount,
-      onTap: () async {
-        final delayMin =
-            ref.read(sessionProvider).mobileConfig?.sync.postOrderDelayMinutes ??
-                h.submitAt.difference(h.createdAt).inMinutes.clamp(1, 59);
-        final action = await showHeldOrderSyncSheet(
-          context,
-          order: h,
-          delayMinutes: delayMin,
-        );
-        if (!mounted) return;
-        if (action == HeldOrderSyncAction.edit) {
-          context.push('/orders/create?held_id=${h.id}');
-        } else if (action == HeldOrderSyncAction.goHome) {
-          context.go('/home');
-        } else if (action == HeldOrderSyncAction.sent) {
-          showAgentToast(
-            context,
-            'Buyurtma yuborildi',
-            accentColor: AppColors.success,
-          );
-        }
-      },
-      onCancel: () async {
-        final ok = await showDialog<bool>(
-          context: context,
-          builder: (ctx) => AlertDialog(
-            title: const Text('Buyurtmani bekor qilish?'),
-            content: const Text(
-              'Buyurtma serverga yuborilmaydi va qurilmadan o\'chiriladi.',
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(ctx, false),
-                child: const Text("Yo'q"),
-              ),
-              TextButton(
-                onPressed: () => Navigator.pop(ctx, true),
-                child: const Text('Ha, bekor'),
-              ),
-            ],
-          ),
-        );
-        if (ok != true) return;
-        await ref.read(heldOrderSchedulerProvider).cancelHeldOrder(h.id);
-        if (mounted) {
-          showAgentToast(
-            context,
-            'Buyurtma bekor qilindi',
-            accentColor: AppColors.warning,
-          );
-        }
-      },
-    );
-  }
+  Widget _orderCard(AgentOrderHistoryRow o, OrderDebtsListResult? debts) {
+    final chip = orderStatusChip(o.status, orderType: o.orderType);
+    final debtRow = debts?.data.where((d) => d.orderId == o.id).firstOrNull;
+    final debtLabel = debtRow != null && debtRow.remainder > 0
+        ? formatDebtMoney(debtRow.remainder, currency: debts?.currency ?? 'UZS')
+        : null;
 
-  Widget _templateOrderCard(AgentOrderHistoryRow o) {
-    final st = _uzStatus(o.status);
-    final tone = _uzStatusColor(o.status);
-    final n = o.number?.trim();
-    final no = (n != null && n.isNotEmpty) ? n : '${o.id}';
-    final qty = o.qty == o.qty.roundToDouble()
-        ? o.qty.round().toString()
-        : o.qty.toStringAsFixed(1);
-
-    return SaPressable(
-      pressedScale: 0.99,
+    return AgentOrderCard(
+      title: _orderTitle(o),
+      statusChip: chip,
+      client: o.clientName.isNotEmpty ? o.clientName : '—',
+      date: _formatOrderDate(o.createdAt),
+      bonus: _formatBonusSummary(o),
+      volume: o.volumeM3 != null && o.volumeM3! > 0 ? o.volumeM3!.toStringAsFixed(2) : '—',
+      count: _formatQty(o.qty),
+      amount: _formatAmount(o),
+      debt: debtLabel,
+      expanded: false,
       onTap: () => context.push('/orders/detail/${o.id}'),
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 8),
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: AppColors.surface,
-          borderRadius: BorderRadius.circular(13),
-          border: Border.all(color: AppColors.border),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Row(
-              children: [
-                Text(
-                  '№$no',
-                  style: const TextStyle(
-                    fontFamily: 'monospace',
-                    fontSize: 12,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                const Spacer(),
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: tone.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Text(
-                    st.toUpperCase(),
-                    style: TextStyle(
-                      fontSize: 9,
-                      fontWeight: FontWeight.w800,
-                      color: tone,
-                      letterSpacing: 0.3,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 6),
-            Text(
-              o.clientName.isNotEmpty ? o.clientName : '—',
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: AppTypography.bodySmall.copyWith(
-                fontWeight: FontWeight.w700,
-                fontSize: 13,
-              ),
-            ),
-            const SizedBox(height: 4),
-            Row(
-              children: [
-                Text(
-                  _formatOrderDate(o.createdAt),
-                  style: AppTypography.caption.copyWith(
-                    color: AppColors.textMuted,
-                    fontSize: 10,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  '$qty pozitsiya',
-                  style: AppTypography.caption.copyWith(
-                    color: AppColors.textMuted,
-                    fontSize: 10,
-                  ),
-                ),
-                const Spacer(),
-                Text(
-                  '${formatMoneyUz(o.totalSum)} so\'m',
-                  style: const TextStyle(
-                    fontFamily: 'monospace',
-                    fontSize: 12,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
     );
   }
+
+  String _orderTitle(AgentOrderHistoryRow o) {
+    final n = o.number?.trim();
+    final num = (n != null && n.isNotEmpty) ? n : '${o.id}';
+    switch (o.orderType) {
+      case 'return':
+        return 'Возврат №$num';
+      case 'return_by_order':
+        return 'Возврат по заказу №$num';
+      case 'exchange':
+        return 'Обмен №$num';
+      case 'partial_return':
+        return 'Частичный возврат №$num';
+      default:
+        return 'Заказ №$num';
+    }
+  }
+
+  String _formatAmount(AgentOrderHistoryRow o) {
+    final prefix = _isReturnType(o.orderType) ? '−' : '';
+    return '$prefix${formatMoneyUz(o.totalSum)}';
+  }
+
+  bool _isReturnType(String orderType) =>
+      orderType == 'return' || orderType == 'return_by_order' || orderType == 'partial_return';
 
   String _formatOrderDate(String? raw) {
     if (raw == null || raw.isEmpty) return '—';
     final wr = toWorkRegionFromIso(raw);
     if (wr == null) return raw.substring(0, raw.length.clamp(0, 10));
-    final now = workRegionNow();
-    final today = DateTime(now.year, now.month, now.day);
-    final day = DateTime(wr.year, wr.month, wr.day);
-    final time = DateFormat('HH:mm').format(wr);
-    if (day == today) return 'Bugun $time';
-    if (day == today.subtract(const Duration(days: 1))) return 'Kecha $time';
-    return DateFormat('d MMM HH:mm').format(wr);
+    return DateFormat('dd.MM.yyyy HH:mm').format(wr);
   }
-}
 
-class _FilterChip extends StatelessWidget {
-  final String label;
-  final bool selected;
-  final VoidCallback onTap;
+  String _formatBonusSummary(AgentOrderHistoryRow o) {
+    if (o.bonusSum > 0) return formatMoneyUz(o.bonusSum);
+    if (o.bonusQty > 0) return _formatQty(o.bonusQty);
+    return '0';
+  }
 
-  const _FilterChip({
-    required this.label,
-    required this.selected,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return SaPressable(
-      pressedScale: 0.96,
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(20),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-        decoration: BoxDecoration(
-          color: selected ? AppColors.primary : AppColors.surface,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(
-            color: selected ? AppColors.primary : AppColors.border,
-          ),
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            fontSize: 11,
-            fontWeight: FontWeight.w700,
-            color: selected ? Colors.white : AppColors.textMuted,
-          ),
-        ),
-      ),
-    );
+  String _formatQty(double v) {
+    if (v == v.roundToDouble()) return v.round().toString();
+    return v.toStringAsFixed(1);
   }
 }

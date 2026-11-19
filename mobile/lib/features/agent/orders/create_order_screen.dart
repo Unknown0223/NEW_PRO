@@ -11,6 +11,7 @@ import '../../../core/api/api_exceptions.dart';
 import '../../../core/api/orders_api.dart';
 import '../../../core/auth/biometric_transaction_confirm.dart';
 import '../../../core/auth/session.dart';
+import '../../../core/agent/outlet_radius.dart';
 import '../../../core/config/agent_action_guards.dart';
 import '../../../core/config/gps_config_policy.dart';
 import '../../../core/config/security_config_policy.dart';
@@ -28,7 +29,6 @@ import '../../../core/errors/error_reporter.dart';
 import '../../../core/errors/user_facing_error.dart';
 import '../visits/visit_stats_helper.dart';
 import '../visits/agent_visits_page.dart' show visitFromRow;
-import '../visits/visit_starter.dart';
 import '../../../core/sync/sync_data_refresh.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
@@ -36,9 +36,6 @@ import '../../../core/time/work_region_time.dart';
 import '../../auth/auth_provider.dart';
 import '../../../core/ui/agent_ui.dart';
 import '../../../core/ui/agent_ui_extended.dart';
-import '../../../design_system/design_system.dart';
-import '../../../core/ui/client_photo_thumb.dart';
-import '../../../core/ui/product_photo_thumb.dart';
 import '../../../core/l10n/app_strings_ru.dart';
 import '../shell/agent_app_bar.dart';
 import '../shell/agent_drawer.dart';
@@ -57,7 +54,6 @@ import 'held_orders_provider.dart';
 import 'held_order_sync_sheet.dart';
 import '../home/last_created_order_banner.dart';
 import 'orders_providers.dart';
-import 'order_flow_rail.dart';
 import 'van_selling_payment_sheet.dart';
 
 /// Yangi zakaz — referens ketma-ketlik:
@@ -66,14 +62,12 @@ class CreateOrderScreen extends ConsumerStatefulWidget {
   final int? initialClientId;
   final Map<String, dynamic>? initialClient;
   final int? heldOrderId;
-  final String? prefillComment;
 
   const CreateOrderScreen({
     super.key,
     this.initialClientId,
     this.initialClient,
     this.heldOrderId,
-    this.prefillComment,
   });
 
   @override
@@ -177,43 +171,11 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
           clientId: clientId,
           warehouseId: wh,
         );
-    // Bo‘sh ombor javobini keshga yozmaslik — aks holda 5 daqiqa «Склад не назначен».
-    if (ctx.warehouses.isEmpty) {
-      _createContextCache = null;
-      _createContextCacheClientId = null;
-      _createContextCacheWarehouseId = null;
-      _createContextCacheAt = null;
-      return ctx;
-    }
     _createContextCache = ctx;
     _createContextCacheClientId = clientId;
     _createContextCacheWarehouseId = wh;
     _createContextCacheAt = now;
     return ctx;
-  }
-
-  /// create-context bo‘sh/xato bo‘lsa — agent omborlari (warehouse-stock).
-  Future<bool> _fallbackWarehousesFromStockView() async {
-    try {
-      final slug = ref.read(sessionProvider).tenantSlug ?? '';
-      if (slug.isEmpty) return false;
-      final raw = await ref.read(ordersApiProvider).getWarehouseStockView(slug);
-      final list = (raw['warehouses'] as List? ?? [])
-          .whereType<Map>()
-          .map((e) => Map<String, dynamic>.from(e))
-          .toList();
-      if (list.isEmpty || !mounted) return false;
-      final def = (raw['warehouse_id'] as num?)?.toInt() ??
-          (list.first['id'] as num?)?.toInt();
-      setState(() {
-        _warehouses = list;
-        _defaultWarehouseId = def;
-        _warehouseId ??= def;
-      });
-      return true;
-    } catch (_) {
-      return false;
-    }
   }
 
   Future<void> _refreshAgentConfigIfStale() async {
@@ -238,10 +200,6 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
   void initState() {
     super.initState();
     _exitGuard = CreateOrderExitGuard(_confirmLeaveForNavigation);
-    final prefill = widget.prefillComment?.trim();
-    if (prefill != null && prefill.isNotEmpty) {
-      _comment = prefill;
-    }
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       ref.read(createOrderExitGuardProvider.notifier).state = _exitGuard;
@@ -281,7 +239,6 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
       'id': held.clientId,
       'name': held.clientName.isNotEmpty ? held.clientName : 'Клиент #${held.clientId}',
     };
-    if (!await _requireVisitOrLeave(client)) return;
     setState(() {
       _selectedClient = client;
       _warehouseId = held.warehouseId;
@@ -351,7 +308,6 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
     }
 
     if (!mounted) return;
-    if (!await _requireVisitOrLeave(client)) return;
     setState(() => _selectedClient = client);
 
     final draft = await ref.read(orderDraftRepositoryProvider).loadForClient(id);
@@ -371,20 +327,6 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
       await _openSetupSheet(fromInitialClient: true);
     }
     if (mounted) setState(() => _bootstrappingInitialClient = false);
-  }
-
-  /// Zakaz faqat faol vizit ichida; vizit boshlanmasa — ekrandan chiqamiz.
-  Future<bool> _requireVisitOrLeave(Map<String, dynamic> client) async {
-    if (await ensureActiveVisitForOrder(context, ref, client)) return mounted;
-    if (!mounted) return false;
-    setState(() => _bootstrappingInitialClient = false);
-    _releaseExitGuard();
-    if (context.canPop()) {
-      context.pop();
-    } else {
-      context.go('/visits');
-    }
-    return false;
   }
 
   Future<void> _waitAuthReady() async {
@@ -503,7 +445,7 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
 
   Future<bool> _saveDraft({bool popAfter = false}) async {
     if (_selectedClientId <= 0 || _warehouseId == null || _cartQty == 0) {
-      _toast('Выберите хотя бы один товар', accent: AppColors.warning);
+      _toast('Kamida bitta mahsulot tanlang', accent: AppColors.warning);
       return false;
     }
     final now = DateTime.now();
@@ -601,10 +543,7 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
     try {
       final photos = await ref.read(mobileApiProvider).getClientPhotoReports(slug, _selectedClientId);
       if (mounted) {
-        setState(() => _hasUnlinkedPhotoToday = hasUnlinkedPhotoReportToday(
-              photos,
-              ownerUserId: ref.read(sessionProvider).user?.id,
-            ));
+        setState(() => _hasUnlinkedPhotoToday = hasUnlinkedPhotoReportToday(photos));
         _photoStatusFetchedAt = now;
       }
     } catch (_) {}
@@ -639,16 +578,12 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) => SaPopIn(
-        child: _ClientPickerSheet(
-          clientCount: _clientCount,
-          mobileConfig: cfg,
-        ),
+      builder: (ctx) => _ClientPickerSheet(
+        clientCount: _clientCount,
+        mobileConfig: cfg,
       ),
     );
     if (picked != null && mounted) {
-      if (!await ensureActiveVisitForOrder(context, ref, picked) || !mounted) return;
       setState(() {
         _selectedClient = picked;
         _hasUnlinkedPhotoToday = false;
@@ -664,7 +599,7 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
   Future<void> _prefetchWarehouses() async {
     if (_effectiveClientId <= 0) return;
     try {
-      final ctx = await _getCreateContext(forceRefresh: true);
+      final ctx = await _getCreateContext();
       if (ctx == null || !mounted) return;
       setState(() {
         _applyCreateContextMeta(ctx);
@@ -683,17 +618,7 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
           }
         }
       });
-      if (_warehouses.isEmpty) {
-        await _fallbackWarehousesFromStockView();
-      }
-    } catch (e) {
-      final ok = await _fallbackWarehousesFromStockView();
-      if (!ok && mounted) {
-        _toast(
-          'Не удалось загрузить склад. Проверьте интернет и синхронизацию.',
-        );
-      }
-    }
+    } catch (_) {}
   }
 
   /// create-context + session: narx turlari / label / moliya (retail-placeholder ni almashtirish).
@@ -930,7 +855,7 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
       if (ctx == null) {
         if (mounted) {
           setState(() {
-            _loadError = 'Не удалось загрузить каталог';
+            _loadError = 'Katalog yuklanmadi';
             _loadingCatalog = false;
           });
         }
@@ -1037,7 +962,7 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
       );
       if (mounted) {
         setState(() {
-          _loadError = 'Не удалось загрузить каталог';
+          _loadError = 'Katalog yuklanmadi';
           _loadingCatalog = false;
         });
       }
@@ -1073,7 +998,7 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
     if (_selectedClient != null) {
       if (isNewClientBlockedForOrder(_selectedClient!, cfg.client, cfg.productList)) {
         if (mounted) {
-          _toast('Заказы для новых клиентов запрещены (конфигурация)');
+          _toast('Yangi mijozga buyurtma berish taqiqlangan (konfiguratsiya)');
         }
         return false;
       }
@@ -1082,27 +1007,29 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
       final online = await ref.read(connectivityProvider).isOnline();
       if (!online) {
         if (mounted) {
-          _toast('Для заказа нужен интернет (конфигурация)');
+          _toast('Buyurtma uchun internet kerak (konfiguratsiya)');
         }
         return false;
       }
     }
     if (_selectedClient != null) {
-      if (offerPhotoCapture) {
-        if (!mounted || !await ensureActiveVisitForOrder(context, ref, _selectedClient!)) return false;
-      } else {
-        final visitError = await recordOrderPositionForVisit(ref, _selectedClient!);
-        if (visitError != null) {
-          if (mounted) _toast(visitError);
-          return false;
-        }
+      final clat = (_selectedClient!['latitude'] as num?)?.toDouble();
+      final clng = (_selectedClient!['longitude'] as num?)?.toDouble();
+      if (!await ensureWithinOutletRadius(
+        context: context,
+        config: cfg,
+        clientLat: clat,
+        clientLng: clng,
+        blockedMessage: 'Buyurtma uchun mijoz radiusida bo‘ling',
+      )) {
+        return false;
       }
     }
     if (cfg.gps.requiredForOrder) {
       final perm = await Geolocator.checkPermission();
       if (perm == LocationPermission.denied || perm == LocationPermission.deniedForever) {
         if (mounted) {
-          _toast('Для заказа нужно разрешение GPS');
+          _toast('Buyurtma uchun GPS ruxsati kerak');
         }
         return false;
       }
@@ -1110,7 +1037,7 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
       final check = checkGpsPosition(cfg.gps, pos);
       if (!check.ok) {
         if (mounted) {
-          _toast(check.message ?? 'Недостаточная точность GPS');
+          _toast(check.message ?? 'GPS aniqligi yetarli emas');
         }
         return false;
       }
@@ -1156,7 +1083,7 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
         }
       } catch (_) {
         if (mounted) {
-          _toast('Фотоотчёт не проверен — проверьте интернет');
+          _toast('Фотоотчет tekshirilmadi — internetni tekshiring');
         }
         return false;
       }
@@ -1168,14 +1095,14 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
     );
     if (!stockCheck.allowed) {
       if (mounted) {
-        _toast(stockCheck.message ?? 'Нужен снимок остатков');
+        _toast(stockCheck.message ?? 'Qoldiq snapshot kerak');
       }
       return false;
     }
     final shipCheck = checkShipmentDateRequired(cfg.misc, _shipmentDate);
     if (!shipCheck.allowed) {
       if (mounted) {
-        _toast(shipCheck.message ?? 'Укажите дату отгрузки');
+        _toast(shipCheck.message ?? 'Jo\'natish sanasi kerak');
       }
       return false;
     }
@@ -1246,7 +1173,7 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
       context,
       onPhotoReport: _addPhotoReport,
       onRefusal: () {
-        _toast('Отказ — в разделе «Визиты»', accent: AppColors.warning);
+        _toast('Отказ — tashriflar bo‘limida', accent: AppColors.warning);
       },
       onCreateOrder: null,
       createOrderEnabled: false,
@@ -1320,7 +1247,7 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
       final avail = _stockAvailable[e.key] ?? 0;
       if (e.value > avail) {
         if (mounted) {
-          _toast('Товар #${e.key}: недостаточно на складе');
+          _toast('Mahsulot #${e.key}: omborda yetarli emas');
         }
         setState(() => _submitting = false);
         return;
@@ -1329,7 +1256,7 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
       if (price <= 0) {
         if (mounted) {
           final ptLabel = _priceTypeLabels[_priceType] ?? _priceType;
-          _toast('Товар #${e.key}: нет цены «$ptLabel» — проверьте справочники');
+          _toast('Mahsulot #${e.key}: «$ptLabel» narxi yo\'q — asosiy ma\'lumotlarni tekshiring');
         }
         setState(() => _submitting = false);
         return;
@@ -1340,10 +1267,7 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
     if (ref.read(sessionProvider).mobileConfig?.photo.requiredForOrder == true) {
       try {
         final photos = await ref.read(mobileApiProvider).getClientPhotoReports(slug, _selectedClientId);
-        if (!hasUnlinkedPhotoReportToday(
-          photos,
-          ownerUserId: ref.read(sessionProvider).user?.id,
-        )) {
+        if (!hasUnlinkedPhotoReportToday(photos)) {
           if (mounted) {
             _toast('Необходимо добавить фотоотчет');
             setState(() => _submitting = false);
@@ -1352,7 +1276,7 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
         }
       } catch (_) {
         if (mounted) {
-          _toast('Фотоотчёт не проверен — проверьте интернет');
+          _toast('Фотоотчет tekshirilmadi — internetni tekshiring');
           setState(() => _submitting = false);
         }
         return;
@@ -1373,14 +1297,18 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
           comment: _comment.isEmpty ? null : _comment,
         );
         await ref.read(orderDraftRepositoryProvider).delete(_selectedClientId);
+        await ensureVisitCompletedForClientToday(
+          _selectedClientId,
+          clientName: _selectedClient?['name']?.toString(),
+        );
         ref.invalidate(orderDraftsProvider);
         ref.invalidate(orderDraftListProvider);
         ref.invalidate(orderDraftForClientProvider(_selectedClientId));
         refreshVisitStatsProviders(ref.invalidate);
         if (mounted) {
-          _toast('Добавлено в офлайн-очередь', accent: AppColors.warning);
+          _toast('Oflayn navbatga qo\'shildi', accent: AppColors.warning);
           _releaseExitGuard();
-          context.go('/visits/active/$_selectedClientId');
+          if (context.canPop()) context.pop();
           ref.invalidate(pendingCountProvider);
         }
       } catch (e, st) {
@@ -1426,6 +1354,7 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
           existingId: _heldOrderId,
         );
         await ref.read(orderDraftRepositoryProvider).delete(_selectedClientId);
+        // Vizit hold oynasida ochiq qoladi — «Отправить сейчас» vizit bo‘limida.
         ref.invalidate(orderDraftsProvider);
         ref.invalidate(orderDraftListProvider);
         ref.invalidate(orderDraftForClientProvider(_selectedClientId));
@@ -1489,7 +1418,6 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
         isConsignment: _isConsignment,
         consignmentDueDate: _isConsignment ? _consignmentDueDate : null,
         shipmentDate: _shipmentDate.isEmpty ? null : _shipmentDate,
-        visit: await orderVisitPayload(_selectedClientId),
       );
       final orderId = parseOrderInt(row['id']);
       final orderNumber = row['number']?.toString() ?? (orderId != null ? '$orderId' : '—');
@@ -1522,6 +1450,10 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
       if (mounted) {
         setState(() => _hasUnlinkedPhotoToday = false);
         await ref.read(orderDraftRepositoryProvider).delete(_selectedClientId);
+        await ensureVisitCompletedForClientToday(
+          _selectedClientId,
+          clientName: _selectedClient?['name']?.toString(),
+        );
         ref.invalidate(orderDraftsProvider);
         ref.invalidate(orderDraftListProvider);
         ref.invalidate(orderDraftForClientProvider(_selectedClientId));
@@ -1542,7 +1474,7 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
           );
           if (!mounted) return;
           if (paid != true) {
-            _toast('Оплата не зафиксирована — внесите её позже через кассу', accent: AppColors.warning);
+            _toast('To‘lov qayd etilmadi — keyinroq kassadan kiriting', accent: AppColors.warning);
           }
         }
         if (!mounted) return;
@@ -1552,8 +1484,7 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
           orderId: orderId,
           clientName: _selectedClient?['name']?.toString(),
         );
-        _toast('Заказ №$orderNumber отправлен — завершите визит', accent: AppColors.success);
-        context.go('/visits/active/$_selectedClientId');
+        context.go('/home');
         invalidateAfterOrderSubmit(ref.invalidate);
       }
     } on ApiException catch (e) {
@@ -1596,7 +1527,7 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
 
   Future<void> _onFinishOrder() async {
     if (_cartQty == 0) {
-      _toast('Выберите хотя бы один товар', accent: AppColors.warning);
+      _toast('Kamida bitta mahsulot tanlang', accent: AppColors.warning);
       return;
     }
 
@@ -1617,27 +1548,16 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
     final slug = ref.read(sessionProvider).tenantSlug ?? '';
     if (slug.isEmpty) {
       if (mounted) {
-        _toast('Нет сессии — войдите заново');
+        _toast('Sessiya yo‘q — qayta kiring');
       }
       return;
     }
     if (_warehouseId == null) {
       if (mounted) {
-        _toast('Сначала выберите склад');
+        _toast('Avval omborni tanlang');
       }
       await _openSetupSheet();
       return;
-    }
-
-    final clientMap = _selectedClient;
-    if (clientMap != null) {
-      final session = ref.read(sessionProvider);
-      final clientCfg = session.mobileConfig?.client ?? const ClientConfig();
-      final productList = session.mobileConfig?.productList ?? const ProductListConfig();
-      if (isNewClientBlockedForOrder(clientMap, clientCfg, productList)) {
-        _toast(kClientInactiveOrderMessage, accent: AppColors.warning);
-        return;
-      }
     }
 
     final items = <OrderLineInput>[];
@@ -1703,185 +1623,67 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
       return const Center(child: AgentEmptyState(message: 'Ничего не найдено'));
     }
 
-    final isGrid =
-        ref.watch(agentLocalPrefsProvider).valueOrNull?.catalogIsGrid ?? false;
-
-    Widget tile(OrderCategoryGroup cat) {
-      final qQty = _qtyInCategory(cat);
-      final blocked = productSelectionBlocked;
-      final count = cat.products.length;
-      String? firstImg;
-      for (final p in cat.products) {
-        final u = productImageUrl(p);
-        if (u != null && u.isNotEmpty) {
-          firstImg = u;
-          break;
-        }
-      }
-      void onTap() {
-        if (blocked) {
-          unawaited(() async {
-            await _addPhotoReport();
-            await _refreshPhotoStatus(force: true);
-          }());
-          return;
-        }
-        _enterCategory(cat);
-      }
-
-      if (isGrid) {
-        return SaPressable(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(SaRadius.card),
-          child: Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: blocked ? Colors.grey.shade50 : AppColors.surface,
-              borderRadius: BorderRadius.circular(SaRadius.card),
-              border: Border.all(
-                color: qQty > 0 ? AppColors.agentAccent : AppColors.border,
-              ),
-            ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      ProductPhotoThumb(source: firstImg, size: 36, radius: 10),
-                      const Spacer(),
-                      if (qQty > 0)
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 2,
-                          ),
-                          decoration: BoxDecoration(
-                            color: AppColors.agentAccent,
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          child: Text(
-                            '$qQty',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 11,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
-                    ],
-                  ),
-                  const SizedBox(height: 10),
-                  Text(
-                    cat.name,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontWeight: FontWeight.w700,
-                      fontSize: 13,
-                      color: blocked ? AppColors.textMuted : AppColors.textTitle,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    blocked
-                        ? 'Сначала фотоотчет'
-                        : '$count ${S.categoryProductsCount}',
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: blocked ? AppColors.warning : AppColors.textSecondary,
-                    ),
-                  ),
-                ],
-              ),
-          ),
-        );
-      }
-
-      return SaPressable(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(SaRadius.card),
-        child: Card(
-          margin: EdgeInsets.zero,
-          color: blocked ? Colors.grey.shade50 : null,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(SaRadius.card),
-          ),
-          child: ListTile(
-          enabled: !blocked,
-          leading: ProductPhotoThumb(source: firstImg, size: 40, radius: 10),
-          title: Text(
-            cat.name,
-            style: TextStyle(
-              fontWeight: FontWeight.w600,
-              color: blocked ? AppColors.textMuted : null,
-            ),
-          ),
-          subtitle: blocked
-              ? const Text(
-                  'Сначала добавьте фотоотчет',
-                  style: TextStyle(fontSize: 12, color: AppColors.warning),
-                )
-              : Text('$count ${S.categoryProductsCount}'),
-          trailing: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (blocked)
-                const Icon(Icons.photo_camera_outlined,
-                    color: AppColors.warning, size: 20)
-              else if (qQty > 0)
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: AppColors.success,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Text(
-                    '$qQty',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 12,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-              const SizedBox(width: 4),
-              Icon(Icons.chevron_right,
-                  color: blocked ? AppColors.textMuted : null),
-            ],
-          ),
-          ),
-        ),
-      );
-    }
-
-    if (isGrid) {
-      return GridView.builder(
-        padding: const EdgeInsets.all(16),
-        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: 2,
-          mainAxisSpacing: 10,
-          crossAxisSpacing: 10,
-          childAspectRatio: 1.15,
-        ),
-        itemCount: visible.length,
-        itemBuilder: (_, i) => SaEnter(
-          delay: SaStaggerDelay.of(i),
-          preset: SaMotionPreset.rise,
-          child: tile(visible[i]),
-        ),
-      );
-    }
-
     return ListView.separated(
       padding: const EdgeInsets.all(16),
       itemCount: visible.length,
       separatorBuilder: (_, __) => const SizedBox(height: 8),
-      itemBuilder: (_, i) => SaEnter(
-        delay: SaStaggerDelay.of(i),
-        preset: SaMotionPreset.rise,
-        child: tile(visible[i]),
-      ),
+      itemBuilder: (_, i) {
+        final cat = visible[i];
+        final qQty = _qtyInCategory(cat);
+        final blocked = productSelectionBlocked;
+        final count = cat.products.length;
+        return Card(
+          margin: EdgeInsets.zero,
+          color: blocked ? Colors.grey.shade50 : null,
+          child: ListTile(
+            enabled: !blocked,
+            title: Text(
+              cat.name,
+              style: TextStyle(
+                fontWeight: FontWeight.w600,
+                color: blocked ? AppColors.textMuted : null,
+              ),
+            ),
+            subtitle: blocked
+                ? const Text(
+                    'Сначала добавьте фотоотчет',
+                    style: TextStyle(fontSize: 12, color: AppColors.warning),
+                  )
+                : Text('$count ${S.categoryProductsCount}'),
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (blocked)
+                  const Icon(Icons.photo_camera_outlined, color: AppColors.warning, size: 20)
+                else if (qQty > 0)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: AppColors.success,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      '$qQty',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                const SizedBox(width: 4),
+                Icon(Icons.chevron_right, color: blocked ? AppColors.textMuted : null),
+              ],
+            ),
+            onTap: blocked
+                ? () async {
+                    await _addPhotoReport();
+                    await _refreshPhotoStatus(force: true);
+                  }
+                : () => _enterCategory(cat),
+          ),
+        );
+      },
     );
   }
 
@@ -1929,31 +1731,53 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
                   children: [
                     if (showDraftButton) ...[
                       Expanded(
-                        child: SaGhostButton(
-                          label: S.draft,
-                          onPressed: (_submitting || _cartQty <= 0)
-                              ? null
-                              : () => _saveDraft(popAfter: true),
+                        child: SizedBox(
+                          height: 48,
+                          child: OutlinedButton(
+                            style: OutlinedButton.styleFrom(
+                              backgroundColor: const Color(0xFFF1F5F9),
+                              foregroundColor: AppColors.textPrimary,
+                              side: BorderSide.none,
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            ),
+                            onPressed: (_submitting || _cartQty <= 0)
+                                ? null
+                                : () => _saveDraft(popAfter: true),
+                            child: const Text(S.draft),
+                          ),
                         ),
                       ),
                       const SizedBox(width: 8),
                     ],
                     Expanded(
                       flex: showDraftButton ? 2 : 1,
-                      child: SaPrimaryButton(
-                        label: primaryLabel,
-                        loading: _submitting,
-                        onPressed: (!primaryEnabled) ? null : onPrimary,
+                      child: SizedBox(
+                        height: 48,
+                        child: ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.agentAccent,
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          ),
+                          onPressed: (_submitting || !primaryEnabled) ? null : onPrimary,
+                          child: _submitting
+                              ? const SizedBox(
+                                  width: 22,
+                                  height: 22,
+                                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                                )
+                              : Text(primaryLabel),
+                        ),
                       ),
                     ),
                     if (showActionsButton && _selectedClientId > 0) ...[
                       const SizedBox(width: 8),
-                      SaPressable(
-                        onTap: _showOrderActionsSheet,
-                        borderRadius: BorderRadius.circular(SaRadius.control),
-                        child: Material(
-                          color: const Color(0xFFF1F5F9),
-                          borderRadius: BorderRadius.circular(SaRadius.control),
+                      Material(
+                        color: const Color(0xFFF1F5F9),
+                        borderRadius: BorderRadius.circular(12),
+                        child: InkWell(
+                          onTap: _showOrderActionsSheet,
+                          borderRadius: BorderRadius.circular(12),
                           child: const SizedBox(
                             width: 48,
                             height: 48,
@@ -1974,28 +1798,25 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
 
   Widget _buildPickClient() {
     return Center(
-      child: SaEnter(
-        preset: SaMotionPreset.rise,
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(Icons.person_search_outlined, size: 64, color: Colors.grey.shade300),
-              const SizedBox(height: 16),
-              Text(
-                _clientCount == 0 ? S.syncFirst : S.selectClient,
-                textAlign: TextAlign.center,
-                style: AppTypography.bodyMedium,
-              ),
-              const SizedBox(height: 20),
-              SaPrimaryButton(
-                label: S.selectClient,
-                icon: Icons.people,
-                onPressed: _clientCount == 0 ? null : _pickClient,
-              ),
-            ],
-          ),
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.person_search_outlined, size: 64, color: Colors.grey.shade300),
+            const SizedBox(height: 16),
+            Text(
+              _clientCount == 0 ? S.syncFirst : S.selectClient,
+              textAlign: TextAlign.center,
+              style: AppTypography.bodyMedium,
+            ),
+            const SizedBox(height: 20),
+            ElevatedButton.icon(
+              onPressed: _clientCount == 0 ? null : _pickClient,
+              icon: const Icon(Icons.people),
+              label: const Text(S.selectClient),
+            ),
+          ],
         ),
       ),
     );
@@ -2066,23 +1887,20 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
         if (_consignmentLimitGateReason() != null)
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-            child: SaEnter(
-              preset: SaMotionPreset.rise,
-              child: Container(
-                width: double.infinity,
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                decoration: BoxDecoration(
-                  color: AppColors.error.withValues(alpha: 0.08),
-                  borderRadius: BorderRadius.circular(SaRadius.control),
-                  border: Border.all(color: AppColors.error.withValues(alpha: 0.35)),
-                ),
-                child: Text(
-                  _consignmentLimitGateReason()!,
-                  style: AppTypography.caption.copyWith(
-                    color: AppColors.error,
-                    fontWeight: FontWeight.w700,
-                    height: 1.35,
-                  ),
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              decoration: BoxDecoration(
+                color: AppColors.error.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: AppColors.error.withValues(alpha: 0.35)),
+              ),
+              child: Text(
+                _consignmentLimitGateReason()!,
+                style: AppTypography.caption.copyWith(
+                  color: AppColors.error,
+                  fontWeight: FontWeight.w700,
+                  height: 1.35,
                 ),
               ),
             ),
@@ -2157,7 +1975,7 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
           Padding(
             padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
             child: Chip(
-              label: Text('Фильтр: $_productSearch'),
+              label: Text('Filtr: $_productSearch'),
               onDeleted: () {
                 _productSearchCtrl.clear();
                 setState(() => _productSearch = '');
@@ -2167,224 +1985,91 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
         Expanded(
           child: products.isEmpty
               ? const Center(child: AgentEmptyState(message: S.emptyProducts))
-              : Builder(
-                  builder: (context) {
-                    final isGrid = ref
-                            .watch(agentLocalPrefsProvider)
-                            .valueOrNull
-                            ?.catalogIsGrid ??
-                        false;
-
-                    Widget productCard(Map<String, dynamic> p) {
-                      final pid = (p['id'] as num).toInt();
-                      final qty = _quantities[pid] ?? 0;
-                      final price = _unitPrices[pid] ?? 0;
-                      final avail = _stockAvailable[pid] ?? 0;
-                      final out = avail <= 0;
-                      final remaining =
-                          (avail - qty).clamp(0.0, double.infinity);
-                      final stockLabel = qty > 0
-                          ? '${S.warehouseStock}: ${avail.toStringAsFixed(0)} · ${S.remaining}: ${remaining.toStringAsFixed(0)}'
-                          : '${S.inStock}: ${avail.toStringAsFixed(0)}';
-                      final stockText = out ? S.outOfStock : stockLabel;
-                      final boxLabel = productQuantityLabel(
-                        p,
-                        qty.toDouble(),
-                        showBoxes: showBoxes,
-                      );
-                      final img = productImageUrl(p);
-                      final stepper = AgentEditableQuantityStepper(
-                        value: qty,
-                        min: 0,
-                        max: avail,
-                        disabled: out || productSelectionBlocked,
-                        onChanged: (next) {
-                          setState(() {
-                            if (next <= 0) {
-                              _quantities.remove(pid);
-                            } else {
-                              _quantities[pid] = next;
-                            }
-                          });
-                        },
-                      );
-
-                      if (isGrid) {
-                        return Card(
-                          margin: EdgeInsets.zero,
-                          color: out ? Colors.grey.shade100 : null,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(SaRadius.control),
-                            side: qty > 0
-                                ? const BorderSide(
-                                    color: AppColors.agentAccent,
-                                    width: 2,
-                                  )
-                                : BorderSide(color: AppColors.border),
-                          ),
-                          child: Padding(
-                            padding: const EdgeInsets.all(10),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                ProductPhotoThumb(
-                                  source: img,
-                                  size: 48,
-                                  radius: 10,
-                                ),
-                                const SizedBox(height: 8),
-                                Text(
-                                  productDisplayName(p),
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.w700,
-                                    fontSize: 12,
-                                  ),
-                                ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  stockText,
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(
-                                    fontSize: 10,
-                                    color: out
-                                        ? AppColors.error
-                                        : AppColors.success,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                                Text(
-                                  price > 0
-                                      ? formatOrderMoney(price)
-                                      : '—',
-                                  style: const TextStyle(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w700,
-                                  ),
-                                ),
-                                const Spacer(),
-                                Align(
-                                  alignment: Alignment.centerRight,
-                                  child: stepper,
-                                ),
-                              ],
+              : ListView.builder(
+            padding: const EdgeInsets.all(12),
+            itemCount: products.length,
+            itemBuilder: (_, i) {
+              final p = products[i];
+              final pid = (p['id'] as num).toInt();
+              final qty = _quantities[pid] ?? 0;
+              final price = _unitPrices[pid] ?? 0;
+              final avail = _stockAvailable[pid] ?? 0;
+              final out = avail <= 0;
+              final remaining = (avail - qty).clamp(0.0, double.infinity);
+              final stockLabel = qty > 0
+                  ? '${S.warehouseStock}: ${avail.toStringAsFixed(0)} · ${S.remaining}: ${remaining.toStringAsFixed(0)}'
+                  : '${S.inStock}: ${avail.toStringAsFixed(0)}';
+              final stockText = out ? S.outOfStock : stockLabel;
+              final boxLabel = productQuantityLabel(p, qty.toDouble(), showBoxes: showBoxes);
+              return RepaintBoundary(
+                child: Card(
+                margin: const EdgeInsets.only(bottom: 8),
+                color: out ? Colors.grey.shade100 : null,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  side: qty > 0
+                      ? const BorderSide(color: AppColors.agentAccent, width: 2)
+                      : BorderSide.none,
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(productDisplayName(p), style: const TextStyle(fontWeight: FontWeight.w600)),
+                      const SizedBox(height: 6),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              stockText,
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: out
+                                    ? AppColors.error
+                                    : (qty > avail ? AppColors.error : AppColors.success),
+                                fontWeight: FontWeight.w600,
+                              ),
                             ),
                           ),
-                        );
-                      }
-
-                      return Card(
-                        margin: const EdgeInsets.only(bottom: 8),
-                        color: out ? Colors.grey.shade100 : null,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(SaRadius.control),
-                          side: qty > 0
-                              ? const BorderSide(
-                                  color: AppColors.agentAccent,
-                                  width: 2,
-                                )
-                              : BorderSide.none,
-                        ),
-                        child: Padding(
-                          padding: const EdgeInsets.all(12),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  ProductPhotoThumb(
-                                    source: img,
-                                    size: 44,
-                                    radius: 10,
-                                  ),
-                                  const SizedBox(width: 10),
-                                  Expanded(
-                                    child: Text(
-                                      productDisplayName(p),
-                                      style: const TextStyle(
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 6),
-                              Row(
-                                children: [
-                                  Expanded(
-                                    child: Text(
-                                      stockText,
-                                      style: TextStyle(
-                                        fontSize: 12,
-                                        color: out
-                                            ? AppColors.error
-                                            : (qty > avail
-                                                ? AppColors.error
-                                                : AppColors.success),
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                    ),
-                                  ),
-                                  Text(
-                                    price > 0
-                                        ? '${S.price}: ${formatOrderMoney(price)}'
-                                        : '—',
-                                    style: const TextStyle(fontSize: 12),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 8),
-                              Row(
-                                children: [
-                                  Text(
-                                    qty > 0 && showBoxes
-                                        ? '$qty ${p['unit']?.toString() ?? S.unitPcs} · $boxLabel'
-                                        : S.unitPcs,
-                                    style: AppTypography.caption,
-                                  ),
-                                  const Spacer(),
-                                  stepper,
-                                ],
-                              ),
-                            ],
+                          Text(
+                            price > 0 ? '${S.price}: ${formatOrderMoney(price)}' : '—',
+                            style: const TextStyle(fontSize: 12),
                           ),
-                        ),
-                      );
-                    }
-
-                    if (isGrid) {
-                      return GridView.builder(
-                        padding: const EdgeInsets.all(12),
-                        gridDelegate:
-                            const SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: 2,
-                          mainAxisSpacing: 10,
-                          crossAxisSpacing: 10,
-                          childAspectRatio: 0.72,
-                        ),
-                        itemCount: products.length,
-                        itemBuilder: (_, i) => SaEnter(
-                          delay: SaStaggerDelay.of(i.clamp(0, 24)),
-                          preset: SaMotionPreset.rise,
-                          child: RepaintBoundary(child: productCard(products[i])),
-                        ),
-                      );
-                    }
-
-                    return ListView.builder(
-                      padding: const EdgeInsets.all(12),
-                      itemCount: products.length,
-                      itemBuilder: (_, i) => SaEnter(
-                        delay: SaStaggerDelay.of(i.clamp(0, 24)),
-                        preset: SaMotionPreset.rise,
-                        child: RepaintBoundary(child: productCard(products[i])),
+                        ],
                       ),
-                    );
-                  },
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          Text(
+                            qty > 0 && showBoxes ? '$qty ${p['unit']?.toString() ?? S.unitPcs} · $boxLabel' : S.unitPcs,
+                            style: AppTypography.caption,
+                          ),
+                          const Spacer(),
+                          AgentEditableQuantityStepper(
+                            value: qty,
+                            min: 0,
+                            max: avail,
+                            disabled: out || productSelectionBlocked,
+                            onChanged: (next) {
+                              setState(() {
+                                if (next <= 0) {
+                                  _quantities.remove(pid);
+                                } else {
+                                  _quantities[pid] = next;
+                                }
+                              });
+                            },
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
                 ),
+              ),
+              );
+            },
+          ),
         ),
         _buildBottomBar(
           primaryLabel: S.finish,
@@ -2403,13 +2088,8 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
     final photoRequired =
         ref.watch(sessionProvider).mobileConfig?.photo.requiredForOrder ?? false;
     final title = _step == _CreateStep.categoryProducts
-        ? (_openCategory?.name ?? 'Mahsulotlar')
-        : 'Buyurtma qo\'shish';
-    final railIndex = OrderFlowRail.railIndexFor(
-      pickingClient: _step == _CreateStep.pickClient && _effectiveClientId <= 0,
-      onProducts: _step == _CreateStep.categoryProducts,
-      setupDone: _setupShown,
-    );
+        ? (_openCategory?.name ?? S.productsTitle)
+        : S.orderAddTitle;
 
     return PopScope(
       canPop: _step == _CreateStep.pickClient ||
@@ -2441,50 +2121,25 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
             AgentIconButton(icon: Icons.close, onPressed: _cancelHeldOrder),
           if (_selectedClientId > 0)
             AgentIconButton(icon: Icons.more_horiz, onPressed: _showOrderActionsSheet),
-          if (_step == _CreateStep.categoryProducts || _step == _CreateStep.categories) ...[
-            AgentIconButton(
-              icon: (ref.watch(agentLocalPrefsProvider).valueOrNull?.catalogIsGrid ?? false)
-                  ? Icons.view_list_rounded
-                  : Icons.grid_view_rounded,
-              onPressed: () {
-                final prefs = ref.read(agentLocalPrefsProvider).valueOrNull;
-                final next = (prefs?.catalogIsGrid ?? false) ? 'list' : 'grid';
-                ref.read(agentLocalPrefsProvider.notifier).setPrefs(
-                      (p) => p.copyWith(catalogViewMode: next),
-                    );
-              },
-            ),
+          if (_step == _CreateStep.categoryProducts || _step == _CreateStep.categories)
             AgentIconButton(icon: Icons.search, onPressed: _showProductSearch),
-          ],
         ],
       ),
-      body: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
+      body: Stack(
         children: [
-          if (!_bootstrappingInitialClient)
-            SaEnter(
-              preset: SaMotionPreset.rise,
-              child: OrderFlowRail(activeIndex: railIndex),
+          if (_bootstrappingInitialClient)
+            const Center(child: CircularProgressIndicator())
+          else if (_step == _CreateStep.pickClient && _effectiveClientId <= 0)
+            _buildPickClient()
+          else if (_step == _CreateStep.categories)
+            _buildCategories(photoRequired: photoRequired)
+          else
+            _buildCategoryProducts(photoRequired: photoRequired),
+          if (_loading)
+            const ColoredBox(
+              color: Color(0x88FFFFFF),
+              child: Center(child: CircularProgressIndicator()),
             ),
-          Expanded(
-            child: Stack(
-              children: [
-                if (_bootstrappingInitialClient)
-                  const Center(child: CircularProgressIndicator())
-                else if (_step == _CreateStep.pickClient && _effectiveClientId <= 0)
-                  _buildPickClient()
-                else if (_step == _CreateStep.categories)
-                  _buildCategories(photoRequired: photoRequired)
-                else
-                  _buildCategoryProducts(photoRequired: photoRequired),
-                if (_loading)
-                  const ColoredBox(
-                    color: Color(0x88FFFFFF),
-                    child: Center(child: CircularProgressIndicator()),
-                  ),
-              ],
-            ),
-          ),
         ],
       ),
     ),
@@ -2518,16 +2173,16 @@ class _ProductSearchDialogState extends State<_ProductSearchDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: const Text('Поиск товара'),
+      title: const Text('Mahsulot qidirish'),
       content: TextField(
         controller: _ctrl,
         autofocus: true,
-        decoration: const InputDecoration(hintText: 'Название или SKU...'),
+        decoration: const InputDecoration(hintText: 'Nom yoki SKU...'),
         onSubmitted: (v) => Navigator.pop(context, v),
       ),
       actions: [
-        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Отмена')),
-        TextButton(onPressed: () => Navigator.pop(context, _ctrl.text), child: const Text('Найти')),
+        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Bekor')),
+        TextButton(onPressed: () => Navigator.pop(context, _ctrl.text), child: const Text('OK')),
       ],
     );
   }
@@ -2634,26 +2289,18 @@ class _ClientPickerSheetState extends State<_ClientPickerSheet> {
 
   Widget _clientTile(Map<String, dynamic> c) {
     final days = formatClientVisitDaysDisplay(c);
-    return SaPressable(
+    return ListTile(
+      title: Text(c['name']?.toString() ?? ''),
+      subtitle: Text(
+        [
+          c['phone']?.toString() ?? '',
+          if (days != null && days.isNotEmpty) days,
+        ].where((s) => s.trim().isNotEmpty).join(' · '),
+      ),
       onTap: () {
         _focusNode.unfocus();
         Navigator.pop(context, c);
       },
-      borderRadius: BorderRadius.circular(SaRadius.control),
-      child: ListTile(
-        leading: ClientPhotoThumb(
-          source: firstClientPhotoUrl(c),
-          size: 40,
-          radius: 10,
-        ),
-        title: Text(c['name']?.toString() ?? ''),
-        subtitle: Text(
-          [
-            c['phone']?.toString() ?? '',
-            if (days != null && days.isNotEmpty) days,
-          ].where((s) => s.trim().isNotEmpty).join(' · '),
-        ),
-      ),
     );
   }
 
@@ -2670,17 +2317,12 @@ class _ClientPickerSheetState extends State<_ClientPickerSheet> {
         alignment: Alignment.topCenter,
         child: Material(
           color: Theme.of(context).scaffoldBackgroundColor,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(SaRadius.sheet)),
-          clipBehavior: Clip.antiAlias,
           child: Column(
             children: [
               const SizedBox(height: 8),
-              SaEnter(
-                preset: SaMotionPreset.rise,
-                child: const Padding(
-                  padding: EdgeInsets.all(16),
-                  child: Text('Выберите клиента', style: AppTypography.headlineSmall),
-                ),
+              const Padding(
+                padding: EdgeInsets.all(16),
+                child: Text('Mijoz tanlang', style: AppTypography.headlineSmall),
               ),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -2689,7 +2331,7 @@ class _ClientPickerSheetState extends State<_ClientPickerSheet> {
                   focusNode: _focusNode,
                   autofocus: false,
                   decoration: InputDecoration(
-                    hintText: 'Название, код или телефон',
+                    hintText: 'Nom, kod yoki telefon',
                     prefixIcon: const Icon(Icons.search),
                     suffixIcon: IconButton(
                       icon: const Icon(Icons.close),
@@ -2705,8 +2347,8 @@ class _ClientPickerSheetState extends State<_ClientPickerSheet> {
                   alignment: Alignment.centerLeft,
                   child: Text(
                     showingSearch
-                        ? 'Поиск (${_results.length})'
-                        : 'Клиенты (${widget.clientCount})',
+                        ? 'Qidiruv (${_results.length})'
+                        : 'Mijozlar (${widget.clientCount})',
                     style: AppTypography.caption.copyWith(color: AppColors.textMuted),
                   ),
                 ),
@@ -2719,29 +2361,21 @@ class _ClientPickerSheetState extends State<_ClientPickerSheet> {
                             ? const Center(child: AgentEmptyState(message: S.emptyClientSearch))
                             : ListView.builder(
                                 itemCount: _results.length,
-                                itemBuilder: (_, i) => SaEnter(
-                                  delay: SaStaggerDelay.of(i),
-                                  preset: SaMotionPreset.rise,
-                                  child: _clientTile(_results[i]),
-                                ),
+                                itemBuilder: (_, i) => _clientTile(_results[i]),
                               ))
                         : (_suggested.isEmpty
                             ? Center(
                                 child: Text(
                                   widget.clientCount == 0
                                       ? S.syncFirst
-                                      : 'Загрузка клиентов…',
+                                      : 'Mijozlar yuklanmoqda…',
                                   textAlign: TextAlign.center,
                                   style: AppTypography.caption.copyWith(color: AppColors.textMuted),
                                 ),
                               )
                             : ListView.builder(
                                 itemCount: _suggested.length,
-                                itemBuilder: (_, i) => SaEnter(
-                                  delay: SaStaggerDelay.of(i),
-                                  preset: SaMotionPreset.rise,
-                                  child: _clientTile(_suggested[i]),
-                                ),
+                                itemBuilder: (_, i) => _clientTile(_suggested[i]),
                               )),
               ),
             ],

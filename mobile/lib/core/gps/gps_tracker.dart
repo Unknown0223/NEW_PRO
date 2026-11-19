@@ -6,9 +6,7 @@ import '../api/field_api.dart';
 import '../auth/session.dart';
 import '../config/gps_config_policy.dart';
 import '../config/mobile_config.dart';
-import '../connectivity/connectivity_service.dart';
 import '../database/app_database.dart';
-import '../device/battery_level.dart';
 import '../errors/error_reporter.dart';
 import 'gps_ping_queue.dart';
 
@@ -32,13 +30,13 @@ class GpsAttachOutcome {
   String get message {
     switch (issue) {
       case GpsAttachIssue.serviceOff:
-        return 'Геолокация выключена. Включите GPS в настройках телефона.';
+        return 'Joylashuv o‘chirilgan. Telefon sozlamalarida GPS ni yoqing.';
       case GpsAttachIssue.denied:
-        return 'Разрешите доступ к GPS и нажмите ещё раз.';
+        return 'GPS ruxsatini bering — keyin qayta bosing.';
       case GpsAttachIssue.deniedForever:
-        return 'Доступ к GPS запрещён. Включите разрешение в настройках приложения.';
+        return 'GPS ruxsati yopilgan. Ilova sozlamalaridan ruxsatni yoqing.';
       case GpsAttachIssue.noFix:
-        return 'Сигнал GPS не найден. Выйдите на открытое место и нажмите ещё раз.';
+        return 'GPS signali topilmadi. Ochiq joyda qayta bosing.';
       case null:
         return '';
     }
@@ -292,14 +290,10 @@ class GpsTracker extends StateNotifier<GpsState> {
       if (!shouldEnqueue) return;
 
       final recordedAt = DateTime.now().toUtc();
-      final batteryPct = await readBatteryLevelPercent();
-      final networkType = await ConnectivityService().networkTypeLabel();
       await AppDatabase().enqueueLocationPing(
         latitude: position.latitude,
         longitude: position.longitude,
         accuracyMeters: position.accuracy,
-        batteryPct: batteryPct,
-        networkType: networkType,
         recordedAt: recordedAt,
       );
 
@@ -359,29 +353,7 @@ class GpsTracker extends StateNotifier<GpsState> {
 /// GPS tracker provider — reads config from session
 final gpsTrackerProvider = StateNotifierProvider<GpsTracker, GpsState>((ref) {
   final slug = ref.watch(sessionProvider.select((s) => s.tenantSlug ?? ''));
-  final gpsKey = ref.watch(
-    sessionProvider.select((s) {
-      final gps = s.mobileConfig?.gps ?? const GpsConfig();
-      return (
-        gps.trackingEnabled,
-        gps.alwaysOn,
-        gps.requiredForOrder,
-        gps.trackingIntervalSec,
-        gps.minBatteryPct,
-        gps.minDistanceM,
-        gps.maxAccuracyM,
-      );
-    }),
-  );
-  final gps = GpsConfig(
-    trackingEnabled: gpsKey.$1,
-    alwaysOn: gpsKey.$2,
-    requiredForOrder: gpsKey.$3,
-    trackingIntervalSec: gpsKey.$4,
-    minBatteryPct: gpsKey.$5,
-    minDistanceM: gpsKey.$6,
-    maxAccuracyM: gpsKey.$7,
-  );
+  final gps = ref.watch(sessionProvider.select((s) => s.mobileConfig?.gps ?? const GpsConfig()));
 
   return GpsTracker(
     fieldApi: ref.read(fieldApiProvider),

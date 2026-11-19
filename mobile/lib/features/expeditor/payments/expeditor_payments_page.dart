@@ -8,7 +8,6 @@ import '../../../core/auth/session.dart';
 import '../../../core/face/face_verification_flow.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
-import '../../../core/ui/agent_ui.dart';
 import '../../../core/ui/agent_ui_extended.dart';
 import '../../agent/orders/order_create_models.dart' show formatMoneySpaced;
 import '../config/expeditor_config_enforcement.dart';
@@ -47,7 +46,9 @@ class _ExpeditorPaymentsPageState extends ConsumerState<ExpeditorPaymentsPage> {
     final amount = parseGroupedNumber(_amountCtrl.text);
     final pt = _selectedPaymentType;
     if (amount <= 0 || pt == null || pt.isEmpty) {
-      showAgentToast(context, 'Укажите сумму и способ оплаты');
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Summa va to\'lov usulini kiriting')),
+      );
       return;
     }
     setState(() => _submitting = true);
@@ -80,16 +81,19 @@ class _ExpeditorPaymentsPageState extends ConsumerState<ExpeditorPaymentsPage> {
       ref.invalidate(expeditorPaymentContextProvider(orderId));
       ref.invalidate(expeditorOrderDetailProvider(orderId));
       if (mounted) {
-        showAgentToast(
-          context,
-          'Заявка на оплату отправлена. Ожидайте подтверждения кассы.',
-          accentColor: AppColors.warning,
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('To\'lov arizasi yuborildi. Kassa tasdiqlashini kuting.'),
+            backgroundColor: AppColors.warning,
+          ),
         );
         if (context.canPop()) context.pop();
       }
     } catch (e) {
       if (mounted) {
-        showAgentToast(context, '$e', accentColor: AppColors.error);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('$e'), backgroundColor: AppColors.error),
+        );
       }
     } finally {
       if (mounted) setState(() => _submitting = false);
@@ -106,15 +110,15 @@ class _ExpeditorPaymentsPageState extends ConsumerState<ExpeditorPaymentsPage> {
     if (!policy.paymentsEnabled) {
       return Scaffold(
         drawer: const ExpeditorDrawer(),
-        appBar: AppBar(title: const Text('Оплаты')),
+        appBar: AppBar(title: const Text('To\'lovlar')),
         body: Center(child: Text(policy.blockPaymentMessage())),
       );
     }
 
     if (orderId == null) {
       return ExpeditorOrderPicker(
-        title: 'Заказ для оплаты',
-        emptyMessage: 'Нет доставленных заказов для приёма оплаты',
+        title: 'To\'lov uchun buyurtma',
+        emptyMessage: 'To\'lov qabul qilish uchun yetkazilgan buyurtma yo\'q',
         onlyDelivered: true,
         onlyWithDebt: true,
         header: const ExpeditorReturnedPaymentsBanner(),
@@ -126,7 +130,7 @@ class _ExpeditorPaymentsPageState extends ConsumerState<ExpeditorPaymentsPage> {
 
     return Scaffold(
       drawer: const ExpeditorDrawer(),
-      appBar: AppBar(title: Text('Оплата #$orderId')),
+      appBar: AppBar(title: Text('To\'lov #$orderId')),
       body: ctxAsync.when(
         data: (ctx) {
           final methods = (ctx['payment_methods'] as List?)?.cast<Map>() ?? [];
@@ -152,11 +156,11 @@ class _ExpeditorPaymentsPageState extends ConsumerState<ExpeditorPaymentsPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Text('Остаток: ${formatMoneySpaced(remaining)} $currency', style: AppTypography.titleMedium),
+                Text('Qoldiq: ${formatMoneySpaced(remaining)} $currency', style: AppTypography.titleMedium),
                 if (pendingTotal > 0) ...[
                   const SizedBox(height: 8),
                   Text(
-                    'Ожидает подтверждения: ${formatMoneySpaced(pendingTotal)} $currency',
+                    'Tasdiqlanishni kutmoqda: ${formatMoneySpaced(pendingTotal)} $currency',
                     style: AppTypography.bodyMedium.copyWith(color: AppColors.warning),
                   ),
                 ],
@@ -168,7 +172,7 @@ class _ExpeditorPaymentsPageState extends ConsumerState<ExpeditorPaymentsPage> {
                       dense: true,
                       contentPadding: EdgeInsets.zero,
                       title: Text('${formatMoneySpaced((m['amount'] as num?)?.toDouble() ?? 0)} $currency — ${expeditorPaymentWorkflowLabel(m['workflow_status']?.toString() ?? '')}'),
-                      subtitle: const Text('Подтверждается в веб-панели через «Заявки на оплату экспедиторов»'),
+                      subtitle: const Text('Web panelda «Заявки на оплату экспедиторов» orqali tasdiqlanadi'),
                     );
                   }),
                 ],
@@ -178,20 +182,12 @@ class _ExpeditorPaymentsPageState extends ConsumerState<ExpeditorPaymentsPage> {
                   keyboardType: TextInputType.number,
                   inputFormatters: const [ThousandsTextInputFormatter()],
                   decoration: InputDecoration(
-                    labelText: 'Сумма ($currency)',
+                    labelText: 'Summa ($currency)',
                     border: const OutlineInputBorder(),
                   ),
                 ),
                 const SizedBox(height: 16),
-                const Text('Способ оплаты', style: AppTypography.labelLarge),
-                if (methods.isEmpty)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 8),
-                    child: Text(
-                      'Нет доступных методов оплаты. Добавьте их в справочнике компании.',
-                      style: AppTypography.bodyMedium.copyWith(color: AppColors.warning),
-                    ),
-                  ),
+                const Text('To\'lov usuli', style: AppTypography.labelLarge),
                 ...methods.map((m) {
                   final map = Map<String, dynamic>.from(m);
                   final pt = map['payment_type']?.toString() ?? '';
@@ -210,14 +206,14 @@ class _ExpeditorPaymentsPageState extends ConsumerState<ExpeditorPaymentsPage> {
                   onPressed: _submitting || !canSubmit ? null : () => _submit(orderId, slug),
                   child: _submitting
                       ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))
-                      : const Text('ОТПРАВИТЬ ЗАЯВКУ'),
+                      : const Text('ARIZA YUBORISH'),
                 ),
               ],
             ),
           );
         },
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(child: Text('Ошибка: $e')),
+        error: (e, _) => Center(child: Text('Xato: $e')),
       ),
     );
   }

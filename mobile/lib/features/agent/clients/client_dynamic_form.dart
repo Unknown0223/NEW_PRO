@@ -9,7 +9,6 @@ import '../../../core/config/client_field_constraints.dart';
 import '../../../core/config/client_field_policy.dart';
 import '../../../core/config/mobile_config.dart';
 import '../../../core/config/tenant_refs_provider.dart';
-import '../../../core/ui/agent_template_form.dart';
 
 const kVisitWeekdayChipOptions = <(int, String)>[
   (1, 'ПН'),
@@ -20,14 +19,6 @@ const kVisitWeekdayChipOptions = <(int, String)>[
   (6, 'СБ'),
   (7, 'ВС'),
 ];
-
-/// Spravochnikdan tanlanadigan maydonlar — hech qachon qo‘lda yozilmasin.
-/// `territory` ataylab yo‘q: agentda faqat «Город» (viloyat ro‘yxati chiqmasin).
-const kClientSelectFieldKeys = <String>{
-  'category',
-  'client_type',
-  'sales_channel',
-};
 
 /// Agent mijoz yaratish/tahrirlash — config maydonlari + format validatsiya.
 class ClientDynamicFormFields extends ConsumerWidget {
@@ -92,20 +83,19 @@ class ClientDynamicFormFields extends ConsumerWidget {
     }
   }
 
-  List<String> _options(WidgetRef ref, String key) {
+  List<String>? _options(WidgetRef ref, String key) {
     final refs = ref.watch(sessionTenantRefsProvider);
     switch (key) {
       case 'category':
-        return refs.clientCategories;
+        return refs.clientCategories.isNotEmpty ? refs.clientCategories : null;
       case 'client_type':
-        return refs.clientTypeCodes;
+        return refs.clientTypeCodes.isNotEmpty ? refs.clientTypeCodes : null;
       case 'sales_channel':
-        return refs.salesChannels;
+        return refs.salesChannels.isNotEmpty ? refs.salesChannels : null;
       case 'territory':
-        // Hech qachon viloyat ro‘yxati — bo‘sh.
-        return const [];
+        return refs.regions.isNotEmpty ? refs.regions : null;
       default:
-        return const [];
+        return null;
     }
   }
 
@@ -122,7 +112,7 @@ class ClientDynamicFormFields extends ConsumerWidget {
             decoration: InputDecoration(
               labelText: clientFieldLabel('visit_day'),
               suffixText: required ? '*' : null,
-              helperText: 'Выберите один или несколько дней',
+              helperText: 'Bir yoki bir nechta kunni tanlang',
               border: const OutlineInputBorder(),
             ),
             child: Wrap(
@@ -152,54 +142,13 @@ class ClientDynamicFormFields extends ConsumerWidget {
     );
   }
 
-  Widget _buildSelectField(WidgetRef ref, String key) {
-    final options = _options(ref, key);
-    final ctrl = _ctrl(key);
-    final current = ctrl.text.trim();
-    final value = current.isNotEmpty && options.contains(current) ? current : null;
-    final required = isClientFieldRequired(config, key);
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          AgentOutlineSelect(
-            label: clientFieldLabel(key),
-            value: value,
-            options: options,
-            showRequiredStar: required,
-            padding: EdgeInsets.zero,
-            onChanged: options.isEmpty
-                ? null
-                : (v) {
-                    ctrl.text = v ?? '';
-                  },
-          ),
-          if (options.isEmpty)
-            Padding(
-              padding: const EdgeInsets.only(top: 4, left: 4),
-              child: Text(
-                'Справочник пуст — заполните в настройках',
-                style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-
   Widget _buildField(BuildContext context, WidgetRef ref, String key) {
-    // Agentda hudud faqat «Город» picker orqali — viloyat TextField/select chiqmasin.
-    if (key == 'territory') {
-      return const SizedBox.shrink();
-    }
-
     if (key == 'coordinates') {
       if (showGpsHint) {
         return Padding(
           padding: const EdgeInsets.only(bottom: 8),
           child: Text(
-            'При сохранении будут использованы текущие координаты GPS',
+            'Koordinatalar saqlashda joriy GPS ishlatiladi',
             style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
           ),
         );
@@ -208,7 +157,7 @@ class ClientDynamicFormFields extends ConsumerWidget {
         return Padding(
           padding: const EdgeInsets.only(bottom: 8),
           child: Text(
-            'Координаты: изменение запрещено конфигурацией',
+            'Koordinatalar: konfiguratsiyada o‘zgartirish ruxsati yo‘q',
             style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
           ),
         );
@@ -220,8 +169,21 @@ class ClientDynamicFormFields extends ConsumerWidget {
       return _buildVisitDayField(context);
     }
 
-    if (kClientSelectFieldKeys.contains(key)) {
-      return _buildSelectField(ref, key);
+    final options = _options(ref, key);
+    if (options != null) {
+      final current = _ctrl(key).text.trim();
+      final value = current.isNotEmpty && options.contains(current) ? current : null;
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 8),
+        child: DropdownButtonFormField<String>(
+          initialValue: value,
+          decoration: _decoration(key),
+          items: options
+              .map((o) => DropdownMenuItem(value: o, child: Text(o, overflow: TextOverflow.ellipsis)))
+              .toList(),
+          onChanged: (v) => _ctrl(key).text = v ?? '',
+        ),
+      );
     }
 
     final c = constraintForField(key);
@@ -246,7 +208,7 @@ class ClientDynamicFormFields extends ConsumerWidget {
       children.addAll([
         TextField(
           controller: _ctrl('name'),
-          decoration: const InputDecoration(labelText: 'Название *'),
+          decoration: const InputDecoration(labelText: 'Nomi *'),
           inputFormatters: [LengthLimitingTextInputFormatter(255)],
         ),
         Padding(
@@ -254,9 +216,9 @@ class ClientDynamicFormFields extends ConsumerWidget {
           child: TextField(
             controller: _ctrl('phone'),
             decoration: InputDecoration(
-              labelText: 'Телефон *',
+              labelText: 'Telefon *',
               prefixText: config.phonePrefix.isNotEmpty ? '${config.phonePrefix} ' : null,
-              helperText: '9 цифр',
+              helperText: '9 raqam',
             ),
             keyboardType: TextInputType.number,
             inputFormatters: [

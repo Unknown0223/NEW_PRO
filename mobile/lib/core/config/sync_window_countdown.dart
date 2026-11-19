@@ -222,13 +222,7 @@ class _SyncWindowCountdownStripState extends State<SyncWindowCountdownStrip> {
       nextShow = true;
       if (!_permissionAsked) {
         _permissionAsked = true;
-        // Home birinchi chizilishidan keyin — dialog ANR bilan aralashmasin.
-        unawaited(
-          Future<void>.delayed(const Duration(seconds: 8), () async {
-            await MobileLocalNotificationService.instance
-                .ensureNotificationPermission();
-          }),
-        );
+        unawaited(MobileLocalNotificationService.instance.ensureNotificationPermission());
       }
     } else if (start != null) {
       nextTick = start;
@@ -471,7 +465,6 @@ class _CountdownTickerState extends State<_CountdownTicker> {
 
     return Container(
       width: double.infinity,
-      margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.08),

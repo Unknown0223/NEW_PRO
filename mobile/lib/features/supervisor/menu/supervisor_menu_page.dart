@@ -6,7 +6,6 @@ import '../../../core/auth/session.dart';
 import '../../../core/prefs/app_prefs.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
-import '../../../design_system/design_system.dart';
 import '../../auth/auth_provider.dart';
 import '../config/supervisor_config_enforcement.dart';
 import '../shared/supervisor_ui.dart';
@@ -126,7 +125,7 @@ class SupervisorMenuPage extends ConsumerWidget {
       final text = [
         name,
         server,
-        'Роль: супервайзер',
+        'Роль: supervisor',
         'Sales Arena',
       ].join('\n');
       await shareSupervisorText(context, text, successLabel: l10n.copied);
@@ -144,33 +143,27 @@ class SupervisorMenuPage extends ConsumerWidget {
         padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
         children: [
           const SizedBox(height: 8),
-          SaEnter(
-            preset: SaMotionPreset.rise,
-            child: Column(
-              children: [
-                CircleAvatar(
-                  radius: 36,
-                  backgroundColor: accent.withValues(alpha: 0.12),
-                  child: Text(
-                    name.isNotEmpty ? name[0].toUpperCase() : 'S',
-                    style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w700, color: accent),
-                  ),
+          Column(
+            children: [
+              CircleAvatar(
+                radius: 36,
+                backgroundColor: accent.withValues(alpha: 0.12),
+                child: Text(
+                  name.isNotEmpty ? name[0].toUpperCase() : 'S',
+                  style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w700, color: accent),
                 ),
-                const SizedBox(height: 12),
-                Text(name, textAlign: TextAlign.center, style: AppTypography.titleMedium.copyWith(fontWeight: FontWeight.w800)),
-                const SizedBox(height: 4),
-                Text(server, style: AppTypography.caption.copyWith(color: AppColors.textSecondary)),
-              ],
-            ),
+              ),
+              const SizedBox(height: 12),
+              Text(name, textAlign: TextAlign.center, style: AppTypography.titleMedium.copyWith(fontWeight: FontWeight.w800)),
+              const SizedBox(height: 4),
+              Text(server, style: AppTypography.caption.copyWith(color: AppColors.textSecondary)),
+            ],
           ),
           const SizedBox(height: 16),
           Builder(
             builder: (_) {
               final policy = SupervisorConfigPolicy(session.mobileConfig);
-              return SaEnter(
-                delay: SaStaggerDelay.of(1),
-                preset: SaMotionPreset.rise,
-                child: SvCard(
+              return SvCard(
                 padding: EdgeInsets.zero,
                 child: Column(
                   children: [
@@ -178,10 +171,11 @@ class SupervisorMenuPage extends ConsumerWidget {
                       icon: Icons.add_business_outlined,
                       title: 'Добавить торговую точку',
                       subtitle: policy.canCreateClient
-                          ? 'С выбором агента из вашей команды'
+                          ? null
                           : 'Запрещено в конфигурации',
+                      soon: policy.canCreateClient,
                       onTap: policy.canCreateClient
-                          ? () => context.push('/sv-clients/new')
+                          ? null
                           : () {
                               ScaffoldMessenger.of(context).showSnackBar(
                                 const SnackBar(
@@ -212,15 +206,7 @@ class SupervisorMenuPage extends ConsumerWidget {
                     tile(
                       icon: Icons.task_alt_outlined,
                       title: 'Задачи',
-                      subtitle: 'Поручения агентам и мои задачи',
-                      onTap: () => context.push('/tasks'),
-                    ),
-                    const Divider(height: 1),
-                    tile(
-                      icon: Icons.how_to_reg_outlined,
-                      title: 'Посещаемость и Киоск бригады',
-                      subtitle: 'Фото/Видео отметка (3-код) и Киоск Face ID',
-                      onTap: () => context.push('/attendance'),
+                      soon: true,
                     ),
                     const Divider(height: 1),
                     tile(
@@ -236,15 +222,11 @@ class SupervisorMenuPage extends ConsumerWidget {
                     ),
                   ],
                 ),
-              ),
               );
             },
           ),
           const SizedBox(height: 10),
-          SaEnter(
-            delay: SaStaggerDelay.of(2),
-            preset: SaMotionPreset.rise,
-            child: SvCard(
+          SvCard(
             padding: EdgeInsets.zero,
             child: Column(
               children: [
@@ -316,19 +298,14 @@ class SupervisorMenuPage extends ConsumerWidget {
               ],
             ),
           ),
-          ),
           const SizedBox(height: 10),
-          SaEnter(
-            delay: SaStaggerDelay.of(3),
-            preset: SaMotionPreset.rise,
-            child: SvCard(
-              padding: EdgeInsets.zero,
-              child: tile(
-                icon: Icons.logout,
-                title: l10n.logout,
-                titleColor: AppColors.error,
-                onTap: () async => ref.read(authStateProvider.notifier).logout(),
-              ),
+          SvCard(
+            padding: EdgeInsets.zero,
+            child: tile(
+              icon: Icons.logout,
+              title: l10n.logout,
+              titleColor: AppColors.error,
+              onTap: () async => ref.read(authStateProvider.notifier).logout(),
             ),
           ),
           const SizedBox(height: 20),

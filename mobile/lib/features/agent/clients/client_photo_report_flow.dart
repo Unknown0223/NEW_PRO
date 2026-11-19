@@ -12,13 +12,9 @@ import '../../../core/l10n/app_strings_ru.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/errors/error_reporter.dart';
 import '../../../core/errors/user_facing_error.dart';
-import '../../../core/database/app_database.dart';
 import '../../../core/sync/photo_report_queue.dart';
 import '../../../core/time/work_region_time.dart';
 import '../../../core/ui/agent_ui.dart';
-import '../../../design_system/design_system.dart';
-import '../home/sync_count_provider.dart';
-import '../visits/visit_stats_helper.dart';
 
 /// Standart foto sabablari (veb spravochnik bo‘sh bo‘lsa).
 /// Asosiy ro‘yxat: Sozlamalar → Причины и категории → Причины фотоотчёта.
@@ -40,62 +36,52 @@ class MandatoryPhotoInlinePrompt extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SaEnter(
-      preset: SaMotionPreset.rise,
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
-        decoration: BoxDecoration(
-          color: const Color(0xFFFFF7ED),
-          borderRadius: BorderRadius.circular(SaRadius.control),
-          border: Border.all(color: const Color(0xFFFED7AA)),
-        ),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              width: 4,
-              height: 44,
-              decoration: BoxDecoration(
-                color: const Color(0xFFF97316),
-                borderRadius: BorderRadius.circular(2),
-              ),
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFF7ED),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFFED7AA)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 4,
+            height: 44,
+            decoration: BoxDecoration(
+              color: const Color(0xFFF97316),
+              borderRadius: BorderRadius.circular(2),
             ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'Необходимо добавить фотоотчет',
-                    style: TextStyle(
-                      color: Color(0xFF9A3412),
-                      fontWeight: FontWeight.w700,
-                      fontSize: 14,
-                    ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Необходимо добавить фотоотчет',
+                  style: TextStyle(
+                    color: Color(0xFF9A3412),
+                    fontWeight: FontWeight.w700,
+                    fontSize: 14,
                   ),
-                  const SizedBox(height: 8),
-                  SaPressable(
-                    onTap: onAdd,
-                    borderRadius: BorderRadius.circular(SaRadius.control),
-                    child: OutlinedButton.icon(
-                      onPressed: onAdd,
-                      icon: const Icon(Icons.photo_camera_outlined, size: 18),
-                      label: const Text('Добавить фотоотчет'),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: const Color(0xFF9A3412),
-                        side: const BorderSide(color: Color(0xFFF97316)),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(SaRadius.control),
-                        ),
-                      ),
-                    ),
+                ),
+                const SizedBox(height: 8),
+                OutlinedButton.icon(
+                  onPressed: onAdd,
+                  icon: const Icon(Icons.photo_camera_outlined, size: 18),
+                  label: const Text('Добавить фотоотчет'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: const Color(0xFF9A3412),
+                    side: const BorderSide(color: Color(0xFFF97316)),
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -124,12 +110,9 @@ class MandatoryPhotoBanner extends StatelessWidget {
                   style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 14),
                 ),
               ),
-              SaPressable(
-                onTap: onAdd,
-                child: const Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-                  child: Text('Добавить', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
-                ),
+              TextButton(
+                onPressed: onAdd,
+                child: const Text('Добавить', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
               ),
             ],
           ),
@@ -146,13 +129,8 @@ bool _isPhotoToday(ClientPhotoReport p) {
   return wr.year == now.year && wr.month == now.month && wr.day == now.day;
 }
 
-bool _ownedBy(ClientPhotoReport photo, int? ownerUserId) {
-  if (ownerUserId == null) return true;
-  return photo.createdByUserId == ownerUserId;
-}
-
-bool hasPhotoReportToday(List<ClientPhotoReport> photos, {int? ownerUserId}) {
-  return photos.any((photo) => _isPhotoToday(photo) && _ownedBy(photo, ownerUserId));
+bool hasPhotoReportToday(List<ClientPhotoReport> photos) {
+  return photos.any(_isPhotoToday);
 }
 
 List<ClientPhotoReport> photoReportsForToday(List<ClientPhotoReport> photos) {
@@ -160,10 +138,8 @@ List<ClientPhotoReport> photoReportsForToday(List<ClientPhotoReport> photos) {
 }
 
 /// Buyurtma uchun — bugun olingan va hali boshqa zakazga bog‘lanmagan foto.
-bool hasUnlinkedPhotoReportToday(List<ClientPhotoReport> photos, {int? ownerUserId}) {
-  return photos.any(
-    (p) => p.orderId == null && _isPhotoToday(p) && _ownedBy(p, ownerUserId),
-  );
+bool hasUnlinkedPhotoReportToday(List<ClientPhotoReport> photos) {
+  return photos.any((p) => p.orderId == null && _isPhotoToday(p));
 }
 
 ClientPhotoReport? latestPhotoReportToday(List<ClientPhotoReport> photos) {
@@ -282,23 +258,19 @@ Future<ClientPhotoReport?> captureAndUploadPhotoReport({
   final caption = category ?? await pickPhotoReportCategory(context, ref);
   if (caption == null || !context.mounted) return null;
 
-  final photo = await withAppLockSuppressed(ref, () async {
-    final cam = await Permission.camera.request();
-    if (!cam.isGranted) return null;
-    return ref.read(photoServiceProvider).takeClientPhoto();
-  });
-  if (photo == null || !context.mounted) {
-    if (photo == null && context.mounted) {
-      final cam = await Permission.camera.status;
-      if (!cam.isGranted) {
-        showAgentToast(context, 'Нужно разрешение на камеру');
-      }
+  final cam = await Permission.camera.request();
+  if (!cam.isGranted) {
+    if (context.mounted) {
+      showAgentToast(context, 'Kamera ruxsati kerak');
     }
     return null;
   }
 
-  // Siqish/upload paytida process o‘lishi mumkin — PIN skip TTL ni yangilaymiz.
-  await markExternalCaptureSkipLock(ttl: const Duration(minutes: 5));
+  final photo = await withAppLockSuppressed(
+    ref,
+    () => ref.read(photoServiceProvider).takeClientPhoto(),
+  );
+  if (photo == null || !context.mounted) return null;
 
   var loadingShown = false;
   void hideLoading() {
@@ -334,22 +306,13 @@ Future<ClientPhotoReport?> captureAndUploadPhotoReport({
   }
 
   try {
-    final uploaded = await ref.read(mobileApiProvider).postClientPhotoReport(
+    return await ref.read(mobileApiProvider).postClientPhotoReport(
           slug,
           clientId,
           imageBase64: b64,
           caption: caption,
           orderId: orderId,
         );
-    await AppDatabase().recordPhotosSyncedToday(1);
-    await AppDatabase().recordPhotoSyncedClientToday(clientId);
-    await ensureVisitCompletedForClientTodayWithRef(ref, clientId);
-    refreshVisitStatsProviders(ref.invalidate);
-    ref.invalidate(syncedPhotoCountTodayProvider);
-    ref.invalidate(pendingPhotoCountProvider);
-    ref.invalidate(failedPhotoCountProvider);
-    await clearExternalCaptureSkipLock();
-    return uploaded;
   } on NetworkException {
     final queued = await PhotoReportQueue.enqueue(
       clientId: clientId,
@@ -371,14 +334,10 @@ Future<ClientPhotoReport?> captureAndUploadPhotoReport({
       showAgentToast(
         context,
         queued
-            ? 'Фото сохранено офлайн — его можно отправить в любое время через «Синхронизация фото»'
-            : 'Окно съёмки закрыто или фото не сохранено',
+            ? 'Foto oflayn saqlandi — «Синхронизация фото» orqali istalgan vaqtda yuboriladi'
+            : 'Окно съёмки закрыто или фото сақланмади',
         accentColor: queued ? AppColors.success : AppColors.error,
       );
-    }
-    if (queued) {
-      ref.invalidate(pendingPhotoCountProvider);
-      ref.invalidate(failedPhotoCountProvider);
     }
     return null;
   } catch (e) {
@@ -404,14 +363,10 @@ Future<ClientPhotoReport?> captureAndUploadPhotoReport({
       showAgentToast(
         context,
         queued
-            ? 'Фото сохранено — его можно отправить в любое время через «Синхронизация фото»'
+            ? 'Foto saqlandi — «Синхронизация фото» orqali istalgan vaqtda yuboriladi'
             : UserFacingError.toast(e, action: 'Не удалось загрузить фото'),
         accentColor: queued ? AppColors.warning : AppColors.error,
       );
-    }
-    if (queued) {
-      ref.invalidate(pendingPhotoCountProvider);
-      ref.invalidate(failedPhotoCountProvider);
     }
     return null;
   }
@@ -441,27 +396,24 @@ Future<ClientPhotoReport?> replacePhotoReport({
   final caption = (existing.caption ?? '').trim();
   if (caption.isEmpty) {
     if (context.mounted) {
-      showAgentToast(context, 'Категория не найдена');
+      showAgentToast(context, 'Kategoriya topilmadi');
     }
     return null;
   }
 
-  final photo = await withAppLockSuppressed(ref, () async {
-    final cam = await Permission.camera.request();
-    if (!cam.isGranted) return null;
-    return ref.read(photoServiceProvider).takeClientPhoto();
-  });
-  if (photo == null || !context.mounted) {
-    if (photo == null && context.mounted) {
-      final cam = await Permission.camera.status;
-      if (!cam.isGranted) {
-        showAgentToast(context, 'Нужно разрешение на камеру');
-      }
+  final cam = await Permission.camera.request();
+  if (!cam.isGranted) {
+    if (context.mounted) {
+      showAgentToast(context, 'Kamera ruxsati kerak');
     }
     return null;
   }
 
-  await markExternalCaptureSkipLock(ttl: const Duration(minutes: 5));
+  final photo = await withAppLockSuppressed(
+    ref,
+    () => ref.read(photoServiceProvider).takeClientPhoto(),
+  );
+  if (photo == null || !context.mounted) return null;
 
   var loadingShown = false;
   void hideLoading() {
@@ -498,15 +450,13 @@ Future<ClientPhotoReport?> replacePhotoReport({
 
   try {
     await ref.read(mobileApiProvider).deleteClientPhotoReport(slug, clientId, existing.id);
-    final uploaded = await ref.read(mobileApiProvider).postClientPhotoReport(
+    return await ref.read(mobileApiProvider).postClientPhotoReport(
           slug,
           clientId,
           imageBase64: b64,
           caption: caption,
           orderId: existing.orderId,
         );
-    await clearExternalCaptureSkipLock();
-    return uploaded;
   } catch (e) {
     ErrorReporter.instance?.reportCaught(
       e,

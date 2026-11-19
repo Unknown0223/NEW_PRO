@@ -17,7 +17,6 @@ import '../orders/order_draft_ui.dart';
 import 'clients_list_provider.dart';
 import '../../../core/ui/agent_visit_ui.dart';
 import '../../../core/ui/client_photo_thumb.dart';
-import '../../../design_system/design_system.dart';
 
 /// Mijozlar ro‘yxati — vizitlar va qidiruv uchun (kun + filtr bilan).
 class AgentClientsOutletList extends ConsumerWidget {
@@ -68,7 +67,7 @@ class AgentClientsOutletList extends ConsumerWidget {
                   ? ref.watch(visitedTodayClientIdsProvider).valueOrNull
                   : null;
               return ListView.builder(
-                padding: EdgeInsets.fromLTRB(12, 12, 12, visitsMode ? 140 : 24),
+                padding: EdgeInsets.fromLTRB(12, 12, 12, visitsMode ? 88 : 24),
                 itemCount: clients.length,
                 itemBuilder: (_, i) {
                   final c = clients[i];
@@ -79,30 +78,15 @@ class AgentClientsOutletList extends ConsumerWidget {
                   final hasDraft = id != null && drafts?[id] != null;
                   final visited =
                       id != null && (visitedIds?.contains(id) ?? false);
-                  final tile = _ClientListTile(
-                    client: c,
-                    visitsMode: visitsMode,
-                    balanceAmount: balanceAmount,
-                    hasDraft: hasDraft,
-                    visited: visited,
-                    onTap: id != null ? () => context.push('/clients/$id') : null,
-                  );
-                  if (visitsMode) {
-                    return Padding(
-                      padding: const EdgeInsets.only(bottom: 12),
-                      child: SaEnter(
-                        delay: SaStaggerDelay.of(i),
-                        preset: SaMotionPreset.rise,
-                        child: tile,
-                      ),
-                    );
-                  }
                   return Padding(
                     padding: const EdgeInsets.only(bottom: 12),
-                    child: SaEnter(
-                      delay: SaStaggerDelay.of(i),
-                      preset: SaMotionPreset.rise,
-                      child: tile,
+                    child: _ClientListTile(
+                      client: c,
+                      visitsMode: visitsMode,
+                      balanceAmount: balanceAmount,
+                      hasDraft: hasDraft,
+                      visited: visited,
+                      onTap: id != null ? () => context.push('/clients/$id') : null,
                     ),
                   );
                 },
@@ -150,7 +134,7 @@ class _ClientListTile extends StatelessWidget {
     final code = client['client_code']?.toString().trim() ?? '';
     final phone = client['phone']?.toString() ?? '';
     final category = client['category']?.toString() ?? '';
-    final visitDays = formatClientVisitDaysDisplay(client) ?? '';
+    final visitDays = formatClientVisitDaysDisplay(client);
     final debt = balanceAmount != null ? formatClientBalanceAmount(balanceAmount!) : '';
     final debtColor =
         balanceAmount != null ? colorForClientBalance(balanceAmount!) : AppColors.textPrimary;
@@ -169,12 +153,9 @@ class _ClientListTile extends StatelessWidget {
       );
     }
 
-    final subtitle = visitDays.isNotEmpty
-        ? visitDays
-        : (phone.isNotEmpty ? phone : (category.isNotEmpty ? category : ''));
     return AgentOutletCard(
       name: name,
-      subtitle: subtitle,
+      subtitle: code.isNotEmpty ? code : (phone.isNotEmpty ? phone : '—'),
       grade: category.isNotEmpty ? category : 'B',
       photoUrl: firstClientPhotoUrl(client),
       trailing: debt,

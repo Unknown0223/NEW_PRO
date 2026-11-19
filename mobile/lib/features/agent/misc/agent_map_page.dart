@@ -13,11 +13,9 @@ import '../../../core/prefs/agent_local_prefs_provider.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/ui/agent_ui.dart';
-import '../../../core/ui/client_photo_thumb.dart';
 import '../../../core/ui/agent_ui_extended.dart';
 import '../../../core/utils/client_navigation.dart';
 import '../../../core/utils/external_actions.dart';
-import '../../../design_system/design_system.dart';
 import '../../auth/auth_provider.dart';
 import '../route/agent_route_provider.dart';
 import '../route/agent_route_start_provider.dart';
@@ -53,7 +51,7 @@ class _AgentMapPageState extends ConsumerState<AgentMapPage> {
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AgentAppBar(
-        title: 'Xarita',
+        title: S.mapPointsTitle,
         showBack: true,
         actions: [
           AgentIconButton(icon: Icons.filter_list, onPressed: () => AgentFilterSheet.show(context)),
@@ -97,7 +95,7 @@ class _AgentMapPageState extends ConsumerState<AgentMapPage> {
                 Padding(
                   padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
                   child: Text(
-                    'Xaritada ${mapStops.length} / ${stops.length} nuqta (tezlik uchun cheklangan)',
+                    'Xaritada ${mapStops.length} / ${stops.length} ta nuqta (tezlik uchun cheklangan)',
                     style: AppTypography.caption.copyWith(color: AppColors.info),
                   ),
                 ),
@@ -123,9 +121,9 @@ class _AgentMapPageState extends ConsumerState<AgentMapPage> {
                   child: Text(
                     localFallback
                         ? (routeDateLabel != null
-                            ? 'Marshrut ($routeDateLabel): ${routeLine.length} nuqta · geolokatsiyadan'
-                            : 'Marshrut: ${routeLine.length} nuqta · geolokatsiyadan')
-                        : 'Marshrut: ${routeLine.length} nuqta (optimal tartib)',
+                            ? 'Маршрут ($routeDateLabel): ${routeLine.length} точек от вашей геолокации'
+                            : 'Маршрут: ${routeLine.length} точек от вашей геолокации')
+                        : 'Маршрут: ${routeLine.length} точек (оптимальный порядок)',
                     style: AppTypography.caption.copyWith(color: AppColors.success),
                   ),
                 )
@@ -134,8 +132,8 @@ class _AgentMapPageState extends ConsumerState<AgentMapPage> {
                   padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
                   child: Text(
                     routeDateLabel != null
-                        ? 'Marshrut ($routeDateLabel) rejalashtirilmagan — nuqta yo\'q'
-                        : 'Marshrut uchun nuqta yo\'q (limit yoki vizitdan keyin pauza)',
+                        ? 'Маршрут ($routeDateLabel) не запланирован — нет доступных точек'
+                        : 'Нет доступных точек для маршрута (лимит или пауза после визита)',
                     style: AppTypography.caption.copyWith(color: AppColors.warning),
                   ),
                 ),
@@ -145,13 +143,7 @@ class _AgentMapPageState extends ConsumerState<AgentMapPage> {
                   clipBehavior: Clip.none,
                   children: [
                     if (stops.isEmpty && !waitingGps)
-                      Center(
-                        child: AgentEmptyState(
-                          message: onWeekdayPlan
-                              ? 'Bugun marshrutda nuqta yo\'q'
-                              : 'Koordinatali nuqtalar yo\'q',
-                        ),
-                      )
+                      Center(child: AgentEmptyState(message: onWeekdayPlan ? 'Нет точек в маршруте на этот день' : S.emptyMapPoints))
                     else if (waitingGps)
                       const Center(child: CircularProgressIndicator(color: AppColors.primary))
                     else
@@ -175,44 +167,47 @@ class _AgentMapPageState extends ConsumerState<AgentMapPage> {
                       ),
                     Positioned(
                       right: 12,
+                      top: 12,
+                      child: _MapControl(
+                        icon: Icons.info_outline,
+                        onTap: () {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Yandex Maps — savdo nuqtalari')),
+                          );
+                        },
+                      ),
+                    ),
+                    Positioned(
+                      right: 12,
                       bottom: 63,
-                      child: SaEnter(
-                        delay: SaStaggerDelay.of(1),
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            _MapControl(icon: Icons.add, onTap: () => _mapKey.currentState?.zoomIn()),
-                            const SizedBox(height: 4),
-                            _MapControl(icon: Icons.remove, onTap: () => _mapKey.currentState?.zoomOut()),
-                          ],
-                        ),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          _MapControl(icon: Icons.add, onTap: () => _mapKey.currentState?.zoomIn()),
+                          const SizedBox(height: 4),
+                          _MapControl(icon: Icons.remove, onTap: () => _mapKey.currentState?.zoomOut()),
+                        ],
                       ),
                     ),
                     Positioned(
                       right: 12,
                       bottom: 12,
-                      child: SaEnter(
-                        delay: SaStaggerDelay.of(2),
-                        child: _MapControl(
-                          icon: Icons.my_location,
-                          filled: true,
-                          onTap: () => _mapKey.currentState?.goToUserLocation(),
-                        ),
+                      child: _MapControl(
+                        icon: Icons.my_location,
+                        filled: true,
+                        onTap: () => _mapKey.currentState?.goToUserLocation(),
                       ),
                     ),
                     Positioned(
                       left: 12,
                       bottom: 12,
-                      child: SaEnter(
-                        delay: SaStaggerDelay.of(2),
-                        child: _MapControl(
-                          icon: _listOpen ? Icons.map : Icons.list,
-                          filled: true,
-                          onTap: () => setState(() {
-                            _listOpen = !_listOpen;
-                            if (_listOpen) _selectedClient = null;
-                          }),
-                        ),
+                      child: _MapControl(
+                        icon: _listOpen ? Icons.map : Icons.list,
+                        filled: true,
+                        onTap: () => setState(() {
+                          _listOpen = !_listOpen;
+                          if (_listOpen) _selectedClient = null;
+                        }),
                       ),
                     ),
                     if (_selectedClient != null && !_listOpen)
@@ -220,30 +215,27 @@ class _AgentMapPageState extends ConsumerState<AgentMapPage> {
                         left: 0,
                         right: 0,
                         bottom: 0,
-                        child: SaEnter(
-                          preset: SaMotionPreset.spring,
-                          child: _OutletDetailBar(
-                            client: _selectedClient!,
-                            onClose: () => setState(() => _selectedClient = null),
-                            onDetails: () {
-                              final id = _selectedClient!['id'];
-                              if (id != null) context.push('/clients/$id');
-                            },
-                            onRoute: () async {
-                              final stop = RouteMapStop.fromClient(_selectedClient!);
-                              if (!stop.hasCoords) return;
-                              await _mapKey.currentState?.focusStop(stop);
-                              final ok = await openDirectionsToClient(
-                                latitude: stop.latitude,
-                                longitude: stop.longitude,
+                        child: _OutletDetailBar(
+                          client: _selectedClient!,
+                          onClose: () => setState(() => _selectedClient = null),
+                          onDetails: () {
+                            final id = _selectedClient!['id'];
+                            if (id != null) context.push('/clients/$id');
+                          },
+                          onRoute: () async {
+                            final stop = RouteMapStop.fromClient(_selectedClient!);
+                            if (!stop.hasCoords) return;
+                            await _mapKey.currentState?.focusStop(stop);
+                            final ok = await openDirectionsToClient(
+                              latitude: stop.latitude,
+                              longitude: stop.longitude,
+                            );
+                            if (!ok && context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(content: Text('Не удалось открыть навигацию')),
                               );
-                              if (!ok && context.mounted) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(content: Text('Не удалось открыть навигацию')),
-                                );
-                              }
-                            },
-                          ),
+                            }
+                          },
                         ),
                       ),
                     if (_listOpen)
@@ -251,46 +243,40 @@ class _AgentMapPageState extends ConsumerState<AgentMapPage> {
                         left: 0,
                         right: 0,
                         bottom: 0,
-                        child: SaEnter(
-                          preset: SaMotionPreset.spring,
-                          child: _OutletListSheet(
-                            onMap: onMap,
-                            offMap: offMap,
-                            visitedIds: visitedIds,
-                            onSelect: (c) {
-                              setState(() {
-                                _selectedClient = c;
-                                _listOpen = false;
-                              });
-                              final stop = RouteMapStop.fromClient(c);
-                              if (stop.hasCoords) _mapKey.currentState?.focusStop(stop);
-                            },
-                            onClose: () => setState(() => _listOpen = false),
-                          ),
+                        child: _OutletListSheet(
+                          onMap: onMap,
+                          offMap: offMap,
+                          visitedIds: visitedIds,
+                          onSelect: (c) {
+                            setState(() {
+                              _selectedClient = c;
+                              _listOpen = false;
+                            });
+                            final stop = RouteMapStop.fromClient(c);
+                            if (stop.hasCoords) _mapKey.currentState?.focusStop(stop);
+                          },
+                          onClose: () => setState(() => _listOpen = false),
                         ),
                       ),
                   ],
                 ),
                 ),
               ),
-              SaEnter(
-                delay: SaStaggerDelay.of(1),
-                child: _MapStatsBar(
-                  visited: visitedOnMap,
-                  totalOnMap: onWeekdayPlan ? routeLine.length : onMap.length,
-                  hidden: offMap.length,
-                  totalAll: clients.length,
-                  onHiddenTap: offMap.isEmpty
-                      ? null
-                      : () => setState(() {
-                            _listOpen = true;
-                            _selectedClient = null;
-                          }),
-                  onVisitedTap: () => setState(() {
-                    _listOpen = true;
-                    _selectedClient = null;
-                  }),
-                ),
+              _MapStatsBar(
+                visited: visitedOnMap,
+                totalOnMap: onWeekdayPlan ? routeLine.length : onMap.length,
+                hidden: offMap.length,
+                totalAll: clients.length,
+                onHiddenTap: offMap.isEmpty
+                    ? null
+                    : () => setState(() {
+                          _listOpen = true;
+                          _selectedClient = null;
+                        }),
+                onVisitedTap: () => setState(() {
+                  _listOpen = true;
+                  _selectedClient = null;
+                }),
               ),
             ],
           );
@@ -333,13 +319,13 @@ class _MapControl extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SaPressable(
-      onTap: onTap,
+    return Material(
+      color: filled ? AppColors.primary : AppColors.surface,
       borderRadius: BorderRadius.circular(10),
-      child: Material(
-        color: filled ? AppColors.primary : AppColors.surface,
+      elevation: 2,
+      child: InkWell(
+        onTap: onTap,
         borderRadius: BorderRadius.circular(10),
-        elevation: 2,
         child: SizedBox(
           width: 43,
           height: 43,
@@ -386,7 +372,7 @@ class _MapStatsBar extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('Tashrif', style: AppTypography.caption.copyWith(color: AppColors.textMuted)),
+                        Text(S.visited, style: AppTypography.caption.copyWith(color: AppColors.textMuted)),
                         const SizedBox(height: 8),
                         Text(
                           '$visited / $totalOnMap',
@@ -410,7 +396,7 @@ class _MapStatsBar extends StatelessWidget {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                'Xaritada yo\'q',
+                                S.notShownOnMap,
                                 style: AppTypography.caption.copyWith(color: AppColors.textMuted),
                               ),
                               const SizedBox(height: 8),
@@ -467,7 +453,7 @@ class _OutletDetailBar extends ConsumerWidget {
           children: [
             Row(
               children: [
-                Text('Batafsil', style: AppTypography.headlineMedium.copyWith(fontWeight: FontWeight.w800)),
+                Text('Подробно', style: AppTypography.headlineMedium.copyWith(fontWeight: FontWeight.w800)),
                 const Spacer(),
                 IconButton(icon: const Icon(Icons.close, size: 20), onPressed: onClose),
               ],
@@ -506,7 +492,7 @@ class _OutletDetailBar extends ConsumerWidget {
             Row(
               children: [
                 Expanded(
-                  child: AgentSecondaryButton(label: 'Batafsil', onPressed: onDetails),
+                  child: AgentSecondaryButton(label: 'Подробно', onPressed: onDetails),
                 ),
                 const SizedBox(width: 8),
                 _ActionIcon(icon: Icons.alt_route, onTap: onRoute),
@@ -678,7 +664,6 @@ class _OutletTile extends ConsumerWidget {
     final balanceAmount = clientAgentLedgerBalance(agentBalances, clientId);
     final balance = balanceAmount != null ? formatClientBalanceAmount(balanceAmount) : '';
     final hasDebt = balanceAmount != null && isClientDebtBalance(balanceAmount);
-    final photo = firstClientPhotoUrl(client);
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
@@ -692,10 +677,8 @@ class _OutletTile extends ConsumerWidget {
             padding: const EdgeInsets.all(12),
             child: Row(
               children: [
-                if (photo != null) ...[
-                  ClientPhotoThumb(source: photo, size: 40, radius: 10),
-                  const SizedBox(width: 10),
-                ],
+                Icon(Icons.storefront_outlined, color: visited ? AppColors.success : AppColors.textMuted),
+                const SizedBox(width: 12),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,

@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 
 import '../../../core/auth/session.dart';
 import '../../../core/config/mobile_config.dart';
@@ -51,11 +50,6 @@ class ExpeditorSettingsPage extends ConsumerWidget {
                 value: prefs.localeLabel,
                 onTap: () => _pickLocale(context, ref, prefs),
               ),
-              _NavRow(
-                label: 'Быстрое меню (разделы)',
-                value: '',
-                onTap: () => context.push('/settings/quick'),
-              ),
             ]),
             AgentSurfaceCard(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -103,7 +97,7 @@ class ExpeditorSettingsPage extends ConsumerWidget {
               ),
               _ValueRow(
                 label: 'Валюта',
-                value: cfg?.expeditor?.currencySymbol ?? 'сум',
+                value: cfg?.expeditor?.currencySymbol ?? "so'm",
               ),
             ]),
             _group('НАКЛАДНЫЕ', [
@@ -162,9 +156,11 @@ class ExpeditorSettingsPage extends ConsumerWidget {
   }
 
   Future<void> _refreshConfig(BuildContext context, WidgetRef ref) async {
+    final messenger = ScaffoldMessenger.of(context);
     await ref.read(authStateProvider.notifier).refreshMobileConfig();
-    if (!context.mounted) return;
-    showAgentToast(context, 'Настройки обновлены', accentColor: AppColors.success);
+    messenger.showSnackBar(
+      const SnackBar(content: Text('Настройки обновлены')),
+    );
   }
 
   Future<void> _pickLocale(
@@ -185,7 +181,7 @@ class ExpeditorSettingsPage extends ConsumerWidget {
             const AgentSheetHandle(),
             const Padding(
               padding: EdgeInsets.symmetric(vertical: 8),
-              child: Text('Язык приложения',
+              child: Text('Язык приложении',
                   style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),),
             ),
             ListTile(

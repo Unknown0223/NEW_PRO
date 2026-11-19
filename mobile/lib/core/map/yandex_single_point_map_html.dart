@@ -29,7 +29,7 @@ String buildYandexSinglePointMapHtml({String? apiKey}) {
 </head>
 <body>
   <div id="map"></div>
-  <div id="err">Не удалось загрузить карту Yandex.</div>
+  <div id="err">Yandex xarita yuklanmadi.</div>
   <script>
     var USE_API_KEY = $useApiKeyJs;
     var map = null;
@@ -57,7 +57,7 @@ String buildYandexSinglePointMapHtml({String? apiKey}) {
 
     window.setSinglePoint = function(lat, lon, name) {
       if (!map || lat == null || lon == null) return;
-      var title = name || 'Клиент';
+      var title = name || 'Mijoz';
       map.setCenter([lat, lon], 15, { duration: 0 });
       if (marker) map.geoObjects.remove(marker);
       marker = new ymaps.Placemark([lat, lon], {

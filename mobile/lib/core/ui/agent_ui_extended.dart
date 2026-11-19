@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../design_system/design_system.dart';
 import '../clients/agent_outlet_filters_provider.dart';
 import '../l10n/app_strings_ru.dart';
 import '../format/money_display.dart';
@@ -10,7 +9,6 @@ import '../theme/app_colors.dart';
 import '../theme/app_typography.dart';
 import 'agent_template_form.dart';
 import 'agent_ui.dart';
-import 'client_photo_thumb.dart';
 
 import '../api/api_exceptions.dart';
 import '../errors/user_facing_error.dart';
@@ -59,7 +57,7 @@ class AgentSearchHeader extends StatelessWidget implements PreferredSizeWidget {
     super.key,
     required this.controller,
     required this.onBack,
-    this.hint = 'Поиск...',
+    this.hint = 'Qidiruv...',
   });
 
   @override
@@ -151,26 +149,19 @@ class _AgentDayTabsState extends ConsumerState<AgentDayTabs> {
       });
     }
 
-    // Shablon: Hammasi / Du Se Ch Pa Ju Sh Ya
-    const uzDays = ['Hammasi', 'Du', 'Se', 'Ch', 'Pa', 'Ju', 'Sh', 'Ya'];
-    final labels = List<String>.generate(
-      days.length,
-      (i) => i < uzDays.length ? uzDays[i] : days[i],
-    );
-
     return Padding(
-      padding: EdgeInsets.fromLTRB(12, widget.topPadding.clamp(0, 8), 12, 8),
+      padding: EdgeInsets.fromLTRB(12, widget.topPadding, 12, 12),
       child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
         physics: const BouncingScrollPhysics(),
         clipBehavior: Clip.none,
         child: Row(
-          children: List.generate(labels.length, (i) {
+          children: List.generate(days.length, (i) {
             final active = i == selected;
             final isAll = i == 0;
             return Padding(
               key: _chipKeys[i],
-              padding: EdgeInsets.only(right: i < labels.length - 1 ? 8 : 0),
+              padding: EdgeInsets.only(right: i < days.length - 1 ? 8 : 0),
               child: Material(
                 color: active ? AppColors.primaryDark : AppColors.surfaceVariant,
                 borderRadius: BorderRadius.circular(99),
@@ -181,19 +172,19 @@ class _AgentDayTabsState extends ConsumerState<AgentDayTabs> {
                     duration: const Duration(milliseconds: 220),
                     curve: Curves.easeOutCubic,
                     constraints: BoxConstraints(
-                      minWidth: isAll ? 56 : 40,
-                      minHeight: 40,
+                      minWidth: isAll ? 52 : 44,
+                      minHeight: 44,
                     ),
                     padding: EdgeInsets.symmetric(horizontal: isAll ? 12 : 0),
                     alignment: Alignment.center,
                     child: AnimatedDefaultTextStyle(
                       duration: const Duration(milliseconds: 220),
                       style: TextStyle(
-                        fontSize: isAll ? 12 : 13,
+                        fontSize: isAll ? 13 : 14,
                         fontWeight: FontWeight.w800,
                         color: active ? Colors.white : AppColors.textSecondary,
                       ),
-                      child: Text(labels[i]),
+                      child: Text(days[i]),
                     ),
                   ),
                 ),
@@ -294,51 +285,72 @@ class AgentProgressGauge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final p = percent.clamp(0.0, 1.0);
-    // CustomPaint/drawArc Impeller+emulyatorda GPU artefakt berardi —
-    // LinearProgressIndicator + count-up (Motion Lab).
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(24, 8, 24, 4),
-      child: Column(
+    return SizedBox(
+      height: 140,
+      width: double.infinity,
+      child: Stack(
+        alignment: Alignment.center,
         children: [
-          Text(
-            S.performance,
-            style: AppTypography.labelLarge.copyWith(
-              fontSize: 15,
-              fontWeight: FontWeight.w700,
-              color: AppColors.textMenu,
+          CustomPaint(
+            size: const Size(240, 120),
+            painter: _GaugePainter(percent: p),
+          ),
+          Positioned(
+            bottom: 8,
+            child: Column(
+              children: [
+                Text(
+                  S.performance,
+                  style: AppTypography.labelLarge.copyWith(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.textMenu,
+                  ),
+                ),
+                Text(
+                  '${(p * 100).round()}%',
+                  style: const TextStyle(fontSize: 32, fontWeight: FontWeight.w800, color: AppColors.textPrimary),
+                ),
+              ],
             ),
           ),
-          const SizedBox(height: 4),
-          SaCountUp(
-            value: p * 100,
-            format: (v) => '${v.round()}%',
-            style: const TextStyle(
-              fontSize: 32,
-              fontWeight: FontWeight.w800,
-              color: AppColors.textPrimary,
-              fontFeatures: [FontFeature.tabularFigures()],
-            ),
-          ),
-          const SizedBox(height: 12),
-          TweenAnimationBuilder<double>(
-            tween: Tween(begin: 0, end: p),
-            duration: SaDurations.data,
-            curve: SaCurves.enter,
-            builder: (context, value, _) => ClipRRect(
-              borderRadius: BorderRadius.circular(8),
-              child: LinearProgressIndicator(
-                value: value,
-                minHeight: 10,
-                backgroundColor: const Color(0xFFE8EEF5),
-                color: AppColors.primary,
-              ),
-            ),
-          ),
-          const SizedBox(height: 8),
         ],
       ),
     );
   }
+}
+
+class _GaugePainter extends CustomPainter {
+  final double percent;
+  _GaugePainter({required this.percent});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final rect = Rect.fromLTWH(0, 0, size.width, size.height * 2);
+    const start = 3.14159;
+    const sweep = 3.14159;
+    final bg = Paint()
+      ..color = Colors.white
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 18
+      ..strokeCap = StrokeCap.round;
+    final track = Paint()
+      ..color = const Color(0xFFF9FBFD)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 18
+      ..strokeCap = StrokeCap.round;
+    final fg = Paint()
+      ..color = AppColors.primary
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 18
+      ..strokeCap = StrokeCap.round;
+    canvas.drawArc(rect, start, sweep, false, bg);
+    canvas.drawArc(rect, start, sweep, false, track);
+    if (percent > 0) canvas.drawArc(rect, start, sweep * percent, false, fg);
+  }
+
+  @override
+  bool shouldRepaint(covariant _GaugePainter old) => old.percent != percent;
 }
 
 class AgentVisitMetric extends StatelessWidget {
@@ -1075,7 +1087,6 @@ class AgentOrderCard extends StatelessWidget {
 
 class AgentDebtorCard extends StatelessWidget {
   final String name;
-  final String? photoUrl;
   final String balance;
   final double? balanceAmount;
   final String? overdue;
@@ -1090,7 +1101,6 @@ class AgentDebtorCard extends StatelessWidget {
   const AgentDebtorCard({
     super.key,
     required this.name,
-    this.photoUrl,
     required this.balance,
     this.balanceAmount,
     this.overdue,
@@ -1117,7 +1127,12 @@ class AgentDebtorCard extends StatelessWidget {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            ClientPhotoThumb(source: photoUrl, size: 44, radius: 12),
+            Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(color: AppColors.surfaceVariant, borderRadius: BorderRadius.circular(12)),
+              child: const Icon(Icons.storefront_outlined, color: AppColors.textSecondary),
+            ),
             const SizedBox(width: 12),
             Expanded(
               child: Column(
@@ -1285,7 +1300,7 @@ class AgentExpandableStockGroup extends StatelessWidget {
                       width: double.infinity,
                       padding: const EdgeInsets.all(24),
                       decoration: BoxDecoration(color: AppColors.surfaceReport, borderRadius: BorderRadius.circular(10)),
-                      child: const Text('Пусто', textAlign: TextAlign.center, style: TextStyle(color: AppColors.textMuted, fontWeight: FontWeight.w600)),
+                      child: const Text('Bo\'sh', textAlign: TextAlign.center, style: TextStyle(color: AppColors.textMuted, fontWeight: FontWeight.w600)),
                     )
                   : Container(
                       decoration: BoxDecoration(color: AppColors.surfaceReport, borderRadius: BorderRadius.circular(10)),
@@ -1995,9 +2010,9 @@ class AgentErrorPanel extends StatelessWidget {
             ),
             const SizedBox(height: 20),
             if (_is401 && onLogin != null)
-              AgentPrimaryButton(label: 'Войти снова', height: 44, onPressed: onLogin)
+              AgentPrimaryButton(label: 'Qayta kirish', height: 44, onPressed: onLogin)
             else if (onRetry != null)
-              AgentPrimaryButton(label: 'Повторить', height: 44, onPressed: onRetry),
+              AgentPrimaryButton(label: 'Qayta urinish', height: 44, onPressed: onRetry),
           ],
         ),
       ),
@@ -2049,7 +2064,7 @@ class AgentClientDetailHeader extends StatelessWidget {
                       const SizedBox(height: 4),
                       Text.rich(
                         TextSpan(
-                          text: 'Общий баланс: ',
+                          text: 'Umumiy balans: ',
                           style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.textMuted),
                           children: [
                             TextSpan(
@@ -2084,9 +2099,9 @@ class AgentClientDetailHeader extends StatelessWidget {
           IntrinsicHeight(
             child: Row(
               children: [
-                Expanded(child: _act(Icons.phone_outlined, 'Позвонить', onCall)),
+                Expanded(child: _act(Icons.phone_outlined, 'Qo\'ng\'iroq', onCall)),
                 const VerticalDivider(width: 1, color: AppColors.borderLight),
-                Expanded(child: _act(Icons.location_on_outlined, 'Локация', onRoute)),
+                Expanded(child: _act(Icons.location_on_outlined, 'Lokatsiya', onRoute)),
               ],
             ),
           ),
@@ -2133,7 +2148,7 @@ class AgentRouteInfoBox extends StatelessWidget {
               Expanded(
                 child: Text.rich(
                   TextSpan(
-                    text: 'Маршрут: ',
+                    text: 'Marshrut: ',
                     style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: AppColors.primary),
                     children: [
                       TextSpan(
@@ -2152,7 +2167,7 @@ class AgentRouteInfoBox extends StatelessWidget {
             children: [
               Icon(Icons.schedule, size: 16, color: AppColors.textMuted),
               SizedBox(width: 8),
-              Expanded(child: Text('Маршрут построен — клиент закреплён', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.textSecondary))),
+              Expanded(child: Text('Marshrut chizilgan — mijozga biriktirilgan', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.textSecondary))),
             ],
           ),
         ],
@@ -2241,7 +2256,7 @@ Future<void> showAgentClientActionsSheet(
             if (editEnabled && onEdit != null)
               actionTile(icon: Icons.edit_outlined, title: 'Редактировать', onTap: onEdit),
             if (supervisionEnabled && onSupervisionChecklist != null)
-              actionTile(icon: Icons.checklist_outlined, title: 'Чек-лист аудита', onTap: onSupervisionChecklist),
+              actionTile(icon: Icons.checklist_outlined, title: 'Audit checklist', onTap: onSupervisionChecklist),
             const SizedBox(height: 8),
           ],
         ),
@@ -2283,7 +2298,7 @@ class AgentOrdersHeroCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'МОИ ЗАКАЗЫ',
+            'МЕНИНГ ЗАКАЗЛАРИМ',
             style: AppTypography.caption.copyWith(
               color: Colors.white.withValues(alpha: 0.85),
               fontWeight: FontWeight.w800,
@@ -2298,9 +2313,9 @@ class AgentOrdersHeroCard extends StatelessWidget {
           const SizedBox(height: 10),
           Row(
             children: [
-              Expanded(child: _stat('Всего', '$totalCount')),
+              Expanded(child: _stat('Жами', '$totalCount')),
               Expanded(child: _stat('В процессе', '$inProgressCount')),
-              Expanded(child: _stat('Долг', debtLabel)),
+              Expanded(child: _stat('Қарз', debtLabel)),
             ],
           ),
         ],
