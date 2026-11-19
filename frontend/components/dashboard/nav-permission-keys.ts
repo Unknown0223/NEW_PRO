@@ -84,6 +84,7 @@ export const NAV_PERM = {
   reportPhoto: ["reports.fotootchyoty.view"],
   reportTasks: ["reports.otchet_po_zadacham.view"],
   reportBonuses: ["reports.po_bonusam.view"],
+  reportCumulativeBonus: ["reports.nakopitelnyy_bonus.view"],
   reportVisits2: ["reports.vizity.view"],
   reportVisitTotals: ["reports.itogi_vizitov.view"],
   /** Istalgan hisobot — «Настройки отчетов» (shaxsiy menyu) uchun. */
@@ -105,6 +106,7 @@ export const NAV_PERM = {
     "reports.fotootchyoty.view",
     "reports.otchet_po_zadacham.view",
     "reports.po_bonusam.view",
+    "reports.nakopitelnyy_bonus.view",
     "reports.vizity.view",
     "reports.itogi_vizitov.view",
     "reports.dnevnye_kpi_plany.view",
