@@ -2,7 +2,6 @@
 export const REPORT_MENU_STUBS: Array<{ slug: string; label: string }> = [
   { slug: "feedback", label: "Отчёт обратной связи (бот акт сверки)" },
   { slug: "nr", label: "НР отчёты" },
-  { slug: "daily-visits", label: "По дневному посещению" },
   { slug: "prices", label: "По ценам" },
   { slug: "tare", label: "По тарам" },
   { slug: "outlet-class", label: "Классификация торговых точек" },

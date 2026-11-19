@@ -63,6 +63,7 @@ import { registerTasksReportRoutes } from "./reports.route.tasks";
 import { registerBonusesReportRoutes } from "./reports.route.bonuses";
 import { registerCumulativeBonusReportRoutes } from "./reports.route.cumulative-bonus";
 import { registerVisitsReportRoutes } from "./reports.route.visits";
+import { registerDailyVisitsReportRoutes } from "./reports.route.daily-visits";
 import { createReportRouteGuards, parseReportQueryOr400, reportQueryRaw } from "./reports.route.shared";
 
 export async function registerReportsSpecializedRoutes(app: FastifyInstance, guards: ReturnType<typeof createReportRouteGuards> = createReportRouteGuards()) {
@@ -78,6 +79,7 @@ export async function registerReportsSpecializedRoutes(app: FastifyInstance, gua
   registerBonusesReportRoutes(app, guards);
   registerCumulativeBonusReportRoutes(app, guards);
   registerVisitsReportRoutes(app, guards);
+  registerDailyVisitsReportRoutes(app, guards);
 
   app.get("/api/:slug/reports/product-sales/filter-options", { preHandler: reportViewPreHandler }, async (request, reply) => {
     if (!ensureTenantContext(request, reply)) return;

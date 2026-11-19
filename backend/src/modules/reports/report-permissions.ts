@@ -22,6 +22,7 @@ export const REPORT_PAGE_PERMISSIONS: ReadonlyArray<{ path: string; section: str
   { path: "bonuses", section: "reports.po_bonusam", export: true },
   { path: "cumulative-bonus", section: "reports.nakopitelnyy_bonus", export: true },
   { path: "visits", section: "reports.po_vizitam", export: true },
+  { path: "daily-visits", section: "reports.po_dnevnomu_poseshcheniyu", export: true },
   { path: "visits-2", section: "reports.vizity", export: true },
   { path: "visit-totals", section: "reports.itogi_vizitov", export: true }
 ];

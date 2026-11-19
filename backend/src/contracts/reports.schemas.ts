@@ -32,6 +32,8 @@ import { parseCumulativeBonusQuery } from "../modules/reports/cumulative-bonus.s
 import type { CumulativeBonusFilters } from "../modules/reports/cumulative-bonus.service";
 import { parseVisitsReportQuery } from "../modules/reports/visits-report.service";
 import type { VisitsReportFilters } from "../modules/reports/visits-report.service";
+import { parseDailyVisitsReportQuery } from "../modules/reports/daily-visits-report.service";
+import type { DailyVisitsReportFilters } from "../modules/reports/daily-visits-report.service";
 import { parseOrderDebtsListQuery } from "../modules/reports/order-debts-report.service";
 import type { OrderDebtsListQuery } from "../modules/reports/order-debts-report.service";
 import { parseProductSalesReportQuery } from "../modules/reports/product-sales-report.service";
@@ -274,6 +276,12 @@ export const cumulativeBonusQuerySchema = queryRecord.transform((q) =>
 export type { VisitsReportFilters };
 export const visitsReportQuerySchema = queryRecord.transform((q) =>
   parseVisitsReportQuery(q as Record<string, string | undefined>)
+);
+
+/** GET `/api/:slug/reports/daily-visits` */
+export type { DailyVisitsReportFilters };
+export const dailyVisitsReportQuerySchema = queryRecord.transform((q) =>
+  parseDailyVisitsReportQuery(q as Record<string, string | undefined>)
 );
 
 /** GET `/api/:slug/reports/visits-2` */
