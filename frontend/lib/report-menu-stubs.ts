@@ -3,7 +3,6 @@ export const REPORT_MENU_STUBS: Array<{ slug: string; label: string }> = [
   { slug: "feedback", label: "Отчёт обратной связи (бот акт сверки)" },
   { slug: "nr", label: "НР отчёты" },
   { slug: "tare", label: "По тарам" },
-  { slug: "expeditor-visits", label: "Визиты экспедиторов" },
   { slug: "universal-returns", label: "Универсальный отчет по возвратам" },
   { slug: "universal-bonuses", label: "Универсальный отчет по бонусам" },
   { slug: "universal-visits", label: "Универсальный отчет по посещениям" },
