@@ -48,6 +48,12 @@ import { parseUniversalBonusesReportQuery } from "../modules/reports/universal-b
 import type { UniversalBonusesReportFilters } from "../modules/reports/universal-bonuses-report.service";
 import { parseUniversalVisitsReportQuery } from "../modules/reports/universal-visits-report.service";
 import type { UniversalVisitsReportFilters } from "../modules/reports/universal-visits-report.service";
+import { parseUniversalSalesReportQuery } from "../modules/reports/universal-sales-report.service";
+import type { UniversalSalesReportFilters } from "../modules/reports/universal-sales-report.service";
+import { parseDiscountDetailReportQuery } from "../modules/reports/discount-detail-report.service";
+import type { DiscountDetailReportFilters } from "../modules/reports/discount-detail-report.service";
+import { parseUniversalDiscountsReportQuery } from "../modules/reports/universal-discounts-report.service";
+import type { UniversalDiscountsReportFilters } from "../modules/reports/universal-discounts-report.service";
 import { parseOrderDebtsListQuery } from "../modules/reports/order-debts-report.service";
 import type { OrderDebtsListQuery } from "../modules/reports/order-debts-report.service";
 import { parseProductSalesReportQuery } from "../modules/reports/product-sales-report.service";
@@ -346,6 +352,24 @@ export const universalBonusesReportQuerySchema = queryRecord.transform((q) =>
 export type { UniversalVisitsReportFilters };
 export const universalVisitsReportQuerySchema = queryRecord.transform((q) =>
   parseUniversalVisitsReportQuery(q as Record<string, string | undefined>)
+);
+
+/** GET `/api/:slug/reports/universal-sales` */
+export type { UniversalSalesReportFilters };
+export const universalSalesReportQuerySchema = queryRecord.transform((q) =>
+  parseUniversalSalesReportQuery(q as Record<string, string | undefined>)
+);
+
+/** GET `/api/:slug/reports/discount-detail` */
+export type { DiscountDetailReportFilters };
+export const discountDetailReportQuerySchema = queryRecord.transform((q) =>
+  parseDiscountDetailReportQuery(q as Record<string, string | undefined>)
+);
+
+/** GET `/api/:slug/reports/universal-discounts` */
+export type { UniversalDiscountsReportFilters };
+export const universalDiscountsReportQuerySchema = queryRecord.transform((q) =>
+  parseUniversalDiscountsReportQuery(q as Record<string, string | undefined>)
 );
 
 /** GET `/api/:slug/reports/visits-2` */

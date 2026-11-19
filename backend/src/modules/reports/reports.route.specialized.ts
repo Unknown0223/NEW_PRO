@@ -64,6 +64,9 @@ import { registerRfmReportRoutes } from "./reports.route.rfm";
 import { registerUniversalReturnsReportRoutes } from "./reports.route.universal-returns";
 import { registerUniversalBonusesReportRoutes } from "./reports.route.universal-bonuses";
 import { registerUniversalVisitsReportRoutes } from "./reports.route.universal-visits";
+import { registerUniversalSalesReportRoutes } from "./reports.route.universal-sales";
+import { registerDiscountDetailReportRoutes } from "./reports.route.discount-detail";
+import { registerUniversalDiscountsReportRoutes } from "./reports.route.universal-discounts";
 import { registerProductSalesReportRoutes } from "./reports.route.product-sales";
 import { registerSalesCompareReportRoutes } from "./reports.route.sales-compare";
 import { createReportRouteGuards, parseReportQueryOr400, reportQueryRaw } from "./reports.route.shared";
@@ -89,6 +92,9 @@ export async function registerReportsSpecializedRoutes(app: FastifyInstance, gua
   registerUniversalReturnsReportRoutes(app, guards);
   registerUniversalBonusesReportRoutes(app, guards);
   registerUniversalVisitsReportRoutes(app, guards);
+  registerUniversalSalesReportRoutes(app, guards);
+  registerDiscountDetailReportRoutes(app, guards);
+  registerUniversalDiscountsReportRoutes(app, guards);
   registerProductSalesReportRoutes(app, guards);
   registerSalesCompareReportRoutes(app, guards);
 

@@ -31,6 +31,9 @@ export const REPORT_PAGE_PERMISSIONS: ReadonlyArray<{ path: string; section: str
   { path: "universal-returns", section: "reports.universalnyy_vozvrat", export: true },
   { path: "universal-bonuses", section: "reports.universalnyy_bonus", export: true },
   { path: "universal-visits", section: "reports.universalnyy_vizity", export: true },
+  { path: "universal-sales", section: "reports.universalnyy_prodazhi", export: true },
+  { path: "universal-discounts", section: "reports.universalnyy_skidki", export: true },
+  { path: "discount-detail", section: "reports.detalnyy_skidki", export: true },
   { path: "visits-2", section: "reports.vizity", export: true },
   { path: "visit-totals", section: "reports.itogi_vizitov", export: true }
 ];

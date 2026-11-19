@@ -572,6 +572,21 @@ export const dashboardReportsNav: { sectionTitle: string; items: NavItem[] } = {
       label: "Универсальный отчет по посещениям",
       showIfAnyPermission: [...NAV_PERM.reportUniversalVisits]
     },
+    {
+      href: "/reports/universal-sales",
+      label: "Универсальный отчёт по продажам",
+      showIfAnyPermission: [...NAV_PERM.reportUniversalSales]
+    },
+    {
+      href: "/reports/universal-discounts",
+      label: "Универсальный отчет по скидкам",
+      showIfAnyPermission: [...NAV_PERM.reportUniversalDiscounts]
+    },
+    {
+      href: "/reports/discount-detail",
+      label: "Детальный отчет по скидкам",
+      showIfAnyPermission: [...NAV_PERM.reportDiscountDetail]
+    },
     { href: "/reports/visits-2", label: "По визитам 2.0", showIfAnyPermission: [...NAV_PERM.reportVisits2] },
     { href: "/reports/visit-totals", label: "Итоги визитов", showIfAnyPermission: [...NAV_PERM.reportVisitTotals] },
     {
