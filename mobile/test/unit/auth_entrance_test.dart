@@ -5,7 +5,8 @@ void main() {
   test('authEntranceWaveTop matches AuthScreen stage tops', () {
     expect(authEntranceWaveTop(AuthEntranceStage.launch), 1.0);
     expect(authEntranceWaveTop(AuthEntranceStage.form), 0.71);
-    expect(authEntranceWaveTop(AuthEntranceStage.cover), 0.0);
+    // Cover: CSS `-160px` ≈ −0.18 viewport overshoot.
+    expect(authEntranceWaveTop(AuthEntranceStage.cover), -0.18);
   });
 
   test('authEntranceLaunchHold matches AuthScreen 1600ms', () {

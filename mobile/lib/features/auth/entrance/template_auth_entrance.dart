@@ -3,10 +3,11 @@ import 'package:flutter/material.dart';
 /// Shablon AuthScreen kirish bosqichlari — faqat ilova ochilishi.
 enum AuthEntranceStage { launch, form, cover }
 
+/// CSS: launch 100%, form 71%, cover `-160px` ≈ −0.18 viewport.
 double authEntranceWaveTop(AuthEntranceStage stage) => switch (stage) {
       AuthEntranceStage.launch => 1.0,
       AuthEntranceStage.form => 0.71,
-      AuthEntranceStage.cover => 0.0,
+      AuthEntranceStage.cover => -0.18,
     };
 
 const Duration authEntranceLaunchHold = Duration(milliseconds: 1600);
@@ -258,30 +259,34 @@ class _AuthBrandWaveState extends State<AuthBrandWave>
 
   @override
   Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: _top,
-      builder: (context, _) {
-        final top = _top.value.clamp(0.0, 1.0);
-        final heightFactor = (1.0 - top).clamp(0.0, 1.0);
-        if (heightFactor <= 0.001) return const SizedBox.shrink();
-        return Align(
-          alignment: Alignment.bottomCenter,
-          child: FractionallySizedBox(
-            widthFactor: 1,
-            heightFactor: heightFactor,
-            alignment: Alignment.bottomCenter,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                SizedBox(
-                  height: 72,
-                  width: double.infinity,
-                  child: CustomPaint(painter: _WavePainter()),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        return AnimatedBuilder(
+          animation: _top,
+          builder: (context, _) {
+            // Cover overshoot: top < 0 → height > parent (shablon −160px).
+            final fill = (1.0 - _top.value).clamp(0.0, 1.25);
+            if (fill <= 0.001) return const SizedBox.shrink();
+            final h = constraints.maxHeight * fill;
+            return Align(
+              alignment: Alignment.bottomCenter,
+              child: SizedBox(
+                width: constraints.maxWidth,
+                height: h,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    SizedBox(
+                      height: 72,
+                      width: double.infinity,
+                      child: CustomPaint(painter: _WavePainter()),
+                    ),
+                    const Expanded(child: ColoredBox(color: _blue)),
+                  ],
                 ),
-                const Expanded(child: ColoredBox(color: _blue)),
-              ],
-            ),
-          ),
+              ),
+            );
+          },
         );
       },
     );

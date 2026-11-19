@@ -11,6 +11,7 @@ import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_typography.dart';
 import '../../core/ui/agent_ui.dart';
 import 'auth_provider.dart';
+import 'entrance/auth_enter.dart';
 import 'entrance/template_auth_entrance.dart';
 
 /// Eski login forma + shablon Auth kirish: launch → form → cover.
@@ -28,6 +29,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   bool _shownInitialError = false;
   AuthEntranceStage _stage = AuthEntranceStage.launch;
   Timer? _launchTimer;
+
+  static const _curve = Cubic(0.16, 0.99, 0.3, 1);
 
   @override
   void initState() {
@@ -124,6 +127,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       resizeToAvoidBottomInset: true,
       body: AuthLaunchZoom(
         child: Stack(
+          clipBehavior: Clip.hardEdge,
           children: [
             const Positioned.fill(
               child: IgnorePointer(
@@ -133,9 +137,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             Positioned.fill(
               child: AuthBrandWave(topFraction: waveTop, animate: true),
             ),
+
+            // Brand lockup — launch markazda → formada tepaga scale.
             AnimatedPositioned(
               duration: const Duration(milliseconds: 550),
-              curve: const Cubic(0.16, 0.99, 0.3, 1),
+              curve: _curve,
               left: 0,
               right: 0,
               top: cover ? h * 0.28 : (launch ? h * 0.32 : 48),
@@ -144,24 +150,31 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 opacity: cover ? 0 : 1,
                 child: AnimatedScale(
                   duration: const Duration(milliseconds: 550),
+                  curve: _curve,
                   scale: launch ? 1 : 0.66,
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       const AuthBrandMark(size: 64, draw: true),
                       const SizedBox(height: 10),
-                      const AuthBrandWordmark(size: 24),
+                      const AuthEnter(
+                        delay: Duration(milliseconds: 40),
+                        child: AuthBrandWordmark(size: 26),
+                      ),
                       AnimatedOpacity(
                         duration: const Duration(milliseconds: 280),
                         opacity: launch ? 1 : 0,
                         child: const Padding(
-                          padding: EdgeInsets.only(top: 10),
-                          child: Text(
-                            'Savdo jamoasi uchun mobil ilova',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: Color(0xFF677386),
-                              fontWeight: FontWeight.w500,
+                          padding: EdgeInsets.only(top: 8),
+                          child: AuthEnter(
+                            delay: Duration(milliseconds: 120),
+                            child: Text(
+                              'Savdo jamoasi uchun mobil ilova',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Color(0xFF677386),
+                                fontWeight: FontWeight.w500,
+                              ),
                             ),
                           ),
                         ),
@@ -171,137 +184,198 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 ),
               ),
             ),
+
             if (form)
               Positioned.fill(
                 child: SafeArea(
-                  child: SingleChildScrollView(
-                    padding: EdgeInsets.fromLTRB(22, 120, 22, bottomInset + 24),
-                    keyboardDismissBehavior:
-                        ScrollViewKeyboardDismissBehavior.onDrag,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        Text(
-                          S.loginTitle,
-                          textAlign: TextAlign.center,
-                          style: AppTypography.bodyMedium
-                              .copyWith(color: AppColors.textMuted),
-                        ),
-                        const SizedBox(height: 18),
-                        // Kartochkasiz forma — shablon Auth maydonlari.
-                        AgentAuthTextField(
-                          controller: _slug,
-                          enabled: !loading,
-                          label: S.companySlug,
-                          hint: S.companyHint,
-                        ),
-                        const SizedBox(height: 14),
-                        AgentAuthTextField(
-                          controller: _login,
-                          enabled: !loading,
-                          label: S.login,
-                          hint: S.loginHint,
-                        ),
-                        const SizedBox(height: 14),
-                        AgentAuthTextField(
-                          controller: _pass,
-                          enabled: !loading,
-                          label: S.password,
-                          hint: '••••••••',
-                          obscureText: _obscure,
-                          onSubmitted: (_) => _submit(),
-                          suffix: IconButton(
-                            icon: Icon(
-                              _obscure
-                                  ? Icons.visibility_off_rounded
-                                  : Icons.visibility_rounded,
-                              color: AppColors.textMuted,
-                              size: 20,
-                            ),
-                            onPressed: () =>
-                                setState(() => _obscure = !_obscure),
+                  child: Column(
+                    children: [
+                      Expanded(
+                        child: SingleChildScrollView(
+                          padding: EdgeInsets.fromLTRB(
+                            24,
+                            132,
+                            24,
+                            16 + bottomInset,
                           ),
-                        ),
-                        const SizedBox(height: 20),
-                        AgentPrimaryButton(
-                          label: S.signIn,
-                          height: 52,
-                          borderRadius: 14,
-                          onPressed: loading ? null : _submit,
-                        ),
-                        if (loading) ...[
-                          const SizedBox(height: 12),
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
+                          keyboardDismissBehavior:
+                              ScrollViewKeyboardDismissBehavior.onDrag,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
-                              const SizedBox(
-                                width: 16,
-                                height: 16,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: AppColors.primary,
+                              AuthEnter(
+                                delay: const Duration(milliseconds: 40),
+                                child: Text(
+                                  S.loginTitle,
+                                  textAlign: TextAlign.center,
+                                  style: AppTypography.bodyMedium
+                                      .copyWith(color: AppColors.textMuted),
                                 ),
                               ),
-                              const SizedBox(width: 8),
+                              const SizedBox(height: 16),
+                              AuthEnter(
+                                delay: const Duration(milliseconds: 80),
+                                child: AgentAuthTextField(
+                                  controller: _slug,
+                                  enabled: !loading,
+                                  label: S.companySlug,
+                                  hint: S.companyHint,
+                                ),
+                              ),
+                              const SizedBox(height: 12),
+                              AuthEnter(
+                                delay: const Duration(milliseconds: 140),
+                                child: AgentAuthTextField(
+                                  controller: _login,
+                                  enabled: !loading,
+                                  label: S.login,
+                                  hint: S.loginHint,
+                                ),
+                              ),
+                              const SizedBox(height: 12),
+                              AuthEnter(
+                                delay: const Duration(milliseconds: 200),
+                                child: AgentAuthTextField(
+                                  controller: _pass,
+                                  enabled: !loading,
+                                  label: S.password,
+                                  hint: '••••••••',
+                                  obscureText: _obscure,
+                                  onSubmitted: (_) => _submit(),
+                                  suffix: IconButton(
+                                    icon: Icon(
+                                      _obscure
+                                          ? Icons.visibility_off_rounded
+                                          : Icons.visibility_rounded,
+                                      color: AppColors.textMuted,
+                                      size: 20,
+                                    ),
+                                    onPressed: () =>
+                                        setState(() => _obscure = !_obscure),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(height: 18),
+                              AuthEnter(
+                                delay: const Duration(milliseconds: 280),
+                                child: AgentPrimaryButton(
+                                  label: S.signIn,
+                                  height: 52,
+                                  borderRadius: 14,
+                                  onPressed: loading ? null : _submit,
+                                ),
+                              ),
+                              if (loading) ...[
+                                const SizedBox(height: 12),
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    const SizedBox(
+                                      width: 16,
+                                      height: 16,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        color: AppColors.primary,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Text(
+                                      S.connecting,
+                                      style: AppTypography.captionSmall
+                                          .copyWith(color: AppColors.textMuted),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                              if (kDebugMode || isLocalApiEnv()) ...[
+                                const SizedBox(height: 12),
+                                Text(
+                                  apiEnvDisplayLabel(),
+                                  textAlign: TextAlign.center,
+                                  style: AppTypography.captionSmall
+                                      .copyWith(color: Colors.orange.shade800),
+                                ),
+                              ],
+                              const SizedBox(height: 100),
+                            ],
+                          ),
+                        ),
+                      ),
+                      // To‘lqin ustidagi footer (shablon Auth form).
+                      AuthEnter(
+                        delay: const Duration(milliseconds: 320),
+                        child: Padding(
+                          padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
+                          child: Column(
+                            children: [
+                              Text.rich(
+                                TextSpan(
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    color: Colors.white.withValues(alpha: 0.85),
+                                  ),
+                                  children: const [
+                                    TextSpan(text: 'Hisobingiz yo‘qmi? '),
+                                    TextSpan(
+                                      text: 'Administratorga murojaat qiling.',
+                                      style: TextStyle(
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.w800,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                textAlign: TextAlign.center,
+                              ),
+                              const SizedBox(height: 6),
                               Text(
-                                S.connecting,
-                                style: AppTypography.captionSmall
-                                    .copyWith(color: AppColors.textMuted),
-                              ),
-                            ],
-                          ),
-                        ],
-                        const SizedBox(height: 12),
-                        Text.rich(
-                          TextSpan(
-                            text: '${S.help} · ',
-                            style: AppTypography.captionSmall
-                                .copyWith(color: AppColors.textMuted),
-                            children: [
-                              TextSpan(
-                                text: S.support,
-                                style: AppTypography.captionSmall.copyWith(
-                                  color: AppColors.primary,
+                                '${S.help} · ${S.support}',
+                                style: TextStyle(
+                                  fontSize: 11,
                                   fontWeight: FontWeight.w700,
+                                  color: Colors.white.withValues(alpha: 0.95),
+                                  decoration: TextDecoration.underline,
+                                  decorationColor: Colors.white70,
                                 ),
                               ),
                             ],
                           ),
                         ),
-                        if (kDebugMode || isLocalApiEnv()) ...[
-                          const SizedBox(height: 16),
-                          Text(
-                            apiEnvDisplayLabel(),
-                            textAlign: TextAlign.center,
-                            style: AppTypography.captionSmall
-                                .copyWith(color: Colors.orange.shade800),
-                          ),
-                        ],
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
                 ),
               ),
+
             if (cover)
               Positioned.fill(
                 child: IgnorePointer(
                   child: Center(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const AuthBrandMark(size: 72, bare: true, draw: false),
-                        const SizedBox(height: 8),
-                        const AuthBrandWordmark(size: 22, onBrand: true),
-                        const SizedBox(height: 12),
-                        Text(
-                          loading ? 'Kirish tasdiqlandi…' : 'Kirish tasdiqlandi',
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            color: Colors.white.withValues(alpha: 0.85),
+                    child: AuthEnter(
+                      delay: const Duration(milliseconds: 120),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const AuthBrandMark(
+                            size: 72,
+                            bare: true,
+                            draw: false,
                           ),
-                        ),
-                      ],
+                          const SizedBox(height: 8),
+                          const AuthBrandWordmark(size: 22, onBrand: true),
+                          const SizedBox(height: 12),
+                          Text(
+                            loading
+                                ? 'Kirish tasdiqlandi…'
+                                : 'Kirish tasdiqlandi',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.white.withValues(alpha: 0.85),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ),
