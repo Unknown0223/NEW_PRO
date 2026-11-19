@@ -558,9 +558,19 @@ export const dashboardReportsNav: { sectionTitle: string; items: NavItem[] } = {
       showIfAnyPermission: [...NAV_PERM.reportExpeditorVisits]
     },
     {
+      href: "/reports/expeditor-share",
+      label: "Доли по экспедиторам",
+      showIfAnyPermission: [...NAV_PERM.reportExpeditorShare]
+    },
+    {
       href: "/reports/rfm",
       label: "RFM",
       showIfAnyPermission: [...NAV_PERM.reportRfm]
+    },
+    {
+      href: "/reports/balance-control",
+      label: "Контроль балансов",
+      showIfAnyPermission: [...NAV_PERM.reportBalanceControl]
     },
     {
       href: "/reports/universal-returns",
