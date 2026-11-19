@@ -36,6 +36,8 @@ import { parseDailyVisitsReportQuery } from "../modules/reports/daily-visits-rep
 import type { DailyVisitsReportFilters } from "../modules/reports/daily-visits-report.service";
 import { parsePricesReportQuery } from "../modules/reports/prices-report.service";
 import type { PricesReportFilters } from "../modules/reports/prices-report.service";
+import { parseOutletClassReportQuery } from "../modules/reports/outlet-class-report.service";
+import type { OutletClassReportFilters } from "../modules/reports/outlet-class-report.service";
 import { parseOrderDebtsListQuery } from "../modules/reports/order-debts-report.service";
 import type { OrderDebtsListQuery } from "../modules/reports/order-debts-report.service";
 import { parseProductSalesReportQuery } from "../modules/reports/product-sales-report.service";
@@ -290,6 +292,12 @@ export const dailyVisitsReportQuerySchema = queryRecord.transform((q) =>
 export type { PricesReportFilters };
 export const pricesReportQuerySchema = queryRecord.transform((q) =>
   parsePricesReportQuery(q as Record<string, string | undefined>)
+);
+
+/** GET `/api/:slug/reports/outlet-class` */
+export type { OutletClassReportFilters };
+export const outletClassReportQuerySchema = queryRecord.transform((q) =>
+  parseOutletClassReportQuery(q as Record<string, string | undefined>)
 );
 
 /** GET `/api/:slug/reports/visits-2` */
