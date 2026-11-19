@@ -1,5 +1,5 @@
 @echo off
 chcp 65001 >nul
-REM Asosiy mobil = SalesDoc Legacy (mobile_legacy). Redesign: mobile\start-mobile.cmd
-cd /d "%~dp0mobile_legacy"
+REM Asosiy mobil = mobile\ (bitta ilova). Legacy yo‘q.
+cd /d "%~dp0mobile"
 call start-mobile.cmd

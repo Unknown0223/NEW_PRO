@@ -188,86 +188,81 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                               .copyWith(color: AppColors.textMuted),
                         ),
                         const SizedBox(height: 18),
-                        AgentOnboardingCard(
-                          child: Column(
+                        // Kartochkasiz forma — shablon Auth maydonlari.
+                        AgentAuthTextField(
+                          controller: _slug,
+                          enabled: !loading,
+                          label: S.companySlug,
+                          hint: S.companyHint,
+                        ),
+                        const SizedBox(height: 14),
+                        AgentAuthTextField(
+                          controller: _login,
+                          enabled: !loading,
+                          label: S.login,
+                          hint: S.loginHint,
+                        ),
+                        const SizedBox(height: 14),
+                        AgentAuthTextField(
+                          controller: _pass,
+                          enabled: !loading,
+                          label: S.password,
+                          hint: '••••••••',
+                          obscureText: _obscure,
+                          onSubmitted: (_) => _submit(),
+                          suffix: IconButton(
+                            icon: Icon(
+                              _obscure
+                                  ? Icons.visibility_off_rounded
+                                  : Icons.visibility_rounded,
+                              color: AppColors.textMuted,
+                              size: 20,
+                            ),
+                            onPressed: () =>
+                                setState(() => _obscure = !_obscure),
+                          ),
+                        ),
+                        const SizedBox(height: 20),
+                        AgentPrimaryButton(
+                          label: S.signIn,
+                          height: 52,
+                          borderRadius: 14,
+                          onPressed: loading ? null : _submit,
+                        ),
+                        if (loading) ...[
+                          const SizedBox(height: 12),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              AgentAuthTextField(
-                                controller: _slug,
-                                enabled: !loading,
-                                label: S.companySlug,
-                                hint: S.companyHint,
-                              ),
-                              const SizedBox(height: 16),
-                              AgentAuthTextField(
-                                controller: _login,
-                                enabled: !loading,
-                                label: S.login,
-                                hint: S.loginHint,
-                              ),
-                              const SizedBox(height: 16),
-                              AgentAuthTextField(
-                                controller: _pass,
-                                enabled: !loading,
-                                label: S.password,
-                                hint: '••••••••',
-                                obscureText: _obscure,
-                                onSubmitted: (_) => _submit(),
-                                suffix: IconButton(
-                                  icon: Icon(
-                                    _obscure
-                                        ? Icons.visibility_off_rounded
-                                        : Icons.visibility_rounded,
-                                    color: AppColors.textMuted,
-                                    size: 20,
-                                  ),
-                                  onPressed: () =>
-                                      setState(() => _obscure = !_obscure),
+                              const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: AppColors.primary,
                                 ),
                               ),
-                              const SizedBox(height: 20),
-                              AgentPrimaryButton(
-                                label: S.signIn,
-                                height: 52,
-                                borderRadius: 14,
-                                onPressed: loading ? null : _submit,
+                              const SizedBox(width: 8),
+                              Text(
+                                S.connecting,
+                                style: AppTypography.captionSmall
+                                    .copyWith(color: AppColors.textMuted),
                               ),
-                              if (loading) ...[
-                                const SizedBox(height: 12),
-                                Row(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    const SizedBox(
-                                      width: 16,
-                                      height: 16,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2,
-                                        color: AppColors.primary,
-                                      ),
-                                    ),
-                                    const SizedBox(width: 8),
-                                    Text(
-                                      S.connecting,
-                                      style: AppTypography.captionSmall
-                                          .copyWith(color: AppColors.textMuted),
-                                    ),
-                                  ],
-                                ),
-                              ],
-                              const SizedBox(height: 12),
-                              Text.rich(
-                                TextSpan(
-                                  text: '${S.help} · ',
-                                  style: AppTypography.captionSmall
-                                      .copyWith(color: AppColors.textMuted),
-                                  children: [
-                                    TextSpan(
-                                      text: S.support,
-                                      style: AppTypography.captionSmall.copyWith(
-                                        color: AppColors.primary,
-                                        fontWeight: FontWeight.w700,
-                                      ),
-                                    ),
-                                  ],
+                            ],
+                          ),
+                        ],
+                        const SizedBox(height: 12),
+                        Text.rich(
+                          TextSpan(
+                            text: '${S.help} · ',
+                            style: AppTypography.captionSmall
+                                .copyWith(color: AppColors.textMuted),
+                            children: [
+                              TextSpan(
+                                text: S.support,
+                                style: AppTypography.captionSmall.copyWith(
+                                  color: AppColors.primary,
+                                  fontWeight: FontWeight.w700,
                                 ),
                               ),
                             ],
