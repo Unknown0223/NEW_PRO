@@ -2,7 +2,6 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import type {
   ExpeditorReturnsFilters,
   OrderQtyFilters,
-  ProductSalesReportFilters,
   ShelfReturnsFilters,
   Visits2Filters,
   VisitTotalsFilters
@@ -10,7 +9,6 @@ import type {
 import {
   expeditorReturnsQuerySchema,
   orderQtyQuerySchema,
-  productSalesReportQuerySchema,
   shelfReturnsQuerySchema,
   visits2QuerySchema,
   visitTotalsQuerySchema
@@ -35,11 +33,6 @@ import {
   getOrderQtyFilterOptions,
   getOrderQtyReport
 } from "./order-qty-report.service";
-import {
-  exportProductSalesReportXlsx,
-  getProductSalesReport,
-  getProductSalesReportFilterOptions
-} from "./product-sales-report.service";
 import {
   exportVisitTotalsXlsx,
   getVisitTotalsFilterOptions,
@@ -68,6 +61,9 @@ import { registerPricesReportRoutes } from "./reports.route.prices";
 import { registerOutletClassReportRoutes } from "./reports.route.outlet-class";
 import { registerExpeditorVisitsReportRoutes } from "./reports.route.expeditor-visits";
 import { registerUniversalReturnsReportRoutes } from "./reports.route.universal-returns";
+import { registerUniversalBonusesReportRoutes } from "./reports.route.universal-bonuses";
+import { registerUniversalVisitsReportRoutes } from "./reports.route.universal-visits";
+import { registerProductSalesReportRoutes } from "./reports.route.product-sales";
 import { createReportRouteGuards, parseReportQueryOr400, reportQueryRaw } from "./reports.route.shared";
 
 export async function registerReportsSpecializedRoutes(app: FastifyInstance, guards: ReturnType<typeof createReportRouteGuards> = createReportRouteGuards()) {
@@ -88,49 +84,9 @@ export async function registerReportsSpecializedRoutes(app: FastifyInstance, gua
   registerOutletClassReportRoutes(app, guards);
   registerExpeditorVisitsReportRoutes(app, guards);
   registerUniversalReturnsReportRoutes(app, guards);
-
-  app.get("/api/:slug/reports/product-sales/filter-options", { preHandler: reportViewPreHandler }, async (request, reply) => {
-    if (!ensureTenantContext(request, reply)) return;
-    const u = getAccessUser(request);
-    const data = await getProductSalesReportFilterOptions(request.tenant!.id, {
-      userId: actorUserIdOrNull(request),
-      role: u.role
-    });
-    return reply.send({ data });
-  });
-
-  app.get("/api/:slug/reports/product-sales/export", { preHandler: reportExportPreHandler }, async (request, reply) => {
-    if (!ensureTenantContext(request, reply)) return;
-    const q = request.query as Record<string, string | undefined>;
-    const u = getAccessUser(request);
-    const { buffer, total, truncated } = await exportProductSalesReportXlsx(request.tenant!.id, q, {
-      userId: actorUserIdOrNull(request),
-      role: u.role
-    });
-    return reply
-      .header("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
-      .header("Content-Disposition", 'attachment; filename="prodazhi-po-tovaram.xlsx"')
-      .header("X-Export-Truncated", truncated ? "1" : "0")
-      .header("X-Export-Total", String(total))
-      .send(buffer);
-  });
-
-  app.get("/api/:slug/reports/product-sales", { preHandler: reportViewPreHandler }, async (request, reply) => {
-    if (!ensureTenantContext(request, reply)) return;
-    const q = parseReportQueryOr400<ProductSalesReportFilters>(
-      reply,
-      request,
-      productSalesReportQuerySchema,
-      reportQueryRaw(request)
-    );
-    if (!q) return;
-    const u = getAccessUser(request);
-    const data = await getProductSalesReport(request.tenant!.id, q, {
-      userId: actorUserIdOrNull(request),
-      role: u.role
-    });
-    return reply.send({ data });
-  });
+  registerUniversalBonusesReportRoutes(app, guards);
+  registerUniversalVisitsReportRoutes(app, guards);
+  registerProductSalesReportRoutes(app, guards);
 
   app.get("/api/:slug/reports/expeditor-returns/filter-options", { preHandler: reportViewPreHandler }, async (request, reply) => {
     if (!ensureTenantContext(request, reply)) return;

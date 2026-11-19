@@ -27,6 +27,8 @@ export const REPORT_PAGE_PERMISSIONS: ReadonlyArray<{ path: string; section: str
   { path: "outlet-class", section: "reports.klassifikatsiya_tt", export: true },
   { path: "expeditor-visits", section: "reports.vizity_ekspedirov", export: true },
   { path: "universal-returns", section: "reports.universalnyy_vozvrat", export: true },
+  { path: "universal-bonuses", section: "reports.universalnyy_bonus", export: true },
+  { path: "universal-visits", section: "reports.universalnyy_vizity", export: true },
   { path: "visits-2", section: "reports.vizity", export: true },
   { path: "visit-totals", section: "reports.itogi_vizitov", export: true }
 ];

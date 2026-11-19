@@ -91,6 +91,8 @@ export const NAV_PERM = {
   reportOutletClass: ["reports.klassifikatsiya_tt.view"],
   reportExpeditorVisits: ["reports.vizity_ekspedirov.view"],
   reportUniversalReturns: ["reports.universalnyy_vozvrat.view"],
+  reportUniversalBonuses: ["reports.universalnyy_bonus.view"],
+  reportUniversalVisits: ["reports.universalnyy_vizity.view"],
   reportVisits2: ["reports.vizity.view"],
   reportVisitTotals: ["reports.itogi_vizitov.view"],
   /** Istalgan hisobot — «Настройки отчетов» (shaxsiy menyu) uchun. */
@@ -119,6 +121,8 @@ export const NAV_PERM = {
     "reports.klassifikatsiya_tt.view",
     "reports.vizity_ekspedirov.view",
     "reports.universalnyy_vozvrat.view",
+    "reports.universalnyy_bonus.view",
+    "reports.universalnyy_vizity.view",
     "reports.vizity.view",
     "reports.itogi_vizitov.view",
     "reports.dnevnye_kpi_plany.view",
