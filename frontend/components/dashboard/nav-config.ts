@@ -474,6 +474,11 @@ export const dashboardReportsNav: { sectionTitle: string; items: NavItem[] } = {
       showIfAnyPermission: [...NAV_PERM.reportClientSales4]
     },
     { href: "/reports/product-sales", label: "Продажи по товарам", showIfAnyPermission: [...NAV_PERM.reportProductSales] },
+    {
+      href: "/reports/sales-compare",
+      label: "Сравнительный анализ продаж",
+      showIfAnyPermission: [...NAV_PERM.reportSalesCompare]
+    },
     { href: "/reports/p1", label: "P1 отчёт", showIfAnyPermission: [...NAV_PERM.reportP1] },
     {
       href: "/reports/expeditor-returns",
@@ -551,6 +556,11 @@ export const dashboardReportsNav: { sectionTitle: string; items: NavItem[] } = {
       href: "/reports/expeditor-visits",
       label: "Визиты экспедиторов",
       showIfAnyPermission: [...NAV_PERM.reportExpeditorVisits]
+    },
+    {
+      href: "/reports/rfm",
+      label: "RFM",
+      showIfAnyPermission: [...NAV_PERM.reportRfm]
     },
     {
       href: "/reports/universal-returns",

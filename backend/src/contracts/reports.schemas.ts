@@ -40,6 +40,8 @@ import { parseOutletClassReportQuery } from "../modules/reports/outlet-class-rep
 import type { OutletClassReportFilters } from "../modules/reports/outlet-class-report.service";
 import { parseExpeditorVisitsReportQuery } from "../modules/reports/expeditor-visits-report.service";
 import type { ExpeditorVisitsReportFilters } from "../modules/reports/expeditor-visits-report.service";
+import { parseRfmReportQuery } from "../modules/reports/rfm-report.service";
+import type { RfmReportFilters } from "../modules/reports/rfm-report.service";
 import { parseUniversalReturnsReportQuery } from "../modules/reports/universal-returns-report.service";
 import type { UniversalReturnsReportFilters } from "../modules/reports/universal-returns-report.service";
 import { parseUniversalBonusesReportQuery } from "../modules/reports/universal-bonuses-report.service";
@@ -50,6 +52,8 @@ import { parseOrderDebtsListQuery } from "../modules/reports/order-debts-report.
 import type { OrderDebtsListQuery } from "../modules/reports/order-debts-report.service";
 import { parseProductSalesReportQuery } from "../modules/reports/product-sales-report.service";
 import type { ProductSalesReportFilters } from "../modules/reports/product-sales-report.service";
+import { parseSalesCompareReportQuery } from "../modules/reports/sales-compare-report.service";
+import type { SalesCompareReportFilters } from "../modules/reports/sales-compare-report.service";
 import { parseVisits2Query } from "../modules/reports/visits-2-report.service";
 import type { Visits2Filters } from "../modules/reports/visits-2-report.service";
 import { parseVisitTotalsQuery } from "../modules/reports/visit-totals-report.service";
@@ -218,6 +222,12 @@ export const productSalesReportQuerySchema = queryRecord.transform((q) =>
   parseProductSalesReportQuery(q as Record<string, string | undefined>)
 );
 
+/** GET `/api/:slug/reports/sales-compare` */
+export type { SalesCompareReportFilters };
+export const salesCompareReportQuerySchema = queryRecord.transform((q) =>
+  parseSalesCompareReportQuery(q as Record<string, string | undefined>)
+);
+
 /** GET `/api/:slug/reports/expeditor-returns/*` */
 export type { ExpeditorReturnsFilters };
 export const expeditorReturnsQuerySchema = queryRecord.transform((q) =>
@@ -312,6 +322,12 @@ export const outletClassReportQuerySchema = queryRecord.transform((q) =>
 export type { ExpeditorVisitsReportFilters };
 export const expeditorVisitsReportQuerySchema = queryRecord.transform((q) =>
   parseExpeditorVisitsReportQuery(q as Record<string, string | undefined>)
+);
+
+/** GET `/api/:slug/reports/rfm` */
+export type { RfmReportFilters };
+export const rfmReportQuerySchema = queryRecord.transform((q) =>
+  parseRfmReportQuery(q as Record<string, string | undefined>)
 );
 
 /** GET `/api/:slug/reports/universal-returns` */

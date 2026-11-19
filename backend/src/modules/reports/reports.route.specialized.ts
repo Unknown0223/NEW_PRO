@@ -60,10 +60,12 @@ import { registerDailyVisitsReportRoutes } from "./reports.route.daily-visits";
 import { registerPricesReportRoutes } from "./reports.route.prices";
 import { registerOutletClassReportRoutes } from "./reports.route.outlet-class";
 import { registerExpeditorVisitsReportRoutes } from "./reports.route.expeditor-visits";
+import { registerRfmReportRoutes } from "./reports.route.rfm";
 import { registerUniversalReturnsReportRoutes } from "./reports.route.universal-returns";
 import { registerUniversalBonusesReportRoutes } from "./reports.route.universal-bonuses";
 import { registerUniversalVisitsReportRoutes } from "./reports.route.universal-visits";
 import { registerProductSalesReportRoutes } from "./reports.route.product-sales";
+import { registerSalesCompareReportRoutes } from "./reports.route.sales-compare";
 import { createReportRouteGuards, parseReportQueryOr400, reportQueryRaw } from "./reports.route.shared";
 
 export async function registerReportsSpecializedRoutes(app: FastifyInstance, guards: ReturnType<typeof createReportRouteGuards> = createReportRouteGuards()) {
@@ -83,10 +85,12 @@ export async function registerReportsSpecializedRoutes(app: FastifyInstance, gua
   registerPricesReportRoutes(app, guards);
   registerOutletClassReportRoutes(app, guards);
   registerExpeditorVisitsReportRoutes(app, guards);
+  registerRfmReportRoutes(app, guards);
   registerUniversalReturnsReportRoutes(app, guards);
   registerUniversalBonusesReportRoutes(app, guards);
   registerUniversalVisitsReportRoutes(app, guards);
   registerProductSalesReportRoutes(app, guards);
+  registerSalesCompareReportRoutes(app, guards);
 
   app.get("/api/:slug/reports/expeditor-returns/filter-options", { preHandler: reportViewPreHandler }, async (request, reply) => {
     if (!ensureTenantContext(request, reply)) return;

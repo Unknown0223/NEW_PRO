@@ -6,10 +6,8 @@ export const REPORT_MENU_STUBS: Array<{ slug: string; label: string }> = [
   { slug: "universal-discounts", label: "Универсальный отчет по скидкам" },
   { slug: "universal-sales", label: "Универсальный отчёт по продажам" },
   { slug: "discount-detail", label: "Детальный отчет по скидкам" },
-  { slug: "rfm", label: "RFM" },
   { slug: "balance-control", label: "Контроль балансов" },
-  { slug: "expeditor-share", label: "Доли по экспедиторам" },
-  { slug: "sales-compare", label: "Сравнительный анализ продаж" }
+  { slug: "expeditor-share", label: "Доли по экспедиторам" }
 ];
 
 export function reportStubTitle(slug: string) {
