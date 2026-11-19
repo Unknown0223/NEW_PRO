@@ -21,6 +21,7 @@ import '../../core/api/expeditor_api.dart';
 import '../../core/api/supervisor_api.dart';
 import '../../features/expeditor/cache/expeditor_deliveries_cache.dart';
 import '../../core/auth/session.dart';
+import '../../design_system/src/widgets/sa_auth_entrance.dart';
 import '../../core/config/app_env.dart';
 import '../../core/config/mobile_config.dart';
 import '../../core/config/mobile_config_policy.dart';
@@ -670,8 +671,8 @@ class AuthNotifier extends StateNotifier<AuthState> {
         state = const AuthState(status: AuthStatus.pinSetup);
         return;
       }
-      // AuthScreen cover flood (~900ms) — login to‘lqini ko‘rinsin, keyin BrandSync.
-      await Future<void>.delayed(const Duration(milliseconds: 900));
+      // AuthScreen cover flood — login to‘lqini ko‘rinsin, keyin BrandSync.
+      await Future<void>.delayed(saAuthEntranceCoverHold);
       if (state.status != AuthStatus.authenticated) return;
       await _bootstrap();
     } on NetworkException {

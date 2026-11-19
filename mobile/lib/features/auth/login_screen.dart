@@ -102,9 +102,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     }
     if (_stage == SaAuthEntranceStage.launch) {
       _launchTimer?.cancel();
+      setState(() => _stage = SaAuthEntranceStage.form);
     }
-    // Cover flood — muvaffaqiyat/loading paytida; xato bo‘lsa formaga qaytadi.
-    setState(() => _stage = SaAuthEntranceStage.cover);
+    // Cover faqat muvaffaqiyatli auth dan keyin (ref.listen) — shablon ketma-ketligi.
     ref.read(authStateProvider.notifier).login(
           slug: _slug.text.trim(),
           login: _login.text.trim(),
@@ -159,11 +159,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         }
         return;
       }
-      // Muvaffaqiyatli auth — cover flood ushlab tursin (loading → authenticated).
-      if (prev?.status == AuthStatus.unauthenticated &&
-          (next.status == AuthStatus.loading ||
-              next.status == AuthStatus.authenticated ||
-              next.status == AuthStatus.bootstrapping) &&
+      // Cover flood — faqat muvaffaqiyatli kirishdan keyin (katalog AuthScreen).
+      if (next.status == AuthStatus.authenticated &&
           _stage != SaAuthEntranceStage.cover) {
         setState(() => _stage = SaAuthEntranceStage.cover);
       }
