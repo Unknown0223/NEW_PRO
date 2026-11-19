@@ -30,8 +30,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   AuthEntranceStage _stage = AuthEntranceStage.launch;
   Timer? _launchTimer;
 
-  static const _curve = Cubic(0.16, 0.99, 0.3, 1);
-
   @override
   void initState() {
     super.initState();
@@ -102,6 +100,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     final waveTop = authEntranceWaveTop(_stage);
     final h = MediaQuery.sizeOf(context).height;
     final bottomInset = MediaQuery.viewInsetsOf(context).bottom;
+    const delays = authEntranceFormDelays;
 
     ref.listen<AuthState>(authStateProvider, (prev, next) {
       if (next.error != null && prev?.error != next.error) {
@@ -138,36 +137,37 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               child: AuthBrandWave(topFraction: waveTop, animate: true),
             ),
 
-            // Brand lockup — launch markazda → formada tepaga scale.
+            // Brand lockup — CSS .sa-logo: top 36%→6%, scale 1→0.66, 0.8s.
             AnimatedPositioned(
-              duration: const Duration(milliseconds: 550),
-              curve: _curve,
+              duration: authEntranceLogoMove,
+              curve: authEntranceCurve,
               left: 0,
               right: 0,
-              top: cover ? h * 0.28 : (launch ? h * 0.32 : 48),
+              top: launch ? h * 0.36 : h * 0.06,
               child: AnimatedOpacity(
-                duration: const Duration(milliseconds: 280),
+                duration: const Duration(milliseconds: 400),
                 opacity: cover ? 0 : 1,
                 child: AnimatedScale(
-                  duration: const Duration(milliseconds: 550),
-                  curve: _curve,
+                  duration: authEntranceLogoMove,
+                  curve: authEntranceCurve,
                   scale: launch ? 1 : 0.66,
+                  alignment: Alignment.topCenter,
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       const AuthBrandMark(size: 64, draw: true),
                       const SizedBox(height: 10),
                       const AuthEnter(
-                        delay: Duration(milliseconds: 40),
+                        delay: authEntranceWordmarkDelay,
                         child: AuthBrandWordmark(size: 26),
                       ),
                       AnimatedOpacity(
-                        duration: const Duration(milliseconds: 280),
+                        duration: const Duration(milliseconds: 500),
                         opacity: launch ? 1 : 0,
                         child: const Padding(
                           padding: EdgeInsets.only(top: 8),
                           child: AuthEnter(
-                            delay: Duration(milliseconds: 120),
+                            delay: authEntranceTaglineDelay,
                             child: Text(
                               'Savdo jamoasi uchun mobil ilova',
                               style: TextStyle(
@@ -187,6 +187,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
             if (form)
               Positioned.fill(
+                key: const ValueKey('auth-form'),
                 child: SafeArea(
                   child: Column(
                     children: [
@@ -214,7 +215,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                               ),
                               const SizedBox(height: 16),
                               AuthEnter(
-                                delay: const Duration(milliseconds: 80),
+                                delay: delays[0],
                                 child: AgentAuthTextField(
                                   controller: _slug,
                                   enabled: !loading,
@@ -224,7 +225,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                               ),
                               const SizedBox(height: 12),
                               AuthEnter(
-                                delay: const Duration(milliseconds: 140),
+                                delay: delays[1],
                                 child: AgentAuthTextField(
                                   controller: _login,
                                   enabled: !loading,
@@ -234,7 +235,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                               ),
                               const SizedBox(height: 12),
                               AuthEnter(
-                                delay: const Duration(milliseconds: 200),
+                                delay: delays[2],
                                 child: AgentAuthTextField(
                                   controller: _pass,
                                   enabled: !loading,
@@ -257,7 +258,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                               ),
                               const SizedBox(height: 18),
                               AuthEnter(
-                                delay: const Duration(milliseconds: 280),
+                                delay: delays[3],
                                 child: AgentPrimaryButton(
                                   label: S.signIn,
                                   height: 52,
@@ -301,9 +302,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           ),
                         ),
                       ),
-                      // To‘lqin ustidagi footer (shablon Auth form).
                       AuthEnter(
-                        delay: const Duration(milliseconds: 320),
+                        delay: delays[4],
                         child: Padding(
                           padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
                           child: Column(
@@ -349,10 +349,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
             if (cover)
               Positioned.fill(
+                key: const ValueKey('auth-cover'),
                 child: IgnorePointer(
                   child: Center(
                     child: AuthEnter(
-                      delay: const Duration(milliseconds: 120),
+                      delay: authEntranceCoverBrandDelay,
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [

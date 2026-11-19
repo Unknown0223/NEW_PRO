@@ -12,6 +12,29 @@ double authEntranceWaveTop(AuthEntranceStage stage) => switch (stage) {
 
 const Duration authEntranceLaunchHold = Duration(milliseconds: 1600);
 const Duration authEntranceCoverHold = Duration(milliseconds: 900);
+const Duration authEntranceAuIn = Duration(milliseconds: 600);
+const Duration authEntranceLaunchZoom = Duration(milliseconds: 750);
+const Duration authEntranceLogoMove = Duration(milliseconds: 800);
+const Duration authEntranceWaveMove = Duration(milliseconds: 900);
+const Duration authEntranceWordmarkDelay = Duration(milliseconds: 650);
+const Duration authEntranceTaglineDelay = Duration(milliseconds: 900);
+const Duration authEntranceCoverBrandDelay = Duration(milliseconds: 380);
+const Duration authEntranceMarkDraw = Duration(milliseconds: 1180);
+
+/// `.au-in` / `.sa-logo` / `.launch-zoom` cubic-bezier(0.16, 1, 0.3, 1)
+const Cubic authEntranceCurve = Cubic(0.16, 1.0, 0.3, 1.0);
+
+/// `.sa-wave` cubic-bezier(0.7, 0, 0.2, 1)
+const Cubic authEntranceWaveCurve = Cubic(0.7, 0.0, 0.2, 1.0);
+
+/// Form au-in ladder (slug → login → pass → button → footer).
+const List<Duration> authEntranceFormDelays = [
+  Duration(milliseconds: 80),
+  Duration(milliseconds: 140),
+  Duration(milliseconds: 200),
+  Duration(milliseconds: 300),
+  Duration(milliseconds: 350),
+];
 
 const Color _navy = Color(0xFF14223F);
 const Color _blue = Color(0xFF1F66D1);
@@ -40,10 +63,7 @@ class _AuthBrandMarkState extends State<AuthBrandMark>
   @override
   void initState() {
     super.initState();
-    _c = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 420),
-    );
+    _c = AnimationController(vsync: this, duration: authEntranceMarkDraw);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       if (!widget.draw) {
@@ -70,7 +90,8 @@ class _AuthBrandMarkState extends State<AuthBrandMark>
         builder: (_, __) => CustomPaint(
           painter: _BrandMarkPainter(
             bare: widget.bare,
-            progress: Curves.easeOutCubic.transform(_c.value),
+            // Timeline matches CSS bm-zig / bm-arrow / bm-head delays.
+            progress: _c.value,
           ),
         ),
       ),
@@ -94,6 +115,8 @@ class _BrandMarkPainter extends CustomPainter {
       canvas.drawRRect(r, Paint()..color = _navy);
     }
 
+    // zig: 0.15s delay + 0.45s draw → ~0.13–0.51 of 1180ms
+    final zigT = ((progress - 0.13) / 0.38).clamp(0.0, 1.0);
     final zig = Paint()
       ..color = Colors.white
       ..style = PaintingStyle.stroke
@@ -105,13 +128,11 @@ class _BrandMarkPainter extends CustomPainter {
       ..lineTo(200 * s, 256 * s)
       ..lineTo(248 * s, 290 * s);
     final zigMetric = zigPath.computeMetrics().first;
-    canvas.drawPath(
-      zigMetric.extractPath(0, zigMetric.length * progress.clamp(0, 1)),
-      zig,
-    );
+    canvas.drawPath(zigMetric.extractPath(0, zigMetric.length * zigT), zig);
 
-    if (progress < 0.35) return;
-    final t = ((progress - 0.35) / 0.65).clamp(0.0, 1.0);
+    // arrow: 0.55s delay + 0.3s → ~0.47–0.72
+    final arrowT = ((progress - 0.47) / 0.25).clamp(0.0, 1.0);
+    if (arrowT <= 0) return;
     final arrowColor = bare ? Colors.white : _blue;
     final arrow = Paint()
       ..color = arrowColor
@@ -120,21 +141,20 @@ class _BrandMarkPainter extends CustomPainter {
       ..strokeCap = StrokeCap.round;
     final p0 = Offset(248 * s, 292 * s);
     final p1 = Offset(336 * s, 194 * s);
-    canvas.drawLine(p0, Offset.lerp(p0, p1, t)!, arrow);
+    canvas.drawLine(p0, Offset.lerp(p0, p1, arrowT)!, arrow);
 
-    if (t > 0.85) {
-      final head = Path()
-        ..moveTo(282 * s, 188 * s)
-        ..lineTo(356 * s, 174 * s)
-        ..lineTo(328 * s, 242 * s)
-        ..close();
-      canvas.drawPath(
-        head,
-        Paint()
-          ..color =
-              arrowColor.withValues(alpha: ((t - 0.85) / 0.15).clamp(0, 1)),
-      );
-    }
+    // head: 0.78s delay + 0.4s → ~0.66–1.0
+    final headT = ((progress - 0.66) / 0.34).clamp(0.0, 1.0);
+    if (headT <= 0) return;
+    final head = Path()
+      ..moveTo(282 * s, 188 * s)
+      ..lineTo(356 * s, 174 * s)
+      ..lineTo(328 * s, 242 * s)
+      ..close();
+    canvas.drawPath(
+      head,
+      Paint()..color = arrowColor.withValues(alpha: headT),
+    );
   }
 
   @override
@@ -192,6 +212,7 @@ class AuthDotGridPainter extends CustomPainter {
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
+/// CSS `.sa-wave`: absolute `top` + h-[150%], transition 0.9s wave curve.
 class AuthBrandWave extends StatefulWidget {
   final double topFraction;
   final bool animate;
@@ -210,30 +231,30 @@ class _AuthBrandWaveState extends State<AuthBrandWave>
     with SingleTickerProviderStateMixin {
   late final AnimationController _c;
   late Animation<double> _top;
+  double _from = 1.0;
+  double _to = 1.0;
 
   @override
   void initState() {
     super.initState();
-    _c = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 900),
-    );
+    _c = AnimationController(vsync: this, duration: authEntranceWaveMove);
     final from = widget.topFraction >= 0.99 ? widget.topFraction : 1.0;
     _bindTween(begin: from, end: widget.topFraction);
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      _run();
+      if (mounted) _run();
     });
   }
 
   void _bindTween({required double begin, required double end}) {
+    _from = begin;
+    _to = end;
     _top = Tween<double>(begin: begin, end: end).animate(
-      CurvedAnimation(parent: _c, curve: const Cubic(0.16, 0.99, 0.3, 1)),
+      CurvedAnimation(parent: _c, curve: authEntranceWaveCurve),
     );
   }
 
   void _run() {
-    if (!widget.animate) {
+    if (!widget.animate || (_from - _to).abs() < 0.0001) {
       _c.value = 1;
       return;
     }
@@ -261,30 +282,32 @@ class _AuthBrandWaveState extends State<AuthBrandWave>
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
+        final h = constraints.maxHeight;
+        final w = constraints.maxWidth;
         return AnimatedBuilder(
           animation: _top,
           builder: (context, _) {
-            // Cover overshoot: top < 0 → height > parent (shablon −160px).
-            final fill = (1.0 - _top.value).clamp(0.0, 1.25);
-            if (fill <= 0.001) return const SizedBox.shrink();
-            final h = constraints.maxHeight * fill;
-            return Align(
-              alignment: Alignment.bottomCenter,
-              child: SizedBox(
-                width: constraints.maxWidth,
-                height: h,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    SizedBox(
-                      height: 72,
-                      width: double.infinity,
-                      child: CustomPaint(painter: _WavePainter()),
-                    ),
-                    const Expanded(child: ColoredBox(color: _blue)),
-                  ],
+            return Stack(
+              clipBehavior: Clip.none,
+              children: [
+                Positioned(
+                  left: 0,
+                  width: w,
+                  top: h * _top.value,
+                  height: h * 1.5,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      SizedBox(
+                        height: 150,
+                        width: w,
+                        child: CustomPaint(painter: _WavePainter()),
+                      ),
+                      const Expanded(child: ColoredBox(color: _blue)),
+                    ],
+                  ),
                 ),
-              ),
+              ],
             );
           },
         );
@@ -336,12 +359,8 @@ class _AuthLaunchZoomState extends State<AuthLaunchZoom>
   @override
   void initState() {
     super.initState();
-    _c = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 420),
-    );
-    final curved =
-        CurvedAnimation(parent: _c, curve: const Cubic(0.16, 0.99, 0.3, 1));
+    _c = AnimationController(vsync: this, duration: authEntranceLaunchZoom);
+    final curved = CurvedAnimation(parent: _c, curve: authEntranceCurve);
     _scale = Tween<double>(begin: 0.7, end: 1).animate(curved);
     _opacity = Tween<double>(begin: 0.2, end: 1).animate(curved);
     WidgetsBinding.instance.addPostFrameCallback((_) {

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
-/// Shablon `au-in` — pastga siljib paydo bo‘lish (+ ixtiyoriy delay).
+import 'template_auth_entrance.dart';
+
+/// Shablon `.au-in` — delay davomida yashirin, keyin 600ms slide/fade.
 class AuthEnter extends StatefulWidget {
   final Widget child;
   final Duration delay;
@@ -18,26 +20,21 @@ class AuthEnter extends StatefulWidget {
 class _AuthEnterState extends State<AuthEnter>
     with SingleTickerProviderStateMixin {
   late final AnimationController _c;
-  bool _ready = false;
+  late final double _start;
 
   @override
   void initState() {
     super.initState();
+    final delayMs = widget.delay.inMilliseconds.clamp(0, 100000);
+    final totalMs = delayMs + authEntranceAuIn.inMilliseconds;
+    _start = totalMs <= 0 ? 0.0 : delayMs / totalMs;
     _c = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 600),
+      duration: Duration(milliseconds: totalMs),
     );
-    WidgetsBinding.instance.addPostFrameCallback((_) => _start());
-  }
-
-  Future<void> _start() async {
-    if (!mounted) return;
-    if (widget.delay > Duration.zero) {
-      await Future<void>.delayed(widget.delay);
-    }
-    if (!mounted) return;
-    setState(() => _ready = true);
-    await _c.forward();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _c.forward();
+    });
   }
 
   @override
@@ -48,15 +45,12 @@ class _AuthEnterState extends State<AuthEnter>
 
   @override
   Widget build(BuildContext context) {
-    if (!_ready && _c.value == 0) {
-      return Opacity(opacity: 0, child: widget.child);
-    }
     return AnimatedBuilder(
       animation: _c,
       builder: (context, child) {
-        final t = const Cubic(0.16, 0.99, 0.3, 1)
-            .transform(_c.value.clamp(0.0, 1.0))
-            .clamp(0.0, 1.0);
+        final span = (1.0 - _start).clamp(0.001, 1.0);
+        final local = ((_c.value - _start) / span).clamp(0.0, 1.0);
+        final t = authEntranceCurve.transform(local);
         return Opacity(
           opacity: t,
           child: Transform.translate(
