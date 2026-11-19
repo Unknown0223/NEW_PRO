@@ -26,6 +26,8 @@ import { parsePhotoReportQuery } from "../modules/reports/photo-report.service";
 import type { PhotoReportFilters } from "../modules/reports/photo-report.service";
 import { parseTasksReportQuery } from "../modules/reports/tasks-report.service";
 import type { TasksReportFilters } from "../modules/reports/tasks-report.service";
+import { parseBonusesReportQuery } from "../modules/reports/bonuses-report.service";
+import type { BonusesReportFilters } from "../modules/reports/bonuses-report.service";
 import { parseOrderDebtsListQuery } from "../modules/reports/order-debts-report.service";
 import type { OrderDebtsListQuery } from "../modules/reports/order-debts-report.service";
 import { parseProductSalesReportQuery } from "../modules/reports/product-sales-report.service";
@@ -250,6 +252,12 @@ export const photoReportQuerySchema = queryRecord.transform((q) =>
 export type { TasksReportFilters };
 export const tasksReportQuerySchema = queryRecord.transform((q) =>
   parseTasksReportQuery(q as Record<string, string | undefined>)
+);
+
+/** GET `/api/:slug/reports/bonuses` */
+export type { BonusesReportFilters };
+export const bonusesReportQuerySchema = queryRecord.transform((q) =>
+  parseBonusesReportQuery(q as Record<string, string | undefined>)
 );
 
 /** GET `/api/:slug/reports/visits-2` */

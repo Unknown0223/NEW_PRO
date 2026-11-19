@@ -19,6 +19,7 @@ export const REPORT_PAGE_PERMISSIONS: ReadonlyArray<{ path: string; section: str
   { path: "inventory", section: "reports.po_inventaryu", export: true },
   { path: "photo", section: "reports.fotootchyoty", export: true },
   { path: "tasks", section: "reports.otchet_po_zadacham", export: true },
+  { path: "bonuses", section: "reports.po_bonusam", export: true },
   { path: "visits-2", section: "reports.vizity", export: true },
   { path: "visit-totals", section: "reports.itogi_vizitov", export: true }
 ];
