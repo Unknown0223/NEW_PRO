@@ -530,6 +530,7 @@ export const dashboardReportsNav: { sectionTitle: string; items: NavItem[] } = {
       label: "Накопительный бонус",
       showIfAnyPermission: [...NAV_PERM.reportCumulativeBonus]
     },
+    { href: "/reports/visits", label: "По визитам", showIfAnyPermission: [...NAV_PERM.reportVisits] },
     { href: "/reports/visits-2", label: "По визитам 2.0", showIfAnyPermission: [...NAV_PERM.reportVisits2] },
     { href: "/reports/visit-totals", label: "Итоги визитов", showIfAnyPermission: [...NAV_PERM.reportVisitTotals] },
     {
