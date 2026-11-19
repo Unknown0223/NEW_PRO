@@ -547,6 +547,11 @@ export const dashboardReportsNav: { sectionTitle: string; items: NavItem[] } = {
       label: "Визиты экспедиторов",
       showIfAnyPermission: [...NAV_PERM.reportExpeditorVisits]
     },
+    {
+      href: "/reports/universal-returns",
+      label: "Универсальный отчет по возвратам",
+      showIfAnyPermission: [...NAV_PERM.reportUniversalReturns]
+    },
     { href: "/reports/visits-2", label: "По визитам 2.0", showIfAnyPermission: [...NAV_PERM.reportVisits2] },
     { href: "/reports/visit-totals", label: "Итоги визитов", showIfAnyPermission: [...NAV_PERM.reportVisitTotals] },
     {

@@ -40,6 +40,8 @@ import { parseOutletClassReportQuery } from "../modules/reports/outlet-class-rep
 import type { OutletClassReportFilters } from "../modules/reports/outlet-class-report.service";
 import { parseExpeditorVisitsReportQuery } from "../modules/reports/expeditor-visits-report.service";
 import type { ExpeditorVisitsReportFilters } from "../modules/reports/expeditor-visits-report.service";
+import { parseUniversalReturnsReportQuery } from "../modules/reports/universal-returns-report.service";
+import type { UniversalReturnsReportFilters } from "../modules/reports/universal-returns-report.service";
 import { parseOrderDebtsListQuery } from "../modules/reports/order-debts-report.service";
 import type { OrderDebtsListQuery } from "../modules/reports/order-debts-report.service";
 import { parseProductSalesReportQuery } from "../modules/reports/product-sales-report.service";
@@ -306,6 +308,12 @@ export const outletClassReportQuerySchema = queryRecord.transform((q) =>
 export type { ExpeditorVisitsReportFilters };
 export const expeditorVisitsReportQuerySchema = queryRecord.transform((q) =>
   parseExpeditorVisitsReportQuery(q as Record<string, string | undefined>)
+);
+
+/** GET `/api/:slug/reports/universal-returns` */
+export type { UniversalReturnsReportFilters };
+export const universalReturnsReportQuerySchema = queryRecord.transform((q) =>
+  parseUniversalReturnsReportQuery(q as Record<string, string | undefined>)
 );
 
 /** GET `/api/:slug/reports/visits-2` */

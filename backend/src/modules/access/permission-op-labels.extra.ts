@@ -49,6 +49,8 @@ export const EXTRA_OP_LABEL_RU: Record<string, string> = {
   "reports.klassifikatsiya_tt.export": "Выгрузка «Классификация торговых точек» в Excel",
   "reports.vizity_ekspedirov.view": "Открыть отчёт «Визиты экспедиторов»",
   "reports.vizity_ekspedirov.export": "Выгрузка «Визиты экспедиторов» в Excel",
+  "reports.universalnyy_vozvrat.view": "Открыть «Универсальный отчет по возвратам»",
+  "reports.universalnyy_vozvrat.export": "Выгрузка «Универсальный отчет по возвратам» в Excel",
   "staff.agent.export": "Выгрузка агентов в Excel",
   "staff.ekspeditor.export": "Выгрузка экспедиторов в Excel",
   "staff.supervayzer.export": "Выгрузка супервайзеров в Excel",
