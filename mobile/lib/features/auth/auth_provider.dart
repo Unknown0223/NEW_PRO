@@ -1036,8 +1036,10 @@ class AuthNotifier extends StateNotifier<AuthState> {
         _session.markBootstrapped();
         await AppDatabase().recordSyncToday();
         state = state.copyWith(bootstrapStep: BootstrapStep.done, status: AuthStatus.syncComplete);
-        // Splash yo‘q — darhol home.
-        finishBootstrap();
+        // RoleWelcome (~8.5s) ko‘rinsin — UI finishBootstrap chaqirmasa ham.
+        unawaited(Future<void>.delayed(const Duration(milliseconds: 8500), () {
+          if (state.status == AuthStatus.syncComplete) finishBootstrap();
+        }));
         return;
       }
 
@@ -1107,8 +1109,13 @@ class AuthNotifier extends StateNotifier<AuthState> {
       _session.markBootstrapped();
       state = state.copyWith(bootstrapStep: BootstrapStep.done, status: AuthStatus.syncComplete);
       unawaited(_bootstrapPostSyncServices());
-      // Splash yo‘q — darhol home.
-      finishBootstrap();
+      // RoleWelcome (~8.5s) + «o‘tkazib yuborish» — oq/spinnerda qolmasin.
+      unawaited(Future<void>.delayed(const Duration(milliseconds: 8500), () {
+        if (state.status == AuthStatus.syncComplete) {
+          finishBootstrap();
+          unawaited(_resumeDeferredAppUpdateSoon());
+        }
+      }));
     } on UnauthorizedException catch (e) {
       if (await _lockForApp()) return;
       await _wipeLocalAuth();

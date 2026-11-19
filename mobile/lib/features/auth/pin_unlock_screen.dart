@@ -10,7 +10,6 @@ import '../../core/auth/session.dart';
 import '../../core/l10n/app_strings_ru.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_typography.dart';
-import '../../core/ui/agent_ui.dart';
 import '../../design_system/design_system.dart';
 import 'auth_provider.dart';
 import 'pin_pad.dart';
@@ -63,32 +62,11 @@ class _PinUnlockScreenState extends ConsumerState<PinUnlockScreen> {
     if (auto && _pin.isNotEmpty) return;
     final gen = ++_bioGeneration;
     setState(() => _bioInProgress = true);
-    final bio = ref.read(biometricServiceProvider);
-    if (!await bio.isAvailable()) {
-      if (!mounted || gen != _bioGeneration) return;
-      setState(() {
-        _bioInProgress = false;
-        _bioEnabled = false;
-      });
-      if (!auto) {
-        showAuthBottomToast(
-          context,
-          'Face ID / biometriya telefonda yoqilmagan',
-          accentColor: AppColors.error,
-        );
-      }
-      return;
-    }
     final ok = await ref.read(authStateProvider.notifier).unlockWithBiometric();
     if (!mounted || gen != _bioGeneration) return;
     setState(() => _bioInProgress = false);
     if (!ok && !auto) {
       setState(() => _pin = '');
-      showAuthBottomToast(
-        context,
-        'Face ID tasdiqlanmadi. PIN bilan oching',
-        accentColor: AppColors.error,
-      );
     }
   }
 

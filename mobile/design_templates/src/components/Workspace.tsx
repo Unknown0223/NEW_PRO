@@ -2,14 +2,12 @@ import { useEffect, useMemo, useRef } from "react";
 import {
   ArrowLeft,
   ArrowRight,
-  Code2,
   Command,
   Gauge,
   Grid3X3,
   Layers,
   Palette,
   Smartphone,
-  Server,
   Sparkles,
   Users,
   Wand2,
@@ -30,7 +28,6 @@ import MotionLab from "./MotionLab";
 import Performance from "./Performance";
 import Audit from "./Audit";
 import FlutterKit from "./FlutterKit";
-import FullStackKit from "./FullStackKit";
 import { LiveBadge, Reveal, useToast } from "./ui";
 import { cn } from "../utils/cn";
 
@@ -42,8 +39,6 @@ const icons: Record<string, LucideIcon> = {
   motion: Wand2,
   gauge: Gauge,
   audit: ClipboardCheck,
-  code: Code2,
-  stack: Server,
 };
 
 export default function Workspace({
@@ -97,8 +92,6 @@ export default function Workspace({
         return <Performance embedded />;
       case "flutter":
         return <FlutterKit embedded />;
-      case "fullstack":
-        return <FullStackKit embedded />;
       default:
         return <Audit onOpenScreen={onOpenScreen} />;
     }
@@ -118,8 +111,8 @@ export default function Workspace({
                 Hamma narsa bitta joyda — <span className="text-brand-600">osa o'tish</span>
               </h2>
               <p className="mt-3 max-w-xl text-[13.5px] leading-relaxed text-ink-2/75">
-                Rollar, 54 interaktiv ekran, 34 shablon, tokenlar, harakat, unumdorlik, audit va
-                Flutter paket — bitta panelda. 8 ko'rinish va ⌘K bilan zumda almashish.
+                Rollar, 25 interaktiv ekran, shablonlar, tokenlar, harakat va unumdorlik — alohida
+                bo'limlarga tarqalmagan. Bitta panel, 6 ko'rinish va ⌘K bilan zumda almashish.
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
@@ -140,8 +133,8 @@ export default function Workspace({
           <div className="mt-6 grid grid-cols-2 gap-2 sm:grid-cols-4">
             {[
               { v: "4", l: "Rol", d: "agent → kassir" },
-              { v: "34", l: "Shablon", d: "role bo'yicha" },
-              { v: "54", l: "Live ekran", d: "bosiladi" },
+              { v: "80", l: "Ekran", d: "repo bo'yicha" },
+              { v: "25", l: "Live prototip", d: "bosiladi" },
               { v: "60", l: "FPS maqsad", d: "adaptiv effekt" },
             ].map((s) => (
               <div key={s.l} className="flex items-baseline gap-2 rounded-[14px] border border-line bg-white/70 px-3 py-2.5">

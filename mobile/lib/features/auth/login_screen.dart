@@ -10,7 +10,7 @@ import '../../core/ui/agent_ui.dart';
 import '../../design_system/design_system.dart';
 import 'auth_provider.dart';
 
-/// Login — oddiy forma (brend splash / SaEnter yo‘q).
+/// Shablon `AuthScreen` — launch-zoom + au-in + BrandWave.
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
   @override
@@ -98,7 +98,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   Future<void> _onFaceId() async {
     if (_faceIdBusy) return;
     setState(() => _faceIdBusy = true);
-    final result = await ref.read(authStateProvider.notifier).tryLoginScreenBiometric();
+    final result =
+        await ref.read(authStateProvider.notifier).tryLoginScreenBiometric();
     if (!mounted) return;
     setState(() => _faceIdBusy = false);
     if (result == BiometricLoginAttempt.success) return;
@@ -134,90 +135,108 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     return Scaffold(
       backgroundColor: Colors.white,
       resizeToAvoidBottomInset: true,
-      body: SafeArea(
-        child: Column(
+      body: SaLaunchZoom(
+        child: Stack(
           children: [
-            Expanded(
-              child: SingleChildScrollView(
-                padding: EdgeInsets.fromLTRB(24, 28, 24, 16 + bottomInset),
-                keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-                child: Column(
-                  children: [
-                    const SizedBox(height: 12),
-                    const Text(
-                      'Sales Arena',
-                      style: TextStyle(
-                        fontSize: 22,
-                        fontWeight: FontWeight.w800,
-                        color: _ink,
-                        letterSpacing: -0.3,
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    const Text(
-                      'Savdo jamoasi uchun mobil ilova',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: _sub,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                    SaAuthShake(
-                      shake: _shakeForm,
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: _form(loading),
-                      ),
-                    ),
-                    if (kDebugMode || isLocalApiEnv()) ...[
-                      const SizedBox(height: 12),
-                      Text(
-                        apiEnvDisplayLabel(),
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.orange.shade800,
-                        ),
-                      ),
-                    ],
-                    const SizedBox(height: 48),
-                  ],
-                ),
+            const Positioned.fill(
+              child: RepaintBoundary(
+                child: IgnorePointer(child: CustomPaint(painter: _DotGridPainter())),
               ),
             ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
+            const Positioned.fill(
+              child: RepaintBoundary(
+                child: SaBrandWave(topFraction: 0.70, animate: true),
+              ),
+            ),
+            SafeArea(
               child: Column(
                 children: [
-                  Text.rich(
-                    TextSpan(
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: _sub.withValues(alpha: 0.95),
-                      ),
-                      children: const [
-                        TextSpan(text: 'Hisobingiz yo‘qmi? '),
-                        TextSpan(
-                          text: 'Administratorga murojaat qiling.',
-                          style: TextStyle(
-                            color: _ink,
-                            fontWeight: FontWeight.w800,
+                  Expanded(
+                    child: SingleChildScrollView(
+                      padding: EdgeInsets.fromLTRB(24, 28, 24, 16 + bottomInset),
+                      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+                      child: Column(
+                        children: [
+                          const SaBrandMark(size: 64, draw: true),
+                          const SizedBox(height: 12),
+                          SaEnter(
+                            delay: const Duration(milliseconds: 40),
+                            child: const SaBrandWordmark(size: 26),
                           ),
-                        ),
-                      ],
+                          const SizedBox(height: 8),
+                          SaEnter(
+                            delay: const Duration(milliseconds: 80),
+                            child: const Text(
+                              'Savdo jamoasi uchun mobil ilova',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: _sub,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ),
+                          SaAuthShake(
+                            shake: _shakeForm,
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: _form(loading),
+                            ),
+                          ),
+                          if (kDebugMode || isLocalApiEnv()) ...[
+                            const SizedBox(height: 12),
+                            Text(
+                              apiEnvDisplayLabel(),
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.orange.shade800,
+                              ),
+                            ),
+                          ],
+                          const SizedBox(height: 120),
+                        ],
+                      ),
                     ),
-                    textAlign: TextAlign.center,
                   ),
-                  const SizedBox(height: 6),
-                  Text(
-                    'Yordam · Texnik qo‘llab-quvvatlash',
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w700,
-                      color: _ink.withValues(alpha: 0.75),
-                      decoration: TextDecoration.underline,
-                      decorationColor: _sub,
+                  SaEnter(
+                    delay: const Duration(milliseconds: 200),
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
+                      child: Column(
+                        children: [
+                          Text.rich(
+                            TextSpan(
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: Colors.white.withValues(alpha: 0.85),
+                              ),
+                              children: const [
+                                TextSpan(text: 'Hisobingiz yo‘qmi? '),
+                                TextSpan(
+                                  text: 'Administratorga murojaat qiling.',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            'Yordam · Texnik qo‘llab-quvvatlash',
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              color: Colors.white.withValues(alpha: 0.95),
+                              decoration: TextDecoration.underline,
+                              decorationColor: Colors.white70,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ],
@@ -232,131 +251,145 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   List<Widget> _form(bool loading) {
     return [
       const SizedBox(height: 28),
-      _field(
-        icon: Icons.apartment_outlined,
-        controller: _slug,
-        hint: 'Kompaniya kodi',
-        enabled: !loading,
-        error: _slugErr,
-        textInputAction: TextInputAction.next,
+      SaEnter(
+        delay: const Duration(milliseconds: 50),
+        child: _field(
+          icon: Icons.apartment_outlined,
+          controller: _slug,
+          hint: 'Kompaniya kodi',
+          enabled: !loading,
+          error: _slugErr,
+          textInputAction: TextInputAction.next,
+        ),
       ),
       if (_slugErr != null) _err(_slugErr!),
       const SizedBox(height: 8),
-      _field(
-        icon: Icons.person_outline_rounded,
-        controller: _login,
-        hint: 'Login yoki telefon',
-        enabled: !loading,
-        error: _loginErr,
-        textInputAction: TextInputAction.next,
+      SaEnter(
+        delay: const Duration(milliseconds: 90),
+        child: _field(
+          icon: Icons.person_outline_rounded,
+          controller: _login,
+          hint: 'Login yoki telefon',
+          enabled: !loading,
+          error: _loginErr,
+          textInputAction: TextInputAction.next,
+        ),
       ),
       if (_loginErr != null) _err(_loginErr!),
       const SizedBox(height: 8),
-      _field(
-        icon: Icons.lock_outline_rounded,
-        controller: _pass,
-        hint: 'Parol',
-        enabled: !loading,
-        error: _passErr,
-        obscure: _obscure,
-        textInputAction: TextInputAction.done,
-        onSubmitted: (_) => _submit(),
-        suffix: IconButton(
-          visualDensity: VisualDensity.compact,
-          onPressed: () => setState(() => _obscure = !_obscure),
-          icon: Icon(
-            _obscure ? Icons.visibility_outlined : Icons.visibility_off_outlined,
-            size: 18,
-            color: _sub,
+      SaEnter(
+        delay: const Duration(milliseconds: 130),
+        child: _field(
+          icon: Icons.lock_outline_rounded,
+          controller: _pass,
+          hint: 'Parol',
+          enabled: !loading,
+          error: _passErr,
+          obscure: _obscure,
+          textInputAction: TextInputAction.done,
+          onSubmitted: (_) => _submit(),
+          suffix: IconButton(
+            visualDensity: VisualDensity.compact,
+            onPressed: () => setState(() => _obscure = !_obscure),
+            icon: Icon(
+              _obscure ? Icons.visibility_outlined : Icons.visibility_off_outlined,
+              size: 18,
+              color: _sub,
+            ),
           ),
         ),
       ),
       if (_passErr != null) _err(_passErr!),
       const SizedBox(height: 12),
-      Row(
-        children: [
-          InkWell(
-            onTap: () => setState(() => _remember = !_remember),
-            borderRadius: BorderRadius.circular(6),
-            child: Row(
-              children: [
-                Container(
-                  width: 16,
-                  height: 16,
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    color: _remember ? SaBrand.blue : Colors.transparent,
-                    borderRadius: BorderRadius.circular(4),
-                    border: Border.all(color: _remember ? SaBrand.blue : _line),
+      SaEnter(
+        delay: const Duration(milliseconds: 160),
+        child: Row(
+          children: [
+            InkWell(
+              onTap: () => setState(() => _remember = !_remember),
+              borderRadius: BorderRadius.circular(6),
+              child: Row(
+                children: [
+                  Container(
+                    width: 16,
+                    height: 16,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: _remember ? SaBrand.blue : Colors.transparent,
+                      borderRadius: BorderRadius.circular(4),
+                      border: Border.all(color: _remember ? SaBrand.blue : _line),
+                    ),
+                    child: _remember
+                        ? const Icon(Icons.check, size: 11, color: Colors.white)
+                        : null,
                   ),
-                  child: _remember
-                      ? const Icon(Icons.check, size: 11, color: Colors.white)
-                      : null,
-                ),
-                const SizedBox(width: 8),
-                const Text('Meni eslab qol', style: TextStyle(fontSize: 11, color: _sub)),
-              ],
+                  const SizedBox(width: 8),
+                  const Text('Meni eslab qol', style: TextStyle(fontSize: 11, color: _sub)),
+                ],
+              ),
             ),
-          ),
-          const Spacer(),
-          InkWell(
-            onTap: loading ? null : _onForgotPassword,
-            borderRadius: BorderRadius.circular(6),
-            child: const Padding(
-              padding: EdgeInsets.symmetric(vertical: 4, horizontal: 2),
-              child: Text(
+            const Spacer(),
+            InkWell(
+              onTap: _onForgotPassword,
+              child: const Text(
                 'Parolni unutdingizmi?',
                 style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: _ink),
               ),
             ),
-          ),
-        ],
-      ),
-      const SizedBox(height: 14),
-      const Text.rich(
-        TextSpan(
-          style: TextStyle(fontSize: 10, height: 1.45, color: _sub),
-          children: [
-            TextSpan(text: 'Davom etish orqali '),
-            TextSpan(
-              text: 'Foydalanish shartlari',
-              style: TextStyle(color: _ink, fontWeight: FontWeight.w700),
-            ),
-            TextSpan(text: ' va '),
-            TextSpan(
-              text: 'Maxfiylik siyosati',
-              style: TextStyle(color: _ink, fontWeight: FontWeight.w700),
-            ),
-            TextSpan(text: 'ga rozilik bildirasiz.'),
           ],
         ),
-        textAlign: TextAlign.center,
       ),
       const SizedBox(height: 14),
-      SaPressable(
-        onTap: loading ? null : _submit,
-        child: SizedBox(
-          width: MediaQuery.sizeOf(context).width * 0.84,
-          height: 48,
-          child: ElevatedButton(
-            onPressed: loading ? null : _submit,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: SaBrand.blue,
-              foregroundColor: Colors.white,
-              disabledBackgroundColor: SaBrand.blue.withValues(alpha: 0.45),
-              elevation: 0,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(9)),
+      SaEnter(
+        delay: const Duration(milliseconds: 180),
+        child: const Text.rich(
+          TextSpan(
+            style: TextStyle(fontSize: 10, height: 1.45, color: _sub),
+            children: [
+              TextSpan(text: 'Davom etish orqali '),
+              TextSpan(
+                text: 'Foydalanish shartlari',
+                style: TextStyle(color: _ink, fontWeight: FontWeight.w700),
+              ),
+              TextSpan(text: ' va '),
+              TextSpan(
+                text: 'Maxfiylik siyosati',
+                style: TextStyle(color: _ink, fontWeight: FontWeight.w700),
+              ),
+              TextSpan(text: 'ga rozilik bildirasiz.'),
+            ],
+          ),
+          textAlign: TextAlign.center,
+        ),
+      ),
+      const SizedBox(height: 14),
+      SaEnter(
+        delay: const Duration(milliseconds: 200),
+        child: SaPressable(
+          onTap: loading ? null : _submit,
+          child: SizedBox(
+            width: MediaQuery.sizeOf(context).width * 0.84,
+            height: 48,
+            child: ElevatedButton(
+              onPressed: loading ? null : _submit,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: SaBrand.blue,
+                foregroundColor: Colors.white,
+                disabledBackgroundColor: SaBrand.blue.withValues(alpha: 0.45),
+                elevation: 0,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(9)),
+              ),
+              child: loading
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                    )
+                  : const Text(
+                      'Kirish',
+                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800),
+                    ),
             ),
-            child: loading
-                ? const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                  )
-                : const Text(
-                    'Kirish',
-                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800),
-                  ),
           ),
         ),
       ),
@@ -372,19 +405,32 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 ? const SizedBox(
                     width: 18,
                     height: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2, color: SaBrand.blue),
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: SaBrand.blue,
+                    ),
                   )
-                : const Icon(Icons.face_retouching_natural, size: 22, color: SaBrand.blue),
+                : const Icon(
+                    Icons.face_retouching_natural,
+                    size: 22,
+                    color: SaBrand.blue,
+                  ),
             label: const Text(
               'Face ID',
-              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: _ink),
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w800,
+                color: _ink,
+              ),
             ),
             style: OutlinedButton.styleFrom(
               side: const BorderSide(color: _line),
               backgroundColor: Colors.white,
               foregroundColor: _ink,
               elevation: 0,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(9)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(9),
+              ),
             ),
           ),
         ),
@@ -463,4 +509,22 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       ),
     );
   }
+}
+
+class _DotGridPainter extends CustomPainter {
+  const _DotGridPainter();
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final p = Paint()..color = const Color(0xFF14223F).withValues(alpha: 0.06);
+    const step = 18.0;
+    for (var y = 0.0; y < size.height; y += step) {
+      for (var x = 0.0; x < size.width; x += step) {
+        canvas.drawCircle(Offset(x, y), 0.8, p);
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }

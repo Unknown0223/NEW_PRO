@@ -135,6 +135,8 @@ class _PinSetupScreenState extends ConsumerState<PinSetupScreen> {
                         icon: const Icon(Icons.arrow_back_rounded, size: 20),
                       ),
                       const SizedBox(width: 8),
+                      const SaBrandMark(size: 28, draw: false),
+                      const SizedBox(width: 8),
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
