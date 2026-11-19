@@ -1,49 +1,6 @@
-import { Prisma } from "@prisma/client";
-import { prisma } from "../../config/database";
-import { ORDER_STATUSES_OUTSTANDING_RECEIVABLE } from "../orders/order-status";
-import {
-  paymentTypesFromMethodEntries,
-  resolveCurrencyEntries,
-  resolvePaymentMethodEntries,
-  resolvePaymentMethodRefToLabel,
-  type PaymentMethodEntryDto
-} from "../tenant-settings/finance-refs";
-
-import type {
-  AgentBalanceRow,
-  ClientBalanceListQuery,
-  ClientBalanceListResponse,
-  ClientBalanceRow
-} from "./client-balances.types";
-import { agentInclude } from "./client-balances.constants";
-import { buildOrderCreatedLocalDateClause, makePerfMarker, tashkentDayEndUtc } from "./client-balances.date";
+import type { ClientBalanceListQuery } from "./client-balances.types";
+import { makePerfMarker, tashkentDayEndUtc } from "./client-balances.date";
 import { buildClientWhere } from "./client-balances.where";
-import type { DeliveryDebtInfo } from "./client-balances.delivery";
-import {
-  loadPaymentNetNormByClient,
-  loadTenantPaymentRefs,
-  loadUnpaidOrderBalanceRawByPaymentRef,
-  processUnpaidPayRefRows
-} from "./client-balances.payments.data";
-import {
-  buildSummaryNetMinusUnpaid,
-  paymentAmountsNetMinusUnpaid
-} from "./client-balances.payments.util";
-import { loadPaymentNetTotalsByTypeGlobally } from "./client-balances.payments.aggregate";
-import {
-  compareNumForSort,
-  moneySortValueFromPaymentAmounts,
-  normPayTypeKey,
-  readSortDir
-} from "./client-balances.payments.util";
-import { loadBalancesAsOf, loadLastDeliveryByClient, loadLastPaymentByClient } from "./client-balances.ledger";
-import {
-  loadDeliveryDebtByClient,
-  loadUnpaidDeliveredOrderDebtRows,
-  mergeLedgerWithUnpaidDelivered
-} from "./client-balances.delivery";
-import { mapClientRow, mapDeliveryOrderRow } from "./client-balances.mappers";
-
 
 export type ClientBalancesReportContext = {
   tenantId: number;

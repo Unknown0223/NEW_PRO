@@ -8,6 +8,8 @@ WORKDIR /app
 
 COPY package.json package-lock.json ./
 COPY prisma ./prisma
+COPY vendor/plans-proposal ./vendor/plans-proposal
+RUN test -f vendor/plans-proposal/dist/index.js
 
 ENV DATABASE_URL="postgresql://buildtime:buildtime@127.0.0.1:5432/buildtime?schema=public"
 
@@ -29,6 +31,8 @@ WORKDIR /app
 
 COPY package.json package-lock.json ./
 COPY prisma ./prisma
+COPY vendor/plans-proposal ./vendor/plans-proposal
+RUN test -f vendor/plans-proposal/dist/index.js
 
 ENV DATABASE_URL="postgresql://buildtime:buildtime@127.0.0.1:5432/buildtime?schema=public"
 

@@ -168,16 +168,27 @@ export const PERMISSION_OP_LABEL_RU: Record<string, string> = {
   "plans.ustanovka_planov.create": "Создать план",
   "plans.ustanovka_planov.update": "Сохранить и отправить на утверждение",
   "plans.ustanovka_planov.approve": "Подтвердить / вернуть для редактирования",
+  "plans.taklifiy_reja.view":
+    "Открыть «Предлагаемый план» (расчёт, результаты, общий черновик)",
+  "plans.taklifiy_reja.update":
+    "Изменить черновик: KPI, веса, ячейки, настройки и сохранение",
+  "plans.taklifiy_reja.approve":
+    "Утвердить и применить предлагаемый план к целевым планам сотрудников",
+  "plans.taklifiy_reja.export": "Выгрузка предлагаемого плана в CSV/Excel",
 
   "reports.zakazy_agentov.view": "Открыть отчёт «Заказы по агентам»",
   "reports.gps.view": "Открыть «Отчёт по GPS» (маршруты доставщиков по дням)",
   "reports.gps.export": "Выгрузка «Отчёта по GPS» в Excel",
   "reports.prodazhi_klientov_2.view": "Открыть отчёт «Продажи по клиентам 2»",
   "reports.prodazhi_klientov_2.export": "Выгрузка «Продажи по клиентам 2» в Excel",
+  "reports.prodazhi_klientov_3.view": "Открыть отчёт «Продажи по клиентам 3»",
+  "reports.prodazhi_klientov_3.export": "Выгрузка «Продажи по клиентам 3» в Excel",
   "reports.prodazhi_klientov_4.view": "Открыть отчёт «Продажи по клиентам 4»",
   "reports.prodazhi_klientov_4.export": "Выгрузка «Продажи по клиентам 4» в Excel",
   "reports.prodazhi_tovarov.view": "Открыть отчёт «Продажи по товарам»",
   "reports.prodazhi_tovarov.export": "Выгрузка «Продажи по товарам» в Excel",
+  "reports.p1.view": "Открыть отчёт «P1 отчёт»",
+  "reports.p1.export": "Выгрузка «P1 отчёт» в Excel",
   "reports.vozvrat_ekspeditora.view": "Открыть отчёт «Возврат экспедитора»",
   "reports.vozvrat_ekspeditora.export": "Выгрузка «Возврат экспедитора» в Excel",
   "reports.vizity.view": "Открыть отчёт «По визитам 2.0»",

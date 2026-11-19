@@ -28,13 +28,12 @@ class RouteMapStop {
     final lon = _toDouble(raw['longitude'] ?? raw['lon'] ?? raw['lng']);
     return RouteMapStop(
       clientId: (raw['client_id'] as num?)?.toInt(),
-      name: raw['client_name']?.toString() ?? raw['name']?.toString() ?? 'Клиент',
+      name: raw['client_name']?.toString() ?? raw['name']?.toString() ?? 'Mijoz',
       latitude: lat,
       longitude: lon,
       orderIndex: (raw['order'] as num?)?.toInt() ??
           (raw['order_index'] as num?)?.toInt() ??
-          (raw['sort'] as num?)?.toInt() ??
-          (raw['sort_order'] as num?)?.toInt(),
+          (raw['sort'] as num?)?.toInt(),
       visited: raw['visited'] == true,
     );
   }
@@ -46,7 +45,7 @@ class RouteMapStop {
   }) {
     return RouteMapStop(
       clientId: (client['id'] as num?)?.toInt(),
-      name: client['name']?.toString() ?? 'Клиент',
+      name: client['name']?.toString() ?? 'Mijoz',
       latitude: _toDouble(client['latitude']),
       longitude: _toDouble(client['longitude']),
       orderIndex: orderIndex,

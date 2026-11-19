@@ -12,7 +12,8 @@ import {
   verifyLoginPassword
 } from "./login-credentials";
 import { issueLoginSession } from "./auth.login-session";
-import { refreshExpiresAt } from "./session-ttl";
+import { isWebPanelDeniedRole } from "./web-panel-access";
+import { isMobileSessionUserAgent, refreshExpiresAt } from "./session-ttl";
 
 export { otherActiveSessionsWhere } from "./auth.session-where";
 export { issueLoginSession, loginAfterFaceApproved } from "./auth.login-session";
@@ -200,15 +201,21 @@ export async function refresh(app: FastifyInstance, input: RefreshInput) {
       await assertUserOnWorkSlot(existing.tenant_id, existing.user.id, existing.user.role);
     }
 
-    /* Absolute max: oila birinchi tokenidan 1 soat — slide bilan uzaytirilmaydi. */
+    /* Web: oila boshidan qat’iy 1 soat. Mobile: 30 kun slide (web idle qoidalari emas). */
     const familyFirst = await tx.refreshToken.findFirst({
       where: { family_id: existing.family_id },
       orderBy: { created_at: "asc" },
-      select: { created_at: true }
+      select: { created_at: true, user_agent: true }
     });
+    const isMobile =
+      isMobileSessionUserAgent(familyFirst?.user_agent ?? existing.user_agent) ||
+      /* Eski sessiya (SalecMobile UA yo‘q): faqat mobil hisoblar — web 1 soat limitya tushmasin */
+      isWebPanelDeniedRole(existing.user.role);
     const familyStartedMs = familyFirst?.created_at.getTime() ?? existing.created_at.getTime();
-    const absoluteExpiresAt = refreshExpiresAt(familyStartedMs);
-    if (Date.now() >= absoluteExpiresAt.getTime()) {
+    const nextExpiresAt = isMobile
+      ? refreshExpiresAt(Date.now(), "mobile")
+      : refreshExpiresAt(familyStartedMs, "web");
+    if (!isMobile && Date.now() >= nextExpiresAt.getTime()) {
       throw new Error("INVALID_REFRESH");
     }
 
@@ -219,7 +226,7 @@ export async function refresh(app: FastifyInstance, input: RefreshInput) {
         user_id: existing.user_id,
         token_hash: hashToken(refreshToken),
         family_id: existing.family_id,
-        expires_at: absoluteExpiresAt,
+        expires_at: nextExpiresAt,
         device_name: existing.device_name,
         device_id: existing.device_id,
         user_agent: existing.user_agent,

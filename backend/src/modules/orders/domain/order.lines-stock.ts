@@ -1,13 +1,9 @@
 /**
  * Domain: Orders — tahrirlashda sklad rezerv / fizik qoldiqni moslash.
- * «new»: reserved_qty; «confirmed»: qty (confirmda allaqachon chiqarilgan).
+ * «new»: StockReservation reserve/release; «confirmed»: fizik qty (reserved allaqachon consume).
  */
 import { Prisma } from "@prisma/client";
-import {
-  lockStockRowsForUpdate,
-  releaseReservedQtyClamped,
-  throwInsufficientStock
-} from "./order.stock-lock";
+import { release, reserve } from "../../stock/stock-reservation";
 
 export type OrderLinesStockMode = "reserved" | "consumed";
 
@@ -35,7 +31,7 @@ function needMapFromLines(
 
 /**
  * Oldingi va yangi outbound qatorlar farqiga qarab skladni yangilaydi.
- * Yetarli qoldiq bo‘lmasa — INSUFFICIENT_STOCK.
+ * Yetarli qoldiq bo‘lmasa — INSUFFICIENT_STOCK (reserve).
  */
 export async function adjustOutboundStockForOrderLinesEdit(
   tx: Prisma.TransactionClient,
@@ -63,85 +59,60 @@ export async function adjustOutboundStockForOrderLinesEdit(
   const productIds = new Set<number>([...prevNeed.keys(), ...nextNeed.keys()]);
   if (productIds.size === 0) return;
 
-  const ids = [...productIds];
-  type Delta = { productId: number; delta: Prisma.Decimal };
-  const deltas: Delta[] = [];
-  for (const productId of ids) {
+  const toReserve = new Map<number, Prisma.Decimal>();
+  const toRelease = new Map<number, Prisma.Decimal>();
+  const qtyDeltas: Array<{ productId: number; delta: Prisma.Decimal }> = [];
+
+  for (const productId of productIds) {
     const prev = prevNeed.get(productId) ?? new Prisma.Decimal(0);
     const next = nextNeed.get(productId) ?? new Prisma.Decimal(0);
     const delta = next.sub(prev);
     if (delta.eq(0)) continue;
-    deltas.push({ productId, delta });
-  }
-  if (deltas.length === 0) return;
-
-  const stockMap = await lockStockRowsForUpdate(tx, {
-    tenantId: params.tenantId,
-    warehouseId: params.warehouseId,
-    productIds: ids
-  });
-
-  for (const { productId, delta } of deltas) {
-    if (!delta.gt(0)) continue;
-    const row = stockMap.get(productId);
-    const qty = row?.qty ?? new Prisma.Decimal(0);
-    const reservedRaw = row?.reserved_qty ?? new Prisma.Decimal(0);
-    const reserved = reservedRaw.lt(0) ? new Prisma.Decimal(0) : reservedRaw;
-    const available = qty.sub(reserved);
-    if (available.lt(delta)) {
-      throwInsufficientStock(productId, available, delta);
-    }
-  }
-
-  for (const { productId, delta } of deltas) {
-    const abs = delta.abs();
     if (mode === "reserved") {
-      if (delta.lt(0)) {
-        await releaseReservedQtyClamped(tx, {
-          tenantId: params.tenantId,
-          warehouseId: params.warehouseId,
-          productId,
-          qty: abs
-        });
-        continue;
-      }
-      await tx.stock.upsert({
-        where: {
-          tenant_id_warehouse_id_product_id: {
-            tenant_id: params.tenantId,
-            warehouse_id: params.warehouseId,
-            product_id: productId
-          }
-        },
-        create: {
-          tenant_id: params.tenantId,
-          warehouse_id: params.warehouseId,
-          product_id: productId,
-          reserved_qty: delta
-        },
-        update: { reserved_qty: { increment: abs } }
-      });
+      if (delta.gt(0)) toReserve.set(productId, delta);
+      else toRelease.set(productId, delta.abs());
     } else {
-      // confirmed: fizik qty allaqachon kamaytirilgan — farqni qty ga qo‘llaymiz
-      await tx.stock.upsert({
-        where: {
-          tenant_id_warehouse_id_product_id: {
-            tenant_id: params.tenantId,
-            warehouse_id: params.warehouseId,
-            product_id: productId
-          }
-        },
-        create: {
-          tenant_id: params.tenantId,
-          warehouse_id: params.warehouseId,
-          product_id: productId,
-          qty: delta.lt(0) ? abs : new Prisma.Decimal(0),
-          reserved_qty: new Prisma.Decimal(0)
-        },
-        update: delta.gt(0)
-          ? { qty: { decrement: abs } }
-          : { qty: { increment: abs } }
+      qtyDeltas.push({ productId, delta });
+    }
+  }
+
+  if (mode === "reserved") {
+    if (toRelease.size > 0) {
+      await release(tx, {
+        tenantId: params.tenantId,
+        warehouseId: params.warehouseId,
+        needByProduct: toRelease
       });
     }
+    if (toReserve.size > 0) {
+      await reserve(tx, {
+        tenantId: params.tenantId,
+        warehouseId: params.warehouseId,
+        needByProduct: toReserve
+      });
+    }
+    return;
+  }
+
+  // confirmed: fizik qty allaqachon kamaytirilgan — farqni qty ga qo‘llaymiz (reserved emas)
+  for (const { productId, delta } of qtyDeltas) {
+    const abs = delta.abs();
+    await tx.stock.upsert({
+      where: {
+        tenant_id_warehouse_id_product_id: {
+          tenant_id: params.tenantId,
+          warehouse_id: params.warehouseId,
+          product_id: productId
+        }
+      },
+      create: {
+        tenant_id: params.tenantId,
+        warehouse_id: params.warehouseId,
+        product_id: productId,
+        qty: delta.lt(0) ? abs : new Prisma.Decimal(0),
+        reserved_qty: new Prisma.Decimal(0)
+      },
+      update: delta.gt(0) ? { qty: { decrement: abs } } : { qty: { increment: abs } }
+    });
   }
 }

@@ -56,7 +56,7 @@ function buildEfficiencyReport(mappedVisitRows: Awaited<ReturnType<typeof loadSu
     if (row.supervisor_id == null) continue;
     const prev = supMap.get(row.supervisor_id) ?? {
       id: row.supervisor_id,
-      name: row.supervisor_name ?? `Supervisor ${row.supervisor_id}`,
+      name: row.supervisor_name?.trim() || "Без супервайзера",
       order_count: 0,
       cancelled_count: 0,
       planned_visits: 0,

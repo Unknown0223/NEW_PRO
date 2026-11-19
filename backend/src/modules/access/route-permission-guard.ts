@@ -405,6 +405,9 @@ const ROUTE_PERMISSION_RULES: RoutePermissionRule[] = [
   // ─────────── Планы → Настройка утверждающих ───────────
   r(WRITE, /\/plans\/approvers/, "plans.nastroyka_utverzhdayushchih.update"),
   r(READ, /\/plans\/approvers/, "plans.nastroyka_utverzhdayushchih.view"),
+  r(WRITE, /\/plans\/proposals/, "plans.taklifiy_reja.update", "plans.taklifiy_reja.approve"),
+  r(READ, /\/plans\/proposals/, "plans.taklifiy_reja.view"),
+
 
   // ─────────── Планы → Установка планов; Отчёт → Дневные KPI планы ───────────
   r(["POST"], /\/plans\/setup\/confirm$/, "plans.ustanovka_planov.update"),

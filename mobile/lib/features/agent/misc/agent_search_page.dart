@@ -10,7 +10,6 @@ import '../../../core/l10n/app_strings_ru.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/ui/agent_ui.dart';
 import '../../../core/ui/agent_ui_extended.dart';
-import '../../../design_system/design_system.dart';
 
 /// Поиск клиентов (shablon SearchScreen).
 class AgentSearchPage extends ConsumerStatefulWidget {
@@ -105,7 +104,7 @@ class _AgentSearchPageState extends ConsumerState<AgentSearchPage> {
                 : _filtered.isEmpty
                     ? const Center(child: AgentEmptyState(message: S.emptySearch))
                     : ListView.builder(
-                        padding: const EdgeInsets.fromLTRB(12, 12, 12, 140),
+                        padding: const EdgeInsets.fromLTRB(12, 12, 12, 80),
                         itemCount: _filtered.length,
                         itemBuilder: (_, i) {
                           final c = _filtered[i];
@@ -116,26 +115,17 @@ class _AgentSearchPageState extends ConsumerState<AgentSearchPage> {
                           final debtColor = balance != null
                               ? colorForClientBalance(balance)
                               : AppColors.textPrimary;
-                          final subtitle =
-                              '${c['owner_name'] ?? c['contact_name'] ?? ''}'.trim();
-                          return SaEnter(
-                            delay: SaStaggerDelay.of(i.clamp(0, 12)),
-                            preset: SaMotionPreset.rise,
-                            child: Padding(
-                              padding: const EdgeInsets.only(bottom: 12),
-                              child: SaPressable(
-                                onTap: id != null
-                                    ? () => context.push('/clients/$id')
-                                    : null,
-                                borderRadius: BorderRadius.circular(SaRadius.card),
-                                child: AgentOutletCard(
-                                  name: '${c['name'] ?? '—'}',
-                                  subtitle: subtitle,
-                                  grade: '${c['grade'] ?? 'B'}',
-                                  trailing: balance != null ? formatClientBalanceAmount(balance) : '',
-                                  trailingColor: debtColor,
-                                ),
-                              ),
+                          return Padding(
+                            padding: const EdgeInsets.only(bottom: 12),
+                            child: AgentOutletCard(
+                              name: '${c['name'] ?? '—'}',
+                              subtitle: '${c['owner_name'] ?? c['contact_name'] ?? c['client_code'] ?? ''}',
+                              grade: '${c['grade'] ?? 'B'}',
+                              trailing: balance != null ? formatClientBalanceAmount(balance) : '',
+                              trailingColor: debtColor,
+                              onTap: id != null
+                                  ? () => context.push('/clients/$id')
+                                  : null,
                             ),
                           );
                         },

@@ -7,7 +7,6 @@ import '../../../core/auth/session.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/ui/agent_ui.dart';
-import '../../../design_system/design_system.dart';
 import '../../auth/auth_provider.dart';
 import '../config/expeditor_config_enforcement.dart';
 
@@ -22,7 +21,6 @@ const expeditorMenuRoutes = <String>[
   '/deliveries',
   '/exp-unfinished',
   '/exp-settings',
-  '/attendance',
   '/profile',
 ];
 
@@ -74,50 +72,47 @@ class _ExpeditorDrawerState extends ConsumerState<ExpeditorDrawer> {
       child: SafeArea(
         child: Column(
           children: [
-            SaEnter(
-              preset: SaMotionPreset.rise,
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
-                child: Column(
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        AgentIconButton(
-                            icon: Icons.arrow_back,
-                            onPressed: () => Navigator.pop(context),),
-                        AgentIconButton(
-                            icon: Icons.edit_outlined,
-                            onPressed: () => go('/profile'),),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    const CircleAvatar(
-                      radius: 44,
-                      backgroundColor: AppColors.surfaceVariant,
-                      child: Icon(Icons.person,
-                          size: 52, color: AppColors.textMuted,),
-                    ),
-                    const SizedBox(height: 12),
-                    Text(
-                      name.isEmpty ? 'Экспедитор' : name,
-                      textAlign: TextAlign.center,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.w700,
-                          height: 1.2,
-                          color: AppColors.textTitle,),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Сервер: ${session.tenantSlug ?? "-"}',
-                      style: AppTypography.bodyMedium
-                          .copyWith(fontSize: 16, color: AppColors.textMuted),
-                    ),
-                  ],
-                ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+              child: Column(
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      AgentIconButton(
+                          icon: Icons.arrow_back,
+                          onPressed: () => Navigator.pop(context),),
+                      AgentIconButton(
+                          icon: Icons.edit_outlined,
+                          onPressed: () => go('/profile'),),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  const CircleAvatar(
+                    radius: 44,
+                    backgroundColor: AppColors.surfaceVariant,
+                    child: Icon(Icons.person,
+                        size: 52, color: AppColors.textMuted,),
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    name.isEmpty ? 'Экспедитор' : name,
+                    textAlign: TextAlign.center,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w700,
+                        height: 1.2,
+                        color: AppColors.textTitle,),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Сервер: ${session.tenantSlug ?? "-"}',
+                    style: AppTypography.bodyMedium
+                        .copyWith(fontSize: 16, color: AppColors.textMuted),
+                  ),
+                ],
               ),
             ),
             const SizedBox(height: 12),
@@ -125,10 +120,7 @@ class _ExpeditorDrawerState extends ConsumerState<ExpeditorDrawer> {
               child: ListView(
                 padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
                 children: [
-                  SaEnter(
-                    delay: SaStaggerDelay.of(1),
-                    preset: SaMotionPreset.rise,
-                    child: AgentSurfaceCard(
+                  AgentSurfaceCard(
                     padding: EdgeInsets.zero,
                     child: Column(
                       children: [
@@ -173,25 +165,11 @@ class _ExpeditorDrawerState extends ConsumerState<ExpeditorDrawer> {
                           label: 'Незавершённые заказы',
                           onTap: () => go('/exp-unfinished'),
                         ),
-                        AgentMenuTile(
-                          icon: Icons.task_alt_outlined,
-                          label: 'Задачи',
-                          onTap: () => go('/tasks', push: true),
-                        ),
-                        AgentMenuTile(
-                          icon: Icons.how_to_reg_outlined,
-                          label: 'Отметка посещаемости (Face ID / Видео)',
-                          onTap: () => go('/attendance', push: true),
-                        ),
                       ],
                     ),
                   ),
-                  ),
                   const SizedBox(height: 12),
-                  SaEnter(
-                    delay: SaStaggerDelay.of(2),
-                    preset: SaMotionPreset.rise,
-                    child: AgentSurfaceCard(
+                  AgentSurfaceCard(
                     padding: EdgeInsets.zero,
                     child: Column(
                       children: [
@@ -210,12 +188,8 @@ class _ExpeditorDrawerState extends ConsumerState<ExpeditorDrawer> {
                       ],
                     ),
                   ),
-                  ),
                   const SizedBox(height: 12),
-                  SaEnter(
-                    delay: SaStaggerDelay.of(3),
-                    preset: SaMotionPreset.rise,
-                    child: AgentSurfaceCard(
+                  AgentSurfaceCard(
                     padding: EdgeInsets.zero,
                     child: InkWell(
                       borderRadius: BorderRadius.circular(16),
@@ -244,7 +218,6 @@ class _ExpeditorDrawerState extends ConsumerState<ExpeditorDrawer> {
                         ),
                       ),
                     ),
-                  ),
                   ),
                 ],
               ),

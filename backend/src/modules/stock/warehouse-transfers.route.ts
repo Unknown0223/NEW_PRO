@@ -66,7 +66,7 @@ function replyWarehouseTransferError(reply: FastifyReply, request: FastifyReques
     void sendApiError(reply, request, 400, msg === "SAME_WAREHOUSE" ? "SameWarehouse" : "BadWarehouse");
     return true;
   }
-  if (msg.startsWith("INSUFFICIENT_STOCK:")) {
+  if (msg === "INSUFFICIENT_STOCK" || msg.startsWith("INSUFFICIENT_STOCK:")) {
     void sendApiError(reply, request, 400, "InsufficientStock", undefined, { detail: msg });
     return true;
   }

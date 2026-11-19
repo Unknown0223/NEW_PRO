@@ -113,28 +113,47 @@ export function mergeTerritoryTermsForScope(
   return [...out];
 }
 
+/**
+ * Dostup linklari asosiy chegara.
+ * Slot kengaytirishi mumkin, lekin linklar bo‘lsa — faqat kesishma (butun katalogni slotga
+ * yozib qo‘yish Navoiy hodimiga Namangan kassa/skladini ochib yubormasin).
+ */
 export function mergeWarehouseIdsForScope(
   fromLinks: number[],
   fromSlot: { warehouse_id?: number | null; warehouse_ids?: number[] | null } | null | undefined
 ): number[] {
-  const ids = [...fromLinks];
+  const linkIds = uniquePositiveIds(fromLinks);
+  const slotIds: number[] = [];
   if (fromSlot) {
-    if (fromSlot.warehouse_id != null) ids.push(fromSlot.warehouse_id);
-    for (const id of fromSlot.warehouse_ids ?? []) ids.push(id);
+    if (fromSlot.warehouse_id != null) slotIds.push(fromSlot.warehouse_id);
+    for (const id of fromSlot.warehouse_ids ?? []) slotIds.push(id);
   }
-  return uniquePositiveIds(ids);
+  const slot = uniquePositiveIds(slotIds);
+  if (linkIds.length > 0 && slot.length > 0) {
+    const allow = new Set(linkIds);
+    return slot.filter((id) => allow.has(id));
+  }
+  if (linkIds.length > 0) return linkIds;
+  return slot;
 }
 
 export function mergeCashDeskIdsForScope(
   fromLinks: number[],
   fromSlot: { cash_desk_id?: number | null; cash_desk_ids?: number[] | null } | null | undefined
 ): number[] {
-  const ids = [...fromLinks];
+  const linkIds = uniquePositiveIds(fromLinks);
+  const slotIds: number[] = [];
   if (fromSlot) {
-    if (fromSlot.cash_desk_id != null) ids.push(fromSlot.cash_desk_id);
-    for (const id of fromSlot.cash_desk_ids ?? []) ids.push(id);
+    if (fromSlot.cash_desk_id != null) slotIds.push(fromSlot.cash_desk_id);
+    for (const id of fromSlot.cash_desk_ids ?? []) slotIds.push(id);
   }
-  return uniquePositiveIds(ids);
+  const slot = uniquePositiveIds(slotIds);
+  if (linkIds.length > 0 && slot.length > 0) {
+    const allow = new Set(linkIds);
+    return slot.filter((id) => allow.has(id));
+  }
+  if (linkIds.length > 0) return linkIds;
+  return slot;
 }
 
 /** Geo manbalar (hudud + filial) — birlashma; hodim kesishmasi alohida. */

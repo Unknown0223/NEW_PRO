@@ -163,16 +163,16 @@ class PhotoConfig {
 
   const PhotoConfig({
     this.requiredForOrder = false,
-    this.jpegQuality = 75,
-    this.maxWidthPx = 1600,
-    this.maxHeightPx = 1600,
+    this.jpegQuality = 92,
+    this.maxWidthPx = 4032,
+    this.maxHeightPx = 4032,
   });
 
   factory PhotoConfig.fromJson(Map<String, dynamic> j) => PhotoConfig(
         requiredForOrder: j['required_for_order'] ?? false,
-        jpegQuality: (j['jpeg_quality'] as num?)?.toInt() ?? 75,
-        maxWidthPx: (j['max_width_px'] as num?)?.toInt() ?? 1600,
-        maxHeightPx: (j['max_height_px'] as num?)?.toInt() ?? 1600,
+        jpegQuality: (j['jpeg_quality'] as num?)?.toInt() ?? 80,
+        maxWidthPx: (j['max_width_px'] as num?)?.toInt() ?? 1280,
+        maxHeightPx: (j['max_height_px'] as num?)?.toInt() ?? 1280,
       );
 }
 
@@ -327,7 +327,7 @@ class ExpeditorConfig {
     this.fingerprintRequiredForShipmentConfirm = false,
     this.deliveryPaymentMethodStrict = false,
     this.requirePhotoReportBeforeVisit = false,
-    this.currencySymbol = 'сум',
+    this.currencySymbol = "so'm",
     this.allowedPaymentMethodIds = const [],
     this.allowedTradeDirectionIds = const [],
   });
@@ -339,7 +339,7 @@ class ExpeditorConfig {
         fingerprintRequiredForShipmentConfirm: j['fingerprint_required_for_shipment_confirm'] ?? false,
         deliveryPaymentMethodStrict: j['delivery_payment_method_strict'] ?? false,
         requirePhotoReportBeforeVisit: j['require_photo_report_before_visit'] ?? false,
-        currencySymbol: j['currency_symbol']?.toString() ?? 'сум',
+        currencySymbol: j['currency_symbol']?.toString() ?? "so'm",
         allowedPaymentMethodIds: (j['allowed_payment_method_ids'] as List?)
                 ?.map((e) => e.toString())
                 .toList() ??

@@ -464,15 +464,128 @@ export const dashboardReportsNav: { sectionTitle: string; items: NavItem[] } = {
       showIfAnyPermission: [...NAV_PERM.reportClientSales2]
     },
     {
+      href: "/reports/client-sales-3",
+      label: "Продажи по клиентам 3",
+      showIfAnyPermission: [...NAV_PERM.reportClientSales3]
+    },
+    {
       href: "/reports/client-sales-4",
       label: "Продажи по клиентам 4",
       showIfAnyPermission: [...NAV_PERM.reportClientSales4]
     },
     { href: "/reports/product-sales", label: "Продажи по товарам", showIfAnyPermission: [...NAV_PERM.reportProductSales] },
     {
+      href: "/reports/sales-compare",
+      label: "Сравнительный анализ продаж",
+      showIfAnyPermission: [...NAV_PERM.reportSalesCompare]
+    },
+    { href: "/reports/p1", label: "P1 отчёт", showIfAnyPermission: [...NAV_PERM.reportP1] },
+    {
       href: "/reports/expeditor-returns",
       label: "Возврат экспедитора",
       showIfAnyPermission: [...NAV_PERM.reportExpeditorReturns]
+    },
+    {
+      href: "/reports/shelf-returns",
+      label: "Отчет по возвратам (возврат с полки)",
+      showIfAnyPermission: [...NAV_PERM.reportShelfReturns]
+    },
+    {
+      href: "/reports/order-qty",
+      label: "Отчет по количеству заказов",
+      showIfAnyPermission: [...NAV_PERM.reportOrderQty]
+    },
+    {
+      href: "/reports/sku-3",
+      label: "По Sku 3.0",
+      showIfAnyPermission: [...NAV_PERM.reportSku3]
+    },
+    {
+      href: "/reports/expeditor-shipments",
+      label: "Отгрузки по экспедиторам",
+      showIfAnyPermission: [...NAV_PERM.reportExpeditorShipments]
+    },
+    {
+      href: "/reports/excel-export",
+      label: "Excel экспорт",
+      showIfAnyPermission: [...NAV_PERM.reportExcelExport]
+    },
+    {
+      href: "/reports/inventory",
+      label: "По инвентарю",
+      showIfAnyPermission: [...NAV_PERM.reportInventory]
+    },
+    {
+      href: "/reports/photo",
+      label: "Фотоотчёты",
+      showIfAnyPermission: [...NAV_PERM.reportPhoto]
+    },
+    {
+      href: "/reports/tasks",
+      label: "Отчёт по задачам",
+      showIfAnyPermission: [...NAV_PERM.reportTasks]
+    },
+    {
+      href: "/reports/bonuses",
+      label: "По бонусам",
+      showIfAnyPermission: [...NAV_PERM.reportBonuses]
+    },
+    {
+      href: "/reports/universal-bonuses",
+      label: "Универсальный отчет по бонусам",
+      showIfAnyPermission: [...NAV_PERM.reportUniversalBonuses]
+    },
+    {
+      href: "/reports/cumulative-bonus",
+      label: "Накопительный бонус",
+      showIfAnyPermission: [...NAV_PERM.reportCumulativeBonus]
+    },
+    { href: "/reports/visits", label: "По визитам", showIfAnyPermission: [...NAV_PERM.reportVisits] },
+    {
+      href: "/reports/daily-visits",
+      label: "По дневному посещению",
+      showIfAnyPermission: [...NAV_PERM.reportDailyVisits]
+    },
+    { href: "/reports/prices", label: "По ценам", showIfAnyPermission: [...NAV_PERM.reportPrices] },
+    {
+      href: "/reports/outlet-class",
+      label: "Классификация торговых точек",
+      showIfAnyPermission: [...NAV_PERM.reportOutletClass]
+    },
+    {
+      href: "/reports/expeditor-visits",
+      label: "Визиты экспедиторов",
+      showIfAnyPermission: [...NAV_PERM.reportExpeditorVisits]
+    },
+    {
+      href: "/reports/rfm",
+      label: "RFM",
+      showIfAnyPermission: [...NAV_PERM.reportRfm]
+    },
+    {
+      href: "/reports/universal-returns",
+      label: "Универсальный отчет по возвратам",
+      showIfAnyPermission: [...NAV_PERM.reportUniversalReturns]
+    },
+    {
+      href: "/reports/universal-visits",
+      label: "Универсальный отчет по посещениям",
+      showIfAnyPermission: [...NAV_PERM.reportUniversalVisits]
+    },
+    {
+      href: "/reports/universal-sales",
+      label: "Универсальный отчёт по продажам",
+      showIfAnyPermission: [...NAV_PERM.reportUniversalSales]
+    },
+    {
+      href: "/reports/universal-discounts",
+      label: "Универсальный отчет по скидкам",
+      showIfAnyPermission: [...NAV_PERM.reportUniversalDiscounts]
+    },
+    {
+      href: "/reports/discount-detail",
+      label: "Детальный отчет по скидкам",
+      showIfAnyPermission: [...NAV_PERM.reportDiscountDetail]
     },
     { href: "/reports/visits-2", label: "По визитам 2.0", showIfAnyPermission: [...NAV_PERM.reportVisits2] },
     { href: "/reports/visit-totals", label: "Итоги визитов", showIfAnyPermission: [...NAV_PERM.reportVisitTotals] },
@@ -519,10 +632,27 @@ export const dashboardPlansNav: { sectionTitle: string; items: NavItem[] } = {
       showIfAnyPermission: ["plans.ustanovka_planov.view"]
     },
     {
+      href: "/plans/taklifiy-reja",
+      label: "Предлагаемый план",
+      showIfAnyPermission: ["plans.taklifiy_reja.view"]
+    },
+    {
+      href: "/plans/taklifiy-reja/natijalar",
+      label: "Анализ обоснования",
+      showIfAnyPermission: ["plans.taklifiy_reja.view"]
+    },
+    {
+      href: "/plans/taklifiy-reja/draft",
+      label: "Общий черновик",
+      showIfAnyPermission: ["plans.taklifiy_reja.view"]
+    },
+    {
       href: "/plans/approvers",
       label: "Настройка утверждающих",
       showIfAnyPermission: ["plans.nastroyka_utverzhdayushchih.view"]
     }
+
+
   ]
 };
 

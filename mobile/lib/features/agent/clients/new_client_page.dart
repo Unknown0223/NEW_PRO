@@ -17,11 +17,9 @@ import '../../../core/camera/photo_service.dart';
 import '../../../core/config/client_field_policy.dart';
 import '../../../core/config/mobile_config.dart';
 import '../../../core/config/agent_cities.dart';
-import '../../../core/config/tenant_refs_provider.dart';
 import '../../../core/database/app_database.dart';
 import '../../../core/gps/gps_tracker.dart';
 import '../../../core/theme/app_colors.dart';
-import '../../../design_system/design_system.dart';
 import '../../../core/ui/agent_template_form.dart';
 import '../../../core/clients/agent_outlet_filters_provider.dart';
 import '../../../core/clients/client_outlet_filters.dart';
@@ -138,7 +136,7 @@ class _NewClientPageState extends ConsumerState<NewClientPage> {
         action: openSettings == null
             ? null
             : SnackBarAction(
-                label: 'Настройки',
+                label: 'Sozlamalar',
                 textColor: Colors.white,
                 onPressed: openSettings,
               ),
@@ -151,7 +149,7 @@ class _NewClientPageState extends ConsumerState<NewClientPage> {
     final cam = await Permission.camera.request();
     if (!cam.isGranted) {
       if (mounted) {
-        _showFormSnack('Нужно разрешение на камеру', backgroundColor: AppColors.error);
+        _showFormSnack('Kamera ruxsati kerak', backgroundColor: AppColors.error);
       }
       return;
     }
@@ -190,8 +188,7 @@ class _NewClientPageState extends ConsumerState<NewClientPage> {
 
   bool get _useCityPicker {
     if (!_territoryVisible) return false;
-    // Viloyat ro‘yxati o‘rniga har doim shahar tanlash (agent yoki daraxt).
-    return true;
+    return ref.read(agentCitiesProvider).isNotEmpty;
   }
 
   Set<String> get _hiddenFormKeys => _useCityPicker ? const {'territory'} : const {};
@@ -316,7 +313,7 @@ class _NewClientPageState extends ConsumerState<NewClientPage> {
         } catch (_) {
           savedPhotoUrl = _photoPath;
           if (mounted) {
-            _showFormSnack('Клиент сохранён, но фото не загружено', backgroundColor: AppColors.warning);
+            _showFormSnack('Klient saqlandi, lekin foto yuklanmadi', backgroundColor: AppColors.warning);
           }
         }
       }
@@ -357,7 +354,7 @@ class _NewClientPageState extends ConsumerState<NewClientPage> {
       final pending = row['is_active'] == false;
       if (pending) {
         _showFormSnack(
-          'Торговая точка создана. Возможно, потребуется подтверждение оператора.',
+          'Savdo nuqtasi yaratildi. Operator tasdiqlashi kutilishi mumkin.',
           backgroundColor: AppColors.info,
         );
         context.go('/clients');
@@ -368,7 +365,7 @@ class _NewClientPageState extends ConsumerState<NewClientPage> {
         context: context,
         builder: (ctx) => AlertDialog(
           title: const Text('Клиент добавлен'),
-          content: const Text('Создать заказ для новой торговой точки?'),
+          content: const Text('Yangi savdo nuqtasi uchun buyurtma yaratilsinmi?'),
           actions: [
             TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Позже')),
             FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Создать заказ')),
@@ -402,7 +399,7 @@ class _NewClientPageState extends ConsumerState<NewClientPage> {
   }
 
   Widget _citySelect() {
-    final agentCities = ref.watch(effectiveAgentCitiesProvider);
+    final agentCities = ref.watch(agentCitiesProvider);
     final seen = <String>{};
     final unique = agentCities.where((c) => seen.add(c.value)).toList();
     final options = unique.map((c) => c.value).toList();
@@ -412,35 +409,21 @@ class _NewClientPageState extends ConsumerState<NewClientPage> {
       final byLabel = unique.where((c) => c.label == value).toList();
       value = byLabel.length == 1 ? byLabel.first.value : null;
     }
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        AgentOutlineSelect(
-          label: 'Город',
-          value: value,
-          options: options,
-          optionLabels: labels,
-          showRequiredStar: true,
-          onChanged: agentCities.isEmpty
-              ? null
-              : (stored) {
-                  if (stored == null) {
-                    _applyCitySelection(null);
-                    return;
-                  }
-                  final picked = unique.where((c) => c.value == stored).toList();
-                  _applyCitySelection(picked.isNotEmpty ? picked.first : null);
-                },
-        ),
-        if (agentCities.isEmpty)
-          const Padding(
-            padding: EdgeInsets.only(top: 4, left: 4),
-            child: Text(
-              'Города не найдены. Администратор должен назначить агенту территорию/город.',
-              style: TextStyle(fontSize: 12, color: Colors.orange),
-            ),
-          ),
-      ],
+    return AgentOutlineSelect(
+      label: 'Город',
+      value: value,
+      options: options,
+      optionLabels: labels,
+      onChanged: agentCities.isEmpty
+          ? null
+          : (stored) {
+              if (stored == null) {
+                _applyCitySelection(null);
+                return;
+              }
+              final picked = unique.where((c) => c.value == stored).toList();
+              _applyCitySelection(picked.isNotEmpty ? picked.first : null);
+            },
     );
   }
 
@@ -448,7 +431,8 @@ class _NewClientPageState extends ConsumerState<NewClientPage> {
   Widget build(BuildContext context) {
     final cfg = ref.watch(sessionProvider).mobileConfig?.client ?? const ClientConfig();
     final territoryVisible = isClientFieldVisible(cfg, 'territory');
-    final showCityPicker = territoryVisible;
+    final agentCities = ref.watch(agentCitiesProvider);
+    final showCityPicker = territoryVisible && agentCities.isNotEmpty;
     final showGpsCapture = showCoordinatesField(cfg);
     final showPhotoCapture = cfg.showPhotos;
     final showLocationSection = showGpsCapture || showPhotoCapture;
@@ -456,23 +440,21 @@ class _NewClientPageState extends ConsumerState<NewClientPage> {
     final canCreate = cfg.canCreate;
     if (!canCreate) {
       return const Scaffold(
-        appBar: AgentAppBar(title: 'Yangi savdo nuqtasi', showBack: true),
+        appBar: AgentAppBar(title: 'Новая торговая точка', showBack: true),
         body: Center(child: Text('Создание новой точки запрещено настройками.')),
       );
     }
 
     return Scaffold(
       backgroundColor: AppColors.background,
-      appBar: const AgentAppBar(title: 'Yangi savdo nuqtasi', showBack: true),
+      appBar: const AgentAppBar(title: 'Новая торговая точка', showBack: true),
       body: Column(
         children: [
           Expanded(
             child: ListView(
               padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
               children: [
-                SaEnter(
-                  preset: SaMotionPreset.rise,
-                  child: AgentTemplateSection(
+                AgentTemplateSection(
                   title: 'Данные клиента',
                   subtitle: 'Поля отображаются по настройкам конфигурации.',
                   children: [
@@ -488,14 +470,10 @@ class _NewClientPageState extends ConsumerState<NewClientPage> {
                     ],
                   ],
                 ),
-                ),
                 if (showLocationSection)
-                  SaEnter(
-                    delay: SaStaggerDelay.of(1),
-                    preset: SaMotionPreset.rise,
-                    child: AgentTemplateSection(
+                  AgentTemplateSection(
                     title: 'Локация',
-                    subtitle: showGpsCapture ? 'Привяжите точку по GPS.' : null,
+                    subtitle: showGpsCapture ? 'GPS orqali nuqtani biriktiring.' : null,
                     children: [
                       if (showGpsCapture || showPhotoCapture)
                         Row(
@@ -543,7 +521,6 @@ class _NewClientPageState extends ConsumerState<NewClientPage> {
                       ],
                     ],
                   ),
-                  ),
                 if (_error != null)
                   Padding(
                     padding: const EdgeInsets.only(top: 4, bottom: 8),
@@ -566,10 +543,21 @@ class _NewClientPageState extends ConsumerState<NewClientPage> {
             ),
             child: SafeArea(
               top: false,
-              child: SaPrimaryButton(
-                label: 'Сохранить клиента',
-                loading: _saving || _photoUploading,
+              child: FilledButton(
                 onPressed: (_saving || _photoUploading) ? null : _save,
+                style: FilledButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  foregroundColor: Colors.white,
+                  minimumSize: const Size(double.infinity, 52),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                ),
+                child: _saving
+                    ? const SizedBox(
+                        height: 22,
+                        width: 22,
+                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                      )
+                    : const Text('Сохранить клиента', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
               ),
             ),
           ),

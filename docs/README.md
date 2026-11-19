@@ -50,6 +50,14 @@ Bu katalog mavjud hujjatlarga havolalar. Eski reja fayllari (`API-reference.md`,
 | [bank-transfer-inbox-adapter-contract.md](./bank-transfer-inbox-adapter-contract.md) | Fake/1C adapter shartnomasi |
 | [bank-transfer-inbox-uat-results.md](./bank-transfer-inbox-uat-results.md) | UAT natija shabloni |
 
+## Reja modullari
+
+| Hujjat | Mazmun |
+|--------|--------|
+| [PLANS_TAKLIFIY_REJA_ANALIZ_VA_REJA.md](./PLANS_TAKLIFIY_REJA_ANALIZ_VA_REJA.md) | **Taklifiy reja** — to‘liq analiz, 4 formula, qoidalar ustuvorligi, ma’lumot sifati, API/model va integratsiya rejasi |
+| [../packages/plans-proposal-demo/README.md](../packages/plans-proposal-demo/README.md) | Interaktiv web prototipni ishga tushirish va sinash |
+| [PLAN_APPROVERS_YAKUNLANDI.md](./PLAN_APPROVERS_YAKUNLANDI.md) | Mavjud tasdiqlash zanjiri |
+
 ## Audit / refaktoring handoff
 
 | Hujjat | Mazmun |

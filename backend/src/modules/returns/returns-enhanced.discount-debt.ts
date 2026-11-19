@@ -1,5 +1,6 @@
 import { Prisma, type PrismaClient } from "@prisma/client";
 import { prisma } from "../../config/database";
+import { applyDelta } from "../client-balances/client-balance-mutator";
 import { parseAppliedBonusRulesSnapshot } from "../bonus-rules/bonus-rules.snapshot";
 import { R } from "./returns-enhanced.helpers";
 
@@ -345,18 +346,12 @@ export async function applyClientDiscountDebt(
     }
   });
 
-  const bal = await tx.clientBalance.upsert({
-    where: { tenant_id_client_id: { tenant_id: tenantId, client_id: clientId } },
-    create: { tenant_id: tenantId, client_id: clientId, balance: delta },
-    update: { balance: { increment: delta } }
-  });
-  await tx.clientBalanceMovement.create({
-    data: {
-      client_balance_id: bal.id,
-      delta,
-      note,
-      user_id: uid
-    }
+  await applyDelta(tx, {
+    tenantId,
+    clientId,
+    delta,
+    note,
+    userId: uid
   });
 
   if (orderId != null && opts.newDiscountSum != null) {

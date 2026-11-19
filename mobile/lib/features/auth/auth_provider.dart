@@ -20,6 +20,7 @@ import '../../core/api/expeditor_api.dart';
 import '../../core/api/supervisor_api.dart';
 import '../../features/expeditor/cache/expeditor_deliveries_cache.dart';
 import '../../core/auth/session.dart';
+import '../../features/auth/entrance/template_auth_entrance.dart';
 import '../../core/config/app_env.dart';
 import '../../core/config/mobile_config.dart';
 import '../../core/config/mobile_config_policy.dart';
@@ -47,8 +48,6 @@ enum AuthStatus {
   unauthenticated,
   loading,
   authenticated,
-  /// Vaqtinchalik parolni majburiy almashtirish.
-  mustChangePassword,
   pinSetup,
   bootstrapping,
   syncComplete,
@@ -61,12 +60,12 @@ class BootstrapStep {
   final int idx;
   final String label;
   const BootstrapStep(this.idx, this.label);
-  static const auth = BootstrapStep(0, 'Аутентификация');
-  static const permissions = BootstrapStep(1, 'Загрузка прав доступа');
-  static const config = BootstrapStep(2, 'Конфигурация');
-  static const sync = BootstrapStep(3, 'Синхронизация данных');
-  static const push = BootstrapStep(4, 'Настройка уведомлений');
-  static const done = BootstrapStep(5, 'Готово!');
+  static const auth = BootstrapStep(0, 'Autentifikatsiya');
+  static const permissions = BootstrapStep(1, 'Ruxsatlar yuklanmoqda');
+  static const config = BootstrapStep(2, 'Konfiguratsiya');
+  static const sync = BootstrapStep(3, 'Ma\'lumotlar sinxronlanmoqda');
+  static const push = BootstrapStep(4, 'Push sozlanmoqda');
+  static const done = BootstrapStep(5, 'Tayyor!');
   static const values = [auth, permissions, config, sync, push, done];
 }
 
@@ -333,7 +332,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
       final me = await _tryFetchMe();
       if (me?.appAccess == false) {
         await _wipeLocalAuth();
-        state = const AuthState(status: AuthStatus.error, error: 'Доступ к приложению отключён');
+        state = const AuthState(status: AuthStatus.error, error: 'Ilova kirish o\'chirilgan');
         return;
       }
       if (me != null) {
@@ -407,7 +406,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
           await _wipeLocalAuth();
           state = const AuthState(
             status: AuthStatus.error,
-            error: 'Сессия истекла. Войдите заново.',
+            error: 'Sessiya tugadi. Qayta kiring.',
           );
           return;
         }
@@ -415,7 +414,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
 
       if (me.appAccess == false) {
         await _wipeLocalAuth();
-        state = const AuthState(status: AuthStatus.error, error: 'Доступ к приложению отключён');
+        state = const AuthState(status: AuthStatus.error, error: 'Ilova kirish o\'chirilgan');
         return;
       }
 
@@ -455,7 +454,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
       }
     } on AppAccessDeniedException {
       await _wipeLocalAuth();
-      state = const AuthState(status: AuthStatus.error, error: 'Доступ к приложению отключён');
+      state = const AuthState(status: AuthStatus.error, error: 'Ilova kirish o\'chirilgan');
     } on UserNotOnSlotException {
       await _wipeLocalAuth();
       state = const AuthState(
@@ -470,7 +469,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
         state = const AuthState(status: AuthStatus.locked, error: 'Нет интернета');
       }
     } catch (_) {
-      state = const AuthState(status: AuthStatus.locked, error: 'Попробуйте ещё раз');
+      state = const AuthState(status: AuthStatus.locked, error: 'Qayta urinib ko\'ring');
     }
   }
 
@@ -539,36 +538,33 @@ class AuthNotifier extends StateNotifier<AuthState> {
       }
 
       if (_session.state.bootstrapped) {
-        // Avval UI ochilsin — /me uzoq kutib splash da qolmasin.
+        state = const AuthState(status: AuthStatus.loading);
+        try {
+          final me = await _authApi.me();
+          if (me.appAccess == false) {
+            await _wipeLocalAuth();
+            state = const AuthState(status: AuthStatus.error, error: 'Ilova kirish o\'chirilgan');
+            return;
+          }
+        } on UnauthorizedException catch (e) {
+          if (await _lockForApp()) return;
+          await _wipeLocalAuth();
+          state = AuthState(status: AuthStatus.error, error: e.message);
+          return;
+        } on AppAccessDeniedException catch (e) {
+          await _wipeLocalAuth();
+          state = AuthState(status: AuthStatus.error, error: e.message);
+          return;
+        } on UserNotOnSlotException catch (e) {
+          await _wipeLocalAuth();
+          state = AuthState(status: AuthStatus.error, error: e.message);
+          return;
+        } on NetworkException {
+          // Oflayn — saqlangan sessiya bilan davom etamiz
+        } catch (_) {}
         _resumeAfterRestore();
         state = const AuthState(status: AuthStatus.ready);
         unawaited(_backgroundAfterUnlock());
-        unawaited(() async {
-          try {
-            final me = await _authApi.me().timeout(const Duration(seconds: 12));
-            if (me.appAccess == false) {
-              await _wipeLocalAuth();
-              state = const AuthState(
-                status: AuthStatus.error,
-                error: 'Доступ к приложению отключён',
-              );
-            }
-          } on UnauthorizedException catch (e) {
-            if (await _lockForApp()) return;
-            await _wipeLocalAuth();
-            state = AuthState(status: AuthStatus.error, error: e.message);
-          } on AppAccessDeniedException catch (e) {
-            await _wipeLocalAuth();
-            state = AuthState(status: AuthStatus.error, error: e.message);
-          } on UserNotOnSlotException catch (e) {
-            await _wipeLocalAuth();
-            state = AuthState(status: AuthStatus.error, error: e.message);
-          } on TimeoutException {
-            // Oflayn / sekin tarmoq — mahalliy sessiya bilan davom
-          } on NetworkException {
-            // Oflayn — saqlangan sessiya bilan davom etamiz
-          } catch (_) {}
-        }());
       } else {
         await _bootstrap();
       }
@@ -588,7 +584,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
         if (preBlocked) {
           state = const AuthState(
             status: AuthStatus.error,
-            error: 'Обновите приложение и войдите заново',
+            error: 'Ilovani yangilang va qayta kiring',
           );
           return;
         }
@@ -612,12 +608,12 @@ class AuthNotifier extends StateNotifier<AuthState> {
       await _session.setUser(r.user, slug: slug, tenantName: r.user.tenantName);
       if (!r.user.isMobileRole) {
         await _wipeLocalAuth();
-        state = const AuthState(status: AuthStatus.error, error: 'Нет доступа к мобильному приложению');
+        state = const AuthState(status: AuthStatus.error, error: 'Mobil ilovaga ruxsat yo\'q');
         return;
       }
       if (r.user.appAccess == false) {
         await _wipeLocalAuth();
-        state = const AuthState(status: AuthStatus.error, error: 'Доступ к приложению отключён');
+        state = const AuthState(status: AuthStatus.error, error: 'Ilova kirish o\'chirilgan');
         return;
       }
       state = const AuthState(status: AuthStatus.authenticated);
@@ -626,18 +622,16 @@ class AuthNotifier extends StateNotifier<AuthState> {
       if (blocked) {
         state = const AuthState(
           status: AuthStatus.error,
-          error: 'Обновите приложение и войдите заново',
+          error: 'Ilovani yangilang va qayta kiring',
         );
-        return;
-      }
-      if (r.user.mustChangePassword) {
-        state = const AuthState(status: AuthStatus.mustChangePassword);
         return;
       }
       if (await _needsPinSetup()) {
         state = const AuthState(status: AuthStatus.pinSetup);
         return;
       }
+      await Future<void>.delayed(authEntranceCoverHold);
+      if (state.status != AuthStatus.authenticated) return;
       await _bootstrap();
     } on NetworkException {
       _setError(UserFacingError.serverUnreachable(context: 'Не удалось войти в систему.'));
@@ -843,11 +837,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
     }
     try {
       final version = await MobileDeviceInfo.apkVersion;
-      final info = await _mobileApi.fetchAppRelease(
-        slug,
-        version,
-        role: _session.state.user?.role,
-      );
+      final info = await _mobileApi.fetchAppRelease(slug, version);
       if (info == null || !info.hasAction) {
         unawaited(
           MobileLocalNotificationService.instance.notifyAppUpdateUpToDate(version),
@@ -879,11 +869,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
     if (slug.isEmpty) return;
     try {
       final version = await MobileDeviceInfo.apkVersion;
-      final info = await _mobileApi.fetchAppRelease(
-        slug,
-        version,
-        role: _session.state.user?.role,
-      );
+      final info = await _mobileApi.fetchAppRelease(slug, version);
       if (info == null || !info.hasAction) {
         if (notifyUpToDate) {
           unawaited(
@@ -958,11 +944,11 @@ class AuthNotifier extends StateNotifier<AuthState> {
       if (user == null) throw const UnauthorizedException();
 
       final slug = _session.state.tenantSlug ?? '';
-      if (slug.isEmpty) throw const ApiException(message: 'Компания не выбрана');
+      if (slug.isEmpty) throw const ApiException(message: 'Tenant slug topilmadi');
 
       // Step 3: GET /auth/me
       state = state.copyWith(bootstrapStep: BootstrapStep.auth);
-      final meUser = await _authApi.me().timeout(const Duration(seconds: 20));
+      final meUser = await _authApi.me();
       final prev = _session.state.user;
       final mergedName = meUser.name.trim().isNotEmpty ? meUser.name : (prev?.name ?? meUser.name);
       await _session.setUser(
@@ -992,9 +978,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
 
       // Step 4: permissions
       state = state.copyWith(bootstrapStep: BootstrapStep.permissions);
-      final perms = await _permsApi
-          .getMyPermissions(slug)
-          .timeout(const Duration(seconds: 20));
+      final perms = await _permsApi.getMyPermissions(slug);
       await _session.setPermissions(perms);
 
       // Step 5–6: config + sync — kassa rollari uchun yengil bootstrap (agent-config kerak emas)
@@ -1004,26 +988,18 @@ class AuthNotifier extends StateNotifier<AuthState> {
         _session.markBootstrapped();
         await AppDatabase().recordSyncToday();
         state = state.copyWith(bootstrapStep: BootstrapStep.done, status: AuthStatus.syncComplete);
-        // RoleWelcome (~2.2s) ko‘rinsin — UI finishBootstrap chaqirmasa ham.
-        unawaited(Future<void>.delayed(const Duration(milliseconds: 2800), () {
-          if (state.status == AuthStatus.syncComplete) finishBootstrap();
-        }));
         return;
       }
 
       // Step 5: config
       state = state.copyWith(bootstrapStep: BootstrapStep.config);
-      final config = await _mobileApi
-          .getAgentConfig(slug)
-          .timeout(const Duration(seconds: 25));
+      final config = await _mobileApi.getAgentConfig(slug);
       if (config.tenantName != null && config.tenantName!.trim().isNotEmpty) {
         await _session.setTenantName(config.tenantName!);
       }
-      // Bootstrap paytida yangilash dialogi Completer da osilib qolardi (3%).
-      // Majburiy/ixtiyoriy — home ochilgach ko‘rsatiladi.
-      if (config.appUpdate != null && config.appUpdate!.hasAction) {
-        _deferredAppUpdate = config.appUpdate;
-        _deferredAfterSync = true;
+      final configBlocked = await _gateAppUpdate(config.appUpdate);
+      if (configBlocked) {
+        throw const ApiException(message: 'Ilovani yangilash majburiy');
       }
       await _session.setMobileConfig(
         MobileConfig.fromJson(config.mobileConfig),
@@ -1077,13 +1053,6 @@ class AuthNotifier extends StateNotifier<AuthState> {
       _session.markBootstrapped();
       state = state.copyWith(bootstrapStep: BootstrapStep.done, status: AuthStatus.syncComplete);
       unawaited(_bootstrapPostSyncServices());
-      // RoleWelcome (~2.2s) + «o‘tkazib yuborish» — oq/spinnerda qolmasin.
-      unawaited(Future<void>.delayed(const Duration(milliseconds: 2800), () {
-        if (state.status == AuthStatus.syncComplete) {
-          finishBootstrap();
-          unawaited(_resumeDeferredAppUpdateSoon());
-        }
-      }));
     } on UnauthorizedException catch (e) {
       if (await _lockForApp()) return;
       await _wipeLocalAuth();
@@ -1094,23 +1063,6 @@ class AuthNotifier extends StateNotifier<AuthState> {
     } on UserNotOnSlotException catch (e) {
       await _wipeLocalAuth();
       _setError(UserFacingError.fromApi(e));
-    } on TimeoutException {
-      ErrorReporter.instance?.reportModuleIssue(
-        module: ErrorModules.sync,
-        code: 'BootstrapSyncTimeout',
-        message: 'Синхронизация при входе: таймаут — отложена',
-        path: '/mobile/sync',
-        severity: 'warning',
-      );
-      _session.markBootstrapped();
-      state = AuthState(
-        status: AuthStatus.ready,
-        error: 'Сервер не ответил вовремя — данные обновятся позже',
-        errorInfo: UserFacingError.serverUnreachable(
-          context: 'Вход выполнен, но синхронизация отложена.',
-        ),
-      );
-      unawaited(_resumeDeferredAppUpdateSoon());
     } on NetworkException {
       ErrorReporter.instance?.reportModuleIssue(
         module: ErrorModules.sync,
@@ -1127,7 +1079,6 @@ class AuthNotifier extends StateNotifier<AuthState> {
           context: 'Вход выполнен, но синхронизация отложена.',
         ),
       );
-      unawaited(_resumeDeferredAppUpdateSoon());
     } on ApiException catch (e) {
       ErrorReporter.instance?.reportCaught(
         e,
@@ -1161,25 +1112,20 @@ class AuthNotifier extends StateNotifier<AuthState> {
     final slug = _session.state.tenantSlug ?? '';
     final se = _ref.read(syncEngineProvider);
     if (se != null) {
-      final payload = await se
-          .pullSync(
-            lastSyncAt: _session.state.lastSyncAt,
-            onPhase: _setSyncPhase,
-            awaitFlush: false,
-          )
-          .timeout(const Duration(seconds: 90));
+      final payload = await se.pullSync(
+        lastSyncAt: _session.state.lastSyncAt,
+        onPhase: _setSyncPhase,
+      );
       await _session.setLastSyncAt(payload.syncAt);
     } else {
       _setSyncPhase(0);
-      final payload = await _mobileApi
-          .syncFullParsed(
-            slug,
-            lastSyncAt: _session.state.lastSyncAt,
-            device: await MobileDeviceInfo.syncPayload(),
-          )
-          .timeout(const Duration(seconds: 90));
-      await _persistSyncPayload(payload, lastSyncAt: _session.state.lastSyncAt);
-      await _session.setLastSyncAt(payload.syncAt);
+      final syncResult = await _mobileApi.syncFull(
+        slug,
+        lastSyncAt: _session.state.lastSyncAt,
+        device: await MobileDeviceInfo.syncPayload(),
+      );
+      await _persistSyncResult(syncResult, lastSyncAt: _session.state.lastSyncAt);
+      await _session.setLastSyncAt(syncResult.syncAt);
     }
     _session.markBootstrapped();
   }
@@ -1187,9 +1133,6 @@ class AuthNotifier extends StateNotifier<AuthState> {
   /// Login bootstrap tugagach — push, GPS, offline navbat (asosiy oqimdan tashqari).
   Future<void> _bootstrapPostSyncServices() async {
     try {
-      // SyncComplete → Continue → home chizilgunga qadar FCM/WebView/GPS
-      // asosiy izolyatorni band qilmasin (emulyator ANR).
-      await Future<void>.delayed(const Duration(seconds: 6));
       final fcm = _ref.read(fcmServiceProvider);
       if (fcm != null) {
         try {
@@ -1211,11 +1154,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
         final se = _ref.read(syncEngineProvider);
         if (se != null) {
           try {
-            await Future.wait([
-              se.flushOfflineQueue(policySync: _syncCfg),
-              se.flushPendingPhotoReports(),
-              se.flushPendingLocationPings(),
-            ]);
+            await se.flushOfflineQueue(policySync: _syncCfg);
           } catch (_) {}
         }
       }
@@ -1373,16 +1312,9 @@ class AuthNotifier extends StateNotifier<AuthState> {
   void _resumeAfterRestore() {
     final gpsConfig = _session.state.mobileConfig?.gps;
     if (gpsConfig?.trackingEnabled == true) {
-      // PIN/home birinchi kadrdan keyin — GPS ANR bermasin.
-      unawaited(Future<void>(() async {
-        await Future<void>.delayed(const Duration(seconds: 2));
-        try {
-          await _ref
-              .read(gpsTrackerProvider.notifier)
-              .startTracking()
-              .timeout(const Duration(seconds: 8), onTimeout: () {});
-        } catch (_) {}
-      }));
+      try {
+        _ref.read(gpsTrackerProvider.notifier).startTracking();
+      } catch (_) {}
     }
   }
 
@@ -1417,7 +1349,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
       if (gateUpdate) {
         final blocked = await _gateAppUpdate(config.appUpdate);
         if (blocked) {
-          throw const ApiException(message: 'Требуется обновление приложения');
+          throw const ApiException(message: 'Ilovani yangilash majburiy');
         }
       }
       await _session.setMobileConfig(
@@ -1484,7 +1416,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
   }) async {
     final slug = _session.state.tenantSlug ?? '';
     if (slug.isEmpty) {
-      return const AgentSyncResult(ok: false, error: 'Компания не выбрана');
+      return const AgentSyncResult(ok: false, error: 'Tenant topilmadi');
     }
 
     await ensureAuthTokens(_ref);
@@ -1730,24 +1662,6 @@ class AuthNotifier extends StateNotifier<AuthState> {
   void finishBootstrap() {
     if (state.status != AuthStatus.syncComplete) return;
     state = state.copyWith(status: AuthStatus.ready);
-    unawaited(_resumeDeferredAppUpdateSoon());
-  }
-
-  Future<void> _resumeDeferredAppUpdateSoon() async {
-    await Future<void>.delayed(const Duration(seconds: 2));
-    try {
-      await resumeDeferredAppUpdate();
-    } catch (_) {}
-  }
-
-  /// Parol almashtirilgach — PIN yoki bootstrap.
-  Future<void> continueAfterPasswordChange() async {
-    state = const AuthState(status: AuthStatus.authenticated);
-    if (await _needsPinSetup()) {
-      state = const AuthState(status: AuthStatus.pinSetup);
-      return;
-    }
-    await _bootstrap();
   }
 
   Future<void> logout() async {
@@ -1794,10 +1708,10 @@ class AuthNotifier extends StateNotifier<AuthState> {
 
   /// Web panel «Доступ к приложению» o‘chirilganda — login ekraniga.
   Future<void> appAccessRevoked() async {
-    state = const AuthState(status: AuthStatus.error, error: 'Доступ к приложению отключён');
+    state = const AuthState(status: AuthStatus.error, error: 'Ilova kirish o\'chirilgan');
     _session.state = const SessionState();
     await _wipeLocalAuth();
-    state = const AuthState(status: AuthStatus.error, error: 'Доступ к приложению отключён');
+    state = const AuthState(status: AuthStatus.error, error: 'Ilova kirish o\'chirilgan');
   }
 
   /// Ishchi o‘rnidan yechilganda — login ekraniga.

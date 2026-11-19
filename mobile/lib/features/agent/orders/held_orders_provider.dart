@@ -112,7 +112,7 @@ class HeldOrderScheduler {
 
     final slug = _ref.read(sessionProvider).tenantSlug ?? '';
     if (slug.isEmpty) {
-      if (reportFailure) throw StateError('Компания не выбрана');
+      if (reportFailure) throw StateError('Нет tenant');
       return false;
     }
 
@@ -131,7 +131,6 @@ class HeldOrderScheduler {
             isConsignment: order.isConsignment,
             consignmentDueDate: order.consignmentDueDate,
             shipmentDate: order.shipmentDate,
-            visit: await AppDatabase().findVisitGeoForClient(order.clientId, at: order.createdAt),
           );
       final orderId = parseOrderInt(row['id']);
       if (orderId != null) {
@@ -147,6 +146,10 @@ class HeldOrderScheduler {
         ]);
       }
       await repo.markSubmitted(heldOrderId);
+      await ensureVisitCompletedForClientToday(
+        order.clientId,
+        clientName: order.clientName,
+      );
       await MobileLocalNotificationService.instance.notifyHeldOrderSent(
         clientName: order.clientName,
         orderNumber: row['number']?.toString() ?? (orderId?.toString() ?? ''),

@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../core/api/api_exceptions.dart';
-import '../../core/api/bank_transfer_inbox_api.dart';
-import '../../core/auth/session.dart';
-import '../../core/format/money_display.dart';
-import '../../core/theme/app_colors.dart';
-import '../../core/theme/app_typography.dart';
+import '../../../core/api/api_exceptions.dart';
+import '../../../core/api/bank_transfer_inbox_api.dart';
+import '../../../core/auth/session.dart';
+import '../../../core/format/money_display.dart';
+import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_typography.dart';
 import 'bank_transfer_inbox_providers.dart';
 
 /// Detail: summa, INN/hisob, status; assign / reassign + majburiy izoh; confirm pending.
@@ -464,7 +464,7 @@ class _BankTransferInboxDetailPageState
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'Клиент уже сопоставлен. Создайте ожидающий платёж, затем подтвердите.',
+                  'Клиент уже сопоставлен. Создайте pending-платёж, затем подтвердите.',
                   style: AppTypography.caption.copyWith(color: AppColors.textMuted),
                 ),
               ] else if (paymentId == null && (canAssign || canReassign)) ...[
@@ -476,7 +476,7 @@ class _BankTransferInboxDetailPageState
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Text(
-                    'После назначения создаётся ожидающий платёж — затем его можно подтвердить здесь.',
+                    'После назначения создаётся pending-платёж — затем можно подтвердить здесь.',
                     style: AppTypography.caption.copyWith(color: AppColors.textTitle),
                   ),
                 ),

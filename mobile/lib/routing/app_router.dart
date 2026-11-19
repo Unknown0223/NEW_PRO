@@ -7,10 +7,7 @@ import '../core/theme/app_colors.dart';
 import '../features/auth/auth_provider.dart';
 import '../features/auth/pin_setup_screen.dart';
 import '../features/auth/pin_unlock_screen.dart';
-import '../core/permissions/app_permissions.dart';
 import '../features/auth/login_screen.dart';
-import '../features/auth/must_change_password_screen.dart';
-import '../features/auth/permission_gate_page.dart';
 import '../features/auth/bootstrap_screen.dart';
 import '../features/auth/session_splash_screen.dart';
 import '../features/agent/home/agent_home_page.dart';
@@ -22,7 +19,6 @@ import '../features/agent/clients/agent_debtors_by_orders_page.dart';
 import '../features/agent/misc/agent_map_page.dart';
 import '../features/agent/misc/agent_search_page.dart';
 import '../features/agent/misc/agent_settings_page.dart';
-import '../features/agent/misc/quick_panel_settings_page.dart';
 import '../features/agent/orders/agent_orders_page.dart';
 import '../features/agent/orders/agent_order_detail_page.dart';
 import '../features/agent/orders/agent_misc_orders_page.dart';
@@ -37,7 +33,6 @@ import '../features/agent/warehouse/agent_warehouse_stock_page.dart';
 import '../features/agent/report/agent_report_page.dart';
 import '../features/agent/tabel/agent_tabel_page.dart';
 import '../features/agent/kpi/agent_kpi_page.dart';
-import '../features/agent/kpi/agent_bonuses_page.dart';
 import '../features/agent/kpi/agent_kpi_calc_page.dart';
 import '../features/agent/kpi/agent_kpi_route_page.dart';
 import '../features/agent/kpi/agent_kpi_diagnostics_days_page.dart';
@@ -81,16 +76,11 @@ import '../features/supervisor/kpi/supervisor_kpi_route_page.dart';
 import '../features/supervisor/settings/supervisor_settings_page.dart';
 import '../features/supervisor/clients/supervisor_clients_page.dart';
 import '../features/supervisor/clients/supervisor_client_edit_page.dart';
-import '../features/supervisor/clients/supervisor_new_client_page.dart';
 import '../features/supervisor/clients/supervisor_notifications_page.dart';
 import '../features/shared/profile/profile_page.dart';
 import '../features/cashier/cashier_home_page.dart';
 import '../features/cashier/bank_transfer_inbox_page.dart';
 import '../features/cashier/bank_transfer_inbox_detail_page.dart';
-import '../features/tasks/task_create_page.dart';
-import '../features/tasks/task_detail_page.dart';
-import '../features/tasks/tasks_page.dart';
-import '../features/attendance/attendance_hub_screen.dart';
 import 'role_guard.dart';
 
 /// Dialoglar uchun (MaterialApp.builder kontekstida Navigator yo‘q).
@@ -101,9 +91,6 @@ final _shellKey = GlobalKey<NavigatorState>();
 class _AppRouterRefresh extends ChangeNotifier {
   _AppRouterRefresh(Ref ref) {
     ref.listen<AuthState>(authStateProvider, (_, __) => notifyListeners());
-    ref.listen<AppPermissionsState>(appPermissionsProvider, (prev, next) {
-      if (prev?.allGranted != next.allGranted || prev?.checkedOnce != next.checkedOnce) notifyListeners();
-    });
   }
 }
 
@@ -182,18 +169,9 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         return null;
       }
 
-      // Unlock da loading — PIN ekrani qolsin.
-      // Splash + allaqachon bootstrap qilingan sessiya: /me kutib oq spinnerda
-      // osilib qolmasin — darhol home (me fonda).
-      if (s == AuthStatus.loading && loc == '/unlock') {
+      // Loading (masalan oflayn me tekshiruvi) — splash/unlock da qolish mumkin.
+      if (s == AuthStatus.loading && (isSplash || loc == '/unlock')) {
         return null;
-      }
-      if (s == AuthStatus.loading && isSplash && session.bootstrapped) {
-        return '/home';
-      }
-
-      if (s == AuthStatus.mustChangePassword) {
-        return loc == '/must-change-password' ? null : '/must-change-password';
       }
 
       if (s == AuthStatus.pinSetup) {
@@ -209,24 +187,16 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         return isBoot ? null : '/bootstrap';
       }
 
-      if (s == AuthStatus.authenticated ||
-          s == AuthStatus.bootstrapping ||
-          s == AuthStatus.syncComplete) {
+      if (s == AuthStatus.authenticated) {
+        return isLogin ? null : '/bootstrap';
+      }
+
+      if (s == AuthStatus.bootstrapping || s == AuthStatus.syncComplete) {
         return isBoot ? null : '/bootstrap';
       }
 
       if (s == AuthStatus.ready) {
-        final perms = ref.read(appPermissionsProvider);
-        if (perms.checkedOnce && !perms.allGranted) {
-          return loc == '/permissions' ? null : '/permissions';
-        }
-        if (isLogin ||
-            isBoot ||
-            isSplash ||
-            loc == '/unlock' ||
-            loc == '/pin-setup' ||
-            loc == '/must-change-password' ||
-            loc == '/permissions') {
+        if (isLogin || isBoot || isSplash || loc == '/unlock' || loc == '/pin-setup') {
           return '/home';
         }
 
@@ -242,14 +212,9 @@ final appRouterProvider = Provider<GoRouter>((ref) {
     routes: [
       GoRoute(path: '/splash', builder: (_, __) => const SessionSplashScreen()),
       GoRoute(path: '/login', builder: (_, __) => const LoginScreen()),
-      GoRoute(
-        path: '/must-change-password',
-        builder: (_, __) => const MustChangePasswordScreen(),
-      ),
       GoRoute(path: '/pin-setup', builder: (_, __) => const PinSetupScreen()),
       GoRoute(path: '/unlock', builder: (_, __) => const PinUnlockScreen()),
       GoRoute(path: '/bootstrap', builder: (_, __) => const BootstrapScreen()),
-      GoRoute(path: '/permissions', builder: (_, __) => const PermissionGatePage()),
       GoRoute(
         path: '/exp-manual-sync',
         parentNavigatorKey: rootNavigatorKey,
@@ -283,26 +248,15 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           Map<String, dynamic>? initialClient;
           final extra = state.extra;
           if (extra is Map) {
-            final m = Map<String, dynamic>.from(extra);
-            // misc oqimidan kelgan comment — mijoz emas
-            if (m.containsKey('id') || m.containsKey('name')) {
-              initialClient = m;
-            }
+            initialClient = Map<String, dynamic>.from(extra);
           }
           final heldId = int.tryParse(state.uri.queryParameters['held_id'] ?? '');
-          final prefill = state.uri.queryParameters['prefill_comment'];
           return CreateOrderScreen(
             initialClientId: clientId,
             initialClient: initialClient,
             heldOrderId: heldId,
-            prefillComment: prefill,
           );
         },
-      ),
-      GoRoute(
-        path: '/bonuses',
-        parentNavigatorKey: rootNavigatorKey,
-        builder: (_, __) => const AgentBonusesPage(),
       ),
       GoRoute(
         path: '/draft',
@@ -334,11 +288,6 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         builder: (_, __) => const SupervisorKpiRoutePage(),
       ),
       GoRoute(
-        path: '/sv-clients/new',
-        parentNavigatorKey: rootNavigatorKey,
-        builder: (_, __) => const SupervisorNewClientPage(),
-      ),
-      GoRoute(
         path: '/sv-clients/:id',
         parentNavigatorKey: rootNavigatorKey,
         builder: (_, state) {
@@ -350,27 +299,6 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: '/sv-notifications',
         parentNavigatorKey: rootNavigatorKey,
         builder: (_, __) => const SupervisorNotificationsPage(),
-      ),
-      GoRoute(
-        path: '/tasks',
-        parentNavigatorKey: rootNavigatorKey,
-        builder: (_, __) => const TasksPage(),
-      ),
-      GoRoute(
-        path: '/tasks/new',
-        parentNavigatorKey: rootNavigatorKey,
-        builder: (_, __) => const TaskCreatePage(),
-      ),
-      GoRoute(
-        path: '/tasks/:id',
-        parentNavigatorKey: rootNavigatorKey,
-        builder: (_, state) {
-          final id = int.tryParse(state.pathParameters['id'] ?? '');
-          if (id == null) {
-            return const Scaffold(body: Center(child: Text('Задача не найдена')));
-          }
-          return TaskDetailPage(taskId: id);
-        },
       ),
       GoRoute(
         path: '/clients/new',
@@ -388,7 +316,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         builder: (ctx, state) {
           final id = int.tryParse(state.pathParameters['clientId'] ?? '');
           if (id == null) {
-            return const Scaffold(body: Center(child: Text('Визит не найден')));
+            return const Scaffold(body: Center(child: Text('Vizit topilmadi')));
           }
           return VisitInProgressScreen(clientId: id);
         },
@@ -400,7 +328,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           final id = int.tryParse(state.pathParameters['id'] ?? '');
           if (id == null) {
             return const Scaffold(
-                body: Center(child: Text('Неверный ID клиента')),);
+                body: Center(child: Text('Mijoz ID noto\'g\'ri')),);
           }
           return ClientDetailScreen(clientId: id);
         },
@@ -449,19 +377,9 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         builder: (_, __) => const AgentSettingsPage(),
       ),
       GoRoute(
-        path: '/settings/quick',
-        parentNavigatorKey: rootNavigatorKey,
-        builder: (_, __) => const QuickPanelSettingsPage(),
-      ),
-      GoRoute(
         path: '/tabel',
         parentNavigatorKey: rootNavigatorKey,
         builder: (_, __) => const AgentTabelPage(),
-      ),
-      GoRoute(
-        path: '/attendance',
-        parentNavigatorKey: rootNavigatorKey,
-        builder: (_, __) => const AttendanceHubScreen(),
       ),
       GoRoute(
         path: '/deliveries/:id',
@@ -470,7 +388,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           final id = int.tryParse(state.pathParameters['id'] ?? '');
           if (id == null) {
             return const Scaffold(
-                body: Center(child: Text('Неверный ID заказа')),);
+                body: Center(child: Text('Buyurtma ID noto\'g\'ri')),);
           }
           return ExpeditorDeliveryDetailPage(orderId: id);
         },
@@ -482,7 +400,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           final id = int.tryParse(state.pathParameters['id'] ?? '');
           if (id == null) {
             return const Scaffold(
-                body: Center(child: Text('Неверный ID клиента')),);
+                body: Center(child: Text('Mijoz ID noto\'g\'ri')),);
           }
           final extra = state.extra;
           return ExpeditorClientDetailPage(
@@ -498,7 +416,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           final id = int.tryParse(state.pathParameters['id'] ?? '');
           if (id == null) {
             return const Scaffold(
-                body: Center(child: Text('Неверный ID клиента')),);
+                body: Center(child: Text('Mijoz ID noto\'g\'ri')),);
           }
           final extra = state.extra;
           return ExpeditorDebtorClientPage(
@@ -514,7 +432,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           final id = int.tryParse(state.pathParameters['id'] ?? '');
           if (id == null) {
             return const Scaffold(
-                body: Center(child: Text('Неверный ID клиента')),);
+                body: Center(child: Text('Mijoz ID noto\'g\'ri')),);
           }
           return ExpeditorClientOrdersPage(clientId: id);
         },
@@ -526,7 +444,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           final id = int.tryParse(state.pathParameters['id'] ?? '');
           if (id == null) {
             return const Scaffold(
-                body: Center(child: Text('Неверный ID клиента')),);
+                body: Center(child: Text('Mijoz ID noto\'g\'ri')),);
           }
           return ExpeditorClientLedgerPage(clientId: id);
         },
@@ -615,7 +533,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           final id = int.tryParse(state.pathParameters['id'] ?? '');
           if (id == null) {
             return const Scaffold(
-              body: Center(child: Text('Неверный ID')),
+              body: Center(child: Text('ID noto\'g\'ri')),
             );
           }
           return BankTransferInboxDetailPage(inboxId: id);

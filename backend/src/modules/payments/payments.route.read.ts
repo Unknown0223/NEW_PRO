@@ -168,6 +168,9 @@ export async function registerPaymentReadRoutes(app: FastifyInstance) {
         if (msg === "BAD_AMOUNT") return sendApiError(reply, request, 400, "BadAmount");
         if (msg === "BAD_PAYMENT_TYPE") return sendApiError(reply, request, 400, "BadPaymentType");
         if (msg === "BAD_CASH_DESK") return sendApiError(reply, request, 400, "BadCashDesk");
+        if (msg === "CASH_DESK_REQUIRED") {
+          return sendApiError(reply, request, 400, "CashDeskRequired", "Выберите кассу");
+        }
         if (msg === "CASH_DESK_NO_CLIENT_PAYMENTS") {
           return sendApiError(reply, request, 400, "CashDeskNoClientPayments");
         }

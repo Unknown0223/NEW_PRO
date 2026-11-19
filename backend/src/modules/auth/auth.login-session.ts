@@ -5,7 +5,11 @@ import { toFio } from "../staff/staff.shared.helpers";
 import { isSessionLimitReached, isUnlimitedMaxSessions } from "../../lib/max-sessions";
 import { isSessionEnforcedRole, MOBILE_FIELD_ROLES } from "./app-access.service";
 import { otherActiveSessionsWhere } from "./auth.session-where";
-import { refreshExpiresAt } from "./session-ttl";
+import {
+  mobileSessionUserAgent,
+  refreshExpiresAt,
+  sessionClientKindFromApk
+} from "./session-ttl";
 
 const ACCESS_TOKEN_TTL = "15m";
 
@@ -92,7 +96,12 @@ export async function issueLoginSession(app: FastifyInstance, input: IssueSessio
   }
 
   const deviceName = input.device_name?.trim().slice(0, 255) || null;
-  const userAgent = input.user_agent?.trim().slice(0, 512) || null;
+  const apkVersionEarly = input.apk_version?.trim().slice(0, 64) || null;
+  const clientKind = sessionClientKindFromApk(apkVersionEarly);
+  const userAgent =
+    clientKind === "mobile" && apkVersionEarly
+      ? mobileSessionUserAgent(apkVersionEarly, input.user_agent)
+      : input.user_agent?.trim().slice(0, 512) || null;
   const ipAddr = input.ip_address?.trim().slice(0, 64) || null;
   const refreshToken = newRefreshTokenValue();
   const newHash = hashToken(refreshToken);
@@ -104,7 +113,7 @@ export async function issueLoginSession(app: FastifyInstance, input: IssueSessio
       user_id: user.id,
       token_hash: newHash,
       family_id: familyId,
-      expires_at: refreshExpiresAt(),
+      expires_at: refreshExpiresAt(Date.now(), clientKind),
       device_name: deviceName,
       device_id: deviceId,
       user_agent: userAgent,
@@ -130,7 +139,7 @@ export async function issueLoginSession(app: FastifyInstance, input: IssueSessio
     });
   }
 
-  const apkVersion = input.apk_version?.trim().slice(0, 64) || null;
+  const apkVersion = apkVersionEarly;
   void import("../security/login-alerts.detect")
     .then(async ({ recordLoginAndDetect }) => {
       const { platformOfLogin } = await import("../security/login-alerts.pure");

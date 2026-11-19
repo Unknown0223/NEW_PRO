@@ -1,7 +1,7 @@
 # Mobil Sa redesign — holat
 
-Oxirgi yangilanish: 2026-11-13  
-Branch: `feature/mobile-ui-redesign`
+Oxirgi yangilanish: 2026-11-19  
+Branch: `feature/mobile-ui-redesign` → **`main` ga qo‘shilgan** (uyda `git pull` bilan keladi)
 
 ## Holat
 
@@ -15,13 +15,23 @@ Branch: `feature/mobile-ui-redesign`
 | Xarita / KPI | done (overflow + o‘zbek) |
 | Vizit / Mijoz / Hisobot / Qarz / Ombor / Sozlama / Tabel | o‘zbek matnlar |
 | `S` (app_strings) | o‘zbekcha SSOT |
+| Auth entrance (template wave / brand) | done |
 
-## Merge
+## Qayerdamiz
 
-`main` ga — E2E exp/sv yashil bo‘lguncha **yo‘q**.
+- Redesign UI: **tayyor** (yuqoridagi jadval).
+- Git: manba `mobile/` **repo ichida**; uyda yangilash: ildizda `.\uyda-yangilash.cmd` ([docs/UYDA-GIT-SINXRON.md](../docs/UYDA-GIT-SINXRON.md)).
+- Agent faza 9.1–9.3: ✅ — [AGENT_REJA_HOLATI.md](./AGENT_REJA_HOLATI.md).
+- Keyingi: 9.4–9.6 (ekspeditor / supervayzer / store release) — alohida.
+
+## Lokal ishga tushirish
 
 ```powershell
-robocopy E:\sales_copiya\mobile\lib C:\salesdoc_mobile\lib /E
-cd C:\salesdoc_mobile
+# Tavsiya: monorepo mobile/
+cd mobile
+flutter pub get
 flutter run -d emulator-5554 --android-skip-build-dependency-validation
+
+# Kirill yo‘l muammosi bo‘lsa (ixtiyoriy):
+# robocopy E:\sales_copiya\mobile\lib C:\salesdoc_mobile\lib /E
 ```

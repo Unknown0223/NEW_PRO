@@ -4,7 +4,6 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/l10n/app_strings_ru.dart';
 import '../../../core/theme/app_colors.dart';
-import '../../../design_system/design_system.dart';
 import '../orders/order_draft_list.dart';
 import '../orders/order_draft_provider.dart';
 import '../shell/agent_app_bar.dart';
@@ -41,7 +40,7 @@ class _AgentDraftPageState extends ConsumerState<AgentDraftPage> {
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AgentAppBar(
-        title: count > 0 ? 'Qoralamalar ($count)' : 'Qoralamalar',
+        title: count > 0 ? '${S.draft} ($count)' : S.draft,
         showBack: true,
         showSyncCountdown: false,
         onBack: () {
@@ -52,10 +51,7 @@ class _AgentDraftPageState extends ConsumerState<AgentDraftPage> {
           }
         },
       ),
-      body: SaEnter(
-        preset: SaMotionPreset.rise,
-        child: OrderDraftPageBody(onRefresh: _refresh),
-      ),
+      body: OrderDraftPageBody(onRefresh: _refresh),
     );
   }
 }

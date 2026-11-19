@@ -104,7 +104,7 @@ export const CLIENT_BALANCES_SORT_KEY: Partial<Record<ClientBalancesColumnId, st
   agent_name: "agent_name",
   agent_code: "agent_code",
   clients_count: "clients_count",
-  supervisor_name: "supervisor",
+  supervisor_name: "supervisor_name",
   legal_name: "legal_name",
   trade_direction: "trade_direction",
   inn: "inn",

@@ -19,7 +19,7 @@ class ExpeditorMyReturnsPage extends ConsumerWidget {
       backgroundColor: AppColors.background,
       drawer: const ExpeditorDrawer(),
       appBar: AppBar(
-        title: const Text('Мои возвраты'),
+        title: const Text('Mening qaytarishlarim'),
         backgroundColor: AppColors.surface,
         foregroundColor: AppColors.textPrimary,
         elevation: 0,
@@ -101,7 +101,7 @@ class _ReturnCard extends StatelessWidget {
                     Text(
                       [
                         if (orderNumber != null && orderNumber.isNotEmpty)
-                          'Заказ $orderNumber',
+                          'Zakaz $orderNumber',
                         if (clientName != null && clientName.isNotEmpty) clientName,
                       ].join(' · '),
                       style: const TextStyle(
@@ -123,7 +123,7 @@ class _ReturnCard extends StatelessWidget {
                     size: 14, color: AppColors.textMuted,),
                 const SizedBox(width: 4),
                 Text(
-                  '${items.length} поз. · всего ${_fmtQty(totalQty)}',
+                  '${items.length} nom · jami ${_fmtQty(totalQty)}',
                   style: const TextStyle(fontSize: 12, color: AppColors.textMuted),
                 ),
                 const Spacer(),
@@ -178,11 +178,11 @@ class _ReturnCard extends StatelessWidget {
               const SizedBox(height: 6),
               Row(
                 children: [
-                  const Text('Сумма возврата',
+                  const Text('Qaytarish summasi',
                       style: TextStyle(fontSize: 12, color: AppColors.textSecondary),),
                   const Spacer(),
                   Text(
-                    '${formatMoneySpaced(refund)} сум',
+                    "${formatMoneySpaced(refund)} So'm",
                     style: const TextStyle(
                         fontSize: 13, fontWeight: FontWeight.w600,),
                   ),
@@ -197,7 +197,7 @@ class _ReturnCard extends StatelessWidget {
                       size: 14, color: AppColors.success,),
                   const SizedBox(width: 4),
                   Text(
-                    'Принято завскладом · $acceptedAt',
+                    'Zavsklad qabul qildi · $acceptedAt',
                     style: const TextStyle(
                         fontSize: 11, color: AppColors.success,),
                   ),
@@ -275,7 +275,7 @@ class _EmptyView extends StatelessWidget {
         SizedBox(height: 12),
         Center(
           child: Text(
-            'Документов возврата пока нет',
+            'Hozircha qaytarish hujjatlari yo\'q',
             style: TextStyle(color: AppColors.textSecondary),
           ),
         ),
@@ -307,7 +307,7 @@ class _ErrorView extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 12),
-          OutlinedButton(onPressed: onRetry, child: const Text('Повторить')),
+          OutlinedButton(onPressed: onRetry, child: const Text('Qayta urinish')),
         ],
       ),
     );

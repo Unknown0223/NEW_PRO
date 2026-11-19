@@ -237,6 +237,9 @@ export function EprConfirmReviewWorkspace() {
       const deskId = deskRaw ? Number.parseInt(deskRaw, 10) : null;
       const cash_desk_id =
         deskId != null && Number.isFinite(deskId) && deskId > 0 ? deskId : null;
+      if (cash_desk_id == null) {
+        throw new Error("NO_CASH_DESK");
+      }
 
       for (const row of rows) {
         const amount = Number.parseFloat(row.amount.replace(/\s/g, "").replace(",", "."));
@@ -268,8 +271,12 @@ export function EprConfirmReviewWorkspace() {
       void qc.invalidateQueries({ queryKey: ["payments", tenantSlug] });
       setTimeout(() => router.push("/expeditor-payment-requests"), 900);
     },
-    onError: () => {
-      setToast("Ошибка оплаты. Повторите попытку");
+    onError: (e: unknown) => {
+      const msg =
+        e instanceof Error && e.message === "NO_CASH_DESK"
+          ? "Выберите кассу"
+          : "Ошибка оплаты. Повторите попытку";
+      setToast(msg);
       setTimeout(() => setToast(null), 2200);
     }
   });

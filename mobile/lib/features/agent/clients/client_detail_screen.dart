@@ -9,7 +9,6 @@ import '../../../core/api/media_url.dart';
 import '../../../core/api/mobile_api.dart';
 import '../../../core/auth/session.dart';
 import '../../../core/config/agent_cities.dart';
-import '../../../core/config/tenant_refs_provider.dart';
 import '../../../core/database/app_database.dart';
 import '../../../core/gps/gps_tracker.dart';
 import '../../../core/theme/app_colors.dart';
@@ -28,7 +27,6 @@ import '../../../core/utils/client_navigation.dart';
 import '../../../core/utils/external_actions.dart';
 import '../../../core/ui/agent_ui_extended.dart';
 import '../../../core/ui/client_photo_thumb.dart';
-import '../../../design_system/design_system.dart';
 import '../../auth/auth_provider.dart';
 import '../shell/agent_app_bar.dart';
 import '../orders/order_draft_model.dart';
@@ -219,13 +217,6 @@ class _ClientDetailScreenState extends ConsumerState<ClientDetailScreen> {
 
   void _openCreateOrder() {
     if (!_canCreateOrder || _client == null) return;
-    final session = ref.read(sessionProvider);
-    final clientCfg = session.mobileConfig?.client ?? const ClientConfig();
-    final productList = session.mobileConfig?.productList ?? const ProductListConfig();
-    if (isNewClientBlockedForOrder(_client!, clientCfg, productList)) {
-      _toast(kClientInactiveOrderMessage, accent: AppColors.warning);
-      return;
-    }
     context.push(
       '/orders/create?client_id=${widget.clientId}',
       extra: Map<String, dynamic>.from(_client!),
@@ -444,7 +435,7 @@ class _ClientDetailScreenState extends ConsumerState<ClientDetailScreen> {
     }
     if (_client == null) {
       return Scaffold(
-        appBar: AgentAppBar(title: 'Xatolik', showBack: true),
+        appBar: AgentAppBar(title: 'Ошибка', showBack: true),
         body: const Center(child: Text('Клиент не найден')),
       );
     }
@@ -484,19 +475,28 @@ class _ClientDetailScreenState extends ConsumerState<ClientDetailScreen> {
           ? AgentBottomActionBar(
               children: [
                 Expanded(
-                  child: SaPrimaryButton(
-                    label: 'Добавить заказ',
-                    icon: Icons.shopping_cart_rounded,
+                  child: ElevatedButton.icon(
                     onPressed: _openCreateOrder,
+                    icon: const Icon(Icons.shopping_cart_rounded, size: 18),
+                    label: const Text(
+                      'Добавить заказ',
+                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.primary,
+                      foregroundColor: Colors.white,
+                      minimumSize: const Size(0, 50),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    ),
                   ),
                 ),
                 const SizedBox(width: 10),
-                SaPressable(
-                  onTap: _showActionsSheet,
-                  borderRadius: BorderRadius.circular(SaRadius.control),
-                  child: Material(
-                    color: const Color(0xFFF1F5F9),
-                    borderRadius: BorderRadius.circular(SaRadius.control),
+                Material(
+                  color: const Color(0xFFF1F5F9),
+                  borderRadius: BorderRadius.circular(14),
+                  child: InkWell(
+                    onTap: _showActionsSheet,
+                    borderRadius: BorderRadius.circular(14),
                     child: const SizedBox(
                       width: 50,
                       height: 50,
@@ -507,11 +507,9 @@ class _ClientDetailScreenState extends ConsumerState<ClientDetailScreen> {
               ],
             )
           : null,
-      body: SaEnter(
-        preset: SaMotionPreset.rise,
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(SaSpace.lg, SaSpace.md, SaSpace.lg, 100),
-          child: Column(
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 100),
+        child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             AgentSurfaceCard(
@@ -551,19 +549,30 @@ class _ClientDetailScreenState extends ConsumerState<ClientDetailScreen> {
                   Row(
                     children: [
                       Expanded(
-                        child: AgentPrimaryButton(
-                          label: 'Позвонить',
-                          height: 44,
-                          borderRadius: SaRadius.control,
+                        child: ElevatedButton.icon(
                           onPressed: () => _callClient(c),
+                          icon: const Icon(Icons.phone_rounded, size: 16),
+                          label: const Text('Call'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.primary,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(11)),
+                          ),
                         ),
                       ),
                       const SizedBox(width: 10),
                       Expanded(
-                        child: SaGhostButton(
-                          label: 'Локация',
-                          icon: Icons.location_on_rounded,
+                        child: ElevatedButton.icon(
                           onPressed: () => _openClientLocation(c),
+                          icon: const Icon(Icons.location_on_rounded, size: 16, color: Color(0xFFEF4444)),
+                          label: const Text('Location'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFFF1F5F9),
+                            foregroundColor: AppColors.textPrimary,
+                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(11)),
+                          ),
                         ),
                       ),
                     ],
@@ -771,7 +780,6 @@ class _ClientDetailScreenState extends ConsumerState<ClientDetailScreen> {
           ],
         ),
       ),
-      ),
     );
   }
 }
@@ -832,7 +840,7 @@ class _EditClientSheetState extends ConsumerState<_EditClientSheet> {
 
   bool get _useCityPicker {
     if (!_territoryVisible) return false;
-    return true;
+    return ref.read(agentCitiesProvider).isNotEmpty;
   }
 
   Set<String> get _hiddenFormKeys => _useCityPicker ? const {'territory'} : const {};
@@ -945,8 +953,8 @@ class _EditClientSheetState extends ConsumerState<_EditClientSheet> {
   Widget build(BuildContext context) {
     final media = MediaQuery.of(context);
     final maxHeight = media.size.height * 0.92 - media.viewInsets.bottom;
-    final agentCities = ref.watch(effectiveAgentCitiesProvider);
-    final showCityPicker = _territoryVisible;
+    final agentCities = ref.watch(agentCitiesProvider);
+    final showCityPicker = _territoryVisible && agentCities.isNotEmpty;
     final showGps = showCoordinatesField(widget.config);
 
     return Padding(
@@ -1025,10 +1033,19 @@ class _EditClientSheetState extends ConsumerState<_EditClientSheet> {
                 top: false,
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
-                  child: SaPrimaryButton(
-                    label: 'Сохранить',
-                    loading: _saving,
-                    onPressed: _saving ? null : _save,
+                  child: SizedBox(
+                    width: double.infinity,
+                    height: 52,
+                    child: ElevatedButton(
+                      onPressed: _saving ? null : _save,
+                      child: _saving
+                          ? const SizedBox(
+                              width: 22,
+                              height: 22,
+                              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                            )
+                          : const Text('Сохранить'),
+                    ),
                   ),
                 ),
               ),
@@ -1426,10 +1443,10 @@ String? _categoryLine(Map<String, dynamic> client) {
   final category = client['category']?.toString().trim();
   final inn = client['inn']?.toString().trim();
   if (category != null && category.isNotEmpty && inn != null && inn.isNotEmpty) {
-    return 'Категория $category · ИНН $inn';
+    return 'Категория $category · INN $inn';
   }
   if (category != null && category.isNotEmpty) return 'Категория $category';
-  if (inn != null && inn.isNotEmpty) return 'ИНН $inn';
+  if (inn != null && inn.isNotEmpty) return 'INN $inn';
   return null;
 }
 

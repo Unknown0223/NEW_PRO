@@ -8,7 +8,6 @@ import '../../../core/theme/app_typography.dart';
 import '../../../core/time/work_region_time.dart';
 import '../../../core/ui/agent_ui.dart';
 import '../../../core/ui/agent_ui_extended.dart';
-import '../../../design_system/design_system.dart';
 import '../shell/agent_app_bar.dart';
 import 'agent_tabel_day_sheet.dart';
 import 'agent_tabel_detail_page.dart';
@@ -36,7 +35,7 @@ class AgentTabelPage extends ConsumerWidget {
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AgentAppBar(
-        title: 'Tabel · ${tabelMonthTitle(month)}',
+        title: 'Табель · ${tabelMonthTitle(month)}',
         showBack: true,
         belowTitle: _MonthSwitcher(
           month: month,
@@ -83,39 +82,20 @@ class AgentTabelPage extends ConsumerWidget {
   Widget _content(BuildContext context, AgentTimesheetResult data, String month) {
     return ListView(
       physics: const AlwaysScrollableScrollPhysics(),
-      padding: const EdgeInsets.fromLTRB(14, 12, 14, 140),
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 32),
       children: [
-        SaEnter(
-          preset: SaMotionPreset.rise,
-          child: _SummaryCard(data: data, month: month),
-        ),
+        _SummaryCard(data: data, month: month),
         const SizedBox(height: 12),
-        SaEnter(
-          delay: SaStaggerDelay.of(1),
-          preset: SaMotionPreset.rise,
-          child: _CalendarCard(data: data),
-        ),
+        _CalendarCard(data: data),
         const SizedBox(height: 12),
-        SaEnter(
-          delay: SaStaggerDelay.of(2),
-          preset: SaMotionPreset.rise,
-          child: const _LegendCard(),
-        ),
+        const _LegendCard(),
         const SizedBox(height: 12),
-        SaEnter(
-          delay: SaStaggerDelay.of(3),
-          preset: SaMotionPreset.rise,
-          child: _RecentDaysCard(data: data),
-        ),
+        _RecentDaysCard(data: data),
         const SizedBox(height: 12),
-        SaEnter(
-          delay: SaStaggerDelay.of(4),
-          preset: SaMotionPreset.rise,
-          child: AgentSecondaryButton(
-            label: 'Батафсил жадвал',
-            onPressed: () => Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => const AgentTabelDetailPage()),
-            ),
+        AgentSecondaryButton(
+          label: 'Батафсил жадвал',
+          onPressed: () => Navigator.of(context).push(
+            MaterialPageRoute(builder: (_) => const AgentTabelDetailPage()),
           ),
         ),
       ],
@@ -203,7 +183,7 @@ class _SummaryCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            '${tabelMonthTitle(month)} · Jami',
+            '${tabelMonthTitle(month)} · Итого',
             style: const TextStyle(
               fontSize: 13,
               fontWeight: FontWeight.w800,
@@ -224,18 +204,18 @@ class _SummaryCard extends StatelessWidget {
           const SizedBox(height: 14),
           Row(
             children: [
-              _stat('${counts.worked}', 'Ishlagan'),
-              _stat('${counts.absent}', 'Kelmagan'),
-              _stat('${counts.holiday}', 'Dam olish'),
-              _stat('${counts.halfDay}', 'Yarim kun'),
+              _stat('${counts.worked}', 'Работал'),
+              _stat('${counts.absent}', 'Отсутствовал'),
+              _stat('${counts.holiday}', 'Выходной'),
+              _stat('${counts.halfDay}', 'Полдня'),
             ],
           ),
           const SizedBox(height: 12),
           Row(
             children: [
-              _stat('${counts.vacation}', 'Ta\'til'),
-              _stat('${counts.sick}', 'Kasallik'),
-              _stat('${counts.trip}', 'Xizmat safari'),
+              _stat('${counts.vacation}', 'Отпуск'),
+              _stat('${counts.sick}', 'Больничный'),
+              _stat('${counts.trip}', 'Командировка'),
               const Expanded(child: SizedBox.shrink()),
             ],
           ),
@@ -305,7 +285,7 @@ class _CalendarCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Kalendar',
+            'Календарь',
             style: AppTypography.headlineSmall
                 .copyWith(fontWeight: FontWeight.w900, fontSize: 17),
           ),
@@ -467,7 +447,7 @@ class _LegendCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Text(
-            'Belgilar',
+            'Легенда',
             style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900),
           ),
           const SizedBox(height: 10),
@@ -545,7 +525,7 @@ class _RecentDaysCard extends StatelessWidget {
             const Padding(
               padding: EdgeInsets.symmetric(vertical: 8),
               child: Text(
-                'Ma\'lumot yo\'q',
+                'Маълумот йўқ',
                 style: TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.w700,
@@ -655,7 +635,7 @@ class _RecentDaysCard extends StatelessWidget {
     if (comment.isNotEmpty) return comment;
     if (meta.backend == 'worked' || meta.backend == 'half_day') {
       final parts = <String>[];
-      if (d.visits > 0) parts.add('${d.visits} nuqta');
+      if (d.visits > 0) parts.add('${d.visits} точек');
       if (d.sales != 0) parts.add('${tabelCompactSum(d.sales)} сум');
       if (parts.isEmpty) return meta.label;
       return parts.join(' · ');

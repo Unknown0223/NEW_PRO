@@ -34,18 +34,18 @@ class _VisitSupervisionSheetState extends State<VisitSupervisionSheet> {
     final s = widget.supervision;
     final out = <({String key, String label})>[];
     if (s.checkReceiptFaces) out.add((key: 'receipt', label: 'Chek yuzlari'));
-    if (s.checkMerchandising) out.add((key: 'merch', label: 'Merchandayzing'));
-    if (s.checkDefaultPrice) out.add((key: 'price', label: 'Standart narx'));
+    if (s.checkMerchandising) out.add((key: 'merch', label: 'Merchandising'));
+    if (s.checkDefaultPrice) out.add((key: 'price', label: 'Narx'));
     if (s.checkMotivation) out.add((key: 'motivation', label: 'Motivatsiya'));
-    if (s.checkStock) out.add((key: 'stock', label: 'Qoldiq'));
-    if (s.checkSales) out.add((key: 'sales', label: 'Savdo'));
+    if (s.checkStock) out.add((key: 'stock', label: 'Ombor'));
+    if (s.checkSales) out.add((key: 'sales', label: 'Sotuvlar'));
     return out;
   }
 
   @override
   Widget build(BuildContext context) {
     if (_items.isEmpty) {
-      return const Padding(padding: EdgeInsets.all(24), child: Text('Audit tekshiruv ro\'yxati yoqilmagan'));
+      return const Padding(padding: EdgeInsets.all(24), child: Text('Audit checklist yoqilmagan'));
     }
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
@@ -53,7 +53,7 @@ class _VisitSupervisionSheetState extends State<VisitSupervisionSheet> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const Text('Audit tekshiruv ro\'yxati', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+          const Text('Audit checklist', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
           const SizedBox(height: 12),
           ..._items.map(
             (e) => CheckboxListTile(

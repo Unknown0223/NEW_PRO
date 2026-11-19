@@ -14,7 +14,6 @@ import '../../auth/auth_provider.dart';
 import '../../../core/ui/agent_ui.dart';
 import '../../../core/ui/agent_ui_extended.dart';
 import '../../../core/ui/agent_visit_ui.dart';
-import '../../../design_system/design_system.dart';
 import '../../../core/ui/client_photo_thumb.dart';
 import '../../../core/clients/client_outlet_filters.dart';
 import '../shell/agent_app_bar.dart';
@@ -113,7 +112,7 @@ class _AgentClientsPageState extends ConsumerState<AgentClientsPage> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(policy.denialMessage ?? 'Sinxronlash mumkin emas'),
+            content: Text(policy.denialMessage ?? 'Sinxronizatsiya mumkin emas'),
             backgroundColor: AppColors.warning,
           ),
         );
@@ -134,8 +133,8 @@ class _AgentClientsPageState extends ConsumerState<AgentClientsPage> {
       }
       final err = result.error ?? '';
       final msg = ok
-          ? 'Mijozlar yangilandi (${result.clients})'
-          : (err.isNotEmpty ? err : 'Sinxronlash xatosi');
+          ? 'Mijozlar yangilandi (${result.clients} ta)'
+          : (err.isNotEmpty ? err : 'Sinxronizatsiya xato');
       if (!silent || !ok) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -162,7 +161,7 @@ class _AgentClientsPageState extends ConsumerState<AgentClientsPage> {
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AgentAppBar(
-        title: 'Savdo nuqtalari',
+        title: S.outlets,
         useShellDrawer: true,
         actions: [
           AgentIconButton(icon: Icons.search, onPressed: () => context.push('/search?from=/clients')),
@@ -181,9 +180,7 @@ class _AgentClientsPageState extends ConsumerState<AgentClientsPage> {
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          SaEnter(
-            preset: SaMotionPreset.rise,
-            child: Padding(
+          Padding(
             padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
             child: TextField(
               controller: _searchCtrl,
@@ -204,26 +201,17 @@ class _AgentClientsPageState extends ConsumerState<AgentClientsPage> {
               ),
             ),
           ),
-          ),
           if (!inSearch) ...[
             const SizedBox(height: 10),
-            SaEnter(
-              delay: SaStaggerDelay.of(1),
-              preset: SaMotionPreset.rise,
-              child: const _OutletCategoryChips(),
-            ),
+            const _OutletCategoryChips(),
           ],
           if (staleCatalog)
-            SaEnter(
-              delay: SaStaggerDelay.of(2),
-              preset: SaMotionPreset.rise,
-              child: Padding(
+            Padding(
               padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
               child: AgentWarningBanner(
                 message: '⚠️ ${S.staleCatalog}',
                 onTap: _syncing ? null : _syncClients,
               ),
-            ),
             ),
           const SizedBox(height: 8),
           Expanded(
@@ -302,7 +290,7 @@ class _AgentClientsPageState extends ConsumerState<AgentClientsPage> {
                     child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                   )
                 : const Icon(Icons.sync),
-            label: const Text('Sinxronlash'),
+            label: const Text('Синхронизация'),
           ),
         ),
       );
@@ -321,7 +309,7 @@ class _AgentClientsPageState extends ConsumerState<AgentClientsPage> {
               ref.watch(clientAgentLedgerBalancesProvider).valueOrNull;
           final drafts = ref.watch(orderDraftsProvider).valueOrNull;
           return ListView.separated(
-            padding: const EdgeInsets.fromLTRB(12, 4, 12, 140),
+            padding: const EdgeInsets.fromLTRB(12, 4, 12, 100),
             itemCount: clients.length,
             separatorBuilder: (_, __) => const SizedBox(height: 12),
             itemBuilder: (ctx, i) {
@@ -331,18 +319,14 @@ class _AgentClientsPageState extends ConsumerState<AgentClientsPage> {
                   ? clientAgentLedgerBalance(agentBalances, id)
                   : null;
               final hasDraft = id != null && drafts?[id] != null;
-              return SaEnter(
-                delay: SaStaggerDelay.of(i.clamp(0, 12)),
-                preset: SaMotionPreset.rise,
-                child: _ClientListTile(
-                  client: client,
-                  balanceAmount: balanceAmount,
-                  hasDraft: hasDraft,
-                  onTap: () {
-                    if (id == null) return;
-                    context.push('/clients/$id');
-                  },
-                ),
+              return _ClientListTile(
+                client: client,
+                balanceAmount: balanceAmount,
+                hasDraft: hasDraft,
+                onTap: () {
+                  if (id == null) return;
+                  context.push('/clients/$id');
+                },
               );
             },
           );
@@ -355,7 +339,7 @@ class _AgentClientsPageState extends ConsumerState<AgentClientsPage> {
 class _OutletCategoryChips extends ConsumerWidget {
   const _OutletCategoryChips();
 
-  static final _filters = [S.dayAll, 'A', 'B', 'C', S.withDebt, 'Tozalash'];
+  static final _filters = [S.dayAll, 'A', 'B', 'C', S.withDebt, 'Сброс'];
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -380,7 +364,7 @@ class _OutletCategoryChips extends ConsumerWidget {
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Row(
         children: _filters.map((f) {
-          final isReset = f == 'Tozalash';
+          final isReset = f == 'Сброс';
           final isActive = isReset ? filtersActive : activeLabel == f;
           return Padding(
             padding: const EdgeInsets.only(right: 8),

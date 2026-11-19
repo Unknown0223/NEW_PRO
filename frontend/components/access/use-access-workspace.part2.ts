@@ -153,8 +153,14 @@ export function useAccessWorkspacePart2(ctx: ReturnType<typeof useAccessWorkspac
   const filteredSideRows = useMemo(() => {
     const q = search.trim().toLowerCase();
     return sideRows.filter((r) => {
-      const code = tab === "users" ? (rows.find((u) => String(u.id) === r.key)?.code ?? "") : "";
-      const matchesSearch = !q || `${r.title} ${r.subtitle} ${code}`.toLowerCase().includes(q);
+      // Users: API allaqachon search qiladi (login/name). Clientda login yo‘qolsa
+      // (title = full_name) tanlov prune effect bilan o‘chib ketadi — login/code/branch ham.
+      const u = tab === "users" ? rows.find((x) => String(x.id) === r.key) : undefined;
+      const haystack =
+        tab === "users"
+          ? `${r.title} ${r.subtitle} ${u?.login ?? ""} ${u?.code ?? ""} ${u?.branch ?? ""}`
+          : `${r.title} ${r.subtitle}`;
+      const matchesSearch = !q || haystack.toLowerCase().includes(q);
       const matchesStatus = status === "active" ? r.is_active : !r.is_active;
       return matchesSearch && matchesStatus;
     });

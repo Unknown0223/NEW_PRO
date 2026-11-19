@@ -104,7 +104,7 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
     if (bytes.length > 150000) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Изображение слишком большое — выберите поменьше'), backgroundColor: AppColors.warning),
+          const SnackBar(content: Text('Rasm juda katta — kichikroq tanlang'), backgroundColor: AppColors.warning),
         );
       }
       return;
@@ -123,11 +123,11 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
     final newPw2 = _newPass2.text;
     if (newPw.isNotEmpty || newPw2.isNotEmpty || oldPw.isNotEmpty) {
       if (oldPw.isEmpty || newPw.length < 6) {
-        setState(() => _error = 'Пароль: укажите старый и новый пароль (минимум 6 символов)');
+        setState(() => _error = 'Parol: eski parol va yangi (kamida 6 belgi) kerak');
         return;
       }
       if (newPw != newPw2) {
-        setState(() => _error = 'Новые пароли не совпадают');
+        setState(() => _error = 'Yangi parollar mos emas');
         return;
       }
     }

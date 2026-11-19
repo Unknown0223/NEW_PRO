@@ -39,7 +39,7 @@ void main() {
       );
       final r = evaluateSyncPolicy(sync);
       expect(r.allowed, isFalse);
-      expect(r.denialMessage, contains('заблокирована'));
+      expect(r.denialMessage, contains('bloklangan'));
     });
 
     test('outside window returns syncWindowMessage', () {
@@ -61,7 +61,7 @@ SyncPolicyEvaluation evaluateSyncPolicyAt(SyncConfig sync, {required int hour, r
   if (sync.blockSync) {
     return const SyncPolicyEvaluation(
       allowed: false,
-      denialMessage: 'Синхронизация заблокирована',
+      denialMessage: 'Sinxronizatsiya bloklangan',
     );
   }
   if (!isSyncAllowedNowForDateTime(sync, now)) {

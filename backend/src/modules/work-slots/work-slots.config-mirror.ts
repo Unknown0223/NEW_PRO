@@ -214,8 +214,22 @@ export async function mirrorSlotConfigToUser(
         ? { disconnect: true }
         : { connect: { id: slot.direction_id } }
   };
+  // Faqat role=supervisor — aks holda pivot/hisobotlarda direktor «SVR» bo‘lib chiqadi.
   if (slot.supervisor_user_id != null) {
-    data.supervisor = { connect: { id: slot.supervisor_user_id } };
+    const supOk = await tx.user.findFirst({
+      where: {
+        id: slot.supervisor_user_id,
+        tenant_id: tenantId,
+        is_active: true,
+        role: "supervisor"
+      },
+      select: { id: true }
+    });
+    if (supOk) {
+      data.supervisor = { connect: { id: supOk.id } };
+    } else {
+      data.supervisor = { disconnect: true };
+    }
   }
 
   await tx.user.update({

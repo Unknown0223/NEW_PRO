@@ -8,7 +8,6 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/ui/agent_ui.dart';
 import '../../../core/ui/agent_ui_extended.dart';
-import '../../../design_system/design_system.dart';
 import '../shell/agent_app_bar.dart';
 import '../tabel/tabel_format.dart';
 import 'kpi_format.dart';
@@ -26,7 +25,7 @@ class AgentKpiCalcPage extends ConsumerWidget {
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AgentAppBar(
-        title: 'KPI · Oylik hisob',
+        title: 'KPI · Месяц',
         showBack: true,
         belowTitle: Text(
           'Месячный расчёт · ${tabelMonthTitle(month)}',
@@ -85,73 +84,54 @@ class _Body extends StatelessWidget {
       physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.fromLTRB(14, 12, 14, 32),
       children: [
-        SaEnter(
-          preset: SaMotionPreset.rise,
-          child: _MonthHero(
-            fact: data.monthFactSum,
-            plan: data.monthPlanSum,
-            pct: monthPct,
-            elapsedDays: elapsed.clamp(0, data.dailyRoute.workingDaysTotal),
-            totalWorkDays: data.dailyRoute.workingDaysTotal,
-            sales: sales,
-            avg: avg,
-            maxS: maxS,
-            minS: minS,
-            forecast: data.forecastPct,
-          ),
+        _MonthHero(
+          fact: data.monthFactSum,
+          plan: data.monthPlanSum,
+          pct: monthPct,
+          elapsedDays: elapsed.clamp(0, data.dailyRoute.workingDaysTotal),
+          totalWorkDays: data.dailyRoute.workingDaysTotal,
+          sales: sales,
+          avg: avg,
+          maxS: maxS,
+          minS: minS,
+          forecast: data.forecastPct,
         ),
         const SizedBox(height: 12),
-        SaEnter(
-          delay: SaStaggerDelay.of(1),
-          preset: SaMotionPreset.rise,
-          child: Row(
-            children: [
-              Expanded(
-                child: _MonthMetric(
-                  title: 'Продажи за месяц',
-                  current: tabelCompactSum(data.monthFactSum),
-                  target: tabelCompactSum(data.monthPlanSum),
-                  pct: monthPct.toDouble(),
-                ),
+        Row(
+          children: [
+            Expanded(
+              child: _MonthMetric(
+                title: 'Продажи за месяц',
+                current: tabelCompactSum(data.monthFactSum),
+                target: tabelCompactSum(data.monthPlanSum),
+                pct: monthPct.toDouble(),
               ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: _MonthMetric(
-                  title: 'Рабочие дни',
-                  current: '$elapsed/${data.dailyRoute.workingDaysTotal}',
-                  target: '${data.dailyRoute.workingDaysTotal}',
-                  pct: data.dailyRoute.workingDaysTotal > 0
-                      ? (elapsed / data.dailyRoute.workingDaysTotal) * 100
-                      : 0,
-                ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: _MonthMetric(
+                title: 'Рабочие дни',
+                current: '$elapsed/${data.dailyRoute.workingDaysTotal}',
+                target: '${data.dailyRoute.workingDaysTotal}',
+                pct: data.dailyRoute.workingDaysTotal > 0
+                    ? (elapsed / data.dailyRoute.workingDaysTotal) * 100
+                    : 0,
               ),
-            ],
-          ),
+            ),
+          ],
         ),
         const SizedBox(height: 10),
-        SaEnter(
-          delay: SaStaggerDelay.of(2),
-          preset: SaMotionPreset.rise,
-          child: _MonthMetric(
-            title: 'Дневной план (база)',
-            current: tabelCompactSum(data.dailyRoute.baseDayPlan),
-            target: 'сегодня ${tabelCompactSum(data.todayPlanDaySum)}',
-            pct: data.todayExecutionPct,
-            fullWidth: true,
-          ),
+        _MonthMetric(
+          title: 'Дневной план (база)',
+          current: tabelCompactSum(data.dailyRoute.baseDayPlan),
+          target: 'сегодня ${tabelCompactSum(data.todayPlanDaySum)}',
+          pct: data.todayExecutionPct,
+          fullWidth: true,
         ),
         const SizedBox(height: 12),
-        SaEnter(
-          delay: SaStaggerDelay.of(3),
-          preset: SaMotionPreset.rise,
-          child: _CalcList(data: data),
-        ),
+        _CalcList(data: data),
         const SizedBox(height: 12),
-        SaEnter(
-          delay: SaStaggerDelay.of(4),
-          preset: SaMotionPreset.rise,
-          child: _HintsCard(data: data),
-        ),
+        _HintsCard(data: data),
       ],
     );
   }
@@ -488,7 +468,7 @@ class _CalcList extends StatelessWidget {
                               ),
                             ),
                             Text(
-                              g.score != null ? 'балл ${g.score}' : 'балл —',
+                              g.score != null ? 'score ${g.score}' : 'score —',
                               style: AppTypography.captionSmall.copyWith(
                                 fontSize: 11,
                                 fontWeight: FontWeight.w700,

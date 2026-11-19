@@ -17,8 +17,6 @@ void _invalidateAll(ProviderInvalidator invalidate) {
   invalidate(homeStatsProvider);
   invalidate(syncCountTodayProvider);
   invalidate(pendingPhotoCountProvider);
-  invalidate(syncedPhotoCountTodayProvider);
-  invalidate(failedPhotoCountProvider);
   invalidate(agentDashboardProvider);
   invalidate(homeVisitMetricsProvider);
   invalidate(visitedTodayClientIdsProvider);
@@ -39,8 +37,6 @@ void invalidateSyncedData(ProviderInvalidator invalidate) => _invalidateAll(inva
 void invalidateAfterOrderSubmit(ProviderInvalidator invalidate) {
   invalidate(homeStatsProvider);
   invalidate(pendingPhotoCountProvider);
-  invalidate(syncedPhotoCountTodayProvider);
-  invalidate(failedPhotoCountProvider);
   invalidate(agentDashboardProvider);
   invalidate(homeVisitMetricsProvider);
   invalidate(visitedTodayClientIdsProvider);

@@ -21,6 +21,7 @@ import {
   mapPaymentToListRow,
   paymentListInclude
 } from "./payment.query.mappers";
+import { loadClientBalanceView } from "../client-balances/client-balance-view";
 
 export async function getPaymentDetail(
   tenantId: number,
@@ -105,35 +106,19 @@ function buildPaymentListOrderBy(q: PaymentListQuery): Prisma.PaymentOrderByWith
   }
 }
 
-/** Mijoz kartasidagi saldo: kassa qoldig‘i minus yetkazilgan zakazlar. */
+/**
+ * To‘lovlar ro‘yxatidagi «Баланс» — mijoz kartasidagi «Общий» (ledger card net) bilan bir xil.
+ * Eski formula `cb.balance − SUM(order.total)` to‘lovlarni ikki marta ayirib yolg‘on qarz berardi.
+ */
 async function clientCardBalanceById(
   tenantId: number,
   clientIds: number[]
 ): Promise<Map<number, string>> {
   const ids = [...new Set(clientIds.filter((id) => Number.isFinite(id) && id > 0))];
   if (ids.length === 0) return new Map();
-  const rows = await prisma.$queryRaw<Array<{ client_id: number; bal: Prisma.Decimal }>>`
-    SELECT c.id AS client_id,
-      (
-        COALESCE((
-          SELECT cb.balance FROM client_balances cb
-          WHERE cb.tenant_id = c.tenant_id AND cb.client_id = c.id
-          LIMIT 1
-        ), 0)
-        - COALESCE((
-          SELECT SUM(o.total_sum) FROM orders o
-          WHERE o.tenant_id = c.tenant_id
-            AND o.client_id = c.id
-            AND o.order_type = 'order'
-            AND o.status = 'delivered'
-        ), 0)
-      )::decimal(15,2) AS bal
-    FROM clients c
-    WHERE c.tenant_id = ${tenantId}
-      AND c.id IN (${Prisma.join(ids)})
-  `;
+  const net = await loadClientBalanceView(tenantId, ids, "card_net");
   const out = new Map<number, string>();
-  for (const r of rows) out.set(Number(r.client_id), r.bal.toString());
+  for (const id of ids) out.set(id, (net.get(id) ?? new Prisma.Decimal(0)).toString());
   return out;
 }
 

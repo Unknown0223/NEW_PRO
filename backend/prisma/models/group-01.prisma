@@ -92,7 +92,10 @@ model Tenant {
   plan_approver_leaders         PlanApproverLeader[]
   sales_kpi_plans               SalesKpiPlan[]
   sales_kpi_plan_targets        SalesKpiPlanTarget[]
+  sales_plan_proposals          SalesPlanProposal[]
+  sales_plan_proposal_rows      SalesPlanProposalRow[]
   job_logs                      JobLog[]
+
   agent_consignment_month_status AgentConsignmentMonthStatus[]
   face_verification_logs        FaceVerificationLog[]
   face_verification_daily_states FaceVerificationDailyState[]
@@ -278,6 +281,11 @@ model User {
   sales_kpi_plans_approved            SalesKpiPlan[]       @relation("SalesKpiPlanApprover")
   sales_kpi_plan_targets              SalesKpiPlanTarget[] @relation("SalesKpiPlanTargetUser")
   sales_kpi_plan_targets_edited       SalesKpiPlanTarget[] @relation("SalesKpiPlanTargetEditor")
+  sales_plan_proposals_created        SalesPlanProposal[]  @relation("SalesPlanProposalCreator")
+  sales_plan_proposals_edited         SalesPlanProposal[]  @relation("SalesPlanProposalEditor")
+  sales_plan_proposals_applied        SalesPlanProposal[]  @relation("SalesPlanProposalApplier")
+  sales_plan_proposal_rows            SalesPlanProposalRow[] @relation("SalesPlanProposalRowUser")
+
   consignment_month_status            AgentConsignmentMonthStatus[]
   face_verification_logs              FaceVerificationLog[]       @relation("FaceVerificationLogs")
   face_verification_daily_states      FaceVerificationDailyState[] @relation("FaceVerificationDailyStates")

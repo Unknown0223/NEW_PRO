@@ -39,7 +39,7 @@ export const agentInclude = {
     consignment: true,
     trade_direction: true,
     supervisor_user_id: true,
-    supervisor: { select: { name: true } },
+    supervisor: { select: { name: true, role: true } },
     trade_direction_row: { select: { name: true } }
   }
 } as const;

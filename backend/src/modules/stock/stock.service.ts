@@ -8,6 +8,7 @@ export * from "./stock.list";
 export * from "./stock.balances.helpers";
 export * from "./stock.balances";
 export * from "./stock.movements";
+export * from "./stock-reservation";
 export * from "./stock.import.helpers";
 export * from "./stock.recommended";
 export * from "./stock.by-date";

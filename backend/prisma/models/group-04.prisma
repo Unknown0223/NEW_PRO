@@ -539,12 +539,14 @@ model TradeDirection {
   work_slots            WorkSlot[]
   plan_approver_configs PlanApproverConfig[]
   sales_kpi_plans       SalesKpiPlan[]
+  sales_plan_proposals  SalesPlanProposal[]
   product_links         ProductTradeDirectionLink[]
 
   @@unique([tenant_id, code])
   @@index([tenant_id, is_active])
   @@map("trade_directions")
 }
+
 
 /// Канал продаж (spravochnik; `Client.sales_channel` bilan mos: code yoki name)
 
@@ -577,12 +579,14 @@ model KpiGroup {
   bonus_formula String?         @db.Text
   created_at DateTime          @default(now())
   updated_at DateTime          @updatedAt
-  agents          KpiGroupAgent[]
-  products        KpiGroupProduct[]
-  sales_kpi_plans SalesKpiPlan[]
-  tenant          Tenant            @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  agents                   KpiGroupAgent[]
+  products                 KpiGroupProduct[]
+  sales_kpi_plans          SalesKpiPlan[]
+  sales_plan_proposal_rows SalesPlanProposalRow[]
+  tenant                   Tenant            @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
 
   @@index([tenant_id, is_active])
   @@map("kpi_groups")
 }
+
 

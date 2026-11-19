@@ -2,17 +2,30 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Building2, CreditCard, MapPin, Pencil, Plus, Route, Search, Users, Warehouse, Wallet, X, type LucideIcon } from "lucide-react";
+import {
+  Building2,
+  CreditCard,
+  MapPin,
+  Pencil,
+  Plus,
+  Route,
+  Search,
+  Users,
+  Warehouse,
+  Wallet,
+  type LucideIcon
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { AccessUnsavedBar, useAccessToast } from "@/components/access/permission-tree/access-save-bar";
 import { countIdDelta, sameIdSet, TerritoryScopeTree } from "./access-user-scope-territory";
-import { cn } from "@/lib/utils";
+import { AccessScopeAttachedList, type ScopeListItem } from "./access-user-scope-list";
 import { api } from "@/lib/api";
-import { accessRoleLabel } from "@/lib/access-role-label";
 import type { AccessUserDetailVm } from "./hooks/use-access-user-detail-panel";
 import {
+  sortStaffRoleKeys,
+  staffRoleGroupLabel,
   userMessageAfterAccessPatchFailure,
   type DetailModalKind,
   type DimRow,
@@ -20,7 +33,10 @@ import {
 } from "./access-user-detail.types";
 import type { AccessUserDetailTab } from "./access-user-detail-header";
 
-type ScopeTab = Extract<AccessUserDetailTab, "territories" | "branches" | "cash_desks" | "payment_methods" | "warehouses" | "trade_directions" | "staff">;
+type ScopeTab = Extract<
+  AccessUserDetailTab,
+  "territories" | "branches" | "cash_desks" | "payment_methods" | "warehouses" | "trade_directions" | "staff"
+>;
 
 const SCOPE_META: Record<ScopeTab, { modal: DetailModalKind; icon: LucideIcon; hint: string; empty: string }> = {
   territories: {
@@ -35,18 +51,41 @@ const SCOPE_META: Record<ScopeTab, { modal: DetailModalKind; icon: LucideIcon; h
     hint: "Сотрудники (агенты, экспедиторы и др.), данные которых видит пользователь.",
     empty: "Сотрудники не прикреплены."
   },
-  cash_desks: { modal: "cash", icon: Wallet, hint: "С какими кассами пользователь может работать.", empty: "Кассы не прикреплены." },
-  warehouses: { modal: "warehouse", icon: Warehouse, hint: "С какими складами пользователь может работать.", empty: "Склады не прикреплены." },
-  branches: { modal: "branch", icon: Building2, hint: "В каких филиалах пользователь может работать.", empty: "Филиалы не прикреплены." },
-  payment_methods: { modal: "payment", icon: CreditCard, hint: "Какие способы оплаты доступны пользователю.", empty: "Способы оплаты не прикреплены." },
-  trade_directions: { modal: "direction", icon: Route, hint: "Направления торговли, доступные пользователю.", empty: "Направления не прикреплены." }
+  cash_desks: {
+    modal: "cash",
+    icon: Wallet,
+    hint: "С какими кассами пользователь может работать.",
+    empty: "Кассы не прикреплены."
+  },
+  warehouses: {
+    modal: "warehouse",
+    icon: Warehouse,
+    hint: "С какими складами пользователь может работать.",
+    empty: "Склады не прикреплены."
+  },
+  branches: {
+    modal: "branch",
+    icon: Building2,
+    hint: "В каких филиалах пользователь может работать.",
+    empty: "Филиалы не прикреплены."
+  },
+  payment_methods: {
+    modal: "payment",
+    icon: CreditCard,
+    hint: "Какие способы оплаты доступны пользователю.",
+    empty: "Способы оплаты не прикреплены."
+  },
+  trade_directions: {
+    modal: "direction",
+    icon: Route,
+    hint: "Направления торговли, доступные пользователю.",
+    empty: "Направления не прикреплены."
+  }
 };
 
 export function isAccessScopeTab(tab: AccessUserDetailTab): tab is ScopeTab {
   return tab in SCOPE_META;
 }
-
-type Item = { id: string; label: string; sub?: string; searchText?: string };
 
 function useScopeLabels(tenantSlug: string, tab: ScopeTab) {
   const dimType = tab === "territories" || tab === "staff" ? null : tab;
@@ -82,35 +121,49 @@ function scopeSaveBody(tab: Exclude<ScopeTab, "territories">, ids: string[]): Re
 }
 
 /** Hudud tablari: biriktirilgan obyektlar nomi bilan + tanlash oynasini ochish. */
-export function AccessUserScopeSummary({ vm, tab, readOnly }: { vm: AccessUserDetailVm; tab: ScopeTab; readOnly: boolean }) {
+export function AccessUserScopeSummary({
+  vm,
+  tab,
+  readOnly
+}: {
+  vm: AccessUserDetailVm;
+  tab: ScopeTab;
+  readOnly: boolean;
+}) {
   const meta = SCOPE_META[tab];
   const Icon = meta.icon;
   const detail = vm.detailQ.data;
   const labelsQ = useScopeLabels(vm.tenantSlug, tab);
   const [search, setSearch] = useState("");
 
-  const items = useMemo((): Item[] => {
+  const items = useMemo((): ScopeListItem[] => {
     if (tab === "staff") {
-      return (detail?.supervisees ?? []).map((s) => ({
-        id: String(s.id),
-        label: s.name || s.login,
-        sub: accessRoleLabel(s.role),
-        searchText: s.code ?? undefined
-      }));
+      return (detail?.supervisees ?? [])
+        .map((s) => {
+          const roleKey = (s.role ?? "").toLowerCase().trim() || "_";
+          return {
+            id: String(s.id),
+            label: s.name || s.login,
+            roleKey,
+            sub: staffRoleGroupLabel(roleKey),
+            searchText: s.code ?? undefined
+          };
+        })
+        .sort((a, b) => a.label.localeCompare(b.label, "ru", { sensitivity: "base", numeric: true }));
     }
     const scope = detail?.scope;
     const ids: (string | number)[] =
       tab === "territories"
-        ? scope?.territories ?? []
+        ? (scope?.territories ?? [])
         : tab === "branches"
-          ? scope?.branches ?? []
+          ? (scope?.branches ?? [])
           : tab === "cash_desks"
-            ? scope?.cash_desks ?? []
+            ? (scope?.cash_desks ?? [])
             : tab === "payment_methods"
-              ? scope?.payment_methods ?? []
+              ? (scope?.payment_methods ?? [])
               : tab === "warehouses"
-                ? scope?.warehouses ?? []
-                : scope?.trade_directions ?? [];
+                ? (scope?.warehouses ?? [])
+                : (scope?.trade_directions ?? []);
     const names = labelsQ.data;
     return ids
       .map((raw) => {
@@ -126,6 +179,22 @@ export function AccessUserScopeSummary({ vm, tab, readOnly }: { vm: AccessUserDe
         `${i.label} ${i.sub ?? ""} ${i.searchText ?? ""}`.toLocaleLowerCase("ru").includes(q)
       )
     : items;
+
+  const staffGroups = useMemo(() => {
+    if (tab !== "staff") return null;
+    const byRole = new Map<string, ScopeListItem[]>();
+    for (const i of shown) {
+      const rk = i.roleKey || "_";
+      const list = byRole.get(rk);
+      if (list) list.push(i);
+      else byRole.set(rk, [i]);
+    }
+    return sortStaffRoleKeys([...byRole.keys()]).map((role) => ({
+      role,
+      items: byRole.get(role) ?? []
+    }));
+  }, [tab, shown]);
+
   const loadingNames = tab !== "staff" && items.length > 0 && labelsQ.isLoading;
   const serverIds = useMemo(() => items.map((i) => i.id), [items]);
   const serverKey = serverIds.join("\n");
@@ -149,6 +218,16 @@ export function AccessUserScopeSummary({ vm, tab, readOnly }: { vm: AccessUserDe
       return next;
     });
   };
+  const setBulk = (ids: string[], on: boolean) => {
+    setDraft((prev) => {
+      const next = new Set(prev ?? serverIds);
+      for (const id of ids) {
+        if (on) next.add(id);
+        else next.delete(id);
+      }
+      return next;
+    });
+  };
   const saveList = async () => {
     try {
       await vm.patchMut.mutateAsync(scopeSaveBody(tab, [...kept]));
@@ -168,8 +247,17 @@ export function AccessUserScopeSummary({ vm, tab, readOnly }: { vm: AccessUserDe
     <div className="flex min-h-0 flex-1 flex-col gap-2">
       <div className="flex shrink-0 flex-wrap items-center gap-2">
         <div className="relative min-w-[12rem] flex-1">
-          <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" aria-hidden />
-          <Input className="h-8 pl-8 text-xs" placeholder="Поиск" value={search} onChange={(e) => setSearch(e.target.value)} aria-label="Поиск" />
+          <Search
+            className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground"
+            aria-hidden
+          />
+          <Input
+            className="h-8 pl-8 text-xs"
+            placeholder="Поиск"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            aria-label="Поиск"
+          />
         </div>
         {!readOnly ? (
           <Button
@@ -180,7 +268,11 @@ export function AccessUserScopeSummary({ vm, tab, readOnly }: { vm: AccessUserDe
             title={listDirty ? "Сначала сохраните или отмените изменения" : undefined}
             onClick={() => vm.openModal(meta.modal)}
           >
-            {items.length > 0 ? <Pencil className="h-3.5 w-3.5" aria-hidden /> : <Plus className="h-3.5 w-3.5" aria-hidden />}
+            {items.length > 0 ? (
+              <Pencil className="h-3.5 w-3.5" aria-hidden />
+            ) : (
+              <Plus className="h-3.5 w-3.5" aria-hidden />
+            )}
             {items.length > 0 ? "Изменить" : "Прикрепить"}
           </Button>
         ) : null}
@@ -211,72 +303,19 @@ export function AccessUserScopeSummary({ vm, tab, readOnly }: { vm: AccessUserDe
         ) : shown.length === 0 ? (
           <p className="px-4 py-10 text-center text-sm text-muted-foreground">Ничего не найдено</p>
         ) : (
-          <ul className="divide-y divide-border/70 overflow-hidden rounded-lg border border-border/70">
-            {!readOnly && shownIds.length > 1 ? (
-              <li className="flex items-center gap-3 bg-muted/40 px-3 py-2 text-xs">
-                <input
-                  type="checkbox"
-                  className="h-4 w-4 accent-teal-700"
-                  checked={allShownOn}
-                  disabled={vm.patchMut.isPending}
-                  aria-label="Отметить все видимые"
-                  onChange={(e) => {
-                    const on = e.target.checked;
-                    setDraft((prev) => {
-                      const next = new Set(prev ?? serverIds);
-                      for (const id of shownIds) {
-                        if (on) next.add(id);
-                        else next.delete(id);
-                      }
-                      return next;
-                    });
-                  }}
-                />
-                <span className="font-medium text-muted-foreground">Все видимые</span>
-              </li>
-            ) : null}
-            {shown.map((i) => {
-              const on = kept.has(i.id);
-              return (
-                <li
-                  key={i.id}
-                  className={cn(
-                    "flex min-w-0 items-center gap-3 px-3 py-2.5 text-sm",
-                    on ? "bg-card" : "bg-rose-50/80 text-muted-foreground dark:bg-rose-950/30"
-                  )}
-                >
-                  <input
-                    type="checkbox"
-                    className="h-4 w-4 shrink-0 accent-teal-700"
-                    checked={on}
-                    disabled={readOnly || vm.patchMut.isPending}
-                    aria-label={on ? `Оставить ${i.label}` : `Вернуть ${i.label}`}
-                    onChange={(e) => setChecked(i.id, e.target.checked)}
-                  />
-                  <Icon className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
-                  <span className={cn("min-w-0 flex-1 truncate", !on && "line-through")} title={i.label}>
-                    {i.label}
-                  </span>
-                  {i.sub ? (
-                    <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-[11px] text-muted-foreground">{i.sub}</span>
-                  ) : null}
-                  {!on ? <span className="shrink-0 text-[11px] text-rose-700">будет убрано</span> : null}
-                  {!readOnly && on ? (
-                    <button
-                      type="button"
-                      className="inline-flex h-7 shrink-0 items-center gap-1 rounded-md px-2 text-xs text-rose-700 hover:bg-rose-100 disabled:opacity-40 dark:hover:bg-rose-950"
-                      disabled={vm.patchMut.isPending}
-                      aria-label={`Убрать ${i.label}`}
-                      onClick={() => setChecked(i.id, false)}
-                    >
-                      <X className="h-3.5 w-3.5" aria-hidden />
-                      Убрать
-                    </button>
-                  ) : null}
-                </li>
-              );
-            })}
-          </ul>
+          <AccessScopeAttachedList
+            key={`${detail?.user?.id ?? 0}-${tab}`}
+            shown={shown}
+            staffGroups={staffGroups}
+            kept={kept}
+            shownIds={shownIds}
+            allShownOn={allShownOn}
+            readOnly={readOnly}
+            pending={vm.patchMut.isPending}
+            Icon={Icon}
+            onToggle={setChecked}
+            onBulk={setBulk}
+          />
         )}
       </div>
       {listDirty && !readOnly ? (

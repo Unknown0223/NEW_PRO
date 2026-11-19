@@ -1,4 +1,8 @@
 import { prisma } from "../../config/database";
+import {
+  isSupervisorRole,
+  supervisorDisplayNameOrNull
+} from "../access/access-supervisor-display";
 import { getMobileAgentKpi } from "../mobile/mobile-agent-kpi.service";
 import type { KpiDailyRoutePlan } from "../mobile/mobile-agent-kpi-daily-route";
 import type { DailyKpiDetailQuery } from "./plans.daily-kpi.schema";
@@ -32,7 +36,7 @@ export async function getDailyKpiAgentDetail(
       branch: true,
       trade_direction_id: true,
       supervisor_user_id: true,
-      supervisor: { select: { name: true } }
+      supervisor: { select: { name: true, role: true } }
     }
   });
   if (!user) throw new Error("NOT_FOUND");
@@ -49,8 +53,8 @@ export async function getDailyKpiAgentDetail(
     name: user.name,
     code: user.code,
     branch: user.branch?.trim() || null,
-    supervisor_id: user.supervisor_user_id,
-    supervisor_name: user.supervisor?.name ?? null,
+    supervisor_id: isSupervisorRole(user.supervisor?.role) ? user.supervisor_user_id : null,
+    supervisor_name: supervisorDisplayNameOrNull(user.supervisor),
     trade_direction_id: user.trade_direction_id,
     trade_direction_name: null,
     month_plan_sum: kpi.month.plan_sum,

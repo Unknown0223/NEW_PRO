@@ -10,11 +10,9 @@ import '../../../core/auth/biometric_transaction_confirm.dart';
 import '../../../core/auth/session.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
-import '../../../core/ui/agent_ui.dart';
 import '../expeditor_status_labels.dart';
 import '../config/expeditor_config_enforcement.dart';
 import '../expeditor_providers.dart';
-import '../visits/expeditor_visit_gates.dart';
 
 class ExpeditorDeliveryDetailPage extends ConsumerStatefulWidget {
   final int orderId;
@@ -37,26 +35,6 @@ class _ExpeditorDeliveryDetailPageState extends ConsumerState<ExpeditorDeliveryD
   }
 
   Future<void> _setStatus(String status, ExpeditorConfigPolicy policy) async {
-    if (status == 'delivered' || status == 'returned') {
-      final order = ref.read(expeditorOrderDetailProvider(widget.orderId)).valueOrNull;
-      final client = Map<String, dynamic>.from(order?['client'] as Map? ?? {});
-      final clientId = (client['id'] as num?)?.toInt() ?? 0;
-      if (clientId > 0) {
-        final gate = await ensureExpeditorVisitAllowed(
-          context: context,
-          ref: ref,
-          clientId: clientId,
-          clientLat: (client['latitude'] as num?)?.toDouble(),
-          clientLng: (client['longitude'] as num?)?.toDouble(),
-        );
-        if (!gate.ok || !mounted) {
-          if (mounted && gate.message != null) {
-            showAgentToast(context, gate.message!, accentColor: AppColors.error);
-          }
-          return;
-        }
-      }
-    }
     if (status == 'delivered') {
       final okBio = await _confirmSensitiveIfNeeded(policy, 'Подтвердите доставку');
       if (!okBio) return;
@@ -77,11 +55,11 @@ class _ExpeditorDeliveryDetailPageState extends ConsumerState<ExpeditorDeliveryD
       ref.invalidate(expeditorOrderDetailProvider(widget.orderId));
       ref.invalidate(deliveriesProvider(null));
       if (mounted) {
-        showAgentToast(context, 'Статус: ${expeditorStatusLabel(status)}', accentColor: AppColors.success);
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Holat: $status')));
       }
     } catch (e) {
       if (mounted) {
-        showAgentToast(context, '$e', accentColor: AppColors.error);
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e'), backgroundColor: AppColors.error));
       }
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -114,11 +92,13 @@ class _ExpeditorDeliveryDetailPageState extends ConsumerState<ExpeditorDeliveryD
           );
       ref.invalidate(expeditorOrderDetailProvider(widget.orderId));
       if (mounted) {
-        showAgentToast(context, 'Координаты обновлены', accentColor: AppColors.success);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Koordinata yangilandi'), backgroundColor: AppColors.success),
+        );
       }
     } catch (e) {
       if (mounted) {
-        showAgentToast(context, '$e', accentColor: AppColors.error);
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e'), backgroundColor: AppColors.error));
       }
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -132,7 +112,7 @@ class _ExpeditorDeliveryDetailPageState extends ConsumerState<ExpeditorDeliveryD
     final detail = ref.watch(expeditorOrderDetailProvider(widget.orderId));
 
     return Scaffold(
-      appBar: AppBar(title: Text('Заказ #${detail.valueOrNull?['number'] ?? widget.orderId}')),
+      appBar: AppBar(title: Text('Buyurtma #${detail.valueOrNull?['number'] ?? widget.orderId}')),
       body: detail.when(
         data: (o) {
           final client = Map<String, dynamic>.from(o['client'] as Map? ?? {});
@@ -162,22 +142,22 @@ class _ExpeditorDeliveryDetailPageState extends ConsumerState<ExpeditorDeliveryD
           return ListView(
             padding: const EdgeInsets.all(16),
             children: [
-              Text('Статус: ${expeditorStatusLabel(status)}', style: AppTypography.titleMedium),
+              Text('Holat: ${expeditorStatusLabel(status)}', style: AppTypography.titleMedium),
               const SizedBox(height: 8),
-              Text('Клиент: ${client['name'] ?? '-'}', style: AppTypography.bodyLarge),
-              if (client['phone'] != null) Text('Тел.: ${client['phone']}', style: AppTypography.bodyMedium),
+              Text('Mijoz: ${client['name'] ?? '-'}', style: AppTypography.bodyLarge),
+              if (client['phone'] != null) Text('Tel: ${client['phone']}', style: AppTypography.bodyMedium),
               if (client['address'] != null || client['city'] != null)
                 Text(
                   [client['address'], client['city'], client['zone']].whereType<String>().where((s) => s.isNotEmpty).join(', '),
                   style: AppTypography.bodySmall,
                 ),
               const SizedBox(height: 8),
-              Text('Сумма: ${o['total_sum']} ${policy.currencySymbol}', style: AppTypography.bodyLarge),
+              Text('Summa: ${o['total_sum']} ${policy.currencySymbol}', style: AppTypography.bodyLarge),
               if (paidConfirmed > 0)
-                Text('Подтверждённая оплата: $paidConfirmed ${policy.currencySymbol}', style: AppTypography.bodySmall),
+                Text('Tasdiqlangan to\'lov: $paidConfirmed ${policy.currencySymbol}', style: AppTypography.bodySmall),
               if (paidPending > 0)
                 Text(
-                  'Ожидает подтверждения: $paidPending ${policy.currencySymbol}',
+                  'Tasdiqlanishni kutmoqda: $paidPending ${policy.currencySymbol}',
                   style: AppTypography.bodySmall.copyWith(color: AppColors.warning),
                 ),
               if (pendingPayments.isNotEmpty) ...[
@@ -197,7 +177,7 @@ class _ExpeditorDeliveryDetailPageState extends ConsumerState<ExpeditorDeliveryD
                 OutlinedButton.icon(
                   onPressed: _busy ? null : () => _openMap(client),
                   icon: const Icon(Icons.map_outlined),
-                  label: const Text('Открыть на карте'),
+                  label: const Text('Xaritada ochish'),
                 ),
               if (policy.canChangeClientLocation && clientId > 0)
                 Padding(
@@ -205,11 +185,11 @@ class _ExpeditorDeliveryDetailPageState extends ConsumerState<ExpeditorDeliveryD
                   child: OutlinedButton.icon(
                     onPressed: _busy ? null : () => _updateClientLocation(clientId),
                     icon: const Icon(Icons.my_location),
-                    label: const Text('Обновить координаты'),
+                    label: const Text('Koordinatani yangilash'),
                   ),
                 ),
               const SizedBox(height: 16),
-              const Text('Товары', style: AppTypography.titleMedium),
+              const Text('Mahsulotlar', style: AppTypography.titleMedium),
               ...items.map((it) {
                 final m = Map<String, dynamic>.from(it);
                 return ListTile(
@@ -221,12 +201,12 @@ class _ExpeditorDeliveryDetailPageState extends ConsumerState<ExpeditorDeliveryD
               }),
               const Divider(height: 32),
               if (nextStatuses.isNotEmpty) ...[
-                const Text('Изменить статус', style: AppTypography.titleMedium),
+                const Text('Holatni yangilash', style: AppTypography.titleMedium),
                 if (policy.fingerprintRequired)
                   Padding(
                     padding: const EdgeInsets.only(bottom: 8),
                     child: Text(
-                      'Для статуса «Доставлен» требуется отпечаток пальца',
+                      '«delivered» uchun barmoq izi talab qilinadi',
                       style: AppTypography.bodySmall.copyWith(color: AppColors.warning),
                     ),
                   ),
@@ -250,7 +230,7 @@ class _ExpeditorDeliveryDetailPageState extends ConsumerState<ExpeditorDeliveryD
                   child: OutlinedButton.icon(
                     onPressed: () => context.push('/payments?order_id=${widget.orderId}'),
                     icon: const Icon(Icons.payment),
-                    label: const Text('Отправить заявку на оплату'),
+                    label: const Text('To\'lov arizasi yuborish'),
                   ),
                 ),
               if (policy.allowPartialReturn && status == 'delivered')
@@ -259,14 +239,14 @@ class _ExpeditorDeliveryDetailPageState extends ConsumerState<ExpeditorDeliveryD
                   child: OutlinedButton.icon(
                     onPressed: () => context.push('/returns?order_id=${widget.orderId}'),
                     icon: const Icon(Icons.replay),
-                    label: const Text('Возврат'),
+                    label: const Text('Qaytarish'),
                   ),
                 ),
             ],
           );
         },
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(child: Text('Ошибка: $e')),
+        error: (e, _) => Center(child: Text('Xato: $e')),
       ),
     );
   }

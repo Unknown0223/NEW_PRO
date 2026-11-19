@@ -12,7 +12,6 @@ import '../../../core/theme/app_typography.dart';
 import '../../../core/orders/order_status_labels.dart';
 import '../../../core/ui/agent_ui.dart';
 import '../../../core/ui/agent_ui_extended.dart';
-import '../../../design_system/design_system.dart';
 import '../orders/order_create_models.dart';
 import '../orders/orders_providers.dart';
 import '../shell/agent_app_bar.dart';
@@ -53,12 +52,12 @@ class _AgentDebtorsByOrdersPageState extends ConsumerState<AgentDebtorsByOrdersP
         .toList();
   }
 
-  String _orderTitle(OrderDebtRow row) => 'Buyurtma №${row.orderNumber.isNotEmpty ? row.orderNumber : row.orderId}';
+  String _orderTitle(OrderDebtRow row) => 'Заказ №${row.orderNumber.isNotEmpty ? row.orderNumber : row.orderId}';
 
   String _orderTitleFromDetail(AgentOrderHistoryRow o) {
     final n = o.number?.trim();
     final num = (n != null && n.isNotEmpty) ? n : '${o.id}';
-    return 'Buyurtma №$num';
+    return 'Заказ №$num';
   }
 
   String _formatBonusSummary(AgentOrderHistoryRow o) {
@@ -74,7 +73,7 @@ class _AgentDebtorsByOrdersPageState extends ConsumerState<AgentDebtorsByOrdersP
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AgentAppBar(
-        title: 'Buyurtma bo\'yicha qarz',
+        title: 'Должники по заказам',
         useShellDrawer: true,
         showBack: true,
         actions: [
@@ -95,7 +94,7 @@ class _AgentDebtorsByOrdersPageState extends ConsumerState<AgentDebtorsByOrdersP
                 children: [
                   SizedBox(
                     height: MediaQuery.sizeOf(context).height * 0.45,
-                    child: AgentEmptyState.fill(message: 'Qarzdorlar yo\'q'),
+                    child: AgentEmptyState.fill(message: S.emptyDebtors),
                   ),
                 ],
               ),
@@ -114,65 +113,50 @@ class _AgentDebtorsByOrdersPageState extends ConsumerState<AgentDebtorsByOrdersP
               }
             },
             child: ListView(
-              padding: const EdgeInsets.fromLTRB(12, 12, 12, 140),
+              padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
               children: [
-                SaEnter(
-                  preset: SaMotionPreset.rise,
-                  child: AgentSurfaceCard(
-                    padding: const EdgeInsets.all(16),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Text(
-                          'Jami qarz:',
-                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: AppColors.textMuted),
-                        ),
-                        Text(
-                          formatDebtMoney(total, currency: result.currency),
-                          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: AppColors.error),
-                        ),
-                      ],
-                    ),
+                AgentSurfaceCard(
+                  padding: const EdgeInsets.all(16),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        'Общие долги:',
+                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: AppColors.textMuted),
+                      ),
+                      Text(
+                        formatDebtMoney(total, currency: result.currency),
+                        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: AppColors.error),
+                      ),
+                    ],
                   ),
                 ),
-                SaEnter(
-                  delay: SaStaggerDelay.of(1),
-                  child: Padding(
-                    padding: const EdgeInsets.only(top: 8, bottom: 8, left: 4),
-                    child: Text(
-                      'Topildi: ${result.data.length}',
-                      style: AppTypography.caption.copyWith(fontWeight: FontWeight.w700, color: AppColors.textSecondary),
-                    ),
+                Padding(
+                  padding: const EdgeInsets.only(top: 8, bottom: 8, left: 4),
+                  child: Text(
+                    'Найдено: ${result.data.length}',
+                    style: AppTypography.caption.copyWith(fontWeight: FontWeight.w700, color: AppColors.textSecondary),
                   ),
                 ),
-                for (var i = 0; i < result.data.length; i++)
-                  SaEnter(
-                    delay: SaStaggerDelay.of(2 + i),
-                    preset: SaMotionPreset.rise,
-                    child: Builder(
-                      builder: (context) {
-                        final row = result.data[i];
-                        return _OrderDebtCard(
-                          row: row,
-                          currency: result.currency,
-                          expanded: _expandedOrderId == row.orderId,
-                          detailAsync: _expandedOrderId == row.orderId
-                              ? ref.watch(orderHistoryDetailProvider(row.orderId))
-                              : null,
-                          onTap: () => setState(() {
-                            _expandedOrderId = _expandedOrderId == row.orderId ? null : row.orderId;
-                          }),
-                          formatDate: _formatDate,
-                          statusChip: orderStatusChip(row.orderStatus),
-                          orderTitle: _orderTitle(row),
-                          lineRows: _lineRows,
-                          orderTitleFromDetail: _orderTitleFromDetail,
-                          formatBonusSummary: _formatBonusSummary,
-                          formatQty: _formatQty,
-                          statusChipFromDetail: (o) => orderStatusChip(o.status, orderType: o.orderType),
-                        );
-                      },
-                    ),
+                for (final row in result.data)
+                  _OrderDebtCard(
+                    row: row,
+                    currency: result.currency,
+                    expanded: _expandedOrderId == row.orderId,
+                    detailAsync: _expandedOrderId == row.orderId
+                        ? ref.watch(orderHistoryDetailProvider(row.orderId))
+                        : null,
+                    onTap: () => setState(() {
+                      _expandedOrderId = _expandedOrderId == row.orderId ? null : row.orderId;
+                    }),
+                    formatDate: _formatDate,
+                    statusChip: orderStatusChip(row.orderStatus),
+                    orderTitle: _orderTitle(row),
+                    lineRows: _lineRows,
+                    orderTitleFromDetail: _orderTitleFromDetail,
+                    formatBonusSummary: _formatBonusSummary,
+                    formatQty: _formatQty,
+                    statusChipFromDetail: (o) => orderStatusChip(o.status, orderType: o.orderType),
                   ),
               ],
             ),

@@ -1,5 +1,9 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "../../config/database";
+import {
+  isSupervisorRole,
+  supervisorDisplayNameOrNull
+} from "../access/access-supervisor-display";
 import { getWorkdaysState } from "../tabel/workdays.service";
 import {
   buildKpiDailyRoutePlan,
@@ -201,7 +205,7 @@ export async function getDailyKpiOverview(
           branch: true,
           trade_direction_id: true,
           supervisor_user_id: true,
-          supervisor: { select: { name: true } }
+          supervisor: { select: { name: true, role: true } }
         }
       },
       plan: {
@@ -234,8 +238,8 @@ export async function getDailyKpiOverview(
         name: t.user.name,
         code: t.user.code,
         branch: t.user.branch?.trim() || null,
-        supervisor_id: t.user.supervisor_user_id,
-        supervisor_name: t.user.supervisor?.name ?? null,
+        supervisor_id: isSupervisorRole(t.user.supervisor?.role) ? t.user.supervisor_user_id : null,
+        supervisor_name: supervisorDisplayNameOrNull(t.user.supervisor),
         trade_direction_id: t.user.trade_direction_id
       });
     }

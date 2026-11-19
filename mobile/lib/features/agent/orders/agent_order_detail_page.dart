@@ -10,7 +10,6 @@ import '../../../core/theme/app_typography.dart';
 import '../../../core/time/work_region_time.dart';
 import '../../../core/ui/agent_ui.dart';
 import '../../../core/ui/agent_ui_extended.dart';
-import '../../../design_system/design_system.dart';
 import '../shell/agent_app_bar.dart';
 import 'order_create_models.dart' show formatMoneyUz;
 import 'orders_providers.dart';
@@ -31,7 +30,7 @@ class AgentOrderDetailPage extends ConsumerWidget {
       appBar: AgentAppBar(
         title: detailAsync.maybeWhen(
           data: (o) => _orderTitle(o),
-          orElse: () => 'Buyurtma №$orderId',
+          orElse: () => 'Заказ #$orderId',
         ),
         showBack: true,
         actions: [
@@ -62,34 +61,19 @@ class AgentOrderDetailPage extends ConsumerWidget {
             },
             child: ListView(
               physics: const AlwaysScrollableScrollPhysics(),
-              padding: const EdgeInsets.fromLTRB(16, 14, 16, 140),
+              padding: const EdgeInsets.fromLTRB(16, 14, 16, 32),
               children: [
-                SaEnter(
-                  preset: SaMotionPreset.rise,
-                  child: _StatusHero(
-                    order: order,
-                    debtRemainder: debtRemainder,
-                    onRepeat: () => _repeatOrder(context, order),
-                  ),
+                _StatusHero(
+                  order: order,
+                  debtRemainder: debtRemainder,
+                  onRepeat: () => _repeatOrder(context, order),
                 ),
                 const SizedBox(height: 12),
-                SaEnter(
-                  delay: SaStaggerDelay.of(1),
-                  preset: SaMotionPreset.rise,
-                  child: _PromoPair(order: order),
-                ),
+                _PromoPair(order: order),
                 const SizedBox(height: 12),
-                SaEnter(
-                  delay: SaStaggerDelay.of(2),
-                  preset: SaMotionPreset.rise,
-                  child: _CompositionCard(order: order),
-                ),
+                _CompositionCard(order: order),
                 const SizedBox(height: 12),
-                SaEnter(
-                  delay: SaStaggerDelay.of(3),
-                  preset: SaMotionPreset.rise,
-                  child: _ViewOnlyStatus(order: order),
-                ),
+                _ViewOnlyStatus(order: order),
               ],
             ),
           );
@@ -111,7 +95,7 @@ class AgentOrderDetailPage extends ConsumerWidget {
 String _orderTitle(AgentOrderHistoryRow o) {
   final n = o.number?.trim();
   final num = (n != null && n.isNotEmpty) ? n : '${o.id}';
-  return 'Buyurtma №$num';
+  return 'Заказ #$num';
 }
 
 String _formatQty(double v) {
@@ -148,13 +132,8 @@ String _bonusSubtitle(AgentOrderHistoryRow o) {
   final name = first.productName.isNotEmpty ? first.productName : 'бонус';
   final short = name.length > 18 ? '${name.substring(0, 16)}…' : name;
   final q = _formatQty(first.qty);
-  if (bonusItems.length == 1) {
-    return '+$q $short · активны';
-  }
-  // Qolgan bonus DONALARI (qatorlar soni emas) — aks holda "+1 Zerelle +1" +3 Livialni yashiradi.
-  final restQty = bonusItems.skip(1).fold<double>(0, (s, it) => s + it.qty);
-  if (restQty <= 0) return '+$q $short · активны';
-  return '+$q $short +${_formatQty(restQty)} · активны';
+  final extra = bonusItems.length > 1 ? ' +${bonusItems.length - 1}' : '';
+  return '+$q $short$extra · активны';
 }
 
 String? _discountPctLabel(AgentOrderHistoryRow o) {
@@ -250,22 +229,19 @@ class _StatusHero extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 8),
-              SaPressable(
-                onTap: onRepeat,
-                child: OutlinedButton(
-                  onPressed: onRepeat,
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: AppColors.primary,
-                    side: const BorderSide(color: AppColors.primary, width: 1.5),
-                    backgroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 0),
-                    minimumSize: const Size(0, 34),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                  ),
-                  child: const Text(
-                    'Повторить',
-                    style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12),
-                  ),
+              OutlinedButton(
+                onPressed: onRepeat,
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: AppColors.primary,
+                  side: const BorderSide(color: AppColors.primary, width: 1.5),
+                  backgroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 0),
+                  minimumSize: const Size(0, 34),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                ),
+                child: const Text(
+                  'Повторить',
+                  style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12),
                 ),
               ),
             ],
@@ -316,7 +292,7 @@ class _StatusHero extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'ЗАДОЛЖЕННОСТЬ',
+                        'ҚАРЗДОРЛИК',
                         style: AppTypography.captionSmall.copyWith(
                           fontWeight: FontWeight.w800,
                           color: AppColors.textMuted,
@@ -633,7 +609,7 @@ class _ViewOnlyStatus extends StatelessWidget {
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        'агент не меняет статус',
+                        'агент статусни ўзгартирмайди',
                         style: AppTypography.captionSmall.copyWith(
                           color: AppColors.textMuted,
                           fontSize: 11.5,

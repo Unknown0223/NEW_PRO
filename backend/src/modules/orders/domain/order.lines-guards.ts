@@ -2,6 +2,7 @@
  * Domain: Orders — tahrirlashda kredit / to‘lov taqsimoti tekshiruvlari.
  */
 import { Prisma } from "@prisma/client";
+import { loadClientBalanceView } from "../../client-balances/client-balance-view";
 import { ORDER_STATUSES_EXCLUDED_FROM_CREDIT_EXPOSURE } from "../order-status";
 
 export async function assertOrderLinesCreditAndPayments(
@@ -17,11 +18,8 @@ export async function assertOrderLinesCreditAndPayments(
   const { tenantId, orderId, clientId, creditLimit, paidTotal } = params;
 
   if (creditLimit.gt(0)) {
-    const balRow = await tx.clientBalance.findUnique({
-      where: { tenant_id_client_id: { tenant_id: tenantId, client_id: clientId } },
-      select: { balance: true }
-    });
-    const accountBalance = balRow?.balance ?? new Prisma.Decimal(0);
+    const balanceByClient = await loadClientBalanceView(tenantId, [clientId], "ledger_merged");
+    const accountBalance = balanceByClient.get(clientId) ?? new Prisma.Decimal(0);
     const headroom = creditLimit.add(accountBalance);
     const agg = await tx.order.aggregate({
       where: {

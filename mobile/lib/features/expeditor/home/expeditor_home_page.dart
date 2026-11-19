@@ -6,14 +6,11 @@ import 'package:intl/intl.dart';
 import '../../../core/auth/session.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
-import '../../../core/ui/quick_panel_sheet.dart';
-import '../../../design_system/design_system.dart';
 import '../../agent/orders/order_create_models.dart' show formatMoneySpaced;
 import '../config/expeditor_config_enforcement.dart';
 import '../expeditor_providers.dart';
 import '../payments/expeditor_notifications.dart';
 import '../shell/expeditor_drawer.dart';
-import 'expeditor_home_report_table.dart';
 import 'expeditor_home_sheets.dart';
 import 'expeditor_sync_sheet.dart';
 
@@ -23,8 +20,6 @@ Future<void> _openSync(BuildContext context, WidgetRef ref) async {
   if (full == null || !context.mounted) return;
   context.push('/exp-manual-sync?full=${full ? 1 : 0}');
 }
-
-final GlobalKey<ScaffoldState> expeditorHomeScaffoldKey = GlobalKey<ScaffoldState>();
 
 class ExpeditorHomePage extends ConsumerWidget {
   const ExpeditorHomePage({super.key});
@@ -36,7 +31,7 @@ class ExpeditorHomePage extends ConsumerWidget {
     return DateFormat('dd.MM, HH:mm').format(dt.toLocal());
   }
 
-  String _fmtMoney(num v) => '${formatMoneySpaced(v.toDouble())} сум';
+  String _fmtMoney(num v) => '${formatMoneySpaced(v.toDouble())} so\'m';
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -45,32 +40,14 @@ class ExpeditorHomePage extends ConsumerWidget {
     final policy = ExpeditorConfigPolicy.fromMobileConfig(mobileConfig);
     final dash = ref.watch(expeditorDashboardProvider);
 
-    final now = TimeOfDay.now();
-    final clock =
-        '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
-
     return Scaffold(
-      key: expeditorHomeScaffoldKey,
       backgroundColor: AppColors.background,
       drawer: const ExpeditorDrawer(),
-      body: Column(
-        children: [
-          SaGlobalChromeBar(
-            roleLabel: 'Dastavka',
-            syncClock: clock,
-            onMenu: () => expeditorHomeScaffoldKey.currentState?.openDrawer(),
-            onSync: () => _openSync(context, ref),
-            onQuick: () => showQuickPanelSheet(context),
-          ),
-          const Align(
-            alignment: Alignment.centerRight,
-            child: Padding(
-              padding: EdgeInsets.only(right: 8),
-              child: ExpeditorNotificationsBell(),
-            ),
-          ),
-          Expanded(
-            child: RefreshIndicator(
+      appBar: AppBar(
+        title: const Text('Главная'),
+        actions: const [ExpeditorNotificationsBell()],
+      ),
+      body: RefreshIndicator(
         onRefresh: () async {
           ref.invalidate(expeditorDashboardProvider);
           await ref.read(expeditorDashboardProvider.future);
@@ -96,246 +73,189 @@ class ExpeditorHomePage extends ConsumerWidget {
                 payments['synced_sum'] as num? ??
                 0;
             final paymentsSummary = pendingCount == 0
-                ? 'Нет оплат, ожидающих подтверждения'
-                : 'Ожидают подтверждения: $pendingCount — ${_fmtMoney(pendingSum)}';
+                ? 'Tasdiqlanishni kutayotgan to\'lovlar yo\'q'
+                : 'Tasdiqlanishni kutmoqda: $pendingCount — ${_fmtMoney(pendingSum)}';
 
             return ListView(
               padding: const EdgeInsets.fromLTRB(12, 12, 12, 130),
               children: [
-                SaEnter(
-                  preset: SaMotionPreset.rise,
-                  child: Card(
-                    child: Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              const Expanded(
-                                child: Text(
-                                  'Дневной отчёт на сегодня',
-                                  style: AppTypography.titleMedium,
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text('Дневной отчёт на сегодня',
+                            style: AppTypography.titleMedium,),
+                        const SizedBox(height: 12),
+                        Center(
+                          child: SizedBox(
+                            width: 132,
+                            height: 132,
+                            child: Stack(
+                              alignment: Alignment.center,
+                              children: [
+                                SizedBox(
+                                  width: 132,
+                                  height: 132,
+                                  child: CircularProgressIndicator(
+                                    value: (perf / 100).clamp(0.0, 1.0),
+                                    strokeWidth: 12,
+                                    color: AppColors.expeditorAccent,
+                                    backgroundColor: AppColors.expeditorAccent
+                                        .withValues(alpha: 0.15),
+                                  ),
                                 ),
-                              ),
-                              SaLiveDot(color: AppColors.expeditorAccent, size: 6),
-                            ],
-                          ),
-                          const SizedBox(height: 12),
-                          Center(
-                            child: SizedBox(
-                              width: 132,
-                              height: 132,
-                              child: Stack(
-                                alignment: Alignment.center,
-                                children: [
-                                  SizedBox(
-                                    width: 132,
-                                    height: 132,
-                                    child: TweenAnimationBuilder<double>(
-                                      tween: Tween(
-                                        begin: 0,
-                                        end: (perf / 100).clamp(0.0, 1.0),
-                                      ),
-                                      duration: SaDurations.data,
-                                      curve: SaCurves.standard,
-                                      builder: (_, v, __) => CircularProgressIndicator(
-                                        value: v,
-                                        strokeWidth: 12,
-                                        color: AppColors.expeditorAccent,
-                                        backgroundColor: AppColors.expeditorAccent
-                                            .withValues(alpha: 0.15),
-                                      ),
-                                    ),
-                                  ),
-                                  Column(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      SaCountUp(
-                                        value: perf,
-                                        format: (v) => '${v.toInt()}%',
-                                        style: AppTypography.headlineMedium,
-                                      ),
-                                      const Text(
-                                        'УСПЕВАЕМОСТЬ',
+                                Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Text('${perf.toInt()}%',
+                                        style: AppTypography.headlineMedium,),
+                                    const Text('УСПЕВАЕМОСТЬ',
                                         style: TextStyle(
-                                          fontSize: 12,
-                                          fontWeight: FontWeight.w700,
-                                          color: AppColors.textSecondary,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ],
-                              ),
+                                            fontSize: 9,
+                                            color: AppColors.textMuted,),),
+                                  ],
+                                ),
+                              ],
                             ),
                           ),
-                          const SizedBox(height: 12),
-                          Row(
-                            children: [
-                              Expanded(
+                        ),
+                        const SizedBox(height: 12),
+                        Row(
+                          children: [
+                            Expanded(
                                 child: _MiniStat(
-                                  'Посещено',
-                                  '$visited / $total',
-                                  Icons.check_circle,
-                                  AppColors.success,
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              Expanded(
+                                    'Посещено',
+                                    '$visited / $total',
+                                    Icons.check_circle,
+                                    AppColors.success,),),
+                            const SizedBox(width: 8),
+                            Expanded(
                                 child: _MiniStat(
-                                  'Осталось',
-                                  '$remaining / $total',
-                                  Icons.location_on,
-                                  AppColors.error,
-                                ),
-                              ),
-                            ],
+                                    'Осталось',
+                                    '$remaining / $total',
+                                    Icons.location_on,
+                                    AppColors.error,),),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        Text(
+                            'Последняя синхр-ция: ${_fmtSync(d['last_sync_at']?.toString())}',
+                            style: AppTypography.caption,),
+                        const SizedBox(height: 8),
+                        SizedBox(
+                          width: double.infinity,
+                          child: ElevatedButton(
+                            onPressed: () => _openSync(context, ref),
+                            style: ElevatedButton.styleFrom(
+                                backgroundColor: AppColors.expeditorAccent,),
+                            child: const Text('Синхронизация'),
                           ),
-                          const SizedBox(height: 12),
-                          Text(
-                            'Синхронизация: ${_fmtSync(d['last_sync_at']?.toString())}',
-                            style: AppTypography.bodySmall
-                                .copyWith(color: AppColors.textSecondary),
-                          ),
-                          const SizedBox(height: 8),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(14),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text('Оплаты',
+                            style: TextStyle(fontWeight: FontWeight.w700),),
+                        const SizedBox(height: 6),
+                        Text(
+                          paymentsSummary,
+                          style: AppTypography.bodySmall,
+                        ),
+                        const SizedBox(height: 10),
+                        if (policy.paymentsEnabled)
                           SizedBox(
                             width: double.infinity,
-                            child: SaPressable(
-                              child: ElevatedButton(
-                                onPressed: () => _openSync(context, ref),
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: AppColors.expeditorAccent,
-                                ),
-                                child: const Text('Синхронизация'),
+                            child: OutlinedButton(
+                              onPressed: () =>
+                                  showExpeditorPaymentsSheet(context),
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: AppColors.expeditorAccent,
+                                side: const BorderSide(color: AppColors.border),
+                                padding:
+                                    const EdgeInsets.symmetric(vertical: 12),
                               ),
+                              child: const Text('Информация оплаты'),
                             ),
                           ),
-                        ],
-                      ),
+                      ],
                     ),
                   ),
                 ),
                 const SizedBox(height: 12),
-                SaEnter(
-                  delay: SaStaggerDelay.of(1),
-                  preset: SaMotionPreset.rise,
-                  child: Card(
-                    child: Padding(
-                      padding: const EdgeInsets.all(14),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text('Оплаты', style: AppTypography.titleMedium),
-                          const SizedBox(height: 6),
-                          Text(
-                            paymentsSummary,
-                            style: AppTypography.bodyMedium
-                                .copyWith(color: AppColors.textSecondary),
-                          ),
-                          const SizedBox(height: 10),
-                          if (policy.paymentsEnabled)
-                            SizedBox(
-                              width: double.infinity,
-                              child: OutlinedButton(
-                                onPressed: () =>
-                                    showExpeditorPaymentsSheet(context),
-                                style: OutlinedButton.styleFrom(
-                                  foregroundColor: AppColors.expeditorAccent,
-                                  side: const BorderSide(color: AppColors.border),
-                                  padding:
-                                      const EdgeInsets.symmetric(vertical: 12),
-                                ),
-                                child: const Text('Информация оплаты'),
-                              ),
-                            ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                SaEnter(
-                  delay: SaStaggerDelay.of(2),
-                  preset: SaMotionPreset.rise,
-                  child: Card(
-                    child: Padding(
-                      padding: const EdgeInsets.all(14),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text(
-                            'Отчет по отгрузкам',
-                            style: AppTypography.headlineSmall,
-                          ),
-                          const SizedBox(height: 10),
-                          ExpeditorHomeReportTable(
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(14),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text('Отчет по отгрузкам',
+                            style: AppTypography.titleMedium,),
+                        const SizedBox(height: 8),
+                        _ReportTable(
                             rows: rows
                                 .map((e) => Map<String, dynamic>.from(e))
-                                .toList(),
-                          ),
-                          const SizedBox(height: 8),
-                          Row(
-                            children: [
-                              Expanded(
-                                child: OutlinedButton(
-                                  onPressed: () =>
-                                      showExpeditorDeliveryByClientsSheet(
-                                    context,
-                                  ),
-                                  style: OutlinedButton.styleFrom(
-                                    foregroundColor: AppColors.textPrimary,
-                                    side: const BorderSide(color: AppColors.border),
-                                    padding: const EdgeInsets.symmetric(vertical: 10),
-                                  ),
-                                  child: const Row(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      Text(
-                                        'По клиентам',
-                                        style: TextStyle(
-                                          fontSize: 15,
-                                          fontWeight: FontWeight.w700,
-                                        ),
-                                      ),
-                                      SizedBox(width: 4),
-                                      Icon(Icons.chevron_right, size: 20),
-                                    ],
-                                  ),
+                                .toList(),),
+                        const SizedBox(height: 8),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: OutlinedButton(
+                                onPressed: () =>
+                                    showExpeditorDeliveryByClientsSheet(
+                                        context,),
+                                style: OutlinedButton.styleFrom(
+                                  foregroundColor: AppColors.textPrimary,
+                                  side:
+                                      const BorderSide(color: AppColors.border),
+                                  padding:
+                                      const EdgeInsets.symmetric(vertical: 10),
+                                ),
+                                child: const Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Text('По клиентам'),
+                                    SizedBox(width: 4),
+                                    Icon(Icons.chevron_right, size: 18),
+                                  ],
                                 ),
                               ),
-                              const SizedBox(width: 10),
-                              Expanded(
-                                child: OutlinedButton(
-                                  onPressed: () =>
-                                      showExpeditorDeliveryByProductsSheet(
-                                    context,
-                                  ),
-                                  style: OutlinedButton.styleFrom(
-                                    foregroundColor: AppColors.textPrimary,
-                                    side: const BorderSide(color: AppColors.border),
-                                    padding: const EdgeInsets.symmetric(vertical: 10),
-                                  ),
-                                  child: const Row(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      Text(
-                                        'По продуктам',
-                                        style: TextStyle(
-                                          fontSize: 15,
-                                          fontWeight: FontWeight.w700,
-                                        ),
-                                      ),
-                                      SizedBox(width: 4),
-                                      Icon(Icons.chevron_right, size: 20),
-                                    ],
-                                  ),
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: OutlinedButton(
+                                onPressed: () =>
+                                    showExpeditorDeliveryByProductsSheet(
+                                        context,),
+                                style: OutlinedButton.styleFrom(
+                                  foregroundColor: AppColors.textPrimary,
+                                  side:
+                                      const BorderSide(color: AppColors.border),
+                                  padding:
+                                      const EdgeInsets.symmetric(vertical: 10),
+                                ),
+                                child: const Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Text('По продуктам'),
+                                    SizedBox(width: 4),
+                                    Icon(Icons.chevron_right, size: 18),
+                                  ],
                                 ),
                               ),
-                            ],
-                          ),
-                        ],
-                      ),
+                            ),
+                          ],
+                        ),
+                      ],
                     ),
                   ),
                 ),
@@ -345,9 +265,6 @@ class ExpeditorHomePage extends ConsumerWidget {
           loading: () => const Center(child: CircularProgressIndicator()),
           error: (e, _) => Center(child: Text('Ошибка: $e')),
         ),
-      ),
-          ),
-        ],
       ),
     );
   }
@@ -375,14 +292,9 @@ class _MiniStat extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(label,
-                      style: const TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                          color: AppColors.textSecondary,),),
+                  Text(label, style: const TextStyle(fontSize: 10)),
                   Text(value,
-                      style: const TextStyle(
-                          fontSize: 18, fontWeight: FontWeight.w800,),),
+                      style: const TextStyle(fontWeight: FontWeight.w700),),
                 ],
               ),
             ),
@@ -391,3 +303,77 @@ class _MiniStat extends StatelessWidget {
       );
 }
 
+class _ReportTable extends StatelessWidget {
+  final List<Map<String, dynamic>> rows;
+  const _ReportTable({required this.rows});
+
+  Color _color(String type) {
+    switch (type) {
+      case 'delivered':
+        return AppColors.success;
+      case 'return':
+      case 'shelf_return':
+        return AppColors.error;
+      case 'exchange_return':
+        return AppColors.warning;
+      default:
+        return AppColors.textPrimary;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Table(
+      columnWidths: const {
+        0: FlexColumnWidth(2),
+        1: FlexColumnWidth(1),
+        2: FlexColumnWidth(1.2),
+      },
+      children: [
+        const TableRow(
+          children: [
+            Padding(
+                padding: EdgeInsets.symmetric(vertical: 4),
+                child: Text('Тип',
+                    style:
+                        TextStyle(fontWeight: FontWeight.w600, fontSize: 11),),),
+            Padding(
+                padding: EdgeInsets.symmetric(vertical: 4),
+                child: Text('Кол-во',
+                    style:
+                        TextStyle(fontWeight: FontWeight.w600, fontSize: 11),),),
+            Padding(
+                padding: EdgeInsets.symmetric(vertical: 4),
+                child: Text('Сумма',
+                    style:
+                        TextStyle(fontWeight: FontWeight.w600, fontSize: 11),),),
+          ],
+        ),
+        ...rows.map((r) {
+          final type = r['type']?.toString() ?? '';
+          final c = _color(type);
+          return TableRow(
+            children: [
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 3),
+                child: Text(r['label']?.toString() ?? type,
+                    style: TextStyle(fontSize: 11, color: c),),
+              ),
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 3),
+                child: Text('${r['qty'] ?? 0}',
+                    style: TextStyle(fontSize: 11, color: c),),
+              ),
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 3),
+                child: Text(
+                    formatMoneySpaced(((r['sum'] as num?) ?? 0).toDouble()),
+                    style: TextStyle(fontSize: 11, color: c),),
+              ),
+            ],
+          );
+        }),
+      ],
+    );
+  }
+}

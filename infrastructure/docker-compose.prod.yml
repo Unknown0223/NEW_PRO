@@ -160,6 +160,19 @@ services:
     depends_on:
       backend:
         condition: service_healthy
+    healthcheck:
+      # Traefik 502: recreate paytida Next hali listen qilmaguncha. Deploy shu holatni kutadi.
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3000/login').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 40s
     networks:
       - salec
       - coolify

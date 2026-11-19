@@ -25,6 +25,10 @@ import {
   WEB_PANEL_STAFF_ROLES
 } from "../../lib/tenant-user-roles";
 
+import {
+  isSupervisorRole,
+  supervisorDisplayNameOrNull
+} from "../access/access-supervisor-display";
 import type {
   AgentEntitlements,
   CreateStaffInput,
@@ -156,7 +160,7 @@ export async function listStaff(
     include: {
       warehouse: { select: { name: true } },
       return_warehouse: { select: { name: true } },
-      supervisor: { select: { id: true, name: true } },
+      supervisor: { select: { id: true, name: true, role: true } },
       trade_direction_row: { select: { id: true, name: true, code: true } }
     },
     orderBy: { created_at: "desc" }
@@ -329,8 +333,8 @@ export async function listStaff(
       (u as { expeditor_assignment_rules?: unknown }).expeditor_assignment_rules
     ),
     client_count: countMap.get(u.id) ?? 0,
-    supervisor_user_id: u.supervisor_user_id,
-    supervisor_name: u.supervisor?.name ?? null,
+    supervisor_user_id: isSupervisorRole(u.supervisor?.role) ? u.supervisor_user_id : null,
+    supervisor_name: supervisorDisplayNameOrNull(u.supervisor),
     supervisee_count: kind === "supervisor" ? superviseeCountMap.get(u.id) ?? 0 : 0,
     supervisees: kind === "supervisor" ? superviseesBySupervisor.get(u.id) ?? [] : [],
     first_name: u.first_name,

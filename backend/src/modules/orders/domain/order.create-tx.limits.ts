@@ -1,4 +1,5 @@
 import { Prisma } from "@prisma/client";
+import { loadClientBalanceView } from "../../client-balances/client-balance-view";
 import {
   computeAgentConsignmentOutstanding,
   parseYearMonth,
@@ -64,6 +65,18 @@ export async function assertCreateOrderLimitsInTransaction(
     consignmentDueDate = d;
   }
 
+  const needsMergedBalance =
+    (!isInboundShelfReturn &&
+      orderType !== "exchange" &&
+      !isConsignmentOrder &&
+      client.allow_order_with_debt === false) ||
+    (!isInboundShelfReturn && orderType !== "exchange" && client.credit_limit.gt(0));
+
+  const accountBalance = needsMergedBalance
+    ? ((await loadClientBalanceView(tenantId, [client.id], "ledger_merged")).get(client.id) ??
+      new Prisma.Decimal(0))
+    : null;
+
   /** Oddiy (naqd/kredit) zakaz: umumiy balans qarzda bo‘lsa blok */
   if (
     !isInboundShelfReturn &&
@@ -71,12 +84,7 @@ export async function assertCreateOrderLimitsInTransaction(
     !isConsignmentOrder &&
     client.allow_order_with_debt === false
   ) {
-    const balRow = await tx.clientBalance.findUnique({
-      where: { tenant_id_client_id: { tenant_id: tenantId, client_id: client.id } },
-      select: { balance: true }
-    });
-    const accountBalance = balRow?.balance ?? new Prisma.Decimal(0);
-    if (accountBalance.lt(0)) {
+    if (accountBalance != null && accountBalance.lt(0)) {
       throw new Error("ORDER_BLOCKED_BY_DEBT");
     }
   }
@@ -96,12 +104,7 @@ export async function assertCreateOrderLimitsInTransaction(
 
   const creditLimit = client.credit_limit;
   if (!isInboundShelfReturn && orderType !== "exchange" && creditLimit.gt(0)) {
-    const balRow = await tx.clientBalance.findUnique({
-      where: { tenant_id_client_id: { tenant_id: tenantId, client_id: client.id } },
-      select: { balance: true }
-    });
-    const accountBalance = balRow?.balance ?? new Prisma.Decimal(0);
-    const headroom = creditLimit.add(accountBalance);
+    const headroom = creditLimit.add(accountBalance ?? new Prisma.Decimal(0));
     const agg = await tx.order.aggregate({
       where: {
         tenant_id: tenantId,

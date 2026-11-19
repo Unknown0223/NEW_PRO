@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 import {
   ArrowUpRight,
   Code2,
-  Server,
   Command,
   Gauge,
   ClipboardCheck,
@@ -32,7 +31,6 @@ const icons: Record<string, LucideIcon> = {
   gauge: Gauge,
   audit: ClipboardCheck,
   code: Code2,
-  stack: Server,
 };
 
 export default function Nav({

@@ -7,10 +7,7 @@ import {
   resolvePaymentMethodRefToLabel,
   type PaymentMethodEntryDto
 } from "../tenant-settings/finance-refs";
-import {
-  loadDeliveryDebtByClient,
-  mergeLedgerWithUnpaidDelivered
-} from "../client-balances/client-balances.service";
+import { loadClientBalanceView } from "../client-balances/client-balance-view";
 import { ORDER_STATUSES_OUTSTANDING_RECEIVABLE } from "../orders/order-status";
 import {
   PAYMENT_COUNTS_FOR_RECEIVABLE_NET,
@@ -62,19 +59,12 @@ export async function getClientBalanceLedger(
 
   const { sprLabels, paymentMethodEntries } = await loadTenantLedgerPaymentContext(tenantId);
 
-  const [balRow, deliveryMap] = await Promise.all([
-    prisma.clientBalance.findUnique({
-      where: { tenant_id_client_id: { tenant_id: tenantId, client_id: clientId } },
-      select: { balance: true }
-    }),
-    loadDeliveryDebtByClient(tenantId, [clientId])
+  const [balanceByClient, agentCardsResult] = await Promise.all([
+    loadClientBalanceView(tenantId, [clientId], "ledger_merged"),
+    buildLedgerAgentCards(tenantId, clientId, sprLabels, paymentMethodEntries)
   ]);
-  const ledgerDec = balRow?.balance ?? new Prisma.Decimal(0);
-  const account_balance = mergeLedgerWithUnpaidDelivered(
-    ledgerDec,
-    deliveryMap.get(clientId)
-  ).toString();
-  const { agent_cards } = await buildLedgerAgentCards(tenantId, clientId, sprLabels, paymentMethodEntries);
+  const account_balance = (balanceByClient.get(clientId) ?? new Prisma.Decimal(0)).toString();
+  const { agent_cards } = agentCardsResult;
   /** Debitor qarz qatorlari — faqat yetkazilgan savdo zakazlari (`delivered`). */
   const receivableStatuses = [...ORDER_STATUSES_OUTSTANDING_RECEIVABLE];
   const page = Math.max(1, q.page);

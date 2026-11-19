@@ -79,7 +79,7 @@ class _CreateClientSheetState extends ConsumerState<_CreateClientSheet> {
       await ensureAuthTokens(ref);
       if (ref.read(accessTokenProvider) == null) {
         if (mounted) {
-          setState(() => _error = 'Требуется вход. Выйдите и войдите заново.');
+          setState(() => _error = 'Kirish talab qilinadi. Chiqib qayta login qiling.');
         }
         return;
       }
@@ -111,11 +111,11 @@ class _CreateClientSheetState extends ConsumerState<_CreateClientSheet> {
       final phone = normalizePhoneWithPrefix(_clientCfg, phoneRaw);
 
       if (name.length < 3) {
-        if (mounted) setState(() => _error = 'Название — минимум 3 символа');
+        if (mounted) setState(() => _error = 'Nom kamida 3 belgi');
         return;
       }
       if (phone.replaceAll(RegExp(r'\D'), '').length < 9) {
-        if (mounted) setState(() => _error = 'Телефон: введите 9 цифр');
+        if (mounted) setState(() => _error = 'Telefon: 9 raqam kiriting');
         return;
       }
 
@@ -172,7 +172,7 @@ class _CreateClientSheetState extends ConsumerState<_CreateClientSheet> {
       if (pending) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Торговая точка создана. Возможно, потребуется подтверждение оператора.'),
+            content: Text('Savdo nuqtasi yaratildi. Operator tasdiqlashi kutilishi mumkin.'),
             backgroundColor: AppColors.info,
           ),
         );
@@ -184,7 +184,7 @@ class _CreateClientSheetState extends ConsumerState<_CreateClientSheet> {
         context: context,
         builder: (ctx) => AlertDialog(
           title: const Text('Клиент добавлен'),
-          content: const Text('Создать заказ для новой торговой точки?'),
+          content: const Text('Yangi savdo nuqtasi uchun buyurtma yaratilsinmi?'),
           actions: [
             TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Позже')),
             FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Создать заказ')),
@@ -218,7 +218,7 @@ class _CreateClientSheetState extends ConsumerState<_CreateClientSheet> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            const Text('Новая торговая точка', style: AppTypography.headlineSmall),
+            const Text('Yangi savdo nuqtasi', style: AppTypography.headlineSmall),
             const SizedBox(height: 16),
             ClientDynamicFormFields(
               config: _clientCfg,
@@ -238,7 +238,7 @@ class _CreateClientSheetState extends ConsumerState<_CreateClientSheet> {
                       width: 22,
                       child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                     )
-                  : const Text('Сохранить'),
+                  : const Text('Saqlash'),
             ),
           ],
         ),

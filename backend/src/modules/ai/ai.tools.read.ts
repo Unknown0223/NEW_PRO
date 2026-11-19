@@ -24,6 +24,50 @@ function periodLabel(params: Record<string, unknown>): string {
   return formatPeriodLabel({ from, to });
 }
 
+/** Kassa pul oqimi hisoboti → ochilish / kirim / chiqim / yopilish. */
+export function formatCashFlow(payload: unknown): ReturnType<typeof rawTable> {
+  const p = (payload ?? {}) as {
+    date_from?: string;
+    date_to?: string;
+    cash_desk?: { name?: string };
+    summary?: Record<string, { terminal?: string; cash?: string; total?: string }>;
+    rows?: Array<{ label?: string; terminal?: string; cash?: string; total?: string }>;
+  };
+  const desk = p.cash_desk?.name ? ` — ${p.cash_desk.name}` : "";
+  const period =
+    p.date_from && p.date_to ? `${p.date_from} — ${p.date_to}` : periodLabel({ from: p.date_from, to: p.date_to });
+  const moneyRow = (label: string, m?: { terminal?: string; cash?: string; total?: string }) => [
+    label,
+    money(m?.terminal),
+    money(m?.cash),
+    money(m?.total)
+  ];
+  if (p.summary) {
+    return rawTable({
+      title: `Pul oqimi${desk}`,
+      summary: period || "Kassa oqimi",
+      columns: ["Ko‘rsatkich", "Terminal", "Naqd", "Jami"],
+      rows: [
+        moneyRow("Ochilish", p.summary.opening),
+        moneyRow("Kirim", p.summary.income),
+        moneyRow("Chiqim", p.summary.expense),
+        moneyRow("Yopilish", p.summary.closing)
+      ],
+      source: "/reports/cash-flow"
+    });
+  }
+  if (Array.isArray(p.rows) && p.rows.length) {
+    return rawTable({
+      title: `Pul oqimi${desk}`,
+      summary: period || "Kassa oqimi",
+      columns: ["Ko‘rsatkich", "Terminal", "Naqd", "Jami"],
+      rows: p.rows.map((r) => [String(r.label ?? "—"), money(r.terminal), money(r.cash), money(r.total)]),
+      source: "/reports/cash-flow"
+    });
+  }
+  return genericTable(payload, { title: `Pul oqimi${desk}`, maxRows: 50, source: "/reports/cash-flow" });
+}
+
 /** `{data:[total], agents:[...]}` — savdo yakuni. */
 export function formatSalesSummary(payload: unknown): ReturnType<typeof rawTable> {
   const obj = (payload ?? {}) as {
@@ -242,10 +286,16 @@ export const READ_TOOLS_FINANCE: AiToolSpec[] = [
     description: "Kassa pul oqimi hisoboti",
     method: "GET",
     anyOf: ["cash.otchety.view"],
-    schema: periodSchema,
-    path: (p) => `/reports/cash-flow${qs({ from: pStr(p, "from"), to: pStr(p, "to") })}`,
-    format: (payload) =>
-      genericTable(payload, { title: "Pul oqimi", maxRows: 50, source: "/reports/cash-flow" })
+    schema: periodSchema.extend({
+      cash_desk_id: z.union([z.coerce.number().int().positive(), z.string().trim().min(1)]).optional()
+    }),
+    path: (p) =>
+      `/reports/cash-flow${qs({
+        from: pStr(p, "from"),
+        to: pStr(p, "to"),
+        cash_desk_id: pStr(p, "cash_desk_id")
+      })}`,
+    format: (payload) => formatCashFlow(payload)
   },
   {
     id: "finance.expenses",

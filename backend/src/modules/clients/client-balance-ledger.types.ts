@@ -1,17 +1,4 @@
 import { Prisma } from "@prisma/client";
-import { prisma } from "../../config/database";
-import {
-  paymentTypesFromMethodEntries,
-  resolveCurrencyEntries,
-  resolvePaymentMethodEntries,
-  resolvePaymentMethodRefToLabel,
-  type PaymentMethodEntryDto
-} from "../tenant-settings/finance-refs";
-import {
-  loadDeliveryDebtByClient,
-  mergeLedgerWithUnpaidDelivered
-} from "../client-balances/client-balances.service";
-import { ORDER_STATUSES_OUTSTANDING_RECEIVABLE } from "../orders/order-status";
 
 export type ClientBalancePaymentTypeSummary = {
   label: string;

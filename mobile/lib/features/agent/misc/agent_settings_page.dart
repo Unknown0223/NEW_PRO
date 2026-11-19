@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 
 import '../../../core/auth/session.dart';
 import '../../../core/config/mobile_config.dart';
@@ -11,7 +10,6 @@ import '../clients/clients_list_provider.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/ui/agent_ui.dart';
-import '../../../design_system/design_system.dart';
 import '../../auth/biometric_quick_login_tile.dart';
 import '../shell/agent_app_bar.dart';
 import '../sync/manual_sync_runner.dart';
@@ -50,59 +48,47 @@ class _AgentSettingsPageState extends ConsumerState<AgentSettingsPage> {
   List<_SettingRow> _mainRows(AgentLocalPrefs prefs) => [
         _SettingRow(
           id: 'locale',
-          label: 'Ilova tili',
+          label: 'Язык приложения',
           value: prefs.localeLabel,
           chevron: true,
-          group: 'ASOSIY SOZLAMALAR',
-        ),
-        const _SettingRow(
-          id: 'quick_panel',
-          label: 'Tezkor menyu (bo\'limlar)',
-          chevron: true,
-          group: 'NAVIGATSIYA',
+          group: 'ОСНОВНЫЕ НАСТРОЙКИ',
         ),
         _SettingRow(
           id: 'full_sync_with_photo',
-          label: 'Foto bilan to\'liq sinxronlash',
+          label: 'Полная синхронизация с фото',
           toggle: prefs.fullSyncWithPhoto,
         ),
         _SettingRow(
           id: 'calendar_mode',
-          label: 'Kalendar rejimi',
+          label: 'Использование календарного режима',
           toggle: prefs.calendarMode,
         ),
         _SettingRow(
           id: 'use_discount',
-          label: 'Chegirmadan foydalanish',
+          label: 'Использование скидки',
           toggle: prefs.useDiscount,
         ),
         _SettingRow(
           id: 'show_bonus_offer',
-          label: 'Bonus taklifini ko\'rsatish',
+          label: 'Показывать предложение о бонусе',
           toggle: prefs.showBonusOffer,
-          group: 'BUYURTMA',
+          group: 'ЗАКАЗ',
         ),
         _SettingRow(
           id: 'sort_clients',
-          label: 'Mijozlarni alifbo tartibida saralash',
+          label: 'Сортировка клиентов в алфавитном порядке',
           toggle: prefs.sortClientsAlphabetically,
-          group: 'FILTR SOZLAMALARI',
+          group: 'НАСТРОЙКИ ФИЛЬТРА',
         ),
         _SettingRow(
           id: 'sort_products',
-          label: 'Mahsulotlarni alifbo tartibida saralash',
+          label: 'Сортировка продуктов в алфавитном порядке',
           toggle: prefs.sortProductsAlphabetically,
         ),
         _SettingRow(
           id: 'show_boxes',
-          label: 'Quti sonini ko\'rsatish',
+          label: 'Показать кол-во коробок',
           toggle: prefs.showBoxCount,
-        ),
-        _SettingRow(
-          id: 'catalog_grid',
-          label: 'Katalog: panjara (aks holda ro\'yxat)',
-          toggle: prefs.catalogIsGrid,
-          group: 'KATALOG',
         ),
       ];
 
@@ -120,63 +106,63 @@ class _AgentSettingsPageState extends ConsumerState<AgentSettingsPage> {
     return [
       _SettingRow(
         id: 'can_create',
-        label: 'Yangi savdo nuqtasi qo\'shish',
+        label: 'Добавить новую торговую точку',
         toggle: c?.canCreate ?? false,
         readOnly: true,
-        group: 'ASOSIY SOZLAMALAR',
+        group: 'ОСНОВНЫЕ НАСТРОЙКИ',
       ),
       _SettingRow(
         id: 'consignment_new',
-        label: 'Yangi mijoz uchun buyurtma (konsignatsiya emas)',
+        label: 'Yangi mijozga buyurtma berish (konsignatsiya emas)',
         toggle: pl?.allowSubmitForNewClient ?? false,
         readOnly: true,
       ),
       _SettingRow(
         id: 'show_balance',
-        label: 'Mijoz balansini ko\'rsatish',
+        label: 'Показать баланс клиента',
         toggle: c?.showBalance ?? true,
         readOnly: true,
       ),
       _SettingRow(
         id: 'phone_prefix',
-        label: 'Telefon raqami prefiksi',
+        label: 'Префикс номера телефона',
         value: c?.phonePrefix.isNotEmpty == true ? c!.phonePrefix : '+998',
         chevron: true,
         readOnly: true,
       ),
       _SettingRow(
         id: 'field_name',
-        label: 'Nomi',
+        label: 'Название',
         toggle: fieldOn('name'),
         readOnly: true,
-        group: 'TAHRIR UCHUN MAYDONLAR',
+        group: 'ДОСТУПНЫЕ ПОЛЯ ДЛЯ РЕДАКТИРОВАНИЯ',
       ),
-      _SettingRow(id: 'field_legal', label: 'Kompaniya nomi', toggle: fieldOn('legal_name'), readOnly: true),
-      _SettingRow(id: 'field_category', label: 'Kategoriya', toggle: fieldOn('category'), readOnly: true),
-      _SettingRow(id: 'field_territory', label: 'Hudud', toggle: fieldOn('territory'), readOnly: true),
-      _SettingRow(id: 'field_inn', label: 'STIR', toggle: fieldOn('inn'), readOnly: true),
-      _SettingRow(id: 'field_phone', label: 'Telefon', toggle: fieldOn('phone'), readOnly: true),
-      _SettingRow(id: 'field_visit', label: 'Tashrif kunlari', toggle: fieldOn('visit_day'), readOnly: true),
-      _SettingRow(id: 'field_address', label: 'Manzil', toggle: fieldOn('address'), readOnly: true),
+      _SettingRow(id: 'field_legal', label: 'Название компании', toggle: fieldOn('legal_name'), readOnly: true),
+      _SettingRow(id: 'field_category', label: 'Категория', toggle: fieldOn('category'), readOnly: true),
+      _SettingRow(id: 'field_territory', label: 'Территория', toggle: fieldOn('territory'), readOnly: true),
+      _SettingRow(id: 'field_inn', label: 'ИНН', toggle: fieldOn('inn'), readOnly: true),
+      _SettingRow(id: 'field_phone', label: 'Телефон', toggle: fieldOn('phone'), readOnly: true),
+      _SettingRow(id: 'field_visit', label: 'Дни посещения', toggle: fieldOn('visit_day'), readOnly: true),
+      _SettingRow(id: 'field_address', label: 'Адрес', toggle: fieldOn('address'), readOnly: true),
       _SettingRow(
         id: 'bio_order',
-        label: 'Buyurtma yuborishda Face ID / barmoq izi',
+        label: 'Face ID / отпечаток при отправке заказа',
         toggle: cfg?.misc.biometricConfirmForOrderSubmit ?? false,
         readOnly: true,
-        group: 'XAVFSIZLIK',
+        group: 'БЕЗОПАСНОСТЬ',
       ),
       _SettingRow(
         id: 'bio_payment',
-        label: 'To\'lov qabulida Face ID / barmoq izi',
+        label: 'Face ID / отпечаток при приёме оплаты',
         toggle: cfg?.misc.biometricConfirmForPaymentAccept ?? false,
         readOnly: true,
       ),
       _SettingRow(
         id: 'face_verification',
-        label: 'Yuz tekshiruvi (serverda selfie)',
+        label: 'Проверка лица (селфи на сервере)',
         toggle: cfg?.misc.faceVerificationEnabled ?? false,
         readOnly: true,
-        group: 'XAVFSIZLIK',
+        group: 'БЕЗОПАСНОСТЬ',
       ),
     ];
   }
@@ -191,9 +177,6 @@ class _AgentSettingsPageState extends ConsumerState<AgentSettingsPage> {
       if (picked != null) {
         await ref.read(agentLocalPrefsProvider.notifier).setPrefs((p) => p.copyWith(locale: picked));
       }
-    } else if (row.id == 'quick_panel') {
-      if (!mounted) return;
-      context.push('/settings/quick');
     }
   }
 
@@ -216,10 +199,6 @@ class _AgentSettingsPageState extends ConsumerState<AgentSettingsPage> {
         await n.setPrefs((p) => p.copyWith(sortProductsAlphabetically: v));
       case 'show_boxes':
         await n.setPrefs((p) => p.copyWith(showBoxCount: v));
-      case 'catalog_grid':
-        await n.setPrefs(
-          (p) => p.copyWith(catalogViewMode: v ? 'grid' : 'list'),
-        );
       default:
         break;
     }
@@ -233,7 +212,7 @@ class _AgentSettingsPageState extends ConsumerState<AgentSettingsPage> {
 
     return Scaffold(
       backgroundColor: AppColors.background,
-      appBar: const AgentAppBar(title: 'Sozlamalar', showBack: true),
+      appBar: const AgentAppBar(title: 'Настройки', showBack: true),
       body: prefsAsync.when(
         loading: () => const Center(child: CircularProgressIndicator(color: AppColors.primary)),
         error: (e, _) => Center(child: Text('$e')),
@@ -247,9 +226,9 @@ class _AgentSettingsPageState extends ConsumerState<AgentSettingsPage> {
                   padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
                   child: Row(
                     children: [
-                      _tabChip('Asosiy sozlamalar', 0),
+                      _tabChip('Основные настройки', 0),
                       const SizedBox(width: 8),
-                      _tabChip('Umumiy sozlamalar', 1),
+                      _tabChip('Общие настройки', 1),
                     ],
                   ),
                 ),
@@ -258,7 +237,7 @@ class _AgentSettingsPageState extends ConsumerState<AgentSettingsPage> {
                 Padding(
                   padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
                   child: Text(
-                    'Bu sozlamalarni faqat moderator o\'zgartirishi mumkin!',
+                    'Эти настройки может изменить только модератор!',
                     style: AppTypography.bodyMedium.copyWith(fontSize: 13, color: AppColors.textMuted),
                   ),
                 ),
@@ -270,33 +249,26 @@ class _AgentSettingsPageState extends ConsumerState<AgentSettingsPage> {
                     child: TextButton.icon(
                       onPressed: () => _runFullSyncWithPrefs(prefs),
                       icon: const Icon(Icons.sync, size: 20),
-                      label: const Text('To\'liq sinxronlash'),
+                      label: const Text('Sinxronizatsiya (to\'liq)'),
                     ),
                   ),
                 ),
               Expanded(
                 child: ListView(
-                  padding: const EdgeInsets.fromLTRB(12, 12, 12, 140),
+                  padding: const EdgeInsets.all(12),
                   children: [
                     if (_tab == 0) ...[
-                      SaEnter(
-                        preset: SaMotionPreset.rise,
-                        child: AgentSurfaceCard(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                          child: const BiometricQuickLoginTile(),
-                        ),
+                      AgentSurfaceCard(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        child: const BiometricQuickLoginTile(),
                       ),
                       const SizedBox(height: 12),
                     ],
-                    SaEnter(
-                      delay: SaStaggerDelay.of(_tab == 0 ? 1 : 0),
-                      preset: SaMotionPreset.rise,
-                      child: _buildGrouped(
-                        rows,
-                        readOnly: _tab == 1,
-                        prefs: prefs,
-                        onRowTap: _tab == 0 ? (r) => _onMainRowTap(r, prefs) : null,
-                      ),
+                    _buildGrouped(
+                      rows,
+                      readOnly: _tab == 1,
+                      prefs: prefs,
+                      onRowTap: _tab == 0 ? (r) => _onMainRowTap(r, prefs) : null,
                     ),
                   ],
                 ),
@@ -460,10 +432,10 @@ class _LocalePickerSheet extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           const AgentSheetHandle(),
-          const Text('Ilova tili', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+          const Text('Язык приложения', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
           const SizedBox(height: 12),
           ListTile(
-            title: const Text('Ruscha'),
+            title: const Text('Русский'),
             trailing: current == 'ru' ? const Icon(Icons.check, color: AppColors.primary) : null,
             onTap: () => Navigator.pop(context, 'ru'),
           ),

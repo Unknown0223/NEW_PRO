@@ -53,57 +53,44 @@ ApiException mapDioException(DioException e, {Map<String, String>? extraCodes}) 
   }
 
   const known = {
-    'Unauthorized': 'Сессия истекла. Войдите снова.',
-    'Invalid or expired access token': 'Сессия истекла. Войдите снова.',
-    'ValidationError': 'Отправлены некорректные данные',
-    'InsufficientStock': 'Недостаточно остатка на складе',
-    'NoPrice': 'Цена товара не найдена — проверьте тип цены',
-    'BadProduct': 'Товар не найден или недоступен для агента',
-    'BadClient': 'Клиент не найден или не привязан к агенту',
-    'ClientInactive':
-        'Клиент неактивен — акции и заказы недоступны до подтверждения оператором',
-    'PhotoReportRequired': 'Нужен сегодняшний фотоотчёт по этому клиенту',
-    'GpsRequired': 'Для визита нужна геолокация',
-    'OutOfRadius': 'Вы слишком далеко от торговой точки',
-    'ReasonRequired': 'Укажите причину возврата',
-    'BAD_STATUS': 'Возврат можно оформить, когда заказ доставляется или уже доставлен',
-    'BadStatus': 'Возврат можно оформить, когда заказ доставляется или уже доставлен',
-    'ORDER_NOT_DELIVERED': 'Частичный возврат доступен после того, как заказ отмечен доставленным',
-    'OrderNotDelivered': 'Частичный возврат доступен после того, как заказ отмечен доставленным',
-    'BadWarehouse': 'Склад не найден',
-    'BadAgent': 'Агент не найден',
-    'OrderRestricted': 'Ограничение на заказ — обратитесь к администратору',
+    'Unauthorized': 'Sessiya tugadi. Qayta kiring.',
+    'Invalid or expired access token': 'Sessiya tugadi. Qayta kiring.',
+    'ValidationError': 'Noto\'g\'ri ma\'lumot yuborildi',
+    'InsufficientStock': 'Omborda yetarli qoldiq yo\'q',
+    'NoPrice': 'Mahsulot narxi topilmadi — narx turini tekshiring',
+    'BadProduct': 'Mahsulot topilmadi yoki agent uchun ruxsat yo\'q',
+    'BadClient': 'Mijoz topilmadi yoki bog\'lanmagan',
+    'PhotoReportRequired': 'Buyurtma uchun bugungi fotoотчет kerak',
+    'BadWarehouse': 'Ombor topilmadi',
+    'BadAgent': 'Agent topilmadi',
+    'OrderRestricted': 'Buyurtma cheklovi — administrator bilan bog\'laning',
     'AgentNotOnSlot':
         'Агент не на рабочем месте — новый заказ запрещён (только сбор долга)',
-    'CreditLimitExceeded': 'Превышен кредитный лимит',
+    'CreditLimitExceeded': 'Kredit limiti oshdi',
     'OrderBlockedByDebt':
         'Обычный заказ запрещён: у клиента есть долг. Снимите долг или обратитесь к администратору',
     'ConsignmentClientDisabled':
         'Консигнация для этого клиента запрещена администратором',
     'ConsignmentBlockedByDebt':
         'Консигнация запрещена: у клиента есть долг по консигнации',
-    'ConsignmentRequiresAgent': 'Для консигнации нужен агент',
-    'ConsignmentAgentDisabled': 'Консигнация для агента отключена',
-    'ConsignmentLimitExceeded': 'Превышен лимит консигнации',
-    'BadConsignmentDueDate': 'Неверная дата оплаты по консигнации',
-    'EmptyItems': 'Корзина пуста — для расчёта бонуса добавьте товары',
-    'BadBonusGiftOverride': 'Неверный выбор бонусного подарка — откройте заново или выберите автобонус',
-    'APP_ACCESS_DENIED': 'Доступ к приложению отключён',
+    'ConsignmentRequiresAgent': 'Konsignatsiya uchun agent kerak',
+    'ConsignmentAgentDisabled': 'Agent uchun konsignatsiya o\'chirilgan',
+    'ConsignmentLimitExceeded': 'Konsignatsiya limiti oshdi',
+    'BadConsignmentDueDate': 'Konsignatsiya to\'lov sanasi noto\'g\'ri',
+    'EmptyItems': 'Savat bo\'sh — bonus hisoblash uchun mahsulot kerak',
+    'BadBonusGiftOverride': 'Bonus sovg\'a tanlovi noto\'g\'ri — qayta oching yoki avto bonusni tanlang',
+    'APP_ACCESS_DENIED': 'Ilova kirish o\'chirilgan',
     'USER_NOT_ON_SLOT':
         'Не назначен на рабочее место. Обратитесь к администратору.',
-    'WORKDAY_OFF':
-        'Сегодня нерабочий день по графику «Рабочие дни» — пользоваться системой нельзя.',
     'ForbiddenRole': 'Это действие недоступно для вашей роли. Обратитесь к администратору.',
     'ForbiddenPermission': 'Нет доступа к этому действию. Обратитесь к администратору.',
-    'ReturnDisabled': 'Возврат с полки отключён в настройках администратора',
-    'RETURN_DISABLED': 'Возврат с полки отключён в настройках администратора',
-    'DuplicatePhone': 'Этот телефон уже используется',
-    'DuplicateName': 'Клиент с таким названием уже существует',
-    'DuplicateClientCode': 'Этот код клиента уже занят',
-    'DuplicateInn': 'Этот ИНН уже занят — такой клиент уже существует',
-    'DuplicatePinfl': 'Этот ПИНФЛ уже занят — такой клиент уже существует',
-    'DuplicateClient': 'Такой клиент уже существует (территория, название, ИНН/ПИНФЛ)',
-    'DuplicateInactive': 'Такой клиент уже существует, его статус — неактивен.',
+    'DuplicatePhone': 'Bu telefon allaqachon mavjud',
+    'DuplicateName': 'Shu nomdagi mijoz mavjud',
+    'DuplicateClientCode': 'Bu klient kodi band',
+    'DuplicateInn': 'Bu STIR (INN) band — bu mijoz allaqachon mavjud',
+    'DuplicatePinfl': 'Bu JSHSHIR (PINFL) band — bu mijoz allaqachon mavjud',
+    'DuplicateClient': 'Bu mijoz allaqachon mavjud (hudud, nom, INN/PINFL)',
+    'DuplicateInactive': 'Bu klient allaqachon mavjud, statusi nofaol',
     'TENANT_NOT_FOUND': 'Неверный код компании',
     'TenantNotFound': 'Неверный код компании',
     'INVALID_CREDENTIALS': 'Неверный логин или пароль',
@@ -136,7 +123,7 @@ ApiException mapDioException(DioException e, {Map<String, String>? extraCodes}) 
   if (status == 404 &&
       (routeMsg.contains('bonus-preview') || routeMsg.contains('Route POST'))) {
     return const ApiException(
-      message: 'Устаревшая версия сервера — перезапустите backend (npm run dev)',
+      message: 'Server eski versiya — backend ni qayta ishga tushiring (npm run dev)',
       statusCode: 404,
     );
   }
@@ -145,30 +132,30 @@ ApiException mapDioException(DioException e, {Map<String, String>? extraCodes}) 
   if (dioMsg.contains('status code of')) {
     return ApiException(
       message: status == 400
-          ? 'Ошибка запроса — проверьте данные'
-          : 'Ошибка сервера ($status)',
+          ? 'So\'rov xato — ma\'lumotlarni tekshiring'
+          : 'Server xato ($status)',
       statusCode: status > 0 ? status : null,
     );
   }
   if (dioMsg.isEmpty) {
     final kind = e.type.name;
     if (e.type == DioExceptionType.cancel) {
-      return const ApiException(message: 'Запрос отменён — попробуйте ещё раз');
+      return const ApiException(message: 'So‘rov bekor qilindi — qayta urinib ko‘ring');
     }
     if (e.type == DioExceptionType.badResponse) {
       return ApiException(
-        message: status > 0 ? 'Некорректный ответ сервера ($status)' : 'Некорректный ответ сервера',
+        message: status > 0 ? 'Server javobi xato ($status)' : 'Server javobi xato',
         statusCode: status > 0 ? status : null,
       );
     }
     if (e.type == DioExceptionType.unknown) {
       return ApiException(
-        message: 'Связь с сетью или сервером прервана ($kind)',
+        message: 'Tarmoq yoki server bilan bog‘lanish uzildi ($kind)',
         statusCode: status > 0 ? status : null,
       );
     }
     return ApiException(
-      message: 'Синхронизация прервана — проверьте интернет и попробуйте ещё раз',
+      message: 'Sinxronlash uzildi — internetni tekshirib qayta urinib ko‘ring',
       statusCode: status > 0 ? status : null,
     );
   }
@@ -189,27 +176,27 @@ String? _formatLimitError(String apiCode, Map<dynamic, dynamic>? data) {
     final outstanding = pick('outstanding');
     final orderTotal = pick('order_total');
     final parts = <String>[];
-    if (limit != null) parts.add('лимит: $limit');
-    if (outstanding != null) parts.add('долг: $outstanding');
-    if (orderTotal != null) parts.add('заказ: $orderTotal');
-    return parts.isEmpty ? 'Превышен кредитный лимит' : 'Превышен кредитный лимит (${parts.join(', ')})';
+    if (limit != null) parts.add('limit: $limit');
+    if (outstanding != null) parts.add('qarz: $outstanding');
+    if (orderTotal != null) parts.add('buyurtma: $orderTotal');
+    return parts.isEmpty ? 'Kredit limiti oshdi' : 'Kredit limiti oshdi (${parts.join(', ')})';
   }
   if (apiCode == 'ConsignmentLimitExceeded') {
     final limit = pick('consignment_limit');
     final outstanding = pick('outstanding');
     final orderTotal = pick('order_total');
     final parts = <String>[];
-    if (limit != null) parts.add('лимит: ${_fmtMoneyPlain(limit)}');
-    if (outstanding != null) parts.add('долг: ${_fmtMoneyPlain(outstanding)}');
+    if (limit != null) parts.add('limit: ${_fmtMoneyPlain(limit)}');
+    if (outstanding != null) parts.add('qarz: ${_fmtMoneyPlain(outstanding)}');
     if (limit != null && outstanding != null && orderTotal != null) {
       final lim = double.tryParse(limit.replaceAll(' ', '').replaceAll(',', '.'));
       final out = double.tryParse(outstanding.replaceAll(' ', '').replaceAll(',', '.'));
       if (lim != null && out != null) {
-        parts.add('доступно: ${_fmtMoneyPlain((lim - out).toString())}');
+        parts.add('mavjud: ${_fmtMoneyPlain((lim - out).toString())}');
       }
     }
-    if (orderTotal != null) parts.add('заказ: ${_fmtMoneyPlain(orderTotal)}');
-    return parts.isEmpty ? 'Превышен лимит консигнации' : 'Превышен лимит консигнации (${parts.join(', ')})';
+    if (orderTotal != null) parts.add('buyurtma: ${_fmtMoneyPlain(orderTotal)}');
+    return parts.isEmpty ? 'Konsignatsiya limiti oshdi' : 'Konsignatsiya limiti oshdi (${parts.join(', ')})';
   }
   return null;
 }
@@ -230,7 +217,7 @@ String _fmtMoneyPlain(String raw) {
 
 class UnauthorizedException extends ApiException {
   const UnauthorizedException({
-    super.message = 'Сессия истекла. Войдите снова.',
+    super.message = 'Sessiya tugadi. Qayta login qiling.',
     super.code,
   }) : super(statusCode: 401);
 }
@@ -259,14 +246,14 @@ class SessionRevokedException extends UnauthorizedException {
 
 class ForbiddenException extends ApiException {
   const ForbiddenException({
-    super.message = 'Нет доступа',
+    super.message = 'Ruxsat yo\'q',
     super.code,
   }) : super(statusCode: 403);
 }
 
 class NotFoundException extends ApiException {
   const NotFoundException({
-    super.message = 'Не найдено',
+    super.message = 'Topilmadi',
     super.code,
   }) : super(statusCode: 404);
 }
@@ -276,12 +263,12 @@ class NetworkException extends ApiException {
 }
 
 class RoleNotAllowedException extends ApiException {
-  const RoleNotAllowedException({super.message = 'Нет доступа к мобильному приложению'});
+  const RoleNotAllowedException({super.message = 'Mobil ilovaga ruxsat yo\'q'});
 }
 
 class AppAccessDeniedException extends ApiException {
   const AppAccessDeniedException({
-    super.message = 'Доступ к приложению отключён',
+    super.message = 'Ilova kirish o\'chirilgan',
   }) : super(statusCode: 403, code: 'APP_ACCESS_DENIED');
 }
 

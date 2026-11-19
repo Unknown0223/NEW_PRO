@@ -15,6 +15,12 @@ import {
 } from "../../lib/soft-void";
 
 import { voidPaymentEditGrantsInTx, restorePaymentEditGrantsInTx } from "./payment-edit-grants.service";
+import {
+  isClientExpense,
+  postConfirmedPaymentAmount,
+  postExpense,
+  reversePayment
+} from "./payment-balance.adapters";
 
 /** Snapshot format for payment allocations (void → restore). */
 type AllocationSnapshotItem = {
@@ -76,49 +82,19 @@ export async function deletePayment(
     clientId = payment.client_id;
     amountValue = payment.amount.toString();
 
-    const wf = String(payment.workflow_status ?? "");
-    const skipBalanceForNeverPosted =
-      wf === "pending_confirmation" || wf === "rejected";
-
-    const bal = await tx.clientBalance.findUnique({
-      where: {
-        tenant_id_client_id: { tenant_id: tenantId, client_id: payment.client_id }
-      }
+    const isExpense = isClientExpense(payment.entry_kind);
+    await reversePayment(tx, {
+      tenantId,
+      payment,
+      note: reasonNote
+        ? isExpense
+          ? `Расход клиента #${payment.id} отменён (архив) — ${reasonNote}`
+          : `Оплата #${payment.id} отменена (архив) — ${reasonNote}`
+        : isExpense
+          ? `Расход клиента #${payment.id} отменён (архив)`
+          : `Оплата #${payment.id} отменена (архив)`,
+      userId: actorUserId
     });
-    if (bal && !skipBalanceForNeverPosted) {
-      const isExpense = String(payment.entry_kind ?? "payment") === "client_expense";
-      if (isExpense) {
-        await tx.clientBalance.update({
-          where: { id: bal.id },
-          data: { balance: { increment: payment.amount } }
-        });
-        await tx.clientBalanceMovement.create({
-          data: {
-            client_balance_id: bal.id,
-            delta: payment.amount,
-            note: reasonNote
-              ? `Расход клиента #${payment.id} отменён (архив) — ${reasonNote}`
-              : `Расход клиента #${payment.id} отменён (архив)`,
-            user_id: actorUserId
-          }
-        });
-      } else {
-        await tx.clientBalance.update({
-          where: { id: bal.id },
-          data: { balance: { decrement: payment.amount } }
-        });
-        await tx.clientBalanceMovement.create({
-          data: {
-            client_balance_id: bal.id,
-            delta: payment.amount.neg(),
-            note: reasonNote
-              ? `Оплата #${payment.id} отменена (архив) — ${reasonNote}`
-              : `Оплата #${payment.id} отменена (архив)`,
-            user_id: actorUserId
-          }
-        });
-      }
-    }
 
     const allocRows = await tx.paymentAllocation.findMany({
       where: { tenant_id: tenantId, payment_id: paymentId },
@@ -206,40 +182,25 @@ export async function restorePayment(
     const prevNote = payment.note?.trim() ?? "";
     const nextNote = prevNote ? `${prevNote}\n${restoreLine}` : restoreLine;
 
-    const bal = await tx.clientBalance.findUnique({
-      where: {
-        tenant_id_client_id: { tenant_id: tenantId, client_id: payment.client_id }
-      }
-    });
-    if (bal) {
-      const isExpense = String(payment.entry_kind ?? "payment") === "client_expense";
-      if (isExpense) {
-        await tx.clientBalance.update({
-          where: { id: bal.id },
-          data: { balance: { decrement: payment.amount } }
-        });
-        await tx.clientBalanceMovement.create({
-          data: {
-            client_balance_id: bal.id,
-            delta: payment.amount.neg(),
-            note: `Расход клиента #${payment.id} восстановлен — ${commentText}`,
-            user_id: actorUserId
-          }
-        });
-      } else {
-        await tx.clientBalance.update({
-          where: { id: bal.id },
-          data: { balance: { increment: payment.amount } }
-        });
-        await tx.clientBalanceMovement.create({
-          data: {
-            client_balance_id: bal.id,
-            delta: payment.amount,
-            note: `Оплата #${payment.id} восстановлена — ${commentText}`,
-            user_id: actorUserId
-          }
-        });
-      }
+    const restoredPayment = {
+      ...payment,
+      workflow_status: "confirmed",
+      entry_kind: payment.entry_kind
+    };
+    if (isClientExpense(payment.entry_kind)) {
+      await postExpense(tx, {
+        tenantId,
+        payment: restoredPayment,
+        note: `Расход клиента #${payment.id} восстановлен — ${commentText}`,
+        userId: actorUserId
+      });
+    } else {
+      await postConfirmedPaymentAmount(tx, {
+        tenantId,
+        payment: restoredPayment,
+        note: `Оплата #${payment.id} восстановлена — ${commentText}`,
+        userId: actorUserId
+      });
     }
 
     const snapshot = parseAllocationsSnapshot(payment.allocations_snapshot);

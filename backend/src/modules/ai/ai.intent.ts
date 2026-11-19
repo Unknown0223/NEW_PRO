@@ -40,13 +40,30 @@ const READ_INTENTS: IntentSpec[] = [
   { name: "inventory.turnover", kind: "read", keywords: ["ombor aylanishi", "sotuv aylanishi", "склад оборот", "turnover"] },
   { name: "price.as-of", kind: "read", keywords: ["narx bo'yicha sana", "narx as_of", "narx sana bo'yicha", "цена на дату", "price as of"] },
   { name: "finance.receivables", kind: "read", keywords: ["qarz", "qarzdor", "долг", "должник", "дебитор", "задолженность", "receivable", "nasiya"] },
-  { name: "finance.cashflow", kind: "read", keywords: ["pul oqimi", "kassa oqimi", "cash flow", "движение денег", "денежный поток"] },
+  {
+    name: "finance.cashflow",
+    kind: "read",
+    keywords: [
+      "pul oqimi",
+      "kassa oqimi",
+      "kassa oqimi hisoboti",
+      "cash flow",
+      "движение денег",
+      "денежный поток",
+      "дДС",
+      "dds"
+    ]
+  },
   { name: "finance.pnl", kind: "read", keywords: ["foyda", "zarar", "прибыль", "убыток", "pnl", "rentabellik", "рентабельность"] },
   { name: "finance.expenses_summary", kind: "read", keywords: ["rasxod jami", "xarajat jami", "расходы итог", "сумма расходов"] },
   { name: "finance.expenses", kind: "read", keywords: ["rasxod", "xarajat", "расход", "затрат", "expense"] },
   { name: "finance.cash_desks", kind: "read", keywords: ["kassa", "касса", "кассы", "cash desk", "naqd qoldiq"] },
   { name: "orders.list", kind: "read", keywords: ["buyurtma", "заказ", "заказы", "order"] },
-  { name: "payments.list", kind: "read", keywords: ["to'lov", "tulov", "платеж", "платёж", "оплата", "payment"] },
+  {
+    name: "payments.list",
+    kind: "read",
+    keywords: ["to'lov", "tolov", "tulov", "to'lovlar", "tolovlar", "платеж", "платёж", "оплата", "payment", "payments"]
+  },
   { name: "clients.list", kind: "read", keywords: ["mijoz", "клиент", "клиенты", "client", "kontragent"] },
   { name: "products.list", kind: "read", keywords: ["mahsulot", "tovar", "товар", "nomenklatura", "product", "skular"] },
   { name: "stock.balances", kind: "read", keywords: ["ombor", "qoldiq", "склад", "остаток", "остатки", "stock", "zapas"] },
@@ -56,7 +73,22 @@ const READ_INTENTS: IntentSpec[] = [
   {
     name: "help.capabilities",
     kind: "read",
-    keywords: ["nima qila olasan", "yordam", "help", "imkoniyat", "что ты умеешь", "помощь", "qanday savol"]
+    keywords: [
+      "nima qila olasan",
+      "yordam",
+      "help",
+      "imkoniyat",
+      "что ты умеешь",
+      "помощь",
+      "qanday savol",
+      "salom",
+      "assalomu",
+      "assalom",
+      "hello",
+      "привет",
+      "здравствуй",
+      "добрый день"
+    ]
   }
 ];
 

@@ -1,10 +1,8 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "../../config/database";
 import { ORDER_STATUSES_EXCLUDED_FROM_CREDIT_EXPOSURE } from "../orders/order-status";
-import {
-  loadDeliveryDebtByClient,
-  mergeLedgerWithUnpaidDelivered
-} from "../client-balances/client-balances.service";
+import { loadClientBalanceView } from "../client-balances/client-balance-view";
+import { loadDeliveryDebtByClient } from "../client-balances/client-balances.service";
 import { splitClientDeliveryDebt } from "../client-balances/client-debt-by-agent";
 import type { ClientListRow } from "./clients.types";
 import { parseContactPersonsJson } from "./clients.helpers";
@@ -20,6 +18,8 @@ import {
 import { getAppCache, setAppCache, invalidateClientDetailCache, clientDetailCacheKey } from "../../lib/redis-cache";
 import { stableJsonStringify } from "../dashboard/dashboard.cache";
 import { appendClientAuditLog } from "./clients.audit";
+import { applyDelta } from "../client-balances/client-balance-mutator";
+import { withTransaction } from "../../lib/db-context";
 
 const CLIENT_DETAIL_CACHE_TTL_SECONDS = 30;
 
@@ -61,7 +61,7 @@ export async function getClientDetail(tenantId: number, id: number): Promise<Cli
   const cached = await getAppCache<ClientDetailRow>(cacheKey);
   if (cached) return cached;
 
-  const [c, agg, balRow, auditPair, deliveryMap, debtSplit] = await Promise.all([
+  const [c, agg, auditPair, balanceByClient, deliveryMap, debtSplit] = await Promise.all([
     prisma.client.findFirst({
       where: { id, tenant_id: tenantId, merged_into_client_id: null },
       select: {
@@ -136,10 +136,6 @@ export async function getClientDetail(tenantId: number, id: number): Promise<Cli
       },
       _sum: { total_sum: true }
     }),
-    prisma.clientBalance.findUnique({
-      where: { tenant_id_client_id: { tenant_id: tenantId, client_id: id } },
-      select: { balance: true }
-    }),
     Promise.all([
       prisma.clientAuditLog.findFirst({
         where: { tenant_id: tenantId, client_id: id, action: "client.create" },
@@ -152,6 +148,7 @@ export async function getClientDetail(tenantId: number, id: number): Promise<Cli
         include: { user: { select: { login: true, name: true } } }
       })
     ]),
+    loadClientBalanceView(tenantId, [id], "ledger_merged"),
     loadDeliveryDebtByClient(tenantId, [id]),
     splitClientDeliveryDebt(tenantId, id)
   ]);
@@ -160,9 +157,8 @@ export async function getClientDetail(tenantId: number, id: number): Promise<Cli
     throw new Error("NOT_FOUND");
   }
   const open_orders_total = (agg._sum.total_sum ?? new Prisma.Decimal(0)).toString();
-  const ledgerBal = balRow?.balance ?? new Prisma.Decimal(0);
+  const account_balance = (balanceByClient.get(id) ?? new Prisma.Decimal(0)).toString();
   const deliveryInfo = deliveryMap.get(id);
-  const account_balance = mergeLedgerWithUnpaidDelivered(ledgerBal, deliveryInfo).toString();
   const delivered_unpaid_total = (deliveryInfo?.debt ?? new Prisma.Decimal(0)).toString();
   const agent_assignments = mapAgentAssignmentsToApi(c.agent_assignments);
   const visitLegacy = c.visit_date?.toISOString() ?? null;
@@ -289,12 +285,20 @@ export async function listClientBalanceMovements(
   }
 
   const bal = await prisma.clientBalance.findUnique({
-    where: { tenant_id_client_id: { tenant_id: tenantId, client_id: clientId } }
+    where: { tenant_id_client_id: { tenant_id: tenantId, client_id: clientId } },
+    select: { id: true }
   });
+  const accountBalancePromise = loadClientBalanceView(tenantId, [clientId], "ledger_merged");
+
   if (!bal) {
-    const dm = await loadDeliveryDebtByClient(tenantId, [clientId]);
-    const m = mergeLedgerWithUnpaidDelivered(new Prisma.Decimal(0), dm.get(clientId));
-    return { data: [], total: 0, page, limit, account_balance: m.toString() };
+    const balanceByClient = await accountBalancePromise;
+    return {
+      data: [],
+      total: 0,
+      page,
+      limit,
+      account_balance: (balanceByClient.get(clientId) ?? new Prisma.Decimal(0)).toString()
+    };
   }
 
   const createdAt: { gte?: Date; lte?: Date } = {};
@@ -305,7 +309,7 @@ export async function listClientBalanceMovements(
     ...(Object.keys(createdAt).length > 0 ? { created_at: createdAt } : {})
   };
 
-  const [total, rows, deliveryMap] = await Promise.all([
+  const [total, rows, balanceByClient] = await Promise.all([
     prisma.clientBalanceMovement.count({ where: movementWhere }),
     prisma.clientBalanceMovement.findMany({
       where: movementWhere,
@@ -314,10 +318,8 @@ export async function listClientBalanceMovements(
       take: limit,
       include: { user: { select: { login: true } } }
     }),
-    loadDeliveryDebtByClient(tenantId, [clientId])
+    accountBalancePromise
   ]);
-
-  const mergedBal = mergeLedgerWithUnpaidDelivered(bal.balance, deliveryMap.get(clientId));
 
   return {
     data: rows.map((r) => ({
@@ -330,7 +332,7 @@ export async function listClientBalanceMovements(
     total,
     page,
     limit,
-    account_balance: mergedBal.toString()
+    account_balance: (balanceByClient.get(clientId) ?? new Prisma.Decimal(0)).toString()
   };
 }
 
@@ -356,21 +358,15 @@ export async function addClientBalanceMovement(
   const uid =
     actorUserId != null && Number.isFinite(actorUserId) && actorUserId > 0 ? actorUserId : null;
 
-  await prisma.$transaction(async (tx) => {
-    const bal = await tx.clientBalance.upsert({
-      where: { tenant_id_client_id: { tenant_id: tenantId, client_id: clientId } },
-      create: { tenant_id: tenantId, client_id: clientId, balance: d },
-      update: { balance: { increment: d } }
-    });
-    await tx.clientBalanceMovement.create({
-      data: {
-        client_balance_id: bal.id,
-        delta: d,
-        note: note?.trim() || null,
-        user_id: uid
-      }
-    });
-  });
+  await withTransaction((tx) =>
+    applyDelta(tx, {
+      tenantId,
+      clientId,
+      delta: d,
+      note: note?.trim() || null,
+      userId: uid
+    })
+  );
 
   await appendClientAuditLog(tenantId, clientId, actorUserId, "client.balance_movement", {
     delta,

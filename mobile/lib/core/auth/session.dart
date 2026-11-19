@@ -72,31 +72,15 @@ class SessionState {
 
 class SessionManager extends StateNotifier<SessionState> {
   final FlutterSecureStorage _storage;
-  String? _configSig;
 
   SessionManager(this._storage) : super(const SessionState());
 
   Future<void> setUser(AuthUser user, {String? slug, String? tenantName}) async {
-    final nextSlug = slug ?? user.tenantSlug;
-    final nextName = tenantName ?? user.tenantName ?? state.tenantName;
-    final prev = state.user;
-    final same = prev != null &&
-        prev.id == user.id &&
-        prev.name == user.name &&
-        prev.login == user.login &&
-        prev.role == user.role &&
-        prev.workSlotCode == user.workSlotCode &&
-        prev.workSlotId == user.workSlotId &&
-        prev.code == user.code &&
-        prev.appAccess == user.appAccess &&
-        state.tenantSlug == nextSlug &&
-        state.tenantName == nextName;
-    if (same) return;
     await _storage.write(key: 'uid', value: user.id.toString());
     await _storage.write(key: 'urole', value: user.role);
-    await _storage.write(key: 'uslug', value: nextSlug ?? '');
-    if (nextName != null && nextName.isNotEmpty) {
-      await _storage.write(key: 'utname', value: nextName);
+    await _storage.write(key: 'uslug', value: slug ?? user.tenantSlug ?? '');
+    if (tenantName != null && tenantName.isNotEmpty) {
+      await _storage.write(key: 'utname', value: tenantName);
     }
     await _storage.write(key: 'uname', value: user.name);
     await _storage.write(key: 'ulogin', value: user.login);
@@ -104,14 +88,14 @@ class SessionManager extends StateNotifier<SessionState> {
     await _storage.write(key: 'ucode', value: user.code ?? '');
     state = state.copyWith(
       user: user,
-      tenantSlug: nextSlug,
-      tenantName: nextName,
+      tenantSlug: slug ?? user.tenantSlug,
+      tenantName: tenantName ?? user.tenantName ?? state.tenantName,
     );
   }
 
   Future<void> setTenantName(String name) async {
     final trimmed = name.trim();
-    if (trimmed.isEmpty || state.tenantName == trimmed) return;
+    if (trimmed.isEmpty) return;
     await _storage.write(key: 'utname', value: trimmed);
     state = state.copyWith(tenantName: trimmed);
   }
@@ -130,19 +114,6 @@ class SessionManager extends StateNotifier<SessionState> {
     List<AgentCityOption>? agentCities,
   }) async {
     final payload = raw ?? <String, dynamic>{'schema_version': config.schemaVersion};
-    final nextPrices = priceTypes ?? state.priceTypes;
-    final nextRefs = tenantReferences ?? state.tenantReferences;
-    final nextLimits = agentLimits ?? state.agentLimits;
-    final nextCities = agentCities ?? state.agentCities;
-    final sig = _stableJson({
-      'c': payload,
-      'p': nextPrices,
-      'r': nextRefs?.toJson(),
-      'l': nextLimits.toJson(),
-      'a': nextCities.map((c) => c.toJson()).toList(),
-    });
-    if (sig == _configSig && state.mobileConfig != null) return;
-    _configSig = sig;
     await _storage.write(key: 'umobilecfg', value: jsonEncode(payload));
     if (priceTypes != null) {
       await _storage.write(key: 'upricetypes', value: priceTypes.join(','));
@@ -164,10 +135,10 @@ class SessionManager extends StateNotifier<SessionState> {
     }
     state = state.copyWith(
       mobileConfig: config,
-      priceTypes: nextPrices,
-      tenantReferences: nextRefs,
-      agentLimits: nextLimits,
-      agentCities: nextCities,
+      priceTypes: priceTypes ?? state.priceTypes,
+      tenantReferences: tenantReferences ?? state.tenantReferences,
+      agentLimits: agentLimits ?? state.agentLimits,
+      agentCities: agentCities ?? state.agentCities,
     );
   }
 
@@ -220,11 +191,9 @@ class SessionManager extends StateNotifier<SessionState> {
     TenantReferences? tenantReferences;
     AgentLimits agentLimits = const AgentLimits();
     List<AgentCityOption> agentCities = const [];
-    Object? rawCfgDecoded;
     if (cfgStr != null && cfgStr.isNotEmpty) {
       try {
         final decoded = jsonDecode(cfgStr);
-        rawCfgDecoded = decoded;
         if (decoded is Map<String, dynamic>) {
           mobileConfig = MobileConfig.fromJson(decoded);
         }
@@ -276,22 +245,10 @@ class SessionManager extends StateNotifier<SessionState> {
       lastSyncAt: lastSync,
       bootstrapped: lastSync != null,
     );
-    if (mobileConfig != null) {
-      _configSig = _stableJson({
-        'c': rawCfgDecoded is Map
-            ? rawCfgDecoded
-            : <String, dynamic>{'schema_version': mobileConfig.schemaVersion},
-        'p': priceTypes.isEmpty ? const ['default'] : priceTypes,
-        'r': tenantReferences?.toJson(),
-        'l': agentLimits.toJson(),
-        'a': agentCities.map((c) => c.toJson()).toList(),
-      });
-    }
     return true;
   }
 
   Future<void> clear() async {
-    _configSig = null;
     state = const SessionState();
     await _storage.deleteAll();
   }
@@ -301,17 +258,6 @@ final sessionProvider =
     StateNotifierProvider<SessionManager, SessionState>((ref) {
   return SessionManager(ref.read(secureStorageProvider));
 });
-
-String _stableJson(Object? value) {
-  if (value is Map) {
-    final keys = value.keys.map((key) => key.toString()).toList()..sort();
-    return '{${keys.map((key) => '${jsonEncode(key)}:${_stableJson(value[key])}').join(',')}}';
-  }
-  if (value is List) {
-    return '[${value.map(_stableJson).join(',')}]';
-  }
-  return jsonEncode(value);
-}
 
 /// Joriy mobil konfiguratsiya (bootstrap dan keyin doim mavjud bo‘lishi kerak).
 final mobileConfigProvider = Provider<MobileConfig>((ref) {

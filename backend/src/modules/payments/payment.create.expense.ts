@@ -10,6 +10,7 @@ import {
   finalizePaymentNumber,
   resolvePaymentDocNumber
 } from "./payment.create.helpers";
+import { postExpense } from "./payment-balance.adapters";
 
 export async function createClientExpense(
   tenantId: number,
@@ -68,7 +69,6 @@ export async function createClientExpense(
     }
   }
 
-  const neg = amountDec.neg();
   const requestedNumber = resolvePaymentDocNumber(input.number);
   const expenseUuid = normalizeClientUuid(input.client_uuid);
 
@@ -99,18 +99,11 @@ export async function createClientExpense(
 
       await finalizePaymentNumber(tx, p.id, requestedNumber);
 
-      const bal = await tx.clientBalance.upsert({
-        where: { tenant_id_client_id: { tenant_id: tenantId, client_id: input.client_id } },
-        create: { tenant_id: tenantId, client_id: input.client_id, balance: neg },
-        update: { balance: { decrement: amountDec } }
-      });
-      await tx.clientBalanceMovement.create({
-        data: {
-          client_balance_id: bal.id,
-          delta: neg,
-          note: `Расход клиента #${p.id}`,
-          user_id: uid
-        }
+      await postExpense(tx, {
+        tenantId,
+        payment: p,
+        note: `Расход клиента #${p.id}`,
+        userId: uid
       });
 
       return tx.payment.findFirstOrThrow({

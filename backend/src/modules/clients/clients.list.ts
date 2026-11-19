@@ -6,10 +6,7 @@ export { exportClientsFilteredCsv } from "./clients.list.export";
 export { clientListOrderBy } from "./clients.list.sort";
 import { Prisma } from "@prisma/client";
 import { prisma } from "../../config/database";
-import {
-  loadDeliveryDebtByClient,
-  mergeLedgerWithUnpaidDelivered
-} from "../client-balances/client-balances.service";
+import { loadClientBalanceView } from "../client-balances/client-balance-view";
 import type { ClientListRow, ListClientsQuery } from "./clients.types";
 import type { ScopedReportActor } from "../access/access-agent-scope";
 import { parseContactPersonsJson } from "./clients.helpers";
@@ -298,20 +295,20 @@ export async function listClientsForTenantPaged(
           select: {
             client_equipment: { where: { removed_at: null } }
           }
-        },
-        client_balances: { take: 1, select: { balance: true } }
+        }
       }
     })
   ]);
 
   const pageIds = clients.map((cl) => cl.id);
-  const deliveryMap =
-    pageIds.length === 0 ? new Map() : await loadDeliveryDebtByClient(tenantId, pageIds);
+  const balanceByClient =
+    pageIds.length === 0
+      ? new Map<number, Prisma.Decimal>()
+      : await loadClientBalanceView(tenantId, pageIds, "ledger_merged");
 
   return {
     data: clients.map((c) => {
-      const ledger = c.client_balances[0]?.balance ?? new Prisma.Decimal(0);
-      const mergedBal = mergeLedgerWithUnpaidDelivered(ledger, deliveryMap.get(c.id));
+      const mergedBal = balanceByClient.get(c.id) ?? new Prisma.Decimal(0);
       const agent_assignments = mapAgentAssignmentsToApi(c.agent_assignments);
       const visitLegacy = c.visit_date?.toISOString() ?? null;
       const disp = mergeAgentDisplayFromAssignments(

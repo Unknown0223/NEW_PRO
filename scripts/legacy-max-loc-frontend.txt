@@ -43,6 +43,7 @@ frontend/components/warehouses/warehouses-workspace.tsx
 frontend/components/stock/goods-receipt-new-workspace.tsx
 frontend/components/staff/agent-configurations-dialog.tsx
 frontend/app/(dashboard)/reports/product-sales/page.tsx
+frontend/app/(dashboard)/reports/universal-sales/page.tsx
 frontend/components/staff/supervisors-workspace.tsx
 frontend/components/reports/cash-flow-workspace.tsx
 frontend/components/stock/goods-receipts-workspace.tsx
@@ -213,3 +214,7 @@ frontend/components/tabel/tabel-requests-clearance-workspace.tsx
 frontend/components/tabel/tabel-shifts-corrections-workspace.tsx
 frontend/components/timesheet/timesheet-table.tsx
 frontend/components/timesheet/timesheet-shared.ts
+frontend/components/settings/finance-price-types-settings.tsx
+frontend/components/login/face-liveness-panel.tsx
+docs/audit/AUDIT-2026-11.md
+frontend/components/orders/order-create/draft/use-order-create-draft.ts

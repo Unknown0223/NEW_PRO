@@ -7,7 +7,6 @@ import '../../../core/l10n/app_strings_ru.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/ui/agent_ui.dart';
 import '../../../core/ui/agent_ui_extended.dart';
-import '../../../design_system/design_system.dart';
 import 'order_draft_model.dart';
 import 'order_draft_provider.dart';
 import 'order_draft_ui.dart';
@@ -164,20 +163,16 @@ class OrderDraftPageBody extends ConsumerWidget {
           },
           child: ListView.separated(
             physics: const AlwaysScrollableScrollPhysics(),
-            padding: SaShellInsets.listWithShellNav(),
+            padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
             itemCount: entries.length,
             separatorBuilder: (_, __) => const SizedBox(height: 10),
             itemBuilder: (context, index) {
               final entry = entries[index];
-              return SaEnter(
-                delay: SaStaggerDelay.of(index),
-                preset: SaMotionPreset.rise,
-                child: OrderDraftClientCard(
-                  draft: entry.draft,
-                  clientName: entry.clientName,
-                  onTap: () => openOrderDraft(context, ref, entry),
-                  onOptions: () => showOrderDraftOptions(context, ref, entry),
-                ),
+              return OrderDraftClientCard(
+                draft: entry.draft,
+                clientName: entry.clientName,
+                onTap: () => openOrderDraft(context, ref, entry),
+                onOptions: () => showOrderDraftOptions(context, ref, entry),
               );
             },
           ),

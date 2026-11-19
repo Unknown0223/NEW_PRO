@@ -19,6 +19,10 @@ import {
 import { getPaymentDetail, type PaymentDetailPayload } from "./payment.query";
 import { voidPaymentEditGrantsInTx, restorePaymentEditGrantsInTx } from "./payment-edit-grants.service";
 import { notifyClientPayment, soon } from "../tg-app/tg-notify";
+import {
+  postConfirmedPaymentAmount,
+  reversePayment
+} from "./payment-balance.adapters";
 
 
 /**
@@ -40,22 +44,15 @@ export async function confirmPendingPayment(
     if (!p) throw new Error("NOT_FOUND");
     if (String(p.entry_kind ?? "payment") !== "payment") throw new Error("BAD_ENTRY_KIND");
     if (p.workflow_status !== "pending_confirmation") throw new Error("NOT_PENDING");
+    if (p.cash_desk_id == null || p.cash_desk_id < 1) throw new Error("CASH_DESK_REQUIRED");
 
-    const amountDec = p.amount;
     const eventAt = p.paid_at ?? new Date();
 
-    const bal = await tx.clientBalance.upsert({
-      where: { tenant_id_client_id: { tenant_id: tenantId, client_id: p.client_id } },
-      create: { tenant_id: tenantId, client_id: p.client_id, balance: amountDec },
-      update: { balance: { increment: amountDec } }
-    });
-    await tx.clientBalanceMovement.create({
-      data: {
-        client_balance_id: bal.id,
-        delta: amountDec,
-        note: `Оплата #${p.id} подтверждена (заявка)`,
-        user_id: uid
-      }
+    await postConfirmedPaymentAmount(tx, {
+      tenantId,
+      payment: p,
+      note: `Оплата #${p.id} подтверждена (заявка)`,
+      userId: uid
     });
 
     await tx.payment.update({
@@ -239,25 +236,14 @@ export async function returnPaymentToExpeditor(
 
     // Tasdiqlangan bo'lsa — balansga qo'shilgani uchun qaytaramiz (qarz qayta ochiladi).
     if (wf === "confirmed") {
-      const bal = await tx.clientBalance.findUnique({
-        where: { tenant_id_client_id: { tenant_id: tenantId, client_id: payment.client_id } }
+      await reversePayment(tx, {
+        tenantId,
+        payment,
+        note: note
+          ? `Оплата #${payment.id} возвращена экспедитору — ${note}`
+          : `Оплата #${payment.id} возвращена экспедитору`,
+        userId: uid
       });
-      if (bal) {
-        await tx.clientBalance.update({
-          where: { id: bal.id },
-          data: { balance: { decrement: payment.amount } }
-        });
-        await tx.clientBalanceMovement.create({
-          data: {
-            client_balance_id: bal.id,
-            delta: payment.amount.neg(),
-            note: note
-              ? `Оплата #${payment.id} возвращена экспедитору — ${note}`
-              : `Оплата #${payment.id} возвращена экспедитору`,
-            user_id: uid
-          }
-        });
-      }
       await tx.paymentAllocation.deleteMany({
         where: { tenant_id: tenantId, payment_id: paymentId }
       });

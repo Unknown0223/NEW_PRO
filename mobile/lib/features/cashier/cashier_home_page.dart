@@ -2,10 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../core/auth/session.dart';
-import '../../core/theme/app_colors.dart';
-import '../../core/theme/app_typography.dart';
-import '../../core/ui/quick_panel_sheet.dart';
+import '../../../core/auth/session.dart';
+import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_typography.dart';
 import 'bank_transfer_inbox_providers.dart';
 
 /// Kassir home — Bank Transfer Inbox kirish nuqtasi.
@@ -27,7 +26,6 @@ class CashierHomePage extends ConsumerWidget {
         foregroundColor: AppColors.textTitle,
         elevation: 0,
         actions: [
-          const QuickPanelAction(),
           IconButton(
             icon: const Icon(Icons.person_outline),
             onPressed: () => context.go('/profile'),
@@ -91,7 +89,7 @@ class CashierHomePage extends ConsumerWidget {
                               style: AppTypography.caption.copyWith(color: AppColors.textMuted),
                             ),
                             error: (_, __) => Text(
-                              'Открыть входящие',
+                              'Открыть inbox',
                               style: AppTypography.caption.copyWith(color: AppColors.textMuted),
                             ),
                           ),
@@ -105,51 +103,8 @@ class CashierHomePage extends ConsumerWidget {
             ),
           ),
           const SizedBox(height: 12),
-          Material(
-            color: AppColors.surface,
-            borderRadius: BorderRadius.circular(16),
-            child: InkWell(
-              borderRadius: BorderRadius.circular(16),
-              onTap: () => context.push('/attendance'),
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Row(
-                  children: [
-                    Container(
-                      width: 48,
-                      height: 48,
-                      decoration: BoxDecoration(
-                        color: accent.withValues(alpha: 0.12),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: const Icon(Icons.face_retouching_natural, color: accent),
-                    ),
-                    const SizedBox(width: 14),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Отметка посещаемости',
-                            style: AppTypography.titleMedium.copyWith(fontWeight: FontWeight.w700),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            'Фото / видео / заявки',
-                            style: AppTypography.caption.copyWith(color: AppColors.textMuted),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const Icon(Icons.chevron_right, color: AppColors.textMuted),
-                  ],
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(height: 12),
           Text(
-            'Назначение и подтверждение ожидающей оплаты — в карточке перевода. '
+            'Назначение и подтверждение pending-оплаты — в карточке перевода. '
             'Импорт CSV/Excel — только в веб-панели.',
             style: AppTypography.caption.copyWith(color: AppColors.textMuted),
           ),

@@ -140,18 +140,18 @@ export async function buildSalesMonitoringBreakdown(
       }>
     >`
       SELECT
-        u.supervisor_user_id AS supervisor_id,
-        COALESCE(NULLIF(TRIM(sup.name), ''), '—') AS supervisor_name,
+        sup.id AS supervisor_id,
+        COALESCE(NULLIF(TRIM(sup.name), ''), 'Без супервайзера') AS supervisor_name,
         COUNT(DISTINCT o.client_id)::bigint AS akb,
         COUNT(DISTINCT o.id)::bigint AS orders_count,
         COALESCE(SUM(oi.total), 0)::numeric(15,2) AS fact_sales
       FROM orders o
       JOIN users u ON u.id = o.agent_id
-      LEFT JOIN users sup ON sup.id = u.supervisor_user_id
+      LEFT JOIN users sup ON sup.id = u.supervisor_user_id AND lower(sup.role) = 'supervisor'
       JOIN clients c ON c.id = o.client_id
       JOIN order_items oi ON oi.order_id = o.id
       WHERE ${salesScope}
-      GROUP BY u.supervisor_user_id, sup.name
+      GROUP BY 1, 2
       ORDER BY fact_sales DESC
     `,
     prisma.$queryRaw<Array<{ direction: string; sales_sum: Prisma.Decimal }>>`
@@ -209,7 +209,7 @@ export async function buildSalesMonitoringBreakdown(
     const gap = planDec.sub(fact);
     return {
       supervisor_id: r.supervisor_id,
-      supervisor_name: (r.supervisor_name ?? "—").trim() || "—",
+      supervisor_name: (r.supervisor_name ?? "Без супервайзера").trim() || "Без супервайзера",
       akb: Number(r.akb),
       orders_count: Number(r.orders_count ?? 0n),
       plan_sales: decToString(planDec),

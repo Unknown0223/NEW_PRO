@@ -20,14 +20,11 @@ class _RoleRoutes {
     '/map',
     '/search',
     '/settings',
-    '/settings/quick',
     '/draft',
     '/notifications',
     '/tabel',
-    '/attendance',
     '/kpi',
     '/kpi/calc',
-    '/bonuses',
     '/orders/create',
     '/client-location',
   };
@@ -48,7 +45,6 @@ class _RoleRoutes {
     '/exp-visits-map',
     '/exp-manual-sync',
     '/my-returns',
-    '/attendance',
   };
   static const supervisor = {
     '/home',
@@ -65,13 +61,11 @@ class _RoleRoutes {
     '/sv-clients',
     '/sv-notifications',
     '/agents',
-    '/attendance',
   };
   static const cashier = {
     '/home',
     '/profile',
     '/bank-transfers',
-    '/attendance',
   };
 
   static Set<String> forRole(String role) {
@@ -95,7 +89,6 @@ class _RoleRoutes {
     if (role == 'agent' && location.startsWith('/visits/')) return null;
     if (role == 'agent' && location.startsWith('/orders/')) return null;
     if (role == 'agent' && location.startsWith('/kpi')) return null;
-    if (role == 'agent' && location.startsWith('/settings')) return null;
     if (role == 'expeditor' && location.startsWith('/deliveries/')) return null;
     if (role == 'expeditor' && location.startsWith('/invoices/')) return null;
     if (role == 'expeditor' && location.startsWith('/exp-client/')) return null;
@@ -106,11 +99,6 @@ class _RoleRoutes {
     if (role == 'expeditor' && location.startsWith('/my-returns')) return null;
     if ((role == 'cashier' || role == 'operator') &&
         location.startsWith('/bank-transfers/')) {
-      return null;
-    }
-    if (const {'agent', 'expeditor', 'supervisor'}.contains(role) &&
-        (location == '/tasks' || location.startsWith('/tasks/'))) {
-      if (location == '/tasks/new' && role != 'supervisor') return '/tasks';
       return null;
     }
     if (role == 'supervisor' && location.startsWith('/sv-clients/')) return null;

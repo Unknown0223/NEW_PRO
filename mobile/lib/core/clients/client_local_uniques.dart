@@ -71,21 +71,6 @@ bool _phonesMatch(String? a, String? b) {
 bool _hasTerritory(String? region, String? zone, String? city) =>
     _norm(region).isNotEmpty || _norm(zone).isNotEmpty || _norm(city).isNotEmpty;
 
-/// Server `DuplicateInactive` bilan bir xil matn.
-const kClientDuplicateInactiveMessage = 'Такой клиент уже существует, его статус — неактивен.';
-
-bool isLocalClientInactive(Map<String, dynamic> c) {
-  final raw = c['is_active'];
-  if (raw == null) return false;
-  if (raw is bool) return !raw;
-  if (raw is num) return raw.toInt() == 0;
-  final s = raw.toString().trim().toLowerCase();
-  return s == '0' || s == 'false' || s == 'no';
-}
-
-String _dupMsg(Map<String, dynamic> c, String activeMsg) =>
-    isLocalClientInactive(c) ? kClientDuplicateInactiveMessage : activeMsg;
-
 /// Topilgan dublikat uchun foydalanuvchi xabari; yo‘q bo‘lsa null.
 String? findLocalClientDuplicateMessage(
   List<Map<String, dynamic>> clients, {
@@ -110,22 +95,22 @@ String? findLocalClientDuplicateMessage(
     if (excludeClientId != null && id == excludeClientId) continue;
 
     if (_phonesMatch(phone, c['phone']?.toString())) {
-      return _dupMsg(c, 'Этот телефон уже используется');
+      return 'Bu telefon allaqachon mavjud';
     }
 
     final otherCode = _norm(c['client_code']?.toString());
     if (codeN.isNotEmpty && otherCode.isNotEmpty && codeN == otherCode) {
-      return _dupMsg(c, 'Этот код клиента уже занят');
+      return 'Bu klient kodi band';
     }
 
     final otherInn = _norm(c['inn']?.toString());
     if (innN.isNotEmpty && otherInn.isNotEmpty && innN == otherInn) {
-      return _dupMsg(c, 'Этот ИНН уже занят — такой клиент уже существует');
+      return 'Bu STIR (INN) band — bu mijoz allaqachon mavjud';
     }
 
     final otherPinfl = _norm(c['client_pinfl']?.toString());
     if (pinflN.isNotEmpty && otherPinfl.isNotEmpty && pinflN == otherPinfl) {
-      return _dupMsg(c, 'Этот ПИНФЛ уже занят — такой клиент уже существует');
+      return 'Bu JSHSHIR (PINFL) band — bu mijoz allaqachon mavjud';
     }
 
     if (nameN.isEmpty) continue;
@@ -153,17 +138,17 @@ String? findLocalClientDuplicateMessage(
       zoneB: c['zone']?.toString(),
       cityB: c['city']?.toString(),
     )) {
-      return _dupMsg(c, 'Такой клиент уже существует (территория, название, ИНН/ПИНФЛ)');
+      return 'Bu mijoz allaqachon mavjud (hudud, nom, INN/PINFL)';
     }
 
     final otherName = _norm(c['name']?.toString());
     if (otherName != nameN) continue;
     if (scopeByTerritory && !sameTerritory) continue;
     if (!scopeByTerritory) {
-      return _dupMsg(c, 'Клиент с таким названием уже существует');
+      return 'Shu nomdagi mijoz mavjud';
     }
     if (sameTerritory) {
-      return _dupMsg(c, 'Клиент с таким названием уже есть на этой территории');
+      return 'Shu nomdagi mijoz shu hududda mavjud';
     }
   }
   return null;

@@ -31,7 +31,9 @@ const nextConfig = {
   },
   experimental: {
     /** Dev HMR va prod bundle: faqat ishlatilgan ikonka / modul tarmoqlari */
-    optimizePackageImports: ["lucide-react", "recharts"]
+    optimizePackageImports: ["lucide-react", "recharts"],
+    /** next upgrade --agent=security (16.4.2 → 16.4.6) */
+    agentUpgrade: "security"
   },
   // @tanstack/query-core sinf ichidagi #private maydonlarni loyiha SWC orqali maqsad brauzerga moslashtiradi
   // (aks holda ba’zi muhitlarda "Invalid or unexpected token" / layout.js xatosi).
@@ -39,8 +41,10 @@ const nextConfig = {
     "@tanstack/react-query",
     "@tanstack/query-core",
     "exceljs",
-    "@mediapipe/tasks-vision"
+    "@mediapipe/tasks-vision",
+    "@salec/plans-proposal"
   ],
+
   /**
    * Dev: brauzer so‘rovlari `localhost:3000` orqali ketadi — API o‘chiq bo‘lsa
    * `net::ERR_CONNECTION_REFUSED` o‘rniga Next proxy xatosi (kamroq shovqin).
@@ -95,8 +99,11 @@ const nextConfig = {
     // Package root — dist entry orqali; transpilePackages dan olib tashlangan (export * buzilmasin).
     config.resolve.alias = {
       ...config.resolve.alias,
-      "@salec/pivot-engine": resolvePivotEngineAlias()
+      "@salec/pivot-engine": resolvePivotEngineAlias(),
+      "@salec/plans-proposal": path.join(__dirname, "../packages/plans-proposal/src/index.ts"),
+      "@taklifiy": path.join(__dirname, "components/plans/taklifiy-reja")
     };
+
     if (dev) {
       // Windows'da disk (filesystem) pack cache yozuvi buzilib, chunk/module 404 siklini berardi.
       // Disk cache o'rniga XOTIRA (memory) cache — disk korruptsiyasi yo'q, ammo bitta

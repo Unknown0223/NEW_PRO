@@ -143,7 +143,7 @@ class AgentYandexMapState extends State<AgentYandexMap> {
             final data = jsonDecode(msg.message) as Map<String, dynamic>;
             final stop = RouteMapStop(
               clientId: (data['clientId'] as num?)?.toInt(),
-              name: data['name']?.toString() ?? 'Клиент',
+              name: data['name']?.toString() ?? 'Mijoz',
               latitude: 0,
               longitude: 0,
             );
@@ -336,7 +336,7 @@ class AgentYandexMapState extends State<AgentYandexMap> {
                     const Icon(Icons.map_outlined, size: 48, color: AppColors.textMuted),
                     const SizedBox(height: 12),
                     Text(
-                      'Yandex xaritani yuklab bo\'lmadi',
+                      'Yandex xarita yuklanmadi',
                       textAlign: TextAlign.center,
                       style: AppTypography.bodyMedium.copyWith(fontWeight: FontWeight.w600),
                     ),
@@ -347,7 +347,7 @@ class AgentYandexMapState extends State<AgentYandexMap> {
                       style: AppTypography.caption.copyWith(color: AppColors.textMuted),
                     ),
                     const SizedBox(height: 16),
-                    TextButton(onPressed: _reloadMap, child: const Text('Повторить')),
+                    TextButton(onPressed: _reloadMap, child: const Text('Qayta urinish')),
                   ],
                 ),
               ),
@@ -360,13 +360,13 @@ class AgentYandexMapState extends State<AgentYandexMap> {
   String _failHint() {
     switch (_failReason) {
       case 'invalid_key':
-        return 'Неверный ключ API. Включите ключ «JavaScript API» в кабинете Yandex (не Static API).';
+        return 'API kalit noto\'g\'ri. Yandex kabinetida "JavaScript API" kalitini oching (Static API emas).';
       case 'script_error':
-        return 'Скрипт Yandex не загрузился — проверьте интернет или файрвол.';
+        return 'Yandex skript yuklanmadi — internet yoki firewall tekshiring.';
       case 'timeout':
-        return 'Карта загружается слишком долго. Попробуйте ещё раз.';
+        return 'Xarita yuklanishi juda uzoq davom etdi. Qayta urinib ko\'ring.';
       default:
-        return 'Проверьте подключение к интернету';
+        return 'Internet aloqasini tekshiring';
     }
   }
 }

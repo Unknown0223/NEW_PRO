@@ -250,9 +250,11 @@ export function AddPaymentForm({
   const filteredCashDesks = useMemo(() => {
     const all = cashDesksQ.data ?? [];
     const scope = linkageQ.data;
-    if (!scope?.constrained) return all;
+    if (!scope?.constrained || scope.cash_desk_ids.length === 0) return all;
     const allowed = new Set(scope.cash_desk_ids);
-    return all.filter((d) => allowed.has(d.id));
+    const hit = all.filter((d) => allowed.has(d.id));
+    // Bo‘sh kesishma kassalarni yo‘qotmasin — operator katalogi qoladi.
+    return hit.length > 0 ? hit : all;
   }, [cashDesksQ.data, linkageQ.data]);
 
   useEffect(() => {
@@ -264,15 +266,22 @@ export function AddPaymentForm({
   }, [clientId, filteredClients]);
 
   useEffect(() => {
+    if (filteredCashDesks.length === 0) return;
     const allowed = new Set(filteredCashDesks.map((d) => String(d.id)));
+    const only = filteredCashDesks.length === 1 ? String(filteredCashDesks[0]!.id) : null;
     setBlocks((prev) => {
       let changed = false;
       const next = prev.map((b) => {
-        if (!b.cash_desk_id.trim() || allowed.has(b.cash_desk_id.trim())) return b;
+        if (!b.cash_desk_id.trim()) {
+          if (!only) return b;
+          changed = true;
+          return { ...b, cash_desk_id: only };
+        }
+        if (allowed.has(b.cash_desk_id.trim())) return b;
         changed = true;
-        return { ...b, cash_desk_id: "" };
+        return { ...b, cash_desk_id: only ?? "" };
       });
-      if (changed) {
+      if (changed && !only) {
         setSelectionNotice("Выбор кассы обновлён: неподходящие значения удалены.");
       }
       return changed ? next : prev;
@@ -321,12 +330,21 @@ export function AddPaymentForm({
       const order_id =
         oid != null && Number.isFinite(oid) && oid > 0 ? oid : null;
 
+      const filterAgentRaw = agentFilterId.trim();
+      const filterAgentParsed = filterAgentRaw ? Number.parseInt(filterAgentRaw, 10) : NaN;
+      const filterAgentId =
+        Number.isFinite(filterAgentParsed) && filterAgentParsed > 0 ? filterAgentParsed : undefined;
+
       const laRawLocked = ledgerAgentUserId.trim();
       const laParsedLocked = laRawLocked ? Number.parseInt(laRawLocked, 10) : NaN;
-      const ledger_agent_id_locked =
+      const ledgerFromCard =
         clientPickerLocked && Number.isFinite(laParsedLocked) && laParsedLocked > 0
           ? laParsedLocked
           : undefined;
+      // Tanlangan ochiq zakaz(lar) yoki agent filtri — ledger ni mijozning joriy agentiga yopishtirmaymiz.
+      const ledger_agent_id =
+        filterAgentId ??
+        (selectedOrderIds.length > 0 ? undefined : ledgerFromCard);
 
       const payloads: Array<{
         client_id: number;
@@ -355,7 +373,8 @@ export function AddPaymentForm({
         }
         const deskRaw = b.cash_desk_id.trim();
         const deskId = deskRaw ? Number.parseInt(deskRaw, 10) : NaN;
-        const cash_desk_id = Number.isFinite(deskId) && deskId > 0 ? deskId : null;
+        if (!Number.isFinite(deskId) || deskId < 1) throw new Error("NO_CASH_DESK");
+        const cash_desk_id = deskId;
         const paid_at = toIsoFromLocal(b.paid_at_local);
         payloads.push({
           client_id: cid,
@@ -368,10 +387,8 @@ export function AddPaymentForm({
           allocation_mode: allocationMode,
           client_uuid: newClientUuid(),
           ...(selectedOrderIds.length > 0 ? { allocation_order_ids: selectedOrderIds } : {}),
-          ...(ledger_agent_id_locked != null ? { ledger_agent_id: ledger_agent_id_locked } : {}),
-          ...(agentFilterId.trim()
-            ? { allocation_agent_id: Number.parseInt(agentFilterId.trim(), 10) }
-            : {})
+          ...(ledger_agent_id != null ? { ledger_agent_id } : {}),
+          ...(filterAgentId != null ? { allocation_agent_id: filterAgentId } : {})
         });
       }
 
@@ -400,14 +417,22 @@ export function AddPaymentForm({
         setFormErr("Выберите способ оплаты.");
         return;
       }
+      if (e instanceof Error && e.message === "NO_CASH_DESK") {
+        setFormErr("Выберите кассу.");
+        return;
+      }
       if (axios.isAxiosError(e)) {
         const data = e.response?.data as { error?: string; message?: string } | undefined;
         const code = data?.error;
         if (code === "DOCUMENT_EDIT_PERIOD_LOCKED" || code === "DocumentEditPeriodLocked") {
           setFormErr(
             data?.message?.trim() ||
-              "Период закрыт: выбран оплаты вне разрешённого окна. Открыть доступ может администратор."
+              "Период закрыт: дата оплаты вне разрешённого окна. Открыть доступ может администратор."
           );
+          return;
+        }
+        if (code === "CashDeskRequired") {
+          setFormErr("Выберите кассу.");
           return;
         }
         if (code === "BadCashDesk") {
@@ -711,10 +736,10 @@ export function AddPaymentForm({
                 </FilterSelect>
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs text-muted-foreground">Касса</Label>
+                <Label className="text-xs text-muted-foreground">Касса *</Label>
                 <FilterSelect
                   className="flex h-10 w-full rounded-md border border-input bg-background px-2 text-sm"
-                  emptyLabel="Не выбрана"
+                  emptyLabel="Выберите кассу"
                   value={b.cash_desk_id}
                   onChange={(e) => updateBlock(b.key, { cash_desk_id: e.target.value })}
                   disabled={submitMut.isPending}

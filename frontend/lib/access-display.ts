@@ -7,7 +7,14 @@ const KNOWN_OPERATION_LABEL_RU: Record<string, string> = {
   "access.upravlenie.history": "Доступ · история изменений",
   "audit.log.view": "Журнал аудита · просмотр",
   "audit.log.copy": "Журнал аудита · выгрузка",
-  "audit.view": "Аудит · просмотр"
+  "audit.view": "Аудит · просмотр",
+  "plans.taklifiy_reja.view":
+    "Предлагаемый план · открыть расчёт, результаты и черновик",
+  "plans.taklifiy_reja.update":
+    "Предлагаемый план · изменить KPI, веса, ячейки и настройки",
+  "plans.taklifiy_reja.approve":
+    "Предлагаемый план · утвердить и применить к целевым планам",
+  "plans.taklifiy_reja.export": "Предлагаемый план · выгрузка CSV/Excel"
 };
 
 /** Modul yorliqlari — backend `PERMISSION_MODULE_LABEL_RU` bilan mos. */
@@ -111,6 +118,8 @@ const SEGMENT_ALIAS_RU: Record<string, string> = {
   // Section sluglar (kalit fallback) — Access chap panel
   nastroyka_utverzhdayushchih: "Настройка утверждающих",
   ustanovka_planov: "Установка планов",
+  taklifiy_reja: "Предлагаемый план",
+
   konstruktor: "Конструктор отчётов",
   otchety: "Отчеты",
   raboche_mesto: "Рабочее место",

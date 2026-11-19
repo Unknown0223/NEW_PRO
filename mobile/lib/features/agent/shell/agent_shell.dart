@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+
 import '../../../core/config/mobile_config.dart';
 import '../../../core/gps/gps_tracker.dart';
 import '../../../core/clients/agent_client_balance.dart';
@@ -16,12 +18,18 @@ import 'agent_drawer.dart';
 import 'agent_scaffold_key.dart';
 import 'agent_van_selling_strip.dart';
 import '../clients/client_map_holder.dart';
+import '../sync/agent_sync_overlay.dart';
 import '../sync/manual_sync_provider.dart';
+import '../sync/sync_progress_sheet.dart';
+import '../sync/sync_success_dialog.dart';
+import '../../../core/l10n/app_strings_ru.dart';
 import '../../../core/notifications/notifications_day_rollover.dart';
-import '../../../design_system/design_system.dart';
+import '../../../core/time/work_region_time.dart';
 import '../orders/held_orders_provider.dart';
+import '../orders/create_order_exit_guard.dart';
+import 'agent_menu_config.dart';
 
-/// Agent ilova qobig‘i: drawer + GlobalChrome (pastki nav shablonda yo‘q).
+/// Agent ilova qobig‘i: drawer + shablon pastki navigatsiya.
 class AgentShell extends ConsumerStatefulWidget {
   final Widget child;
   const AgentShell({super.key, required this.child});
@@ -65,11 +73,20 @@ class _AgentShellState extends ConsumerState<AgentShell> with WidgetsBindingObse
     }
   }
 
+  int _tabIndex(String loc) {
+    if (loc.startsWith('/visits')) return 1;
+    if (loc.startsWith('/orders')) return 2;
+    if (loc.startsWith('/kpi/route')) return 4;
+    if (loc.startsWith('/kpi')) return 3;
+    return 0;
+  }
+
   @override
   Widget build(BuildContext context) {
+    final loc = GoRouterState.of(context).matchedLocation;
+    final hideNav = agentShellHidesBottomNav(loc);
     final sync = ref.watch(manualSyncProvider);
-    final syncActive = sync.status == ManualSyncStatus.running ||
-        sync.status == ManualSyncStatus.success;
+    final syncRunning = sync.status == ManualSyncStatus.running;
     ref.watch(notificationsDayRolloverProvider);
     final vanSelling = ref.watch(sessionProvider).mobileConfig?.vanSelling;
     final showVanStrip = vanSelling != null;
@@ -85,8 +102,16 @@ class _AgentShellState extends ConsumerState<AgentShell> with WidgetsBindingObse
     ref.listen(manualSyncProvider, (prev, next) {
       if (!mounted) return;
       if (prev?.status == next.status) return;
-      // Success BrandSync ichida — alohida dialog yo‘q.
-      if (next.status == ManualSyncStatus.error) {
+      if (next.status == ManualSyncStatus.success) {
+        final ts = next.finishedAt ?? DateTime.now();
+        final subtitle =
+            '${formatWorkRegionDateTime(ts.toUtc().toIso8601String())} · ${S.syncRecordsCount(next.recordCount)}';
+        unawaited(SyncSuccessDialog.show(
+          context,
+          subtitle: subtitle,
+          onContinue: () => ref.read(manualSyncProvider.notifier).reset(),
+        ),);
+      } else if (next.status == ManualSyncStatus.error) {
         final msg = next.errorInfo?.summary ??
             next.result?.error ??
             'Не удалось обновить данные';
@@ -108,33 +133,35 @@ class _AgentShellState extends ConsumerState<AgentShell> with WidgetsBindingObse
               Expanded(child: ClientMapPreloadHost(child: widget.child)),
             ],
           ),
-          // Shablon BrandSync — to‘liq ekran (yo‘l, brand, wave).
-          if (syncActive)
-            Positioned.fill(
-              child: SaBrandSync(
-                variant: sync.identity
-                    ? SaBrandSyncVariant.identity
-                    : sync.full
-                        ? SaBrandSyncVariant.full
-                        : SaBrandSyncVariant.quick,
-                role: session.user?.role,
-                progress: sync.progress,
-                stepIndex: sync.brandSyncStepIndex,
-                done: sync.status == ManualSyncStatus.success,
-                accent: AppColors.primary,
-                onContinue: () =>
-                    ref.read(manualSyncProvider.notifier).reset(),
-                onClose: () => ref.read(manualSyncProvider.notifier).reset(),
-                onRetry: () async {
-                  final n = ref.read(manualSyncProvider.notifier);
-                  if (n.isRunning) return;
-                  await n.run(full: sync.full, identity: sync.identity);
-                },
-              ),
-            ),
+          if (syncRunning) const AgentSyncLoadingOverlay(),
+          if (syncRunning) SyncProgressSheet(state: sync),
         ],
       ),
-      bottomNavigationBar: null,
+      bottomNavigationBar: hideNav
+          ? null
+          : AgentBottomNav(
+              selectedIndex: _tabIndex(loc),
+              onTab: (i) {
+                const paths = [
+                  '/home',
+                  '/visits',
+                  '/orders',
+                  '/kpi',
+                  '/kpi/route',
+                ];
+                if (i < 0 || i >= paths.length) return;
+                final path = paths[i];
+                final router = GoRouter.of(context);
+                final loc = GoRouterState.of(context).uri.path;
+                final container = ProviderScope.containerOf(context);
+                unawaited(leaveCreateOrderThenGo(
+                  container: container,
+                  go: router.go,
+                  path: path,
+                  currentLocation: loc,
+                ));
+              },
+            ),
     );
   }
 }

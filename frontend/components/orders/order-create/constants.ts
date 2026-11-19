@@ -28,13 +28,3 @@ export const POLKI_PRICE_TYPE_LABEL_RU: Record<string, string> = {
   old_prices: "Старые цены",
   OLD_PRICES: "Старые цены"
 };
-
-export const ORDER_STATUS_LABEL_RU: Record<string, string> = {
-  new: "Новый",
-  confirmed: "Подтверждён",
-  picking: "Комплектация",
-  delivering: "Доставка",
-  delivered: "Доставлен",
-  returned: "Возвращён",
-  cancelled: "Отменён"
-};

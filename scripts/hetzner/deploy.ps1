@@ -48,10 +48,11 @@ function Sync-Tree {
   $tar = Join-Path $env:TEMP "salec-deploy-$name.tar.gz"
   if (Test-Path $tar) { Remove-Item $tar -Force }
 
+  # `dist` umumiy exclude qilinmaydi: vendor/plans-proposal va vendor/pivot-engine
+  # Docker build uchun dist/index.js shart (eski --exclude=dist yangi vendorni bo‘sh qoldirardi).
   $excludes = @(
     "--exclude=node_modules",
     "--exclude=.next",
-    "--exclude=dist",
     "--exclude=coverage",
     "--exclude=.git",
     "--exclude=.turbo",
@@ -101,9 +102,9 @@ Write-Host "  $HostName  →  https://salesarena.sale" -ForegroundColor Cyan
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host ""
 
-# 0) pivot-engine (frontend Docker vendor)
+# 0) vendor packages (Docker build context)
 if (-not $SkipFrontend -and -not $SkipPivotSync) {
-  Write-Host "[0/3] pivot-engine sync..." -ForegroundColor Yellow
+  Write-Host "[0/4] pivot-engine sync..." -ForegroundColor Yellow
   Push-Location (Join-Path $Root "frontend")
   try {
     & node "scripts\sync-pivot-engine.mjs"
@@ -111,6 +112,11 @@ if (-not $SkipFrontend -and -not $SkipPivotSync) {
   } finally {
     Pop-Location
   }
+}
+if (-not $SkipBackend -or -not $SkipFrontend) {
+  Write-Host "[0/4] plans-proposal vendor sync..." -ForegroundColor Yellow
+  & node (Join-Path $Root "scripts\sync-plans-proposal.mjs")
+  if ($LASTEXITCODE -ne 0) { throw "plans-proposal sync xato" }
 }
 
 # 1) Kod sync ( .env.production serverda qoladi )
@@ -132,53 +138,104 @@ Copy-Item $composeLocal $composeTmp -Force
 if ($LASTEXITCODE -ne 0) { throw "scp compose xato" }
 Remove-Item $composeTmp -Force -ErrorAction SilentlyContinue
 
-# 2) Build + recreate
-Write-Host "[2/3] Docker build + up..." -ForegroundColor Yellow
-$services = @()
-if (-not $SkipBackend) { $services += @("backend", "worker") }
-if (-not $SkipFrontend) { $services += "frontend" }
-if (-not $SkipBot) { $services += "telegram-bot" }
-if ($services.Count -eq 0) { throw "Hech narsa build qilinmadi (SkipBackend+SkipFrontend+SkipBot)" }
+# 2) Build (downtime yo‘q) → rolling recreate (502 oynasi qisqa)
+# Eski usul: backend+frontend birga --force-recreate → Coolify/Traefik 502.
+Write-Host "[2/3] Docker build + rolling up..." -ForegroundColor Yellow
+$buildServices = @()
+if (-not $SkipBackend) { $buildServices += @("backend", "worker") }
+if (-not $SkipFrontend) { $buildServices += "frontend" }
+if (-not $SkipBot) { $buildServices += "telegram-bot" }
+if ($buildServices.Count -eq 0) { throw "Hech narsa build qilinmadi (SkipBackend+SkipFrontend+SkipBot)" }
 
 $buildFlag = if ($NoCache) { "--no-cache" } else { "" }
-$svc = ($services -join " ")
-# PowerShell `$env:*` ni heredoc/string ichida yutib yubormasligi uchun flag alohida
+$svcBuild = ($buildServices -join " ")
 $composeEnvFile = '.env.production'
 $composeFile = 'docker-compose.prod.yml'
 $buildCmd = if ($buildFlag) {
-  "docker compose -f $composeFile --env-file $composeEnvFile build $buildFlag $svc"
+  "docker compose -f $composeFile --env-file $composeEnvFile build $buildFlag $svcBuild"
 } else {
-  "docker compose -f $composeFile --env-file $composeEnvFile build $svc"
+  "docker compose -f $composeFile --env-file $composeEnvFile build $svcBuild"
 }
+$doBackend = if (-not $SkipBackend) { "1" } else { "0" }
+$doFrontend = if (-not $SkipFrontend) { "1" } else { "0" }
+$doBot = if (-not $SkipBot) { "1" } else { "0" }
+Write-Host "  Eslatma: konteyner almashganda 10–40s 502 bo‘lishi mumkin — keyin avtomatik tiklanadi." -ForegroundColor DarkYellow
 Invoke-Remote @"
 set -euo pipefail
 cd $RemoteRoot/infrastructure
 test -f $composeEnvFile
 $buildCmd
-docker compose -f $composeFile --env-file $composeEnvFile up -d --force-recreate --no-deps $svc
-docker network connect coolify salec-backend-1 2>/dev/null || true
-docker network connect coolify salec-frontend-1 2>/dev/null || true
-sleep 8
+
+wait_http() {
+  local url=`$1
+  local name=`$2
+  local n=0
+  while [ `$n -lt 36 ]; do
+    code=`$(curl -sS -o /dev/null -w '%{http_code}' --connect-timeout 3 --max-time 8 "`$url" || echo 000)
+    if [ "`$code" = "200" ] || [ "`$code" = "301" ] || [ "`$code" = "302" ]; then
+      echo "WAIT_OK_`$name HTTP `$code"
+      return 0
+    fi
+    n=`$((n+1))
+    sleep 5
+  done
+  echo "WAIT_FAIL_`$name last_http=`$code" >&2
+  return 1
+}
+
+if [ '$doBackend' = '1' ]; then
+  echo 'Recreate backend...'
+  docker compose -f $composeFile --env-file $composeEnvFile up -d --force-recreate --no-deps backend
+  docker network connect coolify salec-backend-1 2>/dev/null || true
+  docker compose -f $composeFile --env-file $composeEnvFile up -d --force-recreate --no-deps worker
+  wait_http 'http://127.0.0.1:4000/health' backend_local
+fi
+
+if [ '$doFrontend' = '1' ]; then
+  echo 'Recreate frontend...'
+  docker compose -f $composeFile --env-file $composeEnvFile up -d --force-recreate --no-deps frontend
+  docker network connect coolify salec-frontend-1 2>/dev/null || true
+  wait_http 'http://127.0.0.1:3000/login' frontend_local
+fi
+
+if [ '$doBot' = '1' ]; then
+  docker compose -f $composeFile --env-file $composeEnvFile up -d --force-recreate --no-deps telegram-bot
+fi
+
 docker compose -f $composeFile --env-file $composeEnvFile ps
 docker builder prune -af --filter until=72h 2>&1 | tail -1 || true
 df -h / | tail -1
 echo BUILD_UP_OK
 "@
 
-# 3) Smoke
-Write-Host "[3/3] Smoke check..." -ForegroundColor Yellow
-Start-Sleep -Seconds 5
-try {
-  $h = Invoke-RestMethod -Uri "https://api.salesarena.sale/health" -TimeoutSec 30
-  Write-Host "API health: $($h.status)" -ForegroundColor Green
-} catch {
-  Write-Host "API health: hali kutilyapti — $($_.Exception.Message)" -ForegroundColor DarkYellow
+# 3) Smoke (public URL — Traefik orqali, qayta urinadi)
+Write-Host "[3/3] Smoke check (public)..." -ForegroundColor Yellow
+$apiOk = $false
+$webOk = $false
+for ($i = 1; $i -le 24; $i++) {
+  try {
+    $h = Invoke-RestMethod -Uri "https://api.salesarena.sale/health" -TimeoutSec 15
+    if ($h.status -eq "ok" -or $h.status -eq "healthy" -or $h -ne $null) {
+      Write-Host "API health: $($h.status)" -ForegroundColor Green
+      $apiOk = $true
+    }
+  } catch {
+    Write-Host "API health: urinish $i/24 — $($_.Exception.Message)" -ForegroundColor DarkYellow
+  }
+  try {
+    $r = Invoke-WebRequest -Uri "https://salesarena.sale/login" -UseBasicParsing -TimeoutSec 15
+    if ($r.StatusCode -ge 200 -and $r.StatusCode -lt 400) {
+      Write-Host "Login page: HTTP $($r.StatusCode)" -ForegroundColor Green
+      $webOk = $true
+    }
+  } catch {
+    Write-Host "Login page: urinish $i/24 — $($_.Exception.Message)" -ForegroundColor DarkYellow
+  }
+  if ($apiOk -and $webOk) { break }
+  Start-Sleep -Seconds 5
 }
-try {
-  $r = Invoke-WebRequest -Uri "https://salesarena.sale/login" -UseBasicParsing -TimeoutSec 30
-  Write-Host "Login page: HTTP $($r.StatusCode)" -ForegroundColor Green
-} catch {
-  Write-Host "Login page: hali kutilyapti — $($_.Exception.Message)" -ForegroundColor DarkYellow
+if (-not $apiOk -or -not $webOk) {
+  throw "Smoke check yiqildi (apiOk=$apiOk webOk=$webOk). Konteyner/Traefik holatini tekshiring."
 }
 
 Write-Host ""

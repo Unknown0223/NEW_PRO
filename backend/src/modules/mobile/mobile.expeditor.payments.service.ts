@@ -206,6 +206,9 @@ export async function createMobileExpeditorOrderPayment(
 
   const now = new Date();
   const amountDec = new Prisma.Decimal(input.amount);
+  const { collectCashDeskIdsForUsers } = await import("../linkage/linkage.cash-desk-ids");
+  const deskIds = await collectCashDeskIdsForUsers(tenantId, [expeditorUserId]);
+  const cashDeskId = deskIds[0] ?? null;
   const payment = await prisma.payment.create({
     data: {
       tenant_id: tenantId,
@@ -215,7 +218,7 @@ export async function createMobileExpeditorOrderPayment(
       payment_type: pt,
       note: input.note?.trim() || null,
       created_by_user_id: expeditorUserId,
-      cash_desk_id: null,
+      cash_desk_id: cashDeskId,
       workflow_status: "pending_confirmation",
       received_at: now,
       paid_at: null,

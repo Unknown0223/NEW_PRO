@@ -1,0 +1,57 @@
+export type ShelfReturnsDateType = "order_date" | "shipped_date" | "delivered_date";
+
+export type ShelfReturnsFilters = {
+  date_type: ShelfReturnsDateType;
+  from: string;
+  to: string;
+  agent_ids?: number[];
+  expeditor_ids?: number[];
+  category_ids?: number[];
+  client_categories?: string[];
+  payment_methods?: string[];
+  price_types?: string[];
+  statuses?: string[];
+  warehouse_ids?: number[];
+  territory_1_list?: string[];
+  territory_2_list?: string[];
+  territory_3_list?: string[];
+  search?: string;
+  page: number;
+  limit: number;
+};
+
+export type ShelfReturnsLineRow = {
+  row_number: number;
+  client_id: number;
+  client_name: string;
+  client_code: string;
+  client_legal_name: string;
+  client_category: string;
+  territory: string;
+  qty: string;
+  expeditor_name: string;
+  order_id: number;
+  order_number: string;
+  payment_method: string;
+  price_type: string;
+  warehouse_name: string;
+  order_date: string;
+  shipped_at: string | null;
+  status: string;
+  status_label: string;
+  trade_direction: string;
+  volume: string;
+  amount: string;
+  agent_name: string;
+  agent_code: string;
+  supervisor_name: string;
+  supervisor_code: string;
+  product_id: number;
+  product_sku: string;
+  product_name: string;
+  product_group: string;
+  product_category: string;
+  pack_qty: string;
+  product_volume: string;
+  return_reason: string;
+};

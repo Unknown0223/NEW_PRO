@@ -76,7 +76,7 @@ export const FIELD_REGISTRY_PART1: Record<
     label: "Супервайзер",
     allowRow: true,
     allowCol: true,
-    expr: () => Prisma.sql`COALESCE(sup.name, '')`
+    expr: () => Prisma.sql`COALESCE(NULLIF(TRIM(sup.name), ''), 'Без супервайзера')`
   },
   supervisor_code: {
     label: "Код супервизора",

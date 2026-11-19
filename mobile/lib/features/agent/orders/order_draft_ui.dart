@@ -7,7 +7,6 @@ import '../../../core/l10n/app_strings_ru.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/ui/agent_ui.dart';
-import '../../../design_system/design_system.dart';
 import 'order_create_models.dart';
 import 'order_draft_model.dart';
 
@@ -122,9 +121,9 @@ class OrderDraftClientCard extends ConsumerWidget {
         : priceTypeDisplayLabel(draft.priceType, labels);
     return AgentSurfaceCard(
       padding: EdgeInsets.zero,
-      child: SaPressable(
+      child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(SaRadius.card),
+        borderRadius: BorderRadius.circular(16),
         child: Padding(
           padding: const EdgeInsets.all(14),
           child: Column(

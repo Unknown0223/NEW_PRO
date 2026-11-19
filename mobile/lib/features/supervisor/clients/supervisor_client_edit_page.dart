@@ -7,10 +7,8 @@ import '../../../core/api/supervisor_api.dart';
 import '../../../core/auth/session.dart';
 import '../../../core/config/client_field_policy.dart';
 import '../../../core/config/mobile_config.dart';
-import '../../../core/config/tenant_refs_provider.dart';
 import '../../../core/gps/gps_tracker.dart';
 import '../../../core/theme/app_colors.dart';
-import '../../../core/ui/client_photo_thumb.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../agent/clients/client_dynamic_form.dart';
 import '../../auth/auth_provider.dart';
@@ -60,7 +58,7 @@ class _SupervisorClientEditPageState extends ConsumerState<SupervisorClientEditP
     if (slug.isEmpty) {
       setState(() {
         _loading = false;
-        _error = 'Компания не выбрана';
+        _error = 'Нет tenant';
       });
       return;
     }
@@ -100,7 +98,7 @@ class _SupervisorClientEditPageState extends ConsumerState<SupervisorClientEditP
   }
 
   bool get _territoryVisible => isClientFieldVisible(_cfg, 'territory');
-  bool get _useCityPicker => _territoryVisible;
+  bool get _useCityPicker => _territoryVisible && ref.read(agentCitiesProvider).isNotEmpty;
   Set<String> get _hiddenFormKeys => _useCityPicker ? const {'territory'} : const {};
 
   Future<void> _captureGps() async {
@@ -197,8 +195,8 @@ class _SupervisorClientEditPageState extends ConsumerState<SupervisorClientEditP
   Widget build(BuildContext context) {
     const accent = AppColors.supervisorAccent;
     final policy = SupervisorConfigPolicy(ref.watch(sessionProvider).mobileConfig);
-    final agentCities = ref.watch(effectiveAgentCitiesProvider);
-    final showCityPicker = _territoryVisible;
+    final agentCities = ref.watch(agentCitiesProvider);
+    final showCityPicker = _territoryVisible && agentCities.isNotEmpty;
     final showGps = showCoordinatesField(_cfg) && policy.canChangeClientLocation;
     final title = _client?['name']?.toString() ?? 'Клиент';
 

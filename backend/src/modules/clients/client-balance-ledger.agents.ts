@@ -9,10 +9,6 @@ import {
 } from "../tenant-settings/finance-refs";
 import { loadPriceTypeEntriesForResolve } from "../tenant-settings/tenant-settings.profile.read";
 import { loadTenantLedgerPaymentContext } from "./client-balance-ledger.helpers";
-import {
-  loadDeliveryDebtByClient,
-  mergeLedgerWithUnpaidDelivered
-} from "../client-balances/client-balances.service";
 import { ORDER_STATUSES_OUTSTANDING_RECEIVABLE } from "../orders/order-status";
 import {
   PAYMENT_COUNTS_FOR_RECEIVABLE_NET,

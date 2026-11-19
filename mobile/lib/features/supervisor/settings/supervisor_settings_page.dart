@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 
 import '../../../core/auth/session.dart';
 import '../../../core/prefs/app_prefs.dart';
@@ -82,11 +81,6 @@ class SupervisorSettingsPage extends ConsumerWidget {
               value: themeLabel(),
               onTap: () => _pickTheme(context, ref),
             ),
-            _NavRow(
-              label: 'Быстрое меню (разделы)',
-              value: '',
-              onTap: () => context.push('/settings/quick'),
-            ),
           ]),
           SvCard(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -139,7 +133,7 @@ class SupervisorSettingsPage extends ConsumerWidget {
               value: '${route?.dailyVisitLimit ?? 50}',
             ),
             _ValueRow(
-              label: 'Пауза перед повторным добавлением (дн.)',
+              label: 'Cooldown повторного добавления (дн.)',
               value: '${route?.readdCooldownDays ?? 0}',
             ),
             _ToggleRow(
@@ -148,9 +142,9 @@ class SupervisorSettingsPage extends ConsumerWidget {
             ),
           ]),
           _group('ФОТО', [
-            _ValueRow(label: 'JPEG качество', value: '${photo?.jpegQuality ?? 75}'),
-            _ValueRow(label: 'Макс. ширина', value: '${photo?.maxWidthPx ?? 1600}'),
-            _ValueRow(label: 'Макс. высота', value: '${photo?.maxHeightPx ?? 1600}'),
+            _ValueRow(label: 'JPEG качество', value: '${photo?.jpegQuality ?? 92}'),
+            _ValueRow(label: 'Макс. ширина', value: '${photo?.maxWidthPx ?? 4032}'),
+            _ValueRow(label: 'Макс. высота', value: '${photo?.maxHeightPx ?? 4032}'),
           ]),
           _group('ПРОЧИЕ', [
             _ToggleRow(

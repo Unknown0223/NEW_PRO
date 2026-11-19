@@ -13,8 +13,8 @@ import '../../../core/ui/agent_ui_extended.dart';
 import '../../agent/orders/order_create_models.dart' show formatMoneySpaced;
 import '../config/expeditor_config_enforcement.dart';
 import '../expeditor_providers.dart';
+import '../shell/expeditor_drawer.dart';
 import 'expeditor_bonus_calc_sheet.dart';
-import 'expeditor_return_reason_picker.dart';
 
 /// Qaytarish usuli:
 /// - [byProducts] — savdo va bonus dona alohida belgilanadi (qo'lda);
@@ -88,41 +88,13 @@ class _ExpeditorReturnByOrderPageState
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.background,
+      drawer: const ExpeditorDrawer(),
       appBar: AppBar(
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          tooltip: 'Назад',
-          onPressed: () {
-            if (context.canPop()) {
-              context.pop();
-            } else {
-              context.go('/home');
-            }
-          },
-        ),
         title: Text(_orderId == null
             ? 'Возврат с полки по заказу'
             : 'Возврат · заказ',),
       ),
       body: _orderId == null ? _orderPicker() : _composition(_orderId!),
-      bottomNavigationBar: BottomNavigationBar(
-        currentIndex: 0,
-        selectedItemColor: const Color(0xFF64748B),
-        unselectedItemColor: const Color(0xFF64748B),
-        type: BottomNavigationBarType.fixed,
-        selectedFontSize: 11,
-        unselectedFontSize: 11,
-        onTap: (i) {
-          const paths = ['/home', '/visits', '/debtors', '/invoices'];
-          context.go(paths[i]);
-        },
-        items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.home_outlined), label: 'Главная'),
-          BottomNavigationBarItem(icon: Icon(Icons.location_on_outlined), label: 'Визиты'),
-          BottomNavigationBarItem(icon: Icon(Icons.person_outline), label: 'Должники'),
-          BottomNavigationBarItem(icon: Icon(Icons.receipt_long_outlined), label: 'Накладные'),
-        ],
-      ),
     );
   }
 
@@ -194,7 +166,7 @@ class _ExpeditorReturnByOrderPageState
                                       fontWeight: FontWeight.w700,),),
                               subtitle: Text(
                                 '${o['client_name'] ?? ''}\n'
-                                "${formatMoneySpaced((o['total_sum'] as num?)?.toDouble() ?? 0)} сум",
+                                "${formatMoneySpaced((o['total_sum'] as num?)?.toDouble() ?? 0)} So'm",
                                 maxLines: 2,
                               ),
                               isThreeLine: true,
@@ -971,7 +943,7 @@ class _ExpeditorReturnByOrderPageState
               Expanded(
                 child: Text(
                   'макс: ${_fmtQty(maxTotal)}'
-                  "${price > 0 ? '   ·   ${formatMoneySpaced(price)} сум' : ''}",
+                  "${price > 0 ? '   ·   ${formatMoneySpaced(price)} So\'m' : ''}",
                   style: AppTypography.caption.copyWith(
                       color: qty > 0
                           ? AppColors.expeditorAccent
@@ -1277,7 +1249,7 @@ class _ExpeditorReturnByOrderPageState
           const SizedBox(height: 2),
           Text(
             '${p['sku'] ?? ''}'
-            "${price > 0 ? ' · таннарх ${formatMoneySpaced(price)} сум' : ''}",
+            "${price > 0 ? ' · таннарх ${formatMoneySpaced(price)} So\'m' : ''}",
             style: AppTypography.caption.copyWith(color: AppColors.textMuted),
           ),
           if (maxPaid > 0)
@@ -1288,7 +1260,7 @@ class _ExpeditorReturnByOrderPageState
               maxQty: maxPaid,
               value: paid,
               hint: paid > 0
-                  ? '= ${formatMoneySpaced(paid * price)} сум'
+                  ? "= ${formatMoneySpaced(paid * price)} So'm"
                   : null,
               onChanged: (v) => setState(() {
                 if (v <= 0) {
@@ -1333,7 +1305,7 @@ class _ExpeditorReturnByOrderPageState
                 maxQty: cashMax,
                 value: cashQty.clamp(0.0, cashMax),
                 hint: cashQty > 0
-                    ? '= ${formatMoneySpaced(cashSum)} сум'
+                    ? "= ${formatMoneySpaced(cashSum)} So'm"
                     : 'сумма = дона × таннарх',
                 onChanged: (v) => setState(() {
                   final next = v.clamp(0.0, cashMax);
@@ -1498,7 +1470,7 @@ class _ExpeditorReturnByOrderPageState
                 children: [
                   Expanded(
                     child: _totalChip(
-                        'Сумма (продажа)', '${formatMoneySpaced(saleSum)} сум',
+                        'Сумма (продажа)', "${formatMoneySpaced(saleSum)} So'm",
                         color: AppColors.expeditorAccent,),
                   ),
                   const SizedBox(width: 8),
@@ -1515,7 +1487,7 @@ class _ExpeditorReturnByOrderPageState
                 const SizedBox(height: 8),
                 _totalChip(
                   'Бонус оплатой',
-                  '${formatMoneySpaced(bonusCashSum)} сум',
+                  "${formatMoneySpaced(bonusCashSum)} So'm",
                   color: AppColors.warning,
                 ),
               ],
@@ -1759,7 +1731,7 @@ class _ExpeditorReturnByOrderPageState
                     children: [
                       Expanded(
                         child: _totalChip('К возврату (продажа)',
-                            '${formatMoneySpaced(refund)} сум',
+                            "${formatMoneySpaced(refund)} So'm",
                             color: AppColors.expeditorAccent,),
                       ),
                       const SizedBox(width: 8),
@@ -1774,14 +1746,29 @@ class _ExpeditorReturnByOrderPageState
                     const SizedBox(height: 8),
                     _totalChip(
                       'Бонус оплатой',
-                      '${formatMoneySpaced(bonusCashSum)} сум',
+                      "${formatMoneySpaced(bonusCashSum)} So'm",
                       color: AppColors.warning,
                     ),
                   ],
                   const SizedBox(height: 14),
-                  ExpeditorReturnReasonPicker(
-                    value: reason,
-                    onChanged: (v) => setSheet(() => reason = v),
+                  DropdownButtonFormField<String>(
+                    initialValue: reason.isEmpty ? null : reason,
+                    isExpanded: true,
+                    decoration: const InputDecoration(
+                      labelText: 'Причина возврата',
+                      border: OutlineInputBorder(),
+                    ),
+                    items: const [
+                      DropdownMenuItem(
+                          value: 'defective',
+                          child: Text('Бракованный товар'),),
+                      DropdownMenuItem(
+                          value: 'wrong', child: Text('Неверный товар'),),
+                      DropdownMenuItem(
+                          value: 'excess', child: Text('Излишек'),),
+                      DropdownMenuItem(value: 'other', child: Text('Другое')),
+                    ],
+                    onChanged: (v) => setSheet(() => reason = v ?? ''),
                   ),
                   const SizedBox(height: 12),
                   TextField(
@@ -1798,7 +1785,7 @@ class _ExpeditorReturnByOrderPageState
                       title: 'Не хватает бонусной части',
                       body:
                           'По правилам возврата с полки бонусной части не хватает на '
-                          '${formatMoneySpaced(bonusDebt)} сум. '
+                          "${formatMoneySpaced(bonusDebt)} So'm. "
                           'Эта сумма будет отнесена на баланс (долг) клиента '
                           'после приёмки на складе.',
                       extra: warnings
@@ -1812,11 +1799,11 @@ class _ExpeditorReturnByOrderPageState
                       title: 'Долг скидка',
                       body: discountDebtNote?.trim().isNotEmpty == true
                           ? '${discountDebtNote!.trim()}\n\n'
-                              '${formatMoneySpaced(discountDebt)} сум будет отнесено '
+                              "${formatMoneySpaced(discountDebt)} So'm будет отнесено "
                               'на баланс клиента после приёмки на складе '
                               '(скидка по оставшемуся товару отозвана).'
                           : 'Условие скидки по заказу больше не выполняется. '
-                              '${formatMoneySpaced(discountDebt)} сум — долг скидка '
+                              "${formatMoneySpaced(discountDebt)} So'm — долг скидка "
                               'на баланс клиента после приёмки на складе.',
                     ),
                   ] else if (hasDiscountRecalc) ...[
@@ -1992,7 +1979,7 @@ class _ExpeditorReturnByOrderPageState
         parts.join('\n'),
         color: discDebt > 0.0001 ? AppColors.warning : AppColors.success,
       );
-      context.go('/home');
+      if (context.canPop()) context.pop();
     } on ApiException catch (e) {
       if (mounted) _toast('Ошибка: ${e.message}', color: AppColors.error);
     } catch (e) {
@@ -2019,30 +2006,22 @@ class _ExpeditorReturnByOrderPageState
               style: AppTypography.bodyMedium
                   .copyWith(color: AppColors.textSecondary),
             ),
-            const SizedBox(height: 16),
-            OutlinedButton(
-              onPressed: () {
-                if (allowBack) {
-                  setState(() {
-                    _orderId = null;
-                    _paid.clear();
-                    _bonus.clear();
-                    _bonusCashQty.clear();
-                    _bonusCashEnabled = false;
-                    _returnQty.clear();
-                    _swap.clear();
-                    _method = _ReturnMethod.byProducts;
-                  });
-                  return;
-                }
-                if (context.canPop()) {
-                  context.pop();
-                } else {
-                  context.go('/home');
-                }
-              },
-              child: Text(allowBack ? 'К списку заказов' : 'Назад'),
-            ),
+            if (allowBack) ...[
+              const SizedBox(height: 16),
+              OutlinedButton(
+                onPressed: () => setState(() {
+                  _orderId = null;
+                  _paid.clear();
+                  _bonus.clear();
+                  _bonusCashQty.clear();
+                  _bonusCashEnabled = false;
+                  _returnQty.clear();
+                  _swap.clear();
+                  _method = _ReturnMethod.byProducts;
+                }),
+                child: const Text('К списку заказов'),
+              ),
+            ],
           ],
         ),
       ),

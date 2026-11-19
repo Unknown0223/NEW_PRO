@@ -53,6 +53,7 @@
     "db:seed": "prisma db seed && npm run rbac:migrate-crud",
     "mobile:perms": "tsx scripts/ensure-mobile-role-permissions.ts",
     "rbac:ensure": "tsx scripts/ensure-rbac-tenant.ts",
+    "rbac:merge-defaults": "tsx scripts/merge-role-default-keys.ts",
     "rbac:migrate-crud": "tsx scripts/migrate-permissions-to-crud.ts test1",
     "rbac:migrate-legacy": "tsx scripts/migrate-legacy-permissions.ts test1",
     "dostup:verify": "npm run rbac:migrate-crud && vitest run tests/route-permission-guard.pure.test.ts tests/route-permission-coverage.pure.test.ts tests/rbac.permissions.pure.test.ts tests/access-api.integration.test.ts tests/rbac-enforcement.integration.test.ts tests/contract-smoke.integration.rbac.test.ts",
@@ -133,6 +134,8 @@
     "@opentelemetry/sdk-trace-node": "^1.30.1",
     "@opentelemetry/semantic-conventions": "^1.41.1",
     "@prisma/client": "^6.0.0",
+    "@salec/plans-proposal": "file:./vendor/plans-proposal",
+
     "@sentry/node": "^8.55.2",
     "@tensorflow/tfjs": "^4.22.0",
     "@tensorflow/tfjs-backend-wasm": "^4.22.0",

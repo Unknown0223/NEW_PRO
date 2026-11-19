@@ -29,6 +29,7 @@ import {
   finalizePaymentNumber,
   resolvePaymentDocNumber
 } from "./payment.create.helpers";
+import { postConfirmedPaymentAmount } from "./payment-balance.adapters";
 export { createClientExpense } from "./payment.create.expense";
 import { createClientExpense } from "./payment.create.expense";
 
@@ -80,6 +81,9 @@ export async function createPayment(
       isDiscountSettlement ? "discount_payment" : "client_payment"
     );
     cashDeskId = input.cash_desk_id;
+  } else if (!isDiscountSettlement) {
+    // Web «Оплаты клиентов» kassasiz saqlamasin — ro‘yxatda «—» chiqardi.
+    throw new Error("CASH_DESK_REQUIRED");
   }
 
   let expeditorId: number | null = null;
@@ -101,10 +105,14 @@ export async function createPayment(
     }
   }
 
-  const ledgerAgentId = await resolveLedgerAgentId(tenantId, input.ledger_agent_id, undefined, {
+  let ledgerAgentId = await resolveLedgerAgentId(tenantId, input.ledger_agent_id, undefined, {
     requireActive: input.ledger_agent_allow_inactive ? false : true
   });
   const allocationAgentId = await resolveLedgerAgentId(tenantId, input.allocation_agent_id);
+
+  const allocationOrderIds = (input.allocation_order_ids ?? []).filter(
+    (id) => Number.isFinite(id) && id > 0
+  );
 
   let orderAgentId: number | null = null;
   if (input.order_id != null && input.order_id > 0) {
@@ -115,6 +123,33 @@ export async function createPayment(
     orderAgentId = ordAgent?.agent_id ?? null;
   }
 
+  // ledger_agent berilmasa: avvalo zakaz/allocation agenti, oxirida mijoz agenti (muzlatiladi).
+  if (ledgerAgentId == null) {
+    if (orderAgentId != null && orderAgentId > 0) {
+      ledgerAgentId = orderAgentId;
+    } else if (allocationOrderIds.length > 0) {
+      const ords = await prisma.order.findMany({
+        where: {
+          tenant_id: tenantId,
+          client_id: input.client_id,
+          id: { in: allocationOrderIds }
+        },
+        select: { agent_id: true }
+      });
+      const agents = [
+        ...new Set(
+          ords
+            .map((o) => o.agent_id)
+            .filter((id): id is number => id != null && Number.isFinite(id) && id > 0)
+        )
+      ];
+      if (agents.length === 1) ledgerAgentId = agents[0]!;
+    }
+    if (ledgerAgentId == null && client.agent_id != null && client.agent_id > 0) {
+      ledgerAgentId = client.agent_id;
+    }
+  }
+
   const { assertFieldStaffBranchScopeForActor } = await import("../work-slots/work-slots.branch-scope");
   await assertFieldStaffBranchScopeForActor(tenantId, actorUserId, [
     client.agent_id,
@@ -122,10 +157,6 @@ export async function createPayment(
     allocationAgentId,
     orderAgentId
   ]);
-
-  const allocationOrderIds = (input.allocation_order_ids ?? []).filter(
-    (id) => Number.isFinite(id) && id > 0
-  );
   const allocationMode: AllocationMode =
     input.allocation_mode === "cash" || input.allocation_mode === "consignment"
       ? input.allocation_mode
@@ -174,20 +205,13 @@ export async function createPayment(
 
       await finalizePaymentNumber(tx, p.id, requestedNumber);
 
-      const bal = await tx.clientBalance.upsert({
-        where: { tenant_id_client_id: { tenant_id: tenantId, client_id: input.client_id } },
-        create: { tenant_id: tenantId, client_id: input.client_id, balance: amountDec },
-        update: { balance: { increment: amountDec } }
-      });
-      await tx.clientBalanceMovement.create({
-        data: {
-          client_balance_id: bal.id,
-          delta: amountDec,
-          note: isDiscountSettlement
-            ? paymentNote ?? `Оплата скидки #${p.id}`
-            : `Оплата #${p.id}${input.order_id ? ` (заказ #${input.order_id})` : ""}`,
-          user_id: uid
-        }
+      await postConfirmedPaymentAmount(tx, {
+        tenantId,
+        payment: p,
+        note: isDiscountSettlement
+          ? paymentNote ?? `Оплата скидки #${p.id}`
+          : `Оплата #${p.id}${input.order_id ? ` (заказ #${input.order_id})` : ""}`,
+        userId: uid
       });
 
       return tx.payment.findFirstOrThrow({

@@ -11,7 +11,6 @@ import 'package:intl/date_symbol_data_local.dart';
 import 'core/api/api_base_url.dart';
 import 'core/api/dio_client.dart';
 import 'core/auth/mobile_session_guard.dart';
-import 'core/auth/workday_off.dart';
 import 'core/config/env_loader.dart';
 import 'core/database/app_database.dart';
 import 'core/errors/error_reporter.dart';
@@ -22,7 +21,6 @@ import 'core/sync/sync_engine.dart';
 import 'core/time/server_clock.dart';
 import 'core/time/work_region_time.dart';
 import 'core/update/app_update_listener.dart';
-import 'design_system/design_system.dart';
 import 'features/auth/biometric_setup_listener.dart';
 import 'features/auth/face_verification_listener.dart';
 import 'routing/app_router.dart';
@@ -33,7 +31,7 @@ Future<void> main() async {
     await initializeDateFormatting('ru');
     await loadAppEnv();
     await MobileLocalNotificationService.instance.init();
-    await AppTheme.loadCatalog();
+    await _initServerClockPersistence();
 
     if (!kIsWeb && Platform.isAndroid) {
       final info = await DeviceInfoPlugin().androidInfo;
@@ -51,12 +49,7 @@ Future<void> main() async {
       return true;
     };
 
-    // Motion Lab default: full (emulyator scale=0 ni yengadi).
-    SaMotionSettings.level.value = SaMotionLevel.full;
-    saApplyMotionScheduler(SaMotionLevel.full);
     runApp(const ProviderScope(child: SalesDocApp()));
-    // DB ochishni birinchi kadrdan keyinga — cold start ANR kamayadi.
-    unawaited(_initServerClockPersistence());
   }, (error, stack) {
     ErrorReporter.instance?.reportFatal(error, stack, extra: {'source': 'zone'});
   });
@@ -116,31 +109,13 @@ class _SalesDocAppState extends ConsumerState<SalesDocApp> {
         darkTheme: AppTheme.darkTheme,
         themeMode: themeMode,
         routerConfig: router,
-        builder: (context, child) {
-          // Emulyator Animator scale=0 → MediaQuery.disableAnimations=true
-          // bo‘lsa barcha SaEnter o‘chadi. Product motion default: full.
-          return ValueListenableBuilder<SaMotionLevel>(
-            valueListenable: SaMotionSettings.level,
-            builder: (context, level, _) {
-              final mq = saMotionMediaQuery(MediaQuery.of(context), level);
-              return MediaQuery(
-                data: mq,
-                child: SaMotionScope(
-                  level: level,
-                  child: WorkdayOffGuard(
-                    child: AppUpdateListener(
-                      child: BiometricSetupListener(
-                        child: FaceVerificationListener(
-                          child: child ?? const SizedBox.shrink(),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              );
-            },
-          );
-        },
+        builder: (context, child) => AppUpdateListener(
+          child: BiometricSetupListener(
+            child: FaceVerificationListener(
+              child: child ?? const SizedBox.shrink(),
+            ),
+          ),
+        ),
       ),
     );
   }

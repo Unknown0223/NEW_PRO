@@ -1,0 +1,16 @@
+{
+  "name": "@salec/plans-proposal",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Taklifiy KPI rejalari: aniq hisoblash va qoidalar precedence uchun framework-free yadro",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "require": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {}
+}

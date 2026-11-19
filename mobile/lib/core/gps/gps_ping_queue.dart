@@ -9,8 +9,6 @@ class PendingLocationPing {
   final double latitude;
   final double longitude;
   final double? accuracyMeters;
-  final int? batteryPct;
-  final String? networkType;
   final DateTime recordedAt;
 
   const PendingLocationPing({
@@ -18,8 +16,6 @@ class PendingLocationPing {
     required this.latitude,
     required this.longitude,
     this.accuracyMeters,
-    this.batteryPct,
-    this.networkType,
     required this.recordedAt,
   });
 
@@ -27,8 +23,6 @@ class PendingLocationPing {
         'latitude': latitude,
         'longitude': longitude,
         if (accuracyMeters != null) 'accuracy_meters': accuracyMeters,
-        if (batteryPct != null) 'battery_pct': batteryPct,
-        if (networkType != null && networkType!.isNotEmpty) 'network_type': networkType,
         'recorded_at': recordedAt.toUtc().toIso8601String(),
       };
 }
@@ -78,8 +72,6 @@ Future<int> flushPendingLocationPingsToServer({
           latitude: (row['latitude'] as num).toDouble(),
           longitude: (row['longitude'] as num).toDouble(),
           accuracyMeters: (row['accuracy_meters'] as num?)?.toDouble(),
-          batteryPct: (row['battery_pct'] as num?)?.toInt(),
-          networkType: row['network_type']?.toString(),
           recordedAt: (recordedAt ?? DateTime.now()).toUtc(),
         ).toApiJson(),
       );

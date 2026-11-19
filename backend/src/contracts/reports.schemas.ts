@@ -3,19 +3,69 @@ import { parseAgentOrdersQuery } from "../modules/reports/agent-orders-report.se
 import type { AgentOrdersFilters } from "../modules/reports/agent-orders-report.service";
 import { parseClientSales2Query } from "../modules/reports/client-sales-2-report.service";
 import type { ClientSales2Filters } from "../modules/reports/client-sales-2-report.service";
+import { parseClientSales3Query } from "../modules/reports/client-sales-3-report.service";
+import type { ClientSales3Filters } from "../modules/reports/client-sales-3-report.service";
 import { parseClientSales4Query } from "../modules/reports/client-sales-4-report.service";
 import type { ClientSales4Filters } from "../modules/reports/client-sales-4-report.service";
 import { parseIncomeReportQuery } from "../modules/reports/income-report.service";
 import { parseExpeditorReturnsQuery } from "../modules/reports/expeditor-returns-report.service";
 import type { ExpeditorReturnsFilters } from "../modules/reports/expeditor-returns-report.service";
+import { parseShelfReturnsQuery } from "../modules/reports/shelf-returns-report.service";
+import type { ShelfReturnsFilters } from "../modules/reports/shelf-returns-report.service";
+import { parseOrderQtyQuery } from "../modules/reports/order-qty-report.service";
+import type { OrderQtyFilters } from "../modules/reports/order-qty-report.service";
+import { parseSku3Query } from "../modules/reports/sku-3-report.service";
+import type { Sku3Filters } from "../modules/reports/sku-3-report.service";
+import { parseExpeditorShipmentsQuery } from "../modules/reports/expeditor-shipments-report.service";
+import type { ExpeditorShipmentsFilters } from "../modules/reports/expeditor-shipments-report.service";
+import { parseExcelExportQuery } from "../modules/reports/excel-export-report.service";
+import type { ExcelExportFilters } from "../modules/reports/excel-export-report.service";
+import { parseInventoryQuery } from "../modules/reports/inventory-report.service";
+import type { InventoryFilters } from "../modules/reports/inventory-report.service";
+import { parsePhotoReportQuery } from "../modules/reports/photo-report.service";
+import type { PhotoReportFilters } from "../modules/reports/photo-report.service";
+import { parseTasksReportQuery } from "../modules/reports/tasks-report.service";
+import type { TasksReportFilters } from "../modules/reports/tasks-report.service";
+import { parseBonusesReportQuery } from "../modules/reports/bonuses-report.service";
+import type { BonusesReportFilters } from "../modules/reports/bonuses-report.service";
+import { parseCumulativeBonusQuery } from "../modules/reports/cumulative-bonus.service";
+import type { CumulativeBonusFilters } from "../modules/reports/cumulative-bonus.service";
+import { parseVisitsReportQuery } from "../modules/reports/visits-report.service";
+import type { VisitsReportFilters } from "../modules/reports/visits-report.service";
+import { parseDailyVisitsReportQuery } from "../modules/reports/daily-visits-report.service";
+import type { DailyVisitsReportFilters } from "../modules/reports/daily-visits-report.service";
+import { parsePricesReportQuery } from "../modules/reports/prices-report.service";
+import type { PricesReportFilters } from "../modules/reports/prices-report.service";
+import { parseOutletClassReportQuery } from "../modules/reports/outlet-class-report.service";
+import type { OutletClassReportFilters } from "../modules/reports/outlet-class-report.service";
+import { parseExpeditorVisitsReportQuery } from "../modules/reports/expeditor-visits-report.service";
+import type { ExpeditorVisitsReportFilters } from "../modules/reports/expeditor-visits-report.service";
+import { parseRfmReportQuery } from "../modules/reports/rfm-report.service";
+import type { RfmReportFilters } from "../modules/reports/rfm-report.service";
+import { parseUniversalReturnsReportQuery } from "../modules/reports/universal-returns-report.service";
+import type { UniversalReturnsReportFilters } from "../modules/reports/universal-returns-report.service";
+import { parseUniversalBonusesReportQuery } from "../modules/reports/universal-bonuses-report.service";
+import type { UniversalBonusesReportFilters } from "../modules/reports/universal-bonuses-report.service";
+import { parseUniversalVisitsReportQuery } from "../modules/reports/universal-visits-report.service";
+import type { UniversalVisitsReportFilters } from "../modules/reports/universal-visits-report.service";
+import { parseUniversalSalesReportQuery } from "../modules/reports/universal-sales-report.service";
+import type { UniversalSalesReportFilters } from "../modules/reports/universal-sales-report.service";
+import { parseDiscountDetailReportQuery } from "../modules/reports/discount-detail-report.service";
+import type { DiscountDetailReportFilters } from "../modules/reports/discount-detail-report.service";
+import { parseUniversalDiscountsReportQuery } from "../modules/reports/universal-discounts-report.service";
+import type { UniversalDiscountsReportFilters } from "../modules/reports/universal-discounts-report.service";
 import { parseOrderDebtsListQuery } from "../modules/reports/order-debts-report.service";
 import type { OrderDebtsListQuery } from "../modules/reports/order-debts-report.service";
 import { parseProductSalesReportQuery } from "../modules/reports/product-sales-report.service";
 import type { ProductSalesReportFilters } from "../modules/reports/product-sales-report.service";
+import { parseSalesCompareReportQuery } from "../modules/reports/sales-compare-report.service";
+import type { SalesCompareReportFilters } from "../modules/reports/sales-compare-report.service";
 import { parseVisits2Query } from "../modules/reports/visits-2-report.service";
 import type { Visits2Filters } from "../modules/reports/visits-2-report.service";
 import { parseVisitTotalsQuery } from "../modules/reports/visit-totals-report.service";
 import type { VisitTotalsFilters } from "../modules/reports/visit-totals-report.service";
+import { parseP1ReportQuery } from "../modules/reports/p1-report.service";
+import type { P1ReportFilters } from "../modules/reports/p1-report.service";
 
 const queryRecord = z.record(z.string(), z.union([z.string(), z.undefined()]).optional());
 
@@ -154,6 +204,12 @@ export const clientSales2QuerySchema = queryRecord.transform((q) =>
   parseClientSales2Query(q as Record<string, string | undefined>)
 );
 
+/** GET `/api/:slug/reports/client-sales-3` */
+export type { ClientSales3Filters };
+export const clientSales3QuerySchema = queryRecord.transform((q) =>
+  parseClientSales3Query(q as Record<string, string | undefined>)
+);
+
 /** GET `/api/:slug/reports/client-sales-4` */
 export type { ClientSales4Filters };
 export const clientSales4QuerySchema = queryRecord.transform((q) =>
@@ -172,10 +228,148 @@ export const productSalesReportQuerySchema = queryRecord.transform((q) =>
   parseProductSalesReportQuery(q as Record<string, string | undefined>)
 );
 
+/** GET `/api/:slug/reports/sales-compare` */
+export type { SalesCompareReportFilters };
+export const salesCompareReportQuerySchema = queryRecord.transform((q) =>
+  parseSalesCompareReportQuery(q as Record<string, string | undefined>)
+);
+
 /** GET `/api/:slug/reports/expeditor-returns/*` */
 export type { ExpeditorReturnsFilters };
 export const expeditorReturnsQuerySchema = queryRecord.transform((q) =>
   parseExpeditorReturnsQuery(q as Record<string, string | undefined>)
+);
+
+/** GET `/api/:slug/reports/shelf-returns` */
+export type { ShelfReturnsFilters };
+export const shelfReturnsQuerySchema = queryRecord.transform((q) =>
+  parseShelfReturnsQuery(q as Record<string, string | undefined>)
+);
+
+/** GET `/api/:slug/reports/order-qty` */
+export type { OrderQtyFilters };
+export const orderQtyQuerySchema = queryRecord.transform((q) =>
+  parseOrderQtyQuery(q as Record<string, string | undefined>)
+);
+
+/** GET `/api/:slug/reports/sku-3` */
+export type { Sku3Filters };
+export const sku3QuerySchema = queryRecord.transform((q) =>
+  parseSku3Query(q as Record<string, string | undefined>)
+);
+
+/** GET `/api/:slug/reports/expeditor-shipments` */
+export type { ExpeditorShipmentsFilters };
+export const expeditorShipmentsQuerySchema = queryRecord.transform((q) =>
+  parseExpeditorShipmentsQuery(q as Record<string, string | undefined>)
+);
+
+/** GET `/api/:slug/reports/excel-export` */
+export type { ExcelExportFilters };
+export const excelExportQuerySchema = queryRecord.transform((q) =>
+  parseExcelExportQuery(q as Record<string, string | undefined>)
+);
+
+/** GET `/api/:slug/reports/inventory` */
+export type { InventoryFilters };
+export const inventoryQuerySchema = queryRecord.transform((q) =>
+  parseInventoryQuery(q as Record<string, string | undefined>)
+);
+
+/** GET `/api/:slug/reports/photo` */
+export type { PhotoReportFilters };
+export const photoReportQuerySchema = queryRecord.transform((q) =>
+  parsePhotoReportQuery(q as Record<string, string | undefined>)
+);
+
+/** GET `/api/:slug/reports/tasks` */
+export type { TasksReportFilters };
+export const tasksReportQuerySchema = queryRecord.transform((q) =>
+  parseTasksReportQuery(q as Record<string, string | undefined>)
+);
+
+/** GET `/api/:slug/reports/bonuses` */
+export type { BonusesReportFilters };
+export const bonusesReportQuerySchema = queryRecord.transform((q) =>
+  parseBonusesReportQuery(q as Record<string, string | undefined>)
+);
+
+/** GET `/api/:slug/reports/cumulative-bonus` */
+export type { CumulativeBonusFilters };
+export const cumulativeBonusQuerySchema = queryRecord.transform((q) =>
+  parseCumulativeBonusQuery(q as Record<string, string | undefined>)
+);
+
+/** GET `/api/:slug/reports/visits` */
+export type { VisitsReportFilters };
+export const visitsReportQuerySchema = queryRecord.transform((q) =>
+  parseVisitsReportQuery(q as Record<string, string | undefined>)
+);
+
+/** GET `/api/:slug/reports/daily-visits` */
+export type { DailyVisitsReportFilters };
+export const dailyVisitsReportQuerySchema = queryRecord.transform((q) =>
+  parseDailyVisitsReportQuery(q as Record<string, string | undefined>)
+);
+
+/** GET `/api/:slug/reports/prices` */
+export type { PricesReportFilters };
+export const pricesReportQuerySchema = queryRecord.transform((q) =>
+  parsePricesReportQuery(q as Record<string, string | undefined>)
+);
+
+/** GET `/api/:slug/reports/outlet-class` */
+export type { OutletClassReportFilters };
+export const outletClassReportQuerySchema = queryRecord.transform((q) =>
+  parseOutletClassReportQuery(q as Record<string, string | undefined>)
+);
+
+/** GET `/api/:slug/reports/expeditor-visits` */
+export type { ExpeditorVisitsReportFilters };
+export const expeditorVisitsReportQuerySchema = queryRecord.transform((q) =>
+  parseExpeditorVisitsReportQuery(q as Record<string, string | undefined>)
+);
+
+/** GET `/api/:slug/reports/rfm` */
+export type { RfmReportFilters };
+export const rfmReportQuerySchema = queryRecord.transform((q) =>
+  parseRfmReportQuery(q as Record<string, string | undefined>)
+);
+
+/** GET `/api/:slug/reports/universal-returns` */
+export type { UniversalReturnsReportFilters };
+export const universalReturnsReportQuerySchema = queryRecord.transform((q) =>
+  parseUniversalReturnsReportQuery(q as Record<string, string | undefined>)
+);
+
+/** GET `/api/:slug/reports/universal-bonuses` */
+export type { UniversalBonusesReportFilters };
+export const universalBonusesReportQuerySchema = queryRecord.transform((q) =>
+  parseUniversalBonusesReportQuery(q as Record<string, string | undefined>)
+);
+
+/** GET `/api/:slug/reports/universal-visits` */
+export type { UniversalVisitsReportFilters };
+export const universalVisitsReportQuerySchema = queryRecord.transform((q) =>
+  parseUniversalVisitsReportQuery(q as Record<string, string | undefined>)
+);
+
+/** GET `/api/:slug/reports/universal-sales` */
+export type { UniversalSalesReportFilters };
+export const universalSalesReportQuerySchema = queryRecord.transform((q) =>
+  parseUniversalSalesReportQuery(q as Record<string, string | undefined>)
+);
+
+/** GET `/api/:slug/reports/discount-detail` */
+export type { DiscountDetailReportFilters };
+export const discountDetailReportQuerySchema = queryRecord.transform((q) =>
+  parseDiscountDetailReportQuery(q as Record<string, string | undefined>)
+);
+
+/** GET `/api/:slug/reports/universal-discounts` */
+export type { UniversalDiscountsReportFilters };
+export const universalDiscountsReportQuerySchema = queryRecord.transform((q) =>
+  parseUniversalDiscountsReportQuery(q as Record<string, string | undefined>)
 );
 
 /** GET `/api/:slug/reports/visits-2` */
@@ -188,4 +382,10 @@ export const visits2QuerySchema = queryRecord.transform((q) =>
 export type { VisitTotalsFilters };
 export const visitTotalsQuerySchema = queryRecord.transform((q) =>
   parseVisitTotalsQuery(q as Record<string, string | undefined>)
+);
+
+/** GET `/api/:slug/reports/p1` */
+export type { P1ReportFilters };
+export const p1ReportQuerySchema = queryRecord.transform((q) =>
+  parseP1ReportQuery(q as Record<string, string | undefined>)
 );

@@ -7,7 +7,6 @@ import '../../../core/theme/app_typography.dart';
 import '../../../core/time/work_region_time.dart';
 import '../../../core/ui/agent_ui.dart';
 import '../../../core/ui/agent_ui_extended.dart';
-import '../../../design_system/design_system.dart';
 import '../shell/agent_app_bar.dart';
 import 'agent_tabel_day_sheet.dart';
 import 'tabel_format.dart';
@@ -34,7 +33,7 @@ class _AgentTabelDetailPageState extends ConsumerState<AgentTabelDetailPage> {
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AgentAppBar(
-        title: 'Tabel · Detallar',
+        title: 'Табель · Detail',
         showBack: true,
         belowTitle: Align(
           alignment: Alignment.centerLeft,
@@ -48,19 +47,16 @@ class _AgentTabelDetailPageState extends ConsumerState<AgentTabelDetailPage> {
           ),
         ),
       ),
-      body: SaEnter(
-        preset: SaMotionPreset.rise,
-        child: RefreshIndicator(
-          onRefresh: () async => ref.invalidate(tabelDataProvider),
-          child: dataAsync.when(
-            data: (data) => _content(data),
-            loading: () => const Center(
-              child: CircularProgressIndicator(color: AppColors.primary),
-            ),
-            error: (e, _) => AgentErrorPanel(
-              error: e,
-              onRetry: () => ref.invalidate(tabelDataProvider),
-            ),
+      body: RefreshIndicator(
+        onRefresh: () async => ref.invalidate(tabelDataProvider),
+        child: dataAsync.when(
+          data: (data) => _content(data),
+          loading: () => const Center(
+            child: CircularProgressIndicator(color: AppColors.primary),
+          ),
+          error: (e, _) => AgentErrorPanel(
+            error: e,
+            onRetry: () => ref.invalidate(tabelDataProvider),
           ),
         ),
       ),
@@ -157,7 +153,7 @@ class _AgentTabelDetailPageState extends ConsumerState<AgentTabelDetailPage> {
       child: Row(
         children: [
           _chip(
-            label: 'Barchasi',
+            label: 'Ҳаммаси',
             selected: _filter == null,
             onTap: () => setState(() => _filter = null),
           ),
@@ -280,7 +276,7 @@ class _AgentTabelDetailPageState extends ConsumerState<AgentTabelDetailPage> {
               padding: EdgeInsets.symmetric(vertical: 22),
               child: Center(
                 child: Text(
-                  'Bu filtr bo\'yicha kunlar yo\'q',
+                  'Ушбу фильтр бўйича кунлар йўқ',
                   style: TextStyle(fontSize: 12.5, color: AppColors.textMuted),
                 ),
               ),
@@ -449,7 +445,7 @@ class _AgentTabelDetailPageState extends ConsumerState<AgentTabelDetailPage> {
           ),
           const SizedBox(height: 4),
           Text(
-            'Jami: ${tabelFmtTotal(counts.workedTotal)}',
+            'Итого: ${tabelFmtTotal(counts.workedTotal)}',
             style: const TextStyle(
               fontSize: 12,
               fontWeight: FontWeight.w700,

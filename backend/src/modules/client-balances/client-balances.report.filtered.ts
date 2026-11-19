@@ -1,24 +1,9 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "../../config/database";
-import { ORDER_STATUSES_OUTSTANDING_RECEIVABLE } from "../orders/order-status";
-import {
-  paymentTypesFromMethodEntries,
-  resolveCurrencyEntries,
-  resolvePaymentMethodEntries,
-  resolvePaymentMethodRefToLabel,
-  type PaymentMethodEntryDto
-} from "../tenant-settings/finance-refs";
-import type {
-  AgentBalanceRow,
-  ClientBalanceListQuery,
-  ClientBalanceListResponse,
-  ClientBalanceRow
-} from "./client-balances.types";
+import { supervisorDisplayNameOrNull } from "../access/access-supervisor-display";
+import type { ClientBalanceListResponse, ClientBalanceRow } from "./client-balances.types";
 import { agentInclude } from "./client-balances.constants";
-import { buildOrderCreatedLocalDateClause } from "./client-balances.date";
 import { buildClientWhere } from "./client-balances.where";
-import type { DeliveryDebtInfo } from "./client-balances.delivery";
-import { makePerfMarker, parseIsoDateEndUtc } from "./client-balances.date";
 import {
   loadPaymentNetNormByClient,
   loadTenantPaymentRefs,
@@ -32,16 +17,9 @@ import {
   paymentAmountsNetMinusUnpaid,
   readSortDir
 } from "./client-balances.payments.util";
-import {
-  loadLastDeliveryByClient,
-  loadLastPaymentByClient,
-  loadLedgerCardNetByClient
-} from "./client-balances.ledger";
-import {
-  loadDeliveryDebtByClient,
-  loadUnpaidDeliveredOrderDebtRows
-} from "./client-balances.delivery";
-import { mapClientRow, mapDeliveryOrderRow } from "./client-balances.mappers";
+import { loadLastDeliveryByClient, loadLastPaymentByClient } from "./client-balances.ledger";
+import { loadClientBalanceView } from "./client-balance-view";
+import { mapClientRow } from "./client-balances.mappers";
 import { loadConsignmentDueByClient } from "./client-balances.consignment-due";
 import type { ClientBalancesReportContext } from "./client-balances.report.context";
 import { loadDebtSplitByClient } from "./client-debt-by-agent";
@@ -57,17 +35,22 @@ export async function listClientBalancesReportFiltered(
       select: {
         id: true,
         name: true,
+        agent: {
+          select: {
+            id: true,
+            name: true,
+            code: true,
+            supervisor: { select: { name: true, role: true } }
+          }
+        },
         client_balances: { take: 1, select: { balance: true } }
       },
       orderBy: { name: "asc" }
     });
     const baseIds = allMinimal.map((c) => c.id);
     perf("clients-balance-filter.base-loaded", { baseIds: baseIds.length, filter: bfEarly });
-    const [deliveryMap, cardNetByClient] = await Promise.all([
-      loadDeliveryDebtByClient(tenantId, baseIds, odFrom, odTo),
-      loadLedgerCardNetByClient(tenantId, baseIds, asOfEnd)
-    ]);
-    perf("clients-balance-filter.derived-loaded", { deliveryMap: deliveryMap.size });
+    const cardNetByClient = await loadClientBalanceView(tenantId, baseIds, "card_net", { asOfEnd });
+    perf("clients-balance-filter.derived-loaded", { cardNet: cardNetByClient.size });
 
     const netOf = (id: number) => cardNetByClient.get(id) ?? new Prisma.Decimal(0);
 
@@ -104,6 +87,14 @@ export async function listClientBalancesReportFiltered(
     const sortBy = q.sort_by?.trim() ?? "";
     const sortDir = readSortDir(q);
     let orderedEligible = eligible;
+    const textOf = (row: (typeof eligible)[number], key: string): string => {
+      if (key === "agent_name") return (row.agent?.name ?? "").trim();
+      if (key === "agent_code") return (row.agent?.code ?? "").trim();
+      if (key === "supervisor" || key === "supervisor_name") {
+        return (supervisorDisplayNameOrNull(row.agent?.supervisor) ?? "").trim();
+      }
+      return "";
+    };
     if (sortBy === "balance") {
       orderedEligible = [...eligible].sort((a, b) => {
         const aBal = Number(netOf(a.id).toString());
@@ -129,6 +120,16 @@ export async function listClientBalancesReportFiltered(
         const aVal = moneySortValueFromPaymentAmounts(aAmounts, sortBy, sprLabels);
         const bVal = moneySortValueFromPaymentAmounts(bAmounts, sortBy, sprLabels);
         return compareNumForSort(aVal, bVal, sortDir);
+      });
+    } else if (
+      sortBy === "agent_name" ||
+      sortBy === "agent_code" ||
+      sortBy === "supervisor" ||
+      sortBy === "supervisor_name"
+    ) {
+      orderedEligible = [...eligible].sort((a, b) => {
+        const cmp = textOf(a, sortBy).localeCompare(textOf(b, sortBy), "ru");
+        return cmp * sortDir;
       });
     }
 
