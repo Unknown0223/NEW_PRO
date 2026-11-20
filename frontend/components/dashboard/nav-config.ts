@@ -409,7 +409,11 @@ export const dashboardClientsNav: { sectionTitle: string; items: NavItem[] } = {
       label: "Остатки в торговых точках",
       showIfAnyPermission: [...NAV_PERM.clientsRetailStock]
     },
-    { href: "#", label: "Отчёт по таре", placeholder: true }
+    {
+      href: "/reports/soon/tare",
+      label: "Отчёт по таре",
+      showIfAnyPermission: [...NAV_PERM.reports]
+    }
   ]
 };
 
