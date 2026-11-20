@@ -108,9 +108,9 @@ class _RoadPainter extends CustomPainter {
     const dust = Color(0xFF9AA3B2);
     const cells = [-3, -2, -1, 0, 1, 2, 3];
 
+    // 1) Road + buildings — SVG mask faqat shu qatlamda.
     canvas.saveLayer(Offset.zero & size, Paint());
     roleRoadApplyViewBox(canvas, size);
-
     canvas.save();
     canvas.rotate(angle);
     for (final k in cells) {
@@ -153,6 +153,59 @@ class _RoadPainter extends CustomPainter {
     for (var x = -420.0; x < 420; x += 26) {
       final sx = x - (scroll % 26);
       canvas.drawLine(Offset(sx, 0), Offset(sx + 13, 0), dash);
+    }
+    canvas.restore();
+    canvas.drawRect(
+      const Rect.fromLTWH(-200, -200, 400, 400),
+      Paint()
+        ..blendMode = BlendMode.dstIn
+        ..shader = ui.Gradient.radial(
+          Offset.zero,
+          155,
+          [Colors.white, Colors.white.withValues(alpha: 0)],
+          const [0.42, 1.0],
+        ),
+    );
+    canvas.restore();
+
+    // 2) Pins + vehicle — maskasiz (shablon 2-qator g).
+    roleRoadApplyViewBox(canvas, size);
+    canvas.save();
+    canvas.rotate(angle);
+
+    if (role == 'supervisor') {
+      for (final k in cells.skip(1).take(5)) {
+        final x = k * roleRoadPeriod - scroll;
+        final y = (k.isOdd ? 1 : -1) * (70 + 34 * math.sin(ms / 900 + k * 1.7));
+        const colors = [
+          Color(0xFF5CC8F5),
+          Color(0xFFA79BFF),
+          Color(0xFFFFC24D),
+          Color(0xFF5FE3B0),
+          Color(0xFFF472B6),
+        ];
+        canvas.save();
+        canvas.translate(x, y);
+        canvas.drawCircle(
+          Offset.zero,
+          7,
+          Paint()..color = accent.withValues(alpha: 0.16),
+        );
+        canvas.drawCircle(
+          Offset.zero,
+          4.2,
+          Paint()..color = colors[(k + 5) % 5],
+        );
+        canvas.drawCircle(
+          Offset.zero,
+          4.2,
+          Paint()
+            ..color = paper
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 1.6,
+        );
+        canvas.restore();
+      }
     }
 
     for (final k in cells) {
@@ -219,7 +272,6 @@ class _RoadPainter extends CustomPainter {
       canvas.restore();
     }
 
-    // Expeditor boxes / cashier coins flying to pins.
     if (role == 'expeditor' || role == 'cashier' || role == 'operator') {
       for (final k in cells) {
         final ix = k * roleRoadPeriod - scroll + 84;
@@ -240,11 +292,34 @@ class _RoadPainter extends CustomPainter {
             ),
             Paint()..color = const Color(0xFFE9C27A),
           );
+          canvas.drawRRect(
+            RRect.fromRectAndRadius(
+              const Rect.fromLTWH(-4.6, -4.6, 9.2, 9.2),
+              const Radius.circular(1.8),
+            ),
+            Paint()
+              ..color = const Color(0xFFB98A3C)
+              ..style = PaintingStyle.stroke
+              ..strokeWidth = 0.8,
+          );
         } else {
           canvas.drawCircle(
             Offset.zero,
             4.4,
             Paint()..color = const Color(0xFFF6C945),
+          );
+          canvas.drawCircle(
+            Offset.zero,
+            4.4,
+            Paint()
+              ..color = const Color(0xFFC99A19)
+              ..style = PaintingStyle.stroke
+              ..strokeWidth = 0.9,
+          );
+          canvas.drawCircle(
+            Offset.zero,
+            1.7,
+            Paint()..color = const Color(0xFFC99A19).withValues(alpha: 0.55),
           );
         }
         canvas.restore();
@@ -290,20 +365,6 @@ class _RoadPainter extends CustomPainter {
       beat: beat,
     );
     canvas.restore();
-    canvas.restore();
-
-    // Radial fade in scene space (center = 0,0 after viewBox).
-    canvas.drawRect(
-      const Rect.fromLTWH(-200, -200, 400, 400),
-      Paint()
-        ..blendMode = BlendMode.dstIn
-        ..shader = ui.Gradient.radial(
-          Offset.zero,
-          155,
-          [Colors.white, Colors.white.withValues(alpha: 0)],
-          const [0.42, 1.0],
-        ),
-    );
     canvas.restore();
   }
 
