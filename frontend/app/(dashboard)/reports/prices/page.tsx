@@ -1,364 +1,71 @@
 "use client";
 
-import { useRef, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { CalendarDays, FileSpreadsheet, RotateCcw } from "lucide-react";
-import { api } from "@/lib/api";
-import { usePermissions } from "@/lib/use-permissions";
-import { STALE } from "@/lib/query-stale";
-import { useAuthStore, useAuthStoreHydrated } from "@/lib/auth-store";
-import { SearchableMultiSelectPanel } from "@/components/ui/searchable-multi-select-panel";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { DateRangePopover, formatDateRangeButton } from "@/components/ui/date-range-popover";
-import { monthToDateRange } from "@/components/dashboard/shared/date-ranges";
-import { formatNumberGrouped } from "@/lib/format-numbers";
-import { cn } from "@/lib/utils";
+/**
+ * FlatReport wave-2 adapter (ADR-010 / ADR-012).
+ * Parity: filtrlar ha · chrome ha · oylik/dialog — · export+RBAC ha
+ */
+import { FlatReportPage } from "@/components/reports/flat-report/flat-report-page";
+import type { FlatReportConfig } from "@/components/reports/flat-report/types";
 
-type FilterOptions = {
-  price_types: Array<{ id: string; name: string }>;
-  categories: Array<{ id: number; name: string }>;
-  brands: Array<{ id: number; name: string }>;
-  products: Array<{ id: number; name: string; sku: string }>;
-};
-
-type ReportRow = {
-  row_number: number;
-  changed_at: string;
-  product_id: number;
-  product_name: string;
-  sku: string;
-  category_name: string;
-  brand_name: string;
-  price_type: string;
-  price_type_label: string;
-  price: string;
-  currency: string;
-  previous_price: string | null;
-  diff: string | null;
-};
-
-type ReportData = {
-  rows: ReportRow[];
-  totals: { change_count: number; product_count: number };
-  page: number;
-  limit: number;
-  total: number;
-};
-
-type MultiItem = { id: string; title: string; searchText?: string };
-
-function MultiFilter(props: {
-  placeholder: string;
-  items: MultiItem[];
-  selectedValues: string[];
-  onChange: (v: string[]) => void;
-}) {
-  return (
-    <SearchableMultiSelectPanel
-      label={props.placeholder}
-      hideOuterLabel
-      hidePopoverHeader
-      triggerPlaceholder={props.placeholder}
-      items={props.items}
-      selected={new Set(props.selectedValues)}
-      onSelectedChange={(next) => {
-        const resolved = typeof next === "function" ? next(new Set(props.selectedValues)) : next;
-        props.onChange(Array.from(resolved));
-      }}
-      searchable
-      searchPlaceholder={props.placeholder}
-      minPopoverWidth={260}
-      maxListHeightClass="max-h-44"
-    />
-  );
-}
-
-const emptyDraft = (from: string, to: string) => ({
-  from,
-  to,
-  price_types: [] as string[],
-  category_ids: [] as string[],
-  brand_ids: [] as string[],
-  product_ids: [] as string[],
-  search: "",
-  page: 1,
-  limit: 50
-});
-
-function fmtNum(v: string | number | null) {
-  if (v == null || v === "") return "—";
-  const n = typeof v === "number" ? v : Number(v);
-  if (!Number.isFinite(n)) return String(v);
-  return formatNumberGrouped(n, { maxFractionDigits: 2 });
-}
-
-function fmtDate(iso: string) {
-  if (!iso) return "—";
-  return iso.slice(0, 16).replace("T", " ");
-}
-
-const HEADERS = [
-  "#",
-  "Дата",
-  "Товар",
-  "SKU",
-  "Категория",
-  "Бренд",
-  "Тип цены",
-  "Цена",
-  "Валюта",
-  "Предыдущая",
-  "Разница"
-];
-
-export default function ReportPricesPage() {
-  const canExport = usePermissions().has("reports.po_cenam.export");
-  const tenantSlug = useAuthStore((s) => s.tenantSlug);
-  const hydrated = useAuthStoreHydrated();
-  const { from: from0, to: to0 } = monthToDateRange();
-  const [dateOpen, setDateOpen] = useState(false);
-  const dateAnchorRef = useRef<HTMLButtonElement>(null);
-  const [exporting, setExporting] = useState(false);
-  const [tableSearch, setTableSearch] = useState("");
-  const [draft, setDraft] = useState(() => emptyDraft(from0, to0));
-  const [applied, setApplied] = useState(draft);
-
-  const filtersQ = useQuery({
-    queryKey: ["report-prices-filters", tenantSlug],
-    enabled: Boolean(tenantSlug && hydrated),
-    staleTime: STALE.reference,
-    queryFn: async () => {
-      const { data } = await api.get<{ data: FilterOptions }>(
-        `/api/${tenantSlug}/reports/prices/filter-options`
-      );
-      return data.data;
+const config: FlatReportConfig = {
+  title: "По ценам",
+  apiPath: "prices",
+  exportPermission: "reports.po_cenam.export",
+  exportFilename: "po-cenam.xlsx",
+  filterFields: [
+    { kind: "dateRange" },
+    { kind: "search", placeholder: "Товар / SKU" },
+    {
+      kind: "multiSelect",
+      paramKey: "price_types",
+      optionsFrom: "price_types",
+      placeholder: "Тип цены"
+    },
+    {
+      kind: "multiSelect",
+      paramKey: "category_ids",
+      optionsFrom: "categories",
+      placeholder: "Категория"
+    },
+    { kind: "multiSelect", paramKey: "brand_ids", optionsFrom: "brands", placeholder: "Бренд" },
+    {
+      kind: "multiSelect",
+      paramKey: "product_ids",
+      optionsFrom: "products",
+      placeholder: "Товар"
     }
-  });
-
-  const reportQ = useQuery({
-    queryKey: ["report-prices", tenantSlug, applied],
-    enabled: Boolean(tenantSlug && hydrated),
-    staleTime: STALE.report,
-    queryFn: async () => {
-      const p = new URLSearchParams();
-      Object.entries(applied).forEach(([k, v]) => {
-        if (Array.isArray(v)) {
-          if (v.length > 0) p.set(k, v.join(","));
-          return;
-        }
-        if (v === "" || v === "all") return;
-        p.set(k, String(v));
-      });
-      const { data } = await api.get<{ data: ReportData }>(
-        `/api/${tenantSlug}/reports/prices?${p.toString()}`
-      );
-      return data.data;
-    }
-  });
-
-  if (!hydrated || !tenantSlug) return <p className="p-6 text-sm text-muted-foreground">Загрузка...</p>;
-
-  const opts = filtersQ.data;
-  const priceTypeItems = (opts?.price_types ?? []).map((x) => ({ id: x.id, title: x.name, searchText: x.id }));
-  const categoryItems = (opts?.categories ?? []).map((x) => ({ id: String(x.id), title: x.name }));
-  const brandItems = (opts?.brands ?? []).map((x) => ({ id: String(x.id), title: x.name }));
-  const productItems = (opts?.products ?? []).map((x) => ({
-    id: String(x.id),
-    title: x.name,
-    searchText: [x.name, x.sku].filter(Boolean).join(" ")
-  }));
-  const totalPages = reportQ.data ? Math.max(1, Math.ceil(reportQ.data.total / reportQ.data.limit)) : 1;
-  const rows = (reportQ.data?.rows ?? []).filter((r) => {
-    const q = tableSearch.trim().toLowerCase();
-    if (!q) return true;
-    return [r.product_name, r.sku, r.category_name, r.brand_name, r.price_type_label]
-      .join(" ")
-      .toLowerCase()
-      .includes(q);
-  });
-
-  async function exportXlsx() {
-    if (!tenantSlug || !canExport) return;
-    setExporting(true);
-    try {
-      const p = new URLSearchParams();
-      Object.entries(applied).forEach(([k, v]) => {
-        if (Array.isArray(v)) {
-          if (v.length > 0) p.set(k, v.join(","));
-          return;
-        }
-        if (v === "" || v === "all") return;
-        p.set(k, String(v));
-      });
-      p.set("export_limit", "5000");
-      const res = await api.get<Blob>(`/api/${tenantSlug}/reports/prices/export?${p.toString()}`, {
-        responseType: "blob"
-      });
-      const url = URL.createObjectURL(res.data as Blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = "po-cenam.xlsx";
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
-    } finally {
-      setExporting(false);
+  ],
+  columns: [
+    { key: "row_number", header: "#", cellClassName: "text-muted-foreground" },
+    { key: "changed_at", header: "Дата" },
+    { key: "product_name", header: "Товар", cellClassName: "font-medium" },
+    { key: "sku", header: "SKU" },
+    { key: "category_name", header: "Категория" },
+    { key: "brand_name", header: "Бренд" },
+    { key: "price_type_label", header: "Тип цены" },
+    { key: "price", header: "Цена", align: "right", format: "money" },
+    { key: "currency", header: "Валюта" },
+    { key: "previous_price", header: "Предыдущая", align: "right", format: "money" },
+    { key: "diff", header: "Разница", align: "right", format: "money" }
+  ],
+  totalsKeys: ["change_count", "product_count"],
+  totalsLabels: { change_count: "Изменений", product_count: "Товаров" },
+  rowKey: "row_number",
+  countLabel: "Строк",
+  showTableFooter: false,
+  clientTableSearch: {
+    rowKeys: ["product_name", "sku", "category_name", "brand_name", "price_type_label"],
+    placeholder: "Фильтр в таблице…"
+  },
+  formatters: {
+    changed_at: (v) => {
+      const s = String(v ?? "");
+      if (!s) return "—";
+      return s.slice(0, 16).replace("T", " ");
     }
   }
+};
 
-  return (
-    <div className="space-y-4 p-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-lg font-semibold">По ценам</h1>
-        <div className="flex gap-2">
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={() => {
-              const next = emptyDraft(from0, to0);
-              setDraft(next);
-              setApplied(next);
-            }}
-          >
-            <RotateCcw className="h-4 w-4" />
-          </Button>
-          {canExport ? (
-            <Button disabled={exporting || reportQ.isFetching} onClick={() => void exportXlsx()}>
-              <FileSpreadsheet className="mr-1 h-4 w-4" />
-              Excel
-            </Button>
-          ) : null}
-          <Button
-            onClick={() => {
-              setApplied({ ...draft, page: 1 });
-              setDraft((s) => ({ ...s, page: 1 }));
-            }}
-          >
-            Применить
-          </Button>
-        </div>
-      </div>
-
-      <div className="flex flex-wrap items-center gap-2">
-        <button
-          ref={dateAnchorRef}
-          type="button"
-          className={cn(
-            "inline-flex h-9 items-center gap-1.5 rounded-md border border-input bg-background px-2.5 text-xs",
-            dateOpen && "border-primary/60 bg-primary/5"
-          )}
-          onClick={() => setDateOpen((o) => !o)}
-        >
-          <CalendarDays className="h-3.5 w-3.5" />
-          <span>{formatDateRangeButton(draft.from, draft.to)}</span>
-        </button>
-        <DateRangePopover
-          open={dateOpen}
-          onOpenChange={setDateOpen}
-          anchorRef={dateAnchorRef}
-          dateFrom={draft.from}
-          dateTo={draft.to}
-          onApply={({ dateFrom, dateTo }) => setDraft((d) => ({ ...d, from: dateFrom, to: dateTo }))}
-        />
-        <Input
-          className="h-9 max-w-xs"
-          value={draft.search}
-          onChange={(e) => setDraft((d) => ({ ...d, search: e.target.value }))}
-          placeholder="Товар / SKU"
-        />
-      </div>
-
-      <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-4">
-        <MultiFilter placeholder="Тип цены" items={priceTypeItems} selectedValues={draft.price_types} onChange={(v) => setDraft((d) => ({ ...d, price_types: v }))} />
-        <MultiFilter placeholder="Категория" items={categoryItems} selectedValues={draft.category_ids} onChange={(v) => setDraft((d) => ({ ...d, category_ids: v }))} />
-        <MultiFilter placeholder="Бренд" items={brandItems} selectedValues={draft.brand_ids} onChange={(v) => setDraft((d) => ({ ...d, brand_ids: v }))} />
-        <MultiFilter placeholder="Товар" items={productItems} selectedValues={draft.product_ids} onChange={(v) => setDraft((d) => ({ ...d, product_ids: v }))} />
-      </div>
-
-      <div className="flex flex-wrap items-center gap-3 text-sm">
-        <span>Всего: {reportQ.data?.total ?? 0}</span>
-        <span>Изменений: {reportQ.data?.totals.change_count ?? 0}</span>
-        <span>Товаров: {reportQ.data?.totals.product_count ?? 0}</span>
-        <Input className="ml-auto h-8 max-w-xs" value={tableSearch} onChange={(e) => setTableSearch(e.target.value)} placeholder="Фильтр в таблице…" />
-      </div>
-
-      <div className="overflow-auto rounded-lg border">
-        <table className="w-full min-w-[980px] text-sm">
-          <thead className="bg-muted/50 text-left">
-            <tr>
-              {HEADERS.map((h) => (
-                <th key={h} className="p-2">
-                  {h}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {reportQ.isLoading || rows.length === 0 ? (
-              <tr>
-                <td className="p-4 text-muted-foreground" colSpan={HEADERS.length}>
-                  {reportQ.isLoading ? "Загрузка…" : "Нет данных"}
-                </td>
-              </tr>
-            ) : (
-              rows.map((r) => {
-                const diffN = r.diff == null ? 0 : Number(r.diff);
-                const diffClass =
-                  Number.isFinite(diffN) && diffN > 0
-                    ? "text-emerald-700"
-                    : Number.isFinite(diffN) && diffN < 0
-                      ? "text-red-700"
-                      : "";
-                return (
-                  <tr key={`${r.product_id}-${r.changed_at}-${r.row_number}`} className="border-t">
-                    <td className="p-2">{r.row_number}</td>
-                    <td className="p-2 whitespace-nowrap">{fmtDate(r.changed_at)}</td>
-                    <td className="p-2 font-medium">{r.product_name}</td>
-                    <td className="p-2">{r.sku || "—"}</td>
-                    <td className="p-2">{r.category_name || "—"}</td>
-                    <td className="p-2">{r.brand_name || "—"}</td>
-                    <td className="p-2">{r.price_type_label}</td>
-                    <td className="p-2 text-right">{fmtNum(r.price)}</td>
-                    <td className="p-2">{r.currency || "—"}</td>
-                    <td className="p-2 text-right">{fmtNum(r.previous_price)}</td>
-                    <td className={cn("p-2 text-right", diffClass)}>{fmtNum(r.diff)}</td>
-                  </tr>
-                );
-              })
-            )}
-          </tbody>
-        </table>
-      </div>
-
-      <div className="flex items-center gap-2">
-        <Button
-          variant="outline"
-          disabled={applied.page <= 1 || reportQ.isFetching}
-          onClick={() => {
-            const page = Math.max(1, applied.page - 1);
-            setDraft((s) => ({ ...s, page }));
-            setApplied((s) => ({ ...s, page }));
-          }}
-        >
-          Назад
-        </Button>
-        <span className="text-sm">
-          {applied.page} / {totalPages}
-        </span>
-        <Button
-          variant="outline"
-          disabled={applied.page >= totalPages || reportQ.isFetching}
-          onClick={() => {
-            const page = applied.page + 1;
-            setDraft((s) => ({ ...s, page }));
-            setApplied((s) => ({ ...s, page }));
-          }}
-        >
-          Далее
-        </Button>
-      </div>
-    </div>
-  );
+export default function ReportPricesPage() {
+  return <FlatReportPage {...config} />;
 }
