@@ -1,7 +1,18 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:salesdoc_mobile/features/auth/entrance/role_road_math.dart';
 import 'package:salesdoc_mobile/features/auth/entrance/role_welcome_meta.dart';
 
 void main() {
+  test('roleRoad math matches SplashArt constants', () {
+    expect(roleRoadPeriod, 160);
+    expect(roleRoadAngleDeg, -32);
+    expect(roleRoadPinY, -47);
+    expect(roleRoadEaseOut(0), 0);
+    expect(roleRoadEaseOut(1), 1);
+    expect(roleRoadEaseIn(0), 0);
+    expect(roleRoadEaseIn(1), 1);
+  });
+
   test('roleWelcome timings match RoleWelcome.tsx', () {
     expect(roleWelcomeRevealHold, const Duration(milliseconds: 1150));
     expect(roleWelcomeFirstStepHold, const Duration(milliseconds: 1300));

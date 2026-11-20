@@ -1,11 +1,14 @@
 import 'dart:math' as math;
+import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 
+import 'role_road_math.dart';
+import 'role_road_vehicles.dart';
 import 'role_welcome_meta.dart';
 
-/// Shablon RoadScene — rol transporti + yo‘l scroll (kirish/chiqish).
+/// Shablon SplashArt `RoadScene` — shakl/animatsiya; accent = ilova rangi.
 class RoleRoadScene extends StatefulWidget {
   final String? role;
   final Color accent;
@@ -33,8 +36,6 @@ class _RoleRoadSceneState extends State<RoleRoadScene>
     super.initState();
     _ticker = createTicker((d) {
       _elapsed = d;
-      if (widget.leaving && _leaveAt == null) _leaveAt = d;
-      if (!widget.leaving) _leaveAt = null;
       setState(() {});
     })
       ..start();
@@ -58,23 +59,17 @@ class _RoleRoadSceneState extends State<RoleRoadScene>
 
   @override
   Widget build(BuildContext context) {
-    final ms = _elapsed.inMilliseconds.toDouble();
-    final leaveMs = _leaveAt?.inMilliseconds.toDouble();
     return CustomPaint(
       painter: _RoadPainter(
         role: widget.role ?? 'agent',
         accent: widget.accent,
-        ms: ms,
-        leaveMs: leaveMs,
+        ms: _elapsed.inMilliseconds.toDouble(),
+        leaveMs: _leaveAt?.inMilliseconds.toDouble(),
       ),
       child: const SizedBox.expand(),
     );
   }
 }
-
-double _clamp01(double x) => x.clamp(0.0, 1.0);
-double _easeOut(double x) => 1 - math.pow(1 - x, 3).toDouble();
-double _easeIn(double x) => x * x * x;
 
 class _RoadPainter extends CustomPainter {
   final String role;
@@ -91,53 +86,62 @@ class _RoadPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    const period = 160.0;
-    const angle = -32.0 * math.pi / 180;
-    final enter = _easeOut(
-      _clamp01(ms / roleWelcomeRevealHold.inMilliseconds),
+    const angle = roleRoadAngleRad;
+    final enter = roleRoadEaseOut(
+      roleRoadClamp01(ms / roleWelcomeRevealHold.inMilliseconds),
     );
     final exit = leaveMs == null
         ? 0.0
-        : _easeIn(_clamp01((ms - leaveMs!) / 700));
+        : roleRoadEaseIn(roleRoadClamp01((ms - leaveMs!) / 700));
     final vx = -230 * (1 - enter) + exit * 320;
-    final scroll = (ms * 0.085) % period;
+    final scroll = (ms * 0.085) % roleRoadPeriod;
     final sway = math.sin(ms / 270) * 1.5;
     final bob = math.sin(ms / 130) * 0.45;
+    final beat = 0.5 + 0.5 * math.sin(ms / 260);
+    final bright = Color.lerp(accent, Colors.white, 0.45)!;
 
     const road1 = Color(0xFFE2E5EA);
     const road2 = Color(0xFFECEEF2);
+    const road3 = Color(0xFFF0F2F5);
     const paper = Colors.white;
-    final cx = size.width / 2;
-    final cy = size.height / 2;
-    final scale = math.min(size.width, size.height) / 300;
+    const glyphC = Color(0xFF5B6677);
+    const dust = Color(0xFF9AA3B2);
+    const cells = [-3, -2, -1, 0, 1, 2, 3];
+
+    canvas.saveLayer(Offset.zero & size, Paint());
+    roleRoadApplyViewBox(canvas, size);
 
     canvas.save();
-    // Soft radial mask feel via clip oval.
-    canvas.clipPath(
-      Path()..addOval(Rect.fromCenter(center: Offset(cx, cy), width: size.width * 1.05, height: size.height * 1.05)),
-    );
-    canvas.translate(cx, cy);
-    canvas.scale(scale);
     canvas.rotate(angle);
-
-    for (var k = -3; k <= 3; k++) {
-      final x = k * period - scroll;
+    for (final k in cells) {
+      final x = k * roleRoadPeriod - scroll;
       canvas.drawRect(
         Rect.fromLTWH(x - 13, -300, 26, 600),
         Paint()..color = road2,
       );
+      final stroke = Paint()
+        ..color = road3
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 6;
       canvas.drawRRect(
         RRect.fromRectAndRadius(
           Rect.fromLTWH(x + 30, 44, 100, 84),
           const Radius.circular(5),
         ),
-        Paint()
-          ..color = const Color(0xFFF0F2F5)
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 6,
+        stroke,
+      );
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromLTWH(x + 36, -150, 88, 96),
+          const Radius.circular(5),
+        ),
+        stroke,
+      );
+      canvas.drawRect(
+        Rect.fromLTWH(x + 62, 150, 40, 120),
+        Paint()..color = road3,
       );
     }
-
     canvas.drawRect(
       const Rect.fromLTWH(-420, -25, 840, 50),
       Paint()..color = road1,
@@ -147,39 +151,37 @@ class _RoadPainter extends CustomPainter {
       ..strokeWidth = 2.2
       ..strokeCap = StrokeCap.round;
     for (var x = -420.0; x < 420; x += 26) {
-      canvas.drawLine(
-        Offset(x - scroll % 26, 0),
-        Offset(x - scroll % 26 + 13, 0),
-        dash,
-      );
+      final sx = x - (scroll % 26);
+      canvas.drawLine(Offset(sx, 0), Offset(sx + 13, 0), dash);
     }
 
-    // Pins ahead of vehicle.
-    for (var k = -2; k <= 3; k++) {
-      final ix = k * period - scroll + 84;
+    for (final k in cells) {
+      final ix = k * roleRoadPeriod - scroll + 84;
       final dx = ix - vx;
       final passed = dx < -8;
       final near = dx.abs() < 42;
+      final p = roleRoadClamp01(1 - (dx + 8) / 50);
+      final pop = near ? 1 + 0.2 * math.sin(p * math.pi) : 1.0;
+
       canvas.save();
-      canvas.translate(ix, -47);
-      canvas.rotate(-angle);
+      canvas.translate(ix, roleRoadPinY);
       if (near) {
-        final p = _clamp01(1 - (dx + 8) / 50);
         canvas.drawCircle(
           Offset.zero,
           12 + p * 12,
           Paint()
-            ..color = accent.withValues(alpha: 0.35 * (1 - p))
+            ..color = accent.withValues(alpha: 0.7 * (1 - p))
             ..style = PaintingStyle.stroke
             ..strokeWidth = 1.6,
         );
       }
+      canvas
+        ..rotate(-angle)
+        ..scale(pop);
       canvas.drawCircle(
         Offset.zero,
         12,
-        Paint()
-          ..color = passed ? accent : paper
-          ..style = PaintingStyle.fill,
+        Paint()..color = passed ? accent : paper,
       );
       canvas.drawCircle(
         Offset.zero,
@@ -189,204 +191,120 @@ class _RoadPainter extends CustomPainter {
           ..style = PaintingStyle.stroke
           ..strokeWidth = 1.6,
       );
-      final icon = Paint()
-        ..color = passed ? Colors.white : const Color(0xFF5B6677)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 1.4
-        ..strokeCap = StrokeCap.round;
-      _drawRoleGlyph(canvas, role, icon);
+      if (passed) {
+        canvas.drawPath(
+          Path()
+            ..moveTo(-4.4, 0.2)
+            ..lineTo(-1.2, 3.4)
+            ..lineTo(4.8, -3),
+          Paint()
+            ..color = Colors.white
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 2.2
+            ..strokeCap = StrokeCap.round
+            ..strokeJoin = StrokeJoin.round,
+        );
+      } else {
+        roleRoadDrawGlyph(
+          canvas,
+          role,
+          Paint()
+            ..color = glyphC
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 1.25
+            ..strokeCap = StrokeCap.round
+            ..strokeJoin = StrokeJoin.round,
+        );
+      }
       canvas.restore();
     }
 
-    // Supervisor radar rings.
+    // Expeditor boxes / cashier coins flying to pins.
+    if (role == 'expeditor' || role == 'cashier' || role == 'operator') {
+      for (final k in cells) {
+        final ix = k * roleRoadPeriod - scroll + 84;
+        final dx = ix - vx;
+        final p = roleRoadClamp01(1 - (dx + 8) / 50);
+        if (p <= 0.02 || p >= 0.98) continue;
+        final q = role == 'expeditor' ? p : 1 - p;
+        final x = vx + (ix - vx) * q;
+        final y = roleRoadPinY * q - math.sin(q * math.pi) * 14;
+        canvas.save();
+        canvas.translate(x, y);
+        if (role == 'expeditor') {
+          canvas.rotate(q * 140 * math.pi / 180);
+          canvas.drawRRect(
+            RRect.fromRectAndRadius(
+              const Rect.fromLTWH(-4.6, -4.6, 9.2, 9.2),
+              const Radius.circular(1.8),
+            ),
+            Paint()..color = const Color(0xFFE9C27A),
+          );
+        } else {
+          canvas.drawCircle(
+            Offset.zero,
+            4.4,
+            Paint()..color = const Color(0xFFF6C945),
+          );
+        }
+        canvas.restore();
+      }
+    }
+
+    canvas.save();
+    canvas.translate(vx, bob);
+    for (var j = 0; j < 3; j++) {
+      final ph = (ms / 420 + j / 3) % 1;
+      canvas.drawCircle(
+        Offset(-40 - ph * 30, (j - 1) * 3.0),
+        2 + ph * 4.6,
+        Paint()..color = dust.withValues(alpha: 0.26 * (1 - ph)),
+      );
+    }
     if (role == 'supervisor') {
       for (final o in [0.0, 0.5]) {
         final ph = (ms / 1500 + o) % 1;
         canvas.drawCircle(
-          Offset(vx, bob),
+          Offset.zero,
           22 + ph * 74,
           Paint()
-            ..color = accent.withValues(alpha: 0.35 * (1 - ph))
+            ..color = accent.withValues(alpha: 0.42 * (1 - ph))
             ..style = PaintingStyle.stroke
             ..strokeWidth = 1.4,
         );
       }
     }
-
-    // Vehicle.
-    canvas.save();
-    canvas.translate(vx, bob);
-    canvas.rotate(sway * math.pi / 180);
     canvas.drawOval(
-      Rect.fromCenter(center: const Offset(1, 10), width: 72, height: 28),
-      Paint()..color = Colors.black.withValues(alpha: 0.14),
+      Rect.fromCenter(center: const Offset(1, 6), width: 72, height: 30),
+      Paint()
+        ..color = Colors.black.withValues(alpha: 0.16)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2.6),
     );
-    _drawVehicle(canvas, role, accent);
+    canvas.rotate(sway * math.pi / 180);
+    roleRoadDrawVehicle(
+      canvas,
+      role: role,
+      accent: accent,
+      onAccent: Colors.white,
+      bright: bright,
+      beat: beat,
+    );
     canvas.restore();
     canvas.restore();
-  }
 
-  void _drawRoleGlyph(Canvas canvas, String role, Paint p) {
-    final path = Path();
-    switch (role) {
-      case 'expeditor':
-        path
-          ..moveTo(-5, -2)
-          ..lineTo(0, -4.6)
-          ..lineTo(5, -2)
-          ..lineTo(5, 3.4)
-          ..lineTo(0, 6)
-          ..lineTo(-5, 3.4)
-          ..close();
-        break;
-      case 'supervisor':
-        path.addOval(Rect.fromCenter(center: const Offset(0, -2.6), width: 4.6, height: 4.6));
-        path
-          ..moveTo(-4.6, 5)
-          ..quadraticBezierTo(-4.6, 0.6, 0, 0.6)
-          ..quadraticBezierTo(4.6, 0.6, 4.6, 5);
-        break;
-      case 'cashier':
-      case 'operator':
-        path
-          ..moveTo(-5.6, -1.6)
-          ..lineTo(0, -5)
-          ..lineTo(5.6, -1.6)
-          ..moveTo(-4, -0.2)
-          ..lineTo(-4, 3.6)
-          ..moveTo(0, -0.2)
-          ..lineTo(0, 3.6)
-          ..moveTo(4, -0.2)
-          ..lineTo(4, 3.6)
-          ..moveTo(-5.6, 5)
-          ..lineTo(5.6, 5);
-        break;
-      default:
-        path
-          ..moveTo(-5.6, -1)
-          ..lineTo(-4.2, -5)
-          ..lineTo(4.2, -5)
-          ..lineTo(5.6, -1)
-          ..moveTo(-4.6, -1)
-          ..lineTo(-4.6, 5)
-          ..lineTo(4.6, 5)
-          ..lineTo(4.6, -1);
-    }
-    canvas.drawPath(path, p);
-  }
-
-  void _drawVehicle(Canvas canvas, String role, Color accent) {
-    final body = Paint()..color = accent;
-    final ink = Paint()..color = const Color(0xFF1A1F28);
-    switch (role) {
-      case 'expeditor':
-        canvas.drawRRect(
-          RRect.fromRectAndRadius(
-            const Rect.fromLTWH(-33, -14.5, 45, 29),
-            const Radius.circular(3.6),
-          ),
-          body,
-        );
-        canvas.drawRRect(
-          RRect.fromRectAndRadius(
-            const Rect.fromLTWH(14, -13, 20, 26),
-            const Radius.circular(6.4),
-          ),
-          Paint()..color = Colors.white,
-        );
-        canvas.drawRect(const Rect.fromLTWH(14, -6.5, 8, 13), ink);
-        break;
-      case 'supervisor':
-        canvas.drawRRect(
-          RRect.fromRectAndRadius(
-            const Rect.fromLTWH(-27, -12.6, 54, 25.2),
-            const Radius.circular(9.6),
-          ),
-          body,
-        );
-        canvas.drawCircle(const Offset(-3.4, 0), 3, Paint()..color = Colors.white);
-        break;
-      case 'cashier':
-      case 'operator':
-        canvas.drawRRect(
-          RRect.fromRectAndRadius(
-            const Rect.fromLTWH(-31, -14, 60, 28),
-            const Radius.circular(6.4),
-          ),
-          body,
-        );
-        canvas.drawCircle(
-          const Offset(-8, 0),
-          5,
-          Paint()..color = const Color(0xFFF6C945),
-        );
-        break;
-      default:
-        // Agent scooter (top-down) — shablon SplashArt Scooter.
-        canvas.drawRRect(
-          RRect.fromRectAndRadius(
-            const Rect.fromLTWH(20, -2.8, 11, 5.6),
-            const Radius.circular(2.8),
-          ),
-          ink,
-        );
-        canvas.drawRRect(
-          RRect.fromRectAndRadius(
-            const Rect.fromLTWH(-21, -2.8, 11, 5.6),
-            const Radius.circular(2.8),
-          ),
-          ink,
-        );
-        final deck = Path()
-          ..moveTo(-17, -6.4)
-          ..quadraticBezierTo(-17, -8.4, -13, -8.4)
-          ..lineTo(11, -8.4)
-          ..quadraticBezierTo(20, -6.4, 22.6, 0)
-          ..quadraticBezierTo(20, 6.4, 11, 8.4)
-          ..lineTo(-13, 8.4)
-          ..quadraticBezierTo(-17, 8.4, -17, 6.4)
-          ..close();
-        canvas.drawPath(deck, body);
-        canvas.drawRRect(
-          RRect.fromRectAndRadius(
-            const Rect.fromLTWH(-33, -9.6, 17, 19.2),
-            const Radius.circular(3.8),
-          ),
-          Paint()
-            ..color = Colors.white
-            ..style = PaintingStyle.fill,
-        );
-        canvas.drawRRect(
-          RRect.fromRectAndRadius(
-            const Rect.fromLTWH(-33, -9.6, 17, 19.2),
-            const Radius.circular(3.8),
-          ),
-          Paint()
-            ..color = const Color(0xFFD5DAE1)
-            ..style = PaintingStyle.stroke
-            ..strokeWidth = 0.9,
-        );
-        canvas.drawRect(
-          const Rect.fromLTWH(-33, -2.2, 17, 4.4),
-          Paint()..color = accent.withValues(alpha: 0.9),
-        );
-        canvas.drawCircle(const Offset(1, 0), 8.4, ink);
-        canvas.drawCircle(
-          const Offset(6.4, 0),
-          5.8,
-          Paint()
-            ..color = Colors.white
-            ..style = PaintingStyle.fill,
-        );
-        canvas.drawCircle(
-          const Offset(6.4, 0),
-          5.8,
-          Paint()
-            ..color = const Color(0xFFD5DAE1)
-            ..style = PaintingStyle.stroke
-            ..strokeWidth = 0.9,
-        );
-    }
+    // Radial fade in scene space (center = 0,0 after viewBox).
+    canvas.drawRect(
+      const Rect.fromLTWH(-200, -200, 400, 400),
+      Paint()
+        ..blendMode = BlendMode.dstIn
+        ..shader = ui.Gradient.radial(
+          Offset.zero,
+          155,
+          [Colors.white, Colors.white.withValues(alpha: 0)],
+          const [0.42, 1.0],
+        ),
+    );
+    canvas.restore();
   }
 
   @override
