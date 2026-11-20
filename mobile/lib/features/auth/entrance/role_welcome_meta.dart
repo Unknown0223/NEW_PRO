@@ -25,6 +25,12 @@ class RoleWelcomeMeta {
   });
 }
 
+class RoleWelcomeBootItem {
+  final String label;
+  final String count;
+  const RoleWelcomeBootItem(this.label, this.count);
+}
+
 RoleWelcomeMeta roleWelcomeMeta(String? role) {
   switch (role) {
     case 'expeditor':
@@ -52,6 +58,49 @@ RoleWelcomeMeta roleWelcomeMeta(String? role) {
         tagline: 'Marshrut, vizit va buyurtma — bir necha bosishda.',
         roleLabel: 'Agent',
       );
+  }
+}
+
+/// Shablon BOOT_ITEMS — rol bo‘yicha 2 ustunli checklist.
+List<RoleWelcomeBootItem> roleWelcomeBootItems(String? role) {
+  switch (role) {
+    case 'expeditor':
+      return const [
+        RoleWelcomeBootItem('Mashina profili', '01 A 777'),
+        RoleWelcomeBootItem('Nakladnoylar', '12 ta'),
+        RoleWelcomeBootItem('Yetkazish marshruti', '21 km'),
+        RoleWelcomeBootItem('Qarz kitobi', '48 mijoz'),
+        RoleWelcomeBootItem('Qaytarish turlari', '3 tur'),
+        RoleWelcomeBootItem('Chek printeri', 'ulandi'),
+      ];
+    case 'supervisor':
+      return const [
+        RoleWelcomeBootItem('Hudud va jamoa', 'Sharq'),
+        RoleWelcomeBootItem('Agentlar', '12 ta'),
+        RoleWelcomeBootItem('GPS va geofence', '24 soat'),
+        RoleWelcomeBootItem('Tasdiq kutmoqda', '8 vizit'),
+        RoleWelcomeBootItem('Hudud KPI', '142 mln'),
+        RoleWelcomeBootItem('Yangi mijozlar', '2 ta'),
+      ];
+    case 'cashier':
+    case 'operator':
+      return const [
+        RoleWelcomeBootItem('Kassa sozlamalari', 'Markaz'),
+        RoleWelcomeBootItem('Bank inbox', '24 ta'),
+        RoleWelcomeBootItem('Buyurtmaga moslash', '22 / 24'),
+        RoleWelcomeBootItem('Ekspeditor topshirig‘i', '6 / 6'),
+        RoleWelcomeBootItem('Eksport shablonlari', 'Excel'),
+        RoleWelcomeBootItem('Audit jurnali', 'OK'),
+      ];
+    default:
+      return const [
+        RoleWelcomeBootItem('Savdo nuqtalari', '342'),
+        RoleWelcomeBootItem('Katalog va narxlar', '1 208'),
+        RoleWelcomeBootItem('Ombor qoldiqlari', '3 ombor'),
+        RoleWelcomeBootItem('Bonus va skidka', '6 qoida'),
+        RoleWelcomeBootItem('Kunlik marshrut', '12 vizit'),
+        RoleWelcomeBootItem('Tabel va KPI', 'iyul'),
+      ];
   }
 }
 

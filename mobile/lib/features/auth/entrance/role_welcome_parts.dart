@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
-import '../../agent/sync/full_sync_view.dart';
 import 'auth_enter.dart';
 import 'role_welcome_meta.dart';
 import 'template_auth_entrance.dart';
@@ -19,7 +18,7 @@ class RoleWelcomeHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+      padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
       child: Row(
         children: [
           const AuthBrandMark(size: 22, draw: false),
@@ -29,7 +28,7 @@ class RoleWelcomeHeader extends StatelessWidget {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
             decoration: BoxDecoration(
-              color: accent.withValues(alpha: 0.12),
+              color: accent.withValues(alpha: 0.14),
               borderRadius: BorderRadius.circular(999),
             ),
             child: Row(
@@ -87,7 +86,7 @@ class RoleWelcomeGreeting extends StatelessWidget {
               ),
             ),
           ),
-          const SizedBox(height: 4),
+          const SizedBox(height: 2),
           RoleWelcomeIntroName(name: firstName),
           const SizedBox(height: 8),
           AuthEnter(
@@ -123,6 +122,7 @@ class RoleWelcomeGreeting extends StatelessWidget {
                 textAlign: TextAlign.center,
                 style: AppTypography.captionSmall.copyWith(
                   color: AppColors.textMuted,
+                  fontSize: 11,
                   height: 1.35,
                 ),
               ),
@@ -182,7 +182,7 @@ class RoleWelcomeIntroName extends StatelessWidget {
                 child: Text(
                   chars[i],
                   style: const TextStyle(
-                    fontSize: 26,
+                    fontSize: 24,
                     fontWeight: FontWeight.w800,
                     height: 1,
                     letterSpacing: -0.8,
@@ -198,8 +198,9 @@ class RoleWelcomeIntroName extends StatelessWidget {
   }
 }
 
+/// Shablon: `grid grid-cols-2` + count ustuni.
 class RoleWelcomeChecklist extends StatelessWidget {
-  final List<FullSyncItemState> items;
+  final List<RoleWelcomeBootItem> items;
   final int step;
   final Color accent;
   final bool revealed;
@@ -217,55 +218,91 @@ class RoleWelcomeChecklist extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (items.isEmpty) return const SizedBox.shrink();
-    final half = (MediaQuery.sizeOf(context).width - 56) / 2;
-    return Wrap(
-      spacing: 8,
-      runSpacing: 8,
+    return LayoutBuilder(
+      builder: (context, c) {
+        const gap = 10.0;
+        final w = (c.maxWidth - gap) / 2;
+        return Wrap(
+          spacing: gap,
+          runSpacing: 6,
+          children: [
+            for (var i = 0; i < items.length; i++)
+              SizedBox(
+                width: w,
+                child: _BootRow(
+                  item: items[i],
+                  ok: i < step,
+                  now: i == step && revealed && !done,
+                  accent: accent,
+                ),
+              ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _BootRow extends StatelessWidget {
+  final RoleWelcomeBootItem item;
+  final bool ok;
+  final bool now;
+  final Color accent;
+
+  const _BootRow({
+    required this.item,
+    required this.ok,
+    required this.now,
+    required this.accent,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
       children: [
-        for (var i = 0; i < items.length; i++)
-          SizedBox(
-            width: half,
-            child: Row(
-              children: [
-                AnimatedContainer(
-                  duration: const Duration(milliseconds: 300),
-                  width: 14,
-                  height: 14,
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    color: i < step ? accent : const Color(0xFFEEF1F5),
-                    shape: BoxShape.circle,
-                    boxShadow: i == step && revealed && !done
-                        ? [
-                            BoxShadow(
-                              color: accent.withValues(alpha: 0.28),
-                              spreadRadius: 2.5,
-                            ),
-                          ]
-                        : null,
-                  ),
-                  child: i < step
-                      ? const Icon(Icons.check, size: 9, color: Colors.white)
-                      : null,
-                ),
-                const SizedBox(width: 6),
-                Expanded(
-                  child: Text(
-                    items[i].label,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600,
-                      color: i <= step
-                          ? AppColors.textTitle
-                          : AppColors.textMuted,
+        AnimatedContainer(
+          duration: const Duration(milliseconds: 300),
+          width: 13,
+          height: 13,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: ok ? accent : const Color(0xFFEEF1F5),
+            shape: BoxShape.circle,
+            boxShadow: now
+                ? [
+                    BoxShadow(
+                      color: accent.withValues(alpha: 0.28),
+                      spreadRadius: 2.5,
                     ),
-                  ),
-                ),
-              ],
+                  ]
+                : null,
+          ),
+          child: ok
+              ? const Icon(Icons.check, size: 8, color: Colors.white)
+              : null,
+        ),
+        const SizedBox(width: 5),
+        Expanded(
+          child: Text(
+            item.label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: 10,
+              fontWeight: FontWeight.w600,
+              color: ok || now ? AppColors.textTitle : AppColors.textMuted,
             ),
           ),
+        ),
+        Text(
+          ok ? item.count : '···',
+          style: TextStyle(
+            fontSize: 9,
+            fontWeight: FontWeight.w600,
+            fontFamily: 'monospace',
+            color: ok ? accent : AppColors.textMuted,
+          ),
+        ),
       ],
     );
   }

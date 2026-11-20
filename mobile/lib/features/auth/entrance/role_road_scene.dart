@@ -322,8 +322,22 @@ class _RoadPainter extends CustomPainter {
         );
         break;
       default:
-        // Scooter / agent.
-        final scooter = Path()
+        // Agent scooter (top-down) — shablon SplashArt Scooter.
+        canvas.drawRRect(
+          RRect.fromRectAndRadius(
+            const Rect.fromLTWH(20, -2.8, 11, 5.6),
+            const Radius.circular(2.8),
+          ),
+          ink,
+        );
+        canvas.drawRRect(
+          RRect.fromRectAndRadius(
+            const Rect.fromLTWH(-21, -2.8, 11, 5.6),
+            const Radius.circular(2.8),
+          ),
+          ink,
+        );
+        final deck = Path()
           ..moveTo(-17, -6.4)
           ..quadraticBezierTo(-17, -8.4, -13, -8.4)
           ..lineTo(11, -8.4)
@@ -332,15 +346,46 @@ class _RoadPainter extends CustomPainter {
           ..lineTo(-13, 8.4)
           ..quadraticBezierTo(-17, 8.4, -17, 6.4)
           ..close();
-        canvas.drawPath(scooter, body);
+        canvas.drawPath(deck, body);
         canvas.drawRRect(
           RRect.fromRectAndRadius(
             const Rect.fromLTWH(-33, -9.6, 17, 19.2),
             const Radius.circular(3.8),
           ),
-          Paint()..color = Colors.white,
+          Paint()
+            ..color = Colors.white
+            ..style = PaintingStyle.fill,
+        );
+        canvas.drawRRect(
+          RRect.fromRectAndRadius(
+            const Rect.fromLTWH(-33, -9.6, 17, 19.2),
+            const Radius.circular(3.8),
+          ),
+          Paint()
+            ..color = const Color(0xFFD5DAE1)
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 0.9,
+        );
+        canvas.drawRect(
+          const Rect.fromLTWH(-33, -2.2, 17, 4.4),
+          Paint()..color = accent.withValues(alpha: 0.9),
         );
         canvas.drawCircle(const Offset(1, 0), 8.4, ink);
+        canvas.drawCircle(
+          const Offset(6.4, 0),
+          5.8,
+          Paint()
+            ..color = Colors.white
+            ..style = PaintingStyle.fill,
+        );
+        canvas.drawCircle(
+          const Offset(6.4, 0),
+          5.8,
+          Paint()
+            ..color = const Color(0xFFD5DAE1)
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 0.9,
+        );
     }
   }
 

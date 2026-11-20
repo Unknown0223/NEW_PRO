@@ -23,8 +23,24 @@ void main() {
     }
   });
 
+  test('BOOT_ITEMS are 6 per role with counts', () {
+    for (final role in ['agent', 'expeditor', 'supervisor', 'cashier']) {
+      final items = roleWelcomeBootItems(role);
+      expect(items.length, 6, reason: role);
+      expect(items.first.label.isNotEmpty, true);
+      expect(items.first.count.isNotEmpty, true);
+    }
+    expect(roleWelcomeBootItems('agent').first.label, 'Savdo nuqtalari');
+  });
+
   test('roleWelcomeAccent is role-specific', () {
-    expect(roleWelcomeAccent('agent').toARGB32(), isNot(roleWelcomeAccent('expeditor').toARGB32()));
-    expect(roleWelcomeAccent('supervisor').toARGB32(), isNot(roleWelcomeAccent('cashier').toARGB32()));
+    expect(
+      roleWelcomeAccent('agent').toARGB32(),
+      isNot(roleWelcomeAccent('expeditor').toARGB32()),
+    );
+    expect(
+      roleWelcomeAccent('supervisor').toARGB32(),
+      isNot(roleWelcomeAccent('cashier').toARGB32()),
+    );
   });
 }
