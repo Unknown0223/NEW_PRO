@@ -383,9 +383,11 @@ export const TIMESHEET_ROLE_LABELS: Record<string, string> = {
   cashier: "Кассир"
 };
 
-export function timesheetRoleLabel(role: string): string {
-  const key = role.trim().toLowerCase();
-  return TIMESHEET_ROLE_LABELS[key] ?? role;
+export function timesheetRoleLabel(role: string | null | undefined): string {
+  const raw = role == null ? "" : String(role);
+  const key = raw.trim().toLowerCase();
+  if (!key) return "—";
+  return TIMESHEET_ROLE_LABELS[key] ?? raw;
 }
 
 /** Экспорт матрицы табеля в CSV (разделитель «;», BOM для Excel). mode: коды 0–5 или текст. */

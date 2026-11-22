@@ -428,7 +428,7 @@ export function TabelMarksWorkspace({ onlyProblems = false }: { onlyProblems?: b
                     <td className="px-3 py-2.5">
                       <div className="flex items-center gap-1">
                         <MapPin className="size-3.5 text-muted-foreground" />
-                        {row.lat != null && row.lng != null ? (
+                        {typeof row.lat === "number" && typeof row.lng === "number" ? (
                           <a
                             className="font-medium text-primary underline-offset-2 hover:underline"
                             href={`https://maps.google.com/?q=${row.lat},${row.lng}`}
