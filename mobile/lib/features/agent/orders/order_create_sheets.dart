@@ -14,6 +14,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/ui/agent_ui_extended.dart';
 import '../clients/client_photo_report_flow.dart';
+import 'bonus_discount_sheet_decision.dart';
 import 'bonus_fill_policy.dart';
 import 'bonus_stock_utils.dart';
 import 'order_create_models.dart';
@@ -854,6 +855,8 @@ class OrderBonusDiscountSheet extends StatefulWidget {
   final OrderBonusDraftState? initialDraft;
   final ValueChanged<OrderBonusDraftState>? onDraftChanged;
   final bool isConsignment;
+  /// Prefetchdan kelgan rejim — bonus/skidka tablarini yashirish.
+  final BonusDiscountSheetMode sheetMode;
 
   const OrderBonusDiscountSheet({
     super.key,
@@ -869,6 +872,7 @@ class OrderBonusDiscountSheet extends StatefulWidget {
     this.initialDraft,
     this.onDraftChanged,
     this.isConsignment = false,
+    this.sheetMode = BonusDiscountSheetMode.both,
   });
 
   static Future<OrderBonusDiscountResult?> show(
@@ -885,6 +889,7 @@ class OrderBonusDiscountSheet extends StatefulWidget {
     OrderBonusDraftState? initialDraft,
     ValueChanged<OrderBonusDraftState>? onDraftChanged,
     bool isConsignment = false,
+    BonusDiscountSheetMode sheetMode = BonusDiscountSheetMode.both,
   }) {
     return showModalBottomSheet<OrderBonusDiscountResult>(
       context: context,
@@ -908,6 +913,7 @@ class OrderBonusDiscountSheet extends StatefulWidget {
         initialDraft: initialDraft,
         onDraftChanged: onDraftChanged,
         isConsignment: isConsignment,
+        sheetMode: sheetMode,
       ),
     );
   }
@@ -964,6 +970,14 @@ class _OrderBonusDiscountSheetState extends State<OrderBonusDiscountSheet> {
 
   bool get _discountSectionDisabled => false;
 
+  bool get _showBonusTab =>
+      widget.sheetMode == BonusDiscountSheetMode.both ||
+      widget.sheetMode == BonusDiscountSheetMode.bonusOnly;
+
+  bool get _showDiscountTab =>
+      widget.sheetMode == BonusDiscountSheetMode.both ||
+      widget.sheetMode == BonusDiscountSheetMode.discountOnly;
+
   @override
   void initState() {
     super.initState();
@@ -988,6 +1002,15 @@ class _OrderBonusDiscountSheetState extends State<OrderBonusDiscountSheet> {
     if (!_bonusModeAllowed(_bonusMode)) {
       final fallback = defaultBonusModeKey(widget.ordersConfig);
       _bonusMode = fallback == 'none' ? BonusMode.none : BonusMode.auto;
+    }
+    // Prefetch rejimi: yo‘q bo‘limni yashirish + default «Без …»
+    if (!_showBonusTab) {
+      _bonusMode = BonusMode.none;
+      _activeSection = 1;
+    }
+    if (!_showDiscountTab) {
+      _discountMode = DiscountMode.none;
+      _activeSection = 0;
     }
     _loadPreview();
   }
@@ -1746,82 +1769,27 @@ class _OrderBonusDiscountSheetState extends State<OrderBonusDiscountSheet> {
     }
   }
 
+  /// Server eligible ro‘yxatini saqlaydi; bo‘sh gift / 0 qty «soxta Bonus» yasamaydi.
   OrderBonusPreview _normalizePreview(OrderBonusPreview parsed) {
-    var bonuses = parsed.eligibleBonuses;
-    final giftQty = parsed.autoApplyGifts.fold<int>(0, (s, g) => s + g.qty);
-    if (giftQty <= 0) return parsed;
-
-    GiftProductPreview giftFromAuto(AutoApplyBonusGift g) {
-      for (final rule in bonuses) {
-        for (final p in rule.giftProducts) {
-          if (p.productId == g.productId) return p;
-        }
-      }
-      return GiftProductPreview(
-        productId: g.productId,
-        name: '#${g.productId}',
-        stockAvailable: 0,
-        purchasedQty: 0,
-        bonusQty: 0,
-      );
+    final bonuses = parsed.eligibleBonuses
+        .where(
+          (r) => isUsableBonusPreviewRule(
+            bonusQty: r.bonusQty,
+            giftProductCount: r.giftProducts.length,
+          ),
+        )
+        .toList();
+    final discounts = parsed.eligibleDiscounts
+        .where((d) => isUsableDiscountPreviewRule(discountPct: d.discountPct))
+        .toList();
+    if (bonuses.length == parsed.eligibleBonuses.length &&
+        discounts.length == parsed.eligibleDiscounts.length) {
+      return parsed;
     }
-
-    if (bonuses.isEmpty) {
-      final ruleId = parsed.autoApplyRuleIds.isNotEmpty ? parsed.autoApplyRuleIds.first : 0;
-      bonuses = [
-        OrderBonusPreviewRule(
-          ruleId: ruleId,
-          name: 'Bonus',
-          type: 'qty',
-          bonusQty: giftQty.toDouble(),
-          maxBonusQty: giftQty.toDouble(),
-          giftSelectionKind: 'assortment_auto',
-          giftProducts: parsed.autoApplyGifts.map(giftFromAuto).toList(),
-        ),
-      ];
-      return OrderBonusPreview(
-        bonusStackMode: parsed.bonusStackMode,
-        eligibleBonuses: bonuses,
-        eligibleDiscounts: parsed.eligibleDiscounts,
-        linkedPairs: parsed.linkedPairs,
-        strategies: parsed.strategies,
-        autoApplyRuleIds: parsed.autoApplyRuleIds,
-        autoApplyGifts: parsed.autoApplyGifts,
-        autoDiscountRuleId: parsed.autoDiscountRuleId,
-        autoDiscountPct: parsed.autoDiscountPct,
-        discountSum: parsed.discountSum,
-        expectedDiscountSum: parsed.expectedDiscountSum,
-        discountCashDeskAvailable: parsed.discountCashDeskAvailable,
-      );
-    }
-
-    bonuses = bonuses.map((rule) {
-      if (rule.bonusQty > 0) return rule;
-      if (parsed.autoApplyRuleIds.isNotEmpty && !parsed.autoApplyRuleIds.contains(rule.ruleId)) {
-        return rule;
-      }
-      final gifts = rule.giftProducts.isNotEmpty
-          ? rule.giftProducts
-          : parsed.autoApplyGifts.map(giftFromAuto).toList();
-      final ruleGiftQty = gifts.fold<int>(0, (s, g) => s + g.bonusQty.round());
-      final effectiveGiftQty = ruleGiftQty > 0 ? ruleGiftQty : giftQty;
-      return OrderBonusPreviewRule(
-        ruleId: rule.ruleId,
-        name: rule.name,
-        type: rule.type,
-        bonusQty: effectiveGiftQty.toDouble(),
-        maxBonusQty: effectiveGiftQty.toDouble(),
-        defaultGiftProductId: rule.defaultGiftProductId ?? gifts.firstOrNull?.productId,
-        giftSelectionKind: rule.giftSelectionKind == 'fixed' ? 'assortment_auto' : rule.giftSelectionKind,
-        allowGiftSwap: rule.allowGiftSwap,
-        giftProducts: gifts,
-      );
-    }).toList();
-
     return OrderBonusPreview(
       bonusStackMode: parsed.bonusStackMode,
       eligibleBonuses: bonuses,
-      eligibleDiscounts: parsed.eligibleDiscounts,
+      eligibleDiscounts: discounts,
       linkedPairs: parsed.linkedPairs,
       strategies: parsed.strategies,
       autoApplyRuleIds: parsed.autoApplyRuleIds,
@@ -3201,16 +3169,28 @@ class _OrderBonusDiscountSheetState extends State<OrderBonusDiscountSheet> {
                 ],
               ),
             ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
-              child: Row(
-                children: [
-                  _sectionTab(index: 0, label: S.bonusSection, disabled: _bonusSectionDisabled),
-                  const SizedBox(width: 8),
-                  _sectionTab(index: 1, label: S.discountSection, disabled: _discountSectionDisabled, showWarning: _discountSectionHasWarning),
-                ],
+            if (_showBonusTab || _showDiscountTab)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
+                child: Row(
+                  children: [
+                    if (_showBonusTab)
+                      _sectionTab(
+                        index: 0,
+                        label: S.bonusSection,
+                        disabled: _bonusSectionDisabled,
+                      ),
+                    if (_showBonusTab && _showDiscountTab) const SizedBox(width: 8),
+                    if (_showDiscountTab)
+                      _sectionTab(
+                        index: 1,
+                        label: S.discountSection,
+                        disabled: _discountSectionDisabled,
+                        showWarning: _discountSectionHasWarning,
+                      ),
+                  ],
+                ),
               ),
-            ),
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
               child: Text(hint, style: AppTypography.bodySmall.copyWith(color: Colors.grey.shade700)),

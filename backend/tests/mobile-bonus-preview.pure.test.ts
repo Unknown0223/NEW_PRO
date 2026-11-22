@@ -248,6 +248,19 @@ describe("filterEligibleBonusesForPreview", () => {
     );
     expect(out.map((r) => r.rule_id)).toEqual([2]);
   });
+
+  it("gift_products bo'sh bo'lsa soxta eligible bonusni chiqarib tashlaydi", () => {
+    const fake: EligibleBonusRow = {
+      ...row(9, 5, 90),
+      gift_products: []
+    };
+    const out = filterEligibleBonusesForPreview(
+      [fake, row(2, 3)],
+      { mode: "all", maxUnits: null, forbidApplyAllEligible: false },
+      []
+    );
+    expect(out.map((r) => r.rule_id)).toEqual([2]);
+  });
 });
 
 describe("preferCategoryGiftPoolForPreview", () => {

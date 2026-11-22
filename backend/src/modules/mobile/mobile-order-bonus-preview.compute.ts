@@ -63,13 +63,19 @@ export function rulesLinked(a: BonusRuleRow, b: BonusRuleRow): boolean {
   return aPre.includes(b.id) || bPre.includes(a.id);
 }
 
+/** Bonus UI da ko‘rsatish mumkin: qty > 0 va kamida 1 ta sovg‘a SKU. */
+export function isUsableEligibleBonusRow(row: EligibleBonusRow): boolean {
+  return row.bonus_qty > 0 && row.gift_products.length > 0;
+}
+
 /** Mobil preview: stack siyosatiga mos barcha mos bonuslar (faqat bittasini emas). */
 export function filterEligibleBonusesForPreview(
   rows: EligibleBonusRow[],
   stackPolicy: ReturnType<typeof parseBonusStackPolicy>,
   appliedAutoBonusRuleIds: number[]
 ): EligibleBonusRow[] {
-  const eligible = rows.filter((r) => r.bonus_qty > 0);
+  // Bo‘sh gift havzali «soxta» qatorlar (faqat nomi) chiqmasin.
+  const eligible = rows.filter(isUsableEligibleBonusRow);
   if (eligible.length === 0) return [];
 
   if (stackPolicy.mode === "all") {

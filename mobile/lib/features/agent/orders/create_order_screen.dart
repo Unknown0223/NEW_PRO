@@ -48,6 +48,7 @@ import 'order_draft_model.dart';
 import 'order_draft_provider.dart';
 import 'order_draft_ui.dart';
 import 'create_order_exit_guard.dart';
+import 'bonus_discount_sheet_decision.dart';
 import 'bonus_stock_utils.dart';
 import '../warehouse/warehouse_stock_providers.dart';
 import 'held_orders_provider.dart';
@@ -1592,6 +1593,52 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
         : (_bonusDraft!.itemsFingerprint == fp
             ? _bonusDraft
             : _bonusDraft!.withItemsFingerprint(fp));
+
+    // Prefetch: bonus/skidka yo‘q bo‘lsa sheet ochilmasin — darhol yakunlash.
+    var sheetMode = BonusDiscountSheetMode.both;
+    setState(() => _submitting = true);
+    try {
+      final raw = await ref.read(ordersApiProvider).previewBonus(
+            slug,
+            clientId: _selectedClientId,
+            warehouseId: _warehouseId!,
+            items: items,
+            priceType: _priceType,
+            isConsignment: _isConsignment,
+          );
+      final preview = OrderBonusPreview.fromJson(raw);
+      sheetMode = decideSheetModeFromPreviewRules(
+        bonuses: [
+          for (final b in preview.eligibleBonuses)
+            (bonusQty: b.bonusQty, giftProductCount: b.giftProducts.length),
+        ],
+        discountPcts: [
+          for (final d in preview.eligibleDiscounts) d.discountPct,
+        ],
+        strategyRequiresChoice: preview.strategies.any((s) => s.requiresChoice),
+        autoApplyGiftCount: preview.autoApplyGifts.fold<int>(0, (s, g) => s + g.qty),
+        autoDiscountPct: preview.autoDiscountPct,
+      );
+    } catch (e, st) {
+      ErrorReporter.instance?.reportCaught(
+        e,
+        stack: st,
+        module: ErrorModules.orders,
+        code: 'BonusPreviewPrefetchFailed',
+        message: 'Заказ: prefetch бонус/скидка не загрузился',
+        path: '/mobile/orders/bonus-preview',
+      );
+      // Xatoda eski xulq: sheet ochiladi (both).
+      sheetMode = BonusDiscountSheetMode.both;
+    }
+    if (!mounted) return;
+    setState(() => _submitting = false);
+
+    if (sheetMode == BonusDiscountSheetMode.skipFinish) {
+      await _submit(applyBonus: false, applyDiscount: false);
+      return;
+    }
+
     final result = await OrderBonusDiscountSheet.show(
       context,
       slug: slug,
@@ -1605,6 +1652,7 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
       initialDiscountMode: draft?.discountMode ?? DiscountMode.auto,
       initialDraft: draft,
       isConsignment: _isConsignment,
+      sheetMode: sheetMode,
       onDraftChanged: (d) {
         _bonusDraft = d;
       },
