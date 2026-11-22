@@ -8,6 +8,7 @@ import 'package:google_mlkit_face_detection/google_mlkit_face_detection.dart';
 
 import '../../core/theme/app_colors.dart';
 import 'anime_face_guide.dart';
+import 'liveness_camera_pick.dart';
 import 'liveness_challenge.dart';
 import 'liveness_live_widgets.dart';
 
@@ -127,10 +128,13 @@ class _LivenessLiveScreenState extends State<LivenessLiveScreen>
   Future<void> _start() async {
     try {
       final cams = await availableCameras();
-      _camera = cams.firstWhere(
-        (c) => c.lensDirection == CameraLensDirection.front,
-        orElse: () => throw Exception('Нет фронтальной камеры'),
-      );
+      final picked = selectLivenessCamera(cams);
+      if (picked == null) {
+        throw Exception(
+          'Камера не найдена. На эмуляторе включите VirtualScene / Webcam в Extended controls → Camera.',
+        );
+      }
+      _camera = picked;
       _rotations = _rotationOrder(_camera!.sensorOrientation);
       _rotationIndex = 0;
       _rotationLocked = false;
@@ -160,7 +164,12 @@ class _LivenessLiveScreenState extends State<LivenessLiveScreen>
       });
       setState(() => _error = null);
     } catch (e) {
-      if (mounted) setState(() => _error = 'Камера: $e');
+      if (mounted) {
+        setState(() {
+          _error =
+              'Камера недоступна. Эмулятор: Camera → VirtualScene/Webcam. Или проверьте на телефоне.\n($e)';
+        });
+      }
     }
   }
 
