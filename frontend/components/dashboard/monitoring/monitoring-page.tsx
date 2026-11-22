@@ -63,7 +63,7 @@ export function DashboardSalesMonitoring() {
     [sectionPrefs.hiddenColumnIds]
   );
 
-  const { data, isLoading, isFetching, isError, queryString } = useMonitoringQueries({
+  const { data, isLoading, isFetching, isError } = useMonitoringQueries({
     tenantSlug,
     hydrated,
     applied,
