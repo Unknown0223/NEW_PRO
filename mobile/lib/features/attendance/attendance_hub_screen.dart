@@ -1,10 +1,12 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 
+import '../../core/auth/app_lock.dart';
 import '../../core/face/face_daily_check_policy.dart';
 import '../../core/face/face_gate_state.dart';
 import '../../core/face/face_verification_flow.dart';
@@ -138,6 +140,7 @@ class _AttendanceHubScreenState extends ConsumerState<AttendanceHubScreen> {
   Future<void> _runLiveness(MobileAttendanceState st) async {
     final res = await LivenessCameraFlow.run(
       context,
+      ref,
       directions: st.livenessDirections,
       presetSequence: _livenessSequence.isEmpty ? null : _livenessSequence,
       mandatory: widget.gateMode,
@@ -153,6 +156,7 @@ class _AttendanceHubScreenState extends ConsumerState<AttendanceHubScreen> {
   Future<void> _runDualCapture() async {
     final res = await DualCapture.run(
       context,
+      ref,
       livenessSelfieBase64: _frontPhotoB64,
     );
     if (res == null || !mounted) return;
@@ -164,7 +168,7 @@ class _AttendanceHubScreenState extends ConsumerState<AttendanceHubScreen> {
   }
 
   Future<void> _runVideoCapture(MobileAttendanceState st) async {
-    final res = await VideoPunchFlow.run(context, st: st);
+    final res = await VideoPunchFlow.run(context, ref, st: st);
     if (res == null || !mounted) return;
     setState(() {
       _frontVideoB64 = res.frontBase64;
@@ -462,7 +466,23 @@ class _AttendanceHubScreenState extends ConsumerState<AttendanceHubScreen> {
           ));
         }
 
-        final tabs = st.visibleTabs;
+        final tabs = st.visibleTabs(gateMode: widget.gateMode);
+        if (tabs.isEmpty) {
+          return _wrapGate(Scaffold(
+            backgroundColor: AppColors.background,
+            appBar: AgentAppBar(title: 'Табель и Посещаемость', showBack: showBack),
+            body: Column(
+              children: [
+                if (_gateBanner() != null) _gateBanner()!,
+                Expanded(
+                  child: widget.gateMode
+                      ? _buildGateFaceOnly(st)
+                      : _buildModeBlocked(st),
+                ),
+              ],
+            ),
+          ));
+        }
         return _wrapGate(DefaultTabController(
           key: ValueKey(tabs.map((e) => e.name).join(',')),
           length: tabs.length,
@@ -474,13 +494,15 @@ class _AttendanceHubScreenState extends ConsumerState<AttendanceHubScreen> {
               title: Text(widget.gateMode ? 'Приход · Face ID' : 'Табель и Посещаемость'),
               automaticallyImplyLeading: showBack,
               actions: const [],
-              bottom: TabBar(
-                isScrollable: true,
-                labelColor: AppColors.primary,
-                unselectedLabelColor: AppColors.textSecondary,
-                indicatorColor: AppColors.primary,
-                tabs: tabs.map(_tabFor).toList(),
-              ),
+              bottom: tabs.length > 1
+                  ? TabBar(
+                      isScrollable: true,
+                      labelColor: AppColors.primary,
+                      unselectedLabelColor: AppColors.textSecondary,
+                      indicatorColor: AppColors.primary,
+                      tabs: tabs.map(_tabFor).toList(),
+                    )
+                  : null,
             ),
             body: Column(
               children: [
@@ -496,9 +518,11 @@ class _AttendanceHubScreenState extends ConsumerState<AttendanceHubScreen> {
                     ),
                   ),
                 Expanded(
-                  child: TabBarView(
-                    children: tabs.map((t) => _viewFor(t, st)).toList(),
-                  ),
+                  child: tabs.length == 1
+                      ? _viewFor(tabs.first, st)
+                      : TabBarView(
+                          children: tabs.map((t) => _viewFor(t, st)).toList(),
+                        ),
                 ),
               ],
             ),
@@ -745,13 +769,16 @@ class _AttendanceHubScreenState extends ConsumerState<AttendanceHubScreen> {
             const SizedBox(height: 12),
             ElevatedButton.icon(
               onPressed: () async {
-                final x = await _picker.pickImage(
-                  source: ImageSource.camera,
-                  maxWidth: 960,
-                  imageQuality: 78,
-                );
-                if (x == null) return;
-                var bytes = await x.readAsBytes();
+                final path = await withAppLockSuppressed(ref, () async {
+                  final x = await _picker.pickImage(
+                    source: ImageSource.camera,
+                    maxWidth: 960,
+                    imageQuality: 78,
+                  );
+                  return x?.path;
+                });
+                if (path == null) return;
+                var bytes = await File(path).readAsBytes();
                 try {
                   final stamp =
                       '${st.todayYmd}\n${ServerClock.instance.bestEffortNowUtc().toIso8601String()}';

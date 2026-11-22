@@ -90,14 +90,15 @@ class MobileAttendanceState {
   bool get terminalOnly => !mobileAny && terminalAllowed;
   bool get punchDisabled => !mobileAny && !terminalAllowed;
 
-  /// Mobil tablar (Заявки har doim oxirida).
-  List<AttendanceMethodTab> get visibleTabs {
-    final tabs = <AttendanceMethodTab>[];
-    if (photoEnabled) tabs.add(AttendanceMethodTab.photo);
-    if (videoEnabled) tabs.add(AttendanceMethodTab.video);
-    if (kioskAllowed) tabs.add(AttendanceMethodTab.kiosk);
-    tabs.add(AttendanceMethodTab.requests);
-    return tabs;
+  /// Mobil tablar — faqat yoqilgan usullar.
+  /// [gateMode]: birinchi kirish — bitta asosiy punch + Заявки yo‘q.
+  List<AttendanceMethodTab> visibleTabs({bool gateMode = false}) {
+    return attendanceVisibleTabs(
+      photoEnabled: photoEnabled,
+      videoEnabled: videoEnabled,
+      kioskAllowed: kioskAllowed,
+      gateMode: gateMode,
+    );
   }
 
   factory MobileAttendanceState.fromJson(Map<String, dynamic> json) {
@@ -182,4 +183,24 @@ class MobileAttendanceState {
       todayPunches: punches,
     );
   }
+}
+
+/// Sof: qaysi punch tablar ko‘rinsin (unit-test).
+List<AttendanceMethodTab> attendanceVisibleTabs({
+  required bool photoEnabled,
+  required bool videoEnabled,
+  required bool kioskAllowed,
+  bool gateMode = false,
+}) {
+  final tabs = <AttendanceMethodTab>[];
+  if (photoEnabled) tabs.add(AttendanceMethodTab.photo);
+  if (videoEnabled) tabs.add(AttendanceMethodTab.video);
+  if (kioskAllowed) tabs.add(AttendanceMethodTab.kiosk);
+  if (gateMode) {
+    if (tabs.isEmpty) return tabs;
+    if (photoEnabled) return const [AttendanceMethodTab.photo];
+    return [tabs.first];
+  }
+  tabs.add(AttendanceMethodTab.requests);
+  return tabs;
 }
