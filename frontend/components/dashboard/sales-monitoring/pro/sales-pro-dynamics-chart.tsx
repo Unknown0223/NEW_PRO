@@ -1,12 +1,12 @@
 "use client";
 
-import { formatSalesMoney } from "@/components/dashboard/sales-monitoring/pro/sales-pro-format";
+import { compactSalesMoney, formatSalesMoney } from "@/components/dashboard/sales-monitoring/pro/sales-pro-format";
 import { downloadSalesProCsv, SalesProPanel } from "@/components/dashboard/sales-monitoring/pro/sales-pro-shared";
 import type { SalesProDetailView, SalesProUiModel } from "@/components/dashboard/sales-monitoring/pro/sales-pro-types";
 import { Download, Maximize2 } from "lucide-react";
 import { useMemo, useState } from "react";
 import {
-  Area,
+  Bar,
   CartesianGrid,
   ComposedChart,
   Line,
@@ -25,10 +25,11 @@ export function SalesProDynamicsChart({ model, onOpenDetail }: Props) {
   const [chartMode, setChartMode] = useState<"Дни" | "Недели">("Дни");
 
   const chartData = useMemo(() => {
-    if (chartMode === "Дни") return model.days;
+    const days = model.days;
+    if (chartMode === "Дни") return days;
     const weeks: { label: string; plan: number; fact: number; completion: number }[] = [];
-    for (let i = 0; i < model.days.length; i += 7) {
-      const chunk = model.days.slice(i, i + 7);
+    for (let i = 0; i < days.length; i += 7) {
+      const chunk = days.slice(i, i + 7);
       const plan = chunk.reduce((a, d) => a + d.plan, 0);
       const fact = chunk.reduce((a, d) => a + d.fact, 0);
       weeks.push({
@@ -42,7 +43,7 @@ export function SalesProDynamicsChart({ model, onOpenDetail }: Props) {
   }, [chartMode, model.days]);
 
   return (
-    <SalesProPanel className="chart-panel">
+    <SalesProPanel className="main-chart">
       <div className="panel-head chart-panel-head">
         <div>
           <h2>Динамика плана и факта продаж</h2>
@@ -91,25 +92,91 @@ export function SalesProDynamicsChart({ model, onOpenDetail }: Props) {
           </button>
         </div>
       </div>
-      <div className="chart-body" style={{ height: 280 }}>
+      <div className="legend">
+        <span>
+          <i className="green" />
+          Факт
+        </span>
+        <span>
+          <i className="blue" />
+          План
+        </span>
+        <span>
+          <i className="pink" />
+          Выполнение
+        </span>
+      </div>
+      <div className="chart-area">
         {chartData.length === 0 ? (
-          <p className="text-sm text-muted-foreground" style={{ padding: 16 }}>
-            Нет данных за период.
-          </p>
+          <div className="empty">Нет данных за период.</div>
         ) : (
           <ResponsiveContainer width="100%" height="100%">
-            <ComposedChart data={chartData}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#e4eef8" />
-              <XAxis dataKey="label" tick={{ fontSize: 11 }} />
-              <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => formatSalesMoney(Number(v))} />
-              <Tooltip
-                formatter={(value: number, name: string) => [
-                  formatSalesMoney(value),
-                  name === "plan" ? "План" : name === "fact" ? "Факт" : name
-                ]}
+            <ComposedChart data={chartData} margin={{ top: 10, right: 8, left: -12, bottom: 0 }}>
+              <CartesianGrid stroke="#e8eef7" vertical={false} />
+              <XAxis
+                dataKey="label"
+                axisLine={false}
+                tickLine={false}
+                minTickGap={14}
+                tick={{ fontSize: 10, fill: "#7186a8" }}
               />
-              <Area type="monotone" dataKey="plan" fill="#dfeeff" stroke="#287cf4" strokeWidth={1.5} />
-              <Line type="monotone" dataKey="fact" stroke="#12bd95" strokeWidth={2} dot={false} />
+              <YAxis
+                yAxisId="money"
+                domain={[0, "dataMax"]}
+                tickCount={5}
+                tickFormatter={(value) => compactSalesMoney(Number(value))}
+                axisLine={false}
+                tickLine={false}
+                tick={{ fontSize: 10, fill: "#7186a8" }}
+              />
+              <YAxis
+                yAxisId="percent"
+                orientation="right"
+                domain={[0, 160]}
+                tickFormatter={(value) => `${value}%`}
+                axisLine={false}
+                tickLine={false}
+                tick={{ fontSize: 10, fill: "#7186a8" }}
+                width={38}
+              />
+              <Tooltip
+                formatter={(value: number, name: string) =>
+                  name === "Выполнение"
+                    ? [`${Number(value).toFixed(1)}%`, name]
+                    : [formatSalesMoney(Number(value)), name]
+                }
+                contentStyle={{
+                  border: "1px solid #e2eaf5",
+                  borderRadius: 9,
+                  fontSize: 11,
+                  boxShadow: "0 8px 24px #29466c18"
+                }}
+              />
+              <Bar
+                yAxisId="money"
+                name="Факт"
+                dataKey="fact"
+                fill="#12bd95"
+                radius={[3, 3, 0, 0]}
+                barSize={chartMode === "Дни" ? 8 : 21}
+              />
+              <Line
+                yAxisId="money"
+                name="План"
+                dataKey="plan"
+                stroke="#287cf4"
+                strokeWidth={2.1}
+                dot={false}
+                strokeDasharray="5 4"
+              />
+              <Line
+                yAxisId="percent"
+                name="Выполнение"
+                dataKey="completion"
+                stroke="#ff6684"
+                strokeWidth={1.8}
+                dot={false}
+              />
             </ComposedChart>
           </ResponsiveContainer>
         )}

@@ -67,12 +67,9 @@ export function SalesProPage({ model, loading, monthLabel }: SalesProPageProps) 
       onPointerMove={handlePointerMove}
       onPointerLeave={handlePointerLeave}
     >
-      <div className="sales-pro-main" style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+      <div className="sales-pro-main">
         <SalesProSummaryCards model={model} monthLabel={monthLabel} onOpenDetail={setDetail} />
-        <div
-          className="charts-row"
-          style={{ display: "grid", gap: 14, gridTemplateColumns: "minmax(0, 1.6fr) minmax(0, 1fr)" }}
-        >
+        <div className="analytics-grid">
           <SalesProDynamicsChart model={model} onOpenDetail={setDetail} />
           <SalesProCategoryDonut model={model} onOpenDetail={setDetail} />
         </div>

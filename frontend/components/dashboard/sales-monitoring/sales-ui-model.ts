@@ -60,13 +60,17 @@ export function buildSalesProUiModel(
       ? null
       : input.plan_fact.execution_pct;
 
-  const days: SalesProDayPoint[] = (input.daily_sales ?? []).map((row) => {
+  const rawDays = input.daily_sales ?? [];
+  // API da kunlik plan yo‘q — oy rejasini kunlarga teng taqsimlash (faqat chart/dinamika).
+  const dayPlan = plan > 0 && rawDays.length > 0 ? plan / rawDays.length : 0;
+  const days: SalesProDayPoint[] = rawDays.map((row) => {
     const dayFact = parseAmount(row.sales_sum);
+    const completion = dayPlan > 0 ? (dayFact / dayPlan) * 100 : 0;
     return {
       label: dayLabel(row.day),
-      plan: 0,
+      plan: dayPlan,
       fact: dayFact,
-      completion: 0
+      completion
     };
   });
 
@@ -77,15 +81,25 @@ export function buildSalesProUiModel(
     color: CATEGORY_COLORS[index % CATEGORY_COLORS.length]!
   }));
 
-  const branchRows: SalesProBranchRow[] = (input.branch_performance ?? []).map((row, index) => ({
-    id: `branch-${index}-${row.branch}`,
-    name: row.branch,
-    akb: row.akb,
-    okb: row.okb ?? 0,
-    plan: parseAmount(row.plan_sales),
-    fact: parseAmount(row.fact_sales),
-    completion: row.execution_pct
-  }));
+  const branchRows: SalesProBranchRow[] = (input.branch_performance ?? []).map((row, index) => {
+    const rowPlan = parseAmount(row.plan_sales);
+    const rowFact = parseAmount(row.fact_sales);
+    const completion =
+      row.execution_pct != null && Number.isFinite(row.execution_pct)
+        ? row.execution_pct
+        : rowPlan > 0
+          ? (rowFact / rowPlan) * 100
+          : null;
+    return {
+      id: `branch-${index}-${row.branch || "empty"}`,
+      name: (row.branch || "").trim() || "Без филиала",
+      akb: row.akb,
+      okb: row.okb ?? 0,
+      plan: rowPlan,
+      fact: rowFact,
+      completion
+    };
+  });
 
   const directionRows: SalesProDirectionRow[] = (input.trade_directions ?? []).map((row, index) => ({
     id: `dir-${index}-${row.direction}`,

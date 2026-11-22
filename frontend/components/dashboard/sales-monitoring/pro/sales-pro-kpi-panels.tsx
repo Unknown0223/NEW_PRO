@@ -12,8 +12,12 @@ type Props = {
 };
 
 export function SalesProKpiPanels({ model, monthLabel, onOpenDetail }: Props) {
+  const completion = model.completionPct ?? 0;
+  const akbRate = model.coveragePct;
+  const planGap = Math.max(0, model.plan - model.fact);
+
   return (
-    <div className="ops-grid" style={{ display: "grid", gap: 14, gridTemplateColumns: "repeat(3, minmax(0, 1fr))" }}>
+    <div className="kpi-grid">
       <SalesProPanel className="kpi-card">
         <div className="panel-head">
           <div>
@@ -24,24 +28,37 @@ export function SalesProKpiPanels({ model, monthLabel, onOpenDetail }: Props) {
             Подробно <ArrowUpRight size={13} />
           </button>
         </div>
-        <ul className="kpi-list">
-          <li>
+        <div className="kpi-pair">
+          <div className="kpi-box">
             <span>План</span>
             <b>{formatSalesMoney(model.plan)}</b>
-          </li>
-          <li>
+          </div>
+          <div className="kpi-box fact">
             <span>Факт</span>
             <b>{formatSalesMoney(model.fact)}</b>
-          </li>
-          <li>
-            <span>Выполнение</span>
-            <b>{formatSalesPct(model.completionPct)}</b>
-          </li>
-          <li>
-            <span>Средний чек</span>
-            <b>{formatSalesMoney(model.averageTicket)}</b>
-          </li>
-        </ul>
+          </div>
+        </div>
+        <div className="kpi-progress">
+          <div className="kpi-progress-head">
+            <span>Выполнение плана продаж</span>
+            <b style={{ color: completion >= 100 ? "#12bd95" : "#f7b62d" }}>{formatSalesPct(model.completionPct)}</b>
+          </div>
+          <div className="kpi-bar">
+            <em
+              style={{
+                width: `${Math.min(100, completion)}%`,
+                background: completion >= 100 ? "#12bd95" : "#f7b62d"
+              }}
+            />
+          </div>
+          <small>
+            {model.plan <= 0
+              ? "План на месяц не задан"
+              : completion >= 100
+                ? "План месяца выполнен"
+                : `До плана осталось ${formatSalesMoney(planGap)}`}
+          </small>
+        </div>
       </SalesProPanel>
 
       <SalesProPanel className="kpi-card">
@@ -54,24 +71,26 @@ export function SalesProKpiPanels({ model, monthLabel, onOpenDetail }: Props) {
             Подробно <ArrowUpRight size={13} />
           </button>
         </div>
-        <ul className="kpi-list">
-          <li>
+        <div className="kpi-pair">
+          <div className="kpi-box">
             <span>ОКБ</span>
             <b>{model.okb}</b>
-          </li>
-          <li>
+          </div>
+          <div className="kpi-box purple">
             <span>АКБ</span>
             <b>{model.akb}</b>
-          </li>
-          <li>
-            <span>Покрытие</span>
-            <b>{formatSalesPct(model.coveragePct)}</b>
-          </li>
-          <li>
-            <span>Заказы</span>
-            <b>{model.ordersCount}</b>
-          </li>
-        </ul>
+          </div>
+        </div>
+        <div className="kpi-progress">
+          <div className="kpi-progress-head">
+            <span>АКБ в процентах</span>
+            <b>{formatSalesPct(akbRate)}</b>
+          </div>
+          <div className="kpi-bar">
+            <em style={{ width: `${Math.min(100, akbRate)}%`, background: "#9147ed" }} />
+          </div>
+          <small>Покрытие активной базы · заказов: {model.ordersCount}</small>
+        </div>
       </SalesProPanel>
 
       <SalesProPanel className="kpi-card">
@@ -84,24 +103,48 @@ export function SalesProKpiPanels({ model, monthLabel, onOpenDetail }: Props) {
             Все KPI <ArrowUpRight size={13} />
           </button>
         </div>
-        <ul className="kpi-list">
-          <li>
+        <div className="kpi-chip-grid">
+          <div className="kpi-chip">
             <span>Доставлено</span>
             <b>{model.deliveredOrdersCount}</b>
-          </li>
-          <li>
-            <span>Филиалов</span>
+            <small>из {model.ordersCount} заказов</small>
+            <div className="kpi-bar">
+              <em
+                style={{
+                  width: `${Math.min(
+                    100,
+                    model.ordersCount > 0 ? (model.deliveredOrdersCount / model.ordersCount) * 100 : 0
+                  )}%`,
+                  background: "#12bd95"
+                }}
+              />
+            </div>
+          </div>
+          <div className="kpi-chip">
+            <span>Филиалы</span>
             <b>{model.branchRows.length}</b>
-          </li>
-          <li>
-            <span>Направлений</span>
+            <small>в выборке</small>
+            <div className="kpi-bar">
+              <em style={{ width: model.branchRows.length ? "100%" : "0%", background: "#287cf4" }} />
+            </div>
+          </div>
+          <div className="kpi-chip">
+            <span>Направления</span>
             <b>{model.directionRows.length}</b>
-          </li>
-          <li>
-            <span>Супервайзеров</span>
-            <b>{model.agentRows.length}</b>
-          </li>
-        </ul>
+            <small>каналы сбыта</small>
+            <div className="kpi-bar">
+              <em style={{ width: model.directionRows.length ? "100%" : "0%", background: "#9147ed" }} />
+            </div>
+          </div>
+          <div className="kpi-chip">
+            <span>Средний чек</span>
+            <b>{formatSalesMoney(model.averageTicket)}</b>
+            <small>по факту продаж</small>
+            <div className="kpi-bar">
+              <em style={{ width: model.averageTicket > 0 ? "100%" : "0%", background: "#f7b62d" }} />
+            </div>
+          </div>
+        </div>
       </SalesProPanel>
     </div>
   );

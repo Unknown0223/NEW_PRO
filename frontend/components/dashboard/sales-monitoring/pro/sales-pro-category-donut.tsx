@@ -13,7 +13,7 @@ type Props = {
 
 export function SalesProCategoryDonut({ model, onOpenDetail }: Props) {
   return (
-    <SalesProPanel>
+    <SalesProPanel className="expense-panel">
       <div className="panel-head">
         <div>
           <h2>Факт продаж по категориям</h2>
