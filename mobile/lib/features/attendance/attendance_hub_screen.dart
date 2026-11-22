@@ -128,7 +128,10 @@ class _AttendanceHubScreenState extends ConsumerState<AttendanceHubScreen> {
   }
 
   Future<PreciseFix> _acquireGuardedPosition(double maxAcc) {
-    return LocationGuard().acquire(maxAllowedAccuracyMeters: maxAcc);
+    return LocationGuard().acquire(
+      maxAllowedAccuracyMeters: maxAcc,
+      timeout: const Duration(seconds: 12),
+    );
   }
 
   Future<void> _finishGateIfNeeded() async {
@@ -322,30 +325,33 @@ class _AttendanceHubScreenState extends ConsumerState<AttendanceHubScreen> {
       );
       return;
     }
-    if (_completedLiveness.length < st.livenessDirections) {
+    // Jonli challenge 3–4 qadam; server `liveness_directions` pool hajmi.
+    if (_completedLiveness.isEmpty || _frontPhotoB64 == null) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Пройдите проверку живости (повороты головы + селфи)')),
+        const SnackBar(content: Text('Пройдите проверку живости (камера)')),
       );
       return;
     }
     if (!await _ensureFace(st)) return;
     if (!mounted) return;
-    if (_frontPhotoB64 == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Сначала сделайте селфи (фронтальная камера)')),
-      );
-      return;
-    }
     if (st.requireDualCamera && _backPhotoB64 == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Сделайте снимок рабочего места (задняя камера)')),
       );
       return;
     }
-    setState(() => _submitting = true);
+    setState(() {
+      _submitting = true;
+      _statusBanner = 'Определяем GPS…';
+    });
     try {
-      final pos = await _acquireGuardedPosition(st.maxGpsAccuracyM);
+      final pos = await _acquireGuardedPosition(st.maxGpsAccuracyM).timeout(
+        const Duration(seconds: 15),
+        onTimeout: () => throw LocationGuardException(
+          'GPS слишком долго отвечает — проверьте геолокацию и попробуйте снова.',
+        ),
+      );
       var frontB64 = _frontPhotoB64!;
       try {
         final shrunk = await faceMatchSelfie(base64Decode(frontB64));
@@ -396,9 +402,17 @@ class _AttendanceHubScreenState extends ConsumerState<AttendanceHubScreen> {
       );
       return;
     }
-    setState(() => _submitting = true);
+    setState(() {
+      _submitting = true;
+      _statusBanner = 'Определяем GPS…';
+    });
     try {
-      final pos = await _acquireGuardedPosition(st.maxGpsAccuracyM);
+      final pos = await _acquireGuardedPosition(st.maxGpsAccuracyM).timeout(
+        const Duration(seconds: 15),
+        onTimeout: () => throw LocationGuardException(
+          'GPS слишком долго отвечает — проверьте геолокацию и попробуйте снова.',
+        ),
+      );
       await ref.read(attendanceApiProvider).submitVideoPunch(
             lat: pos.latitude,
             lng: pos.longitude,

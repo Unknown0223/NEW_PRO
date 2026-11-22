@@ -169,19 +169,37 @@ class LocationGuard {
       },
     );
     final settle = Timer(settleAfter, checkDone);
+    // Emulyator/zaif GPS: stream bo‘sh qolsa — vaqtli fused fix (timeout siz ANR).
+    final fusedAfter = Duration(milliseconds: (timeout.inMilliseconds * 0.4).round());
+    final fusedTimer = Timer(fusedAfter, () {
+      if (done.isCompleted || samples.isNotEmpty) return;
+      final remaining = timeout - fusedAfter;
+      if (remaining <= Duration.zero) return;
+      Geolocator.getCurrentPosition(
+        locationSettings: Platform.isAndroid
+            ? AndroidSettings(
+                accuracy: LocationAccuracy.high,
+                forceLocationManager: false,
+                timeLimit: remaining,
+              )
+            : LocationSettings(
+                accuracy: LocationAccuracy.high,
+                timeLimit: remaining,
+              ),
+      ).then(add, onError: (Object _) {});
+    });
     try {
       await done.future.timeout(timeout, onTimeout: () {});
     } finally {
       settle.cancel();
+      fusedTimer.cancel();
       await sub.cancel();
     }
 
     if (samples.isEmpty) {
-      // Fallback: bitta fused fix
-      final one = await Geolocator.getCurrentPosition(
-        locationSettings: const LocationSettings(accuracy: LocationAccuracy.high),
+      throw LocationGuardException(
+        'GPS сигнал не получен — выйдите на открытое место или включите геолокацию в эмуляторе.',
       );
-      samples.add(one);
     }
 
     final best = bestAccuracy();
