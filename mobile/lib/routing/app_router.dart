@@ -203,15 +203,18 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           return '/home';
         }
 
+        // Gate roleRedirect dan oldin — /attendance allowlist da bo‘lmasa ham loop bo‘lmasin.
+        final gateOn = ref.read(faceGateRequiredProvider);
+        if (gateOn) {
+          if (!loc.startsWith('/attendance')) {
+            return '/attendance?gate=1';
+          }
+          return null;
+        }
+
         final role = session.user?.role ?? 'agent';
         final blocked = roleRedirect(state, role);
         if (blocked != null) return blocked;
-
-        // Kunlik Face/tabel gate — boshqa sahifaga chiqib ketmasin.
-        final gateOn = ref.read(faceGateRequiredProvider);
-        if (gateOn && !loc.startsWith('/attendance')) {
-          return '/attendance?gate=1';
-        }
 
         return null;
       }

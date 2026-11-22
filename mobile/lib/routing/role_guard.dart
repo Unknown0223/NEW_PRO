@@ -23,6 +23,7 @@ class _RoleRoutes {
     '/draft',
     '/notifications',
     '/tabel',
+    '/attendance',
     '/kpi',
     '/kpi/calc',
     '/orders/create',
@@ -45,6 +46,7 @@ class _RoleRoutes {
     '/exp-visits-map',
     '/exp-manual-sync',
     '/my-returns',
+    '/attendance',
   };
   static const supervisor = {
     '/home',
@@ -66,6 +68,7 @@ class _RoleRoutes {
     '/home',
     '/profile',
     '/bank-transfers',
+    '/attendance',
   };
 
   static Set<String> forRole(String role) {
@@ -85,6 +88,7 @@ class _RoleRoutes {
   static String? guard(String role, String location) {
     final allowed = forRole(role);
     if (location == '/home' || location == '/profile') return null;
+    if (location.startsWith('/attendance')) return null;
     if (role == 'agent' && location.startsWith('/clients/')) return null;
     if (role == 'agent' && location.startsWith('/visits/')) return null;
     if (role == 'agent' && location.startsWith('/orders/')) return null;
