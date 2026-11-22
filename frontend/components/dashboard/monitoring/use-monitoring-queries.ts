@@ -48,6 +48,13 @@ export function useMonitoringQueries(opts: {
     queryFn: () => fetchMonitoringTables(tenantSlug!, queryString, branchPage + 1, branchPageSize, "branch")
   });
 
+  const supervisorTablesQ = useQuery({
+    queryKey: ["sales-monitoring", "tables", "supervisor", tenantSlug, queryString],
+    enabled: Boolean(tenantSlug) && hydrated && summaryQ.isSuccess,
+    staleTime: STALE.report,
+    queryFn: () => fetchMonitoringTables(tenantSlug!, queryString, 1, 100, "supervisor")
+  });
+
   const skuTablesQ = useQuery({
     queryKey: ["sales-monitoring", "tables", "sku", tenantSlug, queryString, skuPage, skuPageSize],
     enabled: Boolean(tenantSlug) && hydrated && summaryQ.isSuccess && skuVisible,
@@ -59,10 +66,20 @@ export function useMonitoringQueries(opts: {
     const summary = summaryQ.data;
     const charts = chartsQ.data;
     const branchTables = branchTablesQ.data;
+    const supervisorTables = supervisorTablesQ.data;
     const skuTables = skuTablesQ.data;
     const isFetching =
-      summaryQ.isFetching || chartsQ.isFetching || branchTablesQ.isFetching || skuTablesQ.isFetching;
-    const isError = summaryQ.isError || chartsQ.isError || branchTablesQ.isError || skuTablesQ.isError;
+      summaryQ.isFetching ||
+      chartsQ.isFetching ||
+      branchTablesQ.isFetching ||
+      supervisorTablesQ.isFetching ||
+      skuTablesQ.isFetching;
+    const isError =
+      summaryQ.isError ||
+      chartsQ.isError ||
+      branchTablesQ.isError ||
+      supervisorTablesQ.isError ||
+      skuTablesQ.isError;
 
     if (!summary?.plan_fact) {
       return {
@@ -89,7 +106,7 @@ export function useMonitoringQueries(opts: {
       daily_sales: charts?.daily_sales ?? [],
       sales_channels: charts?.sales_channels ?? [],
       branch_performance: branchTables?.branch_performance ?? [],
-      supervisor_performance: [],
+      supervisor_performance: supervisorTables?.supervisor_performance ?? [],
       sku_matrix: skuTables?.sku_matrix ?? [],
       client_daily_sales: []
     };
@@ -102,7 +119,7 @@ export function useMonitoringQueries(opts: {
       branchTotal: branchTables?.sku_total ?? data.branch_performance.length,
       skuTotal: skuTables?.sku_total ?? data.sku_matrix.length
     };
-  }, [summaryQ, chartsQ, branchTablesQ, skuTablesQ]);
+  }, [summaryQ, chartsQ, branchTablesQ, supervisorTablesQ, skuTablesQ]);
 
   return {
     queryString,

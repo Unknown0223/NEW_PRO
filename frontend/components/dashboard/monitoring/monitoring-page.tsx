@@ -1,8 +1,6 @@
 "use client";
 
 import { PageShell } from "@/components/dashboard/page-shell";
-import { toDonutSlices } from "@/components/dashboard/monitoring/donut-slices";
-import { MonitoringDashboardBody } from "@/components/dashboard/monitoring/monitoring-dashboard-body";
 import { MonitoringFiltersBar } from "@/components/dashboard/monitoring/monitoring-filters-bar";
 import {
   MONITORING_SECTION_DEFAULT_ORDER,
@@ -12,24 +10,17 @@ import {
   type MonitoringSectionId
 } from "@/components/dashboard/monitoring/monitoring-section-config";
 import { territoryTreeIdsToFilterLists } from "@/components/dashboard/monitoring/monitoring-territory-tree-utils";
-import {
-  MON_BRANCH_COLS,
-  MON_BRANCH_DEFAULT_ORDER,
-  MON_BRANCH_TABLE_ID,
-  MON_SKU_COLS,
-  MON_SKU_DEFAULT_ORDER,
-  MON_SKU_TABLE_ID
-} from "@/components/dashboard/monitoring/table-constants";
 import type { MonitoringDraft } from "@/components/dashboard/monitoring/types";
 import { useMonitoringQueries } from "@/components/dashboard/monitoring/use-monitoring-queries";
-import { decodeAccessTokenSub, defaultMonitoringDraft, num } from "@/components/dashboard/monitoring/utils";
+import { decodeAccessTokenSub, defaultMonitoringDraft } from "@/components/dashboard/monitoring/utils";
+import { salesMonthLabel } from "@/components/dashboard/sales-monitoring/pro/sales-pro-format";
+import { SalesProPage } from "@/components/dashboard/sales-monitoring/pro/sales-pro-page";
+import { buildSalesProUiModel } from "@/components/dashboard/sales-monitoring/sales-ui-model";
 import { SalesMonitoringFiltersSkeleton } from "@/components/dashboard/sales-monitoring/sales-monitoring-filters-skeleton";
 import { SalesMonitoringKpiSkeleton } from "@/components/dashboard/sales-monitoring/sales-monitoring-kpi-skeleton";
-import { TableColumnSettingsDialog } from "@/components/data-table/table-column-settings-dialog";
 import { useAuthStore, useAuthStoreHydrated, useEffectiveRole } from "@/lib/auth-store";
 import { useDashboardMeta } from "@/lib/use-dashboard-meta";
 import { staffDashboardMultiItem } from "@/lib/order-picker-labels";
-import { useDashboardSectionVisible } from "@/hooks/use-dashboard-section-visible";
 import { useUserTablePrefs } from "@/hooks/use-user-table-prefs";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
@@ -44,29 +35,10 @@ export function DashboardSalesMonitoring() {
   }, [role, accessToken]);
 
   const [applied, setApplied] = useState<MonitoringDraft>(() => defaultMonitoringDraft());
-
-  const [branchPage, setBranchPage] = useState(0);
-  const [branchPageSize, setBranchPageSize] = useState(20);
-  const [skuPage, setSkuPage] = useState(0);
-  const [skuPageSize, setSkuPageSize] = useState(20);
-
-  const [branchColumnsOpen, setBranchColumnsOpen] = useState(false);
-  const [skuColumnsOpen, setSkuColumnsOpen] = useState(false);
-
-  const branchTablePrefs = useUserTablePrefs({
-    tenantSlug,
-    tableId: MON_BRANCH_TABLE_ID,
-    defaultColumnOrder: MON_BRANCH_DEFAULT_ORDER,
-    defaultPageSize: 20,
-    allowedPageSizes: [10, 20, 50]
-  });
-  const skuTablePrefs = useUserTablePrefs({
-    tenantSlug,
-    tableId: MON_SKU_TABLE_ID,
-    defaultColumnOrder: MON_SKU_DEFAULT_ORDER,
-    defaultPageSize: 20,
-    allowedPageSizes: [10, 20, 50]
-  });
+  const [branchPage] = useState(0);
+  const [branchPageSize] = useState(50);
+  const [skuPage] = useState(0);
+  const [skuPageSize] = useState(20);
 
   const sectionPrefs = useUserTablePrefs({
     tenantSlug,
@@ -91,17 +63,12 @@ export function DashboardSalesMonitoring() {
     [sectionPrefs.hiddenColumnIds]
   );
 
-  const sectionVisible = (id: MonitoringSectionId) => visibleSectionIds.has(id);
-
-  const branchSection = useDashboardSectionVisible({ enabled: Boolean(tenantSlug) && hydrated });
-  const skuSection = useDashboardSectionVisible({ enabled: Boolean(tenantSlug) && hydrated });
-
-  const { data, isLoading, isError, branchTotal, skuTotal, queryString } = useMonitoringQueries({
+  const { data, isLoading, isFetching, isError, queryString } = useMonitoringQueries({
     tenantSlug,
     hydrated,
     applied,
-    branchVisible: branchSection.visible && sectionVisible("byBranches"),
-    skuVisible: skuSection.visible && sectionVisible("bySku"),
+    branchVisible: true,
+    skuVisible: false,
     branchPage,
     branchPageSize,
     skuPage,
@@ -109,8 +76,7 @@ export function DashboardSalesMonitoring() {
   });
 
   useEffect(() => {
-    setBranchPage(0);
-    setSkuPage(0);
+    /* queryString change invalidates via react-query keys */
   }, [queryString]);
 
   const filterOptions = useMemo(
@@ -121,19 +87,6 @@ export function DashboardSalesMonitoring() {
     }),
     [data?.meta?.branch_options, agents, supervisors]
   );
-
-  const categorySlices = useMemo(() => {
-    const rows = (data?.category_sales ?? [])
-      .map((r) => ({
-        name: r.category,
-        value: num(r.sales_sum),
-        share_pct: r.share_pct,
-        orders_count: r.orders_count,
-        line_qty: r.line_qty != null ? num(r.line_qty) : undefined
-      }))
-      .sort((a, b) => b.value - a.value);
-    return toDonutSlices(rows, 8, "Прочие категории");
-  }, [data?.category_sales]);
 
   const buildAppliedFromDraft = useCallback(
     (source: MonitoringDraft): MonitoringDraft => {
@@ -162,6 +115,9 @@ export function DashboardSalesMonitoring() {
     [sectionPrefs]
   );
 
+  const proModel = useMemo(() => buildSalesProUiModel(data ?? null), [data]);
+  const monthLabel = salesMonthLabel(applied.month, applied.year);
+
   return (
     <PageShell>
       {!hydrated ? (
@@ -170,29 +126,6 @@ export function DashboardSalesMonitoring() {
         <p className="text-sm text-destructive">Сессия не найдена.</p>
       ) : (
         <div className="flex min-w-0 flex-col gap-6">
-          <TableColumnSettingsDialog
-            open={branchColumnsOpen}
-            onOpenChange={setBranchColumnsOpen}
-            title="Столбцы"
-            columns={[...MON_BRANCH_COLS]}
-            columnOrder={branchTablePrefs.columnOrder}
-            hiddenColumnIds={branchTablePrefs.hiddenColumnIds}
-            saving={branchTablePrefs.saving}
-            onSave={(n) => branchTablePrefs.saveColumnLayout(n)}
-            onReset={() => branchTablePrefs.resetColumnLayout()}
-          />
-          <TableColumnSettingsDialog
-            open={skuColumnsOpen}
-            onOpenChange={setSkuColumnsOpen}
-            title="Столбцы"
-            columns={[...MON_SKU_COLS]}
-            columnOrder={skuTablePrefs.columnOrder}
-            hiddenColumnIds={skuTablePrefs.hiddenColumnIds}
-            saving={skuTablePrefs.saving}
-            onSave={(n) => skuTablePrefs.saveColumnLayout(n)}
-            onReset={() => skuTablePrefs.resetColumnLayout()}
-          />
-
           <MonitoringFiltersBar
             appliedDraft={applied}
             onApply={apply}
@@ -203,35 +136,15 @@ export function DashboardSalesMonitoring() {
             agentOptions={filterOptions.agentOptions}
           />
 
-          {isLoading ? <SalesMonitoringKpiSkeleton cards={3} /> : null}
+          {isLoading ? <SalesMonitoringKpiSkeleton cards={4} /> : null}
           {isError ? <p className="text-sm text-destructive">Не удалось загрузить мониторинг.</p> : null}
 
           {data ? (
-            <MonitoringDashboardBody
-              data={data}
-              appliedMonth={applied.month}
-              appliedYear={applied.year}
-              categorySlices={categorySlices}
-              branchTotal={branchTotal}
-              branchPage={branchPage}
-              branchPageSize={branchPageSize}
-              onBranchPageChange={setBranchPage}
-              onBranchPageSizeChange={(s) => {
-                setBranchPageSize(s);
-                setBranchPage(0);
-              }}
-              skuTotal={skuTotal}
-              skuPage={skuPage}
-              skuPageSize={skuPageSize}
-              onSkuPageChange={setSkuPage}
-              onSkuPageSizeChange={(s) => {
-                setSkuPageSize(s);
-                setSkuPage(0);
-              }}
-              skuRows={data.sku_matrix}
-              skuVisibleColumnOrder={skuTablePrefs.visibleColumnOrder}
-              onOpenSkuColumns={() => setSkuColumnsOpen(true)}
-              visibleSectionIds={visibleSectionIds}
+            <SalesProPage
+              key={monthLabel}
+              model={proModel}
+              loading={isFetching}
+              monthLabel={monthLabel}
             />
           ) : !isLoading ? (
             <SalesMonitoringFiltersSkeleton />
