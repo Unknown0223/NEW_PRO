@@ -52,7 +52,7 @@ export function useMonitoringQueries(opts: {
     queryKey: ["sales-monitoring", "tables", "supervisor", tenantSlug, queryString],
     enabled: Boolean(tenantSlug) && hydrated && summaryQ.isSuccess,
     staleTime: STALE.report,
-    queryFn: () => fetchMonitoringTables(tenantSlug!, queryString, 1, 100, "supervisor")
+    queryFn: () => fetchMonitoringTables(tenantSlug!, queryString, 1, 200, "supervisor")
   });
 
   const skuTablesQ = useQuery({

@@ -36,7 +36,7 @@ export function DashboardSalesMonitoring() {
 
   const [applied, setApplied] = useState<MonitoringDraft>(() => defaultMonitoringDraft());
   const [branchPage] = useState(0);
-  const [branchPageSize] = useState(50);
+  const [branchPageSize] = useState(200);
   const [skuPage] = useState(0);
   const [skuPageSize] = useState(20);
 
@@ -74,10 +74,6 @@ export function DashboardSalesMonitoring() {
     skuPage,
     skuPageSize
   });
-
-  useEffect(() => {
-    /* queryString change invalidates via react-query keys */
-  }, [queryString]);
 
   const filterOptions = useMemo(
     () => ({

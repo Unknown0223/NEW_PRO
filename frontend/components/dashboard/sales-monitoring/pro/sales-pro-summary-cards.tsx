@@ -88,8 +88,9 @@ function SummaryCard({
 
 export function SalesProSummaryCards({ model, monthLabel, onOpenDetail }: Props) {
   const daySpark = model.days.map((d) => d.fact);
-  const planSpark = model.days.map((d) => d.plan || model.plan / Math.max(model.days.length, 1));
-  const completionSpark = model.days.map((d) => d.completion || (model.completionPct ?? 0));
+  // Daily plan API da yo‘q — spark faqat haqiqiy d.plan (odatda 0), oy rejasini kunlarga bo‘lmaymiz.
+  const planSpark = model.days.map((d) => d.plan);
+  const completionSpark = model.days.map((d) => d.completion);
   const akbSpark = model.branchRows.map((r) => r.akb);
 
   return (
@@ -97,11 +98,11 @@ export function SalesProSummaryCards({ model, monthLabel, onOpenDetail }: Props)
       <SummaryCard
         label="План продаж"
         valueText={formatSalesMoney(model.plan)}
-        change={`${model.days.filter((d) => d.fact >= d.plan && d.plan > 0).length} дней выше плана`}
+        change={model.planNote || "Месячный план"}
         color="#287cf4"
         bg="#dfeeff"
         icon={Target}
-        spark={planSpark.length ? planSpark : [model.plan]}
+        spark={planSpark.some((v) => v > 0) ? planSpark : [model.plan]}
         caption={monthLabel}
         onDetails={() => onOpenDetail({ kind: "plan" })}
       />
