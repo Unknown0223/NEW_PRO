@@ -4,6 +4,7 @@
 import { prisma } from "../../config/database";
 import { buildFaceDescriptor } from "../mobile/face-match.descriptor";
 import { faceMatchScore } from "../mobile/face-match.pure";
+import { markDailyLoginVerified } from "../mobile/mobile-face.service";
 import { readUiPrefs } from "../mobile/mobile-face.shared";
 import { loadOrBuildReferenceDescriptor } from "../mobile/mobile-face.reference";
 import { toFio } from "../staff/staff.shared.helpers";
@@ -240,6 +241,15 @@ export async function submitAttendancePunch(tenantId: number, userId: number, in
     err.code = antiFraud.failedCode ?? "ANTIFRAUD_REJECTED";
     err.punchId = punch.id;
     throw err;
+  }
+
+  /* Mobil foto/video punch = kunlik Face gate ham yopiladi. */
+  if (input.source === "mobile_photo" || input.source === "mobile_video" || input.source === "kiosk") {
+    try {
+      await markDailyLoginVerified(tenantId, userId);
+    } catch {
+      /* punch allaqachon yozilgan — daily flag ixtiyoriy */
+    }
   }
 
   return {

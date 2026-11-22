@@ -126,6 +126,31 @@ export async function getOrCreateDailyState(
   return row;
 }
 
+/** Muvaffaqiyatli tabel punch (yoki boshqa kunlik tasdiq) — Face daily gate ochiladi. */
+export async function markDailyLoginVerified(tenantId: number, userId: number): Promise<void> {
+  const dateStr = workRegionDateString();
+  const daily = await getOrCreateDailyState(tenantId, userId, dateStr, 5);
+  if (daily.daily_login_verified) return;
+  await prisma.faceVerificationDailyState.update({
+    where: { id: daily.id },
+    data: { daily_login_verified: true }
+  });
+}
+
+async function hasValidAttendancePunchToday(tenantId: number, userId: number): Promise<boolean> {
+  const dateStr = workRegionDateString();
+  const workDate = new Date(`${dateStr}T00:00:00.000Z`);
+  const n = await prisma.attendancePunch.count({
+    where: {
+      tenant_id: tenantId,
+      user_id: userId,
+      work_date: workDate,
+      is_valid: true
+    }
+  });
+  return n > 0;
+}
+
 export async function getFaceVerificationStatus(
   tenantId: number,
   userId: number,
@@ -137,6 +162,14 @@ export async function getFaceVerificationStatus(
   const daily = policy.enabled
     ? await getOrCreateDailyState(tenantId, userId, dateStr, policy.maxRandomOrdersPerDay)
     : null;
+
+  /* Bugungi valid punch bo‘lsa — kunlik Face gate yopilgan deb hisoblanadi. */
+  if (policy.enabled && policy.dailyLogin && daily != null && !daily.daily_login_verified) {
+    if (await hasValidAttendancePunchToday(tenantId, userId)) {
+      await markDailyLoginVerified(tenantId, userId);
+      daily.daily_login_verified = true;
+    }
+  }
 
   return {
     policy,

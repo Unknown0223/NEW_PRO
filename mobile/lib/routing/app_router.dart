@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../core/auth/session.dart';
+import '../core/face/face_gate_state.dart';
 import '../core/theme/app_colors.dart';
 import '../features/auth/auth_provider.dart';
 import '../features/auth/pin_setup_screen.dart';
@@ -92,6 +93,7 @@ final _shellKey = GlobalKey<NavigatorState>();
 class _AppRouterRefresh extends ChangeNotifier {
   _AppRouterRefresh(Ref ref) {
     ref.listen<AuthState>(authStateProvider, (_, __) => notifyListeners());
+    ref.listen<bool>(faceGateRequiredProvider, (_, __) => notifyListeners());
   }
 }
 
@@ -204,6 +206,12 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         final role = session.user?.role ?? 'agent';
         final blocked = roleRedirect(state, role);
         if (blocked != null) return blocked;
+
+        // Kunlik Face/tabel gate — boshqa sahifaga chiqib ketmasin.
+        final gateOn = ref.read(faceGateRequiredProvider);
+        if (gateOn && !loc.startsWith('/attendance')) {
+          return '/attendance?gate=1';
+        }
 
         return null;
       }
@@ -385,7 +393,9 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/attendance',
         parentNavigatorKey: rootNavigatorKey,
-        builder: (_, __) => const AttendanceHubScreen(),
+        builder: (_, state) => AttendanceHubScreen(
+          gateMode: state.uri.queryParameters['gate'] == '1',
+        ),
       ),
       GoRoute(
         path: '/deliveries/:id',

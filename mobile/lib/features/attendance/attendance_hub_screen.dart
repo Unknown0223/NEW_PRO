@@ -2,8 +2,11 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 
+import '../../core/face/face_daily_check_policy.dart';
+import '../../core/face/face_gate_state.dart';
 import '../../core/face/face_verification_flow.dart';
 import '../../core/security/location_guard.dart';
 import '../../core/theme/app_colors.dart';
@@ -19,7 +22,10 @@ import 'photo_report.dart';
 import 'video_punch_flow.dart';
 
 class AttendanceHubScreen extends ConsumerStatefulWidget {
-  const AttendanceHubScreen({super.key});
+  /// Birinchi kunlik kirish — chiqish faqat ПРИХОД dan keyin.
+  final bool gateMode;
+
+  const AttendanceHubScreen({super.key, this.gateMode = false});
 
   @override
   ConsumerState<AttendanceHubScreen> createState() => _AttendanceHubScreenState();
@@ -44,6 +50,8 @@ class _AttendanceHubScreenState extends ConsumerState<AttendanceHubScreen> {
   String _reqType = 'vacation';
   bool _submitting = false;
   String? _statusBanner;
+  bool _gateCleared = false;
+  bool _gateAutoStarted = false;
 
   @override
   void initState() {
@@ -120,11 +128,20 @@ class _AttendanceHubScreenState extends ConsumerState<AttendanceHubScreen> {
     return LocationGuard().acquire(maxAllowedAccuracyMeters: maxAcc);
   }
 
+  Future<void> _finishGateIfNeeded() async {
+    if (!widget.gateMode || !mounted) return;
+    setState(() => _gateCleared = true);
+    ref.read(faceGateRequiredProvider.notifier).clearGate();
+    if (!mounted) return;
+    context.go('/home');
+  }
+
   Future<void> _runLiveness(MobileAttendanceState st) async {
     final res = await LivenessCameraFlow.run(
       context,
       directions: st.livenessDirections,
       presetSequence: _livenessSequence.isEmpty ? null : _livenessSequence,
+      mandatory: widget.gateMode,
     );
     if (res == null || !mounted) return;
     setState(() {
@@ -240,6 +257,9 @@ class _AttendanceHubScreenState extends ConsumerState<AttendanceHubScreen> {
       setState(() => _statusBanner =
           direction == 'IN' ? 'ПРИХОД принят сервером.' : 'УХОД принят сервером.');
       ref.invalidate(mobileAttendanceStateProvider);
+      if (widget.gateMode && direction == 'IN') {
+        await _finishGateIfNeeded();
+      }
     } catch (e) {
       await _enqueueFailed('photo', st, e);
     } finally {
@@ -285,11 +305,38 @@ class _AttendanceHubScreenState extends ConsumerState<AttendanceHubScreen> {
           );
       setState(() => _statusBanner = 'Видео-отметка отправлена.');
       ref.invalidate(mobileAttendanceStateProvider);
+      if (widget.gateMode) {
+        await _finishGateIfNeeded();
+      }
     } catch (e) {
       await _enqueueFailed('video', st, e);
     } finally {
       if (mounted) setState(() => _submitting = false);
     }
+  }
+
+  Widget _wrapGate(Widget child) {
+    final canLeave = canLeaveAttendanceGate(
+      gateMode: widget.gateMode,
+      dayGateCleared: _gateCleared,
+    );
+    return PopScope(
+      canPop: canLeave,
+      child: child,
+    );
+  }
+
+  Widget? _gateBanner() {
+    if (!widget.gateMode || _gateCleared) return null;
+    return Container(
+      width: double.infinity,
+      color: const Color(0xFF0F766E),
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+      child: const Text(
+        'Первый вход за день — отметьте ПРИХОД (Face ID). После этого приложение откроется.',
+        style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600, height: 1.3),
+      ),
+    );
   }
 
   Future<void> _enqueueFailed(String kind, MobileAttendanceState st, Object error) async {
@@ -338,33 +385,66 @@ class _AttendanceHubScreenState extends ConsumerState<AttendanceHubScreen> {
   @override
   Widget build(BuildContext context) {
     final stateAsync = ref.watch(mobileAttendanceStateProvider);
+    final showBack = canLeaveAttendanceGate(
+      gateMode: widget.gateMode,
+      dayGateCleared: _gateCleared,
+    );
 
     return stateAsync.when(
-      loading: () => Scaffold(
+      loading: () => _wrapGate(Scaffold(
         backgroundColor: AppColors.background,
-        appBar: const AgentAppBar(title: 'Табель и Посещаемость', showBack: true),
+        appBar: AgentAppBar(title: 'Табель и Посещаемость', showBack: showBack),
         body: const Center(child: CircularProgressIndicator()),
-      ),
-      error: (err, _) => Scaffold(
+      )),
+      error: (err, _) => _wrapGate(Scaffold(
         backgroundColor: AppColors.background,
-        appBar: const AgentAppBar(title: 'Табель и Посещаемость', showBack: true),
-        body: Center(child: Text('Ошибка загрузки: $err')),
-      ),
+        appBar: AgentAppBar(title: 'Табель и Посещаемость', showBack: showBack),
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text('Ошибка загрузки: $err', textAlign: TextAlign.center),
+                if (widget.gateMode) ...[
+                  const SizedBox(height: 16),
+                  FilledButton(
+                    onPressed: () => ref.invalidate(mobileAttendanceStateProvider),
+                    child: const Text('Повторить'),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+      )),
       data: (st) {
         if (!_livenessSeeded) {
           _livenessSeeded = true;
           _livenessSequence = LivenessHelper.buildSequence(st.livenessDirections);
           WidgetsBinding.instance.addPostFrameCallback((_) {
             ref.read(attendanceApiProvider).flushOfflineQueue();
+            if (widget.gateMode && st.todayPunches.isNotEmpty) {
+              _finishGateIfNeeded();
+              return;
+            }
+            if (widget.gateMode &&
+                !_gateAutoStarted &&
+                st.photoEnabled &&
+                !st.punchDisabled) {
+              _gateAutoStarted = true;
+              _runLiveness(st);
+            }
           });
         }
 
         if (st.punchDisabled || st.terminalOnly) {
-          return Scaffold(
+          return _wrapGate(Scaffold(
             backgroundColor: AppColors.background,
-            appBar: const AgentAppBar(title: 'Табель и Посещаемость', showBack: true),
+            appBar: AgentAppBar(title: 'Табель и Посещаемость', showBack: showBack),
             body: Column(
               children: [
+                if (_gateBanner() != null) _gateBanner()!,
                 if (_statusBanner != null)
                   Container(
                     width: double.infinity,
@@ -375,14 +455,18 @@ class _AttendanceHubScreenState extends ConsumerState<AttendanceHubScreen> {
                       style: const TextStyle(color: AppColors.primaryDark, fontWeight: FontWeight.w600),
                     ),
                   ),
-                Expanded(child: _buildModeBlocked(st)),
+                Expanded(
+                  child: widget.gateMode
+                      ? _buildGateFaceOnly(st)
+                      : _buildModeBlocked(st),
+                ),
               ],
             ),
-          );
+          ));
         }
 
         final tabs = st.visibleTabs;
-        return DefaultTabController(
+        return _wrapGate(DefaultTabController(
           key: ValueKey(tabs.map((e) => e.name).join(',')),
           length: tabs.length,
           child: Scaffold(
@@ -390,8 +474,9 @@ class _AttendanceHubScreenState extends ConsumerState<AttendanceHubScreen> {
             appBar: AppBar(
               backgroundColor: AppColors.surface,
               foregroundColor: AppColors.textTitle,
-              title: const Text('Табель и Посещаемость'),
-              actions: const [QuickPanelAction()],
+              title: Text(widget.gateMode ? 'Приход · Face ID' : 'Табель и Посещаемость'),
+              automaticallyImplyLeading: showBack,
+              actions: showBack ? const [QuickPanelAction()] : const [],
               bottom: TabBar(
                 isScrollable: true,
                 labelColor: AppColors.primary,
@@ -402,6 +487,7 @@ class _AttendanceHubScreenState extends ConsumerState<AttendanceHubScreen> {
             ),
             body: Column(
               children: [
+                if (_gateBanner() != null) _gateBanner()!,
                 if (_statusBanner != null)
                   Container(
                     width: double.infinity,
@@ -420,8 +506,53 @@ class _AttendanceHubScreenState extends ConsumerState<AttendanceHubScreen> {
               ],
             ),
           ),
-        );
+        ));
       },
+    );
+  }
+
+  /// Terminal-only yoki punch o‘chirilgan — faqat kunlik Face selfie.
+  Widget _buildGateFaceOnly(MobileAttendanceState st) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.face_retouching_natural, size: 56, color: Colors.teal.shade700),
+            const SizedBox(height: 16),
+            const Text(
+              'Подтвердите лицо для входа в приложение',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              st.terminalOnly
+                  ? 'Отметка через терминал. Для приложения — одно селфи Face ID.'
+                  : 'Способ отметки отключён. Для входа подтвердите Face ID.',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Colors.grey.shade700),
+            ),
+            const SizedBox(height: 20),
+            FilledButton.icon(
+              onPressed: _submitting
+                  ? null
+                  : () async {
+                      setState(() => _submitting = true);
+                      try {
+                        final ok = await FaceVerificationFlow.ensureDailyLogin(context, ref);
+                        if (ok && mounted) await _finishGateIfNeeded();
+                      } finally {
+                        if (mounted) setState(() => _submitting = false);
+                      }
+                    },
+              icon: const Icon(Icons.camera_alt),
+              label: Text(_submitting ? 'Проверка…' : 'Открыть камеру'),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -619,7 +750,6 @@ class _AttendanceHubScreenState extends ConsumerState<AttendanceHubScreen> {
               onPressed: () async {
                 final x = await _picker.pickImage(
                   source: ImageSource.camera,
-                  preferredCameraDevice: CameraDevice.front,
                   maxWidth: 960,
                   imageQuality: 78,
                 );

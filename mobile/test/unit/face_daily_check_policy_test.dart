@@ -61,4 +61,48 @@ void main() {
       );
     });
   });
+
+  group('attendance gate', () {
+    test('opens when daily needed and not already on attendance', () {
+      expect(
+        shouldOpenAttendanceGate(
+          needsDailyLogin: true,
+          alreadyNavigated: false,
+          currentPath: '/home',
+        ),
+        isTrue,
+      );
+      expect(
+        shouldOpenAttendanceGate(
+          needsDailyLogin: true,
+          alreadyNavigated: false,
+          currentPath: '/attendance',
+        ),
+        isFalse,
+      );
+      expect(
+        shouldOpenAttendanceGate(
+          needsDailyLogin: false,
+          alreadyNavigated: false,
+          currentPath: '/home',
+        ),
+        isFalse,
+      );
+    });
+
+    test('leave only after cleared', () {
+      expect(
+        canLeaveAttendanceGate(gateMode: true, dayGateCleared: false),
+        isFalse,
+      );
+      expect(
+        canLeaveAttendanceGate(gateMode: true, dayGateCleared: true),
+        isTrue,
+      );
+      expect(
+        canLeaveAttendanceGate(gateMode: false, dayGateCleared: false),
+        isTrue,
+      );
+    });
+  });
 }

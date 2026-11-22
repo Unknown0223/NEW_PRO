@@ -1,14 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../core/face/face_daily_check_policy.dart';
+import '../../core/face/face_gate_state.dart';
 import '../../core/face/face_verification_flow.dart';
 import '../../core/navigation/root_navigator_context.dart';
-import '../../core/theme/app_colors.dart';
-import '../../core/theme/app_typography.dart';
 import 'auth_provider.dart';
 
-/// Kunlik Face ID — soft «Позже» yo‘q: tasdiqlanmaguncha ilova bloklangan.
+/// Kunlik Face / tabel: qora overlay yo‘q — birinchi kirishda `/attendance?gate=1`.
 class FaceVerificationListener extends ConsumerStatefulWidget {
   final Widget child;
   const FaceVerificationListener({super.key, required this.child});
@@ -22,10 +22,7 @@ class _FaceVerificationListenerState
     extends ConsumerState<FaceVerificationListener> {
   bool _running = false;
   bool _doneThisSession = false;
-  bool _blocking = false;
-  bool _promptedWhileBlocking = false;
-  bool _dialogOpen = false;
-  String? _lastError;
+  bool _navigated = false;
   bool _scheduledInitial = false;
 
   @override
@@ -34,7 +31,7 @@ class _FaceVerificationListenerState
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || _scheduledInitial) return;
       _scheduledInitial = true;
-      _maybeDailyCheck();
+      _maybeOpenGate();
     });
   }
 
@@ -43,166 +40,70 @@ class _FaceVerificationListenerState
     ref.listen<AuthState>(authStateProvider, (prev, next) {
       if (next.status == AuthStatus.ready && prev?.status != AuthStatus.ready) {
         _doneThisSession = false;
-        _blocking = false;
-        _promptedWhileBlocking = false;
-        _dialogOpen = false;
-        _lastError = null;
+        _navigated = false;
         WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted) _maybeDailyCheck();
+          if (mounted) _maybeOpenGate();
         });
       }
       if (next.status != AuthStatus.ready) {
         _doneThisSession = false;
-        _blocking = false;
-        _promptedWhileBlocking = false;
-        _dialogOpen = false;
-        _lastError = null;
+        _navigated = false;
       }
     });
 
-    final showOverlay = _blocking && !_dialogOpen;
-
-    return Stack(
-      fit: StackFit.expand,
-      children: [
-        IgnorePointer(ignoring: showOverlay, child: widget.child),
-        if (showOverlay)
-          Material(
-            color: Colors.black.withValues(alpha: 0.72),
-            child: SafeArea(
-              child: Center(
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 360),
-                  child: Padding(
-                    padding: const EdgeInsets.all(24),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(
-                          Icons.face_retouching_natural,
-                          size: 48,
-                          color: Colors.white,
-                        ),
-                        const SizedBox(height: 16),
-                        Text(
-                          'Требуется подтверждение лица',
-                          textAlign: TextAlign.center,
-                          style: AppTypography.headlineSmall
-                              .copyWith(color: Colors.white),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'Без серверной проверки лица работа с приложением недоступна. Пропуск недоступен.',
-                          textAlign: TextAlign.center,
-                          style: AppTypography.bodyMedium
-                              .copyWith(color: Colors.white70),
-                        ),
-                        if (_lastError != null) ...[
-                          const SizedBox(height: 12),
-                          Text(
-                            _lastError!,
-                            textAlign: TextAlign.center,
-                            style: AppTypography.caption
-                                .copyWith(color: AppColors.error),
-                          ),
-                        ],
-                        const SizedBox(height: 20),
-                        FilledButton(
-                          onPressed: _running
-                              ? null
-                              : () => _maybeDailyCheck(force: true),
-                          child: Text(
-                            _running ? 'Проверка…' : 'Подтвердить лицо',
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
-      ],
-    );
+    // Overlay yo‘q — faqat child.
+    return widget.child;
   }
 
-  Future<void> _maybeDailyCheck({bool force = false}) async {
+  Future<void> _maybeOpenGate({bool force = false}) async {
     if (_running || (!force && _doneThisSession) || !mounted) return;
-    if (!force && _promptedWhileBlocking) return;
     if (ref.read(authStateProvider).status != AuthStatus.ready) return;
 
-    final openCapture = shouldAutoPromptDailyFace(
+    final open = shouldAutoPromptDailyFace(
       force: force,
       doneThisSession: _doneThisSession,
-      alreadyPrompted: _promptedWhileBlocking,
+      alreadyPrompted: _navigated,
     );
+    if (!open) return;
 
     _running = true;
-    if (mounted) setState(() => _lastError = null);
     try {
-      await Future<void>.delayed(const Duration(milliseconds: 400));
+      await Future<void>.delayed(const Duration(milliseconds: 350));
       if (!mounted) return;
 
-      final needsBlock = await FaceVerificationFlow.isDailyLoginBlocking(ref);
-      if (!needsBlock) {
-        if (mounted) {
-          setState(() {
-            _doneThisSession = true;
-            _blocking = false;
-            _promptedWhileBlocking = false;
-            _dialogOpen = false;
-          });
-        }
+      final needs = await FaceVerificationFlow.isDailyLoginBlocking(ref);
+      if (!needs) {
+        _doneThisSession = true;
+        _navigated = false;
+        ref.read(faceGateRequiredProvider.notifier).clearGate();
         return;
       }
 
-      if (mounted) setState(() => _blocking = true);
+      ref.read(faceGateRequiredProvider.notifier).requireGate();
 
-      if (!openCapture) return;
-
-      _promptedWhileBlocking = true;
       final navCtx = resolveRootNavigatorContext(context);
-      if (navCtx == null) {
-        if (mounted) {
-          setState(() {
-            _blocking = true;
-            _dialogOpen = false;
-            _lastError = 'Не удалось открыть камеру — повторите подтверждение';
-          });
-        }
+      if (navCtx == null || !navCtx.mounted) return;
+
+      String path = '/home';
+      try {
+        path = GoRouterState.of(navCtx).uri.path;
+      } catch (_) {}
+
+      if (!shouldOpenAttendanceGate(
+        needsDailyLogin: true,
+        alreadyNavigated: _navigated,
+        currentPath: path,
+      )) {
         return;
       }
 
-      if (mounted) setState(() => _dialogOpen = true);
-      final ok = await FaceVerificationFlow.ensureDailyLogin(navCtx, ref);
-      if (!mounted) return;
-      if (ok) {
-        setState(() {
-          _doneThisSession = true;
-          _blocking = false;
-          _promptedWhileBlocking = false;
-          _dialogOpen = false;
-          _lastError = null;
-        });
-      } else {
-        setState(() {
-          _blocking = true;
-          _dialogOpen = false;
-          _lastError = 'Проверка не завершена — повторите подтверждение';
-        });
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          _blocking = true;
-          _promptedWhileBlocking = true;
-          _dialogOpen = false;
-          _lastError = '$e';
-        });
-      }
+      _navigated = true;
+      GoRouter.of(navCtx).go('/attendance?gate=1');
+    } catch (_) {
+      // Keyingi ready/force da qayta uriniladi.
+      _navigated = false;
     } finally {
       _running = false;
-      if (mounted) setState(() {});
     }
   }
 }

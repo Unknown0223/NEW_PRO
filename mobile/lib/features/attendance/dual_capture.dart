@@ -3,7 +3,8 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
-/// Orqa → old kamera ketma-ket surat (HR Hub DualCapture oqimi, image_picker bilan).
+/// Orqa → old kamera ketma-ket surat (image_picker).
+/// preferredCameraDevice yo‘q — emulyator kulrang previewdan qochamiz.
 class DualCaptureResult {
   const DualCaptureResult({required this.backBase64, required this.frontBase64});
   final String backBase64;
@@ -36,7 +37,6 @@ class DualCapture {
 
     final back = await picker.pickImage(
       source: ImageSource.camera,
-      preferredCameraDevice: CameraDevice.rear,
       maxWidth: 1280,
       imageQuality: 78,
     );
@@ -62,7 +62,6 @@ class DualCapture {
       if (okFront != true || !context.mounted) return null;
       final front = await picker.pickImage(
         source: ImageSource.camera,
-        preferredCameraDevice: CameraDevice.front,
         maxWidth: 960,
         imageQuality: 78,
       );

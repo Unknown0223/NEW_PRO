@@ -59,7 +59,6 @@ class VideoPunchFlow {
 
     final front = await picker.pickVideo(
       source: ImageSource.camera,
-      preferredCameraDevice: CameraDevice.front,
       maxDuration: Duration(seconds: maxSec),
     );
     if (front == null || !context.mounted) return null;
@@ -83,7 +82,6 @@ class VideoPunchFlow {
       if (backOk == true && context.mounted) {
         final back = await picker.pickVideo(
           source: ImageSource.camera,
-          preferredCameraDevice: CameraDevice.rear,
           maxDuration: Duration(seconds: maxSec),
         );
         if (back != null) {

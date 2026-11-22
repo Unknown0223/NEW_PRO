@@ -121,10 +121,9 @@ class FaceVerificationFlow {
           style: AppTypography.bodyMedium.copyWith(color: AppColors.textMuted),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Отмена')),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Сделать фото'),
+            child: const Text('Открыть камеру'),
           ),
         ],
       ),
@@ -183,10 +182,9 @@ class FaceVerificationFlow {
           style: AppTypography.bodyMedium.copyWith(color: AppColors.textMuted),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Отмена')),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Сделать фото'),
+            child: const Text('Открыть камеру'),
           ),
         ],
       ),
