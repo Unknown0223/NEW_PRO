@@ -4,11 +4,13 @@ import 'package:salesdoc_mobile/features/attendance/punch_face_result.dart';
 void main() {
   test('FACE_MISMATCH layer passed → matched', () {
     final r = parsePunchFaceResult({
-      'anti_fraud': {
-        'ok': true,
-        'layers': [
-          {'code': 'FACE_MISMATCH', 'passed': true, 'detail': 'Face ID mosligi: 87.2%'},
-        ],
+      'data': {
+        'anti_fraud': {
+          'ok': true,
+          'layers': [
+            {'code': 'FACE_MISMATCH', 'passed': true, 'detail': 'Face ID mosligi: 87.2%'},
+          ],
+        },
       },
     });
     expect(r.matched, isTrue);

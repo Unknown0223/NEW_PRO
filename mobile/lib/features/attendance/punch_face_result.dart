@@ -23,7 +23,12 @@ PunchFaceResult parsePunchFaceResult(Map<String, dynamic>? response) {
     );
   }
 
-  final anti = response['anti_fraud'];
+  // API ko‘pincha `{ data: { anti_fraud, punch } }` qaytaradi.
+  final root = response['data'] is Map
+      ? Map<String, dynamic>.from(response['data'] as Map)
+      : response;
+
+  final anti = root['anti_fraud'];
   final layers = anti is Map && anti['layers'] is List ? anti['layers'] as List : const [];
   for (final raw in layers) {
     if (raw is! Map) continue;
@@ -51,7 +56,7 @@ PunchFaceResult parsePunchFaceResult(Map<String, dynamic>? response) {
     );
   }
 
-  final punch = response['punch'];
+  final punch = root['punch'];
   final score = punch is Map ? (punch['face_score'] as num?)?.toDouble() : null;
   if (score != null) {
     final pct = (score * 100).clamp(0, 100).toDouble();
