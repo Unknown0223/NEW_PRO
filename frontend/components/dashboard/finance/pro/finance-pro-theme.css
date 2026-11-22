@@ -14,7 +14,7 @@
   --pointer-x: 50vw;
   --pointer-y: 32vh;
   position: relative;
-  isolation: isolate;
+  z-index: 0;
   color: var(--ink);
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
@@ -51,7 +51,7 @@
 }
 .finance-pro > * {
   position: relative;
-  z-index: 1;
+  z-index: 0;
 }
 
 .finance-pro {
@@ -60,7 +60,7 @@
   background: transparent;
 }
 .finance-pro-main {
-  overflow: hidden;
+  overflow: visible;
   padding: 14px 0 22px;
 }
 .finance-pro.finance-pro-loading {
@@ -214,14 +214,14 @@
 
 
 @keyframes finance-pro-aurora-drift { 0% { transform: translate3d(-.6%, -.7%, 0) scale(1); } 50% { transform: translate3d(.65%, .35%, 0) scale(1.035); } 100% { transform: translate3d(-.15%, .85%, 0) scale(1.015); } }
-@keyframes enter-from-left { from { opacity: 0; transform: translate3d(-42px, 0, 0) scale(.985); filter: blur(8px); } 72% { opacity: 1; filter: blur(0); } to { opacity: 1; transform: translate3d(0, 0, 0) scale(1); filter: blur(0); } }
-@keyframes enter-from-right { from { opacity: 0; transform: translate3d(42px, 0, 0) scale(.985); filter: blur(8px); } 72% { opacity: 1; filter: blur(0); } to { opacity: 1; transform: translate3d(0, 0, 0) scale(1); filter: blur(0); } }
-@keyframes enter-from-top { from { opacity: 0; transform: translate3d(0, -32px, 0) scale(.99); filter: blur(7px); } 72% { opacity: 1; filter: blur(0); } to { opacity: 1; transform: translate3d(0, 0, 0) scale(1); filter: blur(0); } }
-@keyframes enter-from-bottom { from { opacity: 0; transform: translate3d(0, 34px, 0) scale(.99); filter: blur(7px); } 72% { opacity: 1; filter: blur(0); } to { opacity: 1; transform: translate3d(0, 0, 0) scale(1); filter: blur(0); } }
-@keyframes content-from-left { from { opacity: 0; transform: translate3d(-18px, 0, 0); filter: blur(4px); } to { opacity: 1; transform: translate3d(0, 0, 0); filter: blur(0); } }
-@keyframes content-from-right { from { opacity: 0; transform: translate3d(18px, 0, 0); filter: blur(4px); } to { opacity: 1; transform: translate3d(0, 0, 0); filter: blur(0); } }
-@keyframes content-from-top { from { opacity: 0; transform: translate3d(0, -12px, 0); filter: blur(3px); } to { opacity: 1; transform: translate3d(0, 0, 0); filter: blur(0); } }
-@keyframes content-from-bottom { from { opacity: 0; transform: translate3d(0, 14px, 0); filter: blur(3px); } to { opacity: 1; transform: translate3d(0, 0, 0); filter: blur(0); } }
+@keyframes enter-from-left { from { opacity: 0; transform: translate3d(-42px, 0, 0) scale(.985); } to { opacity: 1; transform: none; } }
+@keyframes enter-from-right { from { opacity: 0; transform: translate3d(42px, 0, 0) scale(.985); } to { opacity: 1; transform: none; } }
+@keyframes enter-from-top { from { opacity: 0; transform: translate3d(0, -32px, 0) scale(.99); } to { opacity: 1; transform: none; } }
+@keyframes enter-from-bottom { from { opacity: 0; transform: translate3d(0, 34px, 0) scale(.99); } to { opacity: 1; transform: none; } }
+@keyframes content-from-left { from { opacity: 0; transform: translate3d(-18px, 0, 0); } to { opacity: 1; transform: none; } }
+@keyframes content-from-right { from { opacity: 0; transform: translate3d(18px, 0, 0); } to { opacity: 1; transform: none; } }
+@keyframes content-from-top { from { opacity: 0; transform: translate3d(0, -12px, 0); } to { opacity: 1; transform: none; } }
+@keyframes content-from-bottom { from { opacity: 0; transform: translate3d(0, 14px, 0); } to { opacity: 1; transform: none; } }
 @keyframes rise-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
 @keyframes pop-in { from { opacity: 0; transform: translateY(-4px) scale(.99); } to { opacity: 1; transform: translateY(0) scale(1); } }
 @keyframes modal-in { from { opacity: 0; transform: translateY(8px) scale(.98); } to { opacity: 1; transform: translateY(0) scale(1); } }

@@ -61,7 +61,7 @@ export function FinanceFiltersBar(props: {
   });
 
   return (
-    <section className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-sm sm:p-5">
+    <section className="relative z-40 rounded-2xl border border-slate-200/80 bg-white p-4 shadow-sm sm:p-5">
       <div className="mb-4 flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
         <div className="min-w-0">
           <p className="text-[11px] font-bold uppercase tracking-[0.22em] text-teal-600">Финансы</p>

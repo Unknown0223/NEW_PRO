@@ -869,7 +869,7 @@ export function DateRangePopover({
   return createPortal(
     <div
       ref={panelRef}
-      className="scrollbar-none fixed z-[100] w-max max-w-[min(628px,calc(100vw-1rem))] max-h-[min(85vh,calc(100vh-1rem))] overflow-y-auto overflow-x-auto rounded-lg border border-border/80 bg-popover text-popover-foreground shadow-lg ring-1 ring-black/5"
+      className="scrollbar-none fixed z-[500] w-max max-w-[min(628px,calc(100vw-1rem))] max-h-[min(85vh,calc(100vh-1rem))] overflow-y-auto overflow-x-auto rounded-lg border border-border/80 bg-popover text-popover-foreground shadow-lg ring-1 ring-black/5"
       style={{
         top: box.top,
         left: box.left
