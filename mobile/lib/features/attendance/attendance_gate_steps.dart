@@ -18,6 +18,7 @@ class AttendanceGateStep {
 }
 
 /// Sof: gate sahifasi qadamlari (unit-test).
+/// Liveness — bitta qadam: kamera ichida random strelkalar.
 List<AttendanceGateStep> buildAttendanceGateSteps({
   required bool photoEnabled,
   required bool videoEnabled,
@@ -27,20 +28,14 @@ List<AttendanceGateStep> buildAttendanceGateSteps({
   List<String>? livenessSequence,
 }) {
   if (photoEnabled) {
-    final seq = livenessSequence ?? LivenessHelper.buildSequence(livenessDirections);
-    final steps = <AttendanceGateStep>[];
-    for (var i = 0; i < seq.length; i++) {
-      final dir = seq[i];
-      final label = LivenessHelper.labelsRu[dir] ?? dir;
-      steps.add(
-        AttendanceGateStep(
-          kind: AttendanceGateStepKind.liveness,
-          direction: dir,
-          title: 'Шаг ${i + 1}/${seq.length}',
-          hint: label,
-        ),
-      );
-    }
+    final n = livenessSequence?.length ?? (livenessDirections == 8 ? 8 : 4);
+    final steps = <AttendanceGateStep>[
+      AttendanceGateStep(
+        kind: AttendanceGateStepKind.liveness,
+        title: 'Проверка лица',
+        hint: 'В камере следуйте случайным стрелкам ($n)',
+      ),
+    ];
     if (requireDualCamera) {
       steps.add(
         const AttendanceGateStep(

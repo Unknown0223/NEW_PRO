@@ -33,6 +33,7 @@ class LivenessHelper {
     base.shuffle(rng);
     return base;
   }
+
 }
 
 enum AttendanceMethodTab { photo, video, kiosk, requests }

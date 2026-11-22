@@ -25,8 +25,8 @@ class _MobileSessionGuardState extends ConsumerState<MobileSessionGuard> with Wi
   Timer? _configTimer;
   DateTime? _lastConfigRefresh;
   AppLifecycleState? _lastLifecycle;
-  /// `paused` dan keyin qaytilganda PIN (fon / ekran o‘chgan).
-  bool _pendingLockOnResume = false;
+  /// Fon boshlangan vaqt — PIN faqat [appLockIdleTimeout] dan keyin.
+  DateTime? _pausedAt;
   /// Kamera `paused` suppressed holatda — `end()` resume’dan oldin bo‘lsa ham qulf yo‘q.
   bool _skipLockAfterSuppressedPause = false;
 
@@ -58,9 +58,9 @@ class _MobileSessionGuardState extends ConsumerState<MobileSessionGuard> with Wi
     if (state == AppLifecycleState.paused) {
       if (suppressed) {
         _skipLockAfterSuppressedPause = true;
-        _pendingLockOnResume = false;
+        _pausedAt = null;
       } else if (!_skipLockAfterSuppressedPause) {
-        _pendingLockOnResume = true;
+        _pausedAt ??= DateTime.now();
       }
     }
 
@@ -68,14 +68,16 @@ class _MobileSessionGuardState extends ConsumerState<MobileSessionGuard> with Wi
       final skipLock = suppressed ||
           _skipLockAfterSuppressedPause ||
           suppression.skipNextResumeLock;
+      final needIdleLock = shouldLockAfterBackgroundIdle(
+        pausedAt: _pausedAt,
+        now: DateTime.now(),
+      );
       _skipLockAfterSuppressedPause = false;
       suppression.skipNextResumeLock = false;
+      _pausedAt = null;
 
-      if (!skipLock && _pendingLockOnResume) {
-        _pendingLockOnResume = false;
+      if (!skipLock && needIdleLock) {
         ref.read(authStateProvider.notifier).lockAppOnResume();
-      } else {
-        _pendingLockOnResume = false;
       }
       if (prev == AppLifecycleState.paused || prev == AppLifecycleState.hidden) {
         _ping();

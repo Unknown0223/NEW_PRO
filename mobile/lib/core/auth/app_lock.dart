@@ -13,6 +13,20 @@ import '../database/app_database.dart';
 ///    `checkSession` yana PIN so‘ramasligi uchun (TTL ichida).
 const _skipLockMetaKey = 'app_lock_skip_after_ext_capture_until';
 
+/// Fon/idle: shu muddatdan keyin qaytganda PIN (kirishdan keyin tez-tez so‘ralmasin).
+const Duration appLockIdleTimeout = Duration(minutes: 5);
+
+/// Sof: fon vaqti [idleFor] dan oshsa PIN kerak.
+bool shouldLockAfterBackgroundIdle({
+  required DateTime? pausedAt,
+  required DateTime now,
+  Duration idleFor = appLockIdleTimeout,
+}) {
+  if (pausedAt == null) return false;
+  final elapsed = now.difference(pausedAt);
+  return !elapsed.isNegative && elapsed >= idleFor;
+}
+
 class AppLockSuppressionNotifier extends StateNotifier<int> {
   AppLockSuppressionNotifier() : super(0);
 

@@ -20,7 +20,7 @@ import 'attendance_gate_steps.dart';
 import 'attendance_models.dart';
 import 'attendance_offline_queue.dart';
 import 'dual_capture.dart';
-import 'liveness_camera_flow.dart';
+import 'liveness_live_screen.dart';
 import 'photo_report.dart';
 import 'video_punch_flow.dart';
 
@@ -177,14 +177,18 @@ class _AttendanceHubScreenState extends ConsumerState<AttendanceHubScreen> {
 
     switch (step.kind) {
       case AttendanceGateStepKind.liveness:
-        final path = await _pickCameraPhoto(maxWidth: 720, quality: 72);
-        if (path == null || !mounted) return;
-        final b64 = base64Encode(await File(path).readAsBytes());
+        final live = await withAppLockSuppressed(ref, () {
+          return LivenessLiveScreen.open(
+            context,
+            directions: st.livenessDirections,
+            presetSequence: _livenessSequence.isEmpty ? null : _livenessSequence,
+          );
+        });
+        if (live == null || !mounted) return;
         setState(() {
-          if (step.direction != null && !_completedLiveness.contains(step.direction)) {
-            _completedLiveness = [..._completedLiveness, step.direction!];
-          }
-          _frontPhotoB64 = b64;
+          _completedLiveness = live.steps;
+          _frontPhotoB64 = live.selfieBase64;
+          _livenessSequence = live.steps;
           _gateStepIndex = idx + 1;
           _statusBanner = null;
         });
@@ -238,17 +242,19 @@ class _AttendanceHubScreenState extends ConsumerState<AttendanceHubScreen> {
   }
 
   Future<void> _runLiveness(MobileAttendanceState st) async {
-    final res = await LivenessCameraFlow.run(
-      context,
-      ref,
-      directions: st.livenessDirections,
-      presetSequence: _livenessSequence.isEmpty ? null : _livenessSequence,
-    );
-    if (res == null || !mounted) return;
+    final live = await withAppLockSuppressed(ref, () {
+      return LivenessLiveScreen.open(
+        context,
+        directions: st.livenessDirections,
+        presetSequence: _livenessSequence.isEmpty ? null : _livenessSequence,
+      );
+    });
+    if (live == null || !mounted) return;
     setState(() {
-      _completedLiveness = res.steps;
-      _frontPhotoB64 = res.selfieBase64;
-      _statusBanner = 'Liveness пройден (${res.steps.length}/${st.livenessDirections})';
+      _completedLiveness = live.steps;
+      _frontPhotoB64 = live.selfieBase64;
+      _livenessSequence = live.steps;
+      _statusBanner = 'Liveness пройден (${live.steps.length}/${st.livenessDirections})';
     });
   }
 

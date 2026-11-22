@@ -186,7 +186,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
     return await _canAppLock() && await _ref.read(biometricServiceProvider).isAvailable();
   }
 
-  /// Ilova fonda bo‘lgandan qaytganda qulflash (PIN majburiy).
+  /// Fon idle (≥5 daqiqa) dan keyin qulflash — `MobileSessionGuard` chaqiradi.
   Future<void> lockAppOnResume() async {
     if (state.status != AuthStatus.ready) return;
     await _lockForApp();
