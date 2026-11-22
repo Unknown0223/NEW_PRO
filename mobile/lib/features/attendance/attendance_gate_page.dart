@@ -252,7 +252,13 @@ class _ResultBody extends StatelessWidget {
               ],
             ),
           ),
-          if (ok)
+          if (ok) ...[
+            const Text(
+              'Сейчас откроется главная страница…',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: AppColors.textMuted, fontSize: 13),
+            ),
+            const SizedBox(height: 12),
             FilledButton(
               onPressed: onContinue,
               style: FilledButton.styleFrom(
@@ -265,8 +271,8 @@ class _ResultBody extends StatelessWidget {
                 'Открыть приложение',
                 style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
               ),
-            )
-          else
+            ),
+          ] else
             FilledButton(
               onPressed: onRetry,
               style: FilledButton.styleFrom(

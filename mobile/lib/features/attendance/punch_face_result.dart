@@ -11,6 +11,25 @@ class PunchFaceResult {
   final String titleRu;
   final String detailRu;
   final double? scorePercent;
+
+  /// Gate: qabul qilingan PRIHOD — markaziy galochka.
+  static const acceptedIn = PunchFaceResult(
+    matched: true,
+    titleRu: 'ПРИХОД принят',
+    detailRu: 'Отметка в табеле. Открываем приложение…',
+  );
+}
+
+/// Bugungi punchlar ichida haqiqiy IN bormi (gate allaqachon yopilishi mumkin).
+bool attendanceHasValidIn(List<Map<String, dynamic>> punches) {
+  for (final p in punches) {
+    final valid = p['is_valid'] != false;
+    if (!valid) continue;
+    final dir = (p['direction'] ?? p['dir'] ?? '').toString().toUpperCase();
+    final role = (p['role_in_day'] ?? '').toString().toLowerCase();
+    if (dir == 'IN' || role == 'in') return true;
+  }
+  return false;
 }
 
 /// Sof: server punch / anti_fraud → odam o‘qiydigan natija.

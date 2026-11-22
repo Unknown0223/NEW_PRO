@@ -42,4 +42,26 @@ void main() {
     expect(isFaceMismatchError(Exception('FACE_MISMATCH: Yuz mos kelmadi')), isTrue);
     expect(isFaceMismatchError(Exception('GPS timeout')), isFalse);
   });
+
+  test('attendanceHasValidIn', () {
+    expect(attendanceHasValidIn(const []), isFalse);
+    expect(
+      attendanceHasValidIn([
+        {'direction': 'IN', 'is_valid': true},
+      ]),
+      isTrue,
+    );
+    expect(
+      attendanceHasValidIn([
+        {'direction': 'IN', 'is_valid': false},
+      ]),
+      isFalse,
+    );
+    expect(
+      attendanceHasValidIn([
+        {'role_in_day': 'in', 'is_valid': true},
+      ]),
+      isTrue,
+    );
+  });
 }

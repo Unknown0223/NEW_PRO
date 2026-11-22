@@ -144,6 +144,21 @@ class _AttendanceHubScreenState extends ConsumerState<AttendanceHubScreen> {
     context.go('/home');
   }
 
+  /// Qabul qilingan PRIHOD: markazda galochka → asosiy sahifa.
+  Future<void> _showGateAcceptedAndEnter([PunchFaceResult? face]) async {
+    if (!widget.gateMode || !mounted) return;
+    ref.read(faceGateRequiredProvider.notifier).clearGate();
+    setState(() {
+      _gateFaceResult = face ?? PunchFaceResult.acceptedIn;
+      _statusBanner = null;
+      _submitting = false;
+      _gateCleared = true;
+    });
+    await Future<void>.delayed(const Duration(milliseconds: 1400));
+    if (!mounted) return;
+    context.go('/home');
+  }
+
   List<AttendanceGateStep> _gateStepsFor(MobileAttendanceState st) {
     return buildAttendanceGateSteps(
       photoEnabled: st.photoEnabled,
@@ -331,9 +346,20 @@ class _AttendanceHubScreenState extends ConsumerState<AttendanceHubScreen> {
       );
       return;
     }
-    final expected = st.todayPunches.isEmpty ? 'IN' : 'OUT';
+    // Gate: PRIHOD allaqachon tabelda — galochka + home (3/3 da qotib qolmasin).
+    if (widget.gateMode && direction == 'IN' && attendanceHasValidIn(st.todayPunches)) {
+      await _showGateAcceptedAndEnter();
+      return;
+    }
+    final expected = st.todayPunches.isEmpty || !attendanceHasValidIn(st.todayPunches)
+        ? 'IN'
+        : 'OUT';
     if (direction != expected) {
       if (!mounted) return;
+      if (widget.gateMode && direction == 'IN' && expected == 'OUT') {
+        await _showGateAcceptedAndEnter();
+        return;
+      }
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
@@ -396,19 +422,19 @@ class _AttendanceHubScreenState extends ConsumerState<AttendanceHubScreen> {
       ref.invalidate(mobileAttendanceStateProvider);
       if (!mounted) return;
       if (widget.gateMode && direction == 'IN') {
-        setState(() {
-          _gateFaceResult = face;
-          _statusBanner = null;
-        });
-        // Mos keldi — darhol ilovaga; qayta urinish tugmasi mismatch da qoladi.
         if (face.matched) {
-          await Future<void>.delayed(const Duration(milliseconds: 900));
-          if (mounted) await _finishGateIfNeeded();
+          await _showGateAcceptedAndEnter(face);
+        } else {
+          setState(() {
+            _gateFaceResult = face;
+            _statusBanner = null;
+            _submitting = false;
+          });
         }
-      } else {
-        setState(() => _statusBanner = face.detailRu);
-        await _showFaceResultDialog(face);
+        return;
       }
+      setState(() => _statusBanner = face.detailRu);
+      await _showFaceResultDialog(face);
     } catch (e) {
       if (isFaceMismatchError(e)) {
         final face = faceMismatchFromError(e);
@@ -425,9 +451,20 @@ class _AttendanceHubScreenState extends ConsumerState<AttendanceHubScreen> {
         }
       } else {
         await _enqueueFailed('photo', st, e);
+        if (widget.gateMode && mounted) {
+          ref.invalidate(mobileAttendanceStateProvider);
+          try {
+            final fresh = await ref.read(mobileAttendanceStateProvider.future);
+            if (attendanceHasValidIn(fresh.todayPunches)) {
+              await _showGateAcceptedAndEnter();
+              return;
+            }
+          } catch (_) {}
+          setState(() => _statusBanner = 'Ошибка отправки: $e');
+        }
       }
     } finally {
-      if (mounted) setState(() => _submitting = false);
+      if (mounted && _gateFaceResult == null) setState(() => _submitting = false);
     }
   }
 
@@ -531,7 +568,13 @@ class _AttendanceHubScreenState extends ConsumerState<AttendanceHubScreen> {
       setState(() => _statusBanner = 'Видео-отметка отправлена.');
       ref.invalidate(mobileAttendanceStateProvider);
       if (widget.gateMode) {
-        await _finishGateIfNeeded();
+        await _showGateAcceptedAndEnter(
+          const PunchFaceResult(
+            matched: true,
+            titleRu: 'ПРИХОД принят',
+            detailRu: 'Видео-отметка в табеле. Открываем приложение…',
+          ),
+        );
       }
     } catch (e) {
       await _enqueueFailed('video', st, e);
