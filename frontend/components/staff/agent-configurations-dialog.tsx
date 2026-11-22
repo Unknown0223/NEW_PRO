@@ -817,7 +817,7 @@ export function AgentConfigurationsDialog({
                         setDraftPath(d, "misc", (m) => ({ ...m, face_verification_enabled: v }))
                       )
                     }
-                    label="Проверка лица (селфи на сервере)"
+                    label="Авторизация: проверка лица (селфи ≠ табель)"
                   />
                   {draft.misc?.face_verification_enabled ? (
                     <>
@@ -831,7 +831,7 @@ export function AgentConfigurationsDialog({
                             }))
                           )
                         }
-                        label="Ежедневно при входе в приложение"
+                        label="Авторизация: ежедневно после PIN / Face ID телефона"
                       />
                       <ConfigCheckRow
                         checked={draft.misc?.face_verification_on_territory_check !== false}

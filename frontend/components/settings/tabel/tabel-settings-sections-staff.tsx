@@ -89,10 +89,15 @@ export function TabelPunchVideoSection({ cur, canEdit, onPatch, staffById, staff
             className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
             value={pv.captureMode ?? "sequential"}
             onChange={(e) => set({ captureMode: e.target.value })}
+            disabled={!canEdit}
           >
-            <option value="sequential">По очереди: фронт → задняя</option>
-            <option value="simultaneous">Одновременно (две камеры)</option>
+            <option value="sequential">Слабые устройства: сначала фронт, потом задняя</option>
+            <option value="simultaneous">Мощные устройства: обе камеры сразу</option>
           </select>
+          <p className="mt-1 text-[11px] text-muted-foreground">
+            Одновременная съёмка нужна только на телефонах с двумя активными камерами; иначе —
+            по очереди.
+          </p>
         </div>
       </div>
       <div className="flex flex-col gap-2.5 text-xs">
@@ -103,8 +108,8 @@ export function TabelPunchVideoSection({ cur, canEdit, onPatch, staffById, staff
           onChange={(v) => set({ enabled: v })}
         />
         <TabelCheckRow
-          title="3-значный дневной код"
-          hint="Сотрудник должен произнести код дня (100–999). Исключения — в таблице ниже."
+          title="3-значный дневной код (уникальный на сотрудника)"
+          hint="Код 100–999 на день: у разных сотрудников в один день не повторяется. Сотрудник подтверждает код на экране."
           checked={pv.codeRequired !== false}
           onChange={(v) => set({ codeRequired: v })}
         />
@@ -236,8 +241,8 @@ export function TabelFaceAntifraudSection({ cur, canEdit, onPatch, staffById, st
           onChange={(v) => set({ requireSingleFace: v })}
         />
         <TabelCheckRow
-          title="Фронт + задняя камера"
-          hint="Обязательный DualCapture при отметке в приложении."
+          title="Табель: фронт + задняя камера (фото)"
+          hint="Только для мобильной фото-отметки посещаемости. Сначала селфи, затем задняя камера (слабые устройства)."
           checked={fa.requireDualCameraPhoto !== false}
           onChange={(v) => set({ requireDualCameraPhoto: v })}
         />
@@ -254,8 +259,8 @@ export function TabelFaceAntifraudSection({ cur, canEdit, onPatch, staffById, st
           onChange={(v) => set({ requireFaceEnrollmentOnStaffCreate: v })}
         />
         <TabelCheckRow
-          title="Вход по Face ID"
-          hint="Если включено — вход в приложение требует лицо."
+          title="Веб: вход по Face ID"
+          hint="Только веб-логин (challenge). Мобильная ежедневная проверка лица настраивается в конфигурации агента (mobile_config), отдельно от табеля."
           checked={Boolean(fa.requireFaceLogin)}
           onChange={(v) => set({ requireFaceLogin: v })}
         />

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/face/face_verification_flow.dart';
+import '../../core/navigation/root_navigator_context.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_typography.dart';
 import 'auth_provider.dart';
@@ -114,7 +115,18 @@ class _FaceVerificationListenerState extends ConsumerState<FaceVerificationListe
       }
 
       if (mounted) setState(() => _blocking = true);
-      final ok = await FaceVerificationFlow.ensureDailyLogin(context, ref);
+      // MaterialApp.builder konteksti Navigator'siz — dialog root key orqali.
+      final navCtx = resolveRootNavigatorContext(context);
+      if (navCtx == null) {
+        if (mounted) {
+          setState(() {
+            _blocking = true;
+            _lastError = 'Не удалось открыть камеру — повторите';
+          });
+        }
+        return;
+      }
+      final ok = await FaceVerificationFlow.ensureDailyLogin(navCtx, ref);
       if (!mounted) return;
       if (ok) {
         setState(() {

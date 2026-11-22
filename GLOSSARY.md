@@ -124,9 +124,14 @@ HR Hub (`d:\hr-hub`) reference; SALEC `backend/src/modules/tabel` + `timesheet` 
 | **Face ID (punch)** | Mobil liveness + ixtiyoriy match; terminal Hikvision yuz. Sales `face_verification_flow` — boshqa kontekst (hard-gate), punch bilan aralashtirilmasin. |
 | **Timesheet matrix** | Oylik kataklar: asosan `AttendanceDayRecord` + workdays + ledger override + agent norma. |
 
+| **Auth Face Check** | Ilova kirishi: `mobile_config.misc.face_verification_*` — PIN/telefon Face ID dan **keyin** server selfie (`daily_login`). Tabel punch emas. |
+| **Tabel Photo Punch** | Davomat: `punchModes.photo` + antifraud dual camera (front→back). |
+| **Tabel Video Punch** | Davomat: `punchModes.video` + `punchVideo.captureMode` (sequential|simultaneous) + kunlik **unikal** 3 xonali kod (`pickDayCode` / `punchDayCode`). |
+
 ### Attendance — kelishuv holati
 
 - Grill ochiq (2026-11-22): DeviceVisibility → WorkdayPunchClock → AttendanceNotify → Mobile hub.
+- Auth Face / Tabel Photo / Tabel Video — uchta alohida sozlama konturi (2026-11-22).
 - HR Hubdan faqat pure/diff + Flutter UX; `employeeNoString` raqamga kesilmasin.
 - ADR hali yo‘q — qarorlar grill yopilgach yoziladi.
 

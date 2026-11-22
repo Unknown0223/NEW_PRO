@@ -6,6 +6,7 @@ import 'package:image_picker/image_picker.dart';
 
 import '../api/api_exceptions.dart';
 import '../auth/session.dart';
+import '../navigation/root_navigator_context.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_typography.dart';
 import 'face_verification_api.dart';
@@ -114,12 +115,25 @@ class FaceVerificationFlow {
           slug,
           base64Encode(bytes),
         );
-    if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
+    final snackCtx = resolveRootNavigatorContext(context);
+    if (snackCtx != null && snackCtx.mounted) {
+      ScaffoldMessenger.of(snackCtx).showSnackBar(
         const SnackBar(content: Text('Эталонное фото сохранено на сервере')),
       );
     }
     return true;
+  }
+
+  /// Tabel / enrollment — etalon selfie (daily_login bilan bir xil capture).
+  static Future<bool> ensureReference(
+    BuildContext context,
+    WidgetRef ref, {
+    String title = 'Загрузите эталонное фото лица',
+  }) async {
+    final slug = ref.read(sessionProvider).tenantSlug ?? '';
+    if (slug.isEmpty) return false;
+    if (!context.mounted) return false;
+    return _captureReference(context, ref, slug, title);
   }
 
   static Future<bool> _captureAndVerify(
@@ -131,8 +145,12 @@ class FaceVerificationFlow {
     int? clientId,
     required String title,
   }) async {
+    final dialogCtx = resolveRootNavigatorContext(context);
+    if (dialogCtx == null) return false;
+
     final accepted = await showDialog<bool>(
-      context: context,
+      context: dialogCtx,
+      useRootNavigator: true,
       barrierDismissible: false,
       builder: (ctx) => AlertDialog(
         title: Text(title),
@@ -172,12 +190,15 @@ class FaceVerificationFlow {
       return true;
     } catch (e) {
       final msg = e is ApiException ? e.message : '$e';
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+      final snackCtx = resolveRootNavigatorContext(context);
+      if (snackCtx != null && snackCtx.mounted) {
+        ScaffoldMessenger.of(snackCtx).showSnackBar(
           SnackBar(
-            content: Text(msg.contains('FaceMismatch') || msg.toLowerCase().contains('mos')
-                ? 'Лицо не совпало с эталоном на сервере'
-                : 'Ошибка проверки: $msg'),
+            content: Text(
+              msg.contains('FaceMismatch') || msg.toLowerCase().contains('mos')
+                  ? 'Лицо не совпало с эталоном на сервере'
+                  : 'Ошибка проверки: $msg',
+            ),
             backgroundColor: AppColors.error,
           ),
         );

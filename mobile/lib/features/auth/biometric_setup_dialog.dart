@@ -17,6 +17,7 @@ Future<void> showBiometricSetupDialog(BuildContext context, WidgetRef ref) async
 
   await showDialog<void>(
     context: context,
+    useRootNavigator: true,
     barrierDismissible: false,
     builder: (ctx) => AlertDialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),

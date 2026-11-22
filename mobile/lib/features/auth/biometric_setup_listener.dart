@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/auth/app_pin_store.dart';
 import '../../core/auth/biometric_preferences.dart';
 import '../../core/auth/biometric_service.dart';
+import '../../core/navigation/root_navigator_context.dart';
 import 'auth_provider.dart';
 import 'biometric_setup_dialog.dart';
 
@@ -59,7 +60,9 @@ class _BiometricSetupListenerState extends ConsumerState<BiometricSetupListener>
       if (!mounted) return;
       await Future<void>.delayed(const Duration(milliseconds: 350));
       if (!mounted) return;
-      await showBiometricSetupDialog(context, ref);
+      final navCtx = resolveRootNavigatorContext(context);
+      if (navCtx == null) return;
+      await showBiometricSetupDialog(navCtx, ref);
       if (!mounted) return;
       await prefs.setOfferShown();
     } finally {
