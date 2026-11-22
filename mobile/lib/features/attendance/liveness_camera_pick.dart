@@ -1,7 +1,4 @@
-import 'dart:io';
-
 import 'package:camera/camera.dart';
-import 'package:device_info_plus/device_info_plus.dart';
 
 import 'liveness_challenge.dart';
 
@@ -14,28 +11,23 @@ CameraDescription? selectLivenessCamera(List<CameraDescription> cams) {
   return cams.first;
 }
 
-/// ML Kit Euler → HeadPose. Old kamera + emulyator ko‘pincha yaw ni oynalaydi;
-/// strelka (ekran chap = chap) bilan moslash uchun belgini aylantiramiz.
+/// ML Kit Euler → HeadPose.
+///
+/// Front CameraPreview odatda oynali: ekrandagi «chap» strelka = anatomik o‘ng =
+/// raw `headEulerAngleY` manfiy. Shuning uchun front yaw ni aylantiramiz —
+/// aks holda teskari burish `matches` ga tushadi.
 HeadPose livenessPoseFromMlKit({
   required double yaw,
   required double pitch,
   required bool frontCamera,
-  bool mirrorFrontYaw = false,
+  bool? mirrorFrontYaw,
 }) {
-  final y = frontCamera && mirrorFrontYaw ? -yaw : yaw;
+  final mirror = mirrorFrontYaw ?? frontCamera;
+  final y = frontCamera && mirror ? -yaw : yaw;
   return HeadPose(y, pitch);
 }
 
-/// Emulyatorda front yaw teskari; jismoniy telefonda yo‘q.
+/// Old kamera — preview oynasi bilan strelka mosligi uchun yaw mirror.
 Future<bool> shouldMirrorFrontYaw(CameraDescription cam) async {
-  if (cam.lensDirection != CameraLensDirection.front) return false;
-  try {
-    if (Platform.isAndroid) {
-      return !(await DeviceInfoPlugin().androidInfo).isPhysicalDevice;
-    }
-    if (Platform.isIOS) {
-      return !(await DeviceInfoPlugin().iosInfo).isPhysicalDevice;
-    }
-  } catch (_) {}
-  return false;
+  return cam.lensDirection == CameraLensDirection.front;
 }
