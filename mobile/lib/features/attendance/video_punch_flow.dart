@@ -102,4 +102,25 @@ class VideoPunchFlow {
       );
     });
   }
+
+  /// Gate: dialogsiz faqat front video (sahifa o‘zi kodni ko‘rsatadi).
+  static Future<VideoPunchCapture?> captureInline(
+    WidgetRef ref, {
+    required int maxSec,
+    required String captureMode,
+  }) {
+    return withAppLockSuppressed(ref, () async {
+      final picker = ImagePicker();
+      final front = await picker.pickVideo(
+        source: ImageSource.camera,
+        maxDuration: Duration(seconds: maxSec),
+      );
+      if (front == null) return null;
+      return VideoPunchCapture(
+        frontBase64: base64Encode(await front.readAsBytes()),
+        durationSec: maxSec,
+        captureMode: 'front_only',
+      );
+    });
+  }
 }

@@ -15,6 +15,8 @@ import '../../core/theme/app_colors.dart';
 import '../../core/time/server_clock.dart';
 import '../agent/shell/agent_app_bar.dart';
 import 'attendance_api_service.dart';
+import 'attendance_gate_page.dart';
+import 'attendance_gate_steps.dart';
 import 'attendance_models.dart';
 import 'attendance_offline_queue.dart';
 import 'dual_capture.dart';
@@ -52,7 +54,7 @@ class _AttendanceHubScreenState extends ConsumerState<AttendanceHubScreen> {
   bool _submitting = false;
   String? _statusBanner;
   bool _gateCleared = false;
-  bool _gateAutoStarted = false;
+  int _gateStepIndex = 0;
 
   @override
   void initState() {
@@ -137,13 +139,110 @@ class _AttendanceHubScreenState extends ConsumerState<AttendanceHubScreen> {
     context.go('/home');
   }
 
+  List<AttendanceGateStep> _gateStepsFor(MobileAttendanceState st) {
+    return buildAttendanceGateSteps(
+      photoEnabled: st.photoEnabled,
+      videoEnabled: st.videoEnabled,
+      kioskAllowed: st.kioskAllowed,
+      livenessDirections: st.livenessDirections,
+      requireDualCamera: st.requireDualCamera,
+      livenessSequence: _livenessSequence.isEmpty ? null : _livenessSequence,
+    );
+  }
+
+  Future<String?> _pickCameraPhoto({int maxWidth = 960, int quality = 78}) {
+    return withAppLockSuppressed(ref, () async {
+      final x = await _picker.pickImage(
+        source: ImageSource.camera,
+        maxWidth: maxWidth.toDouble(),
+        imageQuality: quality,
+      );
+      return x?.path;
+    });
+  }
+
+  Future<void> _gateContinueIfSubmit(MobileAttendanceState st) async {
+    if (!mounted) return;
+    final steps = _gateStepsFor(st);
+    if (_gateStepIndex >= steps.length) return;
+    if (steps[_gateStepIndex].kind != AttendanceGateStepKind.submit) return;
+    await _onGatePrimary(st);
+  }
+
+  Future<void> _onGatePrimary(MobileAttendanceState st) async {
+    final steps = _gateStepsFor(st);
+    if (steps.isEmpty || _submitting) return;
+    final idx = _gateStepIndex.clamp(0, steps.length - 1);
+    final step = steps[idx];
+
+    switch (step.kind) {
+      case AttendanceGateStepKind.liveness:
+        final path = await _pickCameraPhoto(maxWidth: 720, quality: 72);
+        if (path == null || !mounted) return;
+        final b64 = base64Encode(await File(path).readAsBytes());
+        setState(() {
+          if (step.direction != null && !_completedLiveness.contains(step.direction)) {
+            _completedLiveness = [..._completedLiveness, step.direction!];
+          }
+          _frontPhotoB64 = b64;
+          _gateStepIndex = idx + 1;
+          _statusBanner = null;
+        });
+        await _gateContinueIfSubmit(st);
+        return;
+      case AttendanceGateStepKind.workplace:
+        final path = await _pickCameraPhoto(maxWidth: 1280, quality: 78);
+        if (path == null || !mounted) return;
+        final b64 = base64Encode(await File(path).readAsBytes());
+        setState(() {
+          _backPhotoB64 = b64;
+          _gateStepIndex = idx + 1;
+          _statusBanner = null;
+        });
+        await _gateContinueIfSubmit(st);
+        return;
+      case AttendanceGateStepKind.video:
+        final cap = await VideoPunchFlow.captureInline(
+          ref,
+          maxSec: st.videoMaxSec.clamp(5, 10),
+          captureMode: st.captureMode,
+        );
+        if (cap == null || !mounted) return;
+        setState(() {
+          _frontVideoB64 = cap.frontBase64;
+          _backVideoB64 = cap.backBase64;
+          _videoDurationSec = cap.durationSec;
+          _videoCaptureMode = cap.captureMode;
+          if (st.dayCode != null) _spokenCodeCtrl.text = '${st.dayCode}';
+          _gateStepIndex = idx + 1;
+          _statusBanner = null;
+        });
+        await _gateContinueIfSubmit(st);
+        return;
+      case AttendanceGateStepKind.submit:
+        if (st.photoEnabled) {
+          await _submitPhotoPunch(st, direction: 'IN');
+        } else if (st.videoEnabled) {
+          await _submitVideoPunch(st);
+        } else {
+          setState(() => _submitting = true);
+          try {
+            final ok = await FaceVerificationFlow.ensureDailyLogin(context, ref);
+            if (ok && mounted) await _finishGateIfNeeded();
+          } finally {
+            if (mounted) setState(() => _submitting = false);
+          }
+        }
+        return;
+    }
+  }
+
   Future<void> _runLiveness(MobileAttendanceState st) async {
     final res = await LivenessCameraFlow.run(
       context,
       ref,
       directions: st.livenessDirections,
       presetSequence: _livenessSequence.isEmpty ? null : _livenessSequence,
-      mandatory: widget.gateMode,
     );
     if (res == null || !mounted) return;
     setState(() {
@@ -427,60 +526,53 @@ class _AttendanceHubScreenState extends ConsumerState<AttendanceHubScreen> {
           _livenessSequence = LivenessHelper.buildSequence(st.livenessDirections);
           WidgetsBinding.instance.addPostFrameCallback((_) {
             ref.read(attendanceApiProvider).flushOfflineQueue();
-            // Avto-chiqish yo‘q (punchsiz /home ↔ attendance loop).
-            // Gate faqat muvaffaqiyatli ПРИХОД / Face dan keyin yopiladi.
-            if (widget.gateMode &&
-                !_gateAutoStarted &&
-                st.photoEnabled &&
-                !st.punchDisabled) {
-              _gateAutoStarted = true;
-              _runLiveness(st);
-            }
           });
         }
 
-        if (st.punchDisabled || st.terminalOnly) {
+        if (widget.gateMode) {
           return _wrapGate(Scaffold(
             backgroundColor: AppColors.background,
-            appBar: AgentAppBar(title: 'Табель и Посещаемость', showBack: showBack),
+            appBar: AppBar(
+              backgroundColor: AppColors.surface,
+              foregroundColor: AppColors.textTitle,
+              title: const Text('Приход · Face ID'),
+              automaticallyImplyLeading: showBack,
+            ),
             body: Column(
               children: [
                 if (_gateBanner() != null) _gateBanner()!,
-                if (_statusBanner != null)
-                  Container(
-                    width: double.infinity,
-                    color: AppColors.primarySoft,
-                    padding: const EdgeInsets.all(10),
-                    child: Text(
-                      _statusBanner!,
-                      style: const TextStyle(color: AppColors.primaryDark, fontWeight: FontWeight.w600),
-                    ),
-                  ),
                 Expanded(
-                  child: widget.gateMode
+                  child: (st.punchDisabled || st.terminalOnly)
                       ? _buildGateFaceOnly(st)
-                      : _buildModeBlocked(st),
+                      : AttendanceGatePage(
+                          state: st,
+                          steps: _gateStepsFor(st),
+                          stepIndex: _gateStepIndex,
+                          submitting: _submitting,
+                          statusText: _statusBanner,
+                          dayCode: st.dayCode,
+                          onPrimary: () => _onGatePrimary(st),
+                        ),
                 ),
               ],
             ),
           ));
         }
 
-        final tabs = st.visibleTabs(gateMode: widget.gateMode);
+        if (st.punchDisabled || st.terminalOnly) {
+          return _wrapGate(Scaffold(
+            backgroundColor: AppColors.background,
+            appBar: AgentAppBar(title: 'Табель и Посещаемость', showBack: showBack),
+            body: _buildModeBlocked(st),
+          ));
+        }
+
+        final tabs = st.visibleTabs();
         if (tabs.isEmpty) {
           return _wrapGate(Scaffold(
             backgroundColor: AppColors.background,
             appBar: AgentAppBar(title: 'Табель и Посещаемость', showBack: showBack),
-            body: Column(
-              children: [
-                if (_gateBanner() != null) _gateBanner()!,
-                Expanded(
-                  child: widget.gateMode
-                      ? _buildGateFaceOnly(st)
-                      : _buildModeBlocked(st),
-                ),
-              ],
-            ),
+            body: _buildModeBlocked(st),
           ));
         }
         return _wrapGate(DefaultTabController(
@@ -491,7 +583,7 @@ class _AttendanceHubScreenState extends ConsumerState<AttendanceHubScreen> {
             appBar: AppBar(
               backgroundColor: AppColors.surface,
               foregroundColor: AppColors.textTitle,
-              title: Text(widget.gateMode ? 'Приход · Face ID' : 'Табель и Посещаемость'),
+              title: const Text('Табель и Посещаемость'),
               automaticallyImplyLeading: showBack,
               actions: const [],
               bottom: tabs.length > 1
@@ -506,7 +598,6 @@ class _AttendanceHubScreenState extends ConsumerState<AttendanceHubScreen> {
             ),
             body: Column(
               children: [
-                if (_gateBanner() != null) _gateBanner()!,
                 if (_statusBanner != null)
                   Container(
                     width: double.infinity,
