@@ -61,6 +61,7 @@ class AttendanceApiService {
     required String photoFrontBase64,
     String? photoBackBase64,
     String? comment,
+    String? direction,
     bool fromGallery = false,
     int? faceCount,
   }) async {
@@ -77,6 +78,7 @@ class AttendanceApiService {
           'from_gallery': fromGallery,
           'face_count': faceCount ?? 1,
           'liveness_steps': jsonEncode(livenessSteps),
+          if (direction == 'IN' || direction == 'OUT') 'direction': direction,
           if (comment != null && comment.trim().isNotEmpty) 'comment': comment.trim(),
         },
         photoFront: MultipartFile.fromBytes(base64Decode(photoFrontBase64), filename: 'front.jpg'),

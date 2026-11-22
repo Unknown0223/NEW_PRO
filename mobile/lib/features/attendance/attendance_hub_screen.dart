@@ -172,11 +172,28 @@ class _AttendanceHubScreenState extends ConsumerState<AttendanceHubScreen> {
     return ok;
   }
 
-  Future<void> _submitPhotoPunch(MobileAttendanceState st) async {
+  Future<void> _submitPhotoPunch(
+    MobileAttendanceState st, {
+    required String direction,
+  }) async {
     if (!st.photoEnabled) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Фото-отметка для вашей роли отключена')),
+      );
+      return;
+    }
+    final expected = st.todayPunches.isEmpty ? 'IN' : 'OUT';
+    if (direction != expected) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            expected == 'IN'
+                ? 'Сейчас доступен только ПРИХОД'
+                : 'Сейчас доступен только УХОД',
+          ),
+        ),
       );
       return;
     }
@@ -218,8 +235,10 @@ class _AttendanceHubScreenState extends ConsumerState<AttendanceHubScreen> {
             photoFrontBase64: frontB64,
             photoBackBase64: _backPhotoB64,
             comment: _commentCtrl.text,
+            direction: direction,
           );
-      setState(() => _statusBanner = 'Фото-отметка принята сервером.');
+      setState(() => _statusBanner =
+          direction == 'IN' ? 'ПРИХОД принят сервером.' : 'УХОД принят сервером.');
       ref.invalidate(mobileAttendanceStateProvider);
     } catch (e) {
       await _enqueueFailed('photo', st, e);
@@ -434,7 +453,7 @@ class _AttendanceHubScreenState extends ConsumerState<AttendanceHubScreen> {
                 icon: Icons.login_rounded,
                 selected: nextIsIn,
                 enabled: nextIsIn && !_submitting,
-                onTap: () => _submitPhotoPunch(st),
+                onTap: () => _submitPhotoPunch(st, direction: 'IN'),
               ),
             ),
             const SizedBox(width: 12),
@@ -446,7 +465,7 @@ class _AttendanceHubScreenState extends ConsumerState<AttendanceHubScreen> {
                 icon: Icons.logout_rounded,
                 selected: !nextIsIn,
                 enabled: !nextIsIn && !_submitting,
-                onTap: () => _submitPhotoPunch(st),
+                onTap: () => _submitPhotoPunch(st, direction: 'OUT'),
               ),
             ),
           ],
