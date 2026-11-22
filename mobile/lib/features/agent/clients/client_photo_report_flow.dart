@@ -6,7 +6,12 @@ import '../../../core/api/api_exceptions.dart';
 import '../../../core/api/mobile_api.dart';
 import '../../../core/auth/app_lock.dart';
 import '../../../core/auth/session.dart';
-import '../../../core/camera/photo_service.dart' show encodeClientPhotoBase64, photoServiceProvider;
+import '../../../core/camera/photo_service.dart'
+    show
+        PhotoCaptureException,
+        PhotoResult,
+        encodeClientPhotoBase64,
+        photoServiceProvider;
 import '../../../core/config/tenant_refs_provider.dart';
 import '../../../core/database/app_database.dart';
 import '../../../core/l10n/app_strings_ru.dart';
@@ -320,10 +325,18 @@ Future<ClientPhotoReport?> captureAndUploadPhotoReport({
     return null;
   }
 
-  final photo = await withAppLockSuppressed(
-    ref,
-    () => ref.read(photoServiceProvider).takeClientPhoto(),
-  );
+  PhotoResult? photo;
+  try {
+    photo = await withAppLockSuppressed(
+      ref,
+      () => ref.read(photoServiceProvider).takeClientPhoto(),
+    );
+  } on PhotoCaptureException catch (e) {
+    if (context.mounted) {
+      showAgentToast(context, e.message, accentColor: AppColors.error);
+    }
+    return null;
+  }
   if (photo == null || !context.mounted) return null;
 
   var loadingShown = false;
@@ -465,10 +478,18 @@ Future<ClientPhotoReport?> replacePhotoReport({
     return null;
   }
 
-  final photo = await withAppLockSuppressed(
-    ref,
-    () => ref.read(photoServiceProvider).takeClientPhoto(),
-  );
+  PhotoResult? photo;
+  try {
+    photo = await withAppLockSuppressed(
+      ref,
+      () => ref.read(photoServiceProvider).takeClientPhoto(),
+    );
+  } on PhotoCaptureException catch (e) {
+    if (context.mounted) {
+      showAgentToast(context, e.message, accentColor: AppColors.error);
+    }
+    return null;
+  }
   if (photo == null || !context.mounted) return null;
 
   var loadingShown = false;

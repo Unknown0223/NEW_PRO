@@ -3,10 +3,15 @@ import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_image_compress/flutter_image_compress.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 import '../config/mobile_config.dart';
+import '../errors/error_reporter.dart';
+import 'photo_capture_policy.dart';
+
+export 'photo_capture_policy.dart' show PhotoCaptureException, photoCaptureUserMessage;
 
 /// Server bilan bir xil — 25 MiB gacha asl kamera fayli.
 const clientPhotoMaxFileBytes = 25 * 1024 * 1024;
@@ -24,30 +29,56 @@ class PhotoResult {
 }
 
 class PhotoService {
-  PhotoService();
+  PhotoService({ImagePicker? picker}) : _picker = picker ?? ImagePicker();
 
-  Future<PhotoResult?> takePhoto() async {
-    final picker = ImagePicker();
-    final picked = await picker.pickImage(
-      source: ImageSource.camera,
-    );
-    if (picked == null) return null;
-    final file = File(picked.path);
-    final bytes = await file.length();
-    return PhotoResult(filePath: picked.path, sizeBytes: bytes);
-  }
+  final ImagePicker _picker;
 
-  /// Mijoz / foto hisobot — kamera asl rezolyutsiyada (siqish encode bosqichida).
-  Future<PhotoResult?> takeClientPhoto() async {
-    final picker = ImagePicker();
-    final picked = await picker.pickImage(
-      source: ImageSource.camera,
-      preferredCameraDevice: CameraDevice.rear,
-    );
-    if (picked == null) return null;
-    final file = File(picked.path);
-    final bytes = await file.length();
-    return PhotoResult(filePath: picked.path, sizeBytes: bytes);
+  Future<PhotoResult?> takePhoto() => _pickCamera();
+
+  /// Mijoz / foto hisobot.
+  /// `preferredCameraDevice: rear` emulyatorda bo‘sh kulrang preview beradi —
+  /// tizim default kamerasini ochamiz (telefonda odatda orqa).
+  Future<PhotoResult?> takeClientPhoto() => _pickCamera();
+
+  Future<PhotoResult?> _pickCamera() async {
+    try {
+      final XFile? picked =
+          await _picker.pickImage(source: ImageSource.camera);
+      if (picked == null) return null;
+      final file = File(picked.path);
+      final bytes = await file.length();
+      return PhotoResult(filePath: picked.path, sizeBytes: bytes);
+    } on PlatformException catch (e, st) {
+      ErrorReporter.instance?.reportCaught(
+        e,
+        stack: st,
+        module: ErrorModules.photos,
+        code: e.code.isNotEmpty ? e.code : 'CameraPickFailed',
+        message: 'Kamera: pickImage muvaffaqiyatsiz',
+        path: 'image_picker/camera',
+        payload: {
+          'details': e.message,
+        },
+      );
+      throw PhotoCaptureException(
+        code: e.code,
+        message: photoCaptureUserMessage(e.code, fallback: e.message),
+      );
+    } catch (e, st) {
+      if (e is PhotoCaptureException) rethrow;
+      ErrorReporter.instance?.reportCaught(
+        e,
+        stack: st,
+        module: ErrorModules.photos,
+        code: 'CameraPickFailed',
+        message: 'Kamera: kutilmagan xato',
+        path: 'image_picker/camera',
+      );
+      throw PhotoCaptureException(
+        code: 'camera_unavailable',
+        message: photoCaptureUserMessage('camera_unavailable'),
+      );
+    }
   }
 }
 
@@ -109,7 +140,6 @@ Future<String?> encodeClientPhotoBase64(String filePath, {PhotoConfig? config}) 
     return _encodeB64Isolate(rawBytes);
   }
 
-  // Avval faqat JPEG sifatini pasaytiramiz, rezolyutsiyani saqlab.
   for (var quality = targetQuality; quality >= 88; quality -= 2) {
     final reencoded = await _compressJpeg(
       filePath,
@@ -121,7 +151,6 @@ Future<String?> encodeClientPhotoBase64(String filePath, {PhotoConfig? config}) 
     }
   }
 
-  // Hali ham katta — config chegarasigacha kichraytiramiz.
   var compressed = await _compressJpeg(filePath, minSide: targetSide, quality: targetQuality);
   if (compressed != null && _fitsPhotoUploadBytes(compressed.length)) {
     return _encodeB64Isolate(compressed);

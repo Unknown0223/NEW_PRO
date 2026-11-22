@@ -153,12 +153,18 @@ class _NewClientPageState extends ConsumerState<NewClientPage> {
       }
       return;
     }
-    final photo = await withAppLockSuppressed(
-      ref,
-      () => ref.read(photoServiceProvider).takeClientPhoto(),
-    );
-    if (!mounted || photo == null) return;
-    setState(() => _photoPath = photo.filePath);
+    try {
+      final photo = await withAppLockSuppressed(
+        ref,
+        () => ref.read(photoServiceProvider).takeClientPhoto(),
+      );
+      if (!mounted || photo == null) return;
+      setState(() => _photoPath = photo.filePath);
+    } on PhotoCaptureException catch (e) {
+      if (mounted) {
+        _showFormSnack(e.message, backgroundColor: AppColors.error);
+      }
+    }
   }
 
   Future<String?> _photoBase64Payload() async {
