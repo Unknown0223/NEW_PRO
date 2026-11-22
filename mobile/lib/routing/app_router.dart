@@ -142,6 +142,8 @@ class _DebtorsPage extends ConsumerWidget {
 }
 
 final appRouterProvider = Provider<GoRouter>((ref) {
+  // dispose bo‘lsa rootNavigatorKey / _shellKey qayta GoRouter bilan Duplicate GlobalKeys.
+  ref.keepAlive();
   final refresh = _AppRouterRefresh(ref);
   ref.onDispose(refresh.dispose);
 

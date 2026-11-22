@@ -95,7 +95,8 @@ class _SalesDocAppState extends ConsumerState<SalesDocApp> {
 
   @override
   Widget build(BuildContext context) {
-    final router = ref.read(appRouterProvider);
+    // watch — router Provider tirik qolsin (read-only da dispose → Duplicate GlobalKeys).
+    final router = ref.watch(appRouterProvider);
     final themeMode = ref.watch(appThemeModeProvider);
 
     // Keep autoFlush alive by reading it in build

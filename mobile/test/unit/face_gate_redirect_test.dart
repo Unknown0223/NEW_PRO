@@ -59,5 +59,16 @@ void main() {
       expect(readyEntryPath(gateRequired: true), '/attendance?gate=1');
       expect(readyEntryPath(gateRequired: false), '/home');
     });
+
+    test('clearGate while still on attendance must not redirect away', () {
+      // Gate yopildi, lekin hali /attendance da (galochka 1.4s) — null qoladi.
+      expect(
+        faceGateReadyRedirect(
+          matchedLocation: '/attendance',
+          gateRequired: false,
+        ),
+        isNull,
+      );
+    });
   });
 }

@@ -36,17 +36,16 @@ class _FaceVerificationListenerState
   @override
   Widget build(BuildContext context) {
     ref.listen<AuthState>(authStateProvider, (prev, next) {
-      if (next.status == AuthStatus.ready && prev?.status != AuthStatus.ready) {
-        // finishBootstrap / unlock allaqachon resolve qilgan bo‘lishi mumkin —
-        // faqat bayroq hali yo‘q bo‘lsa qayta tekshiramiz (navigatsiya yo‘q).
-        _doneThisSession = false;
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted) _syncGateFlag();
-        });
-      }
       if (next.status != AuthStatus.ready) {
         _doneThisSession = false;
+        return;
       }
+      if (prev?.status == AuthStatus.ready) return;
+      // Yangi ready: auth allaqachon `_resolveDailyFaceGate` qilgan.
+      // Qayta so‘rov — faqat bayroq hali qo‘yilmagan bo‘lsa (ortiqcha refresh yo‘q).
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _syncGateFlag();
+      });
     });
 
     return widget.child;

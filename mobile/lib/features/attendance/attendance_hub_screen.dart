@@ -139,15 +139,15 @@ class _AttendanceHubScreenState extends ConsumerState<AttendanceHubScreen> {
   Future<void> _finishGateIfNeeded() async {
     if (!widget.gateMode || !mounted) return;
     setState(() => _gateCleared = true);
-    ref.read(faceGateRequiredProvider.notifier).clearGate();
     if (!mounted) return;
+    // clearGate + go birga — orada router refresh (Duplicate GlobalKeys) bo‘lmasin.
+    ref.read(faceGateRequiredProvider.notifier).clearGate();
     context.go('/home');
   }
 
   /// Qabul qilingan PRIHOD: markazda galochka → asosiy sahifa.
   Future<void> _showGateAcceptedAndEnter([PunchFaceResult? face]) async {
     if (!widget.gateMode || !mounted) return;
-    ref.read(faceGateRequiredProvider.notifier).clearGate();
     setState(() {
       _gateFaceResult = face ?? PunchFaceResult.acceptedIn;
       _statusBanner = null;
@@ -156,6 +156,8 @@ class _AttendanceHubScreenState extends ConsumerState<AttendanceHubScreen> {
     });
     await Future<void>.delayed(const Duration(milliseconds: 1400));
     if (!mounted) return;
+    // Avval clearGate qilib 1.4s kutish — Shell qayta mount / Duplicate GlobalKeys.
+    ref.read(faceGateRequiredProvider.notifier).clearGate();
     context.go('/home');
   }
 
