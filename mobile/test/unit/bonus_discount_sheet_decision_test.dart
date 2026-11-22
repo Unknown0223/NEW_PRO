@@ -43,6 +43,22 @@ void main() {
     });
   });
 
+  group('strategyChoiceNeedsUi', () {
+    test('false when requiresChoice but no eligible rules', () {
+      expect(
+        strategyChoiceNeedsUi(requiresChoice: true, eligibleRuleCount: 0),
+        isFalse,
+      );
+    });
+
+    test('true when requiresChoice and eligible rules exist', () {
+      expect(
+        strategyChoiceNeedsUi(requiresChoice: true, eligibleRuleCount: 2),
+        isTrue,
+      );
+    });
+  });
+
   group('usable preview rules', () {
     test('bonus needs qty and gift products', () {
       expect(isUsableBonusPreviewRule(bonusQty: 2, giftProductCount: 1), isTrue);
@@ -78,26 +94,39 @@ void main() {
       );
     });
 
-    test('auto_apply gifts keep bonus section when eligible empty', () {
+    test('auto_apply alone does not open bonus sheet', () {
+      // Sheet UI eligible qoidalarsiz ochilmasin; skip + auto bayroq alohida.
       expect(
         decideSheetModeFromPreviewRules(
           bonuses: [],
           discountPcts: [],
-          autoApplyGiftCount: 2,
         ),
-        BonusDiscountSheetMode.bonusOnly,
+        BonusDiscountSheetMode.skipFinish,
       );
     });
+  });
 
-    test('auto discount pct keeps discount when eligible empty', () {
-      expect(
-        decideSheetModeFromPreviewRules(
-          bonuses: [],
-          discountPcts: [0, null],
-          autoDiscountPct: 5,
-        ),
-        BonusDiscountSheetMode.discountOnly,
+  group('skipFinishApplyFlags', () {
+    test('auto gifts and discount pct apply without opening sheet', () {
+      final flags = skipFinishApplyFlags(autoApplyGiftCount: 2, autoDiscountPct: 5);
+      expect(flags.applyBonus, isTrue);
+      expect(flags.applyDiscount, isTrue);
+    });
+
+    test('auto rule ids without gifts still apply bonus on skip', () {
+      final flags = skipFinishApplyFlags(
+        autoApplyGiftCount: 0,
+        autoApplyRuleCount: 1,
+        autoDiscountPct: null,
       );
+      expect(flags.applyBonus, isTrue);
+      expect(flags.applyDiscount, isFalse);
+    });
+
+    test('zero auto means no apply on skip', () {
+      final flags = skipFinishApplyFlags(autoApplyGiftCount: 0, autoDiscountPct: null);
+      expect(flags.applyBonus, isFalse);
+      expect(flags.applyDiscount, isFalse);
     });
   });
 }

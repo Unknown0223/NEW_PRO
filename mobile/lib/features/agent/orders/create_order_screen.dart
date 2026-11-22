@@ -1629,8 +1629,10 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
             ? _bonusDraft
             : _bonusDraft!.withItemsFingerprint(fp));
 
-    // Prefetch: bonus/skidka yo‘q bo‘lsa sheet ochilmasin — darhol yakunlash.
-    var sheetMode = BonusDiscountSheetMode.both;
+    // Prefetch: UI da ko‘rinadigan bonus/skidka yo‘q bo‘lsa sheet ochilmasin.
+    var sheetMode = BonusDiscountSheetMode.skipFinish;
+    var skipApplyBonus = false;
+    var skipApplyDiscount = false;
     setState(() => _submitting = true);
     try {
       final raw = await ref.read(ordersApiProvider).previewBonus(
@@ -1642,6 +1644,8 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
             isConsignment: _isConsignment,
           );
       final preview = OrderBonusPreview.fromJson(raw);
+      final autoGiftCount =
+          preview.autoApplyGifts.fold<int>(0, (s, g) => s + g.qty);
       sheetMode = decideSheetModeFromPreviewRules(
         bonuses: [
           for (final b in preview.eligibleBonuses)
@@ -1650,10 +1654,20 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
         discountPcts: [
           for (final d in preview.eligibleDiscounts) d.discountPct,
         ],
-        strategyRequiresChoice: preview.strategies.any((s) => s.requiresChoice),
-        autoApplyGiftCount: preview.autoApplyGifts.fold<int>(0, (s, g) => s + g.qty),
+        strategyRequiresChoice: preview.strategies.any(
+          (s) => strategyChoiceNeedsUi(
+            requiresChoice: s.requiresChoice,
+            eligibleRuleCount: s.eligibleRuleIds.length,
+          ),
+        ),
+      );
+      final skipFlags = skipFinishApplyFlags(
+        autoApplyGiftCount: autoGiftCount,
+        autoApplyRuleCount: preview.autoApplyRuleIds.length,
         autoDiscountPct: preview.autoDiscountPct,
       );
+      skipApplyBonus = skipFlags.applyBonus;
+      skipApplyDiscount = skipFlags.applyDiscount;
     } catch (e, st) {
       ErrorReporter.instance?.reportCaught(
         e,
@@ -1663,14 +1677,21 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
         message: 'Заказ: prefetch бонус/скидка не загрузился',
         path: '/mobile/orders/bonus-preview',
       );
-      // Xatoda eski xulq: sheet ochiladi (both).
-      sheetMode = BonusDiscountSheetMode.both;
+      if (!mounted) return;
+      setState(() => _submitting = false);
+      _toast(
+        UserFacingError.toast(e, action: 'Не удалось проверить бонус/скидку'),
+      );
+      return;
     }
     if (!mounted) return;
     setState(() => _submitting = false);
 
     if (sheetMode == BonusDiscountSheetMode.skipFinish) {
-      await _submit(applyBonus: false, applyDiscount: false);
+      await _submit(
+        applyBonus: skipApplyBonus,
+        applyDiscount: skipApplyDiscount,
+      );
       return;
     }
 

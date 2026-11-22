@@ -25,6 +25,14 @@ bool isUsableDiscountPreviewRule({required double? discountPct}) {
   return discountPct != null && discountPct > 0;
 }
 
+/// Strategiya tanlovi UI da faqat eligible qoidalar bo‘lsa kerak.
+bool strategyChoiceNeedsUi({
+  required bool requiresChoice,
+  required int eligibleRuleCount,
+}) {
+  return requiresChoice && eligibleRuleCount > 0;
+}
+
 BonusDiscountSheetMode decideBonusDiscountSheetMode({
   required int usableBonusCount,
   required int usableDiscountCount,
@@ -38,16 +46,14 @@ BonusDiscountSheetMode decideBonusDiscountSheetMode({
   return BonusDiscountSheetMode.both;
 }
 
-/// Prefetch preview dan sheet rejimini hisoblash (bonus qty+gift, skidka pct).
-/// [autoApplyGiftCount] / [autoDiscountPct] — eligible bo‘sh bo‘lsa ham auto_apply signal.
+/// Prefetch preview dan sheet rejimini hisoblash.
+/// Faqat UI da ko‘rinadigan qoidalar — auto_apply yolg‘iz sheet ochmaydi.
 BonusDiscountSheetMode decideSheetModeFromPreviewRules({
   required List<({double bonusQty, int giftProductCount})> bonuses,
   required List<double?> discountPcts,
   bool strategyRequiresChoice = false,
-  int autoApplyGiftCount = 0,
-  double? autoDiscountPct,
 }) {
-  var usableBonusCount = bonuses
+  final usableBonusCount = bonuses
       .where(
         (b) => isUsableBonusPreviewRule(
           bonusQty: b.bonusQty,
@@ -55,19 +61,24 @@ BonusDiscountSheetMode decideSheetModeFromPreviewRules({
         ),
       )
       .length;
-  if (usableBonusCount == 0 && autoApplyGiftCount > 0) {
-    usableBonusCount = 1;
-  }
-  var usableDiscountCount = discountPcts
+  final usableDiscountCount = discountPcts
       .where((pct) => isUsableDiscountPreviewRule(discountPct: pct))
       .length;
-  if (usableDiscountCount == 0 &&
-      isUsableDiscountPreviewRule(discountPct: autoDiscountPct)) {
-    usableDiscountCount = 1;
-  }
   return decideBonusDiscountSheetMode(
     usableBonusCount: usableBonusCount,
     usableDiscountCount: usableDiscountCount,
     strategyRequiresChoice: strategyRequiresChoice,
+  );
+}
+
+/// Sheet o‘tkazib yuborilganda serverga yuboriladigan auto bayroqlar.
+({bool applyBonus, bool applyDiscount}) skipFinishApplyFlags({
+  required int autoApplyGiftCount,
+  int autoApplyRuleCount = 0,
+  double? autoDiscountPct,
+}) {
+  return (
+    applyBonus: autoApplyGiftCount > 0 || autoApplyRuleCount > 0,
+    applyDiscount: isUsableDiscountPreviewRule(discountPct: autoDiscountPct),
   );
 }

@@ -925,6 +925,7 @@ class OrderBonusDiscountSheet extends StatefulWidget {
 class _OrderBonusDiscountSheetState extends State<OrderBonusDiscountSheet> {
   late BonusMode _bonusMode;
   late DiscountMode _discountMode;
+  late BonusDiscountSheetMode _resolvedSheetMode;
   int _activeSection = 0; // 0 = bonus, 1 = discount
   bool _slideForward = true;
   int? _selectedBonusRuleId;
@@ -971,16 +972,28 @@ class _OrderBonusDiscountSheetState extends State<OrderBonusDiscountSheet> {
   bool get _discountSectionDisabled => false;
 
   bool get _showBonusTab =>
-      widget.sheetMode == BonusDiscountSheetMode.both ||
-      widget.sheetMode == BonusDiscountSheetMode.bonusOnly;
+      _resolvedSheetMode == BonusDiscountSheetMode.both ||
+      _resolvedSheetMode == BonusDiscountSheetMode.bonusOnly;
 
   bool get _showDiscountTab =>
-      widget.sheetMode == BonusDiscountSheetMode.both ||
-      widget.sheetMode == BonusDiscountSheetMode.discountOnly;
+      _resolvedSheetMode == BonusDiscountSheetMode.both ||
+      _resolvedSheetMode == BonusDiscountSheetMode.discountOnly;
+
+  void _applySheetModeVisibility() {
+    if (!_showBonusTab) {
+      _bonusMode = BonusMode.none;
+      _activeSection = 1;
+    }
+    if (!_showDiscountTab) {
+      _discountMode = DiscountMode.none;
+      _activeSection = 0;
+    }
+  }
 
   @override
   void initState() {
     super.initState();
+    _resolvedSheetMode = widget.sheetMode;
     final draft = widget.initialDraft;
     if (draft != null) {
       _bonusMode = draft.bonusMode;
@@ -1003,15 +1016,7 @@ class _OrderBonusDiscountSheetState extends State<OrderBonusDiscountSheet> {
       final fallback = defaultBonusModeKey(widget.ordersConfig);
       _bonusMode = fallback == 'none' ? BonusMode.none : BonusMode.auto;
     }
-    // Prefetch rejimi: yo‘q bo‘limni yashirish + default «Без …»
-    if (!_showBonusTab) {
-      _bonusMode = BonusMode.none;
-      _activeSection = 1;
-    }
-    if (!_showDiscountTab) {
-      _discountMode = DiscountMode.none;
-      _activeSection = 0;
-    }
+    _applySheetModeVisibility();
     _loadPreview();
   }
 
@@ -1062,21 +1067,59 @@ class _OrderBonusDiscountSheetState extends State<OrderBonusDiscountSheet> {
             (s) => MapEntry(s.strategyId, List<int>.from(s.autoSelectedRuleIds)),
           ),
         );
-      setState(() {
-        _preview = OrderBonusPreview(
-          bonusStackMode: normalized.bonusStackMode,
-          eligibleBonuses: _dedupeEligibleBonuses(normalized.eligibleBonuses),
-          eligibleDiscounts: normalized.eligibleDiscounts,
-          linkedPairs: normalized.linkedPairs,
-          strategies: normalized.strategies,
-          autoApplyRuleIds: normalized.autoApplyRuleIds,
-          autoApplyGifts: normalized.autoApplyGifts,
-          autoDiscountRuleId: normalized.autoDiscountRuleId,
+      final dedupedBonuses = _dedupeEligibleBonuses(normalized.eligibleBonuses);
+      final nextPreview = OrderBonusPreview(
+        bonusStackMode: normalized.bonusStackMode,
+        eligibleBonuses: dedupedBonuses,
+        eligibleDiscounts: normalized.eligibleDiscounts,
+        linkedPairs: normalized.linkedPairs,
+        strategies: normalized.strategies,
+        autoApplyRuleIds: normalized.autoApplyRuleIds,
+        autoApplyGifts: normalized.autoApplyGifts,
+        autoDiscountRuleId: normalized.autoDiscountRuleId,
+        autoDiscountPct: normalized.autoDiscountPct,
+        discountSum: normalized.discountSum,
+        expectedDiscountSum: normalized.expectedDiscountSum,
+        discountCashDeskAvailable: normalized.discountCashDeskAvailable,
+      );
+      final mode = decideSheetModeFromPreviewRules(
+        bonuses: [
+          for (final b in dedupedBonuses)
+            (bonusQty: b.bonusQty, giftProductCount: b.giftProducts.length),
+        ],
+        discountPcts: [
+          for (final d in normalized.eligibleDiscounts) d.discountPct,
+        ],
+        strategyRequiresChoice: normalized.strategies.any(
+          (s) => strategyChoiceNeedsUi(
+            requiresChoice: s.requiresChoice,
+            eligibleRuleCount: s.eligibleRuleIds.length,
+          ),
+        ),
+      );
+      if (mode == BonusDiscountSheetMode.skipFinish) {
+        final flags = skipFinishApplyFlags(
+          autoApplyGiftCount:
+              normalized.autoApplyGifts.fold<int>(0, (s, g) => s + g.qty),
+          autoApplyRuleCount: normalized.autoApplyRuleIds.length,
           autoDiscountPct: normalized.autoDiscountPct,
-          discountSum: normalized.discountSum,
-          expectedDiscountSum: normalized.expectedDiscountSum,
-          discountCashDeskAvailable: normalized.discountCashDeskAvailable,
         );
+        if (!mounted) return;
+        Navigator.of(context).pop(
+          OrderBonusDiscountResult(
+            bonusMode: flags.applyBonus ? BonusMode.auto : BonusMode.none,
+            discountMode:
+                flags.applyDiscount ? DiscountMode.auto : DiscountMode.none,
+            applyBonus: flags.applyBonus,
+            applyDiscount: flags.applyDiscount,
+          ),
+        );
+        return;
+      }
+      setState(() {
+        _preview = nextPreview;
+        _resolvedSheetMode = mode;
+        _applySheetModeVisibility();
         _loadingPreview = false;
         _previewError = null;
         _applyPreviewDefaults();
@@ -3191,10 +3234,11 @@ class _OrderBonusDiscountSheetState extends State<OrderBonusDiscountSheet> {
                   ],
                 ),
               ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
-              child: Text(hint, style: AppTypography.bodySmall.copyWith(color: Colors.grey.shade700)),
-            ),
+            if (_showBonusTab && _showDiscountTab)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
+                child: Text(hint, style: AppTypography.bodySmall.copyWith(color: Colors.grey.shade700)),
+              ),
             if (_previewError != null)
               Padding(
                 padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
