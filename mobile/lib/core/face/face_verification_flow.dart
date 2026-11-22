@@ -1,11 +1,15 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../api/api_exceptions.dart';
+import '../auth/app_lock.dart';
 import '../auth/session.dart';
+import '../camera/photo_capture_policy.dart';
 import '../navigation/root_navigator_context.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_typography.dart';
@@ -103,14 +107,33 @@ class FaceVerificationFlow {
     String slug,
     String title,
   ) async {
-    final picked = await ImagePicker().pickImage(
-      source: ImageSource.camera,
-      preferredCameraDevice: CameraDevice.front,
-      maxWidth: 720,
-      imageQuality: 85,
+    final dialogCtx = resolveRootNavigatorContext(context);
+    if (dialogCtx == null) return false;
+
+    final accepted = await showDialog<bool>(
+      context: dialogCtx,
+      useRootNavigator: true,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        title: Text(title),
+        content: Text(
+          'Сделайте селфи — эталон сохранится на сервере.',
+          style: AppTypography.bodyMedium.copyWith(color: AppColors.textMuted),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Отмена')),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Сделать фото'),
+          ),
+        ],
+      ),
     );
-    if (picked == null) return false;
-    final bytes = await picked.readAsBytes();
+    if (accepted != true) return false;
+
+    final path = await _pickFaceImage(ref);
+    if (path == null) return false;
+    final bytes = await File(path).readAsBytes();
     await ref.read(faceVerificationApiProvider).uploadReference(
           slug,
           base64Encode(bytes),
@@ -124,7 +147,7 @@ class FaceVerificationFlow {
     return true;
   }
 
-  /// Tabel / enrollment — etalon selfie (daily_login bilan bir xil capture).
+  /// Tabel / enrollment — etalon selfie.
   static Future<bool> ensureReference(
     BuildContext context,
     WidgetRef ref, {
@@ -170,16 +193,10 @@ class FaceVerificationFlow {
     );
     if (accepted != true) return false;
 
-    final picked = await ImagePicker().pickImage(
-      source: ImageSource.camera,
-      preferredCameraDevice: CameraDevice.front,
-      maxWidth: 720,
-      imageQuality: 85,
-    );
-    if (picked == null) return false;
-
     try {
-      final bytes = await picked.readAsBytes();
+      final path = await _pickFaceImage(ref);
+      if (path == null) return false;
+      final bytes = await File(path).readAsBytes();
       await ref.read(faceVerificationApiProvider).submitVerification(
             slug,
             context: verifyContext,
@@ -188,6 +205,14 @@ class FaceVerificationFlow {
             clientId: clientId,
           );
       return true;
+    } on PhotoCaptureException catch (e) {
+      final snackCtx = resolveRootNavigatorContext(context);
+      if (snackCtx != null && snackCtx.mounted) {
+        ScaffoldMessenger.of(snackCtx).showSnackBar(
+          SnackBar(content: Text(e.message), backgroundColor: AppColors.error),
+        );
+      }
+      return false;
     } catch (e) {
       final msg = e is ApiException ? e.message : '$e';
       final snackCtx = resolveRootNavigatorContext(context);
@@ -204,6 +229,26 @@ class FaceVerificationFlow {
         );
       }
       return false;
+    }
+  }
+
+  /// preferredCameraDevice yo‘q — emulyator/front yo‘qligida kulrang previewdan qochamiz.
+  static Future<String?> _pickFaceImage(WidgetRef ref) async {
+    try {
+      final picked = await withAppLockSuppressed(
+        ref,
+        () => ImagePicker().pickImage(
+          source: ImageSource.camera,
+          maxWidth: 720,
+          imageQuality: 85,
+        ),
+      );
+      return picked?.path;
+    } on PlatformException catch (e) {
+      throw PhotoCaptureException(
+        code: e.code,
+        message: photoCaptureUserMessage(e.code, fallback: e.message),
+      );
     }
   }
 }

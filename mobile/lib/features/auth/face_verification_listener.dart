@@ -8,9 +8,7 @@ import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_typography.dart';
 import 'auth_provider.dart';
 
-/// Kunlik yuz tasdiqlash — tasdiqlanmaguncha UI bloklanadi.
-///
-/// Muhim: `build` ichida post-frame check YO‘Q — aks holda dialog sikl ochiladi.
+/// Kunlik yuz tasdiqlash — muvaffaqiyatsiz bo‘lsa soft-skip («Позже») bilan ishlash mumkin.
 class FaceVerificationListener extends ConsumerStatefulWidget {
   final Widget child;
   const FaceVerificationListener({super.key, required this.child});
@@ -25,8 +23,8 @@ class _FaceVerificationListenerState
   bool _running = false;
   bool _doneThisSession = false;
   bool _blocking = false;
-  /// Shu bloklashda dialog bir marta avto ochilgan — qayta emas.
   bool _promptedWhileBlocking = false;
+  bool _dialogOpen = false;
   String? _lastError;
   bool _scheduledInitial = false;
 
@@ -40,6 +38,22 @@ class _FaceVerificationListenerState
     });
   }
 
+  void _softSkipSession() {
+    if (!allowSoftSkipDailyFace(
+      hardBlockRequired: true,
+      userChoseLater: true,
+    )) {
+      return;
+    }
+    setState(() {
+      _doneThisSession = true;
+      _blocking = false;
+      _promptedWhileBlocking = false;
+      _dialogOpen = false;
+      _lastError = null;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     ref.listen<AuthState>(authStateProvider, (prev, next) {
@@ -47,6 +61,7 @@ class _FaceVerificationListenerState
         _doneThisSession = false;
         _blocking = false;
         _promptedWhileBlocking = false;
+        _dialogOpen = false;
         _lastError = null;
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (mounted) _maybeDailyCheck();
@@ -56,15 +71,18 @@ class _FaceVerificationListenerState
         _doneThisSession = false;
         _blocking = false;
         _promptedWhileBlocking = false;
+        _dialogOpen = false;
         _lastError = null;
       }
     });
 
+    final showOverlay = _blocking && !_dialogOpen;
+
     return Stack(
       fit: StackFit.expand,
       children: [
-        IgnorePointer(ignoring: _blocking, child: widget.child),
-        if (_blocking)
+        IgnorePointer(ignoring: showOverlay, child: widget.child),
+        if (showOverlay)
           Material(
             color: Colors.black.withValues(alpha: 0.72),
             child: SafeArea(
@@ -113,6 +131,15 @@ class _FaceVerificationListenerState
                             _running ? 'Проверка…' : 'Подтвердить лицо',
                           ),
                         ),
+                        const SizedBox(height: 8),
+                        TextButton(
+                          onPressed: _running ? null : _softSkipSession,
+                          child: Text(
+                            'Позже',
+                            style: AppTypography.bodyMedium
+                                .copyWith(color: Colors.white70),
+                          ),
+                        ),
                       ],
                     ),
                   ),
@@ -126,7 +153,6 @@ class _FaceVerificationListenerState
 
   Future<void> _maybeDailyCheck({bool force = false}) async {
     if (_running || (!force && _doneThisSession) || !mounted) return;
-    // Bloklangan + dialog allaqachon ochilgan — faqat tugma (force) qayta urinadi.
     if (!force && _promptedWhileBlocking) return;
     if (ref.read(authStateProvider).status != AuthStatus.ready) return;
 
@@ -149,19 +175,15 @@ class _FaceVerificationListenerState
             _doneThisSession = true;
             _blocking = false;
             _promptedWhileBlocking = false;
+            _dialogOpen = false;
           });
         }
         return;
       }
 
-      if (mounted) {
-        setState(() => _blocking = true);
-      }
+      if (mounted) setState(() => _blocking = true);
 
-      if (!openCapture) {
-        // Bloklangan, lekin dialogni qayta ochmaymiz — tugma kutadi.
-        return;
-      }
+      if (!openCapture) return;
 
       _promptedWhileBlocking = true;
       final navCtx = resolveRootNavigatorContext(context);
@@ -169,11 +191,14 @@ class _FaceVerificationListenerState
         if (mounted) {
           setState(() {
             _blocking = true;
-            _lastError = 'Не удалось открыть камеру — повторите';
+            _dialogOpen = false;
+            _lastError = 'Не удалось открыть камеру — повторите или «Позже»';
           });
         }
         return;
       }
+
+      if (mounted) setState(() => _dialogOpen = true);
       final ok = await FaceVerificationFlow.ensureDailyLogin(navCtx, ref);
       if (!mounted) return;
       if (ok) {
@@ -181,12 +206,15 @@ class _FaceVerificationListenerState
           _doneThisSession = true;
           _blocking = false;
           _promptedWhileBlocking = false;
+          _dialogOpen = false;
           _lastError = null;
         });
       } else {
         setState(() {
           _blocking = true;
-          _lastError = 'Проверка не завершена — повторите';
+          _dialogOpen = false;
+          _lastError =
+              'Проверка не завершена — повторите или нажмите «Позже»';
         });
       }
     } catch (e) {
@@ -194,6 +222,7 @@ class _FaceVerificationListenerState
         setState(() {
           _blocking = true;
           _promptedWhileBlocking = true;
+          _dialogOpen = false;
           _lastError = '$e';
         });
       }

@@ -41,4 +41,17 @@ void main() {
       );
     });
   });
+
+  group('allowSoftSkipDailyFace', () {
+    test('later unlocks even when hard block required', () {
+      expect(
+        allowSoftSkipDailyFace(hardBlockRequired: true, userChoseLater: true),
+        isTrue,
+      );
+      expect(
+        allowSoftSkipDailyFace(hardBlockRequired: true, userChoseLater: false),
+        isFalse,
+      );
+    });
+  });
 }
