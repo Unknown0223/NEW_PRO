@@ -26,6 +26,7 @@ import 'agent_dashboard_provider.dart';
 import 'home_visit_metrics_provider.dart';
 import 'last_created_order_banner.dart';
 import 'sync_count_provider.dart';
+import 'sync_window_denied_banner.dart';
 
 String planDashboardLine(AgentDashboardResult dash, String? planVersion) {
   final base =
@@ -55,6 +56,8 @@ class AgentHomePage extends ConsumerStatefulWidget {
 
 class _AgentHomePageState extends ConsumerState<AgentHomePage> {
   Timer? _syncPolicyPoll;
+  Timer? _syncDeniedHide;
+  bool _showSyncDeniedBanner = false;
 
   @override
   void initState() {
@@ -69,7 +72,23 @@ class _AgentHomePageState extends ConsumerState<AgentHomePage> {
   @override
   void dispose() {
     _syncPolicyPoll?.cancel();
+    _syncDeniedHide?.cancel();
     super.dispose();
+  }
+
+  void _dismissSyncDeniedBanner() {
+    _syncDeniedHide?.cancel();
+    _syncDeniedHide = null;
+    if (!mounted) return;
+    if (_showSyncDeniedBanner) setState(() => _showSyncDeniedBanner = false);
+  }
+
+  /// Oyna tashqarida urinish — vaqtinchalik banner (yopiladi; qayta urinishda yana).
+  void _revealSyncDeniedBanner() {
+    _syncDeniedHide?.cancel();
+    if (!mounted) return;
+    setState(() => _showSyncDeniedBanner = true);
+    _syncDeniedHide = Timer(const Duration(seconds: 8), _dismissSyncDeniedBanner);
   }
 
   Future<void> _refreshSyncConfigOnOpen() async {
@@ -98,23 +117,30 @@ class _AgentHomePageState extends ConsumerState<AgentHomePage> {
     });
   }
 
+  void _showSyncDeniedFeedback(SyncPolicyEvaluation policy, SyncConfig syncCfg) {
+    if (isOutsideSyncWindowDenial(syncCfg)) {
+      _revealSyncDeniedBanner();
+      return;
+    }
+    _dismissSyncDeniedBanner();
+    final msg = policy.denialMessage;
+    if (msg == null || msg.isEmpty || !mounted) return;
+    showAgentToast(context, msg, accentColor: AppColors.warning);
+  }
+
   Future<void> _tryRefreshAndOpenSync() async {
     final policy =
         await ref.read(authStateProvider.notifier).refreshConfigAndEvaluateSyncPolicy();
     if (!mounted) return;
     if (policy.allowed) {
+      _dismissSyncDeniedBanner();
       if (!context.mounted) return;
       await SyncBottomSheet.show(context);
       return;
     }
     if (!context.mounted) return;
-    showAgentToast(
-      context,
-      policy.denialMessage ?? syncWindowMessage(
-        ref.read(sessionProvider).mobileConfig?.sync ?? const SyncConfig(),
-      ),
-      accentColor: AppColors.warning,
-    );
+    final syncCfg = ref.read(sessionProvider).mobileConfig?.sync ?? const SyncConfig();
+    _showSyncDeniedFeedback(policy, syncCfg);
   }
 
   Future<void> _fixStaleClientCatalog() async {
@@ -196,13 +222,10 @@ class _AgentHomePageState extends ConsumerState<AgentHomePage> {
           final policy = evaluateSyncPolicy(freshCfg);
           if (!policy.allowed) {
             if (!context.mounted) return;
-            showAgentToast(
-                context,
-                policy.denialMessage ?? syncWindowMessage(freshCfg),
-                accentColor: AppColors.warning,
-            );
+            _showSyncDeniedFeedback(policy, freshCfg);
             return;
           }
+          _dismissSyncDeniedBanner();
           final forceCatalog = await AppDatabase().needsFullClientCatalogResync();
           final r = await ref.read(authStateProvider.notifier).resync(
                 full: false,
@@ -266,7 +289,9 @@ class _AgentHomePageState extends ConsumerState<AgentHomePage> {
                   padding: const EdgeInsets.all(12),
                   margin: const EdgeInsets.only(bottom: 8),
                   child: InkWell(
-                    onTap: syncAllowed ? () => SyncBottomSheet.show(context) : null,
+                    onTap: syncAllowed
+                        ? () => SyncBottomSheet.show(context)
+                        : () => unawaited(_tryRefreshAndOpenSync()),
                     borderRadius: BorderRadius.circular(10),
                     child: Row(
                       children: [
@@ -284,19 +309,13 @@ class _AgentHomePageState extends ConsumerState<AgentHomePage> {
                     ),
                   ),
                 ),
-              if (!syncAllowed)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
-                  child: Text(
-                    [
-                      syncWindowMessage(syncCfg),
-                      if (session.user?.workSlotCode != null &&
-                          session.user!.workSlotCode!.trim().isNotEmpty)
-                        'Slot: ${session.user!.workSlotCode}',
-                      'Web → Рабочее место → Синхронизация oynasini tekshiring va Сохранить bosing, keyin shu yerda qayta urinib ko‘ring.',
-                    ].join('\n'),
-                    style: AppTypography.caption.copyWith(color: AppColors.warning),
+              if (_showSyncDeniedBanner)
+                SyncWindowDeniedBanner(
+                  info: buildSyncWindowDeniedInfo(
+                    syncCfg,
+                    slotCode: session.user?.workSlotCode,
                   ),
+                  onClose: _dismissSyncDeniedBanner,
                 ),
               AgentSurfaceCard(
                 padding: const EdgeInsets.all(12),

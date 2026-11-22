@@ -14,8 +14,31 @@ void main() {
       final msg = syncWindowMessage(sync);
       expect(msg, contains('01:00'));
       expect(msg, contains('17:30'));
-      expect(msg, contains('hozir'));
-      expect(msg, contains('ish mintaqasi'));
+      expect(msg, contains('сейчас'));
+      expect(msg, contains('рабочий регион'));
+    });
+
+    test('buildSyncWindowDeniedInfo — chiroyli banner matnlari', () {
+      const sync = SyncConfig(
+        allowedWindowFrom: '06:00',
+        allowedWindowTo: '22:00',
+      );
+      final info = buildSyncWindowDeniedInfo(sync, slotCode: 'A-MAIN-001');
+      expect(info.title, contains('недоступна'));
+      expect(info.windowLine, contains('06:00'));
+      expect(info.windowLine, contains('22:00'));
+      expect(info.slotLine, 'Слот: A-MAIN-001');
+      expect(info.hint, contains('Рабочее место'));
+      expect(info.summaryLine, contains('A-MAIN-001'));
+    });
+
+    test('isOutsideSyncWindowDenial — block_sync uchun false', () {
+      const blocked = SyncConfig(
+        blockSync: true,
+        allowedWindowFrom: '06:00',
+        allowedWindowTo: '22:00',
+      );
+      expect(isOutsideSyncWindowDenial(blocked), isFalse);
     });
 
     test('outside 01:00–17:30 at 20:33 is denied', () {

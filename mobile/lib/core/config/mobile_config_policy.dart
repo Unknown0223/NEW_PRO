@@ -94,11 +94,57 @@ bool needsMandatorySync(SyncConfig sync, int syncCountToday) {
 }
 
 String syncWindowMessage(SyncConfig sync) {
+  final info = buildSyncWindowDeniedInfo(sync);
+  return info.summaryLine;
+}
+
+/// `evaluateSyncPolicy` rad etgan, sabab — vaqt oynasi (block / server langar emas).
+bool isOutsideSyncWindowDenial(SyncConfig sync) {
+  sync = effectiveSyncConfig(sync);
+  if (sync.blockSync) return false;
+  if (syncWindowConfigured(sync) && !ServerClock.instance.hasAnchor) return false;
+  return !isSyncAllowedNow(sync);
+}
+
+/// Sinxron oynasi tashqarida — chiroyli banner / toast uchun bo‘laklar.
+class SyncWindowDeniedInfo {
+  const SyncWindowDeniedInfo({
+    required this.title,
+    required this.windowLine,
+    required this.nowLine,
+    required this.hint,
+    this.slotLine,
+  });
+
+  final String title;
+  final String windowLine;
+  final String nowLine;
+  final String hint;
+  final String? slotLine;
+
+  String get summaryLine {
+    final slot = (slotLine == null || slotLine!.isEmpty) ? '' : '\n$slotLine';
+    return '$windowLine ($nowLine)$slot';
+  }
+}
+
+SyncWindowDeniedInfo buildSyncWindowDeniedInfo(
+  SyncConfig sync, {
+  String? slotCode,
+  DateTime? at,
+}) {
   final effective = effectiveSyncConfig(sync);
   final from = effective.allowedWindowFrom ?? '—';
   final to = effective.allowedWindowTo ?? '—';
-  final now = syncWindowClockNow();
+  final now = syncWindowClockNow(at);
   final hh = now.hour.toString().padLeft(2, '0');
   final mm = now.minute.toString().padLeft(2, '0');
-  return 'Sinxron faqat $from – $to oralig‘ida mumkin (hozir $hh:$mm, ish mintaqasi)';
+  final slot = slotCode?.trim();
+  return SyncWindowDeniedInfo(
+    title: 'Синхронизация недоступна',
+    windowLine: 'Разрешено только с $from до $to',
+    nowLine: 'сейчас $hh:$mm (рабочий регион)',
+    slotLine: (slot != null && slot.isNotEmpty) ? 'Слот: $slot' : null,
+    hint: 'Веб → Рабочее место → Синхронизация: проверьте окно и нажмите Сохранить, затем повторите здесь.',
+  );
 }
