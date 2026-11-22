@@ -237,9 +237,11 @@ class _AttendanceHubScreenState extends ConsumerState<AttendanceHubScreen> {
         return;
       case AttendanceGateStepKind.video:
         final cap = await VideoPunchFlow.captureInline(
+          context,
           ref,
           maxSec: st.videoMaxSec.clamp(5, 10),
           captureMode: st.captureMode,
+          dayCode: st.dayCode,
           requireBack: true,
         );
         if (cap == null || !mounted) return;

@@ -1,13 +1,11 @@
-import 'dart:convert';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:image_picker/image_picker.dart';
 
 import '../../core/auth/app_lock.dart';
 import 'attendance_models.dart';
+import 'video_punch_screen.dart';
 
-/// 3 xonali kod + old/orqa video (image_picker; simultaneous kamera keyingi APK).
+/// 3 xonali kod + old/orqa video (HR Hub uslubidagi in-app kamera).
 class VideoPunchCapture {
   const VideoPunchCapture({
     required this.frontBase64,
@@ -29,115 +27,36 @@ class VideoPunchFlow {
     BuildContext context,
     WidgetRef ref, {
     required MobileAttendanceState st,
-  }) async {
-    return withAppLockSuppressed(ref, () async {
-      final code = st.dayCode;
-      final maxSec = st.videoMaxSec.clamp(5, 10);
-      final picker = ImagePicker();
-
-      final start = await showDialog<bool>(
-        context: context,
-        barrierDismissible: false,
-        builder: (ctx) => AlertDialog(
-          title: const Text('Видео-отметка'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text('Произнесите код на фронтальном видео:'),
-              const SizedBox(height: 8),
-              Text(
-                '${code ?? "---"}',
-                style: const TextStyle(fontSize: 40, fontWeight: FontWeight.w900, letterSpacing: 8),
-              ),
-              const SizedBox(height: 8),
-              Text('Длительность ${st.videoMinSec}–$maxSec сек · Режим: ${st.captureMode}'),
-            ],
-          ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Отмена')),
-            FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Фронт видео')),
-          ],
-        ),
-      );
-      if (start != true || !context.mounted) return null;
-
-      final front = await picker.pickVideo(
-        source: ImageSource.camera,
-        maxDuration: Duration(seconds: maxSec),
-      );
-      if (front == null || !context.mounted) return null;
-      final frontB64 = base64Encode(await front.readAsBytes());
-
-      String? backB64;
-      final needBack = st.captureMode == 'sequential' || st.captureMode == 'simultaneous';
-      if (needBack) {
-        if (!context.mounted) return null;
-        final backOk = await showDialog<bool>(
-          context: context,
-          builder: (ctx) => AlertDialog(
-            title: const Text('Задняя камера'),
-            content: const Text('Сейчас запишите короткое видео рабочего места (задняя камера).'),
-            actions: [
-              TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Пропустить')),
-              FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Записать')),
-            ],
-          ),
-        );
-        if (backOk == true && context.mounted) {
-          final back = await picker.pickVideo(
-            source: ImageSource.camera,
-            maxDuration: Duration(seconds: maxSec),
-          );
-          if (back != null) {
-            backB64 = base64Encode(await back.readAsBytes());
-          }
-        }
-      }
-
-      return VideoPunchCapture(
-        frontBase64: frontB64,
-        backBase64: backB64,
-        durationSec: maxSec,
-        captureMode: backB64 != null ? st.captureMode : 'front_only',
+  }) {
+    return withAppLockSuppressed(ref, () {
+      return VideoPunchScreen.open(
+        context,
+        durationSec: st.videoMaxSec.clamp(5, 10),
+        captureMode: st.captureMode,
+        dayCode: st.dayCode,
+        requireBack: st.captureMode == 'sequential' || st.captureMode == 'simultaneous',
+        title: 'Видео-отметка',
       );
     });
   }
 
-  /// Gate: front video (kod sahifada), keyin orqa video (ikkita kamera).
+  /// Gate: oval kamera + kod + front/back yozish.
   static Future<VideoPunchCapture?> captureInline(
+    BuildContext context,
     WidgetRef ref, {
     required int maxSec,
     required String captureMode,
+    int? dayCode,
     bool requireBack = true,
   }) {
-    return withAppLockSuppressed(ref, () async {
-      final picker = ImagePicker();
-      final front = await picker.pickVideo(
-        source: ImageSource.camera,
-        maxDuration: Duration(seconds: maxSec),
-      );
-      if (front == null) return null;
-      final frontB64 = base64Encode(await front.readAsBytes());
-
-      String? backB64;
-      final needBack = requireBack ||
-          captureMode == 'sequential' ||
-          captureMode == 'simultaneous';
-      if (needBack) {
-        final back = await picker.pickVideo(
-          source: ImageSource.camera,
-          maxDuration: Duration(seconds: maxSec),
-        );
-        if (back != null) {
-          backB64 = base64Encode(await back.readAsBytes());
-        }
-      }
-
-      return VideoPunchCapture(
-        frontBase64: frontB64,
-        backBase64: backB64,
-        durationSec: maxSec,
-        captureMode: backB64 != null ? captureMode : 'front_only',
+    return withAppLockSuppressed(ref, () {
+      return VideoPunchScreen.open(
+        context,
+        durationSec: maxSec.clamp(5, 10),
+        captureMode: captureMode,
+        dayCode: dayCode,
+        requireBack: requireBack,
+        title: 'Видео + код',
       );
     });
   }
