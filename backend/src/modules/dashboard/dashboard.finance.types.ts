@@ -23,6 +23,45 @@ export type FinanceSummaryBlock = {
   debt_ratio_pct: number;
 };
 
+/** NEW_PRO finance UI — cash P&L / kassa / operatsiyalar (sales-debt snapshotdan alohida). */
+export type FinanceProOpsBlock = {
+  total_income: string;
+  total_expense: string;
+  total_profit: string;
+  accounts_balance: string;
+  income_change_pct: number | null;
+  expense_change_pct: number | null;
+  profit_change_pct: number | null;
+  balance_change_pct: number | null;
+  income_spark: number[];
+  expense_spark: number[];
+  profit_spark: number[];
+  balance_spark: number[];
+  cashflow_by_period: { period: string; income: string; expense: string; profit: string }[];
+  income_categories: { name: string; amount: string; pct: number; color: string }[];
+  expense_categories: { name: string; amount: string; pct: number; color: string }[];
+  recent_transactions: {
+    id: number;
+    date: string;
+    type: "income" | "expense" | "transfer";
+    description: string;
+    amount: string;
+    status: string;
+    account: string;
+    category: string;
+  }[];
+  accounts: { id: number; name: string; amount: string; type: string; color: string }[];
+  scheduled_payments: {
+    id: number;
+    date: string;
+    name: string;
+    category: string;
+    account: string;
+    amount: string;
+    status: "pending" | "paid";
+  }[];
+};
+
 export type FinanceCategoryRow = {
   category: string;
   sales_sum: string;
@@ -78,6 +117,7 @@ export type FinanceClientDebtRow = {
 export type FinanceDashboardSnapshot = {
   filters: FinanceDashboardFilters;
   summary: FinanceSummaryBlock;
+  pro?: FinanceProOpsBlock;
   category_analytics: FinanceCategoryRow[];
   payment_type_analytics: FinancePaymentTypeRow[];
   territory_debts: FinanceTerritoryDebtRow[];

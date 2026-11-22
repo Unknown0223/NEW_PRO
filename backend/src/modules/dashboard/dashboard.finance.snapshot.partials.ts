@@ -24,6 +24,7 @@ import {
 } from "./dashboard.finance.scope";
 import { aggregatePaymentsByDisplayLabel } from "./dashboard.payment-labels";
 import { loadPaymentMethodEntriesForResolve } from "../tenant-settings/tenant-settings.service";
+import { loadFinanceProOps } from "./dashboard.finance.pro-ops";
 
 export type FinanceDashboardSummaryPayload = Omit<FinanceDashboardSnapshot, "territory_debts" | "clients_debt_list">;
 
@@ -46,7 +47,7 @@ export async function getFinanceDashboardSummary(
   tenantId: number,
   filters: FinanceDashboardFilters
 ): Promise<FinanceDashboardSummaryPayload> {
-  const snapshotKey = `tenant:${tenantId}:dashboard:finance:summary:v3-labels:${stableJsonStringify(filters)}`;
+  const snapshotKey = `tenant:${tenantId}:dashboard:finance:summary:v4-pro:${stableJsonStringify(filters)}`;
   const cached = await getSnapshotCache<FinanceDashboardSummaryPayload>(snapshotKey);
   if (cached) return cached;
 
@@ -248,6 +249,8 @@ export async function getFinanceDashboardSummary(
 
   const period_balance = buildFinancePeriodBalance(paymentRows, totalPayments, totalDebt);
 
+  const pro = await loadFinanceProOps(tenantId, filters, from, to);
+
   const result: FinanceDashboardSummaryPayload = {
     filters,
     summary: {
@@ -258,6 +261,7 @@ export async function getFinanceDashboardSummary(
       outstanding_debt_sum: totalDebt.toString(),
       debt_ratio_pct: debtRatioPct
     },
+    pro,
     category_analytics,
     payment_type_analytics,
     general_balance,

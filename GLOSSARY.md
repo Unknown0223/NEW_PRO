@@ -135,6 +135,23 @@ HR Hub (`d:\hr-hub`) reference; SALEC `backend/src/modules/tabel` + `timesheet` 
 - HR Hubdan faqat pure/diff + Flutter UX; `employeeNoString` raqamga kesilmasin.
 - ADR hali yo‘q — qarorlar grill yopilgach yoziladi.
 
+## Finance Dashboard (web `/dashboard/finance`)
+
+NEW_PRO shablon asosidagi moliyaviy overview: AppShell chrome saqlanadi; sahifa kontenti `finance/pro/` presentation moduli.
+
+| Term | Meaning |
+|------|---------|
+| **Finance Dashboard** | `/dashboard/finance` — filtrlar + NEW_PRO P&L/kassa/operatsiyalar UI. |
+| **FinanceProOps** | Backend bloki (`dashboard.finance.pro-ops.ts`): income/expense/profit, cashflow, categories, recent transactions, cash desks, draft expenses calendar. Sales/debt snapshot localitydan alohida. |
+| **FinanceProUiModel** | FE deep **interface**: widgetlar faqat shu modelni o‘qiydi. |
+| **buildFinanceProUiModel** | Adapter: `summary.pro` → UiModel; `pro` yo‘q bo‘lsa legacy summary fallback. |
+
+### Finance Dashboard — kelishuv (2026-11-22)
+
+- Sidebar/topbar port qilinmaydi (AppShell).
+- `pro` snapshotga qo‘shiladi; debts/ledger jadvallar shu ekrandan olib tashlandi (UI 1:1 shablon).
+- Scheduled payments = kelajakdagi `expenses` draft; bo‘sh bo‘lishi mumkin.
+
 ## Related (not yet deepened)
 
 | Term | Note |

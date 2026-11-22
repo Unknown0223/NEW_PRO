@@ -5,30 +5,8 @@
  */
 import { Prisma } from "@prisma/client";
 import { prisma } from "../../config/database";
-import { env } from "../../config/env";
-import { getRedisForApp } from "../../lib/redis-cache";
-import {
-  ORDER_STATUSES,
-  ORDER_STATUSES_OUTSTANDING_RECEIVABLE
-} from "../orders/order-status";
-
-import {
-  dashboardCacheKey,
-  endOfTodayUtc,
-  getSnapshotCache,
-  setSnapshotCache,
-  startOfTodayUtc,
-  stableJsonStringify
-} from "./dashboard.cache";
-import {
-  bigToNum,
-  clampPct,
-  csvToIntArray,
-  csvToStringArray,
-  decToString,
-  nonEmpty,
-  normalizeYmd
-} from "./dashboard.helpers";
+import { getSnapshotCache, setSnapshotCache, stableJsonStringify } from "./dashboard.cache";
+import { clampPct } from "./dashboard.helpers";
 import type {
   FinanceBalanceBlock,
   FinanceCategoryRow,
@@ -52,14 +30,19 @@ import {
   financeOrderScopeSql
 } from "./dashboard.finance.scope";
 import { aggregatePaymentsByDisplayLabel } from "./dashboard.payment-labels";
-import { loadTerritoryRegionIndex, resolveTerritoryLabel, rollupDebtTerritoryRows } from "./dashboard.territory-rollup";
+import {
+  loadTerritoryRegionIndex,
+  resolveTerritoryLabel,
+  rollupDebtTerritoryRows
+} from "./dashboard.territory-rollup";
 import { loadPaymentMethodEntriesForResolve } from "../tenant-settings/tenant-settings.service";
+import { loadFinanceProOps } from "./dashboard.finance.pro-ops";
 
 export async function getFinanceDashboardSnapshot(
   tenantId: number,
   filters: FinanceDashboardFilters
 ): Promise<FinanceDashboardSnapshot> {
-  const snapshotKey = `tenant:${tenantId}:dashboard:finance:v3-labels:${stableJsonStringify(filters)}`;
+  const snapshotKey = `tenant:${tenantId}:dashboard:finance:v4-pro:${stableJsonStringify(filters)}`;
   const cached = await getSnapshotCache<FinanceDashboardSnapshot>(snapshotKey);
   if (cached) return cached;
 
@@ -371,6 +354,8 @@ export async function getFinanceDashboardSnapshot(
     effective_balance: r.effective_balance.toString()
   }));
 
+  const pro = await loadFinanceProOps(tenantId, filters, from, to);
+
   const result: FinanceDashboardSnapshot = {
     filters,
     summary: {
@@ -381,6 +366,7 @@ export async function getFinanceDashboardSnapshot(
       outstanding_debt_sum: totalDebt.toString(),
       debt_ratio_pct: debtRatioPct
     },
+    pro,
     category_analytics,
     payment_type_analytics,
     territory_debts,

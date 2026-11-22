@@ -1,39 +1,18 @@
 "use client";
 
 import { PageShell } from "@/components/dashboard/page-shell";
-import { FinanceBalanceSection } from "@/components/dashboard/finance/finance-balance-section";
-import { FinanceCategoryChart } from "@/components/dashboard/finance/finance-category-chart";
-import { FinanceClientLedger } from "@/components/dashboard/finance/finance-client-ledger";
-import {
-  FinanceDataTable,
-  categoryTableColumns,
-  territoryTableColumns
-} from "@/components/dashboard/finance/finance-data-table";
-import { FinanceDebtChart } from "@/components/dashboard/finance/finance-debt-chart";
-import {
-  buildCategoryTotalsRow,
-  buildTerritoryTotalsRow
-} from "@/components/dashboard/finance/finance-export";
 import {
   FinanceFiltersBar,
   defaultFinanceDraft,
   type QuickRangeKey
 } from "@/components/dashboard/finance/finance-filters-bar";
-import { FinanceKpiSection } from "@/components/dashboard/finance/finance-kpi-section";
-import { FinancePeriodChart } from "@/components/dashboard/finance/finance-period-chart";
-import { FinanceDashboardKpiSkeleton } from "@/components/dashboard/finance/finance-dashboard-kpi-skeleton";
-import { FinanceDashboardTableSkeleton } from "@/components/dashboard/finance/finance-dashboard-table-skeleton";
+import { FinanceProPage } from "@/components/dashboard/finance/pro/finance-pro-page";
+import { buildFinanceProUiModel } from "@/components/dashboard/finance/finance-ui-model";
 import { useFinanceQueries } from "@/components/dashboard/finance/use-finance-queries";
 import type { FinanceFilterDraft } from "@/components/dashboard/finance/types";
 import { useAuthStore, useAuthStoreHydrated, useEffectiveRole } from "@/lib/auth-store";
-import { createTerritoryLabelResolver } from "@/lib/territory-filter-labels";
 import { useDashboardMeta } from "@/lib/use-dashboard-meta";
-import { useUserTablePrefs } from "@/hooks/use-user-table-prefs";
-import { useDashboardSectionVisible } from "@/hooks/use-dashboard-section-visible";
 import { useEffect, useMemo, useState } from "react";
-
-const CLIENTS_TABLE_ID = "dashboard-finance/clients-debt-list";
-const CLIENTS_DEFAULT_ORDER = ["client", "agent", "supervisor", "ledger_balance", "delivered_debt", "effective_balance"];
 
 function decodeAccessTokenSub(accessToken: string | null | undefined): number | null {
   if (!accessToken) return null;
@@ -66,18 +45,17 @@ export function DashboardFinance() {
   const [draft, setDraft] = useState<FinanceFilterDraft>(() => defaultFinanceDraft());
   const [applied, setApplied] = useState<FinanceFilterDraft>(() => defaultFinanceDraft());
   const [quickRange, setQuickRange] = useState<QuickRangeKey>("custom");
-  const [clientsPage, setClientsPage] = useState(1);
 
-  const ledgerSection = useDashboardSectionVisible({
-    enabled: Boolean(tenantSlug) && hydrated
-  });
+  const { agents, supervisors, clientRefs, profileRefs, reportFilters: reportFiltersRaw, productCategories } =
+    useDashboardMeta(tenantSlug, hydrated);
 
-  const clientsTablePrefs = useUserTablePrefs({
+  const { data, isLoading, isFetching, isError } = useFinanceQueries({
     tenantSlug,
-    tableId: CLIENTS_TABLE_ID,
-    defaultColumnOrder: CLIENTS_DEFAULT_ORDER,
-    defaultPageSize: 10,
-    allowedPageSizes: [10, 20, 30, 50, 100, 200]
+    hydrated,
+    applied,
+    clientsPage: 1,
+    clientsPageSize: 10,
+    ledgerVisible: false
   });
 
   useEffect(() => {
@@ -90,46 +68,11 @@ export function DashboardFinance() {
     setApplied(patch);
   }, [selfSupervisorIdStr]);
 
-  useEffect(() => {
-    setClientsPage(1);
-  }, [clientsTablePrefs.pageSize, applied]);
-
-  const {
-    agents,
-    supervisors,
-    clientRefs,
-    profileRefs,
-    reportFilters: reportFiltersRaw,
-    productCategories
-  } = useDashboardMeta(tenantSlug, hydrated);
-
-  const { data, isLoading, isFetching, isError, clientsTotal } = useFinanceQueries({
-    tenantSlug,
-    hydrated,
-    applied,
-    clientsPage,
-    clientsPageSize: clientsTablePrefs.pageSize,
-    ledgerVisible: ledgerSection.visible
-  });
-
-  const resolveTerritoryDisplay = useMemo(
-    () =>
-      createTerritoryLabelResolver({
-        zones: clientRefs?.zones,
-        region_options: clientRefs?.region_options,
-        city_options: clientRefs?.city_options,
-        city_territory_hints: clientRefs?.city_territory_hints,
-        territory_nodes: profileRefs?.territory_nodes
-      }),
-    [clientRefs, profileRefs?.territory_nodes]
-  );
-
   const applyFilters = () => {
     setApplied({
       ...draft,
       supervisor_ids: selfSupervisorIdStr ? [selfSupervisorIdStr] : draft.supervisor_ids
     });
-    setClientsPage(1);
   };
 
   const resetFilters = () => {
@@ -137,13 +80,16 @@ export function DashboardFinance() {
     setDraft(fresh);
     setApplied(fresh);
     setQuickRange("custom");
-    setClientsPage(1);
   };
 
-  const categoryCols = useMemo(() => categoryTableColumns(), []);
-  const territoryCols = useMemo(() => territoryTableColumns(resolveTerritoryDisplay), [resolveTerritoryDisplay]);
-  const categoryTotals = useMemo(() => (data ? buildCategoryTotalsRow(data) : undefined), [data]);
-  const territoryTotals = useMemo(() => (data ? buildTerritoryTotalsRow(data) : undefined), [data]);
+  const proModel = useMemo(() => (data ? buildFinanceProUiModel(data) : null), [data]);
+
+  const handleProPeriodChange = (from: string, to: string) => {
+    const next = { ...draft, from, to };
+    setDraft(next);
+    setApplied({ ...next, supervisor_ids: selfSupervisorIdStr ? [selfSupervisorIdStr] : next.supervisor_ids });
+    setQuickRange("custom");
+  };
 
   return (
     <PageShell className="space-y-6">
@@ -170,101 +116,20 @@ export function DashboardFinance() {
           />
 
           {isError ? <p className="text-sm text-destructive">Не удалось загрузить финансовый дашборд.</p> : null}
-
-          {isLoading ? (
-            <>
-              <FinanceDashboardKpiSkeleton cards={5} />
-              <div className="grid gap-6 xl:grid-cols-12">
-                <div className="xl:col-span-7">
-                  <FinanceDashboardTableSkeleton rows={4} />
-                </div>
-                <div className="xl:col-span-5">
-                  <FinanceDashboardTableSkeleton rows={4} />
-                </div>
-              </div>
-            </>
+          {isFetching && !isLoading ? (
+            <p className="text-xs font-medium text-teal-700">Обновление данных…</p>
           ) : null}
 
-          {data ? (
-            <>
-              {isFetching && !isLoading ? (
-                <p className="text-xs font-medium text-teal-700">Обновление данных…</p>
-              ) : null}
-
-              <div className="flex flex-col gap-6">
-                <section className="finance-motion-fade min-w-0">
-                  <FinanceKpiSection
-                    data={data}
-                    paymentEntries={profileRefs?.payment_method_entries}
-                  />
-                </section>
-                <section className="finance-motion-fade min-w-0" style={{ animationDelay: "80ms" }}>
-                  <FinanceBalanceSection data={data} />
-                </section>
-              </div>
-
-              <div className="grid grid-cols-1 gap-6 xl:grid-cols-12">
-                <section className="finance-motion-slide min-w-0 xl:col-span-7">
-                  <FinanceCategoryChart data={data} />
-                </section>
-                <section
-                  className="finance-motion-slide min-w-0 xl:col-span-5"
-                  style={{ animationDelay: "100ms" }}
-                >
-                  <FinanceDebtChart debtRatioPct={data.summary.debt_ratio_pct} />
-                </section>
-              </div>
-
-              <section className="finance-motion-fade" style={{ animationDelay: "140ms" }}>
-                <FinancePeriodChart data={data} />
-              </section>
-
-              <FinanceDataTable
-                title="Продажи по категориям товаров"
-                subtitle={
-                  applied.payment_types.length > 0
-                    ? "Суммы заказов по выбранным способам оплаты"
-                    : "Сумма и доля каждой категории за период"
-                }
-                data={data.category_analytics}
-                columns={categoryCols}
-                totals={categoryTotals}
-                searchKeys={[(row) => row.category]}
-                exportFileName="finance-categories.csv"
-                minWidth={1120}
-              />
-
-              <FinanceDataTable
-                title="Долг по территориям"
-                subtitle="Неоплаченный остаток доставленных заказов по региону клиента"
-                data={data.territory_debts}
-                columns={territoryCols}
-                totals={territoryTotals}
-                searchKeys={[(row) => resolveTerritoryDisplay(row.territory)]}
-                exportFileName="territory-debt.csv"
-                minWidth={980}
-              />
-
-              <div ref={ledgerSection.ref}>
-                <FinanceClientLedger
-                  rows={data.clients_debt_list}
-                  total={clientsTotal}
-                  page={clientsPage}
-                  pageSize={clientsTablePrefs.pageSize}
-                  onPageChange={setClientsPage}
-                  onPageSizeChange={(size) => {
-                    clientsTablePrefs.setPageSize(size);
-                    setClientsPage(1);
-                  }}
-                  columnOrder={clientsTablePrefs.columnOrder}
-                  hiddenColumnIds={clientsTablePrefs.hiddenColumnIds}
-                  onSaveColumns={(next) => clientsTablePrefs.saveColumnLayout(next)}
-                  onResetColumns={() => clientsTablePrefs.resetColumnLayout()}
-                  columnsSaving={clientsTablePrefs.saving}
-                  isFetching={isFetching}
-                />
-              </div>
-            </>
+          {proModel ? (
+            <FinanceProPage
+              model={proModel}
+              loading={isFetching}
+              from={applied.from}
+              to={applied.to}
+              onPeriodChange={handleProPeriodChange}
+            />
+          ) : isLoading ? (
+            <p className="text-sm text-muted-foreground">Загрузка финансов…</p>
           ) : null}
         </div>
       )}
