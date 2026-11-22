@@ -125,6 +125,7 @@ HR Hub (`d:\hr-hub`) reference; SALEC `backend/src/modules/tabel` + `timesheet` 
 | **Timesheet matrix** | Oylik kataklar: asosan `AttendanceDayRecord` + workdays + ledger override + agent norma. |
 
 | **Auth Face Check** | Ilova kirishi: `mobile_config.misc.face_verification_*` — PIN/telefon Face ID dan **keyin** server selfie (`daily_login`). Tabel punch emas. |
+| **Daily PRIHOD Gate** | Kuniga bir marta: `ready` dan oldin `needs_daily_login` (server; bugungi valid punch ham yopadi) → `readyEntryPath` to‘g‘ridan `/attendance?gate=1` yoki `/home`. Biometric/update overlay gate tugaguncha defer. |
 | **Tabel Photo Punch** | Davomat: `punchModes.photo` + antifraud dual camera (front→back). |
 | **Tabel Video Punch** | Davomat: `punchModes.video` + `punchVideo.captureMode` (sequential|simultaneous) + kunlik **unikal** 3 xonali kod (`pickDayCode` / `punchDayCode`). |
 
