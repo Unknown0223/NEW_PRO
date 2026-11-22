@@ -93,7 +93,7 @@ class LivenessStepDot extends StatelessWidget {
     return AnimatedBuilder(
       animation: pulse,
       builder: (_, c) => Transform.scale(
-        scale: 1 + 0.1 * math.sin(pulse.value * 2 * math.pi),
+        scale: 1 + 0.12 * math.sin(pulse.value * 2 * math.pi),
         child: c,
       ),
       child: child,
@@ -108,37 +108,79 @@ class LivenessInstructionCard extends StatelessWidget {
     required this.hint,
     required this.icon,
     required this.color,
+    this.timeLeft,
   });
   final String title;
   final String hint;
   final IconData icon;
   final Color color;
+  final double? timeLeft;
 
   @override
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
       decoration: BoxDecoration(
         color: const Color(0xFF1A1D24),
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(20),
         border: Border.all(color: color.withValues(alpha: 0.45)),
       ),
       child: Row(
         children: [
-          Icon(icon, color: color, size: 32),
+          SizedBox(
+            width: 52,
+            height: 52,
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                if (timeLeft != null)
+                  SizedBox.expand(
+                    child: CircularProgressIndicator(
+                      value: timeLeft,
+                      strokeWidth: 4,
+                      color: timeLeft! < 0.3 ? AppColors.error : color,
+                      backgroundColor: const Color(0xFF2A2F3A),
+                    ),
+                  ),
+                AnimatedContainer(
+                  duration: const Duration(milliseconds: 250),
+                  width: 42,
+                  height: 42,
+                  decoration: BoxDecoration(
+                    color: color.withValues(alpha: 0.14),
+                    shape: BoxShape.circle,
+                  ),
+                  child: AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 250),
+                    transitionBuilder: (child, a) => ScaleTransition(scale: a, child: child),
+                    child: Icon(icon, key: ValueKey(icon), color: color, size: 24),
+                  ),
+                ),
+              ],
+            ),
+          ),
           const SizedBox(width: 12),
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 17),
-                ),
-                const SizedBox(height: 4),
-                Text(hint, style: const TextStyle(color: Colors.white70, fontSize: 13)),
-              ],
+            child: AnimatedSwitcher(
+              duration: const Duration(milliseconds: 250),
+              child: Column(
+                key: ValueKey(title),
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    title,
+                    style: TextStyle(
+                      color: color == AppColors.error ? AppColors.error : Colors.white,
+                      fontWeight: FontWeight.w800,
+                      fontSize: 17,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(hint, style: const TextStyle(color: Colors.white70, fontSize: 13)),
+                ],
+              ),
             ),
           ),
         ],

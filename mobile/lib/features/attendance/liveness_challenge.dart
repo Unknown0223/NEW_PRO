@@ -25,6 +25,21 @@ enum HeadDirection {
 
   String get promptRu => 'Поверните голову $labelRu';
 
+  /// Ekran strelkasi: old kamera oynada chap — chapda (HR Hub).
+  Offset get screenVector {
+    const k = 0.7071;
+    return switch (this) {
+      left => const Offset(-1, 0),
+      right => const Offset(1, 0),
+      up => const Offset(0, -1),
+      down => const Offset(0, 1),
+      upLeft => const Offset(-k, -k),
+      upRight => const Offset(k, -k),
+      downLeft => const Offset(-k, k),
+      downRight => const Offset(k, k),
+    };
+  }
+
   static HeadDirection? tryParse(String raw) {
     for (final d in values) {
       if (d.apiName == raw) return d;
@@ -39,16 +54,15 @@ class HeadPose {
   final double yaw;
   final double pitch;
 
-  // Emulyator/webcam Euler qiymatlari kuchsizroq — chegaralar biroz yumshoq.
-  bool get centered => yaw.abs() < 14 && pitch.abs() < 16;
-  bool get roughlyCentered => yaw.abs() < 20 && pitch.abs() < 26;
+  bool get centered => yaw.abs() < 12 && pitch.abs() < 12;
+  bool get roughlyCentered => yaw.abs() < 15 && pitch.abs() < 22;
 
   HeadPose relativeTo(HeadPose base) => HeadPose(yaw - base.yaw, pitch - base.pitch);
 
-  static const _pitchGain = 1.35;
-  static const _diagonalMinMagnitude = 14.0;
-  static const _diagonalMinComponent = 5.5;
-  static const _diagonalToleranceDeg = 34.0;
+  static const _pitchGain = 1.4;
+  static const _diagonalMinMagnitude = 17.0;
+  static const _diagonalMinComponent = 7.0;
+  static const _diagonalToleranceDeg = 30.0;
 
   (double, double) _diagonalComponents(HeadDirection d) {
     final x = d == HeadDirection.upLeft || d == HeadDirection.downLeft ? yaw : -yaw;
@@ -59,13 +73,13 @@ class HeadPose {
   bool matches(HeadDirection d) {
     switch (d) {
       case HeadDirection.left:
-        return yaw > 15 && pitch.abs() < 12;
+        return yaw > 22 && pitch.abs() < 15;
       case HeadDirection.right:
-        return yaw < -15 && pitch.abs() < 12;
+        return yaw < -22 && pitch.abs() < 15;
       case HeadDirection.up:
-        return pitch > 11 && yaw.abs() < 14;
+        return pitch > 15 && yaw.abs() < 15;
       case HeadDirection.down:
-        return pitch < -9 && yaw.abs() < 14;
+        return pitch < -12 && yaw.abs() < 15;
       case HeadDirection.upLeft:
       case HeadDirection.upRight:
       case HeadDirection.downLeft:
@@ -82,13 +96,13 @@ class HeadPose {
     final double p;
     switch (d) {
       case HeadDirection.left:
-        p = yaw / 15;
+        p = yaw / 22;
       case HeadDirection.right:
-        p = -yaw / 15;
+        p = -yaw / 22;
       case HeadDirection.up:
-        p = pitch / 11;
+        p = pitch / 15;
       case HeadDirection.down:
-        p = -pitch / 9;
+        p = -pitch / 12;
       case HeadDirection.upLeft:
       case HeadDirection.upRight:
       case HeadDirection.downLeft:
@@ -105,7 +119,7 @@ class HeadPose {
 
 enum LivenessPhase { center, turn, back, finalCenter, done, failed }
 
-/// Random challenge: markaz → burish → markaz → … → final selfie.
+/// Random challenge: markaz → burish → markaz → … → final selfie (HR Hub).
 class LivenessChallenge {
   LivenessChallenge(this.steps, {DateTime? now}) {
     _phaseStartedAt = now ?? DateTime.now();
@@ -129,10 +143,10 @@ class LivenessChallenge {
     return LivenessChallenge(steps, now: now);
   }
 
-  static const _turnHoldFrames = 2;
-  static const _centerHoldFrames = 2;
-  static const _finalHoldFrames = 3;
-  static const stepTimeout = Duration(seconds: 16);
+  static const _turnHoldFrames = 3;
+  static const _centerHoldFrames = 3;
+  static const _finalHoldFrames = 4;
+  static const stepTimeout = Duration(seconds: 10);
 
   final List<HeadDirection> steps;
   LivenessPhase phase = LivenessPhase.center;

@@ -49,26 +49,19 @@ void main() {
       c.feed(p, faces: 1, trackingId: 1, now: t);
     }
 
-    for (var i = 0; i < 2; i++) {
+    for (var i = 0; i < 3; i++) {
       f(const HeadPose(0, 0));
     }
     expect(c.phase, LivenessPhase.turn);
-    for (var i = 0; i < 2; i++) {
-      f(const HeadPose(18, 0));
+    for (var i = 0; i < 3; i++) {
+      f(const HeadPose(30, 0));
     }
     expect(c.phase, LivenessPhase.back);
-    for (var i = 0; i < 2; i++) {
+    for (var i = 0; i < 3; i++) {
       f(const HeadPose(0, 0));
     }
     expect(c.phase, LivenessPhase.turn);
     expect(c.current, HeadDirection.right);
-  });
-
-  test('yumshoq chegaralar — kichik burish ham yetadi', () {
-    expect(const HeadPose(16, 0).matches(HeadDirection.left), isTrue);
-    expect(const HeadPose(-16, 0).matches(HeadDirection.right), isTrue);
-    expect(const HeadPose(0, 12).matches(HeadDirection.up), isTrue);
-    expect(const HeadPose(0, -10).matches(HeadDirection.down), isTrue);
   });
 
   test('faces != 1 resets hold', () {
@@ -77,5 +70,10 @@ void main() {
     c.feed(const HeadPose(0, 0), faces: 1, trackingId: 1, now: t0);
     c.feed(const HeadPose(0, 0), faces: 2, trackingId: 1, now: t0.add(const Duration(milliseconds: 100)));
     expect(c.phase, LivenessPhase.center);
+  });
+
+  test('screenVector chap — ekranda chap', () {
+    expect(HeadDirection.left.screenVector.dx, lessThan(0));
+    expect(HeadDirection.right.screenVector.dx, greaterThan(0));
   });
 }

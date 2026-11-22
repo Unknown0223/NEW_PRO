@@ -7,9 +7,9 @@ import 'package:flutter/material.dart';
 import 'package:google_mlkit_face_detection/google_mlkit_face_detection.dart';
 
 import '../../core/theme/app_colors.dart';
-import 'anime_face_guide.dart';
 import 'liveness_camera_pick.dart';
 import 'liveness_challenge.dart';
+import 'liveness_live_overlay.dart';
 import 'liveness_live_widgets.dart';
 
 class LivenessLiveResult {
@@ -18,7 +18,7 @@ class LivenessLiveResult {
   final String selfieBase64;
 }
 
-/// HR Hub uslubidagi jonli liveness: markaz → random burish → markaz → selfie.
+/// HR Hub liveness: oval ramka + katta strelka + progress aniqlash.
 class LivenessLiveScreen extends StatefulWidget {
   const LivenessLiveScreen({
     super.key,
@@ -57,8 +57,7 @@ class _LivenessLiveScreenState extends State<LivenessLiveScreen>
     options: FaceDetectorOptions(
       performanceMode: FaceDetectorMode.fast,
       enableTracking: true,
-      // Webcam/emulyatorda yuz kichikroq ko‘rinadi.
-      minFaceSize: 0.1,
+      minFaceSize: 0.15,
     ),
   );
 
@@ -69,7 +68,7 @@ class _LivenessLiveScreenState extends State<LivenessLiveScreen>
   DateTime _lastFrameAt = DateTime.now();
   DateTime? _lastProcessedAt;
   Timer? _watchdog;
-  static const _processEvery = Duration(milliseconds: 140);
+  static const _processEvery = Duration(milliseconds: 120);
 
   late final AnimationController _anim = AnimationController(
     vsync: this,
@@ -80,7 +79,6 @@ class _LivenessLiveScreenState extends State<LivenessLiveScreen>
   bool _processing = false;
   bool _capturing = false;
   int _faces = 0;
-  final List<bool> _sectors = List.filled(64, false);
   String? _error;
 
   @override
@@ -230,30 +228,18 @@ class _LivenessLiveScreenState extends State<LivenessLiveScreen>
       if (!mounted) return;
       _trackRotation(faces.length);
       final face = faces.length == 1 ? faces.first : null;
-      final before = _challenge.phase;
       _challenge.feed(
         face == null ? null : HeadPose(face.headEulerAngleY ?? 0, face.headEulerAngleX ?? 0),
         faces: faces.length,
         trackingId: face?.trackingId,
       );
-      _markSectors();
-      final facesChanged = faces.length != _faces;
-      if (facesChanged || before != _challenge.phase || before == LivenessPhase.turn) {
-        setState(() => _faces = faces.length);
-      } else {
-        _faces = faces.length;
-      }
+      setState(() => _faces = faces.length);
       if (_challenge.phase == LivenessPhase.done) await _captureSelfie();
     } catch (_) {
-      // frame drop — ML Kit spam / GC dan qochish uchun jim
+      // frame drop
     } finally {
       _processing = false;
     }
-  }
-
-  void _markSectors() {
-    final rel = _challenge.relativePose;
-    if (rel != null) markFaceSectors(_sectors, rel.yaw, rel.pitch);
   }
 
   Future<void> _captureSelfie() async {
@@ -283,9 +269,6 @@ class _LivenessLiveScreenState extends State<LivenessLiveScreen>
     setState(() {
       _challenge = _buildChallenge();
       _error = null;
-      for (var i = 0; i < _sectors.length; i++) {
-        _sectors[i] = false;
-      }
     });
   }
 
@@ -301,7 +284,12 @@ class _LivenessLiveScreenState extends State<LivenessLiveScreen>
         return ('Смотрите прямо в камеру', 'Проверка начинается', Icons.center_focus_strong_rounded);
       case LivenessPhase.turn:
         final d = _challenge.current!;
-        return (d.promptRu, 'Медленно поверните голову по стрелке', d.icon);
+        final hint = !d.isDiagonal
+            ? 'Медленно поверните голову по стрелке'
+            : d.isUp
+                ? 'Поверните в сторону и чуть поднимите подбородок'
+                : 'Поверните в сторону и чуть опустите подбородок';
+        return (d.promptRu, hint, d.icon);
       case LivenessPhase.back:
         return ('Снова смотрите прямо', 'Верните голову в центр', Icons.center_focus_strong_rounded);
       case LivenessPhase.finalCenter:
@@ -317,20 +305,31 @@ class _LivenessLiveScreenState extends State<LivenessLiveScreen>
     }
   }
 
+  double? _timeLeft() {
+    if (_challenge.phase != LivenessPhase.turn && _challenge.phase != LivenessPhase.back) {
+      return null;
+    }
+    final started = _challenge.phaseStartedAt;
+    if (started == null) return 1;
+    final used = DateTime.now().difference(started).inMilliseconds /
+        LivenessChallenge.stepTimeout.inMilliseconds;
+    return (1 - used).clamp(0.0, 1.0);
+  }
+
   @override
   Widget build(BuildContext context) {
     final c = _controller;
-    final failed = _challenge.phase == LivenessPhase.failed;
+    final phase = _challenge.phase;
+    final failed = phase == LivenessPhase.failed;
+    final passed = phase == LivenessPhase.done;
     final (title, hint, icon) = _instruction();
     final tone = failed
         ? AppColors.error
         : _faces == 1
             ? AppColors.primary
             : AppColors.warning;
-    final rel = _challenge.relativePose;
-    final done = _challenge.phase == LivenessPhase.done
-        ? _challenge.steps.length
-        : _challenge.index.clamp(0, _challenge.steps.length);
+    final turning = phase == LivenessPhase.turn && _faces == 1 ? _challenge.current : null;
+    final done = passed ? _challenge.steps.length : _challenge.index.clamp(0, _challenge.steps.length);
 
     return Scaffold(
       backgroundColor: const Color(0xFF101218),
@@ -351,44 +350,26 @@ class _LivenessLiveScreenState extends State<LivenessLiveScreen>
                       LivenessStepRail(challenge: _challenge, pulse: _anim),
                       const SizedBox(height: 12),
                       Expanded(
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(28),
-                          child: ColoredBox(
-                            color: Colors.black,
-                            // CameraPreview o‘zi to‘g‘ri AspectRatio qo‘yadi.
-                            // Tashqi AspectRatio (ayniqsa invert qilinmagan) kadrni siqadi/siljitadi.
-                            child: Center(
-                              child: Stack(
-                                alignment: Alignment.center,
-                                children: [
-                                  CameraPreview(c),
-                                  Positioned.fill(
-                                    child: IgnorePointer(
-                                      child: AnimatedBuilder(
-                                        animation: _anim,
-                                        builder: (_, __) => AnimeFaceGuide(
-                                          t: _anim.value,
-                                          tracked: _faces == 1 && !failed,
-                                          yaw: rel?.yaw ?? 0,
-                                          pitch: rel?.pitch ?? 0,
-                                          sectors: _sectors,
-                                          failed: failed,
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                  if (_capturing)
-                                    const Positioned.fill(
-                                      child: ColoredBox(color: Color(0x66FFFFFF)),
-                                    ),
-                                ],
-                              ),
-                            ),
-                          ),
+                        child: LivenessPreviewStage(
+                          controller: c,
+                          anim: _anim,
+                          tone: tone,
+                          faces: _faces,
+                          failed: failed,
+                          passed: passed,
+                          capturing: _capturing,
+                          turning: turning,
+                          turnProgress: _challenge.turnProgress,
                         ),
                       ),
                       const SizedBox(height: 12),
-                      LivenessInstructionCard(title: title, hint: hint, icon: icon, color: tone),
+                      LivenessInstructionCard(
+                        title: title,
+                        hint: hint,
+                        icon: icon,
+                        color: tone,
+                        timeLeft: _timeLeft(),
+                      ),
                       if (failed) ...[
                         const SizedBox(height: 10),
                         SizedBox(
@@ -397,7 +378,10 @@ class _LivenessLiveScreenState extends State<LivenessLiveScreen>
                           child: FilledButton.icon(
                             onPressed: _restartChallenge,
                             icon: const Icon(Icons.refresh_rounded),
-                            label: const Text('Начать снова', style: TextStyle(fontWeight: FontWeight.w800)),
+                            label: const Text(
+                              'Начать снова',
+                              style: TextStyle(fontWeight: FontWeight.w800),
+                            ),
                           ),
                         ),
                       ],
