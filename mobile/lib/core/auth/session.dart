@@ -34,7 +34,7 @@ class SessionState {
     this.tenantReferences,
     this.agentLimits = const AgentLimits(),
     this.agentCities = const [],
-    this.priceTypes = const ['default'],
+    this.priceTypes = const ['retail'],
     this.lastSyncAt,
     this.bootstrapped = false,
   });
@@ -241,7 +241,7 @@ class SessionManager extends StateNotifier<SessionState> {
       tenantReferences: tenantReferences,
       agentLimits: agentLimits,
       agentCities: agentCities,
-      priceTypes: priceTypes.isEmpty ? const ['default'] : priceTypes,
+      priceTypes: priceTypes.isEmpty ? const ['retail'] : priceTypes,
       lastSyncAt: lastSync,
       bootstrapped: lastSync != null,
     );

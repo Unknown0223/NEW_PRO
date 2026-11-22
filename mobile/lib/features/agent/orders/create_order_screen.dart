@@ -87,7 +87,7 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
   String _consignmentDueDate = '';
   String _shipmentDate = '';
   List<Map<String, dynamic>> _warehouses = [];
-  List<String> _priceTypes = const ['default'];
+  List<String> _priceTypes = const ['retail'];
   Map<String, String> _priceTypeLabels = const {};
 
   List<Map<String, dynamic>> _allProducts = [];
@@ -621,25 +621,40 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
     } catch (_) {}
   }
 
-  /// create-context + session: narx turlari / label / moliya (retail-placeholder ni almashtirish).
+  /// create-context + session: narx turlari / label / moliya (retail/default placeholder).
   void _applyCreateContextMeta(OrderCreateContext ctx) {
     final session = ref.read(sessionProvider);
     final sessionLabels =
         session.tenantReferences?.priceTypeLabels ?? const <String, String>{};
-    final sessionPts =
-        session.priceTypes.map((s) => s.trim()).where((s) => s.isNotEmpty).toList();
-    final ctxPts =
-        ctx.priceTypes.map((s) => s.trim()).where((s) => s.isNotEmpty).toList();
-    final ctxIsRetailOnly =
-        ctxPts.length == 1 && ctxPts.first.toLowerCase() == 'retail';
-    final nextTypes = (!ctxIsRetailOnly && ctxPts.isNotEmpty)
+    bool isPlaceholderList(List<String> pts) {
+      if (pts.isEmpty) return true;
+      if (pts.length != 1) return false;
+      final k = pts.first.toLowerCase();
+      return k == 'retail' || k == 'default';
+    }
+    final sessionPts = session.priceTypes
+        .map((s) => s.trim())
+        .where((s) => s.isNotEmpty && s.toLowerCase() != 'default')
+        .toList();
+    final ctxPts = ctx.priceTypes
+        .map((s) => s.trim())
+        .where((s) => s.isNotEmpty && s.toLowerCase() != 'default')
+        .toList();
+    final ctxIsPlaceholder = isPlaceholderList(ctxPts);
+    // Session dagi `default` create-context `retail` ni yutib yubormasin → NoPrice.
+    final nextTypes = (!ctxIsPlaceholder && ctxPts.isNotEmpty)
         ? ctxPts
-        : (sessionPts.isNotEmpty
+        : (!isPlaceholderList(sessionPts)
             ? sessionPts
-            : (ctxPts.isNotEmpty ? ctxPts : const ['retail']));
+            : (ctxPts.isNotEmpty
+                ? ctxPts
+                : (sessionPts.isNotEmpty ? sessionPts : const ['retail'])));
     _priceTypes = nextTypes;
     _priceTypeLabels = {...sessionLabels, ...ctx.priceTypeLabels};
-    if (_priceType.isEmpty || !_priceTypes.contains(_priceType)) {
+    final selected = _priceType.trim();
+    if (selected.isEmpty ||
+        selected.toLowerCase() == 'default' ||
+        !_priceTypes.contains(selected)) {
       _priceType = _priceTypes.first;
     }
     if (ctx.clientFinance != null) {

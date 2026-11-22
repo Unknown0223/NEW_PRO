@@ -44,6 +44,9 @@ import {
 } from "./mobile-order-bonus-preview.compute";
 import { findAllEligibleDiscountRules, mapGiftProducts } from "./mobile-order-bonus-preview.query";
 import { assertAgentScopedClient } from "./mobile-agent-sync.config.service";
+import { resolveEffectiveOrderPriceType } from "../orders/order-price-type.resolve.pure";
+import { priceTypeEntriesFromUnknown, priceTypeKey } from "../tenant-settings/finance-refs";
+import { getTenantProfile } from "../tenant-settings/tenant-settings.service";
 
 export type MobileBonusPreviewInput = {
   client_id: number;
@@ -70,7 +73,7 @@ export async function previewMobileOrderBonus(
       tenant_id: tenantId,
       merged_into_client_id: null
     },
-    select: { id: true, category: true, is_active: true }
+    select: { id: true, category: true, is_active: true, price_type: true }
   });
   if (!anyClient) throw new Error("BAD_CLIENT");
   if (!anyClient.is_active) throw new Error("CLIENT_INACTIVE");
@@ -99,7 +102,23 @@ export async function previewMobileOrderBonus(
     trade_direction_id: agent.trade_direction_id
   };
 
-  const priceType = (input.price_type ?? "").trim() || "retail";
+  // Mobil `default` (placeholder) yuborsa — create bilan bir xil haqiqiy kalitga tushiramiz.
+  let catalogPriceTypes: string[] = [];
+  try {
+    const profile = await getTenantProfile(tenantId);
+    catalogPriceTypes = priceTypeEntriesFromUnknown(profile.references.price_type_entries)
+      .filter((e) => e.active !== false && e.kind === "sale")
+      .map((e) => priceTypeKey(e).trim())
+      .filter(Boolean);
+  } catch {
+    catalogPriceTypes = [];
+  }
+  const priceType = resolveEffectiveOrderPriceType({
+    requested: input.price_type,
+    clientPriceType: anyClient.price_type,
+    catalogPriceTypes,
+    fallback: "retail"
+  });
   const createInput = {
     client_id: input.client_id,
     warehouse_id: input.warehouse_id,

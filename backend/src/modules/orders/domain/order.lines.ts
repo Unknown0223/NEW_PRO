@@ -7,6 +7,10 @@ import { appendTenantAuditEvent, AuditEntityType } from "../../../lib/tenant-aud
 import { emitOrderUpdated } from "../../../lib/order-event-bus";
 import { invalidateOrdersListCache, invalidateStock } from "../../../lib/redis-cache";
 import { getProductPrice } from "../../products/product-prices.service";
+import {
+  isUnsetOrderPriceType,
+  resolveEffectiveOrderPriceType
+} from "../order-price-type.resolve.pure";
 import { resolveStoredPaymentMethodRef } from "../../tenant-settings/finance-refs";
 import {
   loadPaymentMethodEntriesForResolve,
@@ -183,8 +187,12 @@ export async function updateOrderLines(
 
   const agentId = existing.agent_id;
   const existingPriceType = existing.price_type?.trim() || null;
-  const patchPriceType = (input.price_type ?? "").trim();
-  const priceType = patchPriceType || existingPriceType || "retail";
+  const patchPriceTypeRaw = (input.price_type ?? "").trim();
+  const patchPriceType = isUnsetOrderPriceType(patchPriceTypeRaw) ? "" : patchPriceTypeRaw;
+  const priceType = resolveEffectiveOrderPriceType({
+    requested: patchPriceType || existingPriceType,
+    fallback: "retail"
+  });
   const priceTypeChanged = patchPriceType !== "" && patchPriceType !== existingPriceType;
 
   if (isNewStatus && patchPriceType) {

@@ -414,7 +414,7 @@ class OrderCreateContext {
     this.clients = const [],
     this.products = const [],
     this.warehouses = const [],
-    this.priceTypes = const ['default'],
+    this.priceTypes = const ['retail'],
     this.priceTypeLabels = const {},
     this.clientFinance,
     this.defaultWarehouseId,

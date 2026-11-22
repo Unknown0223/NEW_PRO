@@ -591,7 +591,8 @@ class AgentConfigResult {
           .toList();
       if (out.isNotEmpty) return out;
     }
-    return const ['default'];
+    // `default` — UI placeholder; backend product_prices da bunday kalit yo‘q → NoPrice.
+    return const ['retail'];
   }
 }
 

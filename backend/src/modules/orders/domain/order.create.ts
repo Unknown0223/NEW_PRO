@@ -17,6 +17,7 @@ import {
 import { appendTenantAuditEvent, AuditEntityType } from "../../../lib/tenant-audit";
 import { enqueueOrderStatusNotifyJob } from "../../jobs/jobs.service";
 import { getProductPrice } from "../../products/product-prices.service";
+import { resolveEffectiveOrderPriceType } from "../order-price-type.resolve.pure";
 import { parseBonusStackPolicy } from "../bonus-stack-policy";
 import {
   fetchClientUsedAutoBonusRuleIds,
@@ -193,8 +194,11 @@ export async function createOrder(
     };
   }
 
-  const priceType =
-    (input.price_type ?? "").trim() || (client.price_type ?? "").trim() || "retail";
+  const priceType = resolveEffectiveOrderPriceType({
+    requested: input.price_type,
+    clientPriceType: client.price_type,
+    fallback: "retail"
+  });
 
   const {
     lineData,

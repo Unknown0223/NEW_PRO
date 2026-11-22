@@ -167,7 +167,7 @@ class _OrderSetupSheetState extends State<OrderSetupSheet> {
             : null);
     _priceType = widget.priceTypes.contains(widget.initialPriceType)
         ? widget.initialPriceType
-        : (widget.priceTypes.isNotEmpty ? widget.priceTypes.first : 'default');
+        : (widget.priceTypes.isNotEmpty ? widget.priceTypes.first : 'retail');
     _commentCtrl = TextEditingController(text: widget.initialComment);
     _discountCtrl = TextEditingController();
     _isConsignment = widget.initialIsConsignment;
@@ -451,7 +451,7 @@ class _OrderSetupSheetState extends State<OrderSetupSheet> {
 
   String get _safePriceType {
     if (widget.priceTypes.contains(_priceType)) return _priceType;
-    return widget.priceTypes.isNotEmpty ? widget.priceTypes.first : 'default';
+    return widget.priceTypes.isNotEmpty ? widget.priceTypes.first : 'retail';
   }
 
   bool get _canContinue =>
