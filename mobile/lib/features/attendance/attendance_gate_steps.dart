@@ -33,7 +33,7 @@ List<AttendanceGateStep> buildAttendanceGateSteps({
       AttendanceGateStep(
         kind: AttendanceGateStepKind.liveness,
         title: 'Проверка лица',
-        hint: 'В камере следуйте случайным стрелкам ($n)',
+        hint: 'Следуйте стрелкам в камере ($n). Селфи сверят с эталоном аккаунта',
       ),
     ];
     if (requireDualCamera) {
@@ -41,15 +41,15 @@ List<AttendanceGateStep> buildAttendanceGateSteps({
         const AttendanceGateStep(
           kind: AttendanceGateStepKind.workplace,
           title: 'Рабочее место',
-          hint: 'Сфотографируйте объект задней камерой',
+          hint: 'Задняя камера: стол, стол или объект на рабочем месте',
         ),
       );
     }
     steps.add(
       const AttendanceGateStep(
         kind: AttendanceGateStepKind.submit,
-        title: 'ПРИХОД',
-        hint: 'Отметьте приход — приложение откроется',
+        title: 'ПРИХОД + Face ID',
+        hint: 'Сервер сверит лицо с вашим эталоном и покажет результат',
       ),
     );
     return steps;

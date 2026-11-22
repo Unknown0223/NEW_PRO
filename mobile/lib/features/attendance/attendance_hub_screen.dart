@@ -22,6 +22,7 @@ import 'attendance_offline_queue.dart';
 import 'dual_capture.dart';
 import 'liveness_live_screen.dart';
 import 'photo_report.dart';
+import 'punch_face_result.dart';
 import 'video_punch_flow.dart';
 
 class AttendanceHubScreen extends ConsumerStatefulWidget {
@@ -55,6 +56,7 @@ class _AttendanceHubScreenState extends ConsumerState<AttendanceHubScreen> {
   String? _statusBanner;
   bool _gateCleared = false;
   int _gateStepIndex = 0;
+  PunchFaceResult? _gateFaceResult;
 
   @override
   void initState() {
@@ -344,6 +346,7 @@ class _AttendanceHubScreenState extends ConsumerState<AttendanceHubScreen> {
     setState(() {
       _submitting = true;
       _statusBanner = 'Определяем GPS…';
+      _gateFaceResult = null;
     });
     try {
       final pos = await _acquireGuardedPosition(st.maxGpsAccuracyM).timeout(
@@ -352,12 +355,15 @@ class _AttendanceHubScreenState extends ConsumerState<AttendanceHubScreen> {
           'GPS слишком долго отвечает — проверьте геолокацию и попробуйте снова.',
         ),
       );
+      if (mounted) {
+        setState(() => _statusBanner = 'Сверяем лицо с эталоном аккаунта…');
+      }
       var frontB64 = _frontPhotoB64!;
       try {
         final shrunk = await faceMatchSelfie(base64Decode(frontB64));
         frontB64 = base64Encode(shrunk);
       } catch (_) {}
-      await ref.read(attendanceApiProvider).submitPhotoPunch(
+      final raw = await ref.read(attendanceApiProvider).submitPhotoPunch(
             lat: pos.latitude,
             lng: pos.longitude,
             accuracyM: pos.accuracy,
@@ -368,17 +374,89 @@ class _AttendanceHubScreenState extends ConsumerState<AttendanceHubScreen> {
             comment: _commentCtrl.text,
             direction: direction,
           );
-      setState(() => _statusBanner =
-          direction == 'IN' ? 'ПРИХОД принят сервером.' : 'УХОД принят сервером.');
+      final face = parsePunchFaceResult(raw);
       ref.invalidate(mobileAttendanceStateProvider);
+      if (!mounted) return;
       if (widget.gateMode && direction == 'IN') {
-        await _finishGateIfNeeded();
+        setState(() {
+          _gateFaceResult = face;
+          _statusBanner = null;
+        });
+      } else {
+        setState(() => _statusBanner = face.detailRu);
+        await _showFaceResultDialog(face);
       }
     } catch (e) {
-      await _enqueueFailed('photo', st, e);
+      if (isFaceMismatchError(e)) {
+        final face = faceMismatchFromError(e);
+        if (mounted) {
+          if (widget.gateMode) {
+            setState(() {
+              _gateFaceResult = face;
+              _statusBanner = null;
+            });
+          } else {
+            setState(() => _statusBanner = face.detailRu);
+            await _showFaceResultDialog(face);
+          }
+        }
+      } else {
+        await _enqueueFailed('photo', st, e);
+      }
     } finally {
       if (mounted) setState(() => _submitting = false);
     }
+  }
+
+  Future<void> _showFaceResultDialog(PunchFaceResult face) async {
+    if (!mounted) return;
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        title: Text(face.titleRu),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              face.matched ? Icons.verified_rounded : Icons.face_retouching_off,
+              size: 48,
+              color: face.matched ? AppColors.success : AppColors.error,
+            ),
+            const SizedBox(height: 12),
+            Text(face.detailRu),
+            if (face.scorePercent != null) ...[
+              const SizedBox(height: 8),
+              Text(
+                '${face.scorePercent!.toStringAsFixed(0)}%',
+                style: TextStyle(
+                  fontSize: 28,
+                  fontWeight: FontWeight.w900,
+                  color: face.matched ? AppColors.success : AppColors.error,
+                ),
+              ),
+            ],
+          ],
+        ),
+        actions: [
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text(face.matched ? 'OK' : 'Понятно'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _retryGateFace() {
+    setState(() {
+      _gateFaceResult = null;
+      _gateStepIndex = 0;
+      _completedLiveness = [];
+      _frontPhotoB64 = null;
+      _backPhotoB64 = null;
+      _statusBanner = null;
+    });
   }
 
   Future<void> _submitVideoPunch(MobileAttendanceState st) async {
@@ -571,7 +649,10 @@ class _AttendanceHubScreenState extends ConsumerState<AttendanceHubScreen> {
                           submitting: _submitting,
                           statusText: _statusBanner,
                           dayCode: st.dayCode,
+                          faceResult: _gateFaceResult,
                           onPrimary: () => _onGatePrimary(st),
+                          onContinueAfterResult: () => _finishGateIfNeeded(),
+                          onRetryAfterFail: _retryGateFace,
                         ),
                 ),
               ],

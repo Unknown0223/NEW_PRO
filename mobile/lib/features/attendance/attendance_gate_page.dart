@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../core/theme/app_colors.dart';
 import 'attendance_gate_steps.dart';
 import 'attendance_models.dart';
+import 'punch_face_result.dart';
 
 /// Birinchi kirish — bitta yaxlit sahifa (tab/chip/dialog yo‘q).
 class AttendanceGatePage extends StatelessWidget {
@@ -15,6 +16,9 @@ class AttendanceGatePage extends StatelessWidget {
     required this.statusText,
     required this.onPrimary,
     this.dayCode,
+    this.faceResult,
+    this.onContinueAfterResult,
+    this.onRetryAfterFail,
   });
 
   final MobileAttendanceState state;
@@ -24,9 +28,19 @@ class AttendanceGatePage extends StatelessWidget {
   final String? statusText;
   final VoidCallback onPrimary;
   final int? dayCode;
+  final PunchFaceResult? faceResult;
+  final VoidCallback? onContinueAfterResult;
+  final VoidCallback? onRetryAfterFail;
 
   @override
   Widget build(BuildContext context) {
+    if (faceResult != null) {
+      return _ResultBody(
+        result: faceResult!,
+        onContinue: onContinueAfterResult,
+        onRetry: onRetryAfterFail,
+      );
+    }
     if (steps.isEmpty) {
       return const Center(child: Text('Нет доступного способа отметки'));
     }
@@ -58,11 +72,7 @@ class AttendanceGatePage extends StatelessWidget {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(
-                  _iconFor(step.kind),
-                  size: 72,
-                  color: AppColors.primary,
-                ),
+                Icon(_iconFor(step.kind), size: 72, color: AppColors.primary),
                 const SizedBox(height: 20),
                 Text(
                   step.title,
@@ -166,5 +176,106 @@ class AttendanceGatePage extends StatelessWidget {
       case AttendanceGateStepKind.submit:
         return 'Отметить ПРИХОД';
     }
+  }
+}
+
+class _ResultBody extends StatelessWidget {
+  const _ResultBody({
+    required this.result,
+    this.onContinue,
+    this.onRetry,
+  });
+
+  final PunchFaceResult result;
+  final VoidCallback? onContinue;
+  final VoidCallback? onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    final ok = result.matched;
+    final color = ok ? AppColors.success : AppColors.error;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(24, 20, 24, 28),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Expanded(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  ok ? Icons.verified_rounded : Icons.face_retouching_off,
+                  size: 88,
+                  color: color,
+                ),
+                const SizedBox(height: 20),
+                Text(
+                  result.titleRu,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w800,
+                    color: ok ? AppColors.textTitle : AppColors.error,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  result.detailRu,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    height: 1.35,
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+                if (result.scorePercent != null) ...[
+                  const SizedBox(height: 20),
+                  Text(
+                    '${result.scorePercent!.toStringAsFixed(0)}%',
+                    style: TextStyle(
+                      fontSize: 40,
+                      fontWeight: FontWeight.w900,
+                      color: color,
+                    ),
+                  ),
+                  const Text(
+                    'совпадение с эталоном',
+                    style: TextStyle(color: AppColors.textMuted),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          if (ok)
+            FilledButton(
+              onPressed: onContinue,
+              style: FilledButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                foregroundColor: Colors.white,
+                minimumSize: const Size.fromHeight(52),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+              ),
+              child: const Text(
+                'Открыть приложение',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+              ),
+            )
+          else
+            FilledButton(
+              onPressed: onRetry,
+              style: FilledButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                foregroundColor: Colors.white,
+                minimumSize: const Size.fromHeight(52),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+              ),
+              child: const Text(
+                'Повторить Face ID',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+              ),
+            ),
+        ],
+      ),
+    );
   }
 }
