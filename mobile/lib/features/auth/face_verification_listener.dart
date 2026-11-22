@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/face/face_daily_check_policy.dart';
 import '../../core/face/face_verification_flow.dart';
 import '../../core/navigation/root_navigator_context.dart';
 import '../../core/theme/app_colors.dart';
@@ -8,19 +9,36 @@ import '../../core/theme/app_typography.dart';
 import 'auth_provider.dart';
 
 /// Kunlik yuz tasdiqlash — tasdiqlanmaguncha UI bloklanadi.
+///
+/// Muhim: `build` ichida post-frame check YO‘Q — aks holda dialog sikl ochiladi.
 class FaceVerificationListener extends ConsumerStatefulWidget {
   final Widget child;
   const FaceVerificationListener({super.key, required this.child});
 
   @override
-  ConsumerState<FaceVerificationListener> createState() => _FaceVerificationListenerState();
+  ConsumerState<FaceVerificationListener> createState() =>
+      _FaceVerificationListenerState();
 }
 
-class _FaceVerificationListenerState extends ConsumerState<FaceVerificationListener> {
+class _FaceVerificationListenerState
+    extends ConsumerState<FaceVerificationListener> {
   bool _running = false;
   bool _doneThisSession = false;
   bool _blocking = false;
+  /// Shu bloklashda dialog bir marta avto ochilgan — qayta emas.
+  bool _promptedWhileBlocking = false;
   String? _lastError;
+  bool _scheduledInitial = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _scheduledInitial) return;
+      _scheduledInitial = true;
+      _maybeDailyCheck();
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -28,17 +46,19 @@ class _FaceVerificationListenerState extends ConsumerState<FaceVerificationListe
       if (next.status == AuthStatus.ready && prev?.status != AuthStatus.ready) {
         _doneThisSession = false;
         _blocking = false;
+        _promptedWhileBlocking = false;
         _lastError = null;
-        WidgetsBinding.instance.addPostFrameCallback((_) => _maybeDailyCheck());
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) _maybeDailyCheck();
+        });
       }
       if (next.status != AuthStatus.ready) {
         _doneThisSession = false;
         _blocking = false;
+        _promptedWhileBlocking = false;
         _lastError = null;
       }
     });
-
-    WidgetsBinding.instance.addPostFrameCallback((_) => _maybeDailyCheck());
 
     return Stack(
       fit: StackFit.expand,
@@ -56,31 +76,42 @@ class _FaceVerificationListenerState extends ConsumerState<FaceVerificationListe
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        const Icon(Icons.face_retouching_natural, size: 48, color: Colors.white),
+                        const Icon(
+                          Icons.face_retouching_natural,
+                          size: 48,
+                          color: Colors.white,
+                        ),
                         const SizedBox(height: 16),
                         Text(
                           'Требуется подтверждение лица',
                           textAlign: TextAlign.center,
-                          style: AppTypography.headlineSmall.copyWith(color: Colors.white),
+                          style: AppTypography.headlineSmall
+                              .copyWith(color: Colors.white),
                         ),
                         const SizedBox(height: 8),
                         Text(
                           'Без серверной проверки лица работа с приложением недоступна.',
                           textAlign: TextAlign.center,
-                          style: AppTypography.bodyMedium.copyWith(color: Colors.white70),
+                          style: AppTypography.bodyMedium
+                              .copyWith(color: Colors.white70),
                         ),
                         if (_lastError != null) ...[
                           const SizedBox(height: 12),
                           Text(
                             _lastError!,
                             textAlign: TextAlign.center,
-                            style: AppTypography.caption.copyWith(color: AppColors.error),
+                            style: AppTypography.caption
+                                .copyWith(color: AppColors.error),
                           ),
                         ],
                         const SizedBox(height: 20),
                         FilledButton(
-                          onPressed: _running ? null : () => _maybeDailyCheck(force: true),
-                          child: Text(_running ? 'Проверка…' : 'Подтвердить лицо'),
+                          onPressed: _running
+                              ? null
+                              : () => _maybeDailyCheck(force: true),
+                          child: Text(
+                            _running ? 'Проверка…' : 'Подтвердить лицо',
+                          ),
                         ),
                       ],
                     ),
@@ -95,7 +126,15 @@ class _FaceVerificationListenerState extends ConsumerState<FaceVerificationListe
 
   Future<void> _maybeDailyCheck({bool force = false}) async {
     if (_running || (!force && _doneThisSession) || !mounted) return;
+    // Bloklangan + dialog allaqachon ochilgan — faqat tugma (force) qayta urinadi.
+    if (!force && _promptedWhileBlocking) return;
     if (ref.read(authStateProvider).status != AuthStatus.ready) return;
+
+    final openCapture = shouldAutoPromptDailyFace(
+      force: force,
+      doneThisSession: _doneThisSession,
+      alreadyPrompted: _promptedWhileBlocking,
+    );
 
     _running = true;
     if (mounted) setState(() => _lastError = null);
@@ -109,13 +148,22 @@ class _FaceVerificationListenerState extends ConsumerState<FaceVerificationListe
           setState(() {
             _doneThisSession = true;
             _blocking = false;
+            _promptedWhileBlocking = false;
           });
         }
         return;
       }
 
-      if (mounted) setState(() => _blocking = true);
-      // MaterialApp.builder konteksti Navigator'siz — dialog root key orqali.
+      if (mounted) {
+        setState(() => _blocking = true);
+      }
+
+      if (!openCapture) {
+        // Bloklangan, lekin dialogni qayta ochmaymiz — tugma kutadi.
+        return;
+      }
+
+      _promptedWhileBlocking = true;
       final navCtx = resolveRootNavigatorContext(context);
       if (navCtx == null) {
         if (mounted) {
@@ -132,6 +180,7 @@ class _FaceVerificationListenerState extends ConsumerState<FaceVerificationListe
         setState(() {
           _doneThisSession = true;
           _blocking = false;
+          _promptedWhileBlocking = false;
           _lastError = null;
         });
       } else {
@@ -144,6 +193,7 @@ class _FaceVerificationListenerState extends ConsumerState<FaceVerificationListe
       if (mounted) {
         setState(() {
           _blocking = true;
+          _promptedWhileBlocking = true;
           _lastError = '$e';
         });
       }
