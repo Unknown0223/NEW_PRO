@@ -150,13 +150,18 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
     _createContextCacheAt = null;
   }
 
-  Future<OrderCreateContext?> _getCreateContext({int? warehouseId, bool forceRefresh = false}) async {
+  Future<OrderCreateContext?> _getCreateContext({
+    int? warehouseId,
+    bool forceRefresh = false,
+    /// Setup prefetch: eski/noto‘g‘ri ombor id scope ni bo‘shatmasin.
+    bool ignoreSelectedWarehouse = false,
+  }) async {
     final clientId = _effectiveClientId;
     if (clientId <= 0) return null;
     final slug = ref.read(sessionProvider).tenantSlug ?? '';
     if (slug.isEmpty) return null;
 
-    final wh = warehouseId ?? _warehouseId;
+    final wh = ignoreSelectedWarehouse ? null : (warehouseId ?? _warehouseId);
     final now = DateTime.now();
     if (!forceRefresh &&
         _createContextCache != null &&
@@ -600,18 +605,25 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
   Future<void> _prefetchWarehouses() async {
     if (_effectiveClientId <= 0) return;
     try {
-      final ctx = await _getCreateContext();
+      final ctx = await _getCreateContext(
+        forceRefresh: true,
+        ignoreSelectedWarehouse: true,
+      );
       if (ctx == null || !mounted) return;
       setState(() {
         _applyCreateContextMeta(ctx);
         _warehouses = ctx.warehouses;
         _defaultWarehouseId = ctx.defaultWarehouseId;
+        final allowedIds = ctx.warehouses
+            .map((w) => (w['id'] as num?)?.toInt())
+            .whereType<int>()
+            .toSet();
+        // Eski draft ombori endi ruxsat etilmasa — defaultga tashlaymiz.
+        if (_warehouseId != null && !allowedIds.contains(_warehouseId)) {
+          _warehouseId = null;
+        }
         if (_warehouseId == null) {
           final stockWh = ref.read(warehouseStockWarehouseIdProvider);
-          final allowedIds = ctx.warehouses
-              .map((w) => (w['id'] as num?)?.toInt())
-              .whereType<int>()
-              .toSet();
           if (stockWh != null && allowedIds.contains(stockWh)) {
             _warehouseId = stockWh;
           } else if (ctx.defaultWarehouseId != null) {
@@ -619,7 +631,27 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
           }
         }
       });
-    } catch (_) {}
+      if (mounted && ctx.warehouses.isEmpty) {
+        _toast(
+          'Склад не назначен на рабочем месте. Проверьте «Рабочие места» или синхронизируйте.',
+          accent: AppColors.warning,
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        _toast(
+          UserFacingError.toast(e, action: 'Не удалось загрузить склады'),
+        );
+      }
+      ErrorReporter.instance?.reportCaught(
+        e,
+        module: ErrorModules.orders,
+        code: 'WarehousePrefetchFailed',
+        message: 'Заказ: prefetch складов не удался',
+        path: '/mobile/orders/create-context',
+        payload: {'client_id': _effectiveClientId},
+      );
+    }
   }
 
   /// create-context + session: narx turlari / label / moliya (retail/default placeholder).

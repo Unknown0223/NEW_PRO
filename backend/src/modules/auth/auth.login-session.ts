@@ -174,6 +174,9 @@ export async function issueLoginSession(app: FastifyInstance, input: IssueSessio
     });
   }
 
+  const { getActiveSlotForUser } = await import("../work-slots/work-slots.query.read");
+  const slot = await getActiveSlotForUser(user.id);
+
   return {
     ...tokens,
     user: {
@@ -189,7 +192,9 @@ export async function issueLoginSession(app: FastifyInstance, input: IssueSessio
       tenantId: user.tenant_id,
       code: user.code,
       app_access: user.app_access,
-      must_change_password: user.must_change_password === true
+      must_change_password: user.must_change_password === true,
+      work_slot_id: slot?.slot_id ?? null,
+      work_slot_code: slot?.slot_code ?? null
     },
     ...(app_update ? { app_update } : {})
   };

@@ -103,16 +103,17 @@ export async function getMobileOrderCreateContext(
       ? await getMobileOrderClientFinance(tenantId, userId, opts.clientId)
       : null;
 
-  let warehouses = bundle.warehouses;
-  // Mobil: klient×agent kesimi bo‘sh ombor bersa — faqat agent joy/link omborlariga qaytamiz.
+  // Mobil: faqat agentning joy/link omborlari (klient tarixi kengaytirmasin).
   // Hech qachon tenant dagi barcha omborlarni ochib yubormaymiz.
-  if (warehouses.length === 0) {
-    const boundIds = await collectWarehouseIdsForUsers(tenantId, [userId]);
-    if (boundIds.length > 0) {
-      const allWh = await listWarehousesForTenant(tenantId);
-      const allow = new Set(boundIds);
-      warehouses = allWh.filter((w) => allow.has(w.id));
-    }
+  const boundIds = await collectWarehouseIdsForUsers(tenantId, [userId]);
+  const allow = new Set(boundIds);
+  let warehouses =
+    boundIds.length === 0
+      ? []
+      : bundle.warehouses.filter((w) => allow.has(w.id));
+  if (warehouses.length === 0 && boundIds.length > 0) {
+    const allWh = await listWarehousesForTenant(tenantId);
+    warehouses = allWh.filter((w) => allow.has(w.id));
   }
 
   const defaultWarehouseId = await resolveAgentDefaultWarehouseId(

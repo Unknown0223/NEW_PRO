@@ -111,3 +111,12 @@ export function intersectNumberSets(sets: Array<Set<number>>): number[] {
   }
   return out;
 }
+
+/**
+ * Bo‘sh to‘plam = shu master bo‘yicha cheklov yo‘q (intersect ni 0 ga tushirmaydi).
+ * Ombor/kassa: mijozda WH yo‘q, agentda bor → agent WH saqlansin.
+ */
+export function intersectNumberSetsSkippingEmpty(sets: Array<Set<number>>): number[] {
+  const nonEmpty = sets.filter((s) => s.size > 0);
+  return intersectNumberSets(nonEmpty);
+}

@@ -2,7 +2,11 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "../../config/database";
 import { env } from "../../config/env";
 import type { LinkageConstraintScope, LinkageSelectedMasters } from "./linkage.types";
-import { intersectNumberSets, normalizeSelectedId } from "./linkage.shared";
+import {
+  intersectNumberSets,
+  intersectNumberSetsSkippingEmpty,
+  normalizeSelectedId
+} from "./linkage.shared";
 import { resolveByAgent } from "./linkage.resolve.agent";
 import { resolveByCashDesk } from "./linkage.resolve.cashdesk";
 import { resolveByClient } from "./linkage.resolve.client";
@@ -71,8 +75,9 @@ export async function resolveConstraintScope(
   const scopes = scoped.filter((s): s is NonNullable<(typeof scoped)[number]> => s != null);
   const client_ids = intersectNumberSets(scopes.map((s) => s.client_ids));
   const agent_ids = intersectNumberSets(scopes.map((s) => s.agent_ids));
-  const warehouse_ids = intersectNumberSets(scopes.map((s) => s.warehouse_ids));
-  const cash_desk_ids = intersectNumberSets(scopes.map((s) => s.cash_desk_ids));
+  // Ombor/kassa: bo‘sh scope «cheklov yo‘q» deb o‘qiladi — agent WH ni 0 ga tushirmaydi.
+  const warehouse_ids = intersectNumberSetsSkippingEmpty(scopes.map((s) => s.warehouse_ids));
+  const cash_desk_ids = intersectNumberSetsSkippingEmpty(scopes.map((s) => s.cash_desk_ids));
   const expeditor_ids = intersectNumberSets(scopes.map((s) => s.expeditor_ids));
   const productScoped = scopes.filter((s) => {
     const restricted =
