@@ -195,9 +195,13 @@ class _AttendanceHubScreenState extends ConsumerState<AttendanceHubScreen> {
           _frontPhotoB64 = live.selfieBase64;
           _livenessSequence = live.steps;
           _gateStepIndex = idx + 1;
-          _statusBanner = null;
+          _statusBanner = st.requireDualCamera
+              ? 'Face ID пройден — снимите рабочее место'
+              : 'Face ID пройден — отправляем ПРИХОД…';
         });
-        await _gateContinueIfSubmit(st);
+        // Gate: keyingi kamera/submitni avtomatik ochamiz — 2/3 da qolib ketmasin.
+        if (!mounted) return;
+        await _onGatePrimary(st);
         return;
       case AttendanceGateStepKind.workplace:
         final path = await _pickCameraPhoto(maxWidth: 1280, quality: 78);
@@ -206,7 +210,7 @@ class _AttendanceHubScreenState extends ConsumerState<AttendanceHubScreen> {
         setState(() {
           _backPhotoB64 = b64;
           _gateStepIndex = idx + 1;
-          _statusBanner = null;
+          _statusBanner = 'Отправляем ПРИХОД и сверяем Face ID…';
         });
         await _gateContinueIfSubmit(st);
         return;
@@ -382,6 +386,11 @@ class _AttendanceHubScreenState extends ConsumerState<AttendanceHubScreen> {
           _gateFaceResult = face;
           _statusBanner = null;
         });
+        // Mos keldi — darhol ilovaga; qayta urinish tugmasi mismatch da qoladi.
+        if (face.matched) {
+          await Future<void>.delayed(const Duration(milliseconds: 900));
+          if (mounted) await _finishGateIfNeeded();
+        }
       } else {
         setState(() => _statusBanner = face.detailRu);
         await _showFaceResultDialog(face);

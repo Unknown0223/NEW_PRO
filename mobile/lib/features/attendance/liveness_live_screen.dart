@@ -69,6 +69,8 @@ class _LivenessLiveScreenState extends State<LivenessLiveScreen>
   DateTime? _lastProcessedAt;
   Timer? _watchdog;
   static const _processEvery = Duration(milliseconds: 120);
+  /// Emulyator old kamerada ML Kit yaw teskari keladi — strelka bilan moslash.
+  bool _mirrorFrontYaw = false;
 
   late final AnimationController _anim = AnimationController(
     vsync: this,
@@ -140,6 +142,7 @@ class _LivenessLiveScreenState extends State<LivenessLiveScreen>
       _rotationIndex = 0;
       _rotationLocked = false;
       _emptyFrames = 0;
+      _mirrorFrontYaw = await shouldMirrorFrontYaw(picked);
       final controller = CameraController(
         _camera!,
         ResolutionPreset.medium,
@@ -201,12 +204,19 @@ class _LivenessLiveScreenState extends State<LivenessLiveScreen>
     );
   }
 
-  void _trackRotation(int faceCount) {
+  void _trackRotation(Face? face, int faceCount) {
     if (_rotationLocked) return;
-    if (faceCount > 0) {
-      _rotationLocked = true;
+    if (face != null) {
+      final yaw = (face.headEulerAngleY ?? 99).abs();
+      final pitch = (face.headEulerAngleX ?? 99).abs();
+      // Noto‘g‘ri rotation yuzni "ko‘radi" lekin Euler ni aylantiradi — faqat
+      // taxminan markazga qaraganda qulflash.
+      if (yaw < 28 && pitch < 32) {
+        _rotationLocked = true;
+      }
       return;
     }
+    if (faceCount > 0) return;
     if (++_emptyFrames >= 8) {
       _rotationIndex = (_rotationIndex + 1) % _rotations.length;
       _emptyFrames = 0;
@@ -226,10 +236,18 @@ class _LivenessLiveScreenState extends State<LivenessLiveScreen>
       if (input == null) return;
       final faces = await _detector.processImage(input).timeout(const Duration(seconds: 2));
       if (!mounted) return;
-      _trackRotation(faces.length);
       final face = faces.length == 1 ? faces.first : null;
+      _trackRotation(face, faces.length);
+      final pose = face == null
+          ? null
+          : livenessPoseFromMlKit(
+              yaw: face.headEulerAngleY ?? 0,
+              pitch: face.headEulerAngleX ?? 0,
+              frontCamera: _camera?.lensDirection == CameraLensDirection.front,
+              mirrorFrontYaw: _mirrorFrontYaw,
+            );
       _challenge.feed(
-        face == null ? null : HeadPose(face.headEulerAngleY ?? 0, face.headEulerAngleX ?? 0),
+        pose,
         faces: faces.length,
         trackingId: face?.trackingId,
       );

@@ -1,6 +1,7 @@
 import 'package:camera/camera.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:salesdoc_mobile/features/attendance/liveness_camera_pick.dart';
+import 'package:salesdoc_mobile/features/attendance/liveness_challenge.dart';
 
 CameraDescription _cam(CameraLensDirection lens, {String name = '0'}) {
   return CameraDescription(
@@ -24,5 +25,23 @@ void main() {
   test('faqat back → back (emulyator)', () {
     final back = _cam(CameraLensDirection.back);
     expect(selectLivenessCamera([back]), same(back));
+  });
+
+  test('front yaw mirror — emulyator strelka mosligi', () {
+    final raw = livenessPoseFromMlKit(
+      yaw: 30,
+      pitch: 0,
+      frontCamera: true,
+      mirrorFrontYaw: true,
+    );
+    expect(raw.yaw, -30);
+    expect(raw.matches(HeadDirection.right), isTrue);
+    final phone = livenessPoseFromMlKit(
+      yaw: 30,
+      pitch: 0,
+      frontCamera: true,
+      mirrorFrontYaw: false,
+    );
+    expect(phone.matches(HeadDirection.left), isTrue);
   });
 }
