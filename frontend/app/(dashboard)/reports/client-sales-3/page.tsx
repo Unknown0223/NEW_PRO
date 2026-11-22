@@ -1,399 +1,131 @@
 "use client";
 
-import { useRef, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { CalendarDays, FileSpreadsheet, RotateCcw } from "lucide-react";
-import { api } from "@/lib/api";
-import { usePermissions } from "@/lib/use-permissions";
-import { STALE } from "@/lib/query-stale";
-import { useAuthStore, useAuthStoreHydrated } from "@/lib/auth-store";
-import { FilterSelect } from "@/components/ui/filter-select";
-import { SearchableMultiSelectPanel } from "@/components/ui/searchable-multi-select-panel";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { DateRangePopover, formatDateRangeButton } from "@/components/ui/date-range-popover";
-import { monthToDateRange } from "@/components/dashboard/shared/date-ranges";
-import { formatNumberGrouped } from "@/lib/format-numbers";
-import { cn } from "@/lib/utils";
+/**
+ * FlatReport wave-5 adapter (ADR-010 / ADR-012).
+ * Parity: filtrlar ha · chrome ha (rowsKey=clients) · oylik/dialog — · export+RBAC ha
+ */
+import { FlatReportPage } from "@/components/reports/flat-report/flat-report-page";
+import type { FlatReportConfig } from "@/components/reports/flat-report/types";
 
-type FilterOptions = {
-  date_types: Array<{ id: string; label: string }>;
-  statuses: Array<{ id: string; label: string }>;
-  agents: Array<{ id: number; name: string; code: string }>;
-  categories: Array<{ id: number; name: string }>;
-  products: Array<{ id: number; name: string; sku: string }>;
-  groups: Array<{ id: number; name: string }>;
-  day_visit_options: Array<{ id: number; label: string }>;
-  client_categories: string[];
-  territory_1: string[];
-  territory_2: string[];
-  territory_3: string[];
-};
-
-type ReportRow = {
-  client_id: number;
-  client_name: string;
-  created_at: string;
-  category: string;
-  active: boolean;
-  amount: string;
-  qty: string;
-  volume: string;
-  agents_list: string;
-  visit_days: string;
-  last_order: string | null;
-  days_since_last: number | null;
-  city: string;
-  address: string;
-  phone: string;
-  expeditor_name: string;
-};
-
-type ReportData = {
-  clients: ReportRow[];
-  totals: { amount: string; quantity: string; volume: string };
-  page: number;
-  limit: number;
-  total: number;
-};
-
-type MultiItem = { id: string; title: string; searchText?: string };
-
-function money(v: string | number) {
-  return formatNumberGrouped(v, { maxFractionDigits: 0 });
+function fmtDt(iso: unknown) {
+  if (iso == null || iso === "") return "—";
+  const d = new Date(String(iso));
+  if (Number.isNaN(d.getTime())) return "—";
+  return d.toLocaleString("ru-RU");
 }
 
-function MultiFilter(props: {
-  placeholder: string;
-  items: MultiItem[];
-  selectedValues: string[];
-  onChange: (v: string[]) => void;
-}) {
-  return (
-    <SearchableMultiSelectPanel
-      label={props.placeholder}
-      hideOuterLabel
-      hidePopoverHeader
-      triggerPlaceholder={props.placeholder}
-      items={props.items}
-      selected={new Set(props.selectedValues)}
-      onSelectedChange={(next) => {
-        const resolved = typeof next === "function" ? next(new Set(props.selectedValues)) : next;
-        props.onChange(Array.from(resolved));
-      }}
-      searchable
-      searchPlaceholder={props.placeholder}
-      minPopoverWidth={260}
-      maxListHeightClass="max-h-44"
-    />
-  );
-}
+const config: FlatReportConfig = {
+  title: "Продажи по клиентам 3",
+  apiPath: "client-sales-3",
+  exportPermission: "reports.prodazhi_klientov_3.export",
+  exportFilename: "prodazhi-po-klientam-3.xlsx",
+  rowsKey: "clients",
+  filterFields: [
+    { kind: "dateRange" },
+    { kind: "select", paramKey: "date_type", optionsFrom: "date_types", defaultValue: "order_date" },
+    {
+      kind: "select",
+      paramKey: "client_activity",
+      staticOptions: [
+        { id: "all", label: "Все" },
+        { id: "active", label: "Активные" },
+        { id: "inactive", label: "Неактивные" }
+      ],
+      defaultValue: "all"
+    },
+    { kind: "search", placeholder: "Имя / телефон / ID" },
+    { kind: "multiSelect", paramKey: "statuses", optionsFrom: "statuses", placeholder: "Статус" },
+    { kind: "multiSelect", paramKey: "agent_ids", optionsFrom: "agents", placeholder: "Агент" },
+    {
+      kind: "multiSelect",
+      paramKey: "category_ids",
+      optionsFrom: "categories",
+      placeholder: "Категория продукта"
+    },
+    {
+      kind: "multiSelect",
+      paramKey: "product_ids",
+      optionsFrom: "products",
+      placeholder: "Продукт"
+    },
+    {
+      kind: "multiSelect",
+      paramKey: "product_group_ids",
+      optionsFrom: "groups",
+      placeholder: "Группа"
+    },
+    {
+      kind: "multiSelect",
+      paramKey: "day_visit_iso",
+      optionsFrom: "day_visit_options",
+      placeholder: "День визита"
+    },
+    {
+      kind: "multiSelect",
+      paramKey: "client_categories",
+      optionsFrom: "client_categories",
+      placeholder: "Категория клиента"
+    },
+    {
+      kind: "multiSelect",
+      paramKey: "territory_1_list",
+      optionsFrom: "territory_1",
+      placeholder: "Зона"
+    },
+    {
+      kind: "multiSelect",
+      paramKey: "territory_2_list",
+      optionsFrom: "territory_2",
+      placeholder: "Область"
+    },
+    {
+      kind: "multiSelect",
+      paramKey: "territory_3_list",
+      optionsFrom: "territory_3",
+      placeholder: "Город"
+    }
+  ],
+  columns: [
+    { key: "client_id", header: "Ид", cellClassName: "text-muted-foreground" },
+    { key: "client_name", header: "Клиент", cellClassName: "font-medium" },
+    { key: "created_at", header: "Создан" },
+    { key: "category", header: "Категория" },
+    { key: "active", header: "Активен" },
+    { key: "amount", header: "Сумма", align: "right", format: "money" },
+    { key: "qty", header: "Кол-во", align: "right", format: "money" },
+    { key: "volume", header: "Объём", align: "right", format: "money" },
+    { key: "agents_list", header: "Агенты" },
+    { key: "visit_days", header: "Дни визита" },
+    { key: "last_order", header: "Посл. заказ" },
+    { key: "days_since_last", header: "Дней", align: "right", format: "number" },
+    { key: "city", header: "Город" },
+    { key: "address", header: "Адрес" },
+    { key: "phone", header: "Телефон" },
+    { key: "expeditor_name", header: "Экспедитор" }
+  ],
+  totalsKeys: ["amount", "quantity", "volume"],
+  totalsLabels: { amount: "Сумма", quantity: "Кол-во", volume: "Объём" },
+  rowKey: "client_id",
+  countLabel: "Всего",
+  showTableFooter: false,
+  clientTableSearch: {
+    rowKeys: ["client_id", "client_name", "category", "agents_list", "city", "phone"],
+    placeholder: "Фильтр в таблице…"
+  },
+  formatters: {
+    created_at: (v) => fmtDt(v),
+    last_order: (v) => fmtDt(v),
+    active: (v) => (v === true || v === "true" ? "Да" : "Нет"),
+    category: (v) => String(v ?? "") || "—",
+    agents_list: (v) => String(v ?? "") || "—",
+    city: (v) => String(v ?? "") || "—",
+    address: (v) => String(v ?? "") || "—",
+    phone: (v) => String(v ?? "") || "—",
+    expeditor_name: (v) => String(v ?? "") || "—",
+    visit_days: (v) => String(v ?? "") || "—"
+  }
+};
 
 export default function ReportClientSales3Page() {
-  const canExport = usePermissions().has("reports.prodazhi_klientov_3.export");
-  const tenantSlug = useAuthStore((s) => s.tenantSlug);
-  const hydrated = useAuthStoreHydrated();
-  const { from: from0, to: to0 } = monthToDateRange();
-  const [dateOpen, setDateOpen] = useState(false);
-  const dateAnchorRef = useRef<HTMLButtonElement>(null);
-  const [exporting, setExporting] = useState(false);
-  const [tableSearch, setTableSearch] = useState("");
-
-  const [draft, setDraft] = useState({
-    date_type: "order_date",
-    from: from0,
-    to: to0,
-    statuses: [] as string[],
-    category_ids: [] as string[],
-    product_ids: [] as string[],
-    product_group_ids: [] as string[],
-    day_visit_iso: [] as string[],
-    agent_ids: [] as string[],
-    client_categories: [] as string[],
-    territory_1_list: [] as string[],
-    territory_2_list: [] as string[],
-    territory_3_list: [] as string[],
-    client_activity: "all",
-    search: "",
-    page: 1,
-    limit: 50
-  });
-  const [applied, setApplied] = useState(draft);
-
-  const filtersQ = useQuery({
-    queryKey: ["report-client-sales-3-filters", tenantSlug],
-    enabled: Boolean(tenantSlug && hydrated),
-    staleTime: STALE.reference,
-    queryFn: async () => {
-      const { data } = await api.get<{ data: FilterOptions }>(`/api/${tenantSlug}/reports/client-sales-3/filter-options`);
-      return data.data;
-    }
-  });
-
-  const reportQ = useQuery({
-    queryKey: ["report-client-sales-3", tenantSlug, applied],
-    enabled: Boolean(tenantSlug && hydrated),
-    staleTime: STALE.report,
-    queryFn: async () => {
-      const p = new URLSearchParams();
-      Object.entries(applied).forEach(([k, v]) => {
-        if (Array.isArray(v)) {
-          if (v.length > 0) p.set(k, v.join(","));
-          return;
-        }
-        if (v === "" || v === "all") return;
-        p.set(k, String(v));
-      });
-      const { data } = await api.get<{ data: ReportData }>(`/api/${tenantSlug}/reports/client-sales-3?${p.toString()}`);
-      return data.data;
-    }
-  });
-
-  if (!hydrated || !tenantSlug) return <p className="p-6 text-sm text-muted-foreground">Загрузка...</p>;
-
-  const opts = filtersQ.data;
-  const agentItems = (opts?.agents ?? []).map((x) => ({
-    id: String(x.id),
-    title: x.name,
-    searchText: [x.name, x.code].filter(Boolean).join(" ")
-  }));
-  const productItems = (opts?.products ?? []).map((x) => ({
-    id: String(x.id),
-    title: x.name,
-    searchText: [x.name, x.sku].filter(Boolean).join(" ")
-  }));
-  const categoryItems = (opts?.categories ?? []).map((x) => ({ id: String(x.id), title: x.name }));
-  const groupItems = (opts?.groups ?? []).map((x) => ({ id: String(x.id), title: x.name }));
-  const dayVisitItems = (opts?.day_visit_options ?? []).map((x) => ({ id: String(x.id), title: x.label }));
-  const statusItems = (opts?.statuses ?? []).map((x) => ({ id: x.id, title: x.label }));
-  const clientCategoryItems = (opts?.client_categories ?? []).map((x) => ({ id: x, title: x }));
-  const territory1Items = (opts?.territory_1 ?? []).map((x) => ({ id: x, title: x }));
-  const territory2Items = (opts?.territory_2 ?? []).map((x) => ({ id: x, title: x }));
-  const territory3Items = (opts?.territory_3 ?? []).map((x) => ({ id: x, title: x }));
-  const totalPages = reportQ.data ? Math.max(1, Math.ceil(reportQ.data.total / reportQ.data.limit)) : 1;
-  const rows = (reportQ.data?.clients ?? []).filter((r) => {
-    const q = tableSearch.trim().toLowerCase();
-    if (!q) return true;
-    return [r.client_id, r.client_name, r.category, r.agents_list, r.city, r.phone]
-      .join(" ")
-      .toLowerCase()
-      .includes(q);
-  });
-
-  async function exportXlsx() {
-    if (!tenantSlug || !canExport) return;
-    setExporting(true);
-    try {
-      const p = new URLSearchParams();
-      Object.entries(applied).forEach(([k, v]) => {
-        if (Array.isArray(v)) {
-          if (v.length > 0) p.set(k, v.join(","));
-          return;
-        }
-        if (v === "" || v === "all") return;
-        p.set(k, String(v));
-      });
-      p.set("export_limit", "5000");
-      const res = await api.get<Blob>(`/api/${tenantSlug}/reports/client-sales-3/export?${p.toString()}`, {
-        responseType: "blob"
-      });
-      const url = URL.createObjectURL(res.data as Blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = "prodazhi-po-klientam-3.xlsx";
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
-    } finally {
-      setExporting(false);
-    }
-  }
-
-  return (
-    <div className="space-y-4 p-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-lg font-semibold">Продажи по клиентам 3</h1>
-        <div className="flex gap-2">
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={() => {
-              const next = { ...draft, from: from0, to: to0, statuses: [], category_ids: [], product_ids: [], product_group_ids: [], day_visit_iso: [], agent_ids: [], client_categories: [], territory_1_list: [], territory_2_list: [], territory_3_list: [], client_activity: "all", search: "", page: 1 };
-              setDraft(next);
-              setApplied(next);
-            }}
-          >
-            <RotateCcw className="h-4 w-4" />
-          </Button>
-          {canExport ? (
-            <Button disabled={exporting || reportQ.isFetching} onClick={() => void exportXlsx()}>
-              <FileSpreadsheet className="mr-1 h-4 w-4" />
-              Excel
-            </Button>
-          ) : null}
-          <Button onClick={() => { setApplied({ ...draft, page: 1 }); setDraft((s) => ({ ...s, page: 1 })); }}>Применить</Button>
-        </div>
-      </div>
-
-      <div className="flex flex-wrap items-center gap-2">
-        <FilterSelect
-          emptyLabel="Тип даты"
-          value={draft.date_type}
-          onChange={(e) => setDraft((d) => ({ ...d, date_type: e.target.value || "order_date" }))}
-        >
-          {(opts?.date_types ?? [{ id: "order_date", label: "Дата заказа" }]).map((x) => (
-            <option key={x.id} value={x.id}>
-              {x.label}
-            </option>
-          ))}
-        </FilterSelect>
-        <button
-          ref={dateAnchorRef}
-          type="button"
-          className={cn(
-            "inline-flex h-9 items-center gap-1.5 rounded-md border border-input bg-background px-2.5 text-xs",
-            dateOpen && "border-primary/60 bg-primary/5"
-          )}
-          onClick={() => setDateOpen((o) => !o)}
-        >
-          <CalendarDays className="h-3.5 w-3.5" />
-          <span>{formatDateRangeButton(draft.from, draft.to)}</span>
-        </button>
-        <DateRangePopover
-          open={dateOpen}
-          onOpenChange={setDateOpen}
-          anchorRef={dateAnchorRef}
-          dateFrom={draft.from}
-          dateTo={draft.to}
-          onApply={({ dateFrom, dateTo }) => setDraft((d) => ({ ...d, from: dateFrom, to: dateTo }))}
-        />
-        <FilterSelect
-          emptyLabel="Активность"
-          value={draft.client_activity}
-          onChange={(e) => setDraft((d) => ({ ...d, client_activity: e.target.value || "all" }))}
-        >
-          <option value="all">Все</option>
-          <option value="active">Активные</option>
-          <option value="inactive">Неактивные</option>
-        </FilterSelect>
-        <Input
-          className="h-9 max-w-xs"
-          value={draft.search}
-          onChange={(e) => setDraft((d) => ({ ...d, search: e.target.value }))}
-          placeholder="Имя / телефон / ID"
-        />
-      </div>
-
-      <div className="grid gap-2 md:grid-cols-3 xl:grid-cols-4">
-        <MultiFilter placeholder="Статус" items={statusItems} selectedValues={draft.statuses} onChange={(v) => setDraft((d) => ({ ...d, statuses: v }))} />
-        <MultiFilter placeholder="Агент" items={agentItems} selectedValues={draft.agent_ids} onChange={(v) => setDraft((d) => ({ ...d, agent_ids: v }))} />
-        <MultiFilter placeholder="Категория продукта" items={categoryItems} selectedValues={draft.category_ids} onChange={(v) => setDraft((d) => ({ ...d, category_ids: v }))} />
-        <MultiFilter placeholder="Продукт" items={productItems} selectedValues={draft.product_ids} onChange={(v) => setDraft((d) => ({ ...d, product_ids: v }))} />
-        <MultiFilter placeholder="Группа" items={groupItems} selectedValues={draft.product_group_ids} onChange={(v) => setDraft((d) => ({ ...d, product_group_ids: v }))} />
-        <MultiFilter placeholder="День визита" items={dayVisitItems} selectedValues={draft.day_visit_iso} onChange={(v) => setDraft((d) => ({ ...d, day_visit_iso: v }))} />
-        <MultiFilter placeholder="Категория клиента" items={clientCategoryItems} selectedValues={draft.client_categories} onChange={(v) => setDraft((d) => ({ ...d, client_categories: v }))} />
-        <MultiFilter placeholder="Зона" items={territory1Items} selectedValues={draft.territory_1_list} onChange={(v) => setDraft((d) => ({ ...d, territory_1_list: v }))} />
-        <MultiFilter placeholder="Область" items={territory2Items} selectedValues={draft.territory_2_list} onChange={(v) => setDraft((d) => ({ ...d, territory_2_list: v }))} />
-        <MultiFilter placeholder="Город" items={territory3Items} selectedValues={draft.territory_3_list} onChange={(v) => setDraft((d) => ({ ...d, territory_3_list: v }))} />
-      </div>
-
-      <div className="flex flex-wrap items-center gap-3 text-sm">
-        <span>Всего: {reportQ.data?.total ?? 0}</span>
-        <span>Сумма: {money(reportQ.data?.totals.amount ?? 0)}</span>
-        <span>Кол-во: {money(reportQ.data?.totals.quantity ?? 0)}</span>
-        <span>Объём: {money(reportQ.data?.totals.volume ?? 0)}</span>
-        <Input className="ml-auto h-8 max-w-xs" value={tableSearch} onChange={(e) => setTableSearch(e.target.value)} placeholder="Фильтр в таблице…" />
-      </div>
-
-      <div className="overflow-auto rounded-lg border">
-        <table className="w-full min-w-[1400px] text-sm">
-          <thead className="bg-muted/50 text-left">
-            <tr>
-              {[
-                "Ид",
-                "Название",
-                "Добавлен",
-                "Категория",
-                "Активный",
-                "Сумма",
-                "Кол-во",
-                "Объём",
-                "Агент",
-                "Дни",
-                "Последний закуп",
-                "Дней с закупа",
-                "Территория",
-                "Адрес",
-                "Телефон",
-                "Экспедитор"
-              ].map((h) => (
-                <th key={h} className="p-2">
-                  {h}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {reportQ.isLoading || rows.length === 0 ? (
-              <tr>
-                <td className="p-4 text-muted-foreground" colSpan={16}>
-                  {reportQ.isLoading ? "Загрузка…" : "Нет данных"}
-                </td>
-              </tr>
-            ) : (
-              rows.map((r) => (
-                <tr key={r.client_id} className="border-t">
-                  <td className="p-2">{r.client_id}</td>
-                  <td className="p-2 font-medium">{r.client_name}</td>
-                  <td className="p-2">{new Date(r.created_at).toLocaleDateString("ru-RU")}</td>
-                  <td className="p-2">{r.category || "—"}</td>
-                  <td className="p-2">{r.active ? "Да" : "Нет"}</td>
-                  <td className="p-2 text-right">{money(r.amount)}</td>
-                  <td className="p-2 text-right">{money(r.qty)}</td>
-                  <td className="p-2 text-right">{money(r.volume)}</td>
-                  <td className="p-2">{r.agents_list}</td>
-                  <td className="p-2">{r.visit_days || "—"}</td>
-                  <td className="p-2">{r.last_order ?? "—"}</td>
-                  <td className="p-2 text-right">{r.days_since_last ?? "—"}</td>
-                  <td className="p-2">{r.city}</td>
-                  <td className="p-2">{r.address || "—"}</td>
-                  <td className="p-2">{r.phone || "—"}</td>
-                  <td className="p-2">{r.expeditor_name}</td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
-
-      <div className="flex items-center gap-2">
-        <Button
-          variant="outline"
-          disabled={applied.page <= 1 || reportQ.isFetching}
-          onClick={() => {
-            const page = Math.max(1, applied.page - 1);
-            setDraft((s) => ({ ...s, page }));
-            setApplied((s) => ({ ...s, page }));
-          }}
-        >
-          Назад
-        </Button>
-        <span className="text-sm">
-          {applied.page} / {totalPages}
-        </span>
-        <Button
-          variant="outline"
-          disabled={applied.page >= totalPages || reportQ.isFetching}
-          onClick={() => {
-            const page = applied.page + 1;
-            setDraft((s) => ({ ...s, page }));
-            setApplied((s) => ({ ...s, page }));
-          }}
-        >
-          Далее
-        </Button>
-      </div>
-    </div>
-  );
+  return <FlatReportPage {...config} />;
 }

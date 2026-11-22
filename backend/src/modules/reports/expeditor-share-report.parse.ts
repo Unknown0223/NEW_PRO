@@ -1,0 +1,19 @@
+import { monthToDateYmd } from "../../lib/month-to-date";
+import { intList } from "./expeditor-returns.helpers";
+import type { ExpeditorShareReportFilters } from "./expeditor-share-report.types";
+
+export function parseExpeditorShareReportQuery(
+  q: Record<string, string | undefined>
+): ExpeditorShareReportFilters {
+  const page = Math.max(1, Number.parseInt(q.page ?? "1", 10) || 1);
+  const limit = Math.min(200, Math.max(1, Number.parseInt(q.limit ?? "50", 10) || 50));
+  const { from: defaultFrom, to: defaultTo } = monthToDateYmd();
+  return {
+    from: (q.from ?? "").trim() || defaultFrom,
+    to: (q.to ?? "").trim() || defaultTo,
+    expeditor_ids: intList(q.expeditor_ids),
+    search: q.search?.trim() || undefined,
+    page,
+    limit
+  };
+}

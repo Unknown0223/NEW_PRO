@@ -851,9 +851,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                                   href={item.href}
                                   className={cn(
                                     "block rounded-lg px-3 py-2 text-[13px] font-medium transition-colors",
-                                    active
-                                      ? "bg-sidebar-primary text-sidebar-primary-foreground shadow-sm"
-                                      : "text-sidebar-foreground/80 hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground"
+                                    item.href.startsWith("/reports/soon/")
+                                      ? "text-amber-300 hover:bg-sidebar-accent/60 hover:text-amber-200"
+                                      : active
+                                        ? "bg-sidebar-primary text-sidebar-primary-foreground shadow-sm"
+                                        : "text-sidebar-foreground/80 hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground"
                                   )}
                                 >
                                   {item.label}

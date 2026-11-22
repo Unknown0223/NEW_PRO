@@ -1,337 +1,72 @@
 "use client";
 
-import { useRef, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { CalendarDays, FileSpreadsheet, RotateCcw } from "lucide-react";
-import { api } from "@/lib/api";
-import { usePermissions } from "@/lib/use-permissions";
-import { STALE } from "@/lib/query-stale";
-import { useAuthStore, useAuthStoreHydrated } from "@/lib/auth-store";
-import { SearchableMultiSelectPanel } from "@/components/ui/searchable-multi-select-panel";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { DateRangePopover, formatDateRangeButton } from "@/components/ui/date-range-popover";
-import { monthToDateRange } from "@/components/dashboard/shared/date-ranges";
-import { formatNumberGrouped } from "@/lib/format-numbers";
-import { cn } from "@/lib/utils";
+/**
+ * FlatReport wave-3 adapter (ADR-010 / ADR-012).
+ * Parity: filtrlar ha · chrome ha · oylik/dialog — · export+RBAC ha
+ */
+import { FlatReportPage } from "@/components/reports/flat-report/flat-report-page";
+import type { FlatReportConfig } from "@/components/reports/flat-report/types";
 
-type FilterOptions = {
-  statuses: Array<{ id: string; label: string }>;
-  agents: Array<{ id: number; name: string; code: string }>;
-  categories: Array<{ id: number; name: string }>;
-  client_categories: string[];
-  territory_1: string[];
-  territory_2: string[];
-  territory_3: string[];
+const config: FlatReportConfig = {
+  title: "Отчет по количеству заказов",
+  apiPath: "order-qty",
+  exportPermission: "reports.kolichestvo_zakazov.export",
+  exportFilename: "kolichestvo-zakazov.xlsx",
+  filterFields: [
+    { kind: "dateRange" },
+    { kind: "search", placeholder: "Клиент / телефон / агент" },
+    { kind: "multiSelect", paramKey: "statuses", optionsFrom: "statuses", placeholder: "Статус" },
+    { kind: "multiSelect", paramKey: "agent_ids", optionsFrom: "agents", placeholder: "Агент" },
+    {
+      kind: "multiSelect",
+      paramKey: "category_ids",
+      optionsFrom: "categories",
+      placeholder: "Категория товара"
+    },
+    {
+      kind: "multiSelect",
+      paramKey: "client_categories",
+      optionsFrom: "client_categories",
+      placeholder: "Категория клиента"
+    },
+    {
+      kind: "multiSelect",
+      paramKey: "territory_1_list",
+      optionsFrom: "territory_1",
+      placeholder: "Зона"
+    },
+    {
+      kind: "multiSelect",
+      paramKey: "territory_2_list",
+      optionsFrom: "territory_2",
+      placeholder: "Область"
+    },
+    {
+      kind: "multiSelect",
+      paramKey: "territory_3_list",
+      optionsFrom: "territory_3",
+      placeholder: "Город"
+    }
+  ],
+  columns: [
+    { key: "client_name", header: "Т.Т.", cellClassName: "font-medium" },
+    { key: "phone", header: "Телефон клиента" },
+    { key: "agent_name", header: "Т.П." },
+    { key: "order_count", header: "Заказ", align: "right", format: "number" },
+    { key: "return_count", header: "Возврат с полки", align: "right", format: "number" },
+    { key: "exchange_count", header: "Обмен", align: "right", format: "number" }
+  ],
+  totalsKeys: ["order_count", "return_count", "exchange_count"],
+  totalsLabels: { order_count: "Заказ", return_count: "Возврат", exchange_count: "Обмен" },
+  rowKey: "client_id",
+  countLabel: "Всего клиентов",
+  footerLeadColSpan: 3,
+  clientTableSearch: {
+    rowKeys: ["client_name", "phone", "agent_name"],
+    placeholder: "Фильтр в таблице…"
+  }
 };
-
-type ReportRow = {
-  row_number: number;
-  client_id: number;
-  client_name: string;
-  phone: string;
-  agent_name: string;
-  order_count: number;
-  return_count: number;
-  exchange_count: number;
-};
-
-type ReportData = {
-  rows: ReportRow[];
-  totals: { order_count: number; return_count: number; exchange_count: number };
-  page: number;
-  limit: number;
-  total: number;
-};
-
-type MultiItem = { id: string; title: string; searchText?: string };
-
-function MultiFilter(props: {
-  placeholder: string;
-  items: MultiItem[];
-  selectedValues: string[];
-  onChange: (v: string[]) => void;
-}) {
-  return (
-    <SearchableMultiSelectPanel
-      label={props.placeholder}
-      hideOuterLabel
-      hidePopoverHeader
-      triggerPlaceholder={props.placeholder}
-      items={props.items}
-      selected={new Set(props.selectedValues)}
-      onSelectedChange={(next) => {
-        const resolved = typeof next === "function" ? next(new Set(props.selectedValues)) : next;
-        props.onChange(Array.from(resolved));
-      }}
-      searchable
-      searchPlaceholder={props.placeholder}
-      minPopoverWidth={260}
-      maxListHeightClass="max-h-44"
-    />
-  );
-}
-
-const emptyDraft = (from: string, to: string) => ({
-  from,
-  to,
-  statuses: [] as string[],
-  agent_ids: [] as string[],
-  category_ids: [] as string[],
-  client_categories: [] as string[],
-  territory_1_list: [] as string[],
-  territory_2_list: [] as string[],
-  territory_3_list: [] as string[],
-  search: "",
-  page: 1,
-  limit: 50
-});
 
 export default function ReportOrderQtyPage() {
-  const canExport = usePermissions().has("reports.kolichestvo_zakazov.export");
-  const tenantSlug = useAuthStore((s) => s.tenantSlug);
-  const hydrated = useAuthStoreHydrated();
-  const { from: from0, to: to0 } = monthToDateRange();
-  const [dateOpen, setDateOpen] = useState(false);
-  const dateAnchorRef = useRef<HTMLButtonElement>(null);
-  const [exporting, setExporting] = useState(false);
-  const [tableSearch, setTableSearch] = useState("");
-  const [draft, setDraft] = useState(() => emptyDraft(from0, to0));
-  const [applied, setApplied] = useState(draft);
-
-  const filtersQ = useQuery({
-    queryKey: ["report-order-qty-filters", tenantSlug],
-    enabled: Boolean(tenantSlug && hydrated),
-    staleTime: STALE.reference,
-    queryFn: async () => {
-      const { data } = await api.get<{ data: FilterOptions }>(`/api/${tenantSlug}/reports/order-qty/filter-options`);
-      return data.data;
-    }
-  });
-
-  const reportQ = useQuery({
-    queryKey: ["report-order-qty", tenantSlug, applied],
-    enabled: Boolean(tenantSlug && hydrated),
-    staleTime: STALE.report,
-    queryFn: async () => {
-      const p = new URLSearchParams();
-      Object.entries(applied).forEach(([k, v]) => {
-        if (Array.isArray(v)) {
-          if (v.length > 0) p.set(k, v.join(","));
-          return;
-        }
-        if (v === "" || v === "all") return;
-        p.set(k, String(v));
-      });
-      const { data } = await api.get<{ data: ReportData }>(`/api/${tenantSlug}/reports/order-qty?${p.toString()}`);
-      return data.data;
-    }
-  });
-
-  if (!hydrated || !tenantSlug) return <p className="p-6 text-sm text-muted-foreground">Загрузка...</p>;
-
-  const opts = filtersQ.data;
-  const agentItems = (opts?.agents ?? []).map((x) => ({
-    id: String(x.id),
-    title: x.name,
-    searchText: [x.name, x.code].filter(Boolean).join(" ")
-  }));
-  const categoryItems = (opts?.categories ?? []).map((x) => ({ id: String(x.id), title: x.name }));
-  const statusItems = (opts?.statuses ?? []).map((x) => ({ id: x.id, title: x.label }));
-  const clientCategoryItems = (opts?.client_categories ?? []).map((x) => ({ id: x, title: x }));
-  const territory1Items = (opts?.territory_1 ?? []).map((x) => ({ id: x, title: x }));
-  const territory2Items = (opts?.territory_2 ?? []).map((x) => ({ id: x, title: x }));
-  const territory3Items = (opts?.territory_3 ?? []).map((x) => ({ id: x, title: x }));
-  const totalPages = reportQ.data ? Math.max(1, Math.ceil(reportQ.data.total / reportQ.data.limit)) : 1;
-  const rows = (reportQ.data?.rows ?? []).filter((r) => {
-    const q = tableSearch.trim().toLowerCase();
-    if (!q) return true;
-    return [r.client_name, r.phone, r.agent_name].join(" ").toLowerCase().includes(q);
-  });
-
-  async function exportXlsx() {
-    if (!tenantSlug || !canExport) return;
-    setExporting(true);
-    try {
-      const p = new URLSearchParams();
-      Object.entries(applied).forEach(([k, v]) => {
-        if (Array.isArray(v)) {
-          if (v.length > 0) p.set(k, v.join(","));
-          return;
-        }
-        if (v === "" || v === "all") return;
-        p.set(k, String(v));
-      });
-      p.set("export_limit", "5000");
-      const res = await api.get<Blob>(`/api/${tenantSlug}/reports/order-qty/export?${p.toString()}`, {
-        responseType: "blob"
-      });
-      const url = URL.createObjectURL(res.data as Blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = "kolichestvo-zakazov.xlsx";
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
-    } finally {
-      setExporting(false);
-    }
-  }
-
-  return (
-    <div className="space-y-4 p-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-lg font-semibold">Отчет по количеству заказов</h1>
-        <div className="flex gap-2">
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={() => {
-              const next = emptyDraft(from0, to0);
-              setDraft(next);
-              setApplied(next);
-            }}
-          >
-            <RotateCcw className="h-4 w-4" />
-          </Button>
-          {canExport ? (
-            <Button disabled={exporting || reportQ.isFetching} onClick={() => void exportXlsx()}>
-              <FileSpreadsheet className="mr-1 h-4 w-4" />
-              Excel
-            </Button>
-          ) : null}
-          <Button
-            onClick={() => {
-              setApplied({ ...draft, page: 1 });
-              setDraft((s) => ({ ...s, page: 1 }));
-            }}
-          >
-            Применить
-          </Button>
-        </div>
-      </div>
-
-      <div className="flex flex-wrap items-center gap-2">
-        <button
-          ref={dateAnchorRef}
-          type="button"
-          className={cn(
-            "inline-flex h-9 items-center gap-1.5 rounded-md border border-input bg-background px-2.5 text-xs",
-            dateOpen && "border-primary/60 bg-primary/5"
-          )}
-          onClick={() => setDateOpen((o) => !o)}
-        >
-          <CalendarDays className="h-3.5 w-3.5" />
-          <span>{formatDateRangeButton(draft.from, draft.to)}</span>
-        </button>
-        <DateRangePopover
-          open={dateOpen}
-          onOpenChange={setDateOpen}
-          anchorRef={dateAnchorRef}
-          dateFrom={draft.from}
-          dateTo={draft.to}
-          onApply={({ dateFrom, dateTo }) => setDraft((d) => ({ ...d, from: dateFrom, to: dateTo }))}
-        />
-        <Input
-          className="h-9 max-w-xs"
-          value={draft.search}
-          onChange={(e) => setDraft((d) => ({ ...d, search: e.target.value }))}
-          placeholder="Клиент / телефон / агент"
-        />
-      </div>
-
-      <div className="grid gap-2 md:grid-cols-3 xl:grid-cols-4">
-        <MultiFilter placeholder="Статус" items={statusItems} selectedValues={draft.statuses} onChange={(v) => setDraft((d) => ({ ...d, statuses: v }))} />
-        <MultiFilter placeholder="Агент" items={agentItems} selectedValues={draft.agent_ids} onChange={(v) => setDraft((d) => ({ ...d, agent_ids: v }))} />
-        <MultiFilter placeholder="Категория товара" items={categoryItems} selectedValues={draft.category_ids} onChange={(v) => setDraft((d) => ({ ...d, category_ids: v }))} />
-        <MultiFilter placeholder="Категория клиента" items={clientCategoryItems} selectedValues={draft.client_categories} onChange={(v) => setDraft((d) => ({ ...d, client_categories: v }))} />
-        <MultiFilter placeholder="Зона" items={territory1Items} selectedValues={draft.territory_1_list} onChange={(v) => setDraft((d) => ({ ...d, territory_1_list: v }))} />
-        <MultiFilter placeholder="Область" items={territory2Items} selectedValues={draft.territory_2_list} onChange={(v) => setDraft((d) => ({ ...d, territory_2_list: v }))} />
-        <MultiFilter placeholder="Город" items={territory3Items} selectedValues={draft.territory_3_list} onChange={(v) => setDraft((d) => ({ ...d, territory_3_list: v }))} />
-      </div>
-
-      <div className="flex flex-wrap items-center gap-3 text-sm">
-        <span>Всего клиентов: {reportQ.data?.total ?? 0}</span>
-        <span>Заказ: {formatNumberGrouped(reportQ.data?.totals.order_count ?? 0, { maxFractionDigits: 0 })}</span>
-        <span>Возврат: {formatNumberGrouped(reportQ.data?.totals.return_count ?? 0, { maxFractionDigits: 0 })}</span>
-        <span>Обмен: {formatNumberGrouped(reportQ.data?.totals.exchange_count ?? 0, { maxFractionDigits: 0 })}</span>
-        <Input className="ml-auto h-8 max-w-xs" value={tableSearch} onChange={(e) => setTableSearch(e.target.value)} placeholder="Фильтр в таблице…" />
-      </div>
-
-      <div className="overflow-auto rounded-lg border">
-        <table className="w-full min-w-[900px] text-sm">
-          <thead className="bg-muted/50 text-left">
-            <tr>
-              {["Т.Т.", "Телефон клиента", "Т.П.", "Заказ", "Возврат с полки", "Обмен"].map((h) => (
-                <th key={h} className="p-2">
-                  {h}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {reportQ.isLoading || rows.length === 0 ? (
-              <tr>
-                <td className="p-4 text-muted-foreground" colSpan={6}>
-                  {reportQ.isLoading ? "Загрузка…" : "Нет данных"}
-                </td>
-              </tr>
-            ) : (
-              rows.map((r) => (
-                <tr key={r.client_id} className="border-t">
-                  <td className="p-2 font-medium">{r.client_name}</td>
-                  <td className="p-2">{r.phone || "—"}</td>
-                  <td className="p-2">{r.agent_name || "—"}</td>
-                  <td className="p-2 text-right">{r.order_count}</td>
-                  <td className="p-2 text-right">{r.return_count}</td>
-                  <td className="p-2 text-right">{r.exchange_count}</td>
-                </tr>
-              ))
-            )}
-          </tbody>
-          {reportQ.data && rows.length > 0 ? (
-            <tfoot className="border-t bg-muted/30 font-medium">
-              <tr>
-                <td className="p-2" colSpan={3}>
-                  Общий итог
-                </td>
-                <td className="p-2 text-right">{reportQ.data.totals.order_count}</td>
-                <td className="p-2 text-right">{reportQ.data.totals.return_count}</td>
-                <td className="p-2 text-right">{reportQ.data.totals.exchange_count}</td>
-              </tr>
-            </tfoot>
-          ) : null}
-        </table>
-      </div>
-
-      <div className="flex items-center gap-2">
-        <Button
-          variant="outline"
-          disabled={applied.page <= 1 || reportQ.isFetching}
-          onClick={() => {
-            const page = Math.max(1, applied.page - 1);
-            setDraft((s) => ({ ...s, page }));
-            setApplied((s) => ({ ...s, page }));
-          }}
-        >
-          Назад
-        </Button>
-        <span className="text-sm">
-          {applied.page} / {totalPages}
-        </span>
-        <Button
-          variant="outline"
-          disabled={applied.page >= totalPages || reportQ.isFetching}
-          onClick={() => {
-            const page = applied.page + 1;
-            setDraft((s) => ({ ...s, page }));
-            setApplied((s) => ({ ...s, page }));
-          }}
-        >
-          Далее
-        </Button>
-      </div>
-    </div>
-  );
+  return <FlatReportPage {...config} />;
 }
