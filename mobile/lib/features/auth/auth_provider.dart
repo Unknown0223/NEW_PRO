@@ -21,6 +21,8 @@ import '../../core/api/supervisor_api.dart';
 import '../../features/expeditor/cache/expeditor_deliveries_cache.dart';
 import '../../core/auth/session.dart';
 import '../../features/auth/entrance/template_auth_entrance.dart';
+import '../../core/face/face_gate_state.dart';
+import '../../core/face/face_verification_flow.dart';
 import '../../core/config/app_env.dart';
 import '../../core/config/mobile_config.dart';
 import '../../core/config/mobile_config_policy.dart';
@@ -278,7 +280,8 @@ class AuthNotifier extends StateNotifier<AuthState> {
   /// Mahalliy qulfdan tez ochish — UI darhol ochiladi, API fonda.
   Future<void> _finishLocalUnlock() async {
     if (_session.state.bootstrapped && _session.state.user != null) {
-      // PIN/biometric faqat telefonda — server kutmasdan darhol ready.
+      // PIN/biometric — gate bayrog‘ini tayyorlab, bitta readyEntryPath.
+      await _resolveDailyFaceGate();
       state = const AuthState(status: AuthStatus.ready);
       unawaited(_afterInstantLocalUnlock());
       return;
@@ -447,6 +450,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
         if (_session.state.user?.role == 'agent') {
           unawaited(_refreshAgentClientsFromServer());
         }
+        await _resolveDailyFaceGate();
         state = const AuthState(status: AuthStatus.ready);
         unawaited(_backgroundAfterUnlock());
       } else {
@@ -464,6 +468,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
     } on NetworkException {
       if (_session.state.bootstrapped) {
         _resumeAfterRestore();
+        _ref.read(faceGateRequiredProvider.notifier).clearGate();
         state = const AuthState(status: AuthStatus.ready);
       } else {
         state = const AuthState(status: AuthStatus.locked, error: 'Нет интернета');
@@ -563,6 +568,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
           // Oflayn — saqlangan sessiya bilan davom etamiz
         } catch (_) {}
         _resumeAfterRestore();
+        await _resolveDailyFaceGate();
         state = const AuthState(status: AuthStatus.ready);
         unawaited(_backgroundAfterUnlock());
       } else {
@@ -1072,6 +1078,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
         severity: 'warning',
       );
       _session.markBootstrapped();
+      _ref.read(faceGateRequiredProvider.notifier).clearGate();
       state = AuthState(
         status: AuthStatus.ready,
         error: 'Нет интернета — данные обновятся позже',
@@ -1658,8 +1665,26 @@ class AuthNotifier extends StateNotifier<AuthState> {
     invalidateAuthScopedData(_ref.invalidate);
   }
 
+  /// Kunlik Face/PRIHOD gate bayrog‘i — ready dan OLDIN (home flash bo‘lmasin).
+  Future<void> _resolveDailyFaceGate() async {
+    try {
+      final needs = await FaceVerificationFlow.isDailyLoginBlocking(_ref.read);
+      final gate = _ref.read(faceGateRequiredProvider.notifier);
+      if (needs) {
+        gate.requireGate();
+      } else {
+        gate.clearGate();
+      }
+    } catch (_) {
+      // Oflayn / xato — oldingi kunlik holatni taxmin qilib ochiq qoldirmaymiz.
+      _ref.read(faceGateRequiredProvider.notifier).clearGate();
+    }
+  }
+
   /// Sinxron muvaffaqiyat ekranidan keyin asosiy ilovaga o‘tish.
-  void finishBootstrap() {
+  Future<void> finishBootstrap() async {
+    if (state.status != AuthStatus.syncComplete) return;
+    await _resolveDailyFaceGate();
     if (state.status != AuthStatus.syncComplete) return;
     state = state.copyWith(status: AuthStatus.ready);
   }

@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/face/face_gate_redirect.dart';
+import '../../core/face/face_gate_state.dart';
 import '../../core/notifications/mobile_local_notification_service.dart';
 import '../../features/auth/auth_provider.dart';
 import '../../routing/app_router.dart';
@@ -72,6 +74,13 @@ class _AppUpdateListenerState extends ConsumerState<AppUpdateListener>
   void _scheduleDialog(AppUpdateInfo info, {required bool afterSync}) {
     if (_dialogLocked || isAppUpdateDialogInFlight) return;
     if (_lockedFor == info) return;
+    // Majburiy emas — Face/PRIHOD gate tugaguncha kutamiz (sahifa miltillamasin).
+    if (!info.required &&
+        shouldDeferAppOpenOverlay(
+          faceGateRequired: ref.read(faceGateRequiredProvider),
+        )) {
+      return;
+    }
 
     // Sync band qilish — bir nechta listen / postFrame race’ini to‘xtatadi.
     _dialogLocked = true;
@@ -107,6 +116,16 @@ class _AppUpdateListenerState extends ConsumerState<AppUpdateListener>
       if (info == null || !info.hasAction) return;
       if (prev?.pendingAppUpdate == info) return;
       _scheduleDialog(info, afterSync: next.appUpdateAfterSync);
+    });
+    ref.listen<bool>(faceGateRequiredProvider, (prev, next) {
+      if (prev == true && next == false) {
+        final info = ref.read(authStateProvider).pendingAppUpdate;
+        if (info == null || !info.hasAction) return;
+        _scheduleDialog(
+          info,
+          afterSync: ref.read(authStateProvider).appUpdateAfterSync,
+        );
+      }
     });
 
     return widget.child;

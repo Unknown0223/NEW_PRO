@@ -247,6 +247,7 @@ final attendanceApiProvider = Provider<AttendanceApiService>((ref) {
   return AttendanceApiService(dio, slug);
 });
 
-final mobileAttendanceStateProvider = FutureProvider.autoDispose<MobileAttendanceState>((ref) {
+/// autoDispose emas — gate ochilishida loading miltillashini kamaytiradi.
+final mobileAttendanceStateProvider = FutureProvider<MobileAttendanceState>((ref) {
   return ref.watch(attendanceApiProvider).fetchState();
 });

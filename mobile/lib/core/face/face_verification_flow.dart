@@ -92,12 +92,15 @@ class FaceVerificationFlow {
   }
 
   /// Server status: tenant Face ID yoki agent misc — admin emas.
-  static Future<bool> isDailyLoginBlocking(WidgetRef ref) async {
-    final slug = ref.read(sessionProvider).tenantSlug ?? '';
+  /// Bugungi valid PRIHOD bo‘lsa server `needs_daily_login=false` qaytaradi.
+  static Future<bool> isDailyLoginBlocking(
+    T Function<T>(ProviderListenable<T> provider) read,
+  ) async {
+    final slug = read(sessionProvider).tenantSlug ?? '';
     if (slug.isEmpty) return false;
-    final role = (ref.read(sessionProvider).user?.role ?? '').toLowerCase();
+    final role = (read(sessionProvider).user?.role ?? '').toLowerCase();
     if (role == 'admin') return false;
-    final status = await ref.read(faceVerificationApiProvider).getStatus(slug);
+    final status = await read(faceVerificationApiProvider).getStatus(slug);
     return status.needsDailyLogin;
   }
 

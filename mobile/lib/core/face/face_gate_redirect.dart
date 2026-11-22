@@ -11,3 +11,11 @@ String? faceGateReadyRedirect({
   if (gateRequired) return '/attendance?gate=1';
   return null;
 }
+
+/// Bootstrap/login/splash → bitta target (home flash + qayta gate yo‘q).
+String readyEntryPath({required bool gateRequired}) =>
+    gateRequired ? '/attendance?gate=1' : '/home';
+
+/// Biometric / update dialog — Face gate tugaguncha kutadi.
+bool shouldDeferAppOpenOverlay({required bool faceGateRequired}) =>
+    faceGateRequired;

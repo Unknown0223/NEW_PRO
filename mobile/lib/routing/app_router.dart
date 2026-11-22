@@ -200,14 +200,16 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       }
 
       if (s == AuthStatus.ready) {
+        final gateOn = ref.read(faceGateRequiredProvider);
+        // Bootstrap/login — avval /home emas: gate kerak bo‘lsa to‘g‘ridan attendance.
         if (isLogin || isBoot || isSplash || loc == '/unlock' || loc == '/pin-setup') {
-          return '/home';
+          return readyEntryPath(gateRequired: gateOn);
         }
 
         // /attendance da roleRedirect /home ga urilmasin — aks holda gate bilan loop.
         final gateJump = faceGateReadyRedirect(
           matchedLocation: loc,
-          gateRequired: ref.read(faceGateRequiredProvider),
+          gateRequired: gateOn,
         );
         if (gateJump != null) return gateJump;
         if (loc.startsWith('/attendance')) return null;

@@ -1,7 +1,20 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:salesdoc_mobile/core/face/face_daily_check_policy.dart';
+import 'package:salesdoc_mobile/core/face/face_gate_redirect.dart';
 
 void main() {
+  group('readyEntryPath + defer overlay', () {
+    test('gate kerak bo‘lsa attendance, aks holda home — bitta yo‘l', () {
+      expect(readyEntryPath(gateRequired: true), '/attendance?gate=1');
+      expect(readyEntryPath(gateRequired: false), '/home');
+    });
+
+    test('face gate ochiq bo‘lsa biometric/update defer', () {
+      expect(shouldDeferAppOpenOverlay(faceGateRequired: true), isTrue);
+      expect(shouldDeferAppOpenOverlay(faceGateRequired: false), isFalse);
+    });
+  });
+
   group('shouldAutoPromptDailyFace', () {
     test('auto once then wait for force', () {
       expect(

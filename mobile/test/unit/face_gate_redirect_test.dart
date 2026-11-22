@@ -54,5 +54,10 @@ void main() {
       final c = faceGateReadyRedirect(matchedLocation: loc, gateRequired: true);
       expect(c, isNull);
     });
+
+    test('readyEntryPath skips home when gate on', () {
+      expect(readyEntryPath(gateRequired: true), '/attendance?gate=1');
+      expect(readyEntryPath(gateRequired: false), '/home');
+    });
   });
 }

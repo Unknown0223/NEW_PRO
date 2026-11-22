@@ -4,6 +4,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/auth/app_pin_store.dart';
 import '../../core/auth/biometric_preferences.dart';
 import '../../core/auth/biometric_service.dart';
+import '../../core/face/face_gate_redirect.dart';
+import '../../core/face/face_gate_state.dart';
 import '../../core/navigation/root_navigator_context.dart';
 import 'auth_provider.dart';
 import 'biometric_setup_dialog.dart';
@@ -34,6 +36,12 @@ class _BiometricSetupListenerState extends ConsumerState<BiometricSetupListener>
       if (prev?.status == AuthStatus.ready) return;
       WidgetsBinding.instance.addPostFrameCallback((_) => _maybeOfferSetup());
     });
+    // PRIHOD gate yopilgach — kechiktirilgan biometric dialog.
+    ref.listen<bool>(faceGateRequiredProvider, (prev, next) {
+      if (prev == true && next == false) {
+        WidgetsBinding.instance.addPostFrameCallback((_) => _maybeOfferSetup());
+      }
+    });
 
     return widget.child;
   }
@@ -41,6 +49,11 @@ class _BiometricSetupListenerState extends ConsumerState<BiometricSetupListener>
   Future<void> _maybeOfferSetup() async {
     if (_checking || !mounted) return;
     if (ref.read(authStateProvider).status != AuthStatus.ready) return;
+    if (shouldDeferAppOpenOverlay(
+      faceGateRequired: ref.read(faceGateRequiredProvider),
+    )) {
+      return;
+    }
     _checking = true;
     try {
       final prefs = ref.read(biometricPreferencesProvider);
@@ -60,6 +73,11 @@ class _BiometricSetupListenerState extends ConsumerState<BiometricSetupListener>
       if (!mounted) return;
       await Future<void>.delayed(const Duration(milliseconds: 350));
       if (!mounted) return;
+      if (shouldDeferAppOpenOverlay(
+        faceGateRequired: ref.read(faceGateRequiredProvider),
+      )) {
+        return;
+      }
       final navCtx = resolveRootNavigatorContext(context);
       if (navCtx == null) return;
       await showBiometricSetupDialog(navCtx, ref);
