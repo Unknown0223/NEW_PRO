@@ -56,6 +56,8 @@ class _AttendanceHubScreenState extends ConsumerState<AttendanceHubScreen> {
   String? _statusBanner;
   bool _gateCleared = false;
   int _gateStepIndex = 0;
+  /// Gate: `photo` | `video` | null (ikkala usul bo‘lsa avval tanlov).
+  String? _gateMethod;
   PunchFaceResult? _gateFaceResult;
 
   @override
@@ -152,7 +154,23 @@ class _AttendanceHubScreenState extends ConsumerState<AttendanceHubScreen> {
       livenessDirections: st.livenessDirections,
       requireDualCamera: st.requireDualCamera,
       livenessSequence: _livenessSequence.isEmpty ? null : _livenessSequence,
+      selectedMethod: _gateMethod,
+      videoCodeRequired: st.videoCodeRequired,
+      dayCode: st.dayCode,
     );
+  }
+
+  Future<void> _chooseGateMethod(MobileAttendanceState st, String method) async {
+    setState(() {
+      _gateMethod = method;
+      _gateStepIndex = 0;
+      _gateFaceResult = null;
+      _statusBanner = method == 'photo'
+          ? 'Сверяем лицо с эталоном аккаунта'
+          : 'Видео: произнесите дневной код';
+    });
+    if (!mounted) return;
+    await _onGatePrimary(st);
   }
 
   Future<String?> _pickCameraPhoto({int maxWidth = 960, int quality = 78}) {
@@ -181,7 +199,11 @@ class _AttendanceHubScreenState extends ConsumerState<AttendanceHubScreen> {
     final step = steps[idx];
 
     switch (step.kind) {
+      case AttendanceGateStepKind.choose:
+        return;
       case AttendanceGateStepKind.liveness:
+        if (!await _ensureFace(st)) return;
+        if (!mounted) return;
         final live = await withAppLockSuppressed(ref, () {
           return LivenessLiveScreen.open(
             context,
@@ -196,10 +218,9 @@ class _AttendanceHubScreenState extends ConsumerState<AttendanceHubScreen> {
           _livenessSequence = live.steps;
           _gateStepIndex = idx + 1;
           _statusBanner = st.requireDualCamera
-              ? 'Face ID пройден — снимите рабочее место'
-              : 'Face ID пройден — отправляем ПРИХОД…';
+              ? 'Живость OK — снимите рабочее место'
+              : 'Сверяем Face ID с эталоном аккаунта…';
         });
-        // Gate: keyingi kamera/submitni avtomatik ochamiz — 2/3 da qolib ketmasin.
         if (!mounted) return;
         await _onGatePrimary(st);
         return;
@@ -210,7 +231,7 @@ class _AttendanceHubScreenState extends ConsumerState<AttendanceHubScreen> {
         setState(() {
           _backPhotoB64 = b64;
           _gateStepIndex = idx + 1;
-          _statusBanner = 'Отправляем ПРИХОД и сверяем Face ID…';
+          _statusBanner = 'Сверяем лицо с эталоном — только совпадение попадёт в табель';
         });
         await _gateContinueIfSubmit(st);
         return;
@@ -219,8 +240,16 @@ class _AttendanceHubScreenState extends ConsumerState<AttendanceHubScreen> {
           ref,
           maxSec: st.videoMaxSec.clamp(5, 10),
           captureMode: st.captureMode,
+          requireBack: true,
         );
         if (cap == null || !mounted) return;
+        if (cap.backBase64 == null || cap.backBase64!.isEmpty) {
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Нужны оба видео: фронт (с кодом) и задняя камера')),
+          );
+          return;
+        }
         setState(() {
           _frontVideoB64 = cap.frontBase64;
           _backVideoB64 = cap.backBase64;
@@ -228,15 +257,16 @@ class _AttendanceHubScreenState extends ConsumerState<AttendanceHubScreen> {
           _videoCaptureMode = cap.captureMode;
           if (st.dayCode != null) _spokenCodeCtrl.text = '${st.dayCode}';
           _gateStepIndex = idx + 1;
-          _statusBanner = null;
+          _statusBanner = 'Проверяем код и отправляем ПРИХОД…';
         });
         await _gateContinueIfSubmit(st);
         return;
       case AttendanceGateStepKind.submit:
-        if (st.photoEnabled) {
-          await _submitPhotoPunch(st, direction: 'IN');
-        } else if (st.videoEnabled) {
+        final useVideo = _gateMethod == 'video' || (!st.photoEnabled && st.videoEnabled);
+        if (useVideo && st.videoEnabled) {
           await _submitVideoPunch(st);
+        } else if (st.photoEnabled) {
+          await _submitPhotoPunch(st, direction: 'IN');
         } else {
           setState(() => _submitting = true);
           try {
@@ -461,9 +491,12 @@ class _AttendanceHubScreenState extends ConsumerState<AttendanceHubScreen> {
     setState(() {
       _gateFaceResult = null;
       _gateStepIndex = 0;
+      _gateMethod = null;
       _completedLiveness = [];
       _frontPhotoB64 = null;
       _backPhotoB64 = null;
+      _frontVideoB64 = null;
+      _backVideoB64 = null;
       _statusBanner = null;
     });
   }
@@ -660,7 +693,13 @@ class _AttendanceHubScreenState extends ConsumerState<AttendanceHubScreen> {
                           dayCode: st.dayCode,
                           faceResult: _gateFaceResult,
                           onPrimary: () => _onGatePrimary(st),
-                          onContinueAfterResult: () => _finishGateIfNeeded(),
+                          onChoosePhoto: () => _chooseGateMethod(st, 'photo'),
+                          onChooseVideo: () => _chooseGateMethod(st, 'video'),
+                          onContinueAfterResult: () {
+                            if (_gateFaceResult?.matched == true) {
+                              _finishGateIfNeeded();
+                            }
+                          },
                           onRetryAfterFail: _retryGateFace,
                         ),
                 ),

@@ -21,6 +21,9 @@ void main() {
   test('FACE_MISMATCH failed → not matched', () {
     final r = parsePunchFaceResult({
       'anti_fraud': {
+        'ok': false,
+        'failedCode': 'FACE_MISMATCH',
+        'failedMessage': 'Yuz mos kelmadi (32.0% < 45%)',
         'layers': [
           {
             'code': 'FACE_MISMATCH',
@@ -32,6 +35,7 @@ void main() {
     });
     expect(r.matched, isFalse);
     expect(r.scorePercent, closeTo(32.0, 0.01));
+    expect(r.detailRu, contains('табель'));
   });
 
   test('isFaceMismatchError', () {

@@ -29,6 +29,21 @@ PunchFaceResult parsePunchFaceResult(Map<String, dynamic>? response) {
       : response;
 
   final anti = root['anti_fraud'];
+  if (anti is Map && anti['ok'] == false) {
+    final code = anti['failedCode']?.toString() ?? '';
+    final detail = anti['failedMessage']?.toString() ?? '';
+    final pct = _percentFromDetail(detail);
+    final faceFail = code == 'FACE_MISMATCH' || detail.toLowerCase().contains('yuz') || detail.toLowerCase().contains('лиц');
+    return PunchFaceResult(
+      matched: false,
+      titleRu: faceFail ? 'Лицо не совпало с аккаунтом' : 'Отметка отклонена',
+      detailRu: pct != null
+          ? 'Совпадение ${pct.toStringAsFixed(0)}% — в табель не принято'
+          : (detail.isNotEmpty ? detail : 'Сервер отклонил ПРИХОД'),
+      scorePercent: pct,
+    );
+  }
+
   final layers = anti is Map && anti['layers'] is List ? anti['layers'] as List : const [];
   for (final raw in layers) {
     if (raw is! Map) continue;
@@ -41,16 +56,16 @@ PunchFaceResult parsePunchFaceResult(Map<String, dynamic>? response) {
         matched: true,
         titleRu: 'Лицо совпало с аккаунтом',
         detailRu: pct != null
-            ? 'Совпадение ${(pct).toStringAsFixed(0)}% · ПРИХОД принят'
-            : 'Эталон Face ID подтверждён · ПРИХОД принят',
+            ? 'Совпадение ${(pct).toStringAsFixed(0)}% · ПРИХОД в табеле'
+            : 'Эталон Face ID подтверждён · ПРИХОД в табеле',
         scorePercent: pct,
       );
     }
     return PunchFaceResult(
       matched: false,
-      titleRu: 'Лицо не совпало',
+      titleRu: 'Лицо не совпало с аккаунтом',
       detailRu: pct != null
-          ? 'Совпадение ${(pct).toStringAsFixed(0)}% — это не ваш эталон'
+          ? 'Совпадение ${(pct).toStringAsFixed(0)}% — чужое лицо, в табель не принято'
           : (detail.isNotEmpty ? detail : 'Селфи не совпало с эталоном аккаунта'),
       scorePercent: pct,
     );
@@ -63,18 +78,27 @@ PunchFaceResult parsePunchFaceResult(Map<String, dynamic>? response) {
     final ok = score >= 0.45;
     return PunchFaceResult(
       matched: ok,
-      titleRu: ok ? 'Лицо совпало с аккаунтом' : 'Лицо не совпало',
+      titleRu: ok ? 'Лицо совпало с аккаунтом' : 'Лицо не совпало с аккаунтом',
       detailRu: ok
-          ? 'Совпадение ${pct.toStringAsFixed(0)}% · ПРИХОД принят'
-          : 'Совпадение ${pct.toStringAsFixed(0)}% — эталон не подтверждён',
+          ? 'Совпадение ${pct.toStringAsFixed(0)}% · ПРИХОД в табеле'
+          : 'Совпадение ${pct.toStringAsFixed(0)}% — в табель не принято',
       scorePercent: pct,
+    );
+  }
+
+  // anti_fraud.ok == true yoki qatlam yo‘q — server qabul qilgan.
+  if (anti is Map && anti['ok'] == true) {
+    return const PunchFaceResult(
+      matched: true,
+      titleRu: 'ПРИХОД принят',
+      detailRu: 'Отметка в табеле. Face ID подтверждён на сервере.',
     );
   }
 
   return const PunchFaceResult(
     matched: true,
     titleRu: 'ПРИХОД принят',
-    detailRu: 'Отметка сохранена. Face ID проверен на сервере.',
+    detailRu: 'Отметка сохранена на сервере.',
   );
 }
 

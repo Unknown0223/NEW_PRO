@@ -15,6 +15,8 @@ class AttendanceGatePage extends StatelessWidget {
     required this.submitting,
     required this.statusText,
     required this.onPrimary,
+    this.onChoosePhoto,
+    this.onChooseVideo,
     this.dayCode,
     this.faceResult,
     this.onContinueAfterResult,
@@ -27,6 +29,8 @@ class AttendanceGatePage extends StatelessWidget {
   final bool submitting;
   final String? statusText;
   final VoidCallback onPrimary;
+  final VoidCallback? onChoosePhoto;
+  final VoidCallback? onChooseVideo;
   final int? dayCode;
   final PunchFaceResult? faceResult;
   final VoidCallback? onContinueAfterResult;
@@ -104,6 +108,11 @@ class AttendanceGatePage extends StatelessWidget {
                       color: AppColors.primaryDark,
                     ),
                   ),
+                  const SizedBox(height: 6),
+                  const Text(
+                    'Произнесите этот код на видео',
+                    style: TextStyle(color: AppColors.textMuted, fontSize: 13),
+                  ),
                 ],
                 if (statusText != null) ...[
                   const SizedBox(height: 16),
@@ -119,35 +128,68 @@ class AttendanceGatePage extends StatelessWidget {
               ],
             ),
           ),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(999),
-            child: LinearProgressIndicator(
-              value: progress,
-              minHeight: 6,
-              backgroundColor: AppColors.surfaceMuted,
-              color: AppColors.primary,
+          if (step.kind != AttendanceGateStepKind.choose) ...[
+            ClipRRect(
+              borderRadius: BorderRadius.circular(999),
+              child: LinearProgressIndicator(
+                value: progress,
+                minHeight: 6,
+                backgroundColor: AppColors.surfaceMuted,
+                color: AppColors.primary,
+              ),
             ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            '${idx + 1} / ${steps.length}',
-            textAlign: TextAlign.center,
-            style: const TextStyle(color: AppColors.textMuted, fontSize: 12),
-          ),
-          const SizedBox(height: 18),
-          FilledButton(
-            onPressed: submitting ? null : onPrimary,
-            style: FilledButton.styleFrom(
-              backgroundColor: AppColors.primary,
-              foregroundColor: Colors.white,
-              minimumSize: const Size.fromHeight(52),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+            const SizedBox(height: 8),
+            Text(
+              '${idx + 1} / ${steps.length}',
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: AppColors.textMuted, fontSize: 12),
             ),
-            child: Text(
-              submitting ? 'Подождите…' : _buttonLabel(step),
-              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+            const SizedBox(height: 18),
+          ],
+          if (step.kind == AttendanceGateStepKind.choose) ...[
+            FilledButton.icon(
+              onPressed: submitting ? null : onChoosePhoto,
+              style: FilledButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                foregroundColor: Colors.white,
+                minimumSize: const Size.fromHeight(52),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+              ),
+              icon: const Icon(Icons.face_retouching_natural),
+              label: const Text(
+                'Face ID · фото',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+              ),
             ),
-          ),
+            const SizedBox(height: 10),
+            OutlinedButton.icon(
+              onPressed: submitting ? null : onChooseVideo,
+              style: OutlinedButton.styleFrom(
+                foregroundColor: AppColors.primaryDark,
+                minimumSize: const Size.fromHeight(52),
+                side: const BorderSide(color: AppColors.primary, width: 1.5),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+              ),
+              icon: const Icon(Icons.videocam_outlined),
+              label: const Text(
+                'Видео + дневной код',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+              ),
+            ),
+          ] else
+            FilledButton(
+              onPressed: submitting ? null : onPrimary,
+              style: FilledButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                foregroundColor: Colors.white,
+                minimumSize: const Size.fromHeight(52),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+              ),
+              child: Text(
+                submitting ? 'Подождите…' : _buttonLabel(step),
+                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+              ),
+            ),
         ],
       ),
     );
@@ -155,6 +197,8 @@ class AttendanceGatePage extends StatelessWidget {
 
   static IconData _iconFor(AttendanceGateStepKind kind) {
     switch (kind) {
+      case AttendanceGateStepKind.choose:
+        return Icons.how_to_reg_rounded;
       case AttendanceGateStepKind.liveness:
         return Icons.face_retouching_natural;
       case AttendanceGateStepKind.workplace:
@@ -168,6 +212,8 @@ class AttendanceGatePage extends StatelessWidget {
 
   static String _buttonLabel(AttendanceGateStep step) {
     switch (step.kind) {
+      case AttendanceGateStepKind.choose:
+        return 'Выбрать';
       case AttendanceGateStepKind.liveness:
       case AttendanceGateStepKind.workplace:
         return 'Открыть камеру';
@@ -238,9 +284,10 @@ class _ResultBody extends StatelessWidget {
                       color: color,
                     ),
                   ),
-                  const Text(
-                    'совпадение с эталоном',
-                    style: TextStyle(color: AppColors.textMuted),
+                  Text(
+                    ok ? 'совпадение — это ваш аккаунт' : 'не ваш эталон — в табель не принято',
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(color: AppColors.textMuted),
                   ),
                 ],
               ],

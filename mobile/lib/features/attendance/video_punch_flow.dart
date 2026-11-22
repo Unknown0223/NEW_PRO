@@ -103,11 +103,12 @@ class VideoPunchFlow {
     });
   }
 
-  /// Gate: dialogsiz faqat front video (sahifa o‘zi kodni ko‘rsatadi).
+  /// Gate: front video (kod sahifada), keyin orqa video (ikkita kamera).
   static Future<VideoPunchCapture?> captureInline(
     WidgetRef ref, {
     required int maxSec,
     required String captureMode,
+    bool requireBack = true,
   }) {
     return withAppLockSuppressed(ref, () async {
       final picker = ImagePicker();
@@ -116,10 +117,27 @@ class VideoPunchFlow {
         maxDuration: Duration(seconds: maxSec),
       );
       if (front == null) return null;
+      final frontB64 = base64Encode(await front.readAsBytes());
+
+      String? backB64;
+      final needBack = requireBack ||
+          captureMode == 'sequential' ||
+          captureMode == 'simultaneous';
+      if (needBack) {
+        final back = await picker.pickVideo(
+          source: ImageSource.camera,
+          maxDuration: Duration(seconds: maxSec),
+        );
+        if (back != null) {
+          backB64 = base64Encode(await back.readAsBytes());
+        }
+      }
+
       return VideoPunchCapture(
-        frontBase64: base64Encode(await front.readAsBytes()),
+        frontBase64: frontB64,
+        backBase64: backB64,
         durationSec: maxSec,
-        captureMode: 'front_only',
+        captureMode: backB64 != null ? captureMode : 'front_only',
       );
     });
   }
