@@ -7,7 +7,10 @@ import {
   type QuickRangeKey
 } from "@/components/dashboard/finance/finance-filters-bar";
 import { FinanceProPage } from "@/components/dashboard/finance/pro/finance-pro-page";
-import { buildFinanceProUiModel } from "@/components/dashboard/finance/finance-ui-model";
+import {
+  buildFinanceProUiModel,
+  formatFinanceProActiveDates
+} from "@/components/dashboard/finance/finance-ui-model";
 import { useFinanceQueries } from "@/components/dashboard/finance/use-finance-queries";
 import type { FinanceFilterDraft } from "@/components/dashboard/finance/types";
 import { useAuthStore, useAuthStoreHydrated, useEffectiveRole } from "@/lib/auth-store";
@@ -83,22 +86,19 @@ export function DashboardFinance() {
   };
 
   const proModel = useMemo(() => (data ? buildFinanceProUiModel(data) : null), [data]);
-
-  const handleProPeriodChange = (from: string, to: string) => {
-    const next = { ...draft, from, to };
-    setDraft(next);
-    setApplied({ ...next, supervisor_ids: selfSupervisorIdStr ? [selfSupervisorIdStr] : next.supervisor_ids });
-    setQuickRange("custom");
-  };
+  const activeDates = useMemo(
+    () => formatFinanceProActiveDates(applied.from, applied.to),
+    [applied.from, applied.to]
+  );
 
   return (
-    <PageShell className="space-y-6">
+    <PageShell className="space-y-5">
       {!hydrated ? (
         <p className="text-sm text-muted-foreground">Загрузка сессии…</p>
       ) : !tenantSlug ? (
         <p className="text-sm text-destructive">Сессия не найдена. Войдите заново.</p>
       ) : (
-        <div className="flex flex-col gap-6">
+        <div className="flex flex-col gap-5">
           <FinanceFiltersBar
             draft={draft}
             setDraft={setDraft}
@@ -121,13 +121,7 @@ export function DashboardFinance() {
           ) : null}
 
           {proModel ? (
-            <FinanceProPage
-              model={proModel}
-              loading={isFetching}
-              from={applied.from}
-              to={applied.to}
-              onPeriodChange={handleProPeriodChange}
-            />
+            <FinanceProPage model={proModel} loading={isFetching} activeDates={activeDates} />
           ) : isLoading ? (
             <p className="text-sm text-muted-foreground">Загрузка финансов…</p>
           ) : null}

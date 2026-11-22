@@ -151,6 +151,7 @@ NEW_PRO shablon asosidagi moliyaviy overview: AppShell chrome saqlanadi; sahifa 
 - Sidebar/topbar port qilinmaydi (AppShell).
 - `pro` snapshotga qo‘shiladi; debts/ledger jadvallar shu ekrandan olib tashlandi (UI 1:1 shablon).
 - Scheduled payments = kelajakdagi `expenses` draft; bo‘sh bo‘lishi mumkin.
+- **Filter chrome seam:** faqat `FinanceFiltersBar` (sarlavha + date_type + range + katalog). NEW_PRO `page-head` / period chips takrorlanmaydi.
 
 ## Related (not yet deepened)
 

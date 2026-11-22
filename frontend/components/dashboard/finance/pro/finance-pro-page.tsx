@@ -1,45 +1,32 @@
 "use client";
 
 import "./finance-pro-theme.css";
-import { formatFinanceProActiveDates } from "@/components/dashboard/finance/finance-ui-model";
 import { FinanceProAccountsPayments } from "@/components/dashboard/finance/pro/finance-pro-accounts-payments";
 import { FinanceProCashflowChart } from "@/components/dashboard/finance/pro/finance-pro-cashflow-chart";
 import { FinanceProDetailsDialog } from "@/components/dashboard/finance/pro/finance-pro-details-dialog";
 import { FinanceProExpenseDonut } from "@/components/dashboard/finance/pro/finance-pro-expense-donut";
 import { FinanceProOperations } from "@/components/dashboard/finance/pro/finance-pro-operations";
-import { detectFinanceProPeriod, periodKeyToDates } from "@/components/dashboard/finance/pro/finance-pro-periods";
 import { downloadFinanceProCsv } from "@/components/dashboard/finance/pro/finance-pro-shared";
 import { FinanceProSummaryCards } from "@/components/dashboard/finance/pro/finance-pro-summary-cards";
-import type { FinanceProDetailView, FinanceProPeriodKey, FinanceProUiModel } from "@/components/dashboard/finance/pro/finance-pro-types";
-import { BriefcaseBusiness, CalendarDays, Check, ChevronDown, X } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
-
-const PERIODS: FinanceProPeriodKey[] = ["Сегодня", "Вчера", "Неделя", "Месяц", "Квартал", "Год"];
+import type { FinanceProDetailView, FinanceProUiModel } from "@/components/dashboard/finance/pro/finance-pro-types";
+import { Check, X } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 
 export type FinanceProPageProps = {
   model: FinanceProUiModel;
   loading?: boolean;
-  from: string;
-  to: string;
-  onPeriodChange: (from: string, to: string) => void;
+  /** Dialog subtitle — period from FinanceFiltersBar. */
+  activeDates: string;
 };
 
-export function FinanceProPage({ model, loading, from, to, onPeriodChange }: FinanceProPageProps) {
+/** Presentation-only: filters/title chrome lives in FinanceFiltersBar (single seam). */
+export function FinanceProPage({ model, loading, activeDates }: FinanceProPageProps) {
   const [detail, setDetail] = useState<FinanceProDetailView | null>(null);
   const [toast, setToast] = useState("");
-  const [dateOpen, setDateOpen] = useState(false);
-  const [customRange, setCustomRange] = useState({ start: from, end: to });
   const [search, setSearch] = useState("");
   const [filterType, setFilterType] = useState("Все операции");
   const activePanelRef = useRef<HTMLElement | null>(null);
   const toastTimer = useRef<number | undefined>(undefined);
-
-  useEffect(() => {
-    setCustomRange({ start: from, end: to });
-  }, [from, to]);
-
-  const activePeriod = useMemo(() => detectFinanceProPeriod(from, to), [from, to]);
-  const activeDates = formatFinanceProActiveDates(from, to);
 
   const notify = (message: string) => {
     setToast(message);
@@ -47,10 +34,7 @@ export function FinanceProPage({ model, loading, from, to, onPeriodChange }: Fin
     toastTimer.current = window.setTimeout(() => setToast(""), 2800);
   };
 
-  const openDetails = (view: FinanceProDetailView) => {
-    setDateOpen(false);
-    setDetail(view);
-  };
+  const openDetails = (view: FinanceProDetailView) => setDetail(view);
 
   useEffect(() => {
     if (!detail) return;
@@ -63,10 +47,7 @@ export function FinanceProPage({ model, loading, from, to, onPeriodChange }: Fin
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        setDetail(null);
-        setDateOpen(false);
-      }
+      if (event.key === "Escape") setDetail(null);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -99,19 +80,20 @@ export function FinanceProPage({ model, loading, from, to, onPeriodChange }: Fin
     activePanelRef.current = null;
   };
 
-  const applyCustomRange = () => {
-    if (!customRange.start || !customRange.end || customRange.start > customRange.end) {
-      notify("Укажите корректный диапазон дат");
-      return;
-    }
-    onPeriodChange(customRange.start, customRange.end);
-    setDateOpen(false);
-  };
-
   const exportTransactions = (rows: typeof model.recentTransactions) => {
-    const dataRows: (string | number)[][] = [["Дата и время", "Тип", "Категория", "Описание", "Счёт", "Сумма", "Статус"]];
+    const dataRows: (string | number)[][] = [
+      ["Дата и время", "Тип", "Категория", "Описание", "Счёт", "Сумма", "Статус"]
+    ];
     rows.forEach((item) =>
-      dataRows.push([item.date, item.type, item.category, item.description, item.account, item.amount, item.status])
+      dataRows.push([
+        item.date,
+        item.type,
+        item.category,
+        item.description,
+        item.account,
+        item.amount,
+        item.status
+      ])
     );
     downloadFinanceProCsv("finance-operacii.csv", dataRows);
     notify("Файл CSV подготовлен для Excel");
@@ -132,75 +114,14 @@ export function FinanceProPage({ model, loading, from, to, onPeriodChange }: Fin
       onPointerLeave={handlePointerLeave}
     >
       <main className="finance-pro-main">
-        <div className="page-head">
-          <div className="title-wrap">
-            <div className="title-icon">
-              <BriefcaseBusiness size={24} />
-            </div>
-            <div>
-              <div className="eyebrow">УПРАВЛЕНИЕ БИЗНЕСОМ</div>
-              <h1>Финансы</h1>
-              <p>Контроль доходов, расходов и финансовых потоков вашей компании</p>
-            </div>
-          </div>
-          <div className="filters">
-            <div className="date-anchor">
-              <button className="date-picker" onClick={() => setDateOpen((value) => !value)} aria-expanded={dateOpen} type="button">
-                <CalendarDays size={18} />
-                <span>{activeDates}</span>
-                <ChevronDown size={16} />
-              </button>
-              {dateOpen ? (
-                <div className="date-popover">
-                  <div className="date-popover-heading">
-                    <b>Выберите период</b>
-                    <span>Финансовая аналитика</span>
-                  </div>
-                  <label>
-                    Начало периода
-                    <input
-                      type="date"
-                      value={customRange.start}
-                      onChange={(event) => setCustomRange((current) => ({ ...current, start: event.target.value }))}
-                    />
-                  </label>
-                  <label>
-                    Конец периода
-                    <input
-                      type="date"
-                      value={customRange.end}
-                      onChange={(event) => setCustomRange((current) => ({ ...current, end: event.target.value }))}
-                    />
-                  </label>
-                  <button className="primary-button apply-date" onClick={applyCustomRange} type="button">
-                    Применить период
-                  </button>
-                </div>
-              ) : null}
-            </div>
-            <div className="segmented">
-              {PERIODS.map((item) => (
-                <button
-                  key={item}
-                  className={activePeriod === item ? "selected" : ""}
-                  onClick={() => {
-                    const range = periodKeyToDates(item);
-                    onPeriodChange(range.from, range.to);
-                    setDateOpen(false);
-                  }}
-                  type="button"
-                >
-                  {item}
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-
         <FinanceProSummaryCards model={model} onOpenDetail={openDetails} />
 
         <div className="analytics-grid">
-          <FinanceProCashflowChart points={model.cashflowByPeriod} onOpenDetail={openDetails} onExport={exportChart} />
+          <FinanceProCashflowChart
+            points={model.cashflowByPeriod}
+            onOpenDetail={openDetails}
+            onExport={exportChart}
+          />
           <FinanceProExpenseDonut categories={model.expenseCategories} onOpenDetail={openDetails} />
         </div>
 
@@ -255,21 +176,17 @@ export function FinanceProPage({ model, loading, from, to, onPeriodChange }: Fin
         </div>
       ) : null}
 
-      {loading ? <FinanceProLoadingCover /> : null}
+      {loading ? (
+        <div
+          style={{
+            position: "absolute",
+            inset: 0,
+            zIndex: 2,
+            background: "rgba(246,249,253,0.55)",
+            pointerEvents: "none"
+          }}
+        />
+      ) : null}
     </div>
-  );
-}
-
-function FinanceProLoadingCover() {
-  return (
-    <div
-      style={{
-        position: "absolute",
-        inset: 0,
-        zIndex: 2,
-        background: "rgba(246,249,253,0.55)",
-        pointerEvents: "none"
-      }}
-    />
   );
 }

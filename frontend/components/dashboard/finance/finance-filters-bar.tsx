@@ -16,7 +16,10 @@ import { FilterX } from "lucide-react";
 export { defaultFinanceDraft };
 export type { QuickRangeKey };
 
-/** Shablon: `FinanceFiltersPanel` — sarlavha + sana, keyin 6 filter va 2 tugma. */
+/**
+ * Finance Dashboard filter chrome (single seam): title + date type + range + catalog filters.
+ * NEW_PRO page-head duplicate qilinmaydi — period shu yerda.
+ */
 export function FinanceFiltersBar(props: {
   draft: FinanceFilterDraft;
   setDraft: React.Dispatch<React.SetStateAction<FinanceFilterDraft>>;
@@ -58,13 +61,13 @@ export function FinanceFiltersBar(props: {
   });
 
   return (
-    <section className="rounded-2xl bg-card p-4 shadow-sm ring-1 ring-slate-200/70">
+    <section className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-sm sm:p-5">
       <div className="mb-4 flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
         <div className="min-w-0">
-          <p className="text-xs font-semibold uppercase tracking-[0.22em] text-teal-600">Финансы</p>
-          <h2 className="text-xl font-bold text-slate-950">Финансы</h2>
+          <p className="text-[11px] font-bold uppercase tracking-[0.22em] text-teal-600">Финансы</p>
+          <h1 className="text-2xl font-bold tracking-tight text-slate-950">Финансы</h1>
         </div>
-        <div className="flex min-w-0 flex-col gap-3 xl:flex-row xl:items-center xl:justify-end">
+        <div className="flex min-w-0 flex-col gap-2.5 lg:flex-row lg:items-center lg:justify-end">
           <FinanceDateTypeFieldset
             value={draft.date_type}
             onChange={(date_type) => setDraft((p) => ({ ...p, date_type }))}
@@ -78,7 +81,7 @@ export function FinanceFiltersBar(props: {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-[repeat(8,minmax(0,1fr))_44px_160px]">
+      <div className="grid grid-cols-1 gap-2.5 md:grid-cols-2 xl:grid-cols-[repeat(8,minmax(0,1fr))_44px_150px]">
         <SupervisorDashboardMultiFilter
           placeholder="Супервайзер"
           searchPlaceholder="Супервайзер"
