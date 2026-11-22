@@ -17,6 +17,7 @@ import {
   type AttendanceStatus,
   type Source
 } from "@/components/timesheet/timesheet-shared";
+import { TimesheetDayMarksPanel } from "@/components/timesheet/timesheet-day-marks-panel";
 
 export type CellTarget = {
   userId: number;
@@ -74,7 +75,7 @@ export function TimesheetCellModal({
 
   return (
     <Dialog open={Boolean(target)} onOpenChange={(o) => (!o ? onClose() : undefined)}>
-      <DialogContent className="tabel-theme sm:max-w-md">
+      <DialogContent className="tabel-theme max-h-[90vh] overflow-y-auto sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>Запись табеля</DialogTitle>
           <p className="font-mono text-xs text-muted-foreground">
@@ -127,6 +128,8 @@ export function TimesheetCellModal({
             {(target.overtimeMinutes ?? 0) > 0 ? <Fact label="Переработка" value={`${target.overtimeMinutes} мин`} /> : null}
           </div>
         ) : null}
+
+        <TimesheetDayMarksPanel userId={target.userId} dateYmd={target.date} fio={target.fio} />
 
         <div>
           <label className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Рабочее значение</label>

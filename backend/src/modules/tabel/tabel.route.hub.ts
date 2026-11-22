@@ -103,13 +103,15 @@ export async function registerTabelHubRoutes(app: FastifyInstance) {
   app.get("/api/:slug/tabel/marks", { preHandler: [jwtAccessVerify] }, async (request, reply) => {
     if (!ensureTenantContext(request, reply)) return;
     const q = (request.query ?? {}) as Record<string, unknown>;
+    const takeRaw = q.take != null ? Number(q.take) : undefined;
     const items = await listTabelMarks(request.tenant!.id, {
       from: typeof q.from === "string" ? q.from : undefined,
       to: typeof q.to === "string" ? q.to : undefined,
       user_id: q.user_id ? Number(q.user_id) : undefined,
       branch: typeof q.branch === "string" ? q.branch : undefined,
       source: typeof q.source === "string" ? q.source : undefined,
-      only_problems: q.only_problems === "true" || q.only_problems === "1"
+      only_problems: q.only_problems === "true" || q.only_problems === "1",
+      take: Number.isFinite(takeRaw) ? takeRaw : undefined
     });
     return reply.send({ data: { items } });
   });
@@ -120,6 +122,7 @@ export async function registerTabelHubRoutes(app: FastifyInstance) {
     const filters = {
       from: typeof q.from === "string" ? q.from : undefined,
       to: typeof q.to === "string" ? q.to : undefined,
+      user_id: q.user_id ? Number(q.user_id) : undefined,
       branch: typeof q.branch === "string" ? q.branch : undefined,
       source: typeof q.source === "string" ? q.source : undefined
     };

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, Camera, CheckCircle2, Clock, Download, LogIn, LogOut, MapPin, RefreshCw, ShieldAlert, Timer, Video, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -72,13 +73,22 @@ const SOURCE_BADGE: Record<string, string> = {
   manual: "Вручную"
 };
 
+function ymdOrNull(raw: string | null): string | null {
+  return raw && /^\d{4}-\d{2}-\d{2}$/.test(raw) ? raw : null;
+}
+
 export function TabelMarksWorkspace({ onlyProblems = false }: { onlyProblems?: boolean }) {
   const { tenantSlug } = useAuthStore();
   const perms = usePermissions();
   const qc = useQueryClient();
+  const searchParams = useSearchParams();
   const today = new Date().toISOString().slice(0, 10);
-  const [from, setFrom] = useState(today);
-  const [to, setTo] = useState(today);
+  const paramFrom = ymdOrNull(searchParams.get("from"));
+  const paramTo = ymdOrNull(searchParams.get("to")) ?? paramFrom;
+  const paramUserId = Number(searchParams.get("user_id") || "");
+  const [from, setFrom] = useState(paramFrom ?? today);
+  const [to, setTo] = useState(paramTo ?? today);
+  const [userId, setUserId] = useState<number | "">(Number.isFinite(paramUserId) && paramUserId > 0 ? paramUserId : "");
   const [branches, setBranches] = useState<string[]>([]);
   const [source, setSource] = useState("");
   const [search, setSearch] = useState("");
@@ -91,8 +101,14 @@ export function TabelMarksWorkspace({ onlyProblems = false }: { onlyProblems?: b
   const [exporting, setExporting] = useState(false);
   const canExport = perms.hasAny("tabel.otmetki.export", "staff.tabel.export");
 
+  useEffect(() => {
+    if (paramFrom) setFrom(paramFrom);
+    if (paramTo) setTo(paramTo);
+    if (Number.isFinite(paramUserId) && paramUserId > 0) setUserId(paramUserId);
+  }, [paramFrom, paramTo, paramUserId]);
+
   const marksQ = useQuery({
-    queryKey: ["tabel", "marks", tenantSlug, { from, to, branches, source, onlyProblems }],
+    queryKey: ["tabel", "marks", tenantSlug, { from, to, branches, source, onlyProblems, userId }],
     enabled: Boolean(tenantSlug),
     queryFn: async () => {
       const endpoint = onlyProblems ? `/api/${tenantSlug}/tabel/problems` : `/api/${tenantSlug}/tabel/marks`;
@@ -100,6 +116,7 @@ export function TabelMarksWorkspace({ onlyProblems = false }: { onlyProblems?: b
         params: {
           from: from || undefined,
           to: to || undefined,
+          user_id: userId || undefined,
           branch: branches.length ? branches.join(",") : undefined,
           source: source || undefined,
           only_problems: onlyProblems ? "true" : undefined
@@ -178,6 +195,7 @@ export function TabelMarksWorkspace({ onlyProblems = false }: { onlyProblems?: b
         params: {
           from: from || undefined,
           to: to || undefined,
+          user_id: userId || undefined,
           branch: branches.length ? branches.join(",") : undefined,
           source: source || undefined,
           only_problems: onlyProblems ? "true" : undefined

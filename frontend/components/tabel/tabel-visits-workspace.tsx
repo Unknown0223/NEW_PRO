@@ -1,13 +1,29 @@
 "use client";
 
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import { CalendarDays, Camera, Clock, LogIn, LogOut, Users } from "lucide-react";
 import { Card } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { api } from "@/lib/api";
 import { accessRoleLabel } from "@/lib/access-role-label";
 import { useAuthStore } from "@/lib/auth-store";
+import { dayMarksHref } from "@/lib/tabel/day-marks-link";
+
+type StaffRow = {
+  id: number;
+  name: string;
+  branch: string | null;
+  role: string;
+  status: string;
+  late_minutes: number;
+  late_excused: boolean;
+  punch_id: number | null;
+  first_in_at: string | null;
+  last_out_at: string | null;
+  has_photo: boolean;
+};
 
 type VisitDashboard = {
   date: string;
@@ -24,7 +40,17 @@ type VisitDashboard = {
   };
   month: Array<{ day: number; present: number; absent: number }>;
   branches: Array<{ name: string; count: number }>;
-  recent: Array<{ id: number; name: string; branch: string | null; role: string; punch_id: number | null }>;
+  staff?: StaffRow[];
+  recent: Array<{
+    id: number;
+    name: string;
+    branch: string | null;
+    role: string;
+    punch_id: number | null;
+    status?: string;
+    first_in_at?: string | null;
+    has_photo?: boolean;
+  }>;
   activity: Array<{
     id: number;
     at: string;
@@ -46,6 +72,23 @@ const ABSENCE_LABEL: Record<string, string> = {
   overtime: "Сверхурочные",
   weekend_work: "Выходной",
   early_leave: "Ранний уход"
+};
+
+const STATUS_LABEL: Record<string, string> = {
+  worked: "На работе",
+  late: "Опоздание",
+  half_day: "Полдня",
+  overtime: "Переработка",
+  weekend_work: "Выходной",
+  remote: "Удалённо",
+  early_leave: "Ранний уход",
+  absent: "Нет",
+  no_mark: "Без отметки",
+  vacation: "Отпуск",
+  sick: "Больничный",
+  trip: "Командировка",
+  unpaid_leave: "Б/С",
+  excused_absent: "Уважит."
 };
 
 function initials(name: string) {
@@ -124,6 +167,7 @@ function Kpi({ label, value, prev, icon }: { label: string; value: number; prev:
 export function TabelVisitsWorkspace() {
   const tenantSlug = useAuthStore((s) => s.tenantSlug ?? "");
   const [date, setDate] = useState("");
+  const [staffQ, setStaffQ] = useState("");
   const query = useQuery({
     queryKey: ["tabel", "visit-dashboard", tenantSlug, date],
     enabled: Boolean(tenantSlug),
@@ -140,6 +184,16 @@ export function TabelVisitsWorkspace() {
   const tz = data?.time_zone || "Asia/Tashkent";
   const maxBar = Math.max(1, ...(data?.month.map((row) => row.present + row.absent) ?? [1]));
   const maxBranch = Math.max(1, ...(data?.branches.map((row) => row.count) ?? [1]));
+  const focusDate = date || data?.date || "";
+
+  const staff = useMemo(() => {
+    const list = data?.staff ?? [];
+    const needle = staffQ.trim().toLowerCase();
+    if (!needle) return list;
+    return list.filter((row) =>
+      [row.name, row.branch, row.role, row.status].filter(Boolean).some((v) => String(v).toLowerCase().includes(needle))
+    );
+  }, [data?.staff, staffQ]);
 
   useEffect(() => {
     if (!date && data?.date) setDate(data.date);
@@ -162,6 +216,9 @@ export function TabelVisitsWorkspace() {
           />
           <Link href="/tabel/marks" className="rounded-md border px-3 py-1.5 hover:bg-slate-50">
             Журнал отметок
+          </Link>
+          <Link href="/reports/staff-attendance" className="rounded-md border px-3 py-1.5 hover:bg-slate-50">
+            Отчёт
           </Link>
           <Link href="/tabel/devices" className="rounded-md border px-3 py-1.5 hover:bg-slate-50">
             Терминалы
@@ -217,26 +274,43 @@ export function TabelVisitsWorkspace() {
         </Card>
       </div>
 
-      <div className="grid gap-3 xl:grid-cols-2">
-        <Card className="p-4">
-          <h2 className="text-sm font-semibold">На работе ({data?.date ?? "—"})</h2>
-          <ul className="mt-3 divide-y">
-            {(data?.recent ?? []).map((row) => (
+      <Card className="p-4">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-sm font-semibold">Сотрудники ({focusDate || "—"})</h2>
+          <Input
+            className="h-8 w-56"
+            placeholder="Поиск ФИО / филиал…"
+            value={staffQ}
+            onChange={(e) => setStaffQ(e.target.value)}
+          />
+        </div>
+        <ul className="mt-3 max-h-[28rem] divide-y overflow-y-auto">
+          {staff.map((row) => {
+            const href = focusDate ? dayMarksHref(row.id, focusDate) : null;
+            return (
               <li key={row.id} className="flex items-center gap-3 py-2">
                 <TerminalPhoto punchId={row.punch_id} name={row.name} />
-                <div className="min-w-0">
+                <div className="min-w-0 flex-1">
                   <div className="truncate text-sm font-medium">{row.name}</div>
                   <div className="truncate text-xs text-slate-500">
-                    {row.branch || "—"} · {roleText(row.role)}
+                    {row.branch || "—"} · {roleText(row.role)} · {STATUS_LABEL[row.status] ?? row.status}
+                    {row.first_in_at ? ` · ${timeLabel(row.first_in_at, tz)}` : ""}
                   </div>
                 </div>
-                {row.punch_id ? <Camera className="ml-auto size-4 text-teal-700" /> : null}
+                {row.has_photo ? <Camera className="size-4 text-teal-700" /> : null}
+                {href ? (
+                  <Link href={href} className="text-xs text-sky-700 hover:underline">
+                    Отметки
+                  </Link>
+                ) : null}
               </li>
-            ))}
-            {!data?.recent.length && !query.isLoading ? <li className="py-3 text-sm text-slate-500">Отметок нет</li> : null}
-          </ul>
-        </Card>
+            );
+          })}
+          {!staff.length && !query.isLoading ? <li className="py-3 text-sm text-slate-500">Сотрудников нет</li> : null}
+        </ul>
+      </Card>
 
+      <div className="grid gap-3 xl:grid-cols-2">
         <Card className="p-4">
           <h2 className="text-sm font-semibold">Последние отметки</h2>
           <ul className="mt-3 divide-y">
@@ -262,25 +336,25 @@ export function TabelVisitsWorkspace() {
             {!data?.activity.length && !query.isLoading ? <li className="py-3 text-sm text-slate-500">Отметок нет</li> : null}
           </ul>
         </Card>
-      </div>
 
-      <Card className="p-4">
-        <h2 className="text-sm font-semibold">Ближайшие отсутствия</h2>
-        <ul className="mt-3 divide-y">
-          {(data?.absences ?? []).map((row) => (
-            <li key={row.id} className="flex flex-wrap items-center justify-between gap-2 py-2 text-sm">
-              <span className="font-medium">{row.name}</span>
-              <span className="text-slate-500">{ABSENCE_LABEL[row.type] ?? row.type}</span>
-              <span className="tabular-nums text-slate-500">
-                {row.from} — {row.to}
-              </span>
-            </li>
-          ))}
-          {!data?.absences.length && !query.isLoading ? (
-            <li className="py-3 text-sm text-slate-500">На неделю вперёд заявок нет</li>
-          ) : null}
-        </ul>
-      </Card>
+        <Card className="p-4">
+          <h2 className="text-sm font-semibold">Ближайшие отсутствия</h2>
+          <ul className="mt-3 divide-y">
+            {(data?.absences ?? []).map((row) => (
+              <li key={row.id} className="flex flex-wrap items-center justify-between gap-2 py-2 text-sm">
+                <span className="font-medium">{row.name}</span>
+                <span className="text-slate-500">{ABSENCE_LABEL[row.type] ?? row.type}</span>
+                <span className="tabular-nums text-slate-500">
+                  {row.from} — {row.to}
+                </span>
+              </li>
+            ))}
+            {!data?.absences.length && !query.isLoading ? (
+              <li className="py-3 text-sm text-slate-500">На неделю вперёд заявок нет</li>
+            ) : null}
+          </ul>
+        </Card>
+      </div>
     </div>
   );
 }

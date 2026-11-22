@@ -27,7 +27,7 @@ function ymd(d: Date): string {
 
 export async function listMissingCheckouts(
   tenantId: number,
-  filters: { from?: string; to?: string; branch?: string }
+  filters: { from?: string; to?: string; branch?: string; user_id?: number }
 ): Promise<MissingCheckoutRow[]> {
   const workDate: { gte?: Date; lte?: Date } = {};
   if (filters.from && /^\d{4}-\d{2}-\d{2}$/.test(filters.from)) workDate.gte = new Date(`${filters.from}T00:00:00.000Z`);
@@ -54,6 +54,10 @@ export async function listMissingCheckouts(
       select: { id: true }
     });
     userIds = users.map((u) => u.id);
+    if (userIds.length === 0) return [];
+  }
+  if (filters.user_id && Number.isFinite(filters.user_id) && filters.user_id > 0) {
+    userIds = userIds ? userIds.filter((id) => id === filters.user_id) : [filters.user_id];
     if (userIds.length === 0) return [];
   }
 

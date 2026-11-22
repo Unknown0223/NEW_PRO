@@ -550,6 +550,11 @@ export const dashboardReportsNav: { sectionTitle: string; items: NavItem[] } = {
       label: "По дневному посещению",
       showIfAnyPermission: [...NAV_PERM.reportDailyVisits]
     },
+    {
+      href: "/reports/staff-attendance",
+      label: "Посещения сотрудников (табель)",
+      showIfAnyPermission: [...NAV_PERM.reportStaffAttendance]
+    },
     { href: "/reports/prices", label: "По ценам", showIfAnyPermission: [...NAV_PERM.reportPrices] },
     {
       href: "/reports/outlet-class",

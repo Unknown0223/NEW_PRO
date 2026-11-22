@@ -8,6 +8,7 @@ import { toFio } from "../staff/staff.shared.helpers";
 import { branchLabelLookup, branchVisibleName } from "../tenant-settings/branch-display.pure";
 import { loadBranchLabelSources } from "../tenant-settings/tenant-settings.refs";
 import { loadTimezoneFromSettingsJson } from "../tenant-settings/tenant-timezone";
+import { buildVisitStaffRows } from "./tabel-visit-staff.pure";
 
 const PRESENT = new Set(["worked", "late", "half_day", "overtime", "weekend_work", "remote", "early_leave"]);
 const AWAY = new Set(["vacation", "sick", "trip", "unpaid_leave", "excused_absent"]);
@@ -162,21 +163,45 @@ export async function getVisitDashboard(tenantId: number, opts?: { date?: string
     };
   });
 
-  const seen = new Set<number>();
-  const recent: Array<{ id: number; name: string; branch: string | null; role: string; punch_id: number | null }> = [];
-  for (const punch of todayPunches) {
-    if (seen.has(punch.user_id)) continue;
-    seen.add(punch.user_id);
-    const person = byId.get(punch.user_id);
-    recent.push({
-      id: punch.user_id,
-      name: person ? toFio(person) : `User #${punch.user_id}`,
-      branch: person ? branchVisibleName(person.branch, lookup) : null,
-      role: person?.position || person?.role || "—",
-      punch_id: punch.photo_front_key ? punch.id : null
-    });
-    if (recent.length >= 12) break;
-  }
+  const focusDayRecords = days
+    .filter((row) => dayKey(row.work_date) === focus)
+    .map((row) => ({
+      user_id: row.user_id,
+      status: row.status,
+      late_minutes: row.late_minutes,
+      late_excused: row.late_excused
+    }));
+
+  const staff = buildVisitStaffRows(
+    people.map((person) => ({
+      id: person.id,
+      name: toFio(person),
+      branch: branchVisibleName(person.branch, lookup),
+      role: person.position || person.role || "—"
+    })),
+    focusDayRecords,
+    todayPunches.map((punch) => ({
+      id: punch.id,
+      user_id: punch.user_id,
+      occurred_at: punch.occurred_at.toISOString(),
+      direction: punch.direction as "IN" | "OUT",
+      photo_front_key: punch.photo_front_key
+    }))
+  );
+
+  /** «На работе» — faqat belgi/bo‘lganlar (foto bilan); to‘liq royxat `staff`. */
+  const recent = staff
+    .filter((row) => PRESENT.has(row.status) || row.has_photo || row.first_in_at)
+    .map((row) => ({
+      id: row.id,
+      name: row.name,
+      branch: row.branch,
+      role: row.role,
+      punch_id: row.punch_id,
+      status: row.status,
+      first_in_at: row.first_in_at,
+      has_photo: row.has_photo
+    }));
 
   return {
     date: focus,
@@ -196,6 +221,7 @@ export async function getVisitDashboard(tenantId: number, opts?: { date?: string
       .map(([name, count]) => ({ name, count }))
       .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name, "ru"))
       .slice(0, 12),
+    staff,
     recent,
     activity,
     absences: absences.map((row) => {

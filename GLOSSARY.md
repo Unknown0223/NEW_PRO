@@ -110,6 +110,26 @@ Zakaz yaratish/tahrirlash workspace: `frontend/components/orders/order-create/`.
 - **Hujjat:** `docs/adr/ADR-008-order-create-deep-modules.md`.
 - **Grill yopildi** (2026-11-19).
 
+## Attendance / Tabel (davomat) — reja (grill ochiq)
+
+HR Hub (`d:\hr-hub`) reference; SALEC `backend/src/modules/tabel` + `timesheet` + mobile `features/attendance`. Office Link / device-gw / NATS **ko‘chirilmaydi**.
+
+| Term | Meaning |
+|------|---------|
+| **AttendancePunch** | Bitta belgi (IN / OUT / estimated_out manbai). Terminal, mobil foto/video, (kelajakda) kiosk. |
+| **AttendanceDayRecord** | Xodim × kun yig‘indisi: status, daqiqalar, kechikish — timesheet katakning asosiy manbai. |
+| **WorkdayPunchClock** | (reja) Kun ochilishi = birinchi valid IN; yopilishi = OUT yoki shift-close. Barcha punch manbalari shu clock orqali day recordga yoziladi. |
+| **DeviceVisibility** | (reja) Faqat **ulanган** (`is_linked` / confirmed) va **yoqilgan** (`enabled`) qurilmalar UI, ingest va face-syncda; qolganlari ko‘rinmaydi / ishlamaydi. |
+| **AttendanceNotify** | (reja) Telegram kanal/guruh + nazoratchi DM adapterlari; sozlamalar: bot, default/filial chatId, foto/video/fraud. Punch submit faqat shu interface’ni chaqiradi. |
+| **Face ID (punch)** | Mobil liveness + ixtiyoriy match; terminal Hikvision yuz. Sales `face_verification_flow` — boshqa kontekst (hard-gate), punch bilan aralashtirilmasin. |
+| **Timesheet matrix** | Oylik kataklar: asosan `AttendanceDayRecord` + workdays + ledger override + agent norma. |
+
+### Attendance — kelishuv holati
+
+- Grill ochiq (2026-11-22): DeviceVisibility → WorkdayPunchClock → AttendanceNotify → Mobile hub.
+- HR Hubdan faqat pure/diff + Flutter UX; `employeeNoString` raqamga kesilmasin.
+- ADR hali yo‘q — qarorlar grill yopilgach yoziladi.
+
 ## Related (not yet deepened)
 
 | Term | Note |

@@ -88,6 +88,7 @@ export const NAV_PERM = {
   reportCumulativeBonus: ["reports.nakopitelnyy_bonus.view"],
   reportVisits: ["reports.po_vizitam.view"],
   reportDailyVisits: ["reports.po_dnevnomu_poseshcheniyu.view"],
+  reportStaffAttendance: ["tabel.otmetki.view", "staff.tabel.view"],
   reportPrices: ["reports.po_cenam.view"],
   reportOutletClass: ["reports.klassifikatsiya_tt.view"],
   reportExpeditorVisits: ["reports.vizity_ekspedirov.view"],
