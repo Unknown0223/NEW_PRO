@@ -49,19 +49,26 @@ void main() {
       c.feed(p, faces: 1, trackingId: 1, now: t);
     }
 
-    for (var i = 0; i < 3; i++) {
+    for (var i = 0; i < 2; i++) {
       f(const HeadPose(0, 0));
     }
     expect(c.phase, LivenessPhase.turn);
-    for (var i = 0; i < 3; i++) {
-      f(const HeadPose(30, 0));
+    for (var i = 0; i < 2; i++) {
+      f(const HeadPose(18, 0));
     }
     expect(c.phase, LivenessPhase.back);
-    for (var i = 0; i < 3; i++) {
+    for (var i = 0; i < 2; i++) {
       f(const HeadPose(0, 0));
     }
     expect(c.phase, LivenessPhase.turn);
     expect(c.current, HeadDirection.right);
+  });
+
+  test('yumshoq chegaralar — kichik burish ham yetadi', () {
+    expect(const HeadPose(16, 0).matches(HeadDirection.left), isTrue);
+    expect(const HeadPose(-16, 0).matches(HeadDirection.right), isTrue);
+    expect(const HeadPose(0, 12).matches(HeadDirection.up), isTrue);
+    expect(const HeadPose(0, -10).matches(HeadDirection.down), isTrue);
   });
 
   test('faces != 1 resets hold', () {

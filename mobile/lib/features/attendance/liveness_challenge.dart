@@ -39,15 +39,16 @@ class HeadPose {
   final double yaw;
   final double pitch;
 
-  bool get centered => yaw.abs() < 12 && pitch.abs() < 12;
-  bool get roughlyCentered => yaw.abs() < 15 && pitch.abs() < 22;
+  // Emulyator/webcam Euler qiymatlari kuchsizroq — chegaralar biroz yumshoq.
+  bool get centered => yaw.abs() < 14 && pitch.abs() < 16;
+  bool get roughlyCentered => yaw.abs() < 20 && pitch.abs() < 26;
 
   HeadPose relativeTo(HeadPose base) => HeadPose(yaw - base.yaw, pitch - base.pitch);
 
-  static const _pitchGain = 1.4;
-  static const _diagonalMinMagnitude = 17.0;
-  static const _diagonalMinComponent = 7.0;
-  static const _diagonalToleranceDeg = 30.0;
+  static const _pitchGain = 1.35;
+  static const _diagonalMinMagnitude = 14.0;
+  static const _diagonalMinComponent = 5.5;
+  static const _diagonalToleranceDeg = 34.0;
 
   (double, double) _diagonalComponents(HeadDirection d) {
     final x = d == HeadDirection.upLeft || d == HeadDirection.downLeft ? yaw : -yaw;
@@ -58,13 +59,13 @@ class HeadPose {
   bool matches(HeadDirection d) {
     switch (d) {
       case HeadDirection.left:
-        return yaw > 22 && pitch.abs() < 15;
+        return yaw > 15 && pitch.abs() < 12;
       case HeadDirection.right:
-        return yaw < -22 && pitch.abs() < 15;
+        return yaw < -15 && pitch.abs() < 12;
       case HeadDirection.up:
-        return pitch > 15 && yaw.abs() < 15;
+        return pitch > 11 && yaw.abs() < 14;
       case HeadDirection.down:
-        return pitch < -12 && yaw.abs() < 15;
+        return pitch < -9 && yaw.abs() < 14;
       case HeadDirection.upLeft:
       case HeadDirection.upRight:
       case HeadDirection.downLeft:
@@ -81,13 +82,13 @@ class HeadPose {
     final double p;
     switch (d) {
       case HeadDirection.left:
-        p = yaw / 22;
+        p = yaw / 15;
       case HeadDirection.right:
-        p = -yaw / 22;
+        p = -yaw / 15;
       case HeadDirection.up:
-        p = pitch / 15;
+        p = pitch / 11;
       case HeadDirection.down:
-        p = -pitch / 12;
+        p = -pitch / 9;
       case HeadDirection.upLeft:
       case HeadDirection.upRight:
       case HeadDirection.downLeft:
@@ -128,10 +129,10 @@ class LivenessChallenge {
     return LivenessChallenge(steps, now: now);
   }
 
-  static const _turnHoldFrames = 3;
-  static const _centerHoldFrames = 3;
-  static const _finalHoldFrames = 4;
-  static const stepTimeout = Duration(seconds: 10);
+  static const _turnHoldFrames = 2;
+  static const _centerHoldFrames = 2;
+  static const _finalHoldFrames = 3;
+  static const stepTimeout = Duration(seconds: 16);
 
   final List<HeadDirection> steps;
   LivenessPhase phase = LivenessPhase.center;

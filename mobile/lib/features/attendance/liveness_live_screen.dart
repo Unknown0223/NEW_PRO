@@ -57,7 +57,8 @@ class _LivenessLiveScreenState extends State<LivenessLiveScreen>
     options: FaceDetectorOptions(
       performanceMode: FaceDetectorMode.fast,
       enableTracking: true,
-      minFaceSize: 0.2,
+      // Webcam/emulyatorda yuz kichikroq ko‘rinadi.
+      minFaceSize: 0.1,
     ),
   );
 
@@ -66,7 +67,9 @@ class _LivenessLiveScreenState extends State<LivenessLiveScreen>
   bool _rotationLocked = false;
   int _emptyFrames = 0;
   DateTime _lastFrameAt = DateTime.now();
+  DateTime? _lastProcessedAt;
   Timer? _watchdog;
+  static const _processEvery = Duration(milliseconds: 140);
 
   late final AnimationController _anim = AnimationController(
     vsync: this,
@@ -215,24 +218,34 @@ class _LivenessLiveScreenState extends State<LivenessLiveScreen>
   Future<void> _onFrame(CameraImage image) async {
     _lastFrameAt = DateTime.now();
     if (_processing || _capturing) return;
+    final now = _lastFrameAt;
+    final last = _lastProcessedAt;
+    if (last != null && now.difference(last) < _processEvery) return;
     _processing = true;
+    _lastProcessedAt = now;
     try {
       final input = _toInputImage(image);
       if (input == null) return;
-      final faces = await _detector.processImage(input).timeout(const Duration(seconds: 3));
+      final faces = await _detector.processImage(input).timeout(const Duration(seconds: 2));
       if (!mounted) return;
       _trackRotation(faces.length);
       final face = faces.length == 1 ? faces.first : null;
+      final before = _challenge.phase;
       _challenge.feed(
         face == null ? null : HeadPose(face.headEulerAngleY ?? 0, face.headEulerAngleX ?? 0),
         faces: faces.length,
         trackingId: face?.trackingId,
       );
       _markSectors();
-      setState(() => _faces = faces.length);
+      final facesChanged = faces.length != _faces;
+      if (facesChanged || before != _challenge.phase || before == LivenessPhase.turn) {
+        setState(() => _faces = faces.length);
+      } else {
+        _faces = faces.length;
+      }
       if (_challenge.phase == LivenessPhase.done) await _captureSelfie();
     } catch (_) {
-      // frame drop
+      // frame drop — ML Kit spam / GC dan qochish uchun jim
     } finally {
       _processing = false;
     }
@@ -342,34 +355,34 @@ class _LivenessLiveScreenState extends State<LivenessLiveScreen>
                           borderRadius: BorderRadius.circular(28),
                           child: ColoredBox(
                             color: Colors.black,
-                            child: Stack(
-                              fit: StackFit.expand,
-                              children: [
-                                // cover emas — contain: chetlar kesilmasin (emulyator/webcam).
-                                Center(
-                                  child: AspectRatio(
-                                    aspectRatio: c.value.aspectRatio == 0
-                                        ? (3 / 4)
-                                        : c.value.aspectRatio,
-                                    child: CameraPreview(c),
-                                  ),
-                                ),
-                                IgnorePointer(
-                                  child: AnimatedBuilder(
-                                    animation: _anim,
-                                    builder: (_, __) => AnimeFaceGuide(
-                                      t: _anim.value,
-                                      tracked: _faces == 1 && !failed,
-                                      yaw: rel?.yaw ?? 0,
-                                      pitch: rel?.pitch ?? 0,
-                                      sectors: _sectors,
-                                      failed: failed,
+                            // CameraPreview o‘zi to‘g‘ri AspectRatio qo‘yadi.
+                            // Tashqi AspectRatio (ayniqsa invert qilinmagan) kadrni siqadi/siljitadi.
+                            child: Center(
+                              child: Stack(
+                                alignment: Alignment.center,
+                                children: [
+                                  CameraPreview(c),
+                                  Positioned.fill(
+                                    child: IgnorePointer(
+                                      child: AnimatedBuilder(
+                                        animation: _anim,
+                                        builder: (_, __) => AnimeFaceGuide(
+                                          t: _anim.value,
+                                          tracked: _faces == 1 && !failed,
+                                          yaw: rel?.yaw ?? 0,
+                                          pitch: rel?.pitch ?? 0,
+                                          sectors: _sectors,
+                                          failed: failed,
+                                        ),
+                                      ),
                                     ),
                                   ),
-                                ),
-                                if (_capturing)
-                                  const ColoredBox(color: Color(0x66FFFFFF)),
-                              ],
+                                  if (_capturing)
+                                    const Positioned.fill(
+                                      child: ColoredBox(color: Color(0x66FFFFFF)),
+                                    ),
+                                ],
+                              ),
                             ),
                           ),
                         ),
