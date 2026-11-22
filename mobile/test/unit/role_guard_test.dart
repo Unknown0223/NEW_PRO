@@ -31,6 +31,8 @@ void main() {
 
     test('agent cannot access expeditor deliveries', () {
       expect(roleGuardLocation('agent', '/deliveries'), '/home');
+      expect(roleGuardLocation('agent', '/attendance'), isNull);
+      expect(roleGuardLocation('agent', '/attendance?x=1'), isNull);
     });
 
     test('agent can access notifications', () {

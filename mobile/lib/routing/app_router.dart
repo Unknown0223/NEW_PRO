@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../core/auth/session.dart';
+import '../core/face/face_gate_redirect.dart';
 import '../core/face/face_gate_state.dart';
 import '../core/theme/app_colors.dart';
 import '../features/auth/auth_provider.dart';
@@ -203,14 +204,13 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           return '/home';
         }
 
-        // Gate roleRedirect dan oldin — /attendance allowlist da bo‘lmasa ham loop bo‘lmasin.
-        final gateOn = ref.read(faceGateRequiredProvider);
-        if (gateOn) {
-          if (!loc.startsWith('/attendance')) {
-            return '/attendance?gate=1';
-          }
-          return null;
-        }
+        // /attendance da roleRedirect /home ga urilmasin — aks holda gate bilan loop.
+        final gateJump = faceGateReadyRedirect(
+          matchedLocation: loc,
+          gateRequired: ref.read(faceGateRequiredProvider),
+        );
+        if (gateJump != null) return gateJump;
+        if (loc.startsWith('/attendance')) return null;
 
         final role = session.user?.role ?? 'agent';
         final blocked = roleRedirect(state, role);

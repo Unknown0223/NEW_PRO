@@ -423,10 +423,8 @@ class _AttendanceHubScreenState extends ConsumerState<AttendanceHubScreen> {
           _livenessSequence = LivenessHelper.buildSequence(st.livenessDirections);
           WidgetsBinding.instance.addPostFrameCallback((_) {
             ref.read(attendanceApiProvider).flushOfflineQueue();
-            if (widget.gateMode && st.todayPunches.isNotEmpty) {
-              _finishGateIfNeeded();
-              return;
-            }
+            // Avto-chiqish yo‘q (punchsiz /home ↔ attendance loop).
+            // Gate faqat muvaffaqiyatli ПРИХОД / Face dan keyin yopiladi.
             if (widget.gateMode &&
                 !_gateAutoStarted &&
                 st.photoEnabled &&
