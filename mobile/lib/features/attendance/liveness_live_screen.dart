@@ -1,14 +1,15 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
 import 'package:camera/camera.dart';
-import 'package:flutter/foundation.dart' show WriteBuffer;
 import 'package:flutter/material.dart';
 import 'package:google_mlkit_face_detection/google_mlkit_face_detection.dart';
 
 import '../../core/theme/app_colors.dart';
-import 'attendance_models.dart';
-import 'liveness_pose.dart';
+import 'anime_face_guide.dart';
+import 'liveness_challenge.dart';
+import 'liveness_live_widgets.dart';
 
 class LivenessLiveResult {
   const LivenessLiveResult({required this.steps, required this.selfieBase64});
@@ -16,7 +17,7 @@ class LivenessLiveResult {
   final String selfieBase64;
 }
 
-/// Kamera preview + random strelkalar; bosh burish ML Kit bilan aniqlanadi.
+/// HR Hub uslubidagi jonli liveness: markaz → random burish → markaz → selfie.
 class LivenessLiveScreen extends StatefulWidget {
   const LivenessLiveScreen({
     super.key,
@@ -47,263 +48,336 @@ class LivenessLiveScreen extends StatefulWidget {
   State<LivenessLiveScreen> createState() => _LivenessLiveScreenState();
 }
 
-class _LivenessLiveScreenState extends State<LivenessLiveScreen> {
+class _LivenessLiveScreenState extends State<LivenessLiveScreen>
+    with SingleTickerProviderStateMixin {
   CameraController? _controller;
-  FaceDetector? _detector;
-  late final List<String> _sequence;
-  final List<String> _completed = [];
-  int _holdFrames = 0;
-  bool _busy = false;
-  bool _initError = false;
-  String? _status;
-  int _sensorOrientation = 0;
+  CameraDescription? _camera;
+  final _detector = FaceDetector(
+    options: FaceDetectorOptions(
+      performanceMode: FaceDetectorMode.fast,
+      enableTracking: true,
+      minFaceSize: 0.2,
+    ),
+  );
+
+  List<InputImageRotation> _rotations = const [];
+  int _rotationIndex = 0;
+  bool _rotationLocked = false;
+  int _emptyFrames = 0;
+  DateTime _lastFrameAt = DateTime.now();
+  Timer? _watchdog;
+
+  late final AnimationController _anim = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 1800),
+  )..repeat();
+
+  late LivenessChallenge _challenge;
+  bool _processing = false;
+  bool _capturing = false;
+  int _faces = 0;
+  final List<bool> _sectors = List.filled(64, false);
+  String? _error;
 
   @override
   void initState() {
     super.initState();
-    _sequence = widget.presetSequence ??
-        buildRandomLivenessSequence(widget.directions == 8 ? 8 : 4);
-    _boot();
+    _challenge = _buildChallenge();
+    _start();
   }
 
-  Future<void> _boot() async {
-    try {
-      final cams = await availableCameras();
-      final front = cams.where((c) => c.lensDirection == CameraLensDirection.front);
-      final cam = front.isNotEmpty ? front.first : cams.first;
-      _sensorOrientation = cam.sensorOrientation;
-      final ctrl = CameraController(
-        cam,
-        ResolutionPreset.medium,
-        enableAudio: false,
-        imageFormatGroup: Platform.isAndroid ? ImageFormatGroup.nv21 : ImageFormatGroup.bgra8888,
-      );
-      await ctrl.initialize();
-      _detector = FaceDetector(
-        options: FaceDetectorOptions(
-          performanceMode: FaceDetectorMode.accurate,
-          enableTracking: true,
-        ),
-      );
-      if (!mounted) {
-        await ctrl.dispose();
-        return;
-      }
-      setState(() => _controller = ctrl);
-      await ctrl.startImageStream(_onFrame);
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          _initError = true;
-          _status = 'Камера недоступна: $e';
-        });
-      }
+  LivenessChallenge _buildChallenge() {
+    final preset = widget.presetSequence;
+    if (preset != null && preset.isNotEmpty) {
+      return LivenessChallenge.fromApiNames(preset);
     }
-  }
-
-  Future<void> _onFrame(CameraImage image) async {
-    if (_busy || _detector == null || _completed.length >= _sequence.length) return;
-    _busy = true;
-    try {
-      final input = _toInputImage(image);
-      if (input == null) return;
-      final faces = await _detector!.processImage(input);
-      if (!mounted || faces.isEmpty) {
-        _holdFrames = 0;
-        return;
-      }
-      final face = faces.first;
-      final dir = _sequence[_completed.length];
-      final ok = headPoseMatchesChallenge(
-        direction: dir,
-        yaw: face.headEulerAngleY,
-        pitch: face.headEulerAngleX,
-      );
-      if (ok) {
-        _holdFrames++;
-        if (_holdFrames >= 4) {
-          _holdFrames = 0;
-          await _completeCurrent(dir);
-        }
-      } else {
-        _holdFrames = 0;
-      }
-    } catch (_) {
-      _holdFrames = 0;
-    } finally {
-      _busy = false;
-    }
-  }
-
-  Future<void> _completeCurrent(String dir) async {
-    final ctrl = _controller;
-    if (ctrl == null || !ctrl.value.isInitialized) return;
-    if (ctrl.value.isStreamingImages) {
-      await ctrl.stopImageStream();
-    }
-    setState(() {
-      _completed.add(dir);
-      _status = 'OK · ${_completed.length}/${_sequence.length}';
-    });
-    if (_completed.length >= _sequence.length) {
-      try {
-        final shot = await ctrl.takePicture();
-        final bytes = await File(shot.path).readAsBytes();
-        if (!mounted) return;
-        Navigator.pop(
-          context,
-          LivenessLiveResult(steps: List.from(_completed), selfieBase64: base64Encode(bytes)),
-        );
-      } catch (e) {
-        if (mounted) setState(() => _status = 'Не удалось сделать снимок: $e');
-      }
-      return;
-    }
-    await Future<void>.delayed(const Duration(milliseconds: 350));
-    if (mounted && _controller != null && _controller!.value.isInitialized) {
-      await _controller!.startImageStream(_onFrame);
-    }
-  }
-
-  InputImage? _toInputImage(CameraImage image) {
-    final ctrl = _controller;
-    if (ctrl == null) return null;
-    final rotation = InputImageRotationValue.fromRawValue(_sensorOrientation) ??
-        InputImageRotation.rotation0deg;
-
-    if (Platform.isAndroid) {
-      final bytes = image.planes.first.bytes;
-      return InputImage.fromBytes(
-        bytes: bytes,
-        metadata: InputImageMetadata(
-          size: Size(image.width.toDouble(), image.height.toDouble()),
-          rotation: rotation,
-          format: InputImageFormat.nv21,
-          bytesPerRow: image.planes.first.bytesPerRow,
-        ),
-      );
-    }
-
-    final WriteBuffer all = WriteBuffer();
-    for (final p in image.planes) {
-      all.putUint8List(p.bytes);
-    }
-    return InputImage.fromBytes(
-      bytes: all.done().buffer.asUint8List(),
-      metadata: InputImageMetadata(
-        size: Size(image.width.toDouble(), image.height.toDouble()),
-        rotation: rotation,
-        format: InputImageFormat.bgra8888,
-        bytesPerRow: image.planes.first.bytesPerRow,
-      ),
-    );
+    return LivenessChallenge.random(directions: widget.directions == 8 ? 8 : 4);
   }
 
   @override
   void dispose() {
+    _watchdog?.cancel();
+    _releaseCamera();
+    _detector.close();
+    _anim.dispose();
+    super.dispose();
+  }
+
+  void _releaseCamera() {
     final c = _controller;
     _controller = null;
-    c?.dispose();
-    _detector?.close();
-    super.dispose();
+    if (c != null) {
+      if (c.value.isStreamingImages) c.stopImageStream().catchError((_) {});
+      c.dispose();
+    }
+  }
+
+  static List<InputImageRotation> _rotationOrder(int sensor) {
+    final order = <int>[sensor, (360 - sensor) % 360, 0, 90, 180, 270];
+    final seen = <int>{};
+    final out = <InputImageRotation>[];
+    for (final deg in order) {
+      if (!seen.add(deg)) continue;
+      final r = InputImageRotationValue.fromRawValue(deg);
+      if (r != null) out.add(r);
+    }
+    return out;
+  }
+
+  Future<void> _start() async {
+    try {
+      final cams = await availableCameras();
+      _camera = cams.firstWhere(
+        (c) => c.lensDirection == CameraLensDirection.front,
+        orElse: () => throw Exception('Нет фронтальной камеры'),
+      );
+      _rotations = _rotationOrder(_camera!.sensorOrientation);
+      _rotationIndex = 0;
+      _rotationLocked = false;
+      _emptyFrames = 0;
+      final controller = CameraController(
+        _camera!,
+        ResolutionPreset.medium,
+        enableAudio: false,
+        imageFormatGroup:
+            Platform.isAndroid ? ImageFormatGroup.nv21 : ImageFormatGroup.bgra8888,
+      );
+      await controller.initialize();
+      if (!mounted) {
+        await controller.dispose();
+        return;
+      }
+      _controller = controller;
+      _lastFrameAt = DateTime.now();
+      await controller.startImageStream(_onFrame);
+      _watchdog?.cancel();
+      _watchdog = Timer.periodic(const Duration(seconds: 2), (_) {
+        final c = _controller;
+        if (c == null || _capturing || !c.value.isStreamingImages) return;
+        if (DateTime.now().difference(_lastFrameAt) > const Duration(seconds: 5)) {
+          _restartCamera();
+        }
+      });
+      setState(() => _error = null);
+    } catch (e) {
+      if (mounted) setState(() => _error = 'Камера: $e');
+    }
+  }
+
+  Future<void> _restartCamera() async {
+    _watchdog?.cancel();
+    _releaseCamera();
+    _processing = false;
+    _capturing = false;
+    if (!mounted) return;
+    setState(() => _error = null);
+    await _start();
+  }
+
+  InputImage? _toInputImage(CameraImage image) {
+    if (_camera == null || image.planes.isEmpty || _rotations.isEmpty) return null;
+    final rotation = _rotations[_rotationIndex % _rotations.length];
+    final format = InputImageFormatValue.fromRawValue(image.format.raw);
+    if (format == null) return null;
+    final plane = image.planes.first;
+    return InputImage.fromBytes(
+      bytes: plane.bytes,
+      metadata: InputImageMetadata(
+        size: Size(image.width.toDouble(), image.height.toDouble()),
+        rotation: rotation,
+        format: format,
+        bytesPerRow: plane.bytesPerRow,
+      ),
+    );
+  }
+
+  void _trackRotation(int faceCount) {
+    if (_rotationLocked) return;
+    if (faceCount > 0) {
+      _rotationLocked = true;
+      return;
+    }
+    if (++_emptyFrames >= 8) {
+      _rotationIndex = (_rotationIndex + 1) % _rotations.length;
+      _emptyFrames = 0;
+    }
+  }
+
+  Future<void> _onFrame(CameraImage image) async {
+    _lastFrameAt = DateTime.now();
+    if (_processing || _capturing) return;
+    _processing = true;
+    try {
+      final input = _toInputImage(image);
+      if (input == null) return;
+      final faces = await _detector.processImage(input).timeout(const Duration(seconds: 3));
+      if (!mounted) return;
+      _trackRotation(faces.length);
+      final face = faces.length == 1 ? faces.first : null;
+      _challenge.feed(
+        face == null ? null : HeadPose(face.headEulerAngleY ?? 0, face.headEulerAngleX ?? 0),
+        faces: faces.length,
+        trackingId: face?.trackingId,
+      );
+      _markSectors();
+      setState(() => _faces = faces.length);
+      if (_challenge.phase == LivenessPhase.done) await _captureSelfie();
+    } catch (_) {
+      // frame drop
+    } finally {
+      _processing = false;
+    }
+  }
+
+  void _markSectors() {
+    final rel = _challenge.relativePose;
+    if (rel != null) markFaceSectors(_sectors, rel.yaw, rel.pitch);
+  }
+
+  Future<void> _captureSelfie() async {
+    final c = _controller;
+    if (c == null || _capturing) return;
+    _capturing = true;
+    setState(() {});
+    try {
+      if (c.value.isStreamingImages) await c.stopImageStream();
+      final file = await c.takePicture();
+      final bytes = await File(file.path).readAsBytes();
+      if (!mounted) return;
+      Navigator.pop(
+        context,
+        LivenessLiveResult(
+          steps: _challenge.apiSteps,
+          selfieBase64: base64Encode(bytes),
+        ),
+      );
+    } catch (e) {
+      _capturing = false;
+      if (mounted) setState(() => _error = 'Селфи не снято: $e');
+    }
+  }
+
+  void _restartChallenge() {
+    setState(() {
+      _challenge = _buildChallenge();
+      _error = null;
+      for (var i = 0; i < _sectors.length; i++) {
+        _sectors[i] = false;
+      }
+    });
+  }
+
+  (String, String, IconData) _instruction() {
+    if (_faces == 0) {
+      return ('Поместите лицо в рамку', 'Держите телефон на уровне лица', Icons.face_rounded);
+    }
+    if (_faces > 1) {
+      return ('В кадре только вы', 'Другие люди должны выйти из кадра', Icons.group_off_rounded);
+    }
+    switch (_challenge.phase) {
+      case LivenessPhase.center:
+        return ('Смотрите прямо в камеру', 'Проверка начинается', Icons.center_focus_strong_rounded);
+      case LivenessPhase.turn:
+        final d = _challenge.current!;
+        return (d.promptRu, 'Медленно поверните голову по стрелке', d.icon);
+      case LivenessPhase.back:
+        return ('Снова смотрите прямо', 'Верните голову в центр', Icons.center_focus_strong_rounded);
+      case LivenessPhase.finalCenter:
+        return ('Смотрите прямо', 'Фото сделается автоматически', Icons.photo_camera_front_rounded);
+      case LivenessPhase.done:
+        return ('Подтверждено', 'Сохраняем фото…', Icons.verified_rounded);
+      case LivenessPhase.failed:
+        return (
+          _challenge.failReason ?? 'Проверка не пройдена',
+          'Нажмите «Начать снова»',
+          Icons.error_outline_rounded,
+        );
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final ctrl = _controller;
-    final step = _completed.length.clamp(0, _sequence.length - 1);
-    final dir = _sequence.isEmpty ? 'left' : _sequence[step];
-    final label = LivenessHelper.labelsRu[dir] ?? dir;
+    final c = _controller;
+    final failed = _challenge.phase == LivenessPhase.failed;
+    final (title, hint, icon) = _instruction();
+    final tone = failed
+        ? AppColors.error
+        : _faces == 1
+            ? AppColors.primary
+            : AppColors.warning;
+    final rel = _challenge.relativePose;
+    final done = _challenge.phase == LivenessPhase.done
+        ? _challenge.steps.length
+        : _challenge.index.clamp(0, _challenge.steps.length);
 
     return Scaffold(
-      backgroundColor: Colors.black,
+      backgroundColor: const Color(0xFF101218),
       appBar: AppBar(
-        backgroundColor: Colors.black,
+        backgroundColor: Colors.transparent,
         foregroundColor: Colors.white,
-        title: Text('Живость ${_completed.length}/${_sequence.length}'),
+        elevation: 0,
+        title: Text('Живость $done/${_challenge.steps.length}'),
       ),
-      body: _initError
-          ? Center(
-              child: Padding(
-                padding: const EdgeInsets.all(24),
-                child: Text(_status ?? 'Ошибка камеры', textAlign: TextAlign.center, style: const TextStyle(color: Colors.white)),
-              ),
-            )
-          : ctrl == null || !ctrl.value.isInitialized
-              ? const Center(child: CircularProgressIndicator(color: AppColors.primary))
-              : Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    Center(child: CameraPreview(ctrl)),
-                    Align(
-                      alignment: Alignment.topCenter,
-                      child: Container(
-                        margin: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                        decoration: BoxDecoration(
-                          color: Colors.black.withValues(alpha: 0.55),
-                          borderRadius: BorderRadius.circular(14),
-                        ),
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(
-                              'Шаг ${_completed.length + 1}/${_sequence.length}',
-                              style: const TextStyle(color: Colors.white70, fontWeight: FontWeight.w600),
-                            ),
-                            const SizedBox(height: 6),
-                            Text(
-                              label,
-                              textAlign: TextAlign.center,
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 20,
-                                fontWeight: FontWeight.w800,
+      body: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 0, 16, 20),
+        child: _error != null
+            ? LivenessErrorPane(text: _error!, onRetry: _restartCamera)
+            : c == null || !c.value.isInitialized
+                ? const Center(child: CircularProgressIndicator(color: AppColors.primary))
+                : Column(
+                    children: [
+                      LivenessStepRail(challenge: _challenge, pulse: _anim),
+                      const SizedBox(height: 12),
+                      Expanded(
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(28),
+                          child: Stack(
+                            fit: StackFit.expand,
+                            children: [
+                              FittedBox(
+                                fit: BoxFit.cover,
+                                child: SizedBox(
+                                  width: c.value.previewSize?.height ?? 480,
+                                  height: c.value.previewSize?.width ?? 640,
+                                  child: CameraPreview(c),
+                                ),
                               ),
-                            ),
-                            if (_status != null) ...[
-                              const SizedBox(height: 6),
-                              Text(_status!, style: const TextStyle(color: AppColors.primaryLight)),
+                              IgnorePointer(
+                                child: AnimatedBuilder(
+                                  animation: _anim,
+                                  builder: (_, __) => AnimeFaceGuide(
+                                    t: _anim.value,
+                                    tracked: _faces == 1 && !failed,
+                                    yaw: rel?.yaw ?? 0,
+                                    pitch: rel?.pitch ?? 0,
+                                    sectors: _sectors,
+                                    failed: failed,
+                                  ),
+                                ),
+                              ),
+                              if (_capturing)
+                                const ColoredBox(color: Color(0x66FFFFFF)),
                             ],
-                          ],
+                          ),
                         ),
                       ),
-                    ),
-                    Align(
-                      alignment: Alignment.center,
-                      child: IgnorePointer(
-                        child: Icon(
-                          _arrowIcon(dir),
-                          size: 96,
-                          color: Colors.white.withValues(alpha: 0.35),
+                      const SizedBox(height: 12),
+                      LivenessInstructionCard(title: title, hint: hint, icon: icon, color: tone),
+                      if (failed) ...[
+                        const SizedBox(height: 10),
+                        SizedBox(
+                          width: double.infinity,
+                          height: 50,
+                          child: FilledButton.icon(
+                            onPressed: _restartChallenge,
+                            icon: const Icon(Icons.refresh_rounded),
+                            label: const Text('Начать снова', style: TextStyle(fontWeight: FontWeight.w800)),
+                          ),
                         ),
-                      ),
-                    ),
-                  ],
-                ),
+                      ],
+                    ],
+                  ),
+      ),
     );
-  }
-
-  IconData _arrowIcon(String dir) {
-    switch (dir) {
-      case 'left':
-        return Icons.arrow_back_rounded;
-      case 'right':
-        return Icons.arrow_forward_rounded;
-      case 'up':
-        return Icons.arrow_upward_rounded;
-      case 'down':
-        return Icons.arrow_downward_rounded;
-      case 'up_left':
-        return Icons.north_west;
-      case 'up_right':
-        return Icons.north_east;
-      case 'down_left':
-        return Icons.south_west;
-      case 'down_right':
-        return Icons.south_east;
-      default:
-        return Icons.face_retouching_natural;
-    }
   }
 }
