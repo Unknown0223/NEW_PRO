@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -14,6 +15,16 @@ String resolveMediaUrl(String raw) {
   final base = resolveApiBaseUrl().replaceAll(RegExp(r'/$'), '');
   if (u.startsWith('/')) return '$base$u';
   return '$base/$u';
+}
+
+bool _isLocalFileMediaPath(String raw) {
+  final s = raw.trim();
+  if (s.isEmpty) return false;
+  if (s.startsWith('data:') || s.startsWith('http://') || s.startsWith('https://')) {
+    return false;
+  }
+  if (s.startsWith('/uploads')) return false;
+  return s.contains('/') || s.contains('\\');
 }
 
 Uint8List? decodeDataImageUrl(String raw) {
@@ -62,6 +73,22 @@ class MediaImage extends StatelessWidget {
         height: height,
         fit: fit,
         errorBuilder: onError,
+      );
+    }
+
+    if (_isLocalFileMediaPath(source)) {
+      final dpr = MediaQuery.devicePixelRatioOf(context);
+      final cacheW = width != null ? (width! * dpr).round().clamp(1, 2048) : null;
+      final cacheH = height != null ? (height! * dpr).round().clamp(1, 2048) : null;
+      return Image.file(
+        File(source),
+        width: width,
+        height: height,
+        fit: fit,
+        errorBuilder: onError,
+        cacheWidth: cacheW,
+        cacheHeight: cacheH,
+        filterQuality: FilterQuality.low,
       );
     }
 

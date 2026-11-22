@@ -153,7 +153,7 @@ class _VisitInProgressScreenState extends ConsumerState<VisitInProgressScreen> {
       clientId: widget.clientId,
       category: category,
     );
-    if (row != null && mounted) {
+    if (row != null && mounted && !isPendingLocalPhotoReport(row.id)) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Фотоотчет сохранён'), backgroundColor: AppColors.success),
       );

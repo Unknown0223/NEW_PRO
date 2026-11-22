@@ -86,21 +86,32 @@ class _ClientDetailScreenState extends ConsumerState<ClientDetailScreen> {
     }
     if (mounted) setState(() => _photosLoading = true);
     try {
-      final photos = await ref.read(mobileApiProvider).getClientPhotoReports(slug, widget.clientId);
-      // Server todayOnly + ish mintaqasi filtri — kechagi qoldiqlar ko‘rinmasin.
-      if (mounted) setState(() => _photos = photoReportsForToday(photos));
-    } catch (e) {
-      if (mounted && _photos.isEmpty) {
-        _toast(UserFacingError.toast(e, action: 'Не удалось загрузить фотоотчёты'));
+      List<ClientPhotoReport> photos = const [];
+      try {
+        photos = await ref.read(mobileApiProvider).getClientPhotoReports(slug, widget.clientId);
+      } catch (e) {
+        if (mounted && _photos.isEmpty) {
+          _toast(UserFacingError.toast(e, action: 'Не удалось загрузить фотоотчёты'));
+        }
+        ErrorReporter.instance?.reportCaught(
+          e,
+          module: ErrorModules.photos,
+          code: 'PhotoListFailed',
+          message: 'Фотоотчёт: список не загрузился',
+          path: '/mobile/clients/photo-reports',
+          payload: {'client_id': widget.clientId},
+        );
       }
-      ErrorReporter.instance?.reportCaught(
-        e,
-        module: ErrorModules.photos,
-        code: 'PhotoListFailed',
-        message: 'Фотоотчёт: список не загрузился',
-        path: '/mobile/clients/photo-reports',
-        payload: {'client_id': widget.clientId},
-      );
+      final pendingRows = await AppDatabase().getPendingPhotoReports();
+      final pending = pendingPhotoReportsForClient(pendingRows, clientId: widget.clientId);
+      // Server + oflayn navbat; bugungi ish kuni filtri.
+      if (mounted) {
+        setState(() {
+          _photos = photoReportsForToday(
+            mergeServerAndPendingPhotoReports(server: photos, pending: pending),
+          );
+        });
+      }
     } finally {
       if (mounted) setState(() => _photosLoading = false);
     }
@@ -139,7 +150,8 @@ class _ClientDetailScreenState extends ConsumerState<ClientDetailScreen> {
       );
       if (row != null) {
         _mergePhotoRow(row);
-        if (mounted) {
+        // Navbat toasti flow ichida; server muvaffaqiyatida shu yerda.
+        if (mounted && !isPendingLocalPhotoReport(row.id)) {
           _toast('Фотоотчет сохранён', accent: AppColors.success);
         }
       }
@@ -166,7 +178,8 @@ class _ClientDetailScreenState extends ConsumerState<ClientDetailScreen> {
           _photos = _photos.where((p) => p.id != photo.id).toList();
         });
         _mergePhotoRow(row);
-        if (mounted) {
+        // Navbat toasti flow ichida; server muvaffaqiyatida shu yerda.
+        if (mounted && !isPendingLocalPhotoReport(row.id)) {
           _toast('Фото обновлено', accent: AppColors.success);
         }
       }
@@ -203,7 +216,11 @@ class _ClientDetailScreenState extends ConsumerState<ClientDetailScreen> {
     );
     if (ok != true || !mounted) return;
     try {
-      await ref.read(mobileApiProvider).deleteClientPhotoReport(slug, widget.clientId, photo.id);
+      if (isPendingLocalPhotoReport(photo.id)) {
+        await AppDatabase().deletePendingPhotoReport(pendingPhotoQueueId(photo.id));
+      } else {
+        await ref.read(mobileApiProvider).deleteClientPhotoReport(slug, widget.clientId, photo.id);
+      }
       if (mounted) {
         setState(() => _photos = _photos.where((p) => p.id != photo.id).toList());
       }

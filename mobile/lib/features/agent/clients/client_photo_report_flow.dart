@@ -8,6 +8,7 @@ import '../../../core/auth/app_lock.dart';
 import '../../../core/auth/session.dart';
 import '../../../core/camera/photo_service.dart' show encodeClientPhotoBase64, photoServiceProvider;
 import '../../../core/config/tenant_refs_provider.dart';
+import '../../../core/database/app_database.dart';
 import '../../../core/l10n/app_strings_ru.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/errors/error_reporter.dart';
@@ -130,11 +131,64 @@ bool _isPhotoToday(ClientPhotoReport p) {
 }
 
 bool hasPhotoReportToday(List<ClientPhotoReport> photos) {
-  return photos.any(_isPhotoToday);
+  return photos.any((p) => isPendingLocalPhotoReport(p.id) || _isPhotoToday(p));
 }
 
 List<ClientPhotoReport> photoReportsForToday(List<ClientPhotoReport> photos) {
-  return photos.where(_isPhotoToday).toList();
+  // Oflayn navbatdagi (manfiy id) fotolar bugungi filtrga tushmasa ham ko‘rinsin.
+  return photos.where((p) => isPendingLocalPhotoReport(p.id) || _isPhotoToday(p)).toList();
+}
+
+/// Oflayn navbat qatori — UI da manfiy id bilan (server id bilan aralashmasin).
+bool isPendingLocalPhotoReport(int id) => id < 0;
+
+int pendingPhotoQueueId(int negativeId) => -negativeId;
+
+ClientPhotoReport? clientPhotoReportFromPendingRow(Map<String, dynamic> row) {
+  final id = (row['id'] as num?)?.toInt();
+  final path = row['image_path']?.toString().trim() ?? '';
+  if (id == null || id <= 0 || path.isEmpty) return null;
+  final orderRaw = row['order_id'];
+  final orderId = orderRaw is num ? orderRaw.toInt() : int.tryParse('$orderRaw');
+  return ClientPhotoReport(
+    id: -id,
+    imageUrl: path,
+    caption: row['caption']?.toString(),
+    orderId: orderId != null && orderId > 0 ? orderId : null,
+    createdAt: row['created_at']?.toString().trim().isNotEmpty == true
+        ? row['created_at'].toString()
+        : DateTime.now().toIso8601String(),
+  );
+}
+
+List<ClientPhotoReport> pendingPhotoReportsForClient(
+  List<Map<String, dynamic>> pendingRows, {
+  required int clientId,
+}) {
+  final out = <ClientPhotoReport>[];
+  for (final row in pendingRows) {
+    final cid = (row['client_id'] as num?)?.toInt();
+    if (cid != clientId) continue;
+    final mapped = clientPhotoReportFromPendingRow(row);
+    if (mapped != null) out.add(mapped);
+  }
+  return out;
+}
+
+List<ClientPhotoReport> mergeServerAndPendingPhotoReports({
+  required List<ClientPhotoReport> server,
+  required List<ClientPhotoReport> pending,
+}) {
+  final byId = <int, ClientPhotoReport>{};
+  for (final p in server) {
+    byId[p.id] = p;
+  }
+  for (final p in pending) {
+    byId[p.id] = p;
+  }
+  final merged = byId.values.toList()
+    ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+  return merged;
 }
 
 /// Buyurtma uchun — bugun olingan va hali boshqa zakazga bog‘lanmagan foto.
@@ -321,25 +375,26 @@ Future<ClientPhotoReport?> captureAndUploadPhotoReport({
       orderId: orderId,
       sync: ref.read(sessionProvider).mobileConfig?.sync,
     );
+    final ok = queued != null;
     ErrorReporter.instance?.reportModuleIssue(
       module: ErrorModules.photos,
-      code: queued ? 'PhotoQueuedOffline' : 'PhotoQueueFailed',
-      message: queued
+      code: ok ? 'PhotoQueuedOffline' : 'PhotoQueueFailed',
+      message: ok
           ? 'Фотоотчёт: сеть недоступна — в офлайн очередь'
           : 'Фотоотчёт: не удалось сохранить в офлайн очередь',
       path: '/mobile/clients/photo-reports',
-      payload: {'client_id': clientId, 'order_id': orderId, 'queued': queued},
+      payload: {'client_id': clientId, 'order_id': orderId, 'queued': ok},
     );
     if (context.mounted) {
       showAgentToast(
         context,
-        queued
+        ok
             ? 'Foto oflayn saqlandi — «Синхронизация фото» orqali istalgan vaqtda yuboriladi'
             : 'Окно съёмки закрыто или фото сақланмади',
-        accentColor: queued ? AppColors.success : AppColors.error,
+        accentColor: ok ? AppColors.success : AppColors.error,
       );
     }
-    return null;
+    return queued;
   } catch (e) {
     // Server xatosi — navbatga qo‘yib online da qayta urinish.
     final queued = await PhotoReportQueue.enqueue(
@@ -349,26 +404,27 @@ Future<ClientPhotoReport?> captureAndUploadPhotoReport({
       orderId: orderId,
       sync: ref.read(sessionProvider).mobileConfig?.sync,
     );
+    final ok = queued != null;
     ErrorReporter.instance?.reportCaught(
       e,
       module: ErrorModules.photos,
-      code: queued ? 'PhotoUploadFailedQueued' : 'PhotoUploadFailed',
-      message: queued
+      code: ok ? 'PhotoUploadFailedQueued' : 'PhotoUploadFailed',
+      message: ok
           ? 'Фотоотчёт: загрузка не удалась — в очередь'
           : 'Фотоотчёт: загрузка не удалась',
       path: '/mobile/clients/photo-reports',
-      payload: {'client_id': clientId, 'order_id': orderId, 'queued': queued},
+      payload: {'client_id': clientId, 'order_id': orderId, 'queued': ok},
     );
     if (context.mounted) {
       showAgentToast(
         context,
-        queued
+        ok
             ? 'Foto saqlandi — «Синхронизация фото» orqali istalgan vaqtda yuboriladi'
             : UserFacingError.toast(e, action: 'Не удалось загрузить фото'),
-        accentColor: queued ? AppColors.warning : AppColors.error,
+        accentColor: ok ? AppColors.warning : AppColors.error,
       );
     }
-    return null;
+    return queued;
   }
 }
 
@@ -449,26 +505,57 @@ Future<ClientPhotoReport?> replacePhotoReport({
   }
 
   try {
-    await ref.read(mobileApiProvider).deleteClientPhotoReport(slug, clientId, existing.id);
-    return await ref.read(mobileApiProvider).postClientPhotoReport(
+    final posted = await ref.read(mobileApiProvider).postClientPhotoReport(
           slug,
           clientId,
           imageBase64: b64,
           caption: caption,
           orderId: existing.orderId,
         );
+    // Yangi yozuv muvaffaqiyatli — eski server/pending ni o‘chiramiz.
+    try {
+      if (isPendingLocalPhotoReport(existing.id)) {
+        await AppDatabase().deletePendingPhotoReport(pendingPhotoQueueId(existing.id));
+      } else {
+        await ref.read(mobileApiProvider).deleteClientPhotoReport(slug, clientId, existing.id);
+      }
+    } catch (_) {
+      // Yangi foto allaqachon saqlangan; eski ni o‘chirish ixtiyoriy.
+    }
+    return posted;
   } catch (e) {
+    // Server xatosi — yangi rasmni navbatga qo‘yamiz; eski pendingni faqat yangisi yozilgach o‘chiramiz.
+    final queued = await PhotoReportQueue.enqueue(
+      clientId: clientId,
+      imagePath: photo.filePath,
+      caption: caption,
+      orderId: existing.orderId,
+      sync: ref.read(sessionProvider).mobileConfig?.sync,
+    );
+    if (queued != null && isPendingLocalPhotoReport(existing.id)) {
+      try {
+        await AppDatabase().deletePendingPhotoReport(pendingPhotoQueueId(existing.id));
+      } catch (_) {}
+    }
     ErrorReporter.instance?.reportCaught(
       e,
       module: ErrorModules.photos,
-      code: 'PhotoReplaceFailed',
-      message: 'Фотоотчёт: не удалось обновить фото',
+      code: queued != null ? 'PhotoReplaceFailedQueued' : 'PhotoReplaceFailed',
+      message: queued != null
+          ? 'Фотоотчёт: обновление не удалось — в очередь'
+          : 'Фотоотчёт: не удалось обновить фото',
       path: '/mobile/clients/photo-reports',
-      payload: {'client_id': clientId, 'photo_id': existing.id},
+      payload: {'client_id': clientId, 'photo_id': existing.id, 'queued': queued != null},
     );
     if (context.mounted) {
-      showAgentToast(context, UserFacingError.toast(e, action: 'Не удалось обновить фото'));
+      showAgentToast(
+        context,
+        queued != null
+            ? 'Foto saqlandi — «Синхронизация фото» orqali istalgan vaqtda yuboriladi'
+            : UserFacingError.toast(e, action: 'Не удалось обновить фото'),
+        accentColor: queued != null ? AppColors.warning : AppColors.error,
+      );
     }
-    return null;
+    return queued;
   }
 }

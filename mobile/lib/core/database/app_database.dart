@@ -953,6 +953,7 @@ class AppDatabase {
     required String imagePath,
     required String caption,
     int? orderId,
+    String? createdAt,
   }) async {
     final db = await database;
     return db.insert('pending_photo_reports', {
@@ -960,7 +961,7 @@ class AppDatabase {
       'image_path': imagePath,
       'caption': caption,
       'order_id': orderId,
-      'created_at': DateTime.now().toIso8601String(),
+      'created_at': createdAt ?? DateTime.now().toUtc().toIso8601String(),
       'status': 'pending',
     });
   }

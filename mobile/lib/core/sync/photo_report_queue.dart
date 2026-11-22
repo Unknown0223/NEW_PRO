@@ -49,7 +49,8 @@ class PhotoReportQueue {
     return false;
   }
 
-  static Future<bool> enqueue({
+  /// Navbatga qo‘yadi; muvaffaqiyatda UI uchun [ClientPhotoReport] (manfiy id).
+  static Future<ClientPhotoReport?> enqueue({
     required int clientId,
     required String imagePath,
     required String caption,
@@ -57,17 +58,26 @@ class PhotoReportQueue {
     SyncConfig? sync,
   }) async {
     if (await isCaptureBlockedForClient(clientId, sync: sync)) {
-      return false;
+      return null;
     }
     final persisted = await persistImage(imagePath);
-    if (persisted == null) return false;
-    await AppDatabase().enqueuePendingPhotoReport(
+    if (persisted == null) return null;
+    // UTC ISO — photoReportsForToday (work region) filtri bilan mos.
+    final createdAt = DateTime.now().toUtc().toIso8601String();
+    final id = await AppDatabase().enqueuePendingPhotoReport(
       clientId: clientId,
       imagePath: persisted,
       caption: caption,
       orderId: orderId,
+      createdAt: createdAt,
     );
-    return true;
+    return ClientPhotoReport(
+      id: -id,
+      imageUrl: persisted,
+      caption: caption,
+      orderId: orderId,
+      createdAt: createdAt,
+    );
   }
 
   static Future<PhotoFlushResult> flush({

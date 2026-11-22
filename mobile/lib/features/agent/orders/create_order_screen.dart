@@ -1168,7 +1168,10 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
         _hasUnlinkedPhotoToday = true;
         _photoStatusFetchedAt = DateTime.now();
       });
-      _toast('Фотоотчет сохранён', accent: AppColors.success);
+      // Oflayn navbat toasti flow ichida chiqadi.
+      if (!isPendingLocalPhotoReport(row.id)) {
+        _toast('Фотоотчет сохранён', accent: AppColors.success);
+      }
       return true;
     }
     // Serverga chiqmagan, lekin oflayn navbatga tushgan bo‘lishi mumkin.
