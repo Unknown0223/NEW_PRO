@@ -227,17 +227,15 @@ if errorlevel 1 (
 )
 if errorlevel 1 (
   echo.
-  echo O'rnatish xato — ADB qayta ishga tushirilmoqda...
-  adb kill-server >nul 2>&1
-  timeout /t 2 /nobreak >nul
-  adb start-server >nul 2>&1
-  adb wait-for-device >nul 2>&1
-  adb uninstall uz.salesdoc.salesdoc_mobile >nul 2>&1
+  echo O'rnatish xato — ADB Broken pipe / package service: qayta urinilmoqda...
   if exist "%APK_PATH%" (
-    adb install -r "%APK_PATH%"
+    powershell -NoProfile -ExecutionPolicy Bypass -File "%REPO_ROOT%\mobile\scripts\adb-install-retry.ps1" -ApkPath "%APK_PATH%" -DeviceId "!EMU_ID!"
     if not errorlevel 1 (
-      echo APK o'rnatildi. Ilovani qo'lda oching yoki: flutter run -d !EMU_ID!
+      echo APK o'rnatildi. Ilovani ochish: flutter run --no-pub -d !EMU_ID!
+      flutter run --no-pub -d !EMU_ID!
     )
+  ) else (
+    echo APK topilmadi: %APK_PATH%
   )
 )
 

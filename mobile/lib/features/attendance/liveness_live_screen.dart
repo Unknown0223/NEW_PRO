@@ -340,33 +340,37 @@ class _LivenessLiveScreenState extends State<LivenessLiveScreen>
                       Expanded(
                         child: ClipRRect(
                           borderRadius: BorderRadius.circular(28),
-                          child: Stack(
-                            fit: StackFit.expand,
-                            children: [
-                              FittedBox(
-                                fit: BoxFit.cover,
-                                child: SizedBox(
-                                  width: c.value.previewSize?.height ?? 480,
-                                  height: c.value.previewSize?.width ?? 640,
-                                  child: CameraPreview(c),
-                                ),
-                              ),
-                              IgnorePointer(
-                                child: AnimatedBuilder(
-                                  animation: _anim,
-                                  builder: (_, __) => AnimeFaceGuide(
-                                    t: _anim.value,
-                                    tracked: _faces == 1 && !failed,
-                                    yaw: rel?.yaw ?? 0,
-                                    pitch: rel?.pitch ?? 0,
-                                    sectors: _sectors,
-                                    failed: failed,
+                          child: ColoredBox(
+                            color: Colors.black,
+                            child: Stack(
+                              fit: StackFit.expand,
+                              children: [
+                                // cover emas — contain: chetlar kesilmasin (emulyator/webcam).
+                                Center(
+                                  child: AspectRatio(
+                                    aspectRatio: c.value.aspectRatio == 0
+                                        ? (3 / 4)
+                                        : c.value.aspectRatio,
+                                    child: CameraPreview(c),
                                   ),
                                 ),
-                              ),
-                              if (_capturing)
-                                const ColoredBox(color: Color(0x66FFFFFF)),
-                            ],
+                                IgnorePointer(
+                                  child: AnimatedBuilder(
+                                    animation: _anim,
+                                    builder: (_, __) => AnimeFaceGuide(
+                                      t: _anim.value,
+                                      tracked: _faces == 1 && !failed,
+                                      yaw: rel?.yaw ?? 0,
+                                      pitch: rel?.pitch ?? 0,
+                                      sectors: _sectors,
+                                      failed: failed,
+                                    ),
+                                  ),
+                                ),
+                                if (_capturing)
+                                  const ColoredBox(color: Color(0x66FFFFFF)),
+                              ],
+                            ),
                           ),
                         ),
                       ),
