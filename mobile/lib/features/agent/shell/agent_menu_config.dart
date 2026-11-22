@@ -45,6 +45,10 @@ List<AgentMenuItem> agentMenuItems(MobileConfig? config) {
     const AgentMenuItem(label: 'Задачи', route: '', soon: true),
     const AgentMenuItem(label: 'Моя локация', route: '/map'),
     const AgentMenuItem(label: 'Табель · jadval', route: '/tabel'),
+    const AgentMenuItem(
+      label: 'Отметка посещаемости (Приход / Уход)',
+      route: '/attendance',
+    ),
     const AgentMenuItem(label: 'Настройки', route: '/settings'),
   ];
   return items.where((it) => it.visible?.call(config) ?? true).toList();
@@ -92,6 +96,7 @@ const agentNavigationPages = <String>[
   '/map',
   '/settings',
   '/tabel',
+  '/attendance',
   '/profile',
   '/notifications',
   '/orders/create',

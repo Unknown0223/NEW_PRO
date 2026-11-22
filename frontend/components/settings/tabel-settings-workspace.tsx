@@ -17,10 +17,12 @@ import {
 import { branchChatRowsOf, sectionValid, SECTION_ERROR_MESSAGES } from "./tabel-settings.logic";
 import {
   TabelLatenessSection,
-  TabelPunchModesSection,
+  TabelPunchModesSection
+} from "./tabel/tabel-settings-sections-punch";
+import {
   TabelPunchVideoSection,
   TabelFaceAntifraudSection
-} from "./tabel/tabel-settings-sections-punch";
+} from "./tabel/tabel-settings-sections-staff";
 import {
   TabelRetentionSection,
   TabelTelegramSection

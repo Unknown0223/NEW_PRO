@@ -43,14 +43,21 @@ void main() {
   });
 
   group('allowSoftSkipDailyFace', () {
-    test('later unlocks even when hard block required', () {
+    test('hard block never soft-skips', () {
       expect(
         allowSoftSkipDailyFace(hardBlockRequired: true, userChoseLater: true),
-        isTrue,
+        isFalse,
       );
       expect(
         allowSoftSkipDailyFace(hardBlockRequired: true, userChoseLater: false),
         isFalse,
+      );
+    });
+
+    test('soft mode allows later', () {
+      expect(
+        allowSoftSkipDailyFace(hardBlockRequired: false, userChoseLater: true),
+        isTrue,
       );
     });
   });

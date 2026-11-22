@@ -1,3 +1,4 @@
+import { isFaceLoginExemptRole } from "../auth/face-login.pure";
 import type { AgentMobileConfigV1 } from "../staff/agent-mobile-config.types";
 import { DEFAULT_FACE_MATCH_THRESHOLD } from "./face-match.pure";
 
@@ -61,6 +62,33 @@ export function facePolicyFromMobileConfig(mc: AgentMobileConfigV1 | undefined):
       Math.max(0, Math.trunc(misc?.face_verification_max_random_orders_per_day ?? 5))
     ),
     territoryCheck: misc?.face_verification_on_territory_check !== false
+  };
+}
+
+/**
+ * Mobil Face: agent misc YOKI tenant `faceAntifraud.requireFaceLogin`.
+ * Admin — hech qachon.
+ */
+export function resolveFaceVerificationPolicy(opts: {
+  mobileConfig?: AgentMobileConfigV1;
+  tenantRequireFaceLogin: boolean;
+  role?: string | null;
+}): FaceVerificationPolicy {
+  if (isFaceLoginExemptRole(opts.role)) {
+    return {
+      enabled: false,
+      dailyLogin: false,
+      maxRandomOrdersPerDay: 0,
+      territoryCheck: false
+    };
+  }
+  const fromMisc = facePolicyFromMobileConfig(opts.mobileConfig);
+  const tenantOn = opts.tenantRequireFaceLogin === true;
+  return {
+    enabled: fromMisc.enabled || tenantOn,
+    dailyLogin: tenantOn ? true : fromMisc.dailyLogin,
+    maxRandomOrdersPerDay: fromMisc.maxRandomOrdersPerDay,
+    territoryCheck: fromMisc.territoryCheck
   };
 }
 

@@ -11,11 +11,11 @@ bool shouldAutoPromptDailyFace({
   return true;
 }
 
-/// Bekor / kamera xatosidan keyin sessiya soft-skip ruxsatmi.
+/// Soft «Позже» — faqat hard-block o‘chirilganda. Majburiy Face ID da hech qachon.
 bool allowSoftSkipDailyFace({
   required bool hardBlockRequired,
   required bool userChoseLater,
 }) {
-  if (!hardBlockRequired) return true;
+  if (hardBlockRequired) return false;
   return userChoseLater;
 }

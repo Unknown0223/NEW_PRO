@@ -3,7 +3,11 @@ import { prisma } from "../../config/database";
 import { tenantIdFrom } from "../../domain/tenant-id";
 import { validateLivenessSteps } from "../tabel/tabel-antifraud.pure";
 import { normalizeFullTabelSettings } from "../tabel/tabel-settings.pure";
-import { getFaceReferenceMeta, submitFaceVerification } from "../mobile/mobile-face.service";
+import {
+  getFaceReferenceMeta,
+  submitFaceVerification,
+  uploadFaceReference
+} from "../mobile/mobile-face.service";
 import {
   FACE_LOGIN_CONTEXT,
   shouldChallengeFaceLogin,
@@ -22,6 +26,25 @@ export {
   recreateFaceLoginChallenge
 } from "./face-login.challenge";
 
+/** JWT siz: pending challenge egasi uchun etalon selfie. */
+export async function enrollFaceLoginReference(input: {
+  challenge_token: string;
+  image_base64: string;
+}) {
+  const { row, life } = await loadPendingChallenge(input.challenge_token);
+  if (life !== "pending") {
+    if (life === "approved") throw new Error("FACE_CHALLENGE_ALREADY_USED");
+    if (life === "rejected") throw new Error("FACE_CHALLENGE_REJECTED");
+    throw new Error("FACE_CHALLENGE_EXPIRED");
+  }
+  const existing = await getFaceReferenceMeta(row.tenant_id, row.user_id);
+  if (existing.has_reference) {
+    return { ok: true as const, already: true as const, has_reference: true as const };
+  }
+  await uploadFaceReference(row.tenant_id, row.user_id, input.image_base64);
+  return { ok: true as const, already: false as const, has_reference: true as const };
+}
+
 export async function userNeedsFaceLogin(tenantId: number, userId: number): Promise<boolean> {
   const [user, fa] = await Promise.all([
     prisma.user.findFirst({
@@ -31,13 +54,10 @@ export async function userNeedsFaceLogin(tenantId: number, userId: number): Prom
     loadFaceAntifraud(tenantId)
   ]);
   if (!user) return false;
-  const ref = await getFaceReferenceMeta(tenantId, userId);
-  /** Etalon yo‘q yoki toggle o‘chiq — oddiy login/parol, Face ID so‘ralmaydi. */
   return shouldChallengeFaceLogin({
     userRequireFaceLogin: user.require_face_login === true,
     tenantRequireFaceLogin: fa.requireFaceLogin === true,
-    role: user.role,
-    hasReference: ref.has_reference === true
+    role: user.role
   });
 }
 

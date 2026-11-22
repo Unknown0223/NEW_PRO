@@ -4,10 +4,10 @@ import type { AgentMobileConfigV1 } from "../staff/agent-mobile-config.types";
 import { loadAgentMobileConfig } from "./mobile-agent-sync.config.service";
 import {
   checkFaceVerificationRequired,
-  facePolicyFromMobileConfig,
   getFaceReferenceMeta,
   getOrCreateDailyState,
   isOrderSubmitFaceCheckpoint,
+  resolvePolicyForUser,
   workRegionDateString,
   type FaceVerifyContext
 } from "./mobile-face.service";
@@ -68,7 +68,7 @@ export async function peekOrderSubmitFaceRequired(
   userId: number,
   mobileConfig: AgentMobileConfigV1 | undefined
 ): Promise<boolean> {
-  const policy = facePolicyFromMobileConfig(mobileConfig);
+  const policy = await resolvePolicyForUser(tenantId, userId, mobileConfig);
   if (!policy.enabled) return false;
   const ref = await getFaceReferenceMeta(tenantId, userId);
   if (!ref.has_reference) return true;
@@ -99,7 +99,7 @@ export async function assertFaceGateForAction(
   context: FaceVerifyContext,
   mobileConfig: AgentMobileConfigV1 | undefined
 ): Promise<void> {
-  const policy = facePolicyFromMobileConfig(mobileConfig);
+  const policy = await resolvePolicyForUser(tenantId, userId, mobileConfig);
   if (!policy.enabled) return;
 
   const ref = await getFaceReferenceMeta(tenantId, userId);
@@ -155,7 +155,7 @@ export async function bumpOrderFaceActionCount(
   userId: number,
   mobileConfig: AgentMobileConfigV1 | undefined
 ): Promise<void> {
-  const policy = facePolicyFromMobileConfig(mobileConfig);
+  const policy = await resolvePolicyForUser(tenantId, userId, mobileConfig);
   if (!policy.enabled) return;
   const daily = await getOrCreateDailyState(
     tenantId,

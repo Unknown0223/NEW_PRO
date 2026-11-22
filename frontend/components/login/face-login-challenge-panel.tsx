@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "@/lib/api";
 import {
   buildAbsoluteBridgeUrl,
@@ -11,7 +11,10 @@ import {
 } from "@/lib/face-login";
 import { FaceLivenessPanel } from "@/components/login/face-liveness-panel";
 import { FaceLoginQrPane } from "@/components/login/face-login-qr-pane";
-import { getUserFacingError } from "@/lib/error-utils";
+import {
+  FaceLoginModeBtn,
+  faceVerifyError
+} from "@/components/login/face-login-challenge-helpers";
 import { isAxiosError } from "axios";
 import {
   Dialog,
@@ -164,11 +167,41 @@ export function FaceLoginChallengePanel({ gate, onApproved, onCancel }: Props) {
     setMode("qr");
   }, []);
 
+  async function enrollReference(payload: {
+    image_base64: string;
+    liveness_steps: string[];
+    landmarks?: Array<{ x: number; y: number }>;
+  }) {
+    setBusy(true);
+    setError(null);
+    try {
+      await api.post("/auth/face-login/reference", {
+        challenge_token: challenge.token,
+        image_base64: payload.image_base64
+      });
+      setChallenge((c) => ({ ...c, has_reference: true }));
+      setWebcamOutcome(null);
+      setRetryToken((n) => n + 1);
+      setError(null);
+      void payload.liveness_steps;
+      void payload.landmarks;
+    } catch (err) {
+      setWebcamOutcome("failure");
+      setError(faceVerifyError(err, "Не удалось сохранить эталонное фото"));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function submitWebcam(payload: {
     image_base64: string;
     liveness_steps: string[];
     landmarks?: Array<{ x: number; y: number }>;
   }) {
+    if (!challenge.has_reference) {
+      await enrollReference(payload);
+      return;
+    }
     setBusy(true);
     setError(null);
     /* Outcome ni bu yerda null qilmang — kamera effektini qayta ishga tushirib,
@@ -244,19 +277,22 @@ export function FaceLoginChallengePanel({ gate, onApproved, onCancel }: Props) {
             Подтверждение Face ID
           </DialogTitle>
           <DialogDescription className="text-sm text-slate-500">
-            {userLabel}: после пароля нужна проверка лица по эталону.
+            {userLabel}:{" "}
+            {challenge.has_reference
+              ? "после пароля нужна проверка лица по эталону."
+              : "сначала сохраните эталонное селфи, затем подтвердите лицо."}
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4 px-5 py-4">
           {!challenge.has_reference ? (
             <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
-              Нет эталонного фото. Попросите администратора загрузить Face ID в карточке сотрудника.
+              Эталон ещё не загружен. Пройдите проверку живости — первое селфи станет вашим Face ID.
             </p>
           ) : null}
 
           <div className="flex gap-2">
-            <ModeBtn
+            <FaceLoginModeBtn
               active={showWebcam}
               onClick={() => {
                 setMode("webcam");
@@ -265,38 +301,33 @@ export function FaceLoginChallengePanel({ gate, onApproved, onCancel }: Props) {
               }}
             >
               Камера ПК
-            </ModeBtn>
-            <ModeBtn
+            </FaceLoginModeBtn>
+            <FaceLoginModeBtn
               active={!showWebcam}
               onClick={() => {
                 setMode("qr");
                 setError(null);
               }}
+              disabled={!challenge.has_reference}
             >
               QR на телефон
-            </ModeBtn>
+            </FaceLoginModeBtn>
           </div>
 
           {showWebcam ? (
-            challenge.has_reference ? (
-              <FaceLivenessPanel
-                directions={challenge.directions}
-                busy={busy || refreshing}
-                outcome={webcamOutcome}
-                retryToken={retryToken}
-                onCapture={(p) => void submitWebcam(p)}
-                onCameraError={handleCameraError}
-              />
-            ) : (
-              <p className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-4 text-center text-sm text-slate-600">
-                Сначала загрузите эталонное фото в карточке сотрудника, затем повторите вход.
-              </p>
-            )
+            <FaceLivenessPanel
+              directions={challenge.directions}
+              busy={busy || refreshing}
+              outcome={webcamOutcome}
+              retryToken={retryToken}
+              onCapture={(p) => void submitWebcam(p)}
+              onCameraError={handleCameraError}
+            />
           ) : challenge.has_reference ? (
             <FaceLoginQrPane qrDataUrl={qrDataUrl} bridgeUrl={bridgeUrl} qrPhase={qrPhase} />
           ) : (
             <p className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-4 text-center text-sm text-slate-600">
-              Сначала загрузите эталонное фото в карточке сотрудника, затем повторите вход.
+              Сначала сохраните эталон через камеру ПК, затем можно войти по QR.
             </p>
           )}
 
@@ -343,42 +374,4 @@ export function FaceLoginChallengePanel({ gate, onApproved, onCancel }: Props) {
       </DialogContent>
     </Dialog>
   );
-}
-
-function ModeBtn({
-  active,
-  onClick,
-  children
-}: {
-  active: boolean;
-  onClick: () => void;
-  children: ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={
-        active
-          ? "flex-1 rounded-lg bg-slate-900 px-3 py-2 text-sm font-medium text-white"
-          : "flex-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600 hover:bg-slate-50"
-      }
-    >
-      {children}
-    </button>
-  );
-}
-
-function faceVerifyError(err: unknown, fallback = "Не удалось проверить Face ID"): string {
-  if (isAxiosError(err)) {
-    const body = err.response?.data as { error?: string; message?: string } | undefined;
-    if (body?.message) return body.message;
-    if (body?.error === "FACE_MISMATCH") return "Лицо не совпало с эталоном";
-    if (body?.error === "FACE_LIVENESS_FAILED") return "Проверка живости не пройдена";
-    if (body?.error === "REFERENCE_MISSING") return "Нет эталонного фото Face ID";
-    if (body?.error === "FACE_CHALLENGE_EXPIRED") {
-      return "Срок проверки истёк. Нажмите «Обновить QR» или войдите снова.";
-    }
-  }
-  return getUserFacingError(err, fallback);
 }

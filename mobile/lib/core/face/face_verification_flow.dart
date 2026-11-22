@@ -29,9 +29,8 @@ class FaceVerificationFlow {
   }) async {
     final slug = ref.read(sessionProvider).tenantSlug ?? '';
     if (slug.isEmpty) return true;
-
-    final misc = ref.read(sessionProvider).mobileConfig?.misc;
-    if (misc?.faceVerificationEnabled != true) return true;
+    final role = (ref.read(sessionProvider).user?.role ?? '').toLowerCase();
+    if (role == 'admin') return true;
 
     final api = ref.read(faceVerificationApiProvider);
     final required = await api.checkRequired(
@@ -63,11 +62,13 @@ class FaceVerificationFlow {
   static Future<bool> ensureDailyLogin(BuildContext context, WidgetRef ref) async {
     final slug = ref.read(sessionProvider).tenantSlug ?? '';
     if (slug.isEmpty) return true;
-    final misc = ref.read(sessionProvider).mobileConfig?.misc;
-    if (misc?.faceVerificationEnabled != true) return true;
+    final role = (ref.read(sessionProvider).user?.role ?? '').toLowerCase();
+    if (role == 'admin') return true;
 
     final api = ref.read(faceVerificationApiProvider);
     final status = await api.getStatus(slug);
+    // Server: misc YOKI tenant requireFaceLogin (admin allaqachon o‘chirilgan).
+    if (!status.enabled) return true;
     if (!status.needsDailyLogin) return true;
     if (!context.mounted) return false;
 
@@ -90,13 +91,12 @@ class FaceVerificationFlow {
     );
   }
 
-  /// Face yoqilgan va bugun hali tasdiqlanmagan — UI bloklash uchun.
+  /// Server status: tenant Face ID yoki agent misc — admin emas.
   static Future<bool> isDailyLoginBlocking(WidgetRef ref) async {
     final slug = ref.read(sessionProvider).tenantSlug ?? '';
     if (slug.isEmpty) return false;
-    final misc = ref.read(sessionProvider).mobileConfig?.misc;
-    if (misc?.faceVerificationEnabled != true) return false;
-    if (misc?.faceVerificationDailyLogin == false) return false;
+    final role = (ref.read(sessionProvider).user?.role ?? '').toLowerCase();
+    if (role == 'admin') return false;
     final status = await ref.read(faceVerificationApiProvider).getStatus(slug);
     return status.needsDailyLogin;
   }

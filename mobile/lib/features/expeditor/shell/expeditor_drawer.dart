@@ -20,6 +20,7 @@ const expeditorMenuRoutes = <String>[
   '/my-returns',
   '/deliveries',
   '/exp-unfinished',
+  '/attendance',
   '/exp-settings',
   '/profile',
 ];
@@ -164,6 +165,11 @@ class _ExpeditorDrawerState extends ConsumerState<ExpeditorDrawer> {
                           icon: Icons.history_toggle_off_outlined,
                           label: 'Незавершённые заказы',
                           onTap: () => go('/exp-unfinished'),
+                        ),
+                        AgentMenuTile(
+                          icon: Icons.fingerprint,
+                          label: 'Отметка посещаемости (Приход / Уход)',
+                          onTap: () => go('/attendance', push: true),
                         ),
                       ],
                     ),

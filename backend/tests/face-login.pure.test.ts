@@ -49,14 +49,14 @@ describe("face-login.pure", () => {
     ).toBe(false);
   });
 
-  it("challenge only when toggle/tenant on AND reference exists", () => {
+  it("challenge when toggle/tenant on even without reference (UI asks enroll)", () => {
     expect(
       shouldChallengeFaceLogin({
         userRequireFaceLogin: true,
         tenantRequireFaceLogin: false,
         hasReference: false
       })
-    ).toBe(false);
+    ).toBe(true);
     expect(
       shouldChallengeFaceLogin({
         userRequireFaceLogin: true,
@@ -68,6 +68,14 @@ describe("face-login.pure", () => {
       shouldChallengeFaceLogin({
         userRequireFaceLogin: false,
         tenantRequireFaceLogin: false,
+        hasReference: true
+      })
+    ).toBe(false);
+    expect(
+      shouldChallengeFaceLogin({
+        userRequireFaceLogin: true,
+        tenantRequireFaceLogin: true,
+        role: "admin",
         hasReference: true
       })
     ).toBe(false);

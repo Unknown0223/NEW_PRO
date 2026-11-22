@@ -8,7 +8,7 @@ import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_typography.dart';
 import 'auth_provider.dart';
 
-/// Kunlik yuz tasdiqlash — muvaffaqiyatsiz bo‘lsa soft-skip («Позже») bilan ishlash mumkin.
+/// Kunlik Face ID — soft «Позже» yo‘q: tasdiqlanmaguncha ilova bloklangan.
 class FaceVerificationListener extends ConsumerStatefulWidget {
   final Widget child;
   const FaceVerificationListener({super.key, required this.child});
@@ -35,22 +35,6 @@ class _FaceVerificationListenerState
       if (!mounted || _scheduledInitial) return;
       _scheduledInitial = true;
       _maybeDailyCheck();
-    });
-  }
-
-  void _softSkipSession() {
-    if (!allowSoftSkipDailyFace(
-      hardBlockRequired: true,
-      userChoseLater: true,
-    )) {
-      return;
-    }
-    setState(() {
-      _doneThisSession = true;
-      _blocking = false;
-      _promptedWhileBlocking = false;
-      _dialogOpen = false;
-      _lastError = null;
     });
   }
 
@@ -108,7 +92,7 @@ class _FaceVerificationListenerState
                         ),
                         const SizedBox(height: 8),
                         Text(
-                          'Без серверной проверки лица работа с приложением недоступна.',
+                          'Без серверной проверки лица работа с приложением недоступна. Пропуск недоступен.',
                           textAlign: TextAlign.center,
                           style: AppTypography.bodyMedium
                               .copyWith(color: Colors.white70),
@@ -129,15 +113,6 @@ class _FaceVerificationListenerState
                               : () => _maybeDailyCheck(force: true),
                           child: Text(
                             _running ? 'Проверка…' : 'Подтвердить лицо',
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        TextButton(
-                          onPressed: _running ? null : _softSkipSession,
-                          child: Text(
-                            'Позже',
-                            style: AppTypography.bodyMedium
-                                .copyWith(color: Colors.white70),
                           ),
                         ),
                       ],
@@ -192,7 +167,7 @@ class _FaceVerificationListenerState
           setState(() {
             _blocking = true;
             _dialogOpen = false;
-            _lastError = 'Не удалось открыть камеру — повторите или «Позже»';
+            _lastError = 'Не удалось открыть камеру — повторите подтверждение';
           });
         }
         return;
@@ -213,8 +188,7 @@ class _FaceVerificationListenerState
         setState(() {
           _blocking = true;
           _dialogOpen = false;
-          _lastError =
-              'Проверка не завершена — повторите или нажмите «Позже»';
+          _lastError = 'Проверка не завершена — повторите подтверждение';
         });
       }
     } catch (e) {

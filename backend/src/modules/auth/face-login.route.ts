@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import {
   faceLoginCompleteBodySchema,
   faceLoginRecreateBodySchema,
+  faceLoginReferenceBodySchema,
   faceLoginStatusQuerySchema,
   faceLoginVerifyBodySchema
 } from "../../contracts/face-login.schemas";
@@ -11,6 +12,7 @@ import { resolveRequestOrigin } from "../mobile/app-release.service";
 import { setRefreshTokenCookie } from "./auth-cookies";
 import {
   completeFaceLoginChallenge,
+  enrollFaceLoginReference,
   getFaceLoginStatus,
   recreateFaceLoginChallenge,
   verifyFaceLoginChallenge
@@ -163,6 +165,29 @@ function registerFaceLoginAtBase(app: FastifyInstance, base: string) {
         setRefreshTokenCookie(reply, result.refreshToken);
       }
       return reply.send(result);
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : "UNKNOWN";
+      const mapped = mapFaceError(reply, request, msg);
+      if (mapped) return mapped;
+      throw error;
+    }
+  });
+
+  app.post(`${base}/face-login/reference`, faceVerifyRateOpts, async (request, reply) => {
+    const parsed = faceLoginReferenceBodySchema.safeParse(request.body ?? {});
+    if (!parsed.success) {
+      return sendApiError(
+        reply,
+        request,
+        400,
+        "ValidationError",
+        "Некорректные данные запроса",
+        zodValidationExtras(parsed.error)
+      );
+    }
+    try {
+      const data = await enrollFaceLoginReference(parsed.data);
+      return reply.send({ data });
     } catch (error) {
       const msg = error instanceof Error ? error.message : "UNKNOWN";
       const mapped = mapFaceError(reply, request, msg);

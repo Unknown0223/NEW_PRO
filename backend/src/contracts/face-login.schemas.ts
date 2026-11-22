@@ -24,3 +24,9 @@ export const faceLoginCompleteBodySchema = z.object({
 export const faceLoginRecreateBodySchema = z.object({
   challenge_token: z.string().min(16).max(128)
 });
+
+/** Challenge orqali birinchi etalon selfie (JWT siz). */
+export const faceLoginReferenceBodySchema = z.object({
+  challenge_token: z.string().min(16).max(128),
+  image_base64: z.string().min(32).max(2_500_000)
+});

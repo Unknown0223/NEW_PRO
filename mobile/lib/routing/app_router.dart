@@ -32,6 +32,7 @@ import '../features/agent/sync/sync_success_screen.dart';
 import '../features/agent/warehouse/agent_warehouse_stock_page.dart';
 import '../features/agent/report/agent_report_page.dart';
 import '../features/agent/tabel/agent_tabel_page.dart';
+import '../features/attendance/attendance_hub_screen.dart';
 import '../features/agent/kpi/agent_kpi_page.dart';
 import '../features/agent/kpi/agent_kpi_calc_page.dart';
 import '../features/agent/kpi/agent_kpi_route_page.dart';
@@ -380,6 +381,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: '/tabel',
         parentNavigatorKey: rootNavigatorKey,
         builder: (_, __) => const AgentTabelPage(),
+      ),
+      GoRoute(
+        path: '/attendance',
+        parentNavigatorKey: rootNavigatorKey,
+        builder: (_, __) => const AttendanceHubScreen(),
       ),
       GoRoute(
         path: '/deliveries/:id',

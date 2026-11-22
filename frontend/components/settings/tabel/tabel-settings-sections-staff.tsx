@@ -259,8 +259,8 @@ export function TabelFaceAntifraudSection({ cur, canEdit, onPatch, staffById, st
           onChange={(v) => set({ requireFaceEnrollmentOnStaffCreate: v })}
         />
         <TabelCheckRow
-          title="Веб: вход по Face ID"
-          hint="Только веб-логин (challenge). Мобильная ежедневная проверка лица настраивается в конфигурации агента (mobile_config), отдельно от табеля."
+          title="Face ID обязателен (веб + мобильное)"
+          hint="Админ исключён. Остальным: веб-логин и мобильная ежедневная проверка лица (первый вход за день). Без эталона откроется загрузка селфи — пропуск недоступен."
           checked={Boolean(fa.requireFaceLogin)}
           onChange={(v) => set({ requireFaceLogin: v })}
         />

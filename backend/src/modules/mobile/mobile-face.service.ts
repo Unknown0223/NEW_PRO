@@ -24,14 +24,57 @@ import {
   facePolicyFromMobileConfig,
   matchThreshold,
   readUiPrefs,
+  resolveFaceVerificationPolicy,
   storagePrefix,
   workRegionDateString,
   isOrderSubmitFaceCheckpoint,
   type FaceVerifyContext
 } from "./mobile-face.shared";
+import { normalizeFullTabelSettings } from "../tabel/tabel-settings.pure";
 
 export type { FaceVerifyContext, FaceVerificationPolicy } from "./mobile-face.shared";
-export { facePolicyFromMobileConfig, workRegionDateString, isOrderSubmitFaceCheckpoint } from "./mobile-face.shared";
+export {
+  facePolicyFromMobileConfig,
+  resolveFaceVerificationPolicy,
+  workRegionDateString,
+  isOrderSubmitFaceCheckpoint
+} from "./mobile-face.shared";
+
+async function loadTenantRequireFaceLogin(tenantId: number): Promise<boolean> {
+  const tenant = await prisma.tenant.findUnique({
+    where: { id: tenantId },
+    select: { settings: true }
+  });
+  const raw =
+    tenant?.settings != null && typeof tenant.settings === "object" && !Array.isArray(tenant.settings)
+      ? (tenant.settings as Record<string, unknown>).tabel_settings
+      : undefined;
+  return normalizeFullTabelSettings(raw).faceAntifraud.requireFaceLogin === true;
+}
+
+async function loadUserRole(tenantId: number, userId: number): Promise<string | null> {
+  const u = await prisma.user.findFirst({
+    where: { id: userId, tenant_id: tenantId },
+    select: { role: true }
+  });
+  return u?.role ?? null;
+}
+
+export async function resolvePolicyForUser(
+  tenantId: number,
+  userId: number,
+  mobileConfig: AgentMobileConfigV1 | undefined
+) {
+  const [tenantRequireFaceLogin, role] = await Promise.all([
+    loadTenantRequireFaceLogin(tenantId),
+    loadUserRole(tenantId, userId)
+  ]);
+  return resolveFaceVerificationPolicy({
+    mobileConfig,
+    tenantRequireFaceLogin,
+    role
+  });
+}
 export {
   deleteFaceReference,
   getFaceReferenceKey,
@@ -88,7 +131,7 @@ export async function getFaceVerificationStatus(
   userId: number,
   mobileConfig: AgentMobileConfigV1 | undefined
 ) {
-  const policy = facePolicyFromMobileConfig(mobileConfig);
+  const policy = await resolvePolicyForUser(tenantId, userId, mobileConfig);
   const ref = await getFaceReferenceMeta(tenantId, userId);
   const dateStr = workRegionDateString();
   const daily = policy.enabled
@@ -118,7 +161,7 @@ export async function checkFaceVerificationRequired(
   mobileConfig: AgentMobileConfigV1 | undefined,
   opts?: { order_id?: number; client_id?: number }
 ): Promise<{ required: boolean; reason?: string }> {
-  const policy = facePolicyFromMobileConfig(mobileConfig);
+  const policy = await resolvePolicyForUser(tenantId, userId, mobileConfig);
   if (!policy.enabled) return { required: false };
 
   const ref = await getFaceReferenceMeta(tenantId, userId);
@@ -282,7 +325,7 @@ export async function submitFaceVerification(
     order_verify_count?: number;
   } = {};
 
-  if (input.context === "daily_login") {
+  if (input.context === "daily_login" || input.context === "web_login") {
     dailyPatch.daily_login_verified = true;
   }
   if (input.context === "order_submit") {

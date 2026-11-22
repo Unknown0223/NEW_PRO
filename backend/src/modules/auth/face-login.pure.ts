@@ -54,15 +54,17 @@ export function shouldRequireFaceLogin(opts: {
   return opts.userRequireFaceLogin === true || opts.tenantRequireFaceLogin === true;
 }
 
-/** Login gate: bayroq yoqilgan VA etalon bor. Aks holda oddiy parol. */
+/**
+ * Login gate: bayroq yoqilgan (admin emas).
+ * Etalon yo‘q bo‘lsa ham challenge ochiladi — UI etalon yuklashni so‘raydi.
+ */
 export function shouldChallengeFaceLogin(opts: {
   userRequireFaceLogin: boolean;
   tenantRequireFaceLogin: boolean;
   role?: string | null;
-  hasReference: boolean;
+  hasReference?: boolean;
 }): boolean {
-  if (!shouldRequireFaceLogin(opts)) return false;
-  return opts.hasReference === true;
+  return shouldRequireFaceLogin(opts);
 }
 
 export function resolveChallengeLifecycle(opts: {
