@@ -36,9 +36,14 @@ const List<Duration> authEntranceFormDelays = [
   Duration(milliseconds: 350),
 ];
 
-const Color _navy = Color(0xFF14223F);
-const Color _blue = Color(0xFF1F66D1);
-const Color _bright = Color(0xFF6FA8FF);
+/// Login / cover brand — shablon `BRAND.navy` / `BRAND.blue`.
+const Color authBrandNavy = Color(0xFF14223F);
+const Color authBrandBlue = Color(0xFF1F66D1);
+const Color authBrandBright = Color(0xFF6FA8FF);
+
+const Color _navy = authBrandNavy;
+const Color _blue = authBrandBlue;
+const Color _bright = authBrandBright;
 
 class AuthBrandMark extends StatefulWidget {
   final double size;

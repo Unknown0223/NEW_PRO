@@ -223,14 +223,20 @@ export async function consume(tx: Prisma.TransactionClient, args: StockNeedMapAr
   const needEntries = positiveNeedEntries(args.needByProduct);
   if (needEntries.length === 0) return;
 
-  await lockStockRowsForUpdate(tx, {
+  const stockMap = await lockStockRowsForUpdate(tx, {
     tenantId: args.tenantId,
     warehouseId: args.warehouseId,
     productIds: needEntries.map(([id]) => id)
   });
 
   for (const [productId, qty] of needEntries) {
-    await tx.$executeRaw`
+    const row = stockMap.get(productId);
+    const onHand = row?.qty ?? new Prisma.Decimal(0);
+    if (onHand.lt(qty)) {
+      throwInsufficientStock(productId, onHand, qty);
+    }
+
+    const updated = await tx.$executeRaw`
       UPDATE stock
       SET qty = qty - ${qty}::numeric,
           reserved_qty = GREATEST(0, reserved_qty - ${qty}::numeric),
@@ -238,6 +244,10 @@ export async function consume(tx: Prisma.TransactionClient, args: StockNeedMapAr
       WHERE tenant_id = ${args.tenantId}
         AND warehouse_id = ${args.warehouseId}
         AND product_id = ${productId}
+        AND qty >= ${qty}::numeric
     `;
+    if (Number(updated) !== 1) {
+      throwInsufficientStock(productId, onHand, qty);
+    }
   }
 }

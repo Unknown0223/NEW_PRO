@@ -405,7 +405,10 @@ const ROUTE_PERMISSION_RULES: RoutePermissionRule[] = [
   // ─────────── Планы → Настройка утверждающих ───────────
   r(WRITE, /\/plans\/approvers/, "plans.nastroyka_utverzhdayushchih.update"),
   r(READ, /\/plans\/approvers/, "plans.nastroyka_utverzhdayushchih.view"),
-  r(WRITE, /\/plans\/proposals/, "plans.taklifiy_reja.update", "plans.taklifiy_reja.approve"),
+  // Taklifiy: maxsus yo‘llar umumiy WRITE/READ dan oldin.
+  r(["POST"], /\/plans\/proposals\/[^/]+\/apply$/, "plans.taklifiy_reja.approve"),
+  r(READ, /\/plans\/proposals\/[^/]+\/export$/, "plans.taklifiy_reja.export"),
+  r(WRITE, /\/plans\/proposals/, "plans.taklifiy_reja.update"),
   r(READ, /\/plans\/proposals/, "plans.taklifiy_reja.view"),
 
 

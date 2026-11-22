@@ -23,6 +23,7 @@ import {
   resolveOrderBonusesForCreate,
   type OrderAgentBonusContext
 } from "../order-bonus-apply";
+import { applyStockAdjustmentInTx } from "../../stock/stock.movements";
 import { consume, release, reserve } from "../../stock/stock-reservation";
 import {
   ORDER_STATUSES_EXCLUDED_FROM_CREDIT_EXPOSURE,
@@ -262,24 +263,11 @@ export async function updateOrderStatus(
         }
         const minusItems = items.filter((i) => !i.is_bonus && i.exchange_line_kind === "minus");
         for (const item of minusItems) {
-          await tx.stock.upsert({
-            where: {
-              tenant_id_warehouse_id_product_id: {
-                tenant_id: tenantId,
-                warehouse_id: whId,
-                product_id: item.product_id
-              }
-            },
-            create: {
-              tenant_id: tenantId,
-              warehouse_id: whId,
-              product_id: item.product_id,
-              qty: new Prisma.Decimal(0),
-              reserved_qty: new Prisma.Decimal(0)
-            },
-            update: {
-              qty: { decrement: item.qty }
-            }
+          await applyStockAdjustmentInTx(tx, tenantId, {
+            warehouse_id: whId,
+            product_id: item.product_id,
+            delta: -Number(item.qty),
+            note: "order.cancel.exchange_minus"
           });
         }
       } else if (fromStatus === "cancelled" && trimmed === "new") {

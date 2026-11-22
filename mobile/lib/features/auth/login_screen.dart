@@ -263,6 +263,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                   label: S.signIn,
                                   height: 52,
                                   borderRadius: 14,
+                                  color: authBrandBlue,
                                   onPressed: loading ? null : _submit,
                                 ),
                               ),

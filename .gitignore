@@ -145,3 +145,7 @@ packages/plans-proposal-demo/public/SALEC-*.txt
 
 tmp/
 
+
+# Local Cursor skill junctions (canonical: .agents/skills)
+.cursor/skills/
+

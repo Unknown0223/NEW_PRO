@@ -1,9 +1,20 @@
 "use client";
 
 import type { RefCallback } from "react";
-import { FaceScanIndicator } from "@/components/login/face-scan-indicator";
+import { UnlockFaceId, type UnlockStatus } from "@/components/ui/unlock-face-id";
 
 type ArrowMeta = { rotate: number; x: string; y: string };
+
+function unlockStatusOf(input: {
+  outcome: "success" | "failure" | null;
+  phase: "liveness" | "align" | "sending";
+  serverBusy?: boolean;
+}): UnlockStatus {
+  if (input.outcome === "success") return "success";
+  if (input.outcome === "failure") return "error";
+  if (input.phase === "sending" || input.serverBusy || input.phase === "align") return "scanning";
+  return "scanning";
+}
 
 type Props = {
   setVideoNode: RefCallback<HTMLVideoElement>;
@@ -37,26 +48,17 @@ export function FaceLivenessPreview({
   arrowDone,
   arrowWarm,
   facePresent,
-  progress = 0,
   serverBusy
 }: Props) {
   const showServer = phase === "sending" || Boolean(serverBusy);
-  const indicatorMode =
-    outcome === "success"
-      ? "success"
-      : outcome === "failure"
-        ? "failure"
-        : showServer
-          ? "server"
-          : phase === "align"
-            ? "align"
-            : "scan";
 
   const showCenterIndicator =
     Boolean(outcome) ||
     showServer ||
     phase === "align" ||
     (phase === "liveness" && facePresent && !arrowDone);
+
+  const unlockStatus = unlockStatusOf({ outcome, phase, serverBusy });
 
   return (
     <div
@@ -140,11 +142,14 @@ export function FaceLivenessPreview({
           ) : null}
 
           {showCenterIndicator ? (
-            <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center bg-slate-950/30">
-              <FaceScanIndicator
-                mode={indicatorMode}
-                progress={phase === "align" ? 0.85 : progress}
-                compact={compact}
+            <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center bg-slate-950/40 text-white">
+              <UnlockFaceId
+                status={unlockStatus}
+                size={compact ? 72 : 96}
+                hideStatusText
+                className="gap-0"
+                errorMessage="Лицо не распознано"
+                label="Сканирование лица"
               />
             </div>
           ) : null}

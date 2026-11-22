@@ -1,6 +1,7 @@
 /**
- * plans.taklifiy_reja.* ni admin bo‘lmagan rollardan olib tashlaydi;
- * admin rolida bo‘lmasa qo‘shadi.
+ * LEGACY / ops: plans.taklifiy_reja.* ni admin bo‘lmagan rollardan olib tashlaydi.
+ * Production default endi rahbar presetlarida taklifiy ochiq — bu skriptni
+ * oddiy deployda ishlatmang (qayta yopib qo‘yadi).
  *
  *   npx tsx scripts/revoke-taklifiy-non-admin.ts [slug|--all]
  */

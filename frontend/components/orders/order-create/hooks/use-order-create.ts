@@ -34,7 +34,7 @@ export function useOrderCreate(props: OrderCreateProps) {
   });
 
   const {
-    tenantSlug,
+      tenantSlug,
     onCreated,
     isEditMode,
     editOrderId,

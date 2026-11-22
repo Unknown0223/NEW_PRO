@@ -1,6 +1,5 @@
 import { useCallback, useRef, useState } from "react";
 import type { DirectionContext } from "@salec/plans-proposal";
-import { INITIAL_CONTEXT } from "@taklifiy/data/demo-data";
 import { initialConfigs, initialVisibleKpiIds } from "@taklifiy/lib/draft-config";
 import { AUDIT_ACTOR, makeAuditEntries, type AuditChange, type AuditEntry } from "@taklifiy/lib/audit";
 import {
@@ -16,8 +15,8 @@ import {
 
 export type SharedDraftApi = {
   drafts: SharedDraft[];
-  active: SharedDraft;
-  activeKey: string;
+  active: SharedDraft | null;
+  activeKey: string | null;
   audit: AuditEntry[];
   error: string | null;
   /** Avtomatik saqlash: patch + ixtiyoriy audit o‘zgartirishlari. */
@@ -30,31 +29,23 @@ export type SharedDraftApi = {
 };
 
 function bootstrap(): StorageState {
-  const state = readSharedDrafts();
-  if (state.drafts.length) return state;
-  const draft = createSharedDraft(
-    INITIAL_CONTEXT,
-    initialConfigs(INITIAL_CONTEXT.directionId),
-    initialVisibleKpiIds(INITIAL_CONTEXT.directionId)
-  );
-  try {
-    writeSharedDrafts([draft], draft.key);
-  } catch {
-    // Xotira yozilmagan bo‘lsa ham sessiya ichida ishlash davom etadi.
-  }
-  return { drafts: [draft], activeKey: draft.key, error: state.error };
+  // Production: bo‘sh holatda demo draft yozilmaydi — faqat saqlangan draftlar.
+  // Birinchi haqiqiy context `activate()` orqali keladi.
+  return readSharedDrafts();
 }
 
 /** Bitta umumiy draft + audit jurnali uchun yagona saqlash qatlami. */
 export function useSharedDraft(): SharedDraftApi {
   const [initial] = useState(bootstrap);
   const [drafts, setDrafts] = useState<SharedDraft[]>(initial.drafts);
-  const [activeKey, setActiveKey] = useState<string>(initial.activeKey ?? initial.drafts[0]!.key);
+  const [activeKey, setActiveKey] = useState<string | null>(
+    initial.activeKey ?? initial.drafts[0]?.key ?? null
+  );
   const [error, setError] = useState<string | null>(initial.error);
   const draftsRef = useRef(drafts);
   const activeKeyRef = useRef(activeKey);
 
-  const persist = useCallback((next: SharedDraft[], key?: string) => {
+  const persist = useCallback((next: SharedDraft[], key?: string | null) => {
     draftsRef.current = next;
     setDrafts(next);
     if (key !== undefined) {
@@ -62,7 +53,7 @@ export function useSharedDraft(): SharedDraftApi {
       setActiveKey(key);
     }
     try {
-      writeSharedDrafts(next, key ?? activeKeyRef.current);
+      writeSharedDrafts(next, key === undefined ? activeKeyRef.current : key);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Umumiy draftni saqlab bo‘lmadi");
     }
@@ -71,6 +62,7 @@ export function useSharedDraft(): SharedDraftApi {
   const patch = useCallback(
     (values: Partial<SharedDraft>, changes: AuditChange[] = []) => {
       const key = activeKeyRef.current;
+      if (!key) return;
       const at = new Date().toISOString();
       const entries = changes.length ? makeAuditEntries(changes, key, { at }) : [];
       const next = draftsRef.current.map((d) =>
@@ -165,12 +157,13 @@ export function useSharedDraft(): SharedDraftApi {
     [persist]
   );
 
-  const active = drafts.find((d) => d.key === activeKey) ?? drafts[0]!;
+  const active =
+    (activeKey ? drafts.find((d) => d.key === activeKey) : undefined) ?? drafts[0] ?? null;
   return {
     drafts,
     active,
-    activeKey: active.key,
-    audit: active.audit,
+    activeKey: active?.key ?? null,
+    audit: active?.audit ?? [],
     error,
     patch,
     activate,

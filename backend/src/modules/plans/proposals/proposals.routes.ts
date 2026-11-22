@@ -3,7 +3,8 @@ import { sendApiError, zodValidationExtras } from "../../../lib/api-error";
 import { ensureTenantContext } from "../../../lib/tenant-context";
 import { actorUserIdOrNull } from "../../../lib/request-actor";
 import { jwtAccessVerify, requireRoles } from "../../auth/auth.prehandlers";
-import { TENANT_ADMIN_ROLE } from "../../../lib/tenant-user-roles";
+import { ADMIN_AND_OPERATOR_LIKE_ROLES } from "../../../lib/tenant-user-roles";
+import { PLAN_APPROVER_ROLES, PLAN_SETTER_ROLES } from "../plans.setup.roles";
 import { buildProposalContext } from "./proposals.context";
 import { calculateProposalLive } from "./proposals.calculate";
 import {
@@ -23,11 +24,15 @@ import {
   saveProposalBodySchema
 } from "./proposals.schema";
 
-/** Hozircha faqat admin (preset + route). Keyin kengaytiriladi. */
-const adminOnly = [TENANT_ADMIN_ROLE] as const;
-const readRoles = adminOnly;
-const writeRoles = adminOnly;
-const applyRoles = adminOnly;
+/** Role coarse gate; aniq kalitlar `route-permission-guard` da (`plans.taklifiy_reja.*`). */
+const readRoles = [
+  ...ADMIN_AND_OPERATOR_LIKE_ROLES,
+  "supervisor",
+  "commercial_director",
+  "agent"
+] as const;
+const writeRoles = [...PLAN_SETTER_ROLES] as const;
+const applyRoles = [...PLAN_APPROVER_ROLES] as const;
 
 function mapErr(
   reply: Parameters<typeof sendApiError>[0],

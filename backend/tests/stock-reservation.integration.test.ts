@@ -171,6 +171,25 @@ describe.skipIf(!dbReady)("StockReservation", () => {
     expect(row?.reserved_qty.toString()).toBe("2");
   });
 
+  it("consume — qty yetmasa manfiyga tushirmaydi (reserved > qty)", async () => {
+    const { tenantId, warehouseId, productId } = await fixture();
+    await seedStock({ tenantId, warehouseId, productId, qty: "3", reserved: "5" });
+
+    await expect(
+      prisma.$transaction((tx) =>
+        consume(tx, {
+          tenantId,
+          warehouseId,
+          needByProduct: new Map([[productId, new Prisma.Decimal(5)]])
+        })
+      )
+    ).rejects.toThrow("INSUFFICIENT_STOCK");
+
+    const row = await readStock(tenantId, warehouseId, productId);
+    expect(row?.qty.toString()).toBe("3");
+    expect(row?.reserved_qty.toString()).toBe("5");
+  });
+
   it("parallel race: ikkita reserve(10) stock 10 dan — biri yutadi", async () => {
     const { tenantId, warehouseId, productId } = await fixture();
     await seedStock({ tenantId, warehouseId, productId, qty: "10", reserved: "0" });

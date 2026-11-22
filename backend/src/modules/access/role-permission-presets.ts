@@ -32,9 +32,9 @@ function mod(module: string): string[] {
   return CATALOG.filter((e) => e.module === module).map((e) => e.key);
 }
 
-/** Plans moduli — taklifiy_reja faqat admin presetida (hozircha). */
-function plansExceptTaklifiy(): string[] {
-  return mod("plans").filter((k) => !k.includes(".taklifiy_reja."));
+/** Plans moduli — to‘liq (taklifiy_reja bilan). */
+function plansFull(): string[] {
+  return mod("plans");
 }
 
 /** Modul bo'yicha faqat ko'rish (+copy, Excel) kalitlari. */
@@ -142,7 +142,7 @@ const PRESET_BUILDERS: Record<string, () => string[]> = {
       modViewOnly("staff"),
       mod("finance"),
       mod("audit"),
-      sec("plans", "ustanovka_planov"),
+      plansFull(),
       secOnly("work_slots", "raboche_mesto", ["view", "history", "update"]),
 
       secOnly("staff", "agent", ["activate", "deactivate"]),
@@ -163,7 +163,7 @@ const PRESET_BUILDERS: Record<string, () => string[]> = {
       assistantFull(),
       modViewOnly("orders"),
       modViewOnly("clients"),
-      plansExceptTaklifiy(),
+      plansFull(),
       secOnly("work_slots", "raboche_mesto", ["view", "update", "history"]),
       sec("staff", "zadachi_spisok"),
       sec("staff", "avans"),
@@ -179,6 +179,7 @@ const PRESET_BUILDERS: Record<string, () => string[]> = {
       modViewOnly("clients"),
       sec("plans", "nastroyka_utverzhdayushchih"),
       secOnly("plans", "ustanovka_planov", ["view", "update", "approve"]),
+      sec("plans", "taklifiy_reja"),
       sec("staff", "zadachi_spisok"),
       sec("staff", "avans"),
       tabelLeadView()
@@ -192,7 +193,7 @@ const PRESET_BUILDERS: Record<string, () => string[]> = {
       assistantChatReports(),
       modViewOnly("orders"),
       modViewOnly("clients"),
-      plansExceptTaklifiy(),
+      plansFull(),
       tabelLeadView()
     ),
 
@@ -349,6 +350,7 @@ const PRESET_BUILDERS: Record<string, () => string[]> = {
       mod("reports"),
       assistantFull(),
       secOnly("plans", "ustanovka_planov", ["view", "update", "approve"]),
+      sec("plans", "taklifiy_reja"),
       secOnly("plans", "nastroyka_utverzhdayushchih", ["view"]),
       secOnly("work_slots", "raboche_mesto", ["view", "history"]),
       secOnly("staff", "konsignatsiya", ["view"]),

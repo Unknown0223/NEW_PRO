@@ -470,18 +470,19 @@ class AgentPrimaryButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final bg = color ?? AppColors.primary;
     return SizedBox(
       width: double.infinity,
       height: height,
       child: ElevatedButton(
         onPressed: onPressed,
         style: ElevatedButton.styleFrom(
-          backgroundColor: color ?? AppColors.primary,
+          backgroundColor: bg,
           disabledBackgroundColor: const Color(0xFFCBD5E1),
           disabledForegroundColor: Colors.white,
           foregroundColor: Colors.white,
           elevation: onPressed == null ? 0 : 4,
-          shadowColor: onPressed == null ? Colors.transparent : AppColors.primary.withValues(alpha: 0.25),
+          shadowColor: onPressed == null ? Colors.transparent : bg.withValues(alpha: 0.25),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(borderRadius)),
           textStyle: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700, letterSpacing: 0.2),
         ),

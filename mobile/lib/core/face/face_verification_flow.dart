@@ -14,6 +14,7 @@ import '../navigation/root_navigator_context.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_typography.dart';
 import 'face_verification_api.dart';
+import 'unlock_face_id_sheet.dart';
 
 /// Yuz tasdiqlash oqimi: server policy → selfie → verify.
 class FaceVerificationFlow {
@@ -173,64 +174,37 @@ class FaceVerificationFlow {
     final dialogCtx = resolveRootNavigatorContext(context);
     if (dialogCtx == null) return false;
 
-    final accepted = await showDialog<bool>(
+    final accepted = await showUnlockFaceIdSheet(
       context: dialogCtx,
-      useRootNavigator: true,
-      barrierDismissible: false,
-      builder: (ctx) => AlertDialog(
-        title: Text(title),
-        content: Text(
+      title: title,
+      body:
           'Сделайте селфи для подтверждения личности.\n'
           'Фото сохраняется на сервере и привязано к вашему аккаунту.',
-          style: AppTypography.bodyMedium.copyWith(color: AppColors.textMuted),
-        ),
-        actions: [
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Открыть камеру'),
-          ),
-        ],
-      ),
+      onScanAndVerify: () async {
+        try {
+          final path = await _pickFaceImage(ref);
+          if (path == null) return false;
+          final bytes = await File(path).readAsBytes();
+          await ref.read(faceVerificationApiProvider).submitVerification(
+                slug,
+                context: verifyContext,
+                imageBase64: base64Encode(bytes),
+                orderId: orderId,
+                clientId: clientId,
+              );
+          return true;
+        } on PhotoCaptureException catch (e) {
+          throw Exception(e.message);
+        } catch (e) {
+          final msg = e is ApiException ? e.message : '$e';
+          if (msg.contains('FaceMismatch') || msg.toLowerCase().contains('mos')) {
+            throw Exception('Лицо не совпало с эталоном на сервере');
+          }
+          throw Exception('Ошибка проверки: $msg');
+        }
+      },
     );
-    if (accepted != true) return false;
-
-    try {
-      final path = await _pickFaceImage(ref);
-      if (path == null) return false;
-      final bytes = await File(path).readAsBytes();
-      await ref.read(faceVerificationApiProvider).submitVerification(
-            slug,
-            context: verifyContext,
-            imageBase64: base64Encode(bytes),
-            orderId: orderId,
-            clientId: clientId,
-          );
-      return true;
-    } on PhotoCaptureException catch (e) {
-      final snackCtx = resolveRootNavigatorContext(context);
-      if (snackCtx != null && snackCtx.mounted) {
-        ScaffoldMessenger.of(snackCtx).showSnackBar(
-          SnackBar(content: Text(e.message), backgroundColor: AppColors.error),
-        );
-      }
-      return false;
-    } catch (e) {
-      final msg = e is ApiException ? e.message : '$e';
-      final snackCtx = resolveRootNavigatorContext(context);
-      if (snackCtx != null && snackCtx.mounted) {
-        ScaffoldMessenger.of(snackCtx).showSnackBar(
-          SnackBar(
-            content: Text(
-              msg.contains('FaceMismatch') || msg.toLowerCase().contains('mos')
-                  ? 'Лицо не совпало с эталоном на сервере'
-                  : 'Ошибка проверки: $msg',
-            ),
-            backgroundColor: AppColors.error,
-          ),
-        );
-      }
-      return false;
-    }
+    return accepted == true;
   }
 
   /// preferredCameraDevice yo‘q — emulyator/front yo‘qligida kulrang previewdan qochamiz.

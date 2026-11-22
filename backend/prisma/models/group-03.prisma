@@ -382,6 +382,7 @@ model Stock {
   tenant_id    Int
   warehouse_id Int
   product_id   Int
+  /// Fizik qoldiq; manfiy taqiqlanadi (stock_qty_nonneg).
   qty          Decimal   @default(0) @db.Decimal(15, 3)
   reserved_qty Decimal   @default(0) @db.Decimal(15, 3)
   created_at   DateTime  @default(now())

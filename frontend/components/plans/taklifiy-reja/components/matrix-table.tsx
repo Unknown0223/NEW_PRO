@@ -1,6 +1,7 @@
 import { memo, useEffect, useState } from "react";
 import { Info, Wand2 } from "lucide-react";
 import type { ProposalController } from "@taklifiy/hooks/use-proposal";
+import { sumBlockBasis } from "@taklifiy/lib/block-basis-totals";
 import { kpiLabel } from "@taklifiy/lib/catalog";
 import { fmt } from "@taklifiy/lib/format";
 import type { MatrixRow } from "@taklifiy/lib/grouping";
@@ -67,10 +68,10 @@ export const MatrixTable = memo(function MatrixTable({ c, rows, onInspect, capti
             <th className="py-2.5 pr-3 align-top">XODIM</th>
             {visible.map((id) => {
               const name = kpiLabel(c, id);
-              const total = rows.reduce((sum, r) => {
-                const cell = r.cells[id];
-                return cell?.ready && cell.value ? sum + BigInt(cell.value) : sum;
-              }, 0n);
+              const sourceStatus =
+                c.configs[String(id)]?.settings.sourceStatus ?? "approved_only";
+              const factTotal = sumBlockBasis(rows, id, "fact", sourceStatus);
+              const planTotal = sumBlockBasis(rows, id, "previous_plan", sourceStatus);
               const ids = selectableCellIds(rows, [id]);
               const state = selectionState(c.selected, ids);
               const open = expanded?.type === "column" && expanded.kpiId === id;
@@ -89,18 +90,23 @@ export const MatrixTable = memo(function MatrixTable({ c, rows, onInspect, capti
                       <span className="block truncate text-[10px] font-semibold text-[#5d7264]">
                         {name}
                       </span>
-                      <span className="numeric mt-0.5 block text-[9px] font-normal text-[#93a198]">
-                        {fmt(total.toString())}
+                      <span className="numeric mt-0.5 block text-[9px] font-semibold text-brand-700">
+                        {fmt(factTotal.toString())}
+                        <span className="ml-1 font-normal text-[#93a198]">sof fakt</span>
+                      </span>
+                      <span className="numeric block text-[9px] text-[#93a198]">
+                        {fmt(planTotal.toString())}
+                        <span className="ml-1">eski reja</span>
                       </span>
                     </div>
                   </div>
                   <button
                     className="mt-1.5 flex items-center gap-1 rounded-md border border-[#dbe6df] bg-white px-1.5 py-0.5 text-[9px] font-semibold text-brand-700 normal-case tracking-normal hover:border-brand-300"
                     aria-expanded={open}
-                    aria-label={`${name} ustunida hammasiga o‘rnatish`}
+                    aria-label={`${name} ustunida butun blokka o‘rnatish`}
                     onClick={() => setExpanded(open ? null : { type: "column", kpiId: id })}
                   >
-                    <Wand2 size={10} /> Hammasiga
+                    <Wand2 size={10} /> Blokka
                   </button>
                   {open && (
                     <ColumnEditor

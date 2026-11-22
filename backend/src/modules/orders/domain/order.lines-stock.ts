@@ -3,6 +3,7 @@
  * «new»: StockReservation reserve/release; «confirmed»: fizik qty (reserved allaqachon consume).
  */
 import { Prisma } from "@prisma/client";
+import { applyStockAdjustmentInTx } from "../../stock/stock.movements";
 import { release, reserve } from "../../stock/stock-reservation";
 
 export type OrderLinesStockMode = "reserved" | "consumed";
@@ -96,23 +97,12 @@ export async function adjustOutboundStockForOrderLinesEdit(
 
   // confirmed: fizik qty allaqachon kamaytirilgan — farqni qty ga qo‘llaymiz (reserved emas)
   for (const { productId, delta } of qtyDeltas) {
-    const abs = delta.abs();
-    await tx.stock.upsert({
-      where: {
-        tenant_id_warehouse_id_product_id: {
-          tenant_id: params.tenantId,
-          warehouse_id: params.warehouseId,
-          product_id: productId
-        }
-      },
-      create: {
-        tenant_id: params.tenantId,
-        warehouse_id: params.warehouseId,
-        product_id: productId,
-        qty: delta.lt(0) ? abs : new Prisma.Decimal(0),
-        reserved_qty: new Prisma.Decimal(0)
-      },
-      update: delta.gt(0) ? { qty: { decrement: abs } } : { qty: { increment: abs } }
+    if (delta.eq(0)) continue;
+    await applyStockAdjustmentInTx(tx, params.tenantId, {
+      warehouse_id: params.warehouseId,
+      product_id: productId,
+      delta: delta.neg().toNumber(),
+      note: "order.lines.edit"
     });
   }
 }

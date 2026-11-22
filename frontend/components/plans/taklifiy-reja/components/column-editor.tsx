@@ -2,7 +2,9 @@ import { Check, X } from "lucide-react";
 import { DEFAULT_CONFIG } from "@salec/plans-proposal";
 import type { ProposalController } from "@taklifiy/hooks/use-proposal";
 import { useFormulaFields } from "@taklifiy/hooks/use-formula-fields";
+import { sumBlockBasis } from "@taklifiy/lib/block-basis-totals";
 import { kpiLabel } from "@taklifiy/lib/catalog";
+import { fmt } from "@taklifiy/lib/format";
 import type { MatrixRow } from "@taklifiy/lib/grouping";
 import { selectableCells } from "@taklifiy/lib/selection";
 import { FormulaFields } from "./formula-fields";
@@ -24,6 +26,9 @@ export function ColumnEditor({
   const fields = useFormulaFields(DEFAULT_CONFIG.defaultFormula);
   const cells = selectableCells(rows, [kpiId]);
   const name = kpiLabel(c, kpiId);
+  const sourceStatus = c.configs[String(kpiId)]?.settings.sourceStatus ?? "approved_only";
+  const basisTotal = sumBlockBasis(rows, kpiId, fields.basis, sourceStatus);
+  const basisLabel = fields.basis === "fact" ? "Sof fakt" : "Eski reja";
   const apply = () => {
     const formula = fields.read();
     if (!formula) return;
@@ -42,11 +47,11 @@ export function ColumnEditor({
           className="min-w-0 flex-1 truncate text-[10px] font-semibold text-brand-800"
           title={blockLabel}
         >
-          Butun blokka o‘rnatish
+          Butun blokka · {name}
         </p>
         <span
           className="shrink-0 rounded bg-brand-50 px-1 text-[8px] leading-4 text-brand-700"
-          title={`${blockLabel} · qo‘lda/chiqarilgan/nofaol kataklar o‘zgarmaydi`}
+          title="Faqat shu KPI · shu blok; qo‘lda/chiqarilgan kataklar o‘zgarmaydi"
         >
           {cells.length} katak
         </span>
@@ -59,6 +64,12 @@ export function ColumnEditor({
           <X size={11} />
         </button>
       </div>
+      <p className="numeric px-0.5 text-[9px] text-[#5d7264]">
+        <span className="font-semibold text-brand-700">{fmt(basisTotal.toString())}</span>
+        <span className="ml-1 text-[#93a198]">
+          {basisLabel} jami (shu KPI mahsulotlari)
+        </span>
+      </p>
       <FormulaFields
         state={fields}
         labelPrefix={`${name} ustuni`}

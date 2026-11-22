@@ -52,6 +52,24 @@ export async function decrementStock(
   productId: number,
   delta: Prisma.Decimal
 ): Promise<Prisma.Decimal> {
+  if (!delta.gt(0)) {
+    throw new Error("BAD_DELTA");
+  }
+
+  const existing = await tx.stock.findUnique({
+    where: {
+      tenant_id_warehouse_id_product_id: {
+        tenant_id: tenantId,
+        warehouse_id: warehouseId,
+        product_id: productId
+      }
+    }
+  });
+  const before = existing?.qty ?? new Prisma.Decimal(0);
+  if (before.lt(delta)) {
+    throw new Error("NEGATIVE_QTY");
+  }
+
   const stock = await tx.stock.upsert({
     where: {
       tenant_id_warehouse_id_product_id: { tenant_id: tenantId, warehouse_id: warehouseId, product_id: productId }
@@ -60,10 +78,13 @@ export async function decrementStock(
       tenant_id: tenantId,
       warehouse_id: warehouseId,
       product_id: productId,
-      qty: new Prisma.Decimal(0).sub(delta),
+      qty: new Prisma.Decimal(0),
       reserved_qty: new Prisma.Decimal(0)
     },
-    update: { qty: { increment: delta.neg() } }
+    update: { qty: { decrement: delta } }
   });
+  if (stock.qty.lt(0)) {
+    throw new Error("NEGATIVE_QTY");
+  }
   return stock.qty;
 }

@@ -231,7 +231,7 @@ export function BlocksView({
       </div>
       <div className="flex flex-wrap items-center justify-between gap-2 border-t border-[#e4ebe6] bg-[#fafcfb] px-4 py-3 text-[10px] text-[#8d9a91]">
         <span>
-          Faqat tayyor kataklar jami summasiga kiradi. Katakni bosib bevosita % yoki summa kiriting.
+          KPI ustunida sof fakt / eski reja — shu blok×KPI. Pastdagi jami — tayyor taklif.
         </span>
         <span className="numeric text-sm font-bold text-brand-700">
           {fmt(c.visibleResult.totals.proposed)} so‘m

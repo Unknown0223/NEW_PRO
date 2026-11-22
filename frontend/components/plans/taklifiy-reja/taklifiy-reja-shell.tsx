@@ -51,15 +51,15 @@ export const TAKLIFIY_TABS: Array<{
 const TITLES: Record<WorkspaceTab, { title: string; subtitle: string }> = {
   calculator: {
     title: "Предлагаемый план",
-    subtitle: "Блоки филиалов, колонки KPI и прямое редактирование в таблице."
+    subtitle: "Filial → supervayzer bloklari. KPI ustunida sof fakt / eski reja (shu KPI mahsulotlari)."
   },
   outcomes: {
     title: "Анализ обоснования",
-    subtitle: "Сравнение с фактом закрытого месяца: какой вариант предложения оправдался."
+    subtitle: "Yopilgan oy: qaysi taklif usuli faktga yaqinroq."
   },
   drafts: {
     title: "Общий черновик",
-    subtitle: "Одна таблица на период и направление: правки, удаление и журнал изменений."
+    subtitle: "Davr + yo‘nalish uchun bitta jadval va audit."
   }
 };
 

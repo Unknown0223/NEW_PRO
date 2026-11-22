@@ -8,11 +8,12 @@ const Duration roleWelcomeFirstStepHold = Duration(milliseconds: 1300);
 const Duration roleWelcomeStepHold = Duration(milliseconds: 430);
 const Duration roleWelcomeDoneHold = Duration(milliseconds: 800);
 const Duration roleWelcomeLeaveHold = Duration(milliseconds: 900);
-const Duration roleWelcomeHelloDelay = Duration(milliseconds: 1250);
-const Duration roleWelcomeNameBaseDelay = Duration(milliseconds: 1320);
+/// Cover tugagach (sceneLive) dan — shablon 1250/1650/1780 minus ~1150 hold.
+const Duration roleWelcomeHelloDelay = Duration(milliseconds: 100);
+const Duration roleWelcomeNameBaseDelay = Duration(milliseconds: 170);
 const Duration roleWelcomeNameLetterStep = Duration(milliseconds: 45);
-const Duration roleWelcomeWordmarkDelay = Duration(milliseconds: 1650);
-const Duration roleWelcomeTaglineDelay = Duration(milliseconds: 1780);
+const Duration roleWelcomeWordmarkDelay = Duration(milliseconds: 500);
+const Duration roleWelcomeTaglineDelay = Duration(milliseconds: 630);
 
 class RoleWelcomeMeta {
   final String word;
