@@ -11,7 +11,6 @@ import '../../core/face/face_verification_flow.dart';
 import '../../core/security/location_guard.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/time/server_clock.dart';
-import '../../core/ui/quick_panel_sheet.dart';
 import '../agent/shell/agent_app_bar.dart';
 import 'attendance_api_service.dart';
 import 'attendance_models.dart';
@@ -476,7 +475,7 @@ class _AttendanceHubScreenState extends ConsumerState<AttendanceHubScreen> {
               foregroundColor: AppColors.textTitle,
               title: Text(widget.gateMode ? 'Приход · Face ID' : 'Табель и Посещаемость'),
               automaticallyImplyLeading: showBack,
-              actions: showBack ? const [QuickPanelAction()] : const [],
+              actions: const [],
               bottom: TabBar(
                 isScrollable: true,
                 labelColor: AppColors.primary,
