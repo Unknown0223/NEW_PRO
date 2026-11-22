@@ -3,25 +3,13 @@ import 'package:salesdoc_mobile/features/attendance/attendance_gate_steps.dart';
 
 void main() {
   group('buildAttendanceGateSteps', () {
-    test('foto + video — avval tanlov', () {
+    test('foto yoqilgan — faqat Face ID oqimi (video e’tiborsiz)', () {
       final steps = buildAttendanceGateSteps(
         photoEnabled: true,
         videoEnabled: true,
         kioskAllowed: true,
         livenessDirections: 4,
         requireDualCamera: true,
-      );
-      expect(steps.map((e) => e.kind).toList(), [AttendanceGateStepKind.choose]);
-    });
-
-    test('tanlov photo: liveness + dual + submit', () {
-      final steps = buildAttendanceGateSteps(
-        photoEnabled: true,
-        videoEnabled: true,
-        kioskAllowed: true,
-        livenessDirections: 4,
-        requireDualCamera: true,
-        selectedMethod: 'photo',
         livenessSequence: const ['right', 'left', 'up', 'down'],
       );
       expect(steps.map((e) => e.kind).toList(), [
@@ -29,24 +17,6 @@ void main() {
         AttendanceGateStepKind.workplace,
         AttendanceGateStepKind.submit,
       ]);
-    });
-
-    test('tanlov video: video + submit (kod)', () {
-      final steps = buildAttendanceGateSteps(
-        photoEnabled: true,
-        videoEnabled: true,
-        kioskAllowed: false,
-        livenessDirections: 4,
-        requireDualCamera: true,
-        selectedMethod: 'video',
-        videoCodeRequired: true,
-        dayCode: 427,
-      );
-      expect(steps.map((e) => e.kind).toList(), [
-        AttendanceGateStepKind.video,
-        AttendanceGateStepKind.submit,
-      ]);
-      expect(steps.first.hint, contains('427'));
     });
 
     test('faqat foto: dual yo‘q — liveness + submit', () {
@@ -63,18 +33,21 @@ void main() {
       ]);
     });
 
-    test('faqat video', () {
+    test('faqat video + kod', () {
       final steps = buildAttendanceGateSteps(
         photoEnabled: false,
         videoEnabled: true,
         kioskAllowed: false,
         livenessDirections: 4,
         requireDualCamera: true,
+        videoCodeRequired: true,
+        dayCode: 427,
       );
       expect(steps.map((e) => e.kind).toList(), [
         AttendanceGateStepKind.video,
         AttendanceGateStepKind.submit,
       ]);
+      expect(steps.first.hint, contains('427'));
     });
 
     test('hech narsa — bo‘sh', () {

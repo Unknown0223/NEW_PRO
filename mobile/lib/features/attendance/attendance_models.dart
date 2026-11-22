@@ -186,22 +186,22 @@ class MobileAttendanceState {
   }
 }
 
-/// Sof: qaysi punch tablar ko‘rinsin (unit-test).
+/// Sof: bir vaqtda faqat bitta asosiy punch usuli (photo > video > kiosk).
 List<AttendanceMethodTab> attendanceVisibleTabs({
   required bool photoEnabled,
   required bool videoEnabled,
   required bool kioskAllowed,
   bool gateMode = false,
 }) {
-  final tabs = <AttendanceMethodTab>[];
-  if (photoEnabled) tabs.add(AttendanceMethodTab.photo);
-  if (videoEnabled) tabs.add(AttendanceMethodTab.video);
-  if (kioskAllowed) tabs.add(AttendanceMethodTab.kiosk);
-  if (gateMode) {
-    if (tabs.isEmpty) return tabs;
-    if (photoEnabled) return const [AttendanceMethodTab.photo];
-    return [tabs.first];
+  AttendanceMethodTab? punch;
+  if (photoEnabled) {
+    punch = AttendanceMethodTab.photo;
+  } else if (videoEnabled) {
+    punch = AttendanceMethodTab.video;
+  } else if (kioskAllowed) {
+    punch = AttendanceMethodTab.kiosk;
   }
-  tabs.add(AttendanceMethodTab.requests);
-  return tabs;
+  if (gateMode) return punch == null ? const [] : [punch];
+  if (punch == null) return const [AttendanceMethodTab.requests];
+  return [punch, AttendanceMethodTab.requests];
 }

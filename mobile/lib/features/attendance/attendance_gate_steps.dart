@@ -1,6 +1,4 @@
-import 'attendance_models.dart';
-
-enum AttendanceGateStepKind { choose, liveness, workplace, video, submit }
+enum AttendanceGateStepKind { liveness, workplace, video, submit }
 
 /// Birinchi kirish (gate) — bitta oqim, akkaunt shartiga qarab.
 class AttendanceGateStep {
@@ -17,8 +15,7 @@ class AttendanceGateStep {
   final String? direction;
 }
 
-/// Sof: gate sahifasi qadamlari (unit-test).
-/// [selectedMethod]: `photo` | `video` | null (ikkala yoqilganda avval tanlov).
+/// Sof: gate qadamlari — bir vaqtda faqat bitta usul (photo > video > kiosk).
 List<AttendanceGateStep> buildAttendanceGateSteps({
   required bool photoEnabled,
   required bool videoEnabled,
@@ -26,39 +23,9 @@ List<AttendanceGateStep> buildAttendanceGateSteps({
   required int livenessDirections,
   required bool requireDualCamera,
   List<String>? livenessSequence,
-  String? selectedMethod,
   bool videoCodeRequired = false,
   int? dayCode,
 }) {
-  if (photoEnabled && videoEnabled && selectedMethod == null) {
-    return const [
-      AttendanceGateStep(
-        kind: AttendanceGateStepKind.choose,
-        title: 'Способ отметки',
-        hint: 'Face ID сверяет лицо с эталоном аккаунта. Либо видео: произнесите дневной код (фронт + задняя камера).',
-      ),
-    ];
-  }
-
-  final useVideo = videoEnabled && (selectedMethod == 'video' || !photoEnabled);
-  if (useVideo) {
-    final codeHint = videoCodeRequired && dayCode != null
-        ? 'Произнесите код $dayCode на фронт-видео, затем снимите рабочее место (задняя камера)'
-        : 'Фронт-видео с лицом, затем задняя камера рабочего места';
-    return [
-      AttendanceGateStep(
-        kind: AttendanceGateStepKind.video,
-        title: 'Видео + код',
-        hint: codeHint,
-      ),
-      const AttendanceGateStep(
-        kind: AttendanceGateStepKind.submit,
-        title: 'ПРИХОД',
-        hint: 'Сервер проверит код и примет отметку в табель',
-      ),
-    ];
-  }
-
   if (photoEnabled) {
     final n = livenessSequence?.length ?? (livenessDirections == 8 ? 8 : 4);
     final steps = <AttendanceGateStep>[
@@ -86,6 +53,24 @@ List<AttendanceGateStep> buildAttendanceGateSteps({
       ),
     );
     return steps;
+  }
+
+  if (videoEnabled) {
+    final codeHint = videoCodeRequired && dayCode != null
+        ? 'Произнесите код $dayCode на фронт-видео, затем снимите рабочее место (задняя камера)'
+        : 'Фронт-видео с лицом, затем задняя камера рабочего места';
+    return [
+      AttendanceGateStep(
+        kind: AttendanceGateStepKind.video,
+        title: 'Видео + код',
+        hint: codeHint,
+      ),
+      const AttendanceGateStep(
+        kind: AttendanceGateStepKind.submit,
+        title: 'ПРИХОД',
+        hint: 'Сервер проверит код и примет отметку в табель',
+      ),
+    ];
   }
 
   if (kioskAllowed) {

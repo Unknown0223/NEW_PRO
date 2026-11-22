@@ -3,12 +3,21 @@ import 'package:salesdoc_mobile/features/attendance/attendance_models.dart';
 
 void main() {
   group('attendanceVisibleTabs', () {
-    test('faqat yoqilgan usullar + Заявки', () {
+    test('faqat bitta asosiy punch + Заявки', () {
       expect(
         attendanceVisibleTabs(
           photoEnabled: true,
           videoEnabled: false,
           kioskAllowed: false,
+        ),
+        [AttendanceMethodTab.photo, AttendanceMethodTab.requests],
+      );
+      // photo > video > kiosk — bir vaqtda uchtasi emas
+      expect(
+        attendanceVisibleTabs(
+          photoEnabled: true,
+          videoEnabled: true,
+          kioskAllowed: true,
         ),
         [AttendanceMethodTab.photo, AttendanceMethodTab.requests],
       );
@@ -18,11 +27,7 @@ void main() {
           videoEnabled: true,
           kioskAllowed: true,
         ),
-        [
-          AttendanceMethodTab.video,
-          AttendanceMethodTab.kiosk,
-          AttendanceMethodTab.requests,
-        ],
+        [AttendanceMethodTab.video, AttendanceMethodTab.requests],
       );
     });
 
@@ -47,7 +52,7 @@ void main() {
       );
     });
 
-    test('hech narsa yoqilmasa — bo‘sh', () {
+    test('hech narsa yoqilmasa — faqat Заявки / gate bo‘sh', () {
       expect(
         attendanceVisibleTabs(
           photoEnabled: false,
