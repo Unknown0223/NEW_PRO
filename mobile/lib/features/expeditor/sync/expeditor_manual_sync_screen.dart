@@ -3,13 +3,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/errors/user_facing_error.dart';
-import '../../../core/theme/app_colors.dart';
-import '../../agent/sync/full_sync_view.dart';
+import '../../agent/sync/brand_sync_view.dart';
 import '../expeditor_providers.dart';
-import 'expeditor_sync_labels.dart';
+import 'expeditor_brand_sync_adapter.dart';
 import 'expeditor_sync_provider.dart';
 
-/// «Полная синхронизация» — animatsiyali progress ekrani.
+/// Deep-link / legacy marshrut — BrandSync (shablon) animatsiyasi.
 class ExpeditorManualSyncScreen extends ConsumerStatefulWidget {
   final bool full;
 
@@ -47,22 +46,15 @@ class _ExpeditorManualSyncScreenState
   @override
   Widget build(BuildContext context) {
     final sync = ref.watch(expeditorSyncProvider);
-    final isSuccess = sync.status == ExpeditorSyncStatus.success;
-    final model = ExpeditorSyncLabels.viewModel(
-      isSuccess: isSuccess,
-      phaseIndex: sync.phaseIndex,
-    );
 
     return Stack(
       children: [
-        FullSyncView(
-          isSuccess: model.isSuccess,
-          progress: model.progress,
-          items: model.items,
-          title: widget.full ? ExpeditorSyncLabels.title : 'Обычная синхронизация',
-          accentColor: AppColors.expeditorAccent,
-          onContinue: isSuccess ? _finish : null,
-          onBack: isSuccess ? _finish : null,
+        BrandSyncView(
+          state: manualSyncStateFromExpeditor(sync),
+          role: 'expeditor',
+          onContinue: sync.status == ExpeditorSyncStatus.success
+              ? _finish
+              : () {},
         ),
         if (sync.status == ExpeditorSyncStatus.error &&
             sync.errorInfo != null)
@@ -72,8 +64,9 @@ class _ExpeditorManualSyncScreenState
             bottom: 72,
             child: UserFacingErrorCard(
               error: sync.errorInfo!,
-              onRetry: () =>
-                  ref.read(expeditorSyncProvider.notifier).run(full: widget.full),
+              onRetry: () => ref
+                  .read(expeditorSyncProvider.notifier)
+                  .run(full: widget.full),
             ),
           ),
       ],

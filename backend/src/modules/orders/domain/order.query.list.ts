@@ -603,7 +603,9 @@ export async function listOrdersPaged(
   const result = {
     data: rows.map((o) => {
       const ex = o.expeditor_user;
-      const expeditorDisplay = ex ? `${ex.login} (${ex.name})` : null;
+      const expeditorDisplay = ex
+        ? ex.name?.trim() || ex.login?.trim() || null
+        : null;
       const finRow = finance.get(o.id);
       const metaRow = meta.get(o.id);
       const retDisc = returnDiscountByMirror.get(o.id);

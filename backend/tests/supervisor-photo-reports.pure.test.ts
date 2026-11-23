@@ -33,6 +33,11 @@ describe("supervisor photo report url helpers", () => {
     const decoded = decodeStoredPhotoContent(`data:image/png;base64,${raw}`);
     expect(decoded?.contentType).toBe("image/png");
     expect(decoded?.buffer.toString("utf8")).toBe("hello");
+
+    const svg = encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg"/>');
+    const utf8 = decodeStoredPhotoContent(`data:image/svg+xml;utf8,${svg}`);
+    expect(utf8?.contentType).toBe("image/svg+xml");
+    expect(utf8?.buffer.toString("utf8")).toContain("<svg");
   });
 
   it("allows public https photo hosts and blocks loopback/private", () => {

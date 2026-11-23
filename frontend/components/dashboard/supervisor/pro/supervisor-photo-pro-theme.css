@@ -1,0 +1,577 @@
+.supervisor-photo-pro {
+  --stroke: #dfe9f5;
+  --ink: #102b5e;
+  --muted: #6d83aa;
+  color: var(--ink);
+  font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+}
+.supervisor-photo-pro *,
+.supervisor-photo-pro *::before,
+.supervisor-photo-pro *::after { box-sizing: border-box; }
+.supervisor-photo-pro button,
+.supervisor-photo-pro input { font: inherit; color: inherit; }
+
+.supervisor-photo-pro.photo-pro-backdrop {
+  position: fixed;
+  z-index: 70;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 18px;
+  background: rgba(13, 31, 58, .55);
+  backdrop-filter: blur(7px);
+}
+.supervisor-photo-pro .photo-pro-modal {
+  display: flex;
+  width: min(1100px, 100%);
+  max-height: min(90vh, 860px);
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid rgba(255,255,255,.86);
+  border-radius: 18px;
+  background: linear-gradient(145deg, rgba(255,255,255,.97), rgba(244,249,255,.95));
+  box-shadow: 0 28px 85px rgba(14, 39, 76, .3);
+}
+.supervisor-photo-pro .photo-pro-header {
+  display: flex;
+  flex: none;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 18px 22px 14px;
+  border-bottom: 1px solid rgba(148,174,207,.2);
+}
+.supervisor-photo-pro .photo-pro-header-icon {
+  display: grid;
+  width: 40px;
+  height: 40px;
+  flex: none;
+  place-items: center;
+  border-radius: 12px;
+  background: linear-gradient(145deg, #e9f3ff, #dfeeff);
+  color: #287cf4;
+}
+.supervisor-photo-pro .photo-pro-heading { min-width: 0; flex: 1; }
+.supervisor-photo-pro .photo-pro-eyebrow {
+  color: #8aa0bd;
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 1px;
+}
+.supervisor-photo-pro .photo-pro-heading h2 {
+  margin: 4px 0;
+  color: var(--ink);
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: -.3px;
+  line-height: 1.25;
+}
+.supervisor-photo-pro .photo-pro-heading p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.45;
+}
+.supervisor-photo-pro .photo-pro-close {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  place-items: center;
+  border: 1px solid rgba(120,152,194,.18);
+  border-radius: 8px;
+  background: rgba(255,255,255,.5);
+  color: #6982a8;
+  cursor: pointer;
+}
+.supervisor-photo-pro .photo-pro-close:hover { background: #edf5ff; color: #287cf4; }
+
+.supervisor-photo-pro .photo-pro-summary {
+  display: grid;
+  flex: none;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin: 12px 18px 0;
+  border: 1px solid rgba(117,172,238,.16);
+  border-radius: 11px;
+  overflow: hidden;
+  background: rgba(144,176,216,.2);
+}
+.supervisor-photo-pro .photo-pro-summary > div {
+  display: grid;
+  gap: 4px;
+  padding: 12px 16px;
+  background: rgba(239,247,255,.92);
+  border-right: 1px solid rgba(148,174,207,.18);
+}
+.supervisor-photo-pro .photo-pro-summary > div:last-child { border-right: 0; }
+.supervisor-photo-pro .photo-pro-summary span { color: #7d94b2; font-size: 9px; }
+.supervisor-photo-pro .photo-pro-summary b { color: #102a58; font-size: 18px; }
+
+.supervisor-photo-pro .photo-pro-toolbar {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 18px;
+}
+.supervisor-photo-pro .photo-pro-search {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  max-width: 360px;
+  height: 36px;
+  align-items: center;
+  gap: 8px;
+  padding: 0 10px;
+  border: 1px solid var(--stroke);
+  border-radius: 9px;
+  background: rgba(255,255,255,.7);
+  color: #7a93b5;
+}
+.supervisor-photo-pro .photo-pro-search input {
+  min-width: 0;
+  flex: 1;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--ink);
+  font-size: 10.5px;
+}
+.supervisor-photo-pro .photo-pro-toolbar > em {
+  margin-left: auto;
+  color: #8397b2;
+  font-size: 9px;
+  font-style: normal;
+  white-space: nowrap;
+}
+.supervisor-photo-pro .photo-pro-btn {
+  display: inline-flex;
+  min-height: 34px;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 0 12px;
+  border: 1px solid var(--stroke);
+  border-radius: 7px;
+  background: rgba(255,255,255,.7);
+  color: #58739d;
+  cursor: pointer;
+  font-size: 10px;
+}
+.supervisor-photo-pro .photo-pro-btn:disabled { opacity: .45; cursor: not-allowed; }
+.supervisor-photo-pro .photo-pro-btn.primary {
+  border: 0;
+  background: #287cf4;
+  box-shadow: 0 4px 10px #287cf426;
+  color: #fff;
+  font-weight: 600;
+}
+
+.supervisor-photo-pro .photo-pro-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 0 18px 18px;
+}
+.supervisor-photo-pro .photo-pro-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 10px;
+}
+.supervisor-photo-pro .photo-card {
+  display: grid;
+  gap: 0;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid rgba(150,178,212,.28);
+  border-radius: 11px;
+  background: #fff;
+  box-shadow: 0 1px 5px rgba(54,99,153,.05);
+  cursor: pointer;
+  text-align: left;
+  transition: transform .16s ease, border-color .16s ease, box-shadow .16s ease;
+}
+.supervisor-photo-pro .photo-card:hover {
+  transform: translateY(-2px);
+  border-color: #7eb4f5;
+  box-shadow: 0 8px 18px rgba(54,99,153,.12);
+}
+.supervisor-photo-pro .photo-card:focus-visible {
+  outline: 2px solid #287cf4;
+  outline-offset: 2px;
+}
+.supervisor-photo-pro .photo-thumb {
+  position: relative;
+  display: block;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  overflow: hidden;
+  background: linear-gradient(145deg, #e8eef6, #d5e3f4);
+}
+.supervisor-photo-pro .photo-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  transition: transform .35s ease;
+}
+.supervisor-photo-pro .photo-card:hover .photo-thumb img { transform: scale(1.06); }
+.supervisor-photo-pro .photo-thumb-shade {
+  position: absolute;
+  inset: auto 0 0;
+  height: 46%;
+  background: linear-gradient(180deg, transparent, rgba(10, 28, 58, .62));
+  pointer-events: none;
+}
+.supervisor-photo-pro .photo-badge {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  z-index: 1;
+  max-width: calc(100% - 20px);
+  overflow: hidden;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(255,255,255,.92);
+  color: #0a7a62;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: .02em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  box-shadow: 0 2px 8px rgba(16,42,88,.12);
+  backdrop-filter: blur(8px);
+}
+.supervisor-photo-pro .photo-thumb-time {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  z-index: 1;
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: rgba(8, 22, 48, .55);
+  color: #fff;
+  font-size: 9px;
+  font-weight: 600;
+  backdrop-filter: blur(6px);
+}
+.supervisor-photo-pro .photo-meta {
+  display: grid;
+  gap: 3px;
+  padding: 7px 9px 9px;
+}
+.supervisor-photo-pro .photo-meta-top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+.supervisor-photo-pro .photo-meta-top b {
+  overflow: hidden;
+  color: #102a58;
+  font-size: 10.5px;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.supervisor-photo-pro .photo-meta-top em {
+  color: #7186a8;
+  font-size: 9px;
+  font-style: normal;
+  white-space: nowrap;
+}
+.supervisor-photo-pro .photo-meta > small {
+  overflow: hidden;
+  color: #8498b7;
+  font-size: 9.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.supervisor-photo-pro .photo-empty {
+  display: grid;
+  place-items: center;
+  gap: 8px;
+  min-height: 220px;
+  color: #8498b7;
+  text-align: center;
+}
+.supervisor-photo-pro .photo-empty b { color: #526d94; font-size: 12px; }
+.supervisor-photo-pro .photo-empty p { margin: 0; font-size: 10px; }
+
+/* Lightbox */
+.supervisor-photo-pro .photo-lightbox {
+  position: fixed;
+  z-index: 95;
+  inset: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) minmax(280px, .8fr);
+  background: rgba(8,17,32,.88);
+  backdrop-filter: blur(10px);
+}
+.supervisor-photo-pro .lightbox-stage {
+  position: relative;
+  display: grid;
+  place-items: center;
+  min-height: 0;
+  padding: 26px 60px;
+}
+.supervisor-photo-pro .lightbox-img {
+  max-width: 100%;
+  max-height: 100%;
+  border-radius: 12px;
+  box-shadow: 0 24px 70px rgba(0,0,0,.5);
+  cursor: zoom-in;
+  background: #0d1828;
+  transition: transform .25s ease;
+}
+.supervisor-photo-pro .lightbox-img.zoomed { transform: scale(1.45); cursor: zoom-out; }
+.supervisor-photo-pro .lightbox-zoom,
+.supervisor-photo-pro .lightbox-nav,
+.supervisor-photo-pro .lightbox-close-btn {
+  display: grid;
+  place-items: center;
+  border: 0;
+  color: #fff;
+  cursor: pointer;
+  background: rgba(255,255,255,.14);
+}
+.supervisor-photo-pro .lightbox-zoom {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  z-index: 2;
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+}
+.supervisor-photo-pro .lightbox-counter {
+  position: absolute;
+  bottom: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 5px 14px;
+  border-radius: 8px;
+  background: rgba(255,255,255,.14);
+  color: #fff;
+  font-size: 10.5px;
+  font-weight: 650;
+}
+.supervisor-photo-pro .lightbox-nav {
+  position: absolute;
+  top: 50%;
+  z-index: 2;
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  transform: translateY(-50%);
+}
+.supervisor-photo-pro .lightbox-nav:hover { background: rgba(40,124,244,.75); }
+.supervisor-photo-pro .lightbox-nav.prev { left: 14px; }
+.supervisor-photo-pro .lightbox-nav.next { right: 14px; }
+.supervisor-photo-pro .lightbox-meta {
+  display: grid;
+  align-content: start;
+  gap: 12px;
+  padding: 20px;
+  overflow-y: auto;
+  border-left: 1px solid rgba(255,255,255,.12);
+  background: rgba(13,24,40,.62);
+  color: #cfe0f4;
+}
+.supervisor-photo-pro .lightbox-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.supervisor-photo-pro .lightbox-close-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+}
+.supervisor-photo-pro .lightbox-meta h3 { margin: 0; color: #fff; font-size: 16px; }
+.supervisor-photo-pro .lightbox-meta p { margin: 0; color: #a9c0da; font-size: 11px; line-height: 1.55; }
+.supervisor-photo-pro .lightbox-rows {
+  display: grid;
+  overflow: hidden;
+  border: 1px solid rgba(255,255,255,.12);
+  border-radius: 10px;
+}
+.supervisor-photo-pro .lightbox-rows > div {
+  display: flex;
+  min-height: 38px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 12px;
+  border-bottom: 1px solid rgba(255,255,255,.08);
+}
+.supervisor-photo-pro .lightbox-rows > div:last-child { border-bottom: 0; }
+.supervisor-photo-pro .lightbox-rows > div:nth-child(odd) { background: rgba(255,255,255,.04); }
+.supervisor-photo-pro .lightbox-rows span { color: #8aa3c2; font-size: 9.5px; }
+.supervisor-photo-pro .lightbox-rows b { color: #e6effa; font-size: 10px; font-weight: 600; }
+.supervisor-photo-pro .lightbox-actions a,
+.supervisor-photo-pro .lightbox-actions button {
+  display: inline-flex;
+  min-height: 34px;
+  align-items: center;
+  gap: 6px;
+  padding: 0 12px;
+  border: 1px solid rgba(255,255,255,.18);
+  border-radius: 7px;
+  background: rgba(255,255,255,.08);
+  color: #dce8fb;
+  cursor: pointer;
+  font-size: 10px;
+  text-decoration: none;
+}
+
+.supervisor-photo-pro .photo-page-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px;
+}
+.supervisor-photo-pro .photo-page-toolbar-left { display: flex; align-items: center; gap: 12px; }
+.supervisor-photo-pro .photo-page-toolbar-right { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.supervisor-photo-pro .photo-page-toolbar-title { color: #102a58; font-size: 14px; }
+.supervisor-photo-pro .photo-page-toolbar-sub { margin: 2px 0 0; color: #6d83aa; font-size: 10px; }
+.supervisor-photo-pro .photo-page-controls { padding: 12px 16px; }
+.supervisor-photo-pro .photo-page-filters {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 10px;
+  align-items: end;
+}
+.supervisor-photo-pro .photo-filter-field { display: grid; gap: 5px; min-width: 0; }
+.supervisor-photo-pro .photo-filter-field > span {
+  color: #7186a8;
+  font-size: 8.5px;
+  font-weight: 600;
+}
+.supervisor-photo-pro .photo-filter-field select {
+  width: 100%;
+  min-height: 36px;
+  padding: 0 10px;
+  border: 1px solid var(--stroke);
+  border-radius: 9px;
+  background: rgba(255,255,255,.7);
+  color: #365276;
+  font-size: 10px;
+}
+.supervisor-photo-pro .photo-filter-search { max-width: none; width: 100%; }
+.supervisor-photo-pro .photo-clear {
+  border: 0;
+  background: transparent;
+  color: #287cf4;
+  cursor: pointer;
+  font-size: 9px;
+  min-height: 36px;
+}
+.supervisor-photo-pro .photo-results { padding: 15px; }
+.supervisor-photo-pro .photo-results .panel-head { margin-bottom: 12px; }
+.supervisor-photo-pro .photo-result-count { color: #7f94b0; font-size: 9px; }
+.supervisor-photo-pro .photo-back { margin: 0 0 6px; }
+.supervisor-photo-pro .photo-page-toolbar-left .photo-back {
+  display: inline-flex;
+  margin-bottom: 8px;
+}
+.supervisor-photo-pro .text-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 0;
+  border: 0;
+  background: transparent;
+  color: #0874f8;
+  cursor: pointer;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.2;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.supervisor-photo-pro .text-link:hover { color: #065fd4; }
+.supervisor-photo-pro .photo-agent-list {
+  overflow: hidden;
+  border: 1px solid rgba(137,165,199,.18);
+  border-radius: 10px;
+}
+.supervisor-photo-pro .photo-agent-row {
+  display: grid;
+  width: 100%;
+  min-height: 54px;
+  grid-template-columns: 30px minmax(140px, 1.4fr) repeat(3, minmax(64px, .55fr)) 20px;
+  align-items: center;
+  gap: 8px 10px;
+  padding: 8px 12px;
+  border: 0;
+  border-bottom: 1px solid rgba(137,165,199,.14);
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+  color: #7c90b0;
+  font-size: 9px;
+  transition: background .15s ease;
+}
+.supervisor-photo-pro .photo-agent-row:last-child { border-bottom: 0; }
+.supervisor-photo-pro .photo-agent-row:hover { background: rgba(226,239,255,.5); }
+.supervisor-photo-pro .photo-agent-row > i {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  border-radius: 8px;
+  background: rgba(40,124,244,.09);
+  color: #287cf4;
+}
+.supervisor-photo-pro .photo-agent-name { display: grid; min-width: 0; gap: 3px; }
+.supervisor-photo-pro .photo-agent-name b {
+  overflow: hidden;
+  color: #102a58;
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.supervisor-photo-pro .photo-agent-name small {
+  overflow: hidden;
+  color: #8194b0;
+  font-size: 8px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.supervisor-photo-pro .photo-agent-stat { text-align: right; white-space: nowrap; }
+.supervisor-photo-pro .photo-agent-stat b { color: #24416e; font-size: 11px; }
+.supervisor-photo-pro .photo-agent-stat.accent b { color: #0bad88; }
+.supervisor-photo-pro .photo-agent-chevron { color: #9bb0cb; justify-self: end; }
+
+@media (max-width: 1280px) {
+  .supervisor-photo-pro .photo-pro-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+@media (max-width: 1120px) {
+  .supervisor-photo-pro .photo-pro-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (max-width: 900px) {
+  .supervisor-photo-pro .photo-pro-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .supervisor-photo-pro .photo-lightbox {
+    grid-template-columns: 1fr;
+    grid-template-rows: minmax(0, 1.4fr) minmax(0, 1fr);
+  }
+  .supervisor-photo-pro .lightbox-stage { padding: 18px 52px 44px; }
+  .supervisor-photo-pro .lightbox-meta { border-left: 0; border-top: 1px solid rgba(255,255,255,.12); }
+}
+@media (max-width: 600px) {
+  .supervisor-photo-pro .photo-pro-summary { grid-template-columns: 1fr; }
+  .supervisor-photo-pro .photo-pro-grid { grid-template-columns: 1fr; }
+  .supervisor-photo-pro .photo-card {
+    grid-template-columns: minmax(110px, 132px) 1fr;
+    align-items: center;
+  }
+  .supervisor-photo-pro .photo-thumb { aspect-ratio: 1 / 1; }
+  .supervisor-photo-pro .photo-agent-row {
+    grid-template-columns: 28px minmax(100px, 1fr) minmax(52px, .5fr) 18px;
+  }
+  .supervisor-photo-pro .photo-agent-row > .photo-agent-stat:nth-of-type(1),
+  .supervisor-photo-pro .photo-agent-row > .photo-agent-stat:nth-of-type(2) { display: none; }
+}

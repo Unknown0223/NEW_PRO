@@ -52,6 +52,12 @@ export async function acceptSalesReturn(
       : new Prisma.Decimal(0);
 
   await prisma.$transaction(async (tx) => {
+    const transition = await tx.salesReturn.updateMany({
+      where: { tenant_id: tenantId, id: returnId, status: "pending" },
+      data: { accepted_at: new Date(), accepted_by_user_id: uid, status: "posted" }
+    });
+    if (transition.count !== 1) throw new Error("RETURN_NOT_PENDING");
+
     // 1) Ombor ostatkasi — qaytarish omboriga qo'shamiz
     for (const ln of ret.lines) {
       const delta = new Prisma.Decimal(ln.qty);
@@ -126,12 +132,6 @@ export async function acceptSalesReturn(
         data: { discount_sum: nd.gt(0) ? nd : new Prisma.Decimal(0) }
       });
     }
-
-    // 4) Hujjat holati — qabul qilingan
-    await tx.salesReturn.update({
-      where: { id: ret.id },
-      data: { status: "posted", accepted_at: new Date(), accepted_by_user_id: uid }
-    });
 
     // 5) Ko'zgu «заявка» yoki manba zakaz holati
     if (ret.mirror_order_id != null) {
@@ -218,13 +218,14 @@ export async function rejectSalesReturn(
   if (ret.status !== "pending") throw new Error("RETURN_NOT_PENDING");
 
   await prisma.$transaction(async (tx) => {
-    await tx.salesReturn.update({
-      where: { id: ret.id },
+    const transition = await tx.salesReturn.updateMany({
+      where: { tenant_id: tenantId, id: returnId, status: "pending" },
       data: {
         status: "cancelled",
         note: reason?.trim() ? reason.trim().slice(0, 1000) : undefined
       }
     });
+    if (transition.count !== 1) throw new Error("RETURN_NOT_PENDING");
     if (ret.mirror_order_id != null) {
       const mirror = await tx.order.findFirst({
         where: { id: ret.mirror_order_id, tenant_id: tenantId },

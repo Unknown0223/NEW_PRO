@@ -13,6 +13,8 @@ import '../../core/face/face_verification_flow.dart';
 import '../../core/security/location_guard.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/time/server_clock.dart';
+import '../../core/ui/agent_ui_extended.dart';
+import '../auth/auth_provider.dart';
 import '../agent/shell/agent_app_bar.dart';
 import 'attendance_api_service.dart';
 import 'attendance_gate_page.dart';
@@ -669,23 +671,10 @@ class _AttendanceHubScreenState extends ConsumerState<AttendanceHubScreen> {
       error: (err, _) => _wrapGate(Scaffold(
         backgroundColor: AppColors.background,
         appBar: AgentAppBar(title: 'Табель и Посещаемость', showBack: showBack),
-        body: Center(
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text('Ошибка загрузки: $err', textAlign: TextAlign.center),
-                if (widget.gateMode) ...[
-                  const SizedBox(height: 16),
-                  FilledButton(
-                    onPressed: () => ref.invalidate(mobileAttendanceStateProvider),
-                    child: const Text('Повторить'),
-                  ),
-                ],
-              ],
-            ),
-          ),
+        body: AgentErrorPanel(
+          error: err,
+          onRetry: () => ref.invalidate(mobileAttendanceStateProvider),
+          onLogin: () => ref.read(authStateProvider.notifier).logout(),
         ),
       )),
       data: (st) {

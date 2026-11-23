@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/api/api_exceptions.dart';
 import '../../core/api/dio_client.dart';
 import '../../core/auth/session.dart';
 import 'attendance_models.dart';
@@ -16,11 +17,15 @@ class AttendanceApiService {
   AttendanceApiService(this._dio, this._slug);
 
   Future<MobileAttendanceState> fetchState() async {
-    final r = await _dio.get('/api/$_slug/mobile/attendance/state');
-    final data = r.data is Map && (r.data as Map)['data'] is Map
-        ? Map<String, dynamic>.from((r.data as Map)['data'] as Map)
-        : <String, dynamic>{};
-    return MobileAttendanceState.fromJson(data);
+    try {
+      final r = await _dio.get('/api/$_slug/mobile/attendance/state');
+      final data = r.data is Map && (r.data as Map)['data'] is Map
+          ? Map<String, dynamic>.from((r.data as Map)['data'] as Map)
+          : <String, dynamic>{};
+      return MobileAttendanceState.fromJson(data);
+    } on DioException catch (e) {
+      throw mapDioException(e);
+    }
   }
 
   Future<Map<String, dynamic>?> fetchMyTimesheet({String? month}) async {

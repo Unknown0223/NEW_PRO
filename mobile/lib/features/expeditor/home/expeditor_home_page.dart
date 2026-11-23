@@ -1,6 +1,7 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../../../core/auth/session.dart';
@@ -11,14 +12,17 @@ import '../config/expeditor_config_enforcement.dart';
 import '../expeditor_providers.dart';
 import '../payments/expeditor_notifications.dart';
 import '../shell/expeditor_drawer.dart';
+import '../sync/expeditor_sync_provider.dart';
 import 'expeditor_home_sheets.dart';
 import 'expeditor_sync_sheet.dart';
 
-/// «Синхронизация» — agentnikidek ikki variantli sheet (Полная / Обычная).
+/// «Синхронизация» — sheet → BrandSync overlay (ExpeditorShell).
 Future<void> _openSync(BuildContext context, WidgetRef ref) async {
   final full = await ExpeditorSyncSheet.show(context);
   if (full == null || !context.mounted) return;
-  context.push('/exp-manual-sync?full=${full ? 1 : 0}');
+  final notifier = ref.read(expeditorSyncProvider.notifier);
+  if (notifier.isRunning) return;
+  unawaited(notifier.run(full: full));
 }
 
 class ExpeditorHomePage extends ConsumerWidget {

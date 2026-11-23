@@ -11,7 +11,12 @@ import {
   getSupervisorSummary,
   getSupervisorVisits
 } from "./dashboard.supervisor.snapshot.partials";
-import { listSupervisorAgentPhotoReports, fetchSupervisorPhotoImages, loadSupervisorPhotoContent } from "./dashboard.supervisor.photo-reports";
+import {
+  listSupervisorAgentPhotoReports,
+  listSupervisorDayPhotoFeed,
+  fetchSupervisorPhotoImages,
+  loadSupervisorPhotoContent
+} from "./dashboard.supervisor.photo-reports";
 import {
   getExpeditorsDashboard,
   parseExpeditorsDashboardFilters
@@ -82,6 +87,31 @@ export function registerDashboardSupervisorRoutes(app: FastifyInstance) {
       const data = await getSupervisorProducts(request.tenant!.id, parsed);
       recordDashboardPerf(request.log, reply, {
         route: "supervisor-products",
+        tenantId: request.tenant!.id,
+        durationMs: Date.now() - t0,
+        supervisorRole: accessUser.role === "supervisor"
+      });
+      return reply.send(data);
+    }
+  );
+
+  app.get(
+    "/api/:slug/dashboard/supervisor/photo-reports/feed",
+    { preHandler: dashboardSupervisorPreHandler },
+    async (request, reply) => {
+      if (!ensureTenantContext(request, reply)) return;
+      const q = request.query as Record<string, string | undefined>;
+      const parsed = parseSupervisorDashboardFilters(q);
+      const accessUser = getAccessUser(request);
+      applySupervisorSelfScope(accessUser, parsed);
+      await applyAccessAgentIdsScope(request.tenant!.id, accessUser, parsed);
+      const t0 = Date.now();
+      const data = await listSupervisorDayPhotoFeed(request.tenant!.id, parsed, {
+        search: q.search?.trim(),
+        limit: Number.parseInt(q.limit ?? "200", 10)
+      });
+      recordDashboardPerf(request.log, reply, {
+        route: "supervisor-photo-feed",
         tenantId: request.tenant!.id,
         durationMs: Date.now() - t0,
         supervisorRole: accessUser.role === "supervisor"

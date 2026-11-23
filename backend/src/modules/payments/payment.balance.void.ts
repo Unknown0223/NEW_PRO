@@ -52,6 +52,31 @@ function parseAllocationsSnapshot(raw: unknown): AllocationSnapshotItem[] {
   return out;
 }
 
+async function runPaymentStateTransaction<T>(
+  work: (tx: Prisma.TransactionClient) => Promise<T>
+): Promise<T> {
+  for (let attempt = 1; ; attempt += 1) {
+    try {
+      return await prisma.$transaction(work, {
+        isolationLevel: Prisma.TransactionIsolationLevel.Serializable
+      });
+    } catch (error) {
+      if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== "P2034") {
+        throw error;
+      }
+      if (attempt === 3) {
+        throw Object.assign(new Error("Payment changed concurrently. Retry the operation."), {
+          name: "PaymentWriteConflict",
+          statusCode: 409
+        });
+      }
+      await new Promise<void>((resolve) =>
+        setTimeout(resolve, attempt * 30 + Math.floor(Math.random() * 25))
+      );
+    }
+  }
+}
+
 /**
  * Bekor qilish (arxiv): qator bazada qoladi, balans qaytariladi, taqsimotlar snapshot + olib tashlanadi.
  * To‘liq tarix: `tenant_audit_events`, `delete_reason_ref`, `deleted_by_user_id`.
@@ -69,7 +94,7 @@ export async function deletePayment(
   const now = new Date();
   let clientId: number | null = null;
   let amountValue: string | null = null;
-  await prisma.$transaction(async (tx) => {
+  await runPaymentStateTransaction(async (tx) => {
     const payment = await tx.payment.findFirst({
       where: { id: paymentId, tenant_id: tenantId }
     });
@@ -170,7 +195,7 @@ export async function restorePayment(
   let clientId: number | null = null;
   let amountValue: string | null = null;
 
-  await prisma.$transaction(async (tx) => {
+  await runPaymentStateTransaction(async (tx) => {
     const payment = await tx.payment.findFirst({
       where: { id: paymentId, tenant_id: tenantId }
     });

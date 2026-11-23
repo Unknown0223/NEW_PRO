@@ -39,6 +39,25 @@ export type SupervisorPhotoReportsPayload = {
   limit: number;
 };
 
+/** Kunlik lenta (shablon PhotoReportsPage) — agent_id shart emas. */
+export type SupervisorDayPhotoFeedItem = {
+  id: number;
+  caption: string | null;
+  created_at: string;
+  client_id: number;
+  client_name: string;
+  client_city: string | null;
+  category: string;
+  agent_id: number;
+  agent_name: string;
+};
+
+export type SupervisorDayPhotoFeedPayload = {
+  date: string;
+  summary: { outlets: number; photo_count: number; agent_count: number };
+  photos: SupervisorDayPhotoFeedItem[];
+};
+
 function photoCategoryLabel(caption: string | null | undefined): string {
   const t = String(caption ?? "").trim();
   return t || "Без категории";
@@ -83,7 +102,8 @@ export function resolvePhotoUrlForClient(
   return t || supervisorPhotoContentPath(tenantSlug, photoId);
 }
 
-const DATA_URL_RE = /^data:(image\/[a-z0-9.+-]+);base64,(.+)$/i;
+const DATA_URL_BASE64_RE = /^data:(image\/[a-z0-9.+-]+);base64,(.+)$/i;
+const DATA_URL_UTF8_RE = /^data:(image\/[a-z0-9.+-]+)(?:;charset=[^;,]+)?;(?:utf-?8,|,)(.+)$/i;
 
 export function decodeStoredPhotoContent(stored: string): {
   buffer: Buffer;
@@ -91,9 +111,18 @@ export function decodeStoredPhotoContent(stored: string): {
 } | null {
   const t = stored.trim();
   if (!t) return null;
-  const m = DATA_URL_RE.exec(t);
-  if (m) {
-    return { contentType: m[1]!, buffer: Buffer.from(m[2]!, "base64") };
+  const b64 = DATA_URL_BASE64_RE.exec(t);
+  if (b64) {
+    return { contentType: b64[1]!, buffer: Buffer.from(b64[2]!, "base64") };
+  }
+  const utf8 = DATA_URL_UTF8_RE.exec(t);
+  if (utf8) {
+    try {
+      const raw = decodeURIComponent(utf8[2]!);
+      return { contentType: utf8[1]!, buffer: Buffer.from(raw, "utf8") };
+    } catch {
+      return null;
+    }
   }
   if (/^[A-Za-z0-9+/=\s]+$/.test(t) && t.length > 80) {
     return { contentType: "image/jpeg", buffer: Buffer.from(t.replace(/\s+/g, ""), "base64") };
@@ -253,6 +282,99 @@ export async function listSupervisorAgentPhotoReports(
     limit
   };
 }
+
+export async function listSupervisorDayPhotoFeed(
+  tenantId: number,
+  filters: SupervisorDashboardFilters,
+  opts: { search?: string; limit?: number } = {}
+): Promise<SupervisorDayPhotoFeedPayload> {
+  const search = opts.search?.trim() ?? "";
+  const limit = Math.min(500, Math.max(1, opts.limit ?? 200));
+  const dayStart = new Date(`${filters.date}T00:00:00.000Z`);
+  const dayEnd = new Date(dayStart.getTime() + 86400000);
+
+  const clientWhere: Prisma.ClientWhereInput = {
+    ...(filters.client_categories.length > 0
+      ? { category: { in: filters.client_categories } }
+      : {}),
+    ...(filters.territory_1_list.length > 0 ? { zone: { in: filters.territory_1_list } } : {}),
+    ...(filters.territory_2_list.length > 0 ? { region: { in: filters.territory_2_list } } : {}),
+    ...(filters.territory_3_list.length > 0 ? { city: { in: filters.territory_3_list } } : {})
+  };
+
+  const agentIdFilter =
+    filters.agent_ids.length > 0
+      ? { created_by_user_id: { in: filters.agent_ids } }
+      : {};
+
+  const photos = await prisma.clientPhotoReport.findMany({
+    where: {
+      tenant_id: tenantId,
+      deleted_at: null,
+      created_at: { gte: dayStart, lt: dayEnd },
+      ...agentIdFilter,
+      ...(Object.keys(clientWhere).length > 0 ? { client: clientWhere } : {}),
+      ...(search
+        ? {
+            OR: [
+              { caption: { contains: search, mode: "insensitive" } },
+              {
+                client: {
+                  ...(Object.keys(clientWhere).length > 0 ? clientWhere : {}),
+                  OR: [
+                    { name: { contains: search, mode: "insensitive" } },
+                    { city: { contains: search, mode: "insensitive" } }
+                  ]
+                }
+              },
+              { created_by: { name: { contains: search, mode: "insensitive" } } }
+            ]
+          }
+        : {})
+    },
+    select: {
+      id: true,
+      caption: true,
+      created_at: true,
+      created_by_user_id: true,
+      client_id: true,
+      client: { select: { id: true, name: true, city: true } },
+      created_by: { select: { id: true, name: true } }
+    },
+    orderBy: [{ created_at: "desc" }, { id: "desc" }],
+    take: limit
+  });
+
+  const agentIds = new Set<number>();
+  const clientIds = new Set<number>();
+  const items: SupervisorDayPhotoFeedItem[] = photos.map((p) => {
+    const agentId = p.created_by_user_id ?? p.created_by?.id ?? 0;
+    agentIds.add(agentId);
+    clientIds.add(p.client_id);
+    return {
+      id: p.id,
+      caption: p.caption,
+      created_at: p.created_at.toISOString(),
+      client_id: p.client_id,
+      client_name: p.client?.name ?? "—",
+      client_city: p.client?.city ?? null,
+      category: photoCategoryLabel(p.caption),
+      agent_id: agentId,
+      agent_name: p.created_by?.name?.trim() || `Agent ${agentId}`
+    };
+  });
+
+  return {
+    date: filters.date,
+    summary: {
+      outlets: clientIds.size,
+      photo_count: items.length,
+      agent_count: agentIds.size
+    },
+    photos: items
+  };
+}
+
 export {
   fetchRemotePhotoBytes,
   fetchSupervisorPhotoImages,

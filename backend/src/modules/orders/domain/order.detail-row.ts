@@ -24,7 +24,9 @@ import {
 export function toDetailRow(o: OrderDetailLoaded, viewerRole?: string): OrderDetailRow {
   const agentDisplay = o.agent ? `${o.agent.login} (${o.agent.name})` : null;
   const exp = o.expeditor_user;
-  const expeditorDisplay = exp ? `${exp.login} (${exp.name})` : null;
+  const expeditorDisplay = exp
+    ? exp.name?.trim() || exp.login?.trim() || null
+    : null;
   const agentTradeDir =
     o.agent?.trade_direction_row?.name?.trim() ||
     o.agent?.trade_direction_row?.code?.trim() ||

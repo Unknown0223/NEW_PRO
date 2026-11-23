@@ -122,7 +122,10 @@ export async function registerTabelMobileRoutes(app: FastifyInstance) {
     try {
       const data = await submitAttendancePunch(request.tenant!.id, Number(u.sub), {
         ...body,
-        source: body.source ?? "mobile_photo"
+        source: "mobile_photo",
+        device_id: null,
+        kiosk_leader_id: null,
+        face_score_override: null
       });
       return reply.send({ data });
     } catch (e) {
@@ -138,7 +141,10 @@ export async function registerTabelMobileRoutes(app: FastifyInstance) {
     try {
       const data = await submitAttendancePunch(request.tenant!.id, Number(u.sub), {
         ...body,
-        source: "mobile_video"
+        source: "mobile_video",
+        device_id: null,
+        kiosk_leader_id: null,
+        face_score_override: null
       });
       return reply.send({ data });
     } catch (e) {
@@ -184,6 +190,8 @@ export async function registerTabelMobileRoutes(app: FastifyInstance) {
       const data = await submitAttendancePunch(request.tenant!.id, targetUserId, {
         ...body,
         source: "kiosk",
+        device_id: null,
+        face_score_override: null,
         kiosk_leader_id: Number(u.sub)
       });
       return reply.send({ data });

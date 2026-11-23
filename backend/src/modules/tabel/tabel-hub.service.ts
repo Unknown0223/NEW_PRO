@@ -286,9 +286,6 @@ export async function saveTabelShift(
     comment?: string | null;
   }
 ) {
-  if (input.is_default) {
-    await prisma.attendanceShift.updateMany({ where: { tenant_id: tenantId }, data: { is_default: false } });
-  }
   const data = {
     name: input.name.trim(),
     start_time: input.start_time.trim(),
@@ -301,10 +298,22 @@ export async function saveTabelShift(
     is_active: input.is_active !== false,
     comment: input.comment?.trim() || null
   };
-  if (input.id) {
-    return prisma.attendanceShift.update({ where: { id: input.id }, data });
-  }
-  return prisma.attendanceShift.create({ data: { tenant_id: tenantId, ...data } });
+  /* Tenant filter + default clear in one tx. update({id,tenant_id}) needs @@unique — use findFirstOrThrow. */
+  return prisma.$transaction(async (tx) => {
+    if (data.is_default) {
+      await tx.attendanceShift.updateMany({
+        where: { tenant_id: tenantId, is_default: true },
+        data: { is_default: false }
+      });
+    }
+    if (input.id == null) {
+      return tx.attendanceShift.create({ data: { ...data, tenant_id: tenantId } });
+    }
+    const existing = await tx.attendanceShift.findFirstOrThrow({
+      where: { id: input.id, tenant_id: tenantId }
+    });
+    return tx.attendanceShift.update({ where: { id: existing.id }, data });
+  });
 }
 
 export async function deleteTabelShift(tenantId: number, id: number) {
@@ -343,7 +352,12 @@ export async function saveTabelLocation(
     require_comment_outside: input.require_comment_outside !== false,
     is_active: input.is_active !== false
   };
-  if (input.id) return prisma.attendanceLocation.update({ where: { id: input.id }, data });
+  if (input.id != null) {
+    const existing = await prisma.attendanceLocation.findFirstOrThrow({
+      where: { id: input.id, tenant_id: tenantId }
+    });
+    return prisma.attendanceLocation.update({ where: { id: existing.id }, data });
+  }
   return prisma.attendanceLocation.create({ data: { tenant_id: tenantId, ...data } });
 }
 

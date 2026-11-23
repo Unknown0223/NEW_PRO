@@ -3,11 +3,17 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../auth/auth_provider.dart';
 import '../../../core/auth/session.dart';
 import '../../../core/gps/gps_tracker.dart';
+import '../../../core/theme/app_colors.dart';
+import '../../../core/ui/agent_ui.dart';
+import '../../agent/sync/brand_sync_view.dart';
+import '../../auth/auth_provider.dart';
+import '../expeditor_providers.dart';
+import '../sync/expeditor_brand_sync_adapter.dart';
+import '../sync/expeditor_sync_provider.dart';
 
-/// Ekspeditor shell — GPS tracking va config yangilanishi (agent drawer/nav yo'q).
+/// Ekspeditor shell — GPS + BrandSync overlay (agent shell bilan bir xil UX).
 class ExpeditorShell extends ConsumerStatefulWidget {
   final Widget child;
   const ExpeditorShell({super.key, required this.child});
@@ -16,7 +22,8 @@ class ExpeditorShell extends ConsumerStatefulWidget {
   ConsumerState<ExpeditorShell> createState() => _ExpeditorShellState();
 }
 
-class _ExpeditorShellState extends ConsumerState<ExpeditorShell> with WidgetsBindingObserver {
+class _ExpeditorShellState extends ConsumerState<ExpeditorShell>
+    with WidgetsBindingObserver {
   @override
   void initState() {
     super.initState();
@@ -35,12 +42,12 @@ class _ExpeditorShellState extends ConsumerState<ExpeditorShell> with WidgetsBin
     if (state == AppLifecycleState.resumed) {
       ref.read(authStateProvider.notifier).refreshMobileConfig();
       _startGpsIfNeeded();
-      // Fon / pause dan qaytganda oflayn GPS navbatini uzatish.
       try {
-        unawaited(ref.read(gpsTrackerProvider.notifier).flushPendingLocationPings());
+        unawaited(
+          ref.read(gpsTrackerProvider.notifier).flushPendingLocationPings(),
+        );
       } catch (_) {}
     }
-    // paused da tracking to‘xtatilmaydi — oflayn yig‘ish davom etadi (timer).
   }
 
   void _startGpsIfNeeded() {
@@ -52,6 +59,44 @@ class _ExpeditorShellState extends ConsumerState<ExpeditorShell> with WidgetsBin
     }
   }
 
+  void _finishBrandSync() {
+    ref.read(expeditorSyncProvider.notifier).reset();
+    ref.invalidate(expeditorDashboardProvider);
+    ref.invalidate(expeditorVisitsProvider);
+    ref.invalidate(expeditorDebtorsProvider);
+    ref.invalidate(expeditorHomeStatsProvider);
+  }
+
   @override
-  Widget build(BuildContext context) => widget.child;
+  Widget build(BuildContext context) {
+    final sync = ref.watch(expeditorSyncProvider);
+    final showBrandSync = sync.status == ExpeditorSyncStatus.running ||
+        sync.status == ExpeditorSyncStatus.success;
+
+    ref.listen<ExpeditorSyncState>(expeditorSyncProvider, (prev, next) {
+      if (!mounted) return;
+      if (prev?.status == next.status) return;
+      if (next.status == ExpeditorSyncStatus.error) {
+        final msg = next.errorInfo?.summary ??
+            next.result?.error ??
+            'Не удалось обновить данные';
+        showAgentToast(context, msg, accentColor: AppColors.error);
+        ref.read(expeditorSyncProvider.notifier).reset();
+      }
+    });
+
+    return Stack(
+      children: [
+        widget.child,
+        if (showBrandSync)
+          Positioned.fill(
+            child: BrandSyncView(
+              state: manualSyncStateFromExpeditor(sync),
+              role: 'expeditor',
+              onContinue: _finishBrandSync,
+            ),
+          ),
+      ],
+    );
+  }
 }

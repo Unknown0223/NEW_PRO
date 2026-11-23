@@ -362,14 +362,25 @@ export async function acceptDailyReturnWaybill(
   if (pending.length === 0) throw new Error("WAYBILL_NOTHING_PENDING");
 
   let accepted = 0;
+  let already = list.length - pending.length;
   for (const r of pending) {
-    await acceptSalesReturn(tenantId, r.id, actorUserId);
-    accepted += 1;
+    try {
+      await acceptSalesReturn(tenantId, r.id, actorUserId);
+      accepted += 1;
+    } catch (error) {
+      if (
+        !(error instanceof Error) ||
+        !["RETURN_NOT_PENDING", "RETURN_ALREADY_ACCEPTED", "RETURN_CANCELLED"].includes(error.message)
+      ) {
+        throw error;
+      }
+      already += 1;
+    }
   }
 
   return {
     accepted_count: accepted,
-    already_count: list.length - pending.length,
+    already_count: already,
     total: list.length
   };
 }

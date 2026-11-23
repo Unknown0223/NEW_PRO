@@ -33,6 +33,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   @override
   void initState() {
     super.initState();
+    final slug = defaultTenantSlug();
+    final login = defaultLogin();
+    if (slug != null) _slug.text = slug;
+    if (login != null) _login.text = login;
     _launchTimer = Timer(authEntranceLaunchHold, () {
       if (!mounted || _stage != AuthEntranceStage.launch) return;
       setState(() => _stage = AuthEntranceStage.form);

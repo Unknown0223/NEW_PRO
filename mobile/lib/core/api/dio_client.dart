@@ -252,6 +252,10 @@ Future<RefreshOutcome> _doRefresh(dynamic ref) async {
         isInvalidRefreshResponse(e.response?.statusCode, e.response?.data)) {
       return RefreshOutcome.definitiveFailure;
     }
+    // Dio validateStatus 401 ni exception qiladi — transient deb qoldirmaslik.
+    if (e.response?.statusCode == 401) {
+      return RefreshOutcome.definitiveFailure;
+    }
     // connectionError / timeout / 5xx — sessiya saqlanadi
     return RefreshOutcome.transientFailure;
   } catch (_) {
