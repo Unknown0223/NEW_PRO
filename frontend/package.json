@@ -92,7 +92,7 @@
     "@vitejs/plugin-react": "^4.3.4",
     "@vitest/coverage-v8": "^5.0.5",
     "cross-env": "^7.0.3",
-    "eslint": "^9",
+    "eslint": "^10",
     "eslint-config-next": "16.4.2",
     "jsdom": "^25.0.1",
     "postcss": "^8",
