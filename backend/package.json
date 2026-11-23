@@ -141,7 +141,7 @@
     "@tensorflow/tfjs-backend-wasm": "^4.22.0",
     "@vladmandic/face-api": "^1.7.15",
     "bcryptjs": "^3.0.2",
-    "bullmq": "^5.73.4",
+    "bullmq": "^6.7.8",
     "dotenv": "^16.4.5",
     "exceljs": "^4.4.0",
     "fastify": "^4.28.1",
