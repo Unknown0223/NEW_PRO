@@ -146,7 +146,7 @@
     "exceljs": "^4.4.0",
     "fastify": "^4.28.1",
     "fastify-plugin": "^5.0.1",
-    "ioredis": "^5.10.1",
+    "ioredis": "^6.0.0",
     "jszip": "^3.10.1",
     "opossum": "^10.0.0",
     "pdfkit": "^0.18.0",
