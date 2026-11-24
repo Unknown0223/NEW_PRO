@@ -24,7 +24,8 @@ export async function getClientSales2Report(tenantId: number, f: ClientSales2Fil
     (f.product_ids && f.product_ids.length) ||
       (f.category_ids && f.category_ids.length) ||
       (f.product_group_ids && f.product_group_ids.length) ||
-      (f.segment_ids && f.segment_ids.length)
+      (f.segment_ids && f.segment_ids.length) ||
+      (f.brand_ids && f.brand_ids.length)
   );
   const offset = (f.page - 1) * f.limit;
   const sumFrom = typeof f.sum_from === "number" ? f.sum_from : null;

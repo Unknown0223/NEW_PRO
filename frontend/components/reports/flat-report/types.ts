@@ -26,6 +26,8 @@ export type FlatReportMultiSelectField = {
   /** Key on filter-options payload, e.g. `agents` / `territory_1`. */
   optionsFrom: string;
   placeholder: string;
+  /** Initial selected ids (e.g. SalesDoc default statuses). */
+  defaultValue?: string[];
 };
 
 export type FlatReportSelectField = {
@@ -86,6 +88,8 @@ export type FlatReportClientTableSearch = {
  */
 export type FlatReportConfig = {
   title: string;
+  /** Optional subtitle under title. */
+  description?: string;
   apiPath: string;
   exportPermission: string;
   exportFilename: string;
@@ -110,6 +114,21 @@ export type FlatReportConfig = {
   clientTableSearch?: FlatReportClientTableSearch;
   /** Optional per-column cell override; wins over `column.format`. */
   formatters?: Record<string, (value: unknown, row: Record<string, unknown>) => string>;
+  /** Optional row class (e.g. last_days highlight). */
+  rowClassName?: (
+    row: Record<string, unknown>,
+    applied: Record<string, string | number | string[]>
+  ) => string | undefined;
   /** Report payload array key; default `rows` (e.g. client-sales-3 uses `clients`). */
   rowsKey?: string;
+  /**
+   * Persist column order/visibility via `/me/ui-preferences` (project standard).
+   * Default: `report.<apiPath>`.
+   */
+  tablePrefsId?: string;
+  /**
+   * Render `date_type` select as radio group next to calendar (client-sales-2 style).
+   * Default true when a select field with paramKey `date_type` exists.
+   */
+  dateTypeAsRadio?: boolean;
 };

@@ -59,6 +59,20 @@ describe("buildEmptyDraft", () => {
     expect(draft.to).toBe(draft.from);
     expect(draft.from).not.toBe("2026-11-01");
   });
+
+  it("seeds multiSelect defaultValue (client-sales-3 statuses)", () => {
+    const fields: FlatReportFilterField[] = [
+      {
+        kind: "multiSelect",
+        paramKey: "statuses",
+        optionsFrom: "statuses",
+        placeholder: "Статус",
+        defaultValue: ["delivering", "delivered"]
+      }
+    ];
+    const draft = buildEmptyDraft(fields, "2026-11-01", "2026-11-20", 50);
+    expect(draft.statuses).toEqual(["delivering", "delivered"]);
+  });
 });
 
 describe("resolveReportRows", () => {

@@ -27,6 +27,7 @@ function buildOrderWhere(tenantId: number, f: OrderQtyFilters, actor?: ReportAct
   const parts: Prisma.Sql[] = [
     Prisma.sql`o.tenant_id = ${tenantId}`,
     Prisma.sql`o.order_type IN ('order', 'return', 'return_by_order', 'exchange')`,
+    Prisma.sql`o.status <> 'cancelled'`,
     Prisma.sql`c.merged_into_client_id IS NULL`
   ];
   const from = parseDate(f.from);

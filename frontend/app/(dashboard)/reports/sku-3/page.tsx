@@ -2,8 +2,8 @@
 
 /**
  * FlatReport wave-3 adapter (ADR-010 / ADR-012).
- * Parity: filtrlar ha · chrome qisman (matrix → flat product cols; no dual header / need_products banner)
- * · oylik/dialog — · export+RBAC qisman (Excel always if permitted; product_ids gate lost)
+ * SalesDoc: /report/volumeReport/version2 («По Sku 2.0») — parity 2026-11-24 probe.
+ * SALEC: matrix → flat product amount/qty cols; MML filter yo‘q.
  */
 import { FlatReportPage } from "@/components/reports/flat-report/flat-report-page";
 import { mapMultiOptions } from "@/components/reports/flat-report/flat-report-helpers";
@@ -52,20 +52,21 @@ function sku3Columns(ctx: {
 
 const config: FlatReportConfig = {
   title: "По Sku 3.0",
+  description: "Продажи выбранных SKU по торговым точкам (SalesDoc По Sku 2.0 / volumeReport/version2).",
   apiPath: "sku-3",
   exportPermission: "reports.po_sku_3.export",
   exportFilename: "po-sku-3.xlsx",
   exportLimit: 2000,
+  tablePrefsId: "report.sku-3",
   filterFields: [
     { kind: "dateRange" },
-    { kind: "search", placeholder: "Клиент" },
     {
       kind: "multiSelect",
       paramKey: "product_ids",
       optionsFrom: "products",
       placeholder: "Продукты"
     },
-    { kind: "multiSelect", paramKey: "agent_ids", optionsFrom: "agents", placeholder: "Агент" },
+    { kind: "multiSelect", paramKey: "agent_ids", optionsFrom: "agents", placeholder: "Агенты" },
     {
       kind: "multiSelect",
       paramKey: "expeditor_ids",
@@ -82,7 +83,7 @@ const config: FlatReportConfig = {
       kind: "multiSelect",
       paramKey: "client_categories",
       optionsFrom: "client_categories",
-      placeholder: "Категория клиента"
+      placeholder: "Сегменты клиентов"
     },
     {
       kind: "multiSelect",
@@ -101,14 +102,19 @@ const config: FlatReportConfig = {
       paramKey: "territory_3_list",
       optionsFrom: "territory_3",
       placeholder: "Город"
-    }
+    },
+    { kind: "search", placeholder: "Клиент" }
   ],
   columns: sku3Columns,
   totalsKeys: ["okb", "akb"],
   totalsLabels: { okb: "ОКБ", akb: "АКБ" },
   rowKey: "client_id",
   countLabel: "Клиентов в таблице",
-  showTableFooter: false
+  showTableFooter: false,
+  clientTableSearch: {
+    rowKeys: ["client_name"],
+    placeholder: "Поиск в таблице"
+  }
 };
 
 export default function ReportSku3Page() {

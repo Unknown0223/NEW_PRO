@@ -73,15 +73,22 @@ describe("FlatReportPage wave-1 adapters + source-contract", () => {
 
   it("MultiFilter lives only in multi-filter.tsx", () => {
     const page = readFileSync(join(flatReportDir, "flat-report-page.tsx"), "utf8");
+    const filters = readFileSync(join(flatReportDir, "flat-report-filters.tsx"), "utf8");
     expect(page).not.toMatch(/function MultiFilter/);
-    expect(page).toMatch(/from ["']\.\/multi-filter["']/);
+    expect(filters).not.toMatch(/function MultiFilter/);
+    expect(filters).toMatch(/from ["']\.\/multi-filter["']/);
   });
 
-  it("filter chrome uses primary wrap row + multiSelect grid (not full-width stack)", () => {
+  it("filter chrome uses FlatReportFilters + column prefs (not full-width stack)", () => {
     const page = readFileSync(join(flatReportDir, "flat-report-page.tsx"), "utf8");
-    expect(page).toMatch(/grid gap-2 md:grid-cols-3 xl:grid-cols-4/);
-    expect(page).toMatch(/kind !== "multiSelect"/);
-    expect(page).toMatch(/ml-auto h-8 max-w-xs/);
+    const filters = readFileSync(join(flatReportDir, "flat-report-filters.tsx"), "utf8");
+    expect(existsSync(join(flatReportDir, "flat-report-filters.tsx"))).toBe(true);
+    expect(page).toMatch(/FlatReportFilters/);
+    expect(page).toMatch(/TableColumnSettingsDialog/);
+    expect(page).toMatch(/useUserTablePrefs/);
+    expect(filters).toMatch(/xl:grid-cols-9/);
+    expect(filters).toMatch(/gridFields/);
+    expect(filters).toMatch(/Дата применяется по/);
   });
 
   it.each(wave1Adapters)("%s is thin FlatReport adapter (M1.3)", (rel) => {

@@ -1,34 +1,35 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { FileSpreadsheet, RotateCcw } from "lucide-react";
+import { ListOrdered, Search } from "lucide-react";
 import { api } from "@/lib/api";
 import { usePermissions } from "@/lib/use-permissions";
 import { STALE } from "@/lib/query-stale";
 import { useAuthStore, useAuthStoreHydrated } from "@/lib/auth-store";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { filterSelectClassName } from "@/components/ui/filter-select";
+import { TableColumnSettingsDialog, type ColumnDefItem } from "@/components/data-table/table-column-settings-dialog";
+import { useUserTablePrefs } from "@/hooks/use-user-table-prefs";
 import { monthToDateRange } from "@/components/dashboard/shared/date-ranges";
 import { cn } from "@/lib/utils";
-import type { FlatReportConfig } from "./types";
+import type { FlatReportConfig, FlatReportSelectField } from "./types";
 import {
   appendParams,
   applyOptionsDefaults,
   buildEmptyDraft,
   filterRowsByClientSearch,
-  formatCell,
   mapMultiOptions,
   mapSelectOptions,
   money,
   readReportTotal,
-  resolveCellValue,
   resolveColumns,
   resolveReportRows,
   type MultiItem
 } from "./flat-report-helpers";
-import { DateRangeFieldControl } from "./date-range-field";
-import { MultiFilter } from "./multi-filter";
+import { FlatReportFilters } from "./flat-report-filters";
+import { FlatReportTable } from "./flat-report-table";
 
 type FilterOptions = Record<string, unknown>;
 type ReportData = {
@@ -39,9 +40,11 @@ type ReportData = {
   total: number;
 } & Record<string, unknown>;
 
-/** Deep FE module: one declarative FlatReport config drives chrome. */
+const PAGE_SIZES = [10, 20, 50, 100] as const;
+
+/** Deep FE module: one declarative FlatReport config drives chrome (ADR-010). */
 export function FlatReportPage(config: FlatReportConfig) {
-  const limit = config.defaultLimit ?? 50;
+  const defaultLimit = config.defaultLimit ?? 50;
   const exportLimit = config.exportLimit ?? 5000;
   const canExport = usePermissions().has(config.exportPermission);
   const tenantSlug = useAuthStore((s) => s.tenantSlug);
@@ -49,7 +52,11 @@ export function FlatReportPage(config: FlatReportConfig) {
   const { from: from0, to: to0 } = monthToDateRange();
   const [exporting, setExporting] = useState(false);
   const [tableSearch, setTableSearch] = useState("");
-  const [draft, setDraft] = useState(() => buildEmptyDraft(config.filterFields, from0, to0, limit));
+  const deferredTableSearch = useDeferredValue(tableSearch);
+  const [columnDialogOpen, setColumnDialogOpen] = useState(false);
+  const [draft, setDraft] = useState(() =>
+    buildEmptyDraft(config.filterFields, from0, to0, defaultLimit)
+  );
   const [applied, setApplied] = useState(draft);
 
   const filtersQ = useQuery({
@@ -66,11 +73,43 @@ export function FlatReportPage(config: FlatReportConfig) {
 
   useEffect(() => {
     if (!filtersQ.data) return;
-    // bands (and similar) defaults from filter-options must hit applied too,
-    // else first reportQ runs with empty bands until the user clicks Apply.
     setDraft((d) => applyOptionsDefaults(d, config.filterFields, filtersQ.data));
     setApplied((a) => applyOptionsDefaults(a, config.filterFields, filtersQ.data));
   }, [filtersQ.data, config.filterFields]);
+
+  const columnsAll = useMemo(
+    () => resolveColumns(config.columns, { applied, filterOptions: filtersQ.data }),
+    [config.columns, applied, filtersQ.data]
+  );
+
+  const columnDefs: ColumnDefItem[] = useMemo(
+    () => columnsAll.map((c) => ({ id: c.key, label: c.header })),
+    [columnsAll]
+  );
+  const defaultColumnOrder = useMemo(() => columnDefs.map((c) => c.id), [columnDefs]);
+  const tablePrefsId = config.tablePrefsId ?? `report.${config.apiPath}`;
+
+  const columnPrefs = useUserTablePrefs({
+    tenantSlug,
+    tableId: tablePrefsId,
+    defaultColumnOrder,
+    defaultPageSize: defaultLimit,
+    allowedPageSizes: PAGE_SIZES
+  });
+
+  useEffect(() => {
+    if (columnPrefs.prefsLoading) return;
+    const ps = columnPrefs.pageSize;
+    setDraft((d) => (Number(d.limit) === ps ? d : { ...d, limit: ps, page: 1 }));
+    setApplied((a) => (Number(a.limit) === ps ? a : { ...a, limit: ps, page: 1 }));
+  }, [columnPrefs.prefsLoading, columnPrefs.pageSize]);
+
+  const visibleColumns = useMemo(() => {
+    const byKey = new Map(columnsAll.map((c) => [c.key, c]));
+    return columnPrefs.visibleColumnOrder
+      .map((id) => byKey.get(id))
+      .filter((c): c is NonNullable<typeof c> => Boolean(c));
+  }, [columnsAll, columnPrefs.visibleColumnOrder]);
 
   const reportQ = useQuery({
     queryKey: [`report-${config.apiPath}`, tenantSlug, applied],
@@ -96,22 +135,40 @@ export function FlatReportPage(config: FlatReportConfig) {
     return map;
   }, [config.filterFields, filtersQ.data]);
 
-  const columns = useMemo(
-    () => resolveColumns(config.columns, { applied, filterOptions: filtersQ.data }),
-    [config.columns, applied, filtersQ.data]
+  const dateTypeField = config.filterFields.find(
+    (f): f is FlatReportSelectField => f.kind === "select" && f.paramKey === "date_type"
   );
+  const dateTypeAsRadio = config.dateTypeAsRadio ?? Boolean(dateTypeField);
+  const dateTypeOptions = dateTypeField
+    ? dateTypeField.staticOptions ??
+      mapSelectOptions(dateTypeField.optionsFrom ? filtersQ.data?.[dateTypeField.optionsFrom] : undefined)
+    : [];
 
   if (!hydrated || !tenantSlug) {
-    return <p className="p-6 text-sm text-muted-foreground">Загрузка...</p>;
+    return <p className="text-sm text-muted-foreground">Загрузка...</p>;
   }
 
   const totalPages = reportQ.data ? Math.max(1, Math.ceil(reportQ.data.total / reportQ.data.limit)) : 1;
   const rawRows = resolveReportRows(reportQ.data, config.rowsKey);
   const rows = config.clientTableSearch
-    ? filterRowsByClientSearch(rawRows, tableSearch, config.clientTableSearch.rowKeys)
+    ? filterRowsByClientSearch(rawRows, deferredTableSearch, config.clientTableSearch.rowKeys)
     : rawRows;
-  const colCount = columns.length;
-  const footerLead = config.footerLeadColSpan ?? Math.max(1, colCount - config.totalsKeys.length);
+
+  function applyFilters(page = 1) {
+    setApplied({ ...draft, page });
+    setDraft((s) => ({ ...s, page }));
+  }
+
+  function resetFilters() {
+    const next = applyOptionsDefaults(
+      buildEmptyDraft(config.filterFields, from0, to0, columnPrefs.pageSize || defaultLimit),
+      config.filterFields,
+      filtersQ.data
+    );
+    setDraft(next);
+    setApplied(next);
+    setTableSearch("");
+  }
 
   async function exportXlsx() {
     if (!tenantSlug || !canExport) return;
@@ -137,251 +194,114 @@ export function FlatReportPage(config: FlatReportConfig) {
   }
 
   return (
-    <div className="space-y-4 p-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-lg font-semibold">{config.title}</h1>
-        <div className="flex gap-2">
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={() => {
-              const next = applyOptionsDefaults(
-                buildEmptyDraft(config.filterFields, from0, to0, limit),
-                config.filterFields,
-                filtersQ.data
-              );
-              setDraft(next);
-              setApplied(next);
-              setTableSearch("");
-            }}
-          >
-            <RotateCcw className="h-4 w-4" />
-          </Button>
-          {canExport ? (
-            <Button disabled={exporting || reportQ.isFetching} onClick={() => void exportXlsx()}>
-              <FileSpreadsheet className="mr-1 h-4 w-4" />
-              Excel
+    <div className="space-y-4">
+      <h1 className="text-lg font-semibold">{config.title}</h1>
+      {config.description ? <p className="text-sm text-muted-foreground">{config.description}</p> : null}
+
+      <FlatReportFilters
+        config={config}
+        draft={draft}
+        setDraft={setDraft}
+        filterOptions={filtersQ.data}
+        multiItemsByKey={multiItemsByKey}
+        dateTypeField={dateTypeField}
+        dateTypeAsRadio={dateTypeAsRadio}
+        dateTypeOptions={dateTypeOptions}
+        canExport={canExport}
+        exporting={exporting}
+        fetching={reportQ.isFetching}
+        onReset={resetFilters}
+        onApply={() => applyFilters(1)}
+        onExport={() => void exportXlsx()}
+      />
+
+      <div className="rounded border bg-card">
+        <div className="flex flex-wrap items-center gap-2 border-b px-3 py-2">
+          <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
+            <Button variant="outline" size="sm" onClick={() => setColumnDialogOpen(true)}>
+              <ListOrdered className="mr-1 h-4 w-4" />
+              Колонки
             </Button>
-          ) : null}
-          <Button
-            onClick={() => {
-              setApplied({ ...draft, page: 1 });
-              setDraft((s) => ({ ...s, page: 1 }));
-            }}
-          >
-            Применить
-          </Button>
-        </div>
-      </div>
-
-      {/* Primary chrome: date / select / search / bands — compact wrap row */}
-      <div className="flex flex-wrap items-center gap-2">
-        {config.filterFields.map((field) => {
-          if (field.kind === "dateRange") {
-            const fromKey = field.fromKey ?? "from";
-            const toKey = field.toKey ?? "to";
-            return (
-              <DateRangeFieldControl
-                key={`${fromKey}-${toKey}`}
-                field={field}
-                from={String(draft[fromKey] ?? "")}
-                to={String(draft[toKey] ?? "")}
-                onApply={(dateFrom, dateTo) =>
-                  setDraft((d) => ({ ...d, [fromKey]: dateFrom, [toKey]: dateTo }))
-                }
-              />
-            );
-          }
-          if (field.kind === "search") {
-            const key = field.paramKey ?? "search";
-            return (
-              <Input
-                key={key}
-                className="h-9 max-w-xs"
-                value={String(draft[key] ?? "")}
-                onChange={(e) => setDraft((d) => ({ ...d, [key]: e.target.value }))}
-                placeholder={field.placeholder}
-              />
-            );
-          }
-          if (field.kind === "select") {
-            const options =
-              field.staticOptions ??
-              mapSelectOptions(
-                field.optionsFrom ? filtersQ.data?.[field.optionsFrom] : undefined
-              );
-            return (
-              <select
-                key={field.paramKey}
-                className="h-9 min-w-[9rem] rounded-md border border-input bg-background px-2 text-xs"
-                value={String(draft[field.paramKey] ?? field.defaultValue)}
-                onChange={(e) => setDraft((d) => ({ ...d, [field.paramKey]: e.target.value }))}
-              >
-                {options.map((o) => (
-                  <option key={o.id} value={o.id}>
-                    {o.label}
-                  </option>
-                ))}
-              </select>
-            );
-          }
-          if (field.kind === "bands") {
-            const bandsKey = field.paramKey ?? "bands";
-            return (
-              <Input
-                key={bandsKey}
-                className="h-9 max-w-xs font-mono text-xs"
-                value={String(draft[bandsKey] ?? "")}
-                onChange={(e) => setDraft((d) => ({ ...d, [bandsKey]: e.target.value }))}
-                placeholder={field.placeholder ?? "bands"}
-              />
-            );
-          }
-          return null;
-        })}
-      </div>
-
-      {/* MultiSelect grid — same layout as pre-FlatReport monoliths (not full-width stack) */}
-      {config.filterFields.some((f) => f.kind === "multiSelect") ? (
-        <div className="grid gap-2 md:grid-cols-3 xl:grid-cols-4">
-          {config.filterFields.map((field) => {
-            if (field.kind !== "multiSelect") return null;
-            const selected = Array.isArray(draft[field.paramKey])
-              ? (draft[field.paramKey] as string[])
-              : [];
-            return (
-              <MultiFilter
-                key={field.paramKey}
-                placeholder={field.placeholder}
-                items={multiItemsByKey[field.paramKey] ?? []}
-                selectedValues={selected}
-                onChange={(v) => setDraft((d) => ({ ...d, [field.paramKey]: v }))}
-              />
-            );
-          })}
-        </div>
-      ) : null}
-
-      <div className="flex flex-wrap items-center gap-3 text-sm">
-        <span>
-          {config.countLabel ?? "Строк"}: {reportQ.data?.total ?? 0}
-        </span>
-        {config.totalsKeys.map((key) => {
-          const label = config.totalsLabels?.[key] ?? key;
-          const raw = readReportTotal(reportQ.data, key);
-          const col = columns.find((c) => c.key === key);
-          const formatted = col?.format === "money" || !col ? money(raw as string | number) : String(raw);
-          return (
-            <span key={key}>
-              {label}: {formatted}
-            </span>
-          );
-        })}
-        {config.clientTableSearch ? (
-          <Input
-            className="ml-auto h-8 max-w-xs"
-            value={tableSearch}
-            onChange={(e) => setTableSearch(e.target.value)}
-            placeholder={config.clientTableSearch.placeholder ?? "Поиск в таблице"}
-          />
-        ) : null}
-      </div>
-
-      <div className="overflow-auto rounded-lg border">
-        <table className="w-full min-w-[960px] text-sm">
-          <thead className="bg-muted/50 text-left">
-            <tr>
-              {columns.map((col) => (
-                <th key={col.key} className={cn("p-2", col.align === "right" && "text-right")}>
-                  {col.header}
-                </th>
+            <select
+              className={cn(filterSelectClassName, "h-9 w-auto min-w-0 max-w-none")}
+              value={String(applied.limit)}
+              onChange={(e) => {
+                const nextLimit = Number.parseInt(e.target.value, 10) || defaultLimit;
+                columnPrefs.setPageSize(nextLimit);
+                const next = { ...applied, limit: nextLimit, page: 1 };
+                setDraft(next);
+                setApplied(next);
+              }}
+            >
+              {PAGE_SIZES.map((n) => (
+                <option key={n} value={n}>
+                  {n}
+                </option>
               ))}
-            </tr>
-          </thead>
-          <tbody>
-            {reportQ.isLoading || rows.length === 0 ? (
-              <tr>
-                <td className="p-4 text-muted-foreground" colSpan={Math.max(1, colCount)}>
-                  {reportQ.isLoading ? "Загрузка…" : "Нет данных"}
-                </td>
-              </tr>
-            ) : (
-              rows.map((r, idx) => {
-                const keyVal = r[config.rowKey];
-                const rowReactKey = keyVal != null ? String(keyVal) : String(idx);
-                return (
-                  <tr key={rowReactKey} className="border-t">
-                    {columns.map((col) => {
-                      const cellVal = resolveCellValue(col, r);
-                      return (
-                        <td
-                          key={col.key}
-                          className={cn("p-2", col.align === "right" && "text-right", col.cellClassName)}
-                        >
-                          {config.formatters?.[col.key]
-                            ? config.formatters[col.key](cellVal, r)
-                            : formatCell(cellVal, col.format)}
-                        </td>
-                      );
-                    })}
-                  </tr>
-                );
-              })
-            )}
-          </tbody>
-          {reportQ.data &&
-          rows.length > 0 &&
-          config.totalsKeys.length > 0 &&
-          config.showTableFooter !== false ? (
-            <tfoot className="border-t bg-muted/30 font-medium">
-              <tr>
-                <td className="p-2" colSpan={footerLead}>
-                  Итого
-                </td>
-                {columns.slice(footerLead).map((col) => {
-                  if (!config.totalsKeys.includes(col.key)) {
-                    return <td key={col.key} className="p-2" />;
-                  }
-                  const raw = readReportTotal(reportQ.data, col.key);
-                  return (
-                    <td key={col.key} className={cn("p-2", col.align === "right" && "text-right")}>
-                      {formatCell(raw, col.format ?? "money")}
-                    </td>
-                  );
-                })}
-              </tr>
-            </tfoot>
-          ) : null}
-        </table>
+            </select>
+            {config.clientTableSearch ? (
+              <div className="relative min-w-[180px] flex-1 sm:max-w-md">
+                <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  className="h-9 pl-8 text-sm"
+                  value={tableSearch}
+                  onChange={(e) => setTableSearch(e.target.value)}
+                  placeholder={config.clientTableSearch.placeholder ?? "Поиск в таблице"}
+                />
+              </div>
+            ) : null}
+          </div>
+          <div className="flex flex-wrap items-center gap-3 text-sm">
+            <span className="font-medium">
+              {config.countLabel ?? "Строк"}: {reportQ.data?.total ?? 0}
+            </span>
+            {config.totalsKeys.map((key) => {
+              const label = config.totalsLabels?.[key] ?? key;
+              const raw = readReportTotal(reportQ.data, key);
+              const col = columnsAll.find((c) => c.key === key);
+              const formatted =
+                col?.format === "money" ? money(raw as string | number) : String(raw ?? 0);
+              return (
+                <span key={key} className="text-muted-foreground">
+                  <span className="text-foreground/80">{label}:</span> {formatted}
+                </span>
+              );
+            })}
+          </div>
+        </div>
+
+        {reportQ.data?.need_products === true ? (
+          <div className="rounded border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+            Выберите один или несколько продуктов в фильтре и нажмите «Применить».
+          </div>
+        ) : null}
+
+        <FlatReportTable
+          config={config}
+          columns={visibleColumns}
+          rows={rows}
+          applied={applied}
+          reportData={reportQ.data}
+          loading={reportQ.isLoading}
+          fetching={reportQ.isFetching}
+          totalPages={totalPages}
+          onPage={(page) => {
+            setDraft((s) => ({ ...s, page }));
+            setApplied((s) => ({ ...s, page }));
+          }}
+        />
       </div>
 
-      <div className="flex items-center gap-2">
-        <Button
-          variant="outline"
-          disabled={Number(applied.page) <= 1 || reportQ.isFetching}
-          onClick={() => {
-            const page = Math.max(1, Number(applied.page) - 1);
-            setDraft((s) => ({ ...s, page }));
-            setApplied((s) => ({ ...s, page }));
-          }}
-        >
-          Назад
-        </Button>
-        <span className="text-sm">
-          {String(applied.page)} / {totalPages}
-        </span>
-        <Button
-          variant="outline"
-          disabled={Number(applied.page) >= totalPages || reportQ.isFetching}
-          onClick={() => {
-            const page = Number(applied.page) + 1;
-            setDraft((s) => ({ ...s, page }));
-            setApplied((s) => ({ ...s, page }));
-          }}
-        >
-          Далее
-        </Button>
-      </div>
+      <TableColumnSettingsDialog
+        open={columnDialogOpen}
+        onOpenChange={setColumnDialogOpen}
+        columns={columnDefs}
+        columnOrder={columnPrefs.columnOrder}
+        hiddenColumnIds={columnPrefs.hiddenColumnIds}
+        saving={columnPrefs.saving}
+        onSave={(next) => columnPrefs.saveColumnLayout(next)}
+        onReset={() => columnPrefs.resetColumnLayout()}
+      />
     </div>
   );
 }

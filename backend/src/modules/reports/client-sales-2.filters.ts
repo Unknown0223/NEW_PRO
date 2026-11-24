@@ -31,39 +31,69 @@ export async function getClientSales2FilterOptions(tenantId: number, actor?: Rep
       : {};
   const profilePriceTypeEntries = priceTypeEntriesFromUnknown(refs.price_type_entries).filter((x) => x.active !== false);
 
-  const [agents, supervisors, categories, products, groups, segments] = await Promise.all([
-    prisma.user.findMany({
-      where: staffWhereForFilterOptions(tenantId, scope, "agent"),
-      select: { id: true, name: true, code: true },
-      orderBy: { name: "asc" }
-    }),
-    prisma.user.findMany({
-      where: staffWhereForFilterOptions(tenantId, scope, "supervisor"),
-      select: { id: true, name: true, code: true },
-      orderBy: { name: "asc" }
-    }),
-    prisma.productCategory.findMany({
-      where: { tenant_id: tenantId, is_active: true },
-      select: { id: true, name: true },
-      orderBy: { name: "asc" }
-    }),
-    prisma.product.findMany({
-      where: { tenant_id: tenantId, is_active: true },
-      select: { id: true, name: true, sku: true },
-      orderBy: { name: "asc" },
-      take: 1500
-    }),
-    prisma.productCatalogGroup.findMany({
-      where: { tenant_id: tenantId },
-      select: { id: true, name: true },
-      orderBy: { name: "asc" }
-    }),
-    prisma.productSegment.findMany({
-      where: { tenant_id: tenantId },
-      select: { id: true, name: true },
-      orderBy: { name: "asc" }
-    })
-  ]);
+  const currencyEntries = resolveCurrencyEntries(refs);
+  const paymentEntries = resolvePaymentMethodEntries(refs, currencyEntries);
+  const payment_methods = [
+    ...new Map(
+      paymentEntries
+        .filter((e) => e.active !== false)
+        .map((e) => {
+          const id = paymentMethodStorageKey(e);
+          return [id, { id, label: e.name.trim() }] as const;
+        })
+        .filter(([id, x]) => id && x.label)
+    ).values()
+  ].sort((a, b) => a.label.localeCompare(b.label, "ru"));
+
+  const [agents, supervisors, expeditors, categories, products, groups, segments, brands, tags] =
+    await Promise.all([
+      prisma.user.findMany({
+        where: staffWhereForFilterOptions(tenantId, scope, "agent"),
+        select: { id: true, name: true, code: true },
+        orderBy: { name: "asc" }
+      }),
+      prisma.user.findMany({
+        where: staffWhereForFilterOptions(tenantId, scope, "supervisor"),
+        select: { id: true, name: true, code: true },
+        orderBy: { name: "asc" }
+      }),
+      prisma.user.findMany({
+        where: staffWhereForFilterOptions(tenantId, scope, "expeditor"),
+        select: { id: true, name: true, code: true },
+        orderBy: { name: "asc" }
+      }),
+      prisma.productCategory.findMany({
+        where: { tenant_id: tenantId, is_active: true },
+        select: { id: true, name: true },
+        orderBy: { name: "asc" }
+      }),
+      prisma.product.findMany({
+        where: { tenant_id: tenantId, is_active: true },
+        select: { id: true, name: true, sku: true },
+        orderBy: { name: "asc" },
+        take: 1500
+      }),
+      prisma.productCatalogGroup.findMany({
+        where: { tenant_id: tenantId },
+        select: { id: true, name: true },
+        orderBy: { name: "asc" }
+      }),
+      prisma.productSegment.findMany({
+        where: { tenant_id: tenantId },
+        select: { id: true, name: true },
+        orderBy: { name: "asc" }
+      }),
+      prisma.productBrand.findMany({
+        where: { tenant_id: tenantId, is_active: true },
+        select: { id: true, name: true },
+        orderBy: { name: "asc" }
+      }),
+      prisma.clientTag.findMany({
+        where: { tenant_id: tenantId },
+        select: { id: true, name: true },
+        orderBy: { name: "asc" }
+      })
+    ]);
 
   const [clientCats, territoryRowsRaw, orderTypes] = await Promise.all([
     prisma.$queryRaw<Array<{ v: string }>>`
@@ -111,8 +141,8 @@ export async function getClientSales2FilterOptions(tenantId: number, actor?: Rep
 
   return {
     date_types: [
-      { id: "order_date", label: "Дата заказа" },
-      { id: "shipped_date", label: "Дата отправки" },
+      { id: "order_date", label: "Дата заявки" },
+      { id: "shipped_date", label: "Дата отгрузки" },
       { id: "delivered_date", label: "Дата доставки" },
       { id: "created_date", label: "Дата создания" }
     ],
@@ -127,10 +157,26 @@ export async function getClientSales2FilterOptions(tenantId: number, actor?: Rep
     ],
     agents: agents.map((a) => ({ id: a.id, name: a.name, code: a.code ?? "" })),
     supervisors: supervisors.map((a) => ({ id: a.id, name: a.name, code: a.code ?? "" })),
+    expeditors: expeditors.map((a) => ({ id: a.id, name: a.name, code: a.code ?? "" })),
     categories,
     products: products.map((p) => ({ id: p.id, name: p.name, sku: p.sku })),
     groups,
     segments,
+    brands,
+    tags,
+    payment_methods,
+    inventory_modes: [
+      { id: "all", label: "По инвентарю" },
+      { id: "with", label: "Клиенты с инвентарем" },
+      { id: "without", label: "Клиенты без инвентаря" }
+    ],
+    last_days_options: [
+      { id: "10", label: "10 дней" },
+      { id: "15", label: "15 дней" },
+      { id: "20", label: "20 дней" },
+      { id: "25", label: "25 дней" },
+      { id: "30", label: "30 дней" }
+    ],
     day_visit_options: [
       { id: 1, label: "Пн" },
       { id: 2, label: "Вт" },

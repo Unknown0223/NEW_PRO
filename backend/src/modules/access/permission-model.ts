@@ -11,6 +11,7 @@ import { PERMISSION_OP_LABEL_RU } from "./permission-op-labels";
 import { ASSISTANT_PERMISSION_SECTIONS } from "./permission-assistant-sections";
 import { CLIENT_PERMISSION_SECTIONS } from "./permission-client-sections";
 import { ORDER_PERMISSION_SECTIONS } from "./permission-order-sections";
+import { REPORT_PERMISSION_SECTIONS } from "./permission-report-sections";
 import { TABEL_GROUP_RU, TABEL_PERMISSION_SECTIONS } from "./permission-tabel-sections";
 
 export { TABEL_GROUP_RU };
@@ -206,18 +207,7 @@ export const PERMISSION_SECTIONS: PermissionSectionDef[] = [
   { module: "plans", section: "nastroyka_utverzhdayushchih", labelRu: "Настройка утверждающих", actions: ["view", "update"] },
   { module: "plans", section: "ustanovka_planov", labelRu: "Установка планов", actions: ["view", "create", "update", "approve"] },
   { module: "plans", section: "taklifiy_reja", labelRu: "Предлагаемый план", actions: ["view", "update", "approve", "export"] },
-  // ── Reports (Отчёт) — har bir hisobot sahifasi alohida ─────
-  { module: "reports", section: "zakazy_agentov", labelRu: "Заказы по агентам", actions: VIEW_ONLY },
-  { module: "reports", section: "gps", labelRu: "Отчёт по GPS (маршруты доставки)", actions: VIEW_EXPORT },
-  { module: "reports", section: "prodazhi_klientov_2", labelRu: "Продажи по клиентам 2", actions: VIEW_EXPORT },
-  { module: "reports", section: "prodazhi_klientov_4", labelRu: "Продажи по клиентам 4", actions: VIEW_EXPORT },
-  { module: "reports", section: "prodazhi_tovarov", labelRu: "Продажи по товарам", actions: VIEW_EXPORT },
-  { module: "reports", section: "p1", labelRu: "P1 отчёт", actions: VIEW_EXPORT },
-  { module: "reports", section: "vozvrat_ekspeditora", labelRu: "Возврат экспедитора", actions: VIEW_EXPORT },
-  { module: "reports", section: "vizity", labelRu: "По визитам 2.0", actions: VIEW_EXPORT },
-  { module: "reports", section: "itogi_vizitov", labelRu: "Итоги визитов", actions: VIEW_EXPORT },
-  { module: "reports", section: "dnevnye_kpi_plany", labelRu: "Дневные KPI планы", actions: VIEW_EXPORT },
-  { module: "reports", section: "konstruktor", labelRu: "Конструктор сводной таблицы", actions: ["view", "create", "update", "delete", "export", "transfer"] },
+  ...REPORT_PERMISSION_SECTIONS,
 
   // ── Staff (Пользователи) ───────────────────────────────────
   { module: "staff", section: "agent", labelRu: "Агент", actions: ["view", "create", "update", "delete", "export", "activate", "deactivate", "history"] },

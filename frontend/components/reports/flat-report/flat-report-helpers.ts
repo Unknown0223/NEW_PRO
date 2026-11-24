@@ -76,7 +76,7 @@ export function buildEmptyDraft(
       continue;
     }
     if (field.kind === "multiSelect") {
-      draft[field.paramKey] = [] as string[];
+      draft[field.paramKey] = field.defaultValue ? [...field.defaultValue] : ([] as string[]);
       continue;
     }
     if (field.kind === "select") {

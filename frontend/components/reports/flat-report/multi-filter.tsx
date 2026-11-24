@@ -1,6 +1,7 @@
 "use client";
 
 import { SearchableMultiSelectPanel } from "@/components/ui/searchable-multi-select-panel";
+import { cn } from "@/lib/utils";
 import type { MultiItem } from "./flat-report-helpers";
 
 export function MultiFilter(props: {
@@ -8,6 +9,8 @@ export function MultiFilter(props: {
   items: MultiItem[];
   selectedValues: string[];
   onChange: (v: string[]) => void;
+  /** Ixcham grid ichida (h-8). */
+  compact?: boolean;
 }) {
   return (
     <SearchableMultiSelectPanel
@@ -25,6 +28,8 @@ export function MultiFilter(props: {
       searchPlaceholder={props.placeholder}
       minPopoverWidth={260}
       maxListHeightClass="max-h-44"
+      className={cn(props.compact && "min-w-0")}
+      triggerClassName={cn(props.compact && "h-8 min-h-8 px-2 text-xs")}
     />
   );
 }

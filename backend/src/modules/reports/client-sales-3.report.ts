@@ -23,7 +23,8 @@ export async function getClientSales3Report(tenantId: number, f: ClientSales2Fil
     (f.product_ids && f.product_ids.length) ||
       (f.category_ids && f.category_ids.length) ||
       (f.product_group_ids && f.product_group_ids.length) ||
-      (f.segment_ids && f.segment_ids.length)
+      (f.segment_ids && f.segment_ids.length) ||
+      (f.brand_ids && f.brand_ids.length)
   );
   const offset = (f.page - 1) * f.limit;
   const sumFrom = typeof f.sum_from === "number" ? f.sum_from : null;
@@ -233,6 +234,7 @@ export async function getClientSales3Report(tenantId: number, f: ClientSales2Fil
     })),
     totals: {
       amount: (countRows[0]?.amount_total ?? new Prisma.Decimal(0)).toString(),
+      qty: (countRows[0]?.qty_total ?? new Prisma.Decimal(0)).toString(),
       quantity: (countRows[0]?.qty_total ?? new Prisma.Decimal(0)).toString(),
       volume: (countRows[0]?.volume_total ?? new Prisma.Decimal(0)).toString()
     },

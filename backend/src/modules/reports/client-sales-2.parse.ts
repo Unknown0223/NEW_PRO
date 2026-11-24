@@ -1,4 +1,4 @@
-import type { ClientSales2Filters, ConsignmentMode } from "./client-sales-2.types";
+import type { ClientSales2Filters, ConsignmentMode, InventoryMode } from "./client-sales-2.types";
 import { intList, numOr, strList } from "./client-sales-2.helpers";
 
 export function parseClientSales2Query(q: Record<string, string | undefined>): ClientSales2Filters {
@@ -7,7 +7,11 @@ export function parseClientSales2Query(q: Record<string, string | undefined>): C
   const activity = q.client_activity === "active" || q.client_activity === "inactive" ? q.client_activity : "all";
   const consignmentMode: ConsignmentMode =
     q.consignment_mode === "regular" || q.consignment_mode === "consignment" ? q.consignment_mode : "all";
+  const inventoryMode: InventoryMode =
+    q.inventory_mode === "with" || q.inventory_mode === "without" ? q.inventory_mode : "all";
   const dayVisitIso = intList(q.day_visit_iso).filter((x) => x >= 1 && x <= 7);
+  const lastDaysRaw = Number.parseInt(q.last_days ?? "", 10);
+  const lastDays = Number.isFinite(lastDaysRaw) && lastDaysRaw > 0 ? lastDaysRaw : undefined;
   return {
     date_type:
       q.date_type === "shipped_date" || q.date_type === "delivered_date" || q.date_type === "created_date"
@@ -21,17 +25,22 @@ export function parseClientSales2Query(q: Record<string, string | undefined>): C
     product_ids: intList(q.product_ids),
     product_group_ids: intList(q.product_group_ids),
     segment_ids: intList(q.segment_ids),
+    brand_ids: intList(q.brand_ids),
     day_visit_iso: dayVisitIso,
     agent_ids: intList(q.agent_ids),
     agent_id: q.agent_id ? Number.parseInt(q.agent_id, 10) : undefined,
     supervisor_ids: intList(q.supervisor_ids),
+    expeditor_ids: intList(q.expeditor_ids),
     price_types: strList(q.price_types),
     price_type: q.price_type?.trim() || undefined,
+    payment_methods: strList(q.payment_methods),
     order_types: strList(q.order_types),
     order_type: q.order_type?.trim() || undefined,
     consignment_mode: consignmentMode,
     client_categories: strList(q.client_categories),
     client_category: q.client_category?.trim() || undefined,
+    tag_ids: intList(q.tag_ids),
+    inventory_mode: inventoryMode,
     territory_1_list: strList(q.territory_1_list),
     territory_2_list: strList(q.territory_2_list),
     territory_3_list: strList(q.territory_3_list),
@@ -41,6 +50,7 @@ export function parseClientSales2Query(q: Record<string, string | undefined>): C
     client_activity: activity,
     sum_from: numOr(q.sum_from),
     sum_to: numOr(q.sum_to),
+    last_days: lastDays,
     search: q.search?.trim() || undefined,
     page,
     limit
