@@ -20,7 +20,6 @@ const wave3Adapters = [
   "app/(dashboard)/reports/sku-3/page.tsx",
   "app/(dashboard)/reports/order-qty/page.tsx",
   "app/(dashboard)/reports/inventory/page.tsx",
-  "app/(dashboard)/reports/tasks/page.tsx",
   "app/(dashboard)/reports/sales-compare/page.tsx"
 ] as const;
 
@@ -129,6 +128,12 @@ describe("FlatReportPage wave-1 adapters + source-contract", () => {
   it("photo report uses dedicated PhotoReportWorkspace (not FlatReportPage shell)", () => {
     const src = readAdapter("app/(dashboard)/reports/photo/page.tsx");
     expect(src).toMatch(/PhotoReportWorkspace/);
+    expect(src).not.toMatch(/FlatReportPage/);
+  });
+
+  it("tasks report uses Virtual Pivot workspace (not FlatReportPage)", () => {
+    const src = readAdapter("app/(dashboard)/reports/tasks/page.tsx");
+    expect(src).toMatch(/TasksVirtualPivotWorkspace/);
     expect(src).not.toMatch(/FlatReportPage/);
   });
 

@@ -10,7 +10,7 @@ set "REPO_ROOT=%~dp0.."
 for %%I in ("%REPO_ROOT%") do set "REPO_ROOT=%%~fI"
 set "MOBILE_SRC=%REPO_ROOT%\mobile"
 set "BUILD_DIR=C:\salesdoc_mobile"
-set "APK=%BUILD_DIR%\build\app\outputs\flutter-apk\app-release.apk"
+set "APK=%BUILD_DIR%\build\app\outputs\flutter-apk\app-salesdoc-release.apk"
 
 powershell -NoProfile -ExecutionPolicy Bypass -File "%REPO_ROOT%\scripts\env\switch-local.ps1"
 if errorlevel 1 exit /b 1
@@ -26,7 +26,7 @@ call flutter pub get
 if errorlevel 1 exit /b 1
 
 echo APK yig'ilmoqda (APP_ENV=local)...
-call flutter build apk --release --no-tree-shake-icons --dart-define=APP_ENV=local
+call flutter build apk --release --flavor salesdoc --no-tree-shake-icons --dart-define=APP_ENV=local
 if errorlevel 1 exit /b 1
 
 for /f "usebackq delims=" %%V in (`powershell -NoProfile -Command "(Get-Content '%MOBILE_SRC%\pubspec.yaml' | Select-String '^version:' | ForEach-Object { $_ -replace 'version:\s*','' -replace '\+.*','' }).ToString().Trim()"`) do set "APP_VER=%%V"

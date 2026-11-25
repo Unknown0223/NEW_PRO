@@ -16,7 +16,9 @@ import 'core/database/app_database.dart';
 import 'core/errors/error_reporter.dart';
 import 'core/notifications/mobile_local_notification_service.dart';
 import 'core/prefs/app_prefs.dart';
+import 'core/config/app_product.dart';
 import 'core/theme/app_theme.dart';
+import 'core/theme/tezyuk_theme.dart';
 import 'core/sync/sync_engine.dart';
 import 'core/time/server_clock.dart';
 import 'core/time/work_region_time.dart';
@@ -102,13 +104,14 @@ class _SalesDocAppState extends ConsumerState<SalesDocApp> {
     // Keep autoFlush alive by reading it in build
     ref.watch(autoFlushProvider);
 
+    final tezyuk = isTezyukProduct;
     return MobileSessionGuard(
       child: MaterialApp.router(
-        title: 'Sales Arena',
+        title: tezyuk ? 'TezYuk' : 'Sales Arena',
         debugShowCheckedModeBanner: false,
-        theme: AppTheme.lightTheme,
-        darkTheme: AppTheme.darkTheme,
-        themeMode: themeMode,
+        theme: tezyuk ? buildTezyukTheme() : AppTheme.lightTheme,
+        darkTheme: tezyuk ? buildTezyukTheme() : AppTheme.darkTheme,
+        themeMode: tezyuk ? ThemeMode.light : themeMode,
         routerConfig: router,
         builder: (context, child) => AppUpdateListener(
           child: BiometricSetupListener(

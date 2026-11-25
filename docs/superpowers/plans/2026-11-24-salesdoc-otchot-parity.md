@@ -30,8 +30,8 @@
 | 6 | Excel экспорт | `excel-export` | `/report/export/version1` | [x] Done 2026-11-25 |
 | 7 | По инвентарю | `inventory` | `/clients/Inventorization` | [x] Done 2026-11-25 |
 | 8 | Фотоотчёты | `photo` | `/report/photoReport` | [x] Done 2026-11-25 |
-| 9 | Отчёт по задачам | `tasks` | `/report/tasksReport` | [x] Done 2026-11-25 |
-| 10 | По бонусам | `bonuses` | (probe) | [ ] |
+| 9 | Отчёт по задачам | `tasks` | `/report/tasksReport` | [x] Virtual Pivot 2026-11-25 |
+| 10 | По бонусам | `bonuses` | `/report/bonusReport` | [x] Done 2026-11-25 |
 | 11+ | Qolgan wave FlatReport stublar | — | menyu tartibi | [ ] |
 
 Har otchot uchun bir xil sikl:
@@ -110,9 +110,11 @@ Har otchot uchun bir xil sikl:
 - [x] #6 `excel-export` — Version1 columns + date radios/table prefs/client search; COALESCE dates; Доступ already
 - [x] #7 `inventory` — FlatReport polish (date radios, prefs, address, shipped COALESCE, seed) 2026-11-25
 - [x] #8 `photo` — mosaic + table workspace, thumb_url content proxy, seed 2026-11-25
-- [x] #9 `tasks` — FlatReport polish (client_code fix, prefs/grid, completed_at, seed) 2026-11-25
-- [ ] #10 `bonuses` — probe + parity **Next**
+- [x] #9 `tasks` — Virtual Pivot rewrite + konstruktor chrome; classic Options fix 2026-11-25 (FlatReport polish superseded)
+- [x] #10 `bonuses` — FlatReport polish (date radios, prefs, shipped COALESCE, seed; search dublikat olib tashlandi) 2026-11-25
+- [ ] #11+ qolgan FlatReport stublar — **Next**
 - [ ] Qolgan navbat (jadval) birma-bir, review oralig‘ida
+- Holat/e’tirozlar: `docs/superpowers/plans/2026-11-25-otchot-tezyuk-status-va-etirozlar.md`
 
 ## Verification (har task oxiri)
 

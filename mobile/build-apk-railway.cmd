@@ -6,7 +6,7 @@ set "REPO_ROOT=%~dp0.."
 for %%I in ("%REPO_ROOT%") do set "REPO_ROOT=%%~fI"
 set "MOBILE_SRC=%REPO_ROOT%\mobile"
 set "BUILD_DIR=C:\salesdoc_mobile"
-set "APK=%BUILD_DIR%\build\app\outputs\flutter-apk\app-release.apk"
+set "APK=%BUILD_DIR%\build\app\outputs\flutter-apk\app-salesdoc-release.apk"
 set "RELEASES=%MOBILE_SRC%\releases"
 set "RELEASE_APK=%RELEASES%\SalesDoc-latest-release.apk"
 
@@ -29,7 +29,7 @@ call flutter pub get
 if errorlevel 1 exit /b 1
 
 echo APK yig'ilmoqda...
-call flutter build apk --release --no-tree-shake-icons
+call flutter build apk --release --flavor salesdoc --no-tree-shake-icons
 if errorlevel 1 exit /b 1
 
 if not exist "%RELEASES%" mkdir "%RELEASES%"

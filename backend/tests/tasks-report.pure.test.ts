@@ -1,6 +1,17 @@
 import { describe, expect, it } from "vitest";
 import { parseTasksReportQuery } from "../src/modules/reports/tasks-report.parse";
 import { TASKS_FILTER_CLIENTS_SELECT_SQL } from "../src/modules/reports/tasks-report.filters";
+import { TASKS_PIVOT_FIELDS } from "../src/modules/reports/tasks-report.dataset";
+
+describe("tasks-report pivot fields", () => {
+  it("includes core SalesDoc flat columns", () => {
+    const ids = TASKS_PIVOT_FIELDS.map((f) => f.id);
+    expect(ids).toEqual(
+      expect.arrayContaining(["task_id", "title", "client_name", "status_label", "created_at"])
+    );
+    expect(TASKS_PIVOT_FIELDS.find((f) => f.id === "task_id")?.dataType).toBe("number");
+  });
+});
 
 describe("tasks-report filter clients SQL", () => {
   it("selects client_code (not clients.code)", () => {

@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/config/app_product.dart';
 import '../../../core/l10n/app_strings_ru.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/ui/agent_ui_extended.dart';
 import '../expeditor_providers.dart';
 import '../shell/expeditor_drawer.dart';
+import 'expeditor_stock_summary.dart';
 
 /// «Остаток в машине» — ekspeditor skladdan olib chiqqan, hali mijozga
 /// yetkazilmagan mahsulotlar ro'yxati (qoldiq).
@@ -22,7 +24,9 @@ class ExpeditorDeliveriesPage extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final stock = ref.watch(expeditorVehicleStockProvider);
     return Scaffold(
-      appBar: AppBar(title: const Text('Остаток в машине')),
+      appBar: AppBar(
+        title: Text(isTezyukProduct ? 'Qoldiq' : 'Остаток в машине'),
+      ),
       drawer: const ExpeditorDrawer(),
       body: stock.when(
         data: (data) {
@@ -50,7 +54,12 @@ class ExpeditorDeliveriesPage extends ConsumerWidget {
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               itemCount: products.length + 1,
               itemBuilder: (ctx, i) {
-                if (i == 0) return _SummaryHeader(totals: totals);
+                if (i == 0) {
+                  return _SummaryHeader(
+                    totals: totals,
+                    products: products,
+                  );
+                }
                 final p = products[i - 1];
                 final code = p['code']?.toString();
                 final category = p['category']?.toString();
@@ -106,10 +115,40 @@ class ExpeditorDeliveriesPage extends ConsumerWidget {
 
 class _SummaryHeader extends StatelessWidget {
   final Map<String, dynamic> totals;
-  const _SummaryHeader({required this.totals});
+  final List<Map<String, dynamic>> products;
+  const _SummaryHeader({required this.totals, required this.products});
 
   @override
   Widget build(BuildContext context) {
+    if (isTezyukProduct) {
+      final triad = stockTriadFromTotals(totals) ?? summarizeStock(products);
+      return Card(
+        margin: const EdgeInsets.only(bottom: 8),
+        color: AppColors.expeditorAccent.withValues(alpha: 0.06),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          child: Row(
+            children: [
+              _Metric(
+                label: 'Yuklangan',
+                value: ExpeditorDeliveriesPage._qty(triad.loaded),
+              ),
+              _divider(),
+              _Metric(
+                label: 'Yetkazildi',
+                value: ExpeditorDeliveriesPage._qty(triad.delivered),
+              ),
+              _divider(),
+              _Metric(
+                label: 'Qoldi',
+                value: ExpeditorDeliveriesPage._qty(triad.remaining),
+                accent: true,
+              ),
+            ],
+          ),
+        ),
+      );
+    }
     final productCount = (totals['product_count'] as num?)?.toInt() ?? 0;
     final remaining = ExpeditorDeliveriesPage._qty(totals['remaining_qty'] as num?);
     final delivered = ExpeditorDeliveriesPage._qty(totals['delivered_qty'] as num?);

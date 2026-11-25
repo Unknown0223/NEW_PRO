@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
 import '../../../core/auth/session.dart';
+import '../../../core/config/app_product.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../agent/orders/order_create_models.dart' show formatMoneySpaced;
@@ -13,8 +14,10 @@ import '../expeditor_providers.dart';
 import '../payments/expeditor_notifications.dart';
 import '../shell/expeditor_drawer.dart';
 import '../sync/expeditor_sync_provider.dart';
+import 'expeditor_home_model.dart';
 import 'expeditor_home_sheets.dart';
 import 'expeditor_sync_sheet.dart';
+import 'tezyuk_home_page.dart';
 
 /// «Синхронизация» — sheet → BrandSync overlay (ExpeditorShell).
 Future<void> _openSync(BuildContext context, WidgetRef ref) async {
@@ -39,6 +42,9 @@ class ExpeditorHomePage extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    if (isTezyukProduct) {
+      return const TezyukHomePage();
+    }
     final mobileConfig =
         ref.watch(sessionProvider.select((s) => s.mobileConfig));
     final policy = ExpeditorConfigPolicy.fromMobileConfig(mobileConfig);
@@ -79,18 +85,55 @@ class ExpeditorHomePage extends ConsumerWidget {
             final paymentsSummary = pendingCount == 0
                 ? 'Tasdiqlanishni kutayotgan to\'lovlar yo\'q'
                 : 'Tasdiqlanishni kutmoqda: $pendingCount — ${_fmtMoney(pendingSum)}';
+            final otmetka = isTezyukProduct
+                ? mapHomeOtmetkaChip(
+                    d['attendance'] is Map
+                        ? Map<String, dynamic>.from(d['attendance'] as Map)
+                        : d['otmetka'] is Map
+                            ? Map<String, dynamic>.from(d['otmetka'] as Map)
+                            : null,
+                  )
+                : null;
+            final nextStop = isTezyukProduct
+                ? mapNextStop(
+                    d['next_stop'] is Map
+                        ? Map<String, dynamic>.from(d['next_stop'] as Map)
+                        : null,
+                  )
+                : null;
 
             return ListView(
               padding: const EdgeInsets.fromLTRB(12, 12, 12, 130),
               children: [
+                if (otmetka != null || nextStop != null) ...[
+                  if (otmetka != null)
+                    Chip(
+                      avatar: const Icon(Icons.fingerprint, size: 18),
+                      label: Text(otmetka.label),
+                    ),
+                  if (nextStop != null)
+                    ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: const Icon(Icons.near_me_outlined),
+                      title: Text(nextStop.clientName),
+                      subtitle: nextStop.distanceKm == null
+                          ? null
+                          : Text('${nextStop.distanceKm!.toStringAsFixed(1)} km'),
+                    ),
+                  const SizedBox(height: 8),
+                ],
                 Card(
                   child: Padding(
                     padding: const EdgeInsets.all(16),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text('Дневной отчёт на сегодня',
-                            style: AppTypography.titleMedium,),
+                        Text(
+                          isTezyukProduct
+                              ? 'Kunlik reja'
+                              : 'Дневной отчёт на сегодня',
+                          style: AppTypography.titleMedium,
+                        ),
                         const SizedBox(height: 12),
                         Center(
                           child: SizedBox(

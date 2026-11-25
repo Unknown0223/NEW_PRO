@@ -2,14 +2,17 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/auth/session.dart';
+import '../../../core/config/app_product.dart';
 import '../../../core/config/mobile_config.dart';
 import '../../../core/prefs/agent_local_prefs.dart';
 import '../../../core/prefs/agent_local_prefs_provider.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
+import '../../../core/theme/tezyuk_colors.dart';
 import '../../../core/ui/agent_ui.dart';
 import '../../auth/auth_provider.dart';
 import '../../auth/biometric_quick_login_tile.dart';
+import '../shared/tezyuk_expeditor_chrome.dart';
 import '../shell/expeditor_drawer.dart';
 
 /// «Настройки» — ekspeditor. Veb «Конфигурации» bilan to'liq bog'langan:
@@ -22,123 +25,187 @@ class ExpeditorSettingsPage extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final cfg = ref.watch(sessionProvider.select((s) => s.mobileConfig));
     final prefsAsync = ref.watch(agentLocalPrefsProvider);
+    final accent = expeditorChromeAccent();
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: expeditorPageBackground(),
       drawer: const ExpeditorDrawer(),
       appBar: AppBar(
-        title: const Text('Настройки'),
+        title: Text(
+          expeditorLabel('Настройки', 'Profil va sozlamalar'),
+        ),
         actions: [
           IconButton(
-            tooltip: 'Обновить настройки',
+            tooltip: expeditorLabel('Обновить настройки', 'Sozlamalarni yangilash'),
             icon: const Icon(Icons.sync),
             onPressed: () => _refreshConfig(context, ref),
           ),
         ],
       ),
       body: prefsAsync.when(
-        loading: () => const Center(
-            child:
-                CircularProgressIndicator(color: AppColors.expeditorAccent),),
+        loading: () => Center(child: CircularProgressIndicator(color: accent)),
         error: (e, _) => Center(child: Text('$e')),
         data: (prefs) => ListView(
           padding: const EdgeInsets.all(12),
           children: [
-            _group('ОСНОВНЫЕ НАСТРОЙКИ', [
+            _group(expeditorLabel('ОСНОВНЫЕ НАСТРОЙКИ', 'ASOSIY SOZLAMALAR'), [
               _NavRow(
-                label: 'Язык приложении',
+                label: expeditorLabel('Язык приложении', 'Ilova tili'),
                 value: prefs.localeLabel,
                 onTap: () => _pickLocale(context, ref, prefs),
               ),
             ]),
             AgentSurfaceCard(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              child: BiometricQuickLoginTile(accentColor: AppColors.expeditorAccent),
+              child: BiometricQuickLoginTile(accentColor: accent),
             ),
             const SizedBox(height: 12),
-            _group('ЗАКАЗ', [
+            _group(expeditorLabel('ЗАКАЗ', 'BUYURTMA'), [
               _ToggleRow(
-                label: 'Показывать предложение о бонусе',
+                label: expeditorLabel(
+                  'Показывать предложение о бонусе',
+                  'Bonus taklifini ko\'rsatish',
+                ),
                 value: _bonusOfferOn(cfg),
+                accent: accent,
               ),
               _ToggleRow(
-                label: 'Изменение (частный возврат)',
+                label: expeditorLabel(
+                  'Изменение (частный возврат)',
+                  'O\'zgartirish (qisman qaytarish)',
+                ),
                 value: cfg?.orders.allowPartialReturnEdit ?? false,
+                accent: accent,
               ),
               _ToggleRow(
-                label: 'Догруз (С авто экспедитора)',
+                label: expeditorLabel(
+                  'Догруз (С авто экспедитора)',
+                  'Qo\'shimcha yuklash (mashinadan)',
+                ),
                 value: cfg?.orders.allowReloadFromVehicle ?? false,
+                accent: accent,
               ),
               _ToggleRow(
-                label: 'Возврат с полки по заказу',
+                label: expeditorLabel(
+                  'Возврат с полки по заказу',
+                  'Buyurtma bo\'yicha javondan qaytarish',
+                ),
                 value: cfg?.orders.allowReturnFromShelf ?? false,
+                accent: accent,
               ),
               _ToggleRow(
-                label: 'Причина возврата обязательна',
+                label: expeditorLabel(
+                  'Причина возврата обязательна',
+                  'Qaytarish sababi majburiy',
+                ),
                 value: cfg?.orders.returnReasonRequired ?? false,
+                accent: accent,
               ),
             ]),
-            _group('ОПЛАТА', [
+            _group(expeditorLabel('ОПЛАТА', 'TO\'LOV'), [
               _ToggleRow(
-                label: 'Принятие оплаты за заказ',
+                label: expeditorLabel(
+                  'Принятие оплаты за заказ',
+                  'Buyurtma uchun to\'lov qabul qilish',
+                ),
                 value: cfg?.expeditor?.acceptPaymentForOrder ?? true,
+                accent: accent,
               ),
               _ToggleRow(
-                label: 'Принятие оплаты при доставке',
+                label: expeditorLabel(
+                  'Принятие оплаты при доставке',
+                  'Yetkazishda to\'lov qabul qilish',
+                ),
                 value: cfg?.expeditor?.acceptPaymentOnDelivery ?? true,
+                accent: accent,
               ),
               _ToggleRow(
-                label: 'Принятие оплаты от должников',
+                label: expeditorLabel(
+                  'Принятие оплаты от должников',
+                  'Qarzdorlardan to\'lov qabul qilish',
+                ),
                 value: cfg?.expeditor?.acceptPaymentFromDebtors ?? false,
+                accent: accent,
               ),
               _ToggleRow(
-                label: 'Строгий способ оплаты при доставке',
+                label: expeditorLabel(
+                  'Строгий способ оплаты при доставке',
+                  'Yetkazishda qat\'iy to\'lov usuli',
+                ),
                 value: cfg?.expeditor?.deliveryPaymentMethodStrict ?? false,
+                accent: accent,
               ),
               _ValueRow(
-                label: 'Валюта',
+                label: expeditorLabel('Валюта', 'Valyuta'),
                 value: cfg?.expeditor?.currencySymbol ?? "so'm",
               ),
             ]),
-            _group('НАКЛАДНЫЕ', [
+            _group(expeditorLabel('НАКЛАДНЫЕ', 'YUKXATLAR'), [
               _ToggleRow(
-                label: 'Face ID / отпечаток при важных действиях',
+                label: expeditorLabel(
+                  'Face ID / отпечаток при важных действиях',
+                  'Muhim amallarda Face ID / barmoq izi',
+                ),
                 value:
                     cfg?.expeditor?.fingerprintRequiredForShipmentConfirm ??
                         false,
+                accent: accent,
               ),
             ]),
-            _group('КЛИЕНТ', [
+            _group(expeditorLabel('КЛИЕНТ', 'MIJOZ'), [
               _ToggleRow(
-                label: 'Изменить местоположение клиента',
+                label: expeditorLabel(
+                  'Изменить местоположение клиента',
+                  'Mijoz joylashuvini o\'zgartirish',
+                ),
                 value: cfg?.client.canChangeClientLocation ?? false,
+                accent: accent,
               ),
               _ToggleRow(
-                label: 'Показать баланс клиента',
+                label: expeditorLabel(
+                  'Показать баланс клиента',
+                  'Mijoz balansini ko\'rsatish',
+                ),
                 value: cfg?.client.showBalance ?? true,
+                accent: accent,
               ),
             ]),
             _group('GPS', [
               _ValueRow(
-                label: 'Интервал отслеживания местоположений',
+                label: expeditorLabel(
+                  'Интервал отслеживания местоположений',
+                  'Joylashuvni kuzatish intervali',
+                ),
                 value: '${cfg?.gps.trackingIntervalSec ?? 300}',
               ),
               _ToggleRow(
-                label: 'Всегда включен',
+                label: expeditorLabel('Всегда включен', 'Doim yoqilgan'),
                 value: cfg?.gps.alwaysOn ?? false,
+                accent: accent,
               ),
               _ToggleRow(
-                label: 'Отслеживание включено',
+                label: expeditorLabel(
+                  'Отслеживание включено',
+                  'Kuzatish yoqilgan',
+                ),
                 value: cfg?.gps.trackingEnabled ?? false,
+                accent: accent,
               ),
             ]),
             const SizedBox(height: 8),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 8),
               child: Text(
-                'Эти настройки может изменить только модератор в веб-конфигурации.',
-                style: AppTypography.bodyMedium
-                    .copyWith(fontSize: 13, color: AppColors.textMuted),
+                expeditorLabel(
+                  'Эти настройки может изменить только модератор в веб-конфигурации.',
+                  'Ushbu sozlamalarni faqat moderator veb konfiguratsiyada o\'zgartiradi.',
+                ),
+                style: AppTypography.bodyMedium.copyWith(
+                  fontSize: 13,
+                  color: isTezyukProduct
+                      ? TezyukColors.onSurfaceVariant
+                      : AppColors.textMuted,
+                ),
               ),
             ),
             const SizedBox(height: 16),
@@ -159,7 +226,11 @@ class ExpeditorSettingsPage extends ConsumerWidget {
     final messenger = ScaffoldMessenger.of(context);
     await ref.read(authStateProvider.notifier).refreshMobileConfig();
     messenger.showSnackBar(
-      const SnackBar(content: Text('Настройки обновлены')),
+      SnackBar(
+        content: Text(
+          expeditorLabel('Настройки обновлены', 'Sozlamalar yangilandi'),
+        ),
+      ),
     );
   }
 
@@ -170,7 +241,7 @@ class ExpeditorSettingsPage extends ConsumerWidget {
   ) async {
     final picked = await showModalBottomSheet<String>(
       context: context,
-      backgroundColor: AppColors.surface,
+      backgroundColor: expeditorChromeSurface(),
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
       ),
@@ -179,22 +250,25 @@ class ExpeditorSettingsPage extends ConsumerWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             const AgentSheetHandle(),
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 8),
-              child: Text('Язык приложении',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),),
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              child: Text(
+                expeditorLabel('Язык приложении', 'Ilova tili'),
+                style:
+                    const TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+              ),
             ),
             ListTile(
               title: const Text('Русский'),
               trailing: prefs.locale == 'ru'
-                  ? const Icon(Icons.check, color: AppColors.expeditorAccent)
+                  ? Icon(Icons.check, color: expeditorChromeAccent())
                   : null,
               onTap: () => Navigator.pop(ctx, 'ru'),
             ),
             ListTile(
               title: const Text("O'zbek"),
               trailing: prefs.locale == 'uz'
-                  ? const Icon(Icons.check, color: AppColors.expeditorAccent)
+                  ? Icon(Icons.check, color: expeditorChromeAccent())
                   : null,
               onTap: () => Navigator.pop(ctx, 'uz'),
             ),
@@ -245,8 +319,13 @@ class ExpeditorSettingsPage extends ConsumerWidget {
 class _ToggleRow extends StatelessWidget {
   final String label;
   final bool value;
+  final Color accent;
 
-  const _ToggleRow({required this.label, required this.value});
+  const _ToggleRow({
+    required this.label,
+    required this.value,
+    required this.accent,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -268,7 +347,7 @@ class _ToggleRow extends StatelessWidget {
             Switch(
               value: value,
               onChanged: null,
-              activeThumbColor: AppColors.expeditorAccent,
+              activeThumbColor: accent,
             ),
           ],
         ),

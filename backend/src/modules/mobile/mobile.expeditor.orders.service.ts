@@ -12,6 +12,10 @@ import { resolveMobileConfigForUser } from "../staff/agent-mobile-config.default
 import type { AgentMobileConfigV1 } from "../staff/agent-mobile-config.types";
 import { loadActiveWorkSlotsByUserIds } from "../work-slots/work-slots.query";
 import { assertMobilePhotoReportForClient } from "./mobile-agent-sync.config.service";
+import {
+  assertOrderShareActionAllowed,
+  locksForOrders
+} from "./share/share.service";
 
 export async function loadExpeditorMobileConfig(
   tenantId: number,
@@ -258,7 +262,34 @@ export async function patchMobileExpeditorOrderStatus(
   nextStatus: string,
   reason?: string | null
 ) {
-  const order = await assertExpeditorOwnsOrder(tenantId, expeditorUserId, orderId);
+  const locks = await locksForOrders(tenantId, [orderId]);
+  assertOrderShareActionAllowed({
+    orderId,
+    actorUserId: expeditorUserId,
+    locks,
+    mode: "act"
+  });
+  const activeShareLock = locks.find((l) => l.orderId === orderId && l.locked);
+  const order =
+    activeShareLock && activeShareLock.receiverUserId === expeditorUserId
+      ? await (async () => {
+          const row = await prisma.order.findFirst({
+            where: { id: orderId, tenant_id: tenantId },
+            select: {
+              id: true,
+              client_id: true,
+              agent_id: true,
+              status: true,
+              order_type: true,
+              comment: true,
+              total_sum: true,
+              is_consignment: true
+            }
+          });
+          if (!row) throw new Error("NOT_FOUND");
+          return row;
+        })()
+      : await assertExpeditorOwnsOrder(tenantId, expeditorUserId, orderId);
   const cfg = await loadExpeditorMobileConfig(tenantId, expeditorUserId);
   const trimmedReason = reason != null && String(reason).trim() ? String(reason).trim().slice(0, 500) : null;
   const status = nextStatus.trim();

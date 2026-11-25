@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../core/auth/session.dart';
+import '../core/config/app_product.dart';
 import '../core/face/face_gate_redirect.dart';
 import '../core/face/face_gate_state.dart';
 import '../core/theme/app_colors.dart';
@@ -65,6 +66,11 @@ import '../features/expeditor/debtors/expeditor_debtors_page.dart';
 import '../features/expeditor/invoices/expeditor_invoices_page.dart';
 import '../features/expeditor/invoices/expeditor_invoice_detail_page.dart';
 import '../features/expeditor/shell/expeditor_shell.dart';
+import '../features/expeditor/queue/expeditor_delivery_queue_page.dart';
+import '../features/expeditor/share/expeditor_share_create_page.dart';
+import '../features/expeditor/share/expeditor_share_detail_page.dart';
+import '../features/expeditor/share/expeditor_share_handoff_page.dart';
+import '../features/expeditor/share/expeditor_share_list_page.dart';
 import '../features/supervisor/home/supervisor_home_page.dart';
 import '../features/supervisor/dashboard/supervisor_dashboard_page.dart';
 import '../features/supervisor/visits/supervisor_visits_page.dart';
@@ -202,6 +208,12 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       }
 
       if (s == AuthStatus.ready) {
+        final role = session.user?.role ?? 'agent';
+        // TezYuk flavor: faqat ekspeditor (Wave 0–1).
+        if (!productAllowsRole(currentAppProduct, role)) {
+          return isLogin ? null : '/login';
+        }
+
         final gateOn = ref.read(faceGateRequiredProvider);
         // Bootstrap/login — avval /home emas: gate kerak bo‘lsa to‘g‘ridan attendance.
         if (isLogin || isBoot || isSplash || loc == '/unlock' || loc == '/pin-setup') {
@@ -216,7 +228,6 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         if (gateJump != null) return gateJump;
         if (loc.startsWith('/attendance')) return null;
 
-        final role = session.user?.role ?? 'agent';
         final blocked = roleRedirect(state, role);
         if (blocked != null) return blocked;
 
@@ -527,6 +538,37 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         builder: (_, __) => const ExpeditorUnfinishedPage(),
       ),
       GoRoute(
+        path: '/exp-queue',
+        parentNavigatorKey: rootNavigatorKey,
+        builder: (_, __) => const ExpeditorDeliveryQueuePage(),
+      ),
+      GoRoute(
+        path: '/exp-share',
+        parentNavigatorKey: rootNavigatorKey,
+        builder: (_, __) => const ExpeditorShareListPage(),
+      ),
+      GoRoute(
+        path: '/exp-share/create',
+        parentNavigatorKey: rootNavigatorKey,
+        builder: (_, __) => const ExpeditorShareCreatePage(),
+      ),
+      GoRoute(
+        path: '/exp-share/:id',
+        parentNavigatorKey: rootNavigatorKey,
+        builder: (ctx, state) {
+          final id = int.tryParse(state.pathParameters['id'] ?? '') ?? 0;
+          return ExpeditorShareDetailPage(requestId: id);
+        },
+      ),
+      GoRoute(
+        path: '/exp-share/:id/handoff',
+        parentNavigatorKey: rootNavigatorKey,
+        builder: (ctx, state) {
+          final id = int.tryParse(state.pathParameters['id'] ?? '') ?? 0;
+          return ExpeditorShareHandoffPage(requestId: id);
+        },
+      ),
+      GoRoute(
         path: '/exp-return-by-order',
         parentNavigatorKey: rootNavigatorKey,
         builder: (_, __) => const ExpeditorReturnByOrderPage(),
@@ -677,15 +719,29 @@ class _NavShell extends ConsumerWidget {
 
     if (role == 'expeditor') {
       body = ExpeditorShell(child: child);
-      color = AppColors.expeditorAccent;
-      items = [
-        const _NavItem(Icons.home_outlined, Icons.home, 'Главная', '/home'),
-        const _NavItem(
-            Icons.location_on_outlined, Icons.location_on, 'Визиты', '/visits',),
-        const _NavItem(Icons.person_outline, Icons.person, 'Должники', '/debtors'),
-        const _NavItem(Icons.receipt_long_outlined, Icons.receipt_long, 'Накладные',
-            '/invoices',),
-      ];
+      final tezyuk = isTezyukProduct;
+      color = tezyuk ? const Color(0xFF0A6B3D) : AppColors.expeditorAccent;
+      items = tezyuk
+          ? [
+              const _NavItem(Icons.home_outlined, Icons.home, 'Bosh sahifa', '/home'),
+              const _NavItem(
+                  Icons.location_on_outlined, Icons.location_on, 'Tashriflar', '/visits',),
+              const _NavItem(
+                  Icons.account_balance_wallet_outlined,
+                  Icons.account_balance_wallet,
+                  'Qarzdorlar',
+                  '/debtors',),
+              const _NavItem(Icons.description_outlined, Icons.description, 'Yukxatlar',
+                  '/invoices',),
+            ]
+          : [
+              const _NavItem(Icons.home_outlined, Icons.home, 'Главная', '/home'),
+              const _NavItem(
+                  Icons.location_on_outlined, Icons.location_on, 'Визиты', '/visits',),
+              const _NavItem(Icons.person_outline, Icons.person, 'Должники', '/debtors'),
+              const _NavItem(Icons.receipt_long_outlined, Icons.receipt_long, 'Накладные',
+                  '/invoices',),
+            ];
     } else if (role == 'supervisor') {
       // CACTUS uslubi: shell o‘zi pastki nav + QR FAB ni boshqaradi.
       return SupervisorShell(child: child);

@@ -4,3 +4,4 @@ export { parseTasksReportQuery } from "./tasks-report.parse";
 export { getTasksReportFilterOptions } from "./tasks-report.filters";
 export { getTasksReport } from "./tasks-report.report";
 export { exportTasksReportXlsx } from "./tasks-report.export";
+export { getTasksReportDataset, TASKS_PIVOT_FIELDS } from "./tasks-report.dataset";

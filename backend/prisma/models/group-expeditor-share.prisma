@@ -1,0 +1,63 @@
+/// Ulashish: ekspeditorlar o‘rtasidagi ruxsat etilgan juftlar (web sozlama).
+model ExpeditorSharePartner {
+  id                        Int      @id @default(autoincrement())
+  tenant_id                 Int
+  owner_expeditor_user_id   Int
+  partner_expeditor_user_id Int
+  created_at                DateTime @default(now())
+
+  @@unique([tenant_id, owner_expeditor_user_id, partner_expeditor_user_id])
+  @@index([tenant_id, owner_expeditor_user_id])
+  @@map("expeditor_share_partners")
+}
+
+/// Ulashish so‘rovi (status = ShareStatus).
+model ExpeditorShareRequest {
+  id               Int       @id @default(autoincrement())
+  tenant_id        Int
+  sender_user_id   Int
+  receiver_user_id Int
+  status           String    @default("kutilmoqda") @db.VarChar(32)
+  expires_at       DateTime?
+  created_at       DateTime  @default(now())
+  updated_at       DateTime  @updatedAt
+  orders           ExpeditorShareOrder[]
+  handoffs         ExpeditorShareHandoff[]
+
+  @@index([tenant_id, sender_user_id, status])
+  @@index([tenant_id, receiver_user_id, status])
+  @@map("expeditor_share_requests")
+}
+
+model ExpeditorShareOrder {
+  id         Int     @id @default(autoincrement())
+  tenant_id  Int
+  request_id Int
+  order_id   Int
+  /// Qabulchi tanladi
+  accepted   Boolean @default(false)
+  /// Aktiv qulf: true bo‘lsa amallar faqat receiver JWT
+  locked     Boolean @default(true)
+  request    ExpeditorShareRequest @relation(fields: [request_id], references: [id], onDelete: Cascade)
+
+  @@unique([tenant_id, order_id, request_id])
+  @@index([tenant_id, order_id, locked])
+  @@map("expeditor_share_orders")
+}
+
+model ExpeditorShareHandoff {
+  id          Int      @id @default(autoincrement())
+  tenant_id   Int
+  request_id  Int
+  /// sender | receiver
+  party       String   @db.VarChar(16)
+  lat         Float?
+  lng         Float?
+  photo_key   String?  @db.VarChar(512)
+  created_at  DateTime @default(now())
+  updated_at  DateTime @updatedAt
+  request     ExpeditorShareRequest @relation(fields: [request_id], references: [id], onDelete: Cascade)
+
+  @@unique([tenant_id, request_id, party])
+  @@map("expeditor_share_handoffs")
+}

@@ -4,11 +4,15 @@ import 'package:go_router/go_router.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
 import '../../../core/auth/session.dart';
+import '../../../core/config/app_product.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
+import '../../../core/theme/tezyuk_colors.dart';
 import '../../../core/ui/agent_ui.dart';
 import '../../auth/auth_provider.dart';
 import '../config/expeditor_config_enforcement.dart';
+import '../settings/expeditor_profile_shortcuts.dart';
+import '../shared/tezyuk_expeditor_chrome.dart';
 
 /// Ekspeditor menyu yo‘nalishlari — bir-biriga o‘tish tekshiruvi.
 const expeditorMenuRoutes = <String>[
@@ -18,6 +22,8 @@ const expeditorMenuRoutes = <String>[
   '/exp-return-by-order',
   '/returns',
   '/my-returns',
+  '/exp-queue',
+  '/exp-share',
   '/deliveries',
   '/exp-unfinished',
   '/attendance',
@@ -68,7 +74,7 @@ class _ExpeditorDrawerState extends ConsumerState<ExpeditorDrawer> {
     }
 
     return Drawer(
-      backgroundColor: AppColors.background,
+      backgroundColor: expeditorPageBackground(),
       width: MediaQuery.sizeOf(context).width,
       child: SafeArea(
         child: Column(
@@ -97,7 +103,9 @@ class _ExpeditorDrawerState extends ConsumerState<ExpeditorDrawer> {
                   ),
                   const SizedBox(height: 12),
                   Text(
-                    name.isEmpty ? 'Экспедитор' : name,
+                    name.isEmpty
+                        ? expeditorLabel('Экспедитор', 'Ekspeditor')
+                        : name,
                     textAlign: TextAlign.center,
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
@@ -109,7 +117,10 @@ class _ExpeditorDrawerState extends ConsumerState<ExpeditorDrawer> {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    'Сервер: ${session.tenantSlug ?? "-"}',
+                    expeditorLabel(
+                      'Сервер: ${session.tenantSlug ?? "-"}',
+                      'Server: ${session.tenantSlug ?? "-"}',
+                    ),
                     style: AppTypography.bodyMedium
                         .copyWith(fontSize: 16, color: AppColors.textMuted),
                   ),
@@ -127,48 +138,72 @@ class _ExpeditorDrawerState extends ConsumerState<ExpeditorDrawer> {
                       children: [
                         AgentMenuTile(
                           icon: Icons.home_outlined,
-                          label: 'Главная',
+                          label: expeditorLabel('Главная', 'Bosh sahifa'),
                           showDivider: false,
                           onTap: () => go('/home'),
                         ),
                         AgentMenuTile(
                           icon: Icons.add_location_alt_outlined,
-                          label: 'Дополнительные визиты',
+                          label: expeditorLabel(
+                            'Дополнительные визиты',
+                            'Qo\'shimcha tashriflar',
+                          ),
                           onTap: () => go('/visits'),
                         ),
                         if (policy.paymentsEnabled)
                           AgentMenuTile(
                             icon: Icons.payments_outlined,
-                            label: 'Изменение оплаты',
+                            label: expeditorLabel(
+                              'Изменение оплаты',
+                              'To\'lovlar',
+                            ),
                             onTap: () => go('/payments'),
                           ),
                         AgentMenuTile(
                           icon: Icons.assignment_return_outlined,
                           label: policy.allowReturnFromShelf
-                              ? 'Возврат с полки по заказу'
-                              : 'Возврат / догрузка',
+                              ? expeditorLabel(
+                                  'Возврат с полки по заказу',
+                                  'Buyurtma bo\'yicha javondan qaytarish',
+                                )
+                              : expeditorLabel(
+                                  'Возврат / догрузка',
+                                  'Qaytarish / qo\'shimcha yuk',
+                                ),
                           onTap: () => go(policy.allowReturnFromShelf
                               ? '/exp-return-by-order'
                               : '/returns',),
                         ),
                         AgentMenuTile(
                           icon: Icons.fact_check_outlined,
-                          label: 'Мои возвраты',
+                          label: expeditorLabel('Мои возвраты', 'Mening qaytarishlarim'),
                           onTap: () => go('/my-returns'),
                         ),
+                        if (isTezyukProduct)
+                          AgentMenuTile(
+                            icon: Icons.local_shipping_outlined,
+                            label: 'Yetkazish navbati',
+                            onTap: () => go('/exp-queue'),
+                          ),
                         AgentMenuTile(
                           icon: Icons.inventory_2_outlined,
-                          label: 'Остаток в машине',
+                          label: isTezyukProduct ? 'Qoldiq' : 'Остаток в машине',
                           onTap: () => go('/deliveries'),
                         ),
                         AgentMenuTile(
                           icon: Icons.history_toggle_off_outlined,
-                          label: 'Незавершённые заказы',
+                          label: expeditorLabel(
+                            'Незавершённые заказы',
+                            'Tugallanmagan buyurtmalar',
+                          ),
                           onTap: () => go('/exp-unfinished'),
                         ),
                         AgentMenuTile(
                           icon: Icons.fingerprint,
-                          label: 'Отметка посещаемости (Приход / Уход)',
+                          label: expeditorLabel(
+                            'Отметка посещаемости (Приход / Уход)',
+                            'Davomat (kirish / chiqish)',
+                          ),
                           onTap: () => go('/attendance', push: true),
                         ),
                       ],
@@ -179,16 +214,20 @@ class _ExpeditorDrawerState extends ConsumerState<ExpeditorDrawer> {
                     padding: EdgeInsets.zero,
                     child: Column(
                       children: [
-                        AgentMenuTile(
-                          icon: Icons.share_outlined,
-                          label: 'Поделиться',
-                          badge: 'Скоро!',
-                          showDivider: false,
-                          onTap: () {},
-                        ),
+                        if (isTezyukProduct)
+                          Builder(builder: (_) {
+                            final share = ulashishShortcutWave1();
+                            return AgentMenuTile(
+                              icon: Icons.share_outlined,
+                              label: share.label,
+                              badge: share.badge,
+                              showDivider: false,
+                              onTap: share.enabled ? () => go('/exp-share') : null,
+                            );
+                          },),
                         AgentMenuTile(
                           icon: Icons.settings_outlined,
-                          label: 'Настройки',
+                          label: expeditorLabel('Настройки', 'Sozlamalar'),
                           onTap: () => go('/exp-settings'),
                         ),
                       ],
@@ -203,21 +242,32 @@ class _ExpeditorDrawerState extends ConsumerState<ExpeditorDrawer> {
                         Navigator.pop(context);
                         await ref.read(authStateProvider.notifier).logout();
                       },
-                      child: const SizedBox(
+                      child: SizedBox(
                         height: 52,
                         child: Padding(
-                          padding: EdgeInsets.symmetric(horizontal: 12),
+                          padding: const EdgeInsets.symmetric(horizontal: 12),
                           child: Row(
                             children: [
-                              Icon(Icons.logout,
-                                  color: AppColors.error, size: 22,),
-                              SizedBox(width: 12),
+                              Icon(
+                                Icons.logout,
+                                color: isTezyukProduct
+                                    ? TezyukColors.error
+                                    : AppColors.error,
+                                size: 22,
+                              ),
+                              const SizedBox(width: 12),
                               Text(
-                                'Выйти из аккаунта',
+                                expeditorLabel(
+                                  'Выйти из аккаунта',
+                                  'Hisobdan chiqish',
+                                ),
                                 style: TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w600,
-                                    color: AppColors.error,),
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                  color: isTezyukProduct
+                                      ? TezyukColors.error
+                                      : AppColors.error,
+                                ),
                               ),
                             ],
                           ),

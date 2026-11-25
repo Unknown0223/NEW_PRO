@@ -24,6 +24,7 @@ import '../../features/auth/entrance/template_auth_entrance.dart';
 import '../../core/face/face_gate_state.dart';
 import '../../core/face/face_verification_flow.dart';
 import '../../core/config/app_env.dart';
+import '../../core/config/app_product.dart';
 import '../../core/config/mobile_config.dart';
 import '../../core/config/mobile_config_policy.dart';
 import '../../core/database/app_database.dart';
@@ -528,6 +529,15 @@ class AuthNotifier extends StateNotifier<AuthState> {
         state = const AuthState(status: AuthStatus.unauthenticated);
         return;
       }
+      final restoredRole = _session.state.user?.role ?? '';
+      if (!productAllowsRole(currentAppProduct, restoredRole)) {
+        await _wipeLocalAuth();
+        state = const AuthState(
+          status: AuthStatus.error,
+          error: 'TezYuk faqat ekspeditor uchun. Sales Arena ilovasidan kiring.',
+        );
+        return;
+      }
 
       // Akkaunt bor — login o‘rniga darhol PIN (yoki pin setup).
       // Kamera Activity paytida process o‘lgan bo‘lsa — bir martalik o‘tkazish.
@@ -615,6 +625,14 @@ class AuthNotifier extends StateNotifier<AuthState> {
       if (!r.user.isMobileRole) {
         await _wipeLocalAuth();
         state = const AuthState(status: AuthStatus.error, error: 'Mobil ilovaga ruxsat yo\'q');
+        return;
+      }
+      if (!productAllowsRole(currentAppProduct, r.user.role)) {
+        await _wipeLocalAuth();
+        state = const AuthState(
+          status: AuthStatus.error,
+          error: 'TezYuk faqat ekspeditor uchun. Sales Arena ilovasidan kiring.',
+        );
         return;
       }
       if (r.user.appAccess == false) {

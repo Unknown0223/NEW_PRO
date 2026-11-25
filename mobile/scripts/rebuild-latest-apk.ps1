@@ -4,8 +4,8 @@ $Mobile = Split-Path $PSScriptRoot -Parent
 $Root = Split-Path $Mobile -Parent
 $BuildDir = "C:\salesdoc_mobile"
 $Releases = Join-Path $Mobile "releases"
-$ApkOut = Join-Path $BuildDir "build\app\outputs\flutter-apk\app-release.apk"
-$DebugApk = Join-Path $BuildDir "build\app\outputs\flutter-apk\app-debug.apk"
+$ApkOut = Join-Path $BuildDir "build\app\outputs\flutter-apk\app-salesdoc-release.apk"
+$DebugApk = Join-Path $BuildDir "build\app\outputs\flutter-apk\app-salesdoc-debug.apk"
 
 function Get-PubspecVersion {
   $line = Get-Content (Join-Path $Mobile "pubspec.yaml") | Where-Object { $_ -match '^version:\s*' } | Select-Object -First 1
@@ -38,7 +38,7 @@ try {
   flutter test test/unit/app_update_info_test.dart
   if ($LASTEXITCODE -ne 0) { throw "flutter test failed" }
   Write-Host "=== Release APK ===" -ForegroundColor Cyan
-  flutter build apk --release --no-tree-shake-icons
+  flutter build apk --release --flavor salesdoc --no-tree-shake-icons
   if ($LASTEXITCODE -ne 0) { throw "flutter build apk failed" }
 } finally {
   Pop-Location

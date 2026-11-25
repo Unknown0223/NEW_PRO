@@ -5,15 +5,18 @@ import 'package:go_router/go_router.dart';
 import '../../../core/api/expeditor_api.dart';
 import '../../../core/auth/biometric_transaction_confirm.dart';
 import '../../../core/auth/session.dart';
+import '../../../core/config/app_product.dart';
 import '../../../core/face/face_verification_flow.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
+import '../../../core/theme/tezyuk_colors.dart';
 import '../../../core/ui/agent_ui_extended.dart';
 import '../../agent/orders/order_create_models.dart' show formatMoneySpaced;
 import '../config/expeditor_config_enforcement.dart';
 import '../expeditor_status_labels.dart';
 import '../expeditor_providers.dart';
 import '../shared/expeditor_order_picker.dart';
+import '../shared/tezyuk_expeditor_chrome.dart';
 import '../shell/expeditor_drawer.dart';
 import 'expeditor_returned_payments_banner.dart';
 
@@ -60,7 +63,7 @@ class _ExpeditorPaymentsPageState extends ConsumerState<ExpeditorPaymentsPage> {
         ref,
         context: context,
         required: policy.fingerprintRequired,
-        reason: 'Подтвердите оплату',
+        reason: isTezyukProduct ? 'To\'lovni tasdiqlang' : 'Подтвердите оплату',
       );
       if (!confirmed) return;
       if (!await FaceVerificationFlow.ensure(
@@ -68,7 +71,9 @@ class _ExpeditorPaymentsPageState extends ConsumerState<ExpeditorPaymentsPage> {
         ref,
         verifyContext: 'payment_accept',
         orderId: orderId,
-        title: 'Подтверждение лица при оплате',
+        title: isTezyukProduct
+            ? 'To\'lovda yuzni tasdiqlash'
+            : 'Подтверждение лица при оплате',
       )) {
         return;
       }
@@ -109,6 +114,7 @@ class _ExpeditorPaymentsPageState extends ConsumerState<ExpeditorPaymentsPage> {
 
     if (!policy.paymentsEnabled) {
       return Scaffold(
+        backgroundColor: expeditorPageBackground(),
         drawer: const ExpeditorDrawer(),
         appBar: AppBar(title: const Text('To\'lovlar')),
         body: Center(child: Text(policy.blockPaymentMessage())),
@@ -128,7 +134,10 @@ class _ExpeditorPaymentsPageState extends ConsumerState<ExpeditorPaymentsPage> {
 
     final ctxAsync = ref.watch(expeditorPaymentContextProvider(orderId));
 
+    final accent = expeditorChromeAccent();
+
     return Scaffold(
+      backgroundColor: expeditorPageBackground(),
       drawer: const ExpeditorDrawer(),
       appBar: AppBar(title: Text('To\'lov #$orderId')),
       body: ctxAsync.when(
@@ -172,7 +181,11 @@ class _ExpeditorPaymentsPageState extends ConsumerState<ExpeditorPaymentsPage> {
                       dense: true,
                       contentPadding: EdgeInsets.zero,
                       title: Text('${formatMoneySpaced((m['amount'] as num?)?.toDouble() ?? 0)} $currency — ${expeditorPaymentWorkflowLabel(m['workflow_status']?.toString() ?? '')}'),
-                      subtitle: const Text('Web panelda «Заявки на оплату экспедиторов» orqali tasdiqlanadi'),
+                      subtitle: Text(
+                        isTezyukProduct
+                            ? 'Veb panelda ekspeditor to\'lovlari orqali tasdiqlanadi'
+                            : 'Web panelda «Заявки на оплату экспедиторов» orqali tasdiqlanadi',
+                      ),
                     );
                   }),
                 ],
@@ -203,9 +216,22 @@ class _ExpeditorPaymentsPageState extends ConsumerState<ExpeditorPaymentsPage> {
                 }),
                 const SizedBox(height: 24),
                 ElevatedButton(
+                  style: isTezyukProduct
+                      ? ElevatedButton.styleFrom(
+                          backgroundColor: TezyukColors.primary,
+                          foregroundColor: TezyukColors.onPrimary,
+                        )
+                      : null,
                   onPressed: _submitting || !canSubmit ? null : () => _submit(orderId, slug),
                   child: _submitting
-                      ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                      ? SizedBox(
+                          height: 20,
+                          width: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: isTezyukProduct ? TezyukColors.onPrimary : accent,
+                          ),
+                        )
                       : const Text('ARIZA YUBORISH'),
                 ),
               ],

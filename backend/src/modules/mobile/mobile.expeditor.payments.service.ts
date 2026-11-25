@@ -108,7 +108,13 @@ export async function getMobileExpeditorPaymentContext(
 ) {
   const cfg = await loadExpeditorMobileConfig(tenantId, expeditorUserId);
   assertExpeditorPaymentsAllowed(cfg);
-  const order = await assertExpeditorOwnsOrder(tenantId, expeditorUserId, orderId);
+  const { loadOrderAfterShareGuard } = await import("./share/share-guard");
+  const order = await loadOrderAfterShareGuard(
+    tenantId,
+    expeditorUserId,
+    orderId,
+    assertExpeditorOwnsOrder
+  );
 
   const entries = await loadPaymentMethodEntriesForResolve(tenantId);
   const methods = filterExpeditorPaymentMethods(mapPaymentMethods(entries), cfg.expeditor?.allowed_payment_method_ids);
@@ -180,7 +186,13 @@ export async function createMobileExpeditorOrderPayment(
 ) {
   const cfg = await loadExpeditorMobileConfig(tenantId, expeditorUserId);
   assertExpeditorPaymentsAllowed(cfg);
-  const order = await assertExpeditorOwnsOrder(tenantId, expeditorUserId, orderId);
+  const { loadOrderAfterShareGuard } = await import("./share/share-guard");
+  const order = await loadOrderAfterShareGuard(
+    tenantId,
+    expeditorUserId,
+    orderId,
+    assertExpeditorOwnsOrder
+  );
 
   const entries = await loadPaymentMethodEntriesForResolve(tenantId);
   const allowedKeys = new Set(paymentTypeStorageKeysFromMethodEntries(entries));

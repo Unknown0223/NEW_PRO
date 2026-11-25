@@ -185,7 +185,7 @@ if exist "!MOBILE_SRC!\build" (
 
 echo [5/5] Build va ishga tushirish (faqat %BUILD_DIR%)...
 
-set "APK_PATH=%BUILD_DIR%\build\app\outputs\flutter-apk\app-debug.apk"
+set "APK_PATH=%BUILD_DIR%\build\app\outputs\flutter-apk\app-salesdoc-debug.apk"
 if exist "%APK_PATH%" (
   powershell -NoProfile -Command ^
     "$p='%APK_PATH%'; $aapt=Join-Path $env:LOCALAPPDATA 'Android\Sdk\build-tools\36.1.0\aapt.exe';" ^
@@ -215,7 +215,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File "%REPO_ROOT%\mobile\scripts\
 
 adb uninstall uz.salesdoc.salesdoc_mobile >nul 2>&1
 
-flutter run --no-pub -d !EMU_ID!
+flutter run --no-pub --flavor salesdoc -d !EMU_ID!
 if errorlevel 1 (
   echo.
   echo Build xato — Gradle to'xtatiladi, cache tozalanadi, qayta uriniladi...
@@ -223,7 +223,7 @@ if errorlevel 1 (
   call flutter clean >nul 2>&1
   call flutter pub get
   if errorlevel 1 exit /b 1
-  flutter run --no-pub -d !EMU_ID!
+  flutter run --no-pub --flavor salesdoc -d !EMU_ID!
 )
 if errorlevel 1 (
   echo.
@@ -231,8 +231,8 @@ if errorlevel 1 (
   if exist "%APK_PATH%" (
     powershell -NoProfile -ExecutionPolicy Bypass -File "%REPO_ROOT%\mobile\scripts\adb-install-retry.ps1" -ApkPath "%APK_PATH%" -DeviceId "!EMU_ID!"
     if not errorlevel 1 (
-      echo APK o'rnatildi. Ilovani ochish: flutter run --no-pub -d !EMU_ID!
-      flutter run --no-pub -d !EMU_ID!
+      echo APK o'rnatildi. Ilovani ochish: flutter run --no-pub --flavor salesdoc -d !EMU_ID!
+      flutter run --no-pub --flavor salesdoc -d !EMU_ID!
     )
   ) else (
     echo APK topilmadi: %APK_PATH%

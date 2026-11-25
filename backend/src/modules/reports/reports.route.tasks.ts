@@ -7,6 +7,7 @@ import { ensureTenantContext } from "../../lib/tenant-context";
 import {
   exportTasksReportXlsx,
   getTasksReport,
+  getTasksReportDataset,
   getTasksReportFilterOptions
 } from "./tasks-report.service";
 import { createReportRouteGuards, parseReportQueryOr400, reportQueryRaw } from "./reports.route.shared";
@@ -16,6 +17,24 @@ export function registerTasksReportRoutes(
   guards: ReturnType<typeof createReportRouteGuards> = createReportRouteGuards()
 ) {
   const { reportViewPreHandler, reportExportPreHandler } = guards;
+
+  app.get("/api/:slug/reports/tasks/dataset", { preHandler: reportViewPreHandler }, async (request, reply) => {
+    if (!ensureTenantContext(request, reply)) return;
+    const q = parseReportQueryOr400<TasksReportFilters>(
+      reply,
+      request,
+      tasksReportQuerySchema,
+      reportQueryRaw(request)
+    );
+    if (!q) return;
+    const u = getAccessUser(request);
+    const data = await getTasksReportDataset(
+      request.tenant!.id,
+      { ...q, page: 1, limit: 5000 },
+      { userId: actorUserIdOrNull(request), role: u.role }
+    );
+    return reply.send({ data });
+  });
 
   app.get("/api/:slug/reports/tasks/filter-options", { preHandler: reportViewPreHandler }, async (request, reply) => {
     if (!ensureTenantContext(request, reply)) return;

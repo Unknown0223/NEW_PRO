@@ -11,7 +11,9 @@ import '../../../core/api/mobile_api.dart';
 import '../../../core/auth/biometric_transaction_confirm.dart';
 import '../../../core/auth/session.dart';
 import '../../../core/gps/gps_tracker.dart';
+import '../../../core/config/app_product.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/tezyuk_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/ui/agent_ui.dart';
 import '../../../core/utils/external_actions.dart';
@@ -23,6 +25,7 @@ import '../expeditor_status_labels.dart';
 import '../payments/expeditor_payment_sheet.dart';
 import 'expeditor_photo_flow.dart';
 import 'expeditor_photo_section.dart';
+import 'tezyuk_client_steps.dart';
 
 /// Ekspeditor mijoz kartasi (Маршруты → mijoz) + vizit sessiyasi.
 class ExpeditorClientDetailPage extends ConsumerStatefulWidget {
@@ -316,22 +319,45 @@ class _ExpeditorClientDetailPageState
     return h > 0 ? '${h.toString().padLeft(2, '0')}:$m:$s' : '$m:$s';
   }
 
+  int get _tezyukStepIndex {
+    if (_readOnly) return 2;
+    if (!_visitStarted) return 0;
+    return 1;
+  }
+
   @override
   Widget build(BuildContext context) {
+    final tezyuk = isTezyukProduct;
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor:
+          tezyuk ? TezyukColors.background : AppColors.background,
       appBar: AppBar(
-        title: Text(_readOnly ? 'Завершённый визит' : 'Клиент'),
+        backgroundColor: tezyuk ? TezyukColors.background : null,
+        surfaceTintColor: tezyuk ? Colors.transparent : null,
+        title: Text(
+          tezyuk
+              ? (_readOnly ? 'Tugallangan vizit' : _name)
+              : (_readOnly ? 'Завершённый визит' : 'Клиент'),
+        ),
         actions: [
           PopupMenuButton<String>(
             onSelected: (v) {
               if (v == 'location') _location();
             },
-            itemBuilder: (_) => const [
-              PopupMenuItem(value: 'location', child: Text('Локация')),
+            itemBuilder: (_) => [
+              PopupMenuItem(
+                value: 'location',
+                child: Text(tezyuk ? 'Xarita' : 'Локация'),
+              ),
             ],
           ),
         ],
+        bottom: tezyuk
+            ? PreferredSize(
+                preferredSize: const Size.fromHeight(56),
+                child: TezyukClientSteps(activeIndex: _tezyukStepIndex),
+              )
+            : null,
       ),
       body: Column(
         children: [

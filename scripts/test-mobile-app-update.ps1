@@ -3,7 +3,7 @@ $ErrorActionPreference = "Stop"
 $Root = Resolve-Path (Join-Path $PSScriptRoot "..")
 $Mobile = Join-Path $Root "mobile"
 $BuildDir = "C:\salesdoc_mobile"
-$ApkOut = Join-Path $BuildDir "build\app\outputs\flutter-apk\app-release.apk"
+$ApkOut = Join-Path $BuildDir "build\app\outputs\flutter-apk\app-salesdoc-release.apk"
 $Pubspec = Join-Path $Mobile "pubspec.yaml"
 $Api = "http://127.0.0.1:18080"
 $Slug = "test1"
@@ -29,7 +29,7 @@ function Build-Apk {
   try {
     & $Flutter pub get
     if ($LASTEXITCODE -ne 0) { throw "flutter pub get failed" }
-    & $Flutter build apk --release --no-tree-shake-icons --dart-define=APP_ENV=local
+    & $Flutter build apk --release --flavor salesdoc --no-tree-shake-icons --dart-define=APP_ENV=local
     if ($LASTEXITCODE -ne 0) { throw "flutter build apk failed" }
     if (-not (Test-Path $ApkOut)) { throw "APK not found: $ApkOut" }
   } finally {

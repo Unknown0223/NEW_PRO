@@ -79,7 +79,7 @@ if (-not $SkipMobile) {
   }
 
   $Releases = Join-Path $MobileDir "releases"
-  $ApkOut = Join-Path $BuildDir "build\app\outputs\flutter-apk\app-release.apk"
+  $ApkOut = Join-Path $BuildDir "build\app\outputs\flutter-apk\app-salesdoc-release.apk"
   New-Item -ItemType Directory -Force -Path $Releases | Out-Null
 
   Push-Location $BuildDir
@@ -87,7 +87,7 @@ if (-not $SkipMobile) {
     flutter pub get
     if ($LASTEXITCODE -ne 0) { throw "flutter pub get xato" }
     Write-Host "Gradle build boshlandi (5-15 daqiqa)..." -ForegroundColor DarkYellow
-    flutter build apk --release --no-tree-shake-icons
+    flutter build apk --release --flavor salesdoc --no-tree-shake-icons
     if ($LASTEXITCODE -ne 0) { throw "flutter build apk xato" }
   } finally {
     Pop-Location

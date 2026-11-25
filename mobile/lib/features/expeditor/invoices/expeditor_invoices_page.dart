@@ -2,11 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/config/app_product.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
+import '../../../core/theme/tezyuk_colors.dart';
 import '../../../core/ui/agent_ui_extended.dart';
 import '../expeditor_providers.dart';
 import '../shared/expeditor_history_filter.dart';
+import '../shared/tezyuk_expeditor_chrome.dart';
 import '../shell/expeditor_drawer.dart';
 import 'expeditor_invoices_filter.dart';
 
@@ -58,7 +61,9 @@ class _ExpeditorInvoicesPageState extends ConsumerState<ExpeditorInvoicesPage>
     if (_filter.statuses.isNotEmpty) {
       parts.add(_filter.statuses.map(invoiceStatusLabel).join(', '));
     }
-    return parts.isEmpty ? 'Склад · Статус' : parts.join(' · ');
+    return parts.isEmpty
+        ? expeditorLabel('Склад · Статус', 'Ombor · Holat')
+        : parts.join(' · ');
   }
 
   List<Map<String, dynamic>> _filterRows(List<Map<String, dynamic>> rows) {
@@ -79,22 +84,26 @@ class _ExpeditorInvoicesPageState extends ConsumerState<ExpeditorInvoicesPage>
   @override
   Widget build(BuildContext context) {
     final docs = ref.watch(expeditorShipmentDocsProvider(_docType));
+    final accent = expeditorChromeAccent();
+    final muted = isTezyukProduct
+        ? TezyukColors.onSurfaceVariant
+        : AppColors.textSecondary;
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: expeditorPageBackground(),
       drawer: const ExpeditorDrawer(),
       appBar: AppBar(
         title: _searchOpen
             ? TextField(
                 controller: _searchCtrl,
                 autofocus: true,
-                decoration: const InputDecoration(
-                  hintText: 'Поиск…',
+                decoration: InputDecoration(
+                  hintText: expeditorLabel('Поиск…', 'Qidiruv…'),
                   border: InputBorder.none,
                 ),
                 onChanged: (v) => setState(() => _search = v),
               )
-            : const Text('Накладные'),
+            : Text(expeditorLabel('Накладные', 'Yukxatlar')),
         actions: [
           IconButton(
             icon: Icon(_searchOpen ? Icons.close : Icons.search),
@@ -107,10 +116,10 @@ class _ExpeditorInvoicesPageState extends ConsumerState<ExpeditorInvoicesPage>
             }),
           ),
           IconButton(
-            tooltip: 'Фильтр',
+            tooltip: expeditorLabel('Фильтр', 'Filtr'),
             icon: Icon(
               _showFilters ? Icons.filter_list_off : Icons.filter_list,
-              color: _showFilters ? AppColors.expeditorAccent : null,
+              color: _showFilters ? accent : null,
             ),
             onPressed: () => setState(() => _showFilters = !_showFilters),
           ),
@@ -118,12 +127,22 @@ class _ExpeditorInvoicesPageState extends ConsumerState<ExpeditorInvoicesPage>
         bottom: TabBar(
           controller: _tabs,
           onTap: (_) => setState(() {}),
-          labelColor: AppColors.expeditorAccent,
-          unselectedLabelColor: AppColors.textSecondary,
-          indicatorColor: AppColors.expeditorAccent,
-          tabs: const [
-            Tab(text: 'Отгрузочные накладные'),
-            Tab(text: 'Возвратные накладные'),
+          labelColor: accent,
+          unselectedLabelColor: muted,
+          indicatorColor: accent,
+          tabs: [
+            Tab(
+              text: expeditorLabel(
+                'Отгрузочные накладные',
+                'Yuklash',
+              ),
+            ),
+            Tab(
+              text: expeditorLabel(
+                'Возвратные накладные',
+                'Qaytarish',
+              ),
+            ),
           ],
         ),
       ),
@@ -131,7 +150,7 @@ class _ExpeditorInvoicesPageState extends ConsumerState<ExpeditorInvoicesPage>
           ? FloatingActionButton(
               heroTag: 'exp-invoices-create-return',
               onPressed: () => context.push('/exp-return-by-order'),
-              backgroundColor: AppColors.expeditorAccent,
+              backgroundColor: accent,
               child: const Icon(Icons.add),
             )
           : null,
@@ -165,8 +184,12 @@ class _ExpeditorInvoicesPageState extends ConsumerState<ExpeditorInvoicesPage>
                       icon: const Icon(Icons.tune, size: 18),
                       label: Text(_advancedLabel()),
                       style: OutlinedButton.styleFrom(
-                        foregroundColor: AppColors.expeditorAccent,
-                        side: const BorderSide(color: AppColors.borderLight),
+                        foregroundColor: accent,
+                        side: BorderSide(
+                          color: isTezyukProduct
+                              ? tezyukExpeditorCardBorder
+                              : AppColors.borderLight,
+                        ),
                         padding:
                             const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                       ),
@@ -175,7 +198,7 @@ class _ExpeditorInvoicesPageState extends ConsumerState<ExpeditorInvoicesPage>
                   if (_filter.hasAdvanced) ...[
                     const SizedBox(width: 8),
                     IconButton(
-                      tooltip: 'Сбросить',
+                      tooltip: expeditorLabel('Сбросить', 'Tozalash'),
                       icon: const Icon(Icons.close),
                       onPressed: () => setState(() => _filter = _filter.copyWith(
                             clearWarehouse: true,
@@ -193,7 +216,7 @@ class _ExpeditorInvoicesPageState extends ConsumerState<ExpeditorInvoicesPage>
                 final filtered = _filterRows(rows);
                 if (filtered.isEmpty) {
                   return RefreshIndicator(
-                    color: AppColors.expeditorAccent,
+                    color: accent,
                     onRefresh: () async =>
                         ref.invalidate(expeditorShipmentDocsProvider(_docType)),
                     child: ListView(
@@ -202,14 +225,18 @@ class _ExpeditorInvoicesPageState extends ConsumerState<ExpeditorInvoicesPage>
                         SizedBox(
                           height: MediaQuery.sizeOf(context).height * 0.45,
                           child: AgentEmptyState.fill(
-                              message: 'Пока здесь пусто',),
+                            message: expeditorLabel(
+                              'Пока здесь пусто',
+                              'Hozircha bo\'sh',
+                            ),
+                          ),
                         ),
                       ],
                     ),
                   );
                 }
                 return RefreshIndicator(
-                  color: AppColors.expeditorAccent,
+                  color: accent,
                   onRefresh: () async =>
                       ref.invalidate(expeditorShipmentDocsProvider(_docType)),
                   child: ListView.separated(
@@ -223,10 +250,12 @@ class _ExpeditorInvoicesPageState extends ConsumerState<ExpeditorInvoicesPage>
                   ),
                 );
               },
-              loading: () => const Center(
-                  child: CircularProgressIndicator(
-                      color: AppColors.expeditorAccent,),),
-              error: (e, _) => Center(child: Text('Ошибка: $e')),
+              loading: () => Center(
+                child: CircularProgressIndicator(color: accent),
+              ),
+              error: (e, _) => Center(
+                child: Text(expeditorLabel('Ошибка: $e', 'Xato: $e')),
+              ),
             ),
           ),
         ],
@@ -246,52 +275,84 @@ class _InvoiceCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final id = doc['id']?.toString() ?? '—';
     final waiting = doc['status'] == 'waiting_confirmation';
+    final warn = isTezyukProduct ? TezyukColors.warning : AppColors.warning;
+    final ok = isTezyukProduct ? TezyukColors.success : AppColors.success;
     final (label, color) = waiting
-        ? ('Ожидание', AppColors.warning)
-        : ('Подтвержден', AppColors.success);
+        ? (
+            expeditorLabel('Ожидание', 'Kutilmoqda'),
+            warn,
+          )
+        : (
+            expeditorLabel('Подтвержден', 'Tasdiqlangan'),
+            ok,
+          );
+    final dividerColor = isTezyukProduct
+        ? TezyukColors.outlineVariant
+        : AppColors.borderLight;
     final created = formatInvoiceDay(doc['created_at']?.toString());
     final shipped = formatInvoiceDay(doc['ship_date']?.toString());
 
+    final headline = isTezyukProduct
+        ? TezyukColors.onSurface
+        : AppColors.textHeadline;
+
     return Material(
-      color: AppColors.surface,
+      color: Colors.transparent,
       borderRadius: BorderRadius.circular(12),
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(12),
-        child: Padding(
-          padding: const EdgeInsets.all(14),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: Text('№:$id',
-                        style: const TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w800,
-                            color: AppColors.textHeadline,),),
-                  ),
-                  Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: color.withValues(alpha: 0.14),
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: Text(label,
+        child: Ink(
+          decoration: expeditorListCardDecoration(radius: 12),
+          child: Padding(
+            padding: const EdgeInsets.all(14),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        '№:$id',
                         style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w700,
-                            color: color,),),
-                  ),
-                ],
-              ),
-              const Divider(height: 18, color: AppColors.borderLight),
-              _row('Дата создание:', created),
-              const SizedBox(height: 6),
-              _row('Дата отправки:', shipped),
-            ],
+                          fontSize: 15,
+                          fontWeight: FontWeight.w800,
+                          color: headline,
+                        ),
+                      ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: color.withValues(alpha: 0.14),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(
+                        label,
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: color,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                Divider(height: 18, color: dividerColor),
+                _row(
+                  expeditorLabel('Дата создание:', 'Yaratilgan sana:'),
+                  created,
+                ),
+                const SizedBox(height: 6),
+                _row(
+                  expeditorLabel('Дата отправки:', 'Jo\'natilgan sana:'),
+                  shipped,
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -299,11 +360,15 @@ class _InvoiceCard extends StatelessWidget {
   }
 
   Widget _row(String label, String value) {
+    final muted = isTezyukProduct
+        ? TezyukColors.onSurfaceVariant
+        : AppColors.textMuted;
     return Row(
       children: [
-        Text(label,
-            style: AppTypography.bodyMedium
-                .copyWith(color: AppColors.textMuted),),
+        Text(
+          label,
+          style: AppTypography.bodyMedium.copyWith(color: muted),
+        ),
         const Spacer(),
         Text(value, style: const TextStyle(fontWeight: FontWeight.w700)),
       ],

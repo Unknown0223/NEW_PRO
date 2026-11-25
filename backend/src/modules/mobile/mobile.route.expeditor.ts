@@ -4,10 +4,12 @@ import { registerMobileExpeditorDashboardRoutes } from "./mobile.route.expeditor
 import { registerMobileExpeditorDeliveryRoutes } from "./mobile.route.expeditor.deliveries";
 import { registerMobileExpeditorOrderRoutes } from "./mobile.route.expeditor.orders";
 import { registerMobileExpeditorReturnRoutes } from "./mobile.route.expeditor.returns";
+import { registerMobileExpeditorShareRoutes } from "./mobile.route.expeditor.share";
 import { registerMobileExpeditorShipmentRoutes } from "./mobile.route.expeditor.shipments";
 
 export async function registerMobileExpeditorRoutes(app: FastifyInstance) {
   await registerMobileExpeditorDeliveryRoutes(app);
+  await registerMobileExpeditorShareRoutes(app);
   await registerMobileExpeditorOrderRoutes(app);
   await registerMobileExpeditorReturnRoutes(app);
   await registerMobileExpeditorDashboardRoutes(app);

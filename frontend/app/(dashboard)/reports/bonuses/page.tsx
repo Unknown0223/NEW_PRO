@@ -44,11 +44,14 @@ const config: FlatReportConfig = {
   apiPath: "bonuses",
   exportPermission: "reports.po_bonusam.export",
   exportFilename: "po-bonusam.xlsx",
+  tablePrefsId: "report.bonuses.v1",
+  dateTypeAsRadio: true,
+  /** 11 filtr → xl 6 ustun ≈ 2 qator. */
+  filterGridCols: 6,
   filterFields: [
     { kind: "dateRange" },
     { kind: "select", paramKey: "date_type", optionsFrom: "date_types", defaultValue: "created_at" },
     { kind: "select", paramKey: "group_by", optionsFrom: "group_by", defaultValue: "product" },
-    { kind: "search", placeholder: "Товар / клиент / агент" },
     { kind: "multiSelect", paramKey: "statuses", optionsFrom: "statuses", placeholder: "Статус" },
     { kind: "multiSelect", paramKey: "agent_ids", optionsFrom: "agents", placeholder: "Агент" },
     {

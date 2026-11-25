@@ -14,6 +14,7 @@ import {
 import { assertDocWritableById } from "../../lib/document-edit-lock.request";
 import { ensureTenantContext } from "../../lib/tenant-context";
 import { getAccessUser } from "../auth/auth.prehandlers";
+import { ShareError } from "./share/share-codes";
 import {
   createMobileExpeditorOrderPayment,
   createMobileExpeditorPartialReturn,
@@ -69,6 +70,9 @@ export async function registerMobileExpeditorOrderRoutes(app: FastifyInstance) {
       } catch (e) {
         if (isFaceGateError(e)) {
           return sendApiError(reply, request, 403, e.code, e.message);
+        }
+        if (e instanceof ShareError) {
+          return sendApiError(reply, request, 403, e.code);
         }
         if (isDocumentEditPeriodLockedError(e)) return sendDocumentEditPeriodLocked(reply, request, e);
         if (e instanceof Error && e.message === "NOT_FOUND") {

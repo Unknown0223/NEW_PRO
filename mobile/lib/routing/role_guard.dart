@@ -47,6 +47,8 @@ class _RoleRoutes {
     '/exp-manual-sync',
     '/my-returns',
     '/attendance',
+    '/exp-queue',
+    '/exp-share',
   };
   static const supervisor = {
     '/home',

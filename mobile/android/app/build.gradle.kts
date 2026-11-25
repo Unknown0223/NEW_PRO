@@ -92,6 +92,20 @@ android {
         versionName = flutter.versionName
     }
 
+    // TezYuk = alohida dastavchik APK (Wave 0–1). salesdoc = mavjud multi-role.
+    flavorDimensions += "product"
+    productFlavors {
+        create("salesdoc") {
+            dimension = "product"
+            resValue("string", "app_name", "Sales Arena")
+        }
+        create("tezyuk") {
+            dimension = "product"
+            applicationIdSuffix = ".tezyuk"
+            resValue("string", "app_name", "TezYuk")
+        }
+    }
+
     signingConfigs {
         // Nomlar SigningConfig property lari bilan to‘qnashmasin (storePassword shadow).
         create("ota") {

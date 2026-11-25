@@ -1,5 +1,21 @@
 import { describe, expect, it } from "vitest";
 import { parseBonusesReportQuery } from "../src/modules/reports/bonuses-report.parse";
+import { bonusesDateExpr } from "../src/modules/reports/bonuses.dates";
+
+describe("bonusesDateExpr", () => {
+  it("shipped_date uses COALESCE shipped/delivered", () => {
+    const s = bonusesDateExpr("shipped_date").strings.join("");
+    expect(s).toMatch(/COALESCE/i);
+    expect(s).toMatch(/shipped_at/);
+    expect(s).toMatch(/delivered_at/);
+  });
+
+  it("created_at uses o.created_at", () => {
+    const s = bonusesDateExpr("created_at").strings.join("");
+    expect(s).toMatch(/created_at/);
+    expect(s).not.toMatch(/COALESCE/i);
+  });
+});
 
 describe("bonuses-report parseBonusesReportQuery", () => {
   it("defaults empty filters, product group, created_at date", () => {

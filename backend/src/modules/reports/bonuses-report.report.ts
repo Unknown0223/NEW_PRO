@@ -3,6 +3,8 @@ import { prisma } from "../../config/database";
 import { enrichScopedReportActor, buildScopedAgentExistsSql } from "../access/access-agent-scope";
 import type { ReportActor } from "./client-sales-4-report.service";
 import type { BonusesReportFilters, BonusesReportRow } from "./bonuses-report.types";
+import { bonusesDateExpr } from "./bonuses.dates";
+import { STATUS_CTE } from "./expeditor-returns.helpers";
 
 function parseDate(v?: string): Date | null {
   if (!v) return null;
@@ -28,16 +30,6 @@ function decStr(v: Prisma.Decimal | number | null | undefined): string {
   return String(v);
 }
 
-const STATUS_CTE = Prisma.sql`
-  status_logs AS (
-    SELECT
-      sl.order_id,
-      MIN(CASE WHEN sl.to_status = 'delivering' THEN sl.created_at END) AS shipped_at
-    FROM order_status_logs sl
-    GROUP BY sl.order_id
-  )
-`;
-
 function buildWhere(tenantId: number, f: BonusesReportFilters, actor?: ReportActor): Prisma.Sql {
   const parts: Prisma.Sql[] = [
     Prisma.sql`o.tenant_id = ${tenantId}`,
@@ -47,7 +39,7 @@ function buildWhere(tenantId: number, f: BonusesReportFilters, actor?: ReportAct
   ];
   const from = parseDate(f.from);
   const to = parseDateEnd(f.to);
-  const dateExpr = f.date_type === "shipped_date" ? Prisma.sql`sl.shipped_at` : Prisma.sql`o.created_at`;
+  const dateExpr = bonusesDateExpr(f.date_type);
   if (from) parts.push(Prisma.sql`${dateExpr} >= ${from}`);
   if (to) parts.push(Prisma.sql`${dateExpr} <= ${to}`);
   if (f.statuses.length) parts.push(Prisma.sql`o.status IN (${sqlInStrings(f.statuses)})`);

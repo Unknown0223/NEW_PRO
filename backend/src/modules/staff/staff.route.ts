@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { registerStaffAgentRoutes } from "./staff.route.agents";
 import { registerStaffAuditorRoutes } from "./staff.route.auditors";
 import { registerStaffCollectorRoutes } from "./staff.route.collectors";
+import { registerStaffExpeditorPartnerRoutes } from "./staff.route.expeditor-partners";
 import { registerStaffExpeditorRoutes } from "./staff.route.expeditors";
 import { registerStaffFaceRoutes } from "./staff.route.face";
 import { registerStaffImportRoutes } from "./staff.route.import";
@@ -17,6 +18,7 @@ export async function registerStaffRoutes(app: FastifyInstance) {
   await registerStaffCollectorRoutes(app);
   await registerStaffAuditorRoutes(app);
   await registerStaffExpeditorRoutes(app);
+  await registerStaffExpeditorPartnerRoutes(app);
   await registerStaffOperatorRoutes(app);
   await registerStaffSkladchikRoutes(app);
 }
