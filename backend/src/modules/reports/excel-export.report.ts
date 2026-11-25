@@ -11,6 +11,7 @@ import {
 } from "../tenant-settings/finance-refs";
 import type { ReportActor } from "./client-sales-4-report.service";
 import { ORDER_STATUS_LABEL_RU, STATUS_CTE } from "./expeditor-returns.helpers";
+import { getExcelExportStatusSummaries } from "./excel-export.summaries";
 import type { ExcelExportFilters, ExcelExportRow } from "./excel-export.types";
 
 function parseDate(v?: string): Date | null {
@@ -33,8 +34,12 @@ function sqlInStrings(values: string[]): Prisma.Sql {
 }
 
 function dateExpr(f: ExcelExportFilters): Prisma.Sql {
-  if (f.date_type === "delivered_date") return Prisma.sql`sl.delivered_at`;
-  if (f.date_type === "shipped_date") return Prisma.sql`sl.shipped_at`;
+  if (f.date_type === "delivered_date") {
+    return Prisma.sql`COALESCE(sl.delivered_at, sl.shipped_at)`;
+  }
+  if (f.date_type === "shipped_date") {
+    return Prisma.sql`COALESCE(sl.shipped_at, sl.delivered_at)`;
+  }
   return Prisma.sql`o.created_at`;
 }
 
@@ -48,7 +53,12 @@ function qtyStr(v: Prisma.Decimal | number | null | undefined): string {
   return new Prisma.Decimal(v).toFixed(3).replace(/\.?0+$/, "") || "0";
 }
 
-function buildWhere(tenantId: number, f: ExcelExportFilters, actor?: ReportActor): Prisma.Sql {
+function buildWhere(
+  tenantId: number,
+  f: ExcelExportFilters,
+  actor?: ReportActor,
+  opts?: { includeAllStatuses?: boolean }
+): Prisma.Sql {
   const parts: Prisma.Sql[] = [
     Prisma.sql`o.tenant_id = ${tenantId}`,
     Prisma.sql`o.order_type = 'order'`,
@@ -59,8 +69,10 @@ function buildWhere(tenantId: number, f: ExcelExportFilters, actor?: ReportActor
   const dexpr = dateExpr(f);
   if (from) parts.push(Prisma.sql`${dexpr} >= ${from}`);
   if (to) parts.push(Prisma.sql`${dexpr} <= ${to}`);
-  if (f.statuses?.length) parts.push(Prisma.sql`o.status IN (${sqlInStrings(f.statuses)})`);
-  else parts.push(Prisma.sql`o.status <> 'cancelled'`);
+  if (!opts?.includeAllStatuses) {
+    if (f.statuses?.length) parts.push(Prisma.sql`o.status IN (${sqlInStrings(f.statuses)})`);
+    else parts.push(Prisma.sql`o.status <> 'cancelled'`);
+  }
   if (f.agent_ids?.length) {
     parts.push(Prisma.sql`COALESCE(o.agent_id, c.agent_id) IN (${Prisma.join(f.agent_ids)})`);
   }
@@ -126,6 +138,7 @@ function buildWhere(tenantId: number, f: ExcelExportFilters, actor?: ReportActor
 export async function getExcelExportReport(tenantId: number, f: ExcelExportFilters, actor?: ReportActor) {
   const scopedActor = actor ? await enrichScopedReportActor(tenantId, actor) : undefined;
   const whereSql = buildWhere(tenantId, f, scopedActor);
+  const whereForCards = buildWhere(tenantId, f, scopedActor, { includeAllStatuses: true });
   const offset = (f.page - 1) * f.limit;
 
   const tenant = await prisma.tenant.findUnique({ where: { id: tenantId }, select: { settings: true } });
@@ -248,6 +261,8 @@ export async function getExcelExportReport(tenantId: number, f: ExcelExportFilte
     };
   });
 
+  const status_summaries = await getExcelExportStatusSummaries(tenantId, whereForCards);
+
   return {
     period_from: f.from,
     period_to: f.to,
@@ -255,6 +270,7 @@ export async function getExcelExportReport(tenantId: number, f: ExcelExportFilte
     page: f.page,
     limit: f.limit,
     total: Number(rows[0]?.total_count ?? 0),
-    rows: mapped
+    rows: mapped,
+    status_summaries
   };
 }

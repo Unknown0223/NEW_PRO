@@ -12,11 +12,14 @@ const config: FlatReportConfig = {
   apiPath: "inventory",
   exportPermission: "reports.po_inventaryu.export",
   exportFilename: "po-inventaryu.xlsx",
+  tablePrefsId: "report.inventory.v2",
+  dateTypeAsRadio: true,
+  /** 11 filtr → xl 6 ustun = 2 to‘liq qator (qidiruv jadvalda). */
+  filterGridCols: 6,
   filterFields: [
     { kind: "dateRange" },
     { kind: "select", paramKey: "date_type", optionsFrom: "date_types", defaultValue: "order_date" },
     { kind: "select", paramKey: "client_active", optionsFrom: "client_active", defaultValue: "all" },
-    { kind: "search", placeholder: "Клиент / телефон / агент" },
     {
       kind: "multiSelect",
       paramKey: "inventory_types",
@@ -72,6 +75,7 @@ const config: FlatReportConfig = {
     { key: "row_number", header: "#", cellClassName: "text-muted-foreground" },
     { key: "client_name", header: "Клиент", cellClassName: "font-medium" },
     { key: "phone", header: "Телефон" },
+    { key: "address", header: "Адрес" },
     { key: "city", header: "Город" },
     { key: "agent_name", header: "Агент" },
     { key: "supervisor_name", header: "Супервайзер" },
@@ -90,9 +94,9 @@ const config: FlatReportConfig = {
   },
   rowKey: "client_id",
   countLabel: "Клиентов",
-  footerLeadColSpan: 7,
+  footerLeadColSpan: 8,
   clientTableSearch: {
-    rowKeys: ["client_name", "phone", "agent_name", "inventory_types", "city"],
+    rowKeys: ["client_name", "phone", "address", "agent_name", "inventory_types", "city"],
     placeholder: "Фильтр в таблице…"
   }
 };

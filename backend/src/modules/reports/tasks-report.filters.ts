@@ -16,6 +16,10 @@ const PRIORITY_LABEL_RU: Record<string, string> = {
   high: "Высокий"
 };
 
+/** Clients table has `client_code`, not `code` — used by filter-options raw SQL. */
+export const TASKS_FILTER_CLIENTS_SELECT_SQL =
+  "SELECT DISTINCT c.id, c.name, c.client_code AS code";
+
 export async function getTasksReportFilterOptions(tenantId: number, actor?: ReportActor) {
   const scope = await resolveFilterOptionsScope(tenantId, actor);
   const [assignees, creators, types, clients] = await Promise.all([
@@ -33,7 +37,7 @@ export async function getTasksReportFilterOptions(tenantId: number, actor?: Repo
     }),
     loadTaskTypes(tenantId, false),
     prisma.$queryRaw<Array<{ id: number; name: string; code: string | null }>>`
-      SELECT DISTINCT c.id, c.name, c.code
+      SELECT DISTINCT c.id, c.name, c.client_code AS code
       FROM clients c
       INNER JOIN tenant_tasks t ON t.client_id = c.id AND t.tenant_id = c.tenant_id
       WHERE c.tenant_id = ${tenantId}

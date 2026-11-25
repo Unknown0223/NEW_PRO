@@ -31,16 +31,23 @@ const PHOTO_CONTENT_CACHE_MAX = 96;
 const REMOTE_PHOTO_MAX_BYTES = 12 * 1024 * 1024;
 const THUMB_MAX_EDGE = 480;
 
-function photoCacheKey(photoId: number, thumb: boolean): string {
-  return `${photoId}:${thumb ? "t" : "f"}`;
+/** Tenant-scoped cache key — photo ids are global sequences across tenants. */
+export function photoContentCacheKey(tenantId: number, photoId: number, thumb: boolean): string {
+  return `${tenantId}:${photoId}:${thumb ? "t" : "f"}`;
 }
 
-function rememberPhotoContent(photoId: number, buffer: Buffer, contentType: string, thumb: boolean) {
+function rememberPhotoContent(
+  tenantId: number,
+  photoId: number,
+  buffer: Buffer,
+  contentType: string,
+  thumb: boolean
+) {
   if (photoContentCache.size >= PHOTO_CONTENT_CACHE_MAX) {
     const oldest = photoContentCache.keys().next().value;
     if (oldest != null) photoContentCache.delete(oldest);
   }
-  photoContentCache.set(photoCacheKey(photoId, thumb), { buffer, contentType });
+  photoContentCache.set(photoContentCacheKey(tenantId, photoId, thumb), { buffer, contentType });
 }
 
 /** Grid/lenta uchun kichik JPEG — to‘liq 1.6k rasm o‘rniga. */
@@ -100,14 +107,15 @@ export async function fetchRemotePhotoBytes(
 }
 
 async function asThumbBytes(
+  tenantId: number,
   photoId: number,
   buffer: Buffer
 ): Promise<{ buffer: Buffer; contentType: string }> {
-  const cached = photoContentCache.get(photoCacheKey(photoId, true));
+  const cached = photoContentCache.get(photoContentCacheKey(tenantId, photoId, true));
   if (cached) return cached;
   const thumb = await shrinkPhotoThumb(buffer);
   const packed = { buffer: thumb, contentType: "image/jpeg" };
-  rememberPhotoContent(photoId, packed.buffer, packed.contentType, true);
+  rememberPhotoContent(tenantId, photoId, packed.buffer, packed.contentType, true);
   return packed;
 }
 
@@ -121,12 +129,12 @@ export async function loadSupervisorPhotoContent(
   | null
 > {
   const thumb = opts?.thumb === true;
-  const hit = photoContentCache.get(photoCacheKey(photoId, thumb));
+  const hit = photoContentCache.get(photoContentCacheKey(tenantId, photoId, thumb));
   if (hit) return { kind: "bytes", buffer: hit.buffer, contentType: hit.contentType };
   if (thumb) {
-    const full = photoContentCache.get(photoCacheKey(photoId, false));
+    const full = photoContentCache.get(photoContentCacheKey(tenantId, photoId, false));
     if (full) {
-      const small = await asThumbBytes(photoId, full.buffer);
+      const small = await asThumbBytes(tenantId, photoId, full.buffer);
       return { kind: "bytes", buffer: small.buffer, contentType: small.contentType };
     }
   }
@@ -143,9 +151,9 @@ export async function loadSupervisorPhotoContent(
   if (/^https?:\/\//i.test(stored)) {
     const remote = await fetchRemotePhotoBytes(stored);
     if (!remote) return null;
-    rememberPhotoContent(photoId, remote.buffer, remote.contentType, false);
+    rememberPhotoContent(tenantId, photoId, remote.buffer, remote.contentType, false);
     if (!thumb) return { kind: "bytes", buffer: remote.buffer, contentType: remote.contentType };
-    const small = await asThumbBytes(photoId, remote.buffer);
+    const small = await asThumbBytes(tenantId, photoId, remote.buffer);
     return { kind: "bytes", buffer: small.buffer, contentType: small.contentType };
   }
   // Ichki /uploads/... — Fastify static; /api/... content o‘ziga loop qilmasin.
@@ -155,8 +163,8 @@ export async function loadSupervisorPhotoContent(
   const fromStore = await readStoredClientPhoto(stored);
   const decoded = fromStore ?? decodeStoredPhotoContent(stored);
   if (!decoded) return null;
-  rememberPhotoContent(photoId, decoded.buffer, decoded.contentType, false);
+  rememberPhotoContent(tenantId, photoId, decoded.buffer, decoded.contentType, false);
   if (!thumb) return { kind: "bytes", buffer: decoded.buffer, contentType: decoded.contentType };
-  const small = await asThumbBytes(photoId, decoded.buffer);
+  const small = await asThumbBytes(tenantId, photoId, decoded.buffer);
   return { kind: "bytes", buffer: small.buffer, contentType: small.contentType };
 }

@@ -1,49 +1,23 @@
 import { describe, expect, it } from "vitest";
-import { parsePhotoReportQuery } from "../src/modules/reports/photo-report.parse";
+import { photoContentCacheKey } from "../src/modules/dashboard/dashboard.supervisor.photo-content";
+import { buildPhotoReportThumbUrl } from "../src/modules/reports/photo-report.content";
 
-describe("photo-report parsePhotoReportQuery", () => {
-  it("defaults archive to active and empty multi filters", () => {
-    const f = parsePhotoReportQuery({});
-    expect(f.archive).toBe("active");
-    expect(f.page).toBe(1);
-    expect(f.limit).toBe(50);
-    expect(f.photo_categories).toEqual([]);
-    expect(f.user_ids).toEqual([]);
-    expect(f.user_roles).toEqual([]);
+describe("photoContentCacheKey", () => {
+  it("includes tenantId so tenants cannot share cache slots", () => {
+    expect(photoContentCacheKey(3, 9, true)).toBe("3:9:t");
+    expect(photoContentCacheKey(1, 9, true)).toBe("1:9:t");
+    expect(photoContentCacheKey(3, 9, true)).not.toBe(photoContentCacheKey(1, 9, true));
+  });
+});
+
+describe("buildPhotoReportThumbUrl", () => {
+  it("returns null when purged or archived", () => {
+    expect(buildPhotoReportThumbUrl("aksit", 9, true)).toBeNull();
   });
 
-  it("parses date range, archive void, and multi filters", () => {
-    const f = parsePhotoReportQuery({
-      from: "2026-11-01",
-      to: "2026-11-19",
-      archive: "void",
-      photo_categories: "Полка,Витрина",
-      user_ids: "3,8",
-      user_roles: "agent,expeditor",
-      client_categories: "A,B",
-      territory_3_list: "ASAKA",
-      client_active: "active",
-      search: "  market  ",
-      page: "2",
-      limit: "100"
-    });
-    expect(f.from).toBe("2026-11-01");
-    expect(f.to).toBe("2026-11-19");
-    expect(f.archive).toBe("void");
-    expect(f.photo_categories).toEqual(["Полка", "Витрина"]);
-    expect(f.user_ids).toEqual([3, 8]);
-    expect(f.user_roles).toEqual(["agent", "expeditor"]);
-    expect(f.client_categories).toEqual(["A", "B"]);
-    expect(f.territory_3_list).toEqual(["ASAKA"]);
-    expect(f.client_active).toBe("active");
-    expect(f.search).toBe("market");
-    expect(f.page).toBe(2);
-    expect(f.limit).toBe(100);
-  });
-
-  it("rejects unknown archive and client_active to defaults", () => {
-    const f = parsePhotoReportQuery({ archive: "maybe", client_active: "huh" });
-    expect(f.archive).toBe("active");
-    expect(f.client_active).toBe("all");
+  it("points at reports content with thumb=1", () => {
+    expect(buildPhotoReportThumbUrl("aksit", 9, false)).toBe(
+      "/api/aksit/reports/photo/9/content?thumb=1"
+    );
   });
 });

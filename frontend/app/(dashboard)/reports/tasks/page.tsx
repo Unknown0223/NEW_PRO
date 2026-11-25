@@ -19,6 +19,9 @@ const config: FlatReportConfig = {
   apiPath: "tasks",
   exportPermission: "reports.otchet_po_zadacham.export",
   exportFilename: "otchet-po-zadacham.xlsx",
+  tablePrefsId: "report.tasks.v1",
+  /** 8 filtr → xl 6 ustun ≈ 2 qator. */
+  filterGridCols: 6,
   filterFields: [
     { kind: "dateRange" },
     { kind: "search", placeholder: "Задача / клиент / сотрудник" },
@@ -61,6 +64,7 @@ const config: FlatReportConfig = {
     { key: "client_name", header: "Клиент" },
     { key: "created_at", header: "Создана" },
     { key: "due_at", header: "Срок" },
+    { key: "completed_at", header: "Завершена" },
     { key: "result_comment", header: "Результат" },
     { key: "photo_count", header: "Фото", align: "right", format: "number" }
   ],
@@ -83,6 +87,7 @@ const config: FlatReportConfig = {
   formatters: {
     created_at: (v) => fmtDt(v),
     due_at: (v) => fmtDt(v),
+    completed_at: (v) => fmtDt(v),
     description: (v) => String(v ?? "") || "—",
     result_comment: (v) => String(v ?? "") || "—"
   }

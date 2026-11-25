@@ -74,6 +74,8 @@ export type FlatReportColumn = {
 export type FlatReportColumnsContext = {
   applied: Record<string, string | number | string[]>;
   filterOptions: Record<string, unknown> | undefined;
+  /** Latest report payload (matrix adapters may read `columns`). */
+  reportData?: Record<string, unknown> | undefined;
 };
 
 export type FlatReportClientTableSearch = {
@@ -131,4 +133,9 @@ export type FlatReportConfig = {
    * Default true when a select field with paramKey `date_type` exists.
    */
   dateTypeAsRadio?: boolean;
+  /**
+   * Filter grid column count at `xl` breakpoint. Default 9.
+   * Use 6 when many filters must fit in exactly two equal rows.
+   */
+  filterGridCols?: 6 | 9;
 };

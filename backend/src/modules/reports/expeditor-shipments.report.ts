@@ -30,8 +30,12 @@ function sqlInStrings(values: string[]): Prisma.Sql {
 }
 
 function dateExpr(f: ExpeditorShipmentsFilters): Prisma.Sql {
-  if (f.date_type === "delivered_date") return Prisma.sql`sl.delivered_at`;
-  if (f.date_type === "shipped_date") return Prisma.sql`sl.shipped_at`;
+  if (f.date_type === "delivered_date") {
+    return Prisma.sql`COALESCE(sl.delivered_at, sl.shipped_at)`;
+  }
+  if (f.date_type === "shipped_date") {
+    return Prisma.sql`COALESCE(sl.shipped_at, sl.delivered_at)`;
+  }
   return Prisma.sql`o.created_at`;
 }
 

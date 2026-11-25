@@ -3,6 +3,7 @@ import { prisma } from "../../config/database";
 import { enrichScopedReportActor, buildScopedAgentExistsSql } from "../access/access-agent-scope";
 import type { ReportActor } from "./client-sales-4-report.service";
 import { STATUS_CTE } from "./expeditor-returns.helpers";
+import { inventoryDateExpr } from "./inventory.dates";
 import type { InventoryFilters, InventoryRow } from "./inventory.types";
 
 function parseDate(v?: string): Date | null {
@@ -32,11 +33,6 @@ function moneyStr(v: Prisma.Decimal | number | null | undefined): string {
 function qtyStr(v: Prisma.Decimal | number | null | undefined): string {
   if (v == null) return "0";
   return new Prisma.Decimal(v).toFixed(3).replace(/\.?0+$/, "") || "0";
-}
-
-function dateExpr(f: InventoryFilters): Prisma.Sql {
-  if (f.date_type === "shipped_date") return Prisma.sql`sl.shipped_at`;
-  return Prisma.sql`o.created_at`;
 }
 
 function buildClientWhere(tenantId: number, f: InventoryFilters, actor?: ReportActor): Prisma.Sql {
@@ -97,7 +93,7 @@ function buildSalesWhere(tenantId: number, f: InventoryFilters): Prisma.Sql {
   ];
   const from = parseDate(f.from);
   const to = parseDateEnd(f.to);
-  const dexpr = dateExpr(f);
+  const dexpr = inventoryDateExpr(f.date_type);
   if (from) parts.push(Prisma.sql`${dexpr} >= ${from}`);
   if (to) parts.push(Prisma.sql`${dexpr} <= ${to}`);
   if (f.statuses.length) parts.push(Prisma.sql`o.status IN (${sqlInStrings(f.statuses)})`);

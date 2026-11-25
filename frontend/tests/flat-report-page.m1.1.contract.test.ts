@@ -20,7 +20,6 @@ const wave3Adapters = [
   "app/(dashboard)/reports/sku-3/page.tsx",
   "app/(dashboard)/reports/order-qty/page.tsx",
   "app/(dashboard)/reports/inventory/page.tsx",
-  "app/(dashboard)/reports/photo/page.tsx",
   "app/(dashboard)/reports/tasks/page.tsx",
   "app/(dashboard)/reports/sales-compare/page.tsx"
 ] as const;
@@ -28,7 +27,6 @@ const wave3Adapters = [
 const wave4Adapters = [
   "app/(dashboard)/reports/expeditor-share/page.tsx",
   "app/(dashboard)/reports/expeditor-visits/page.tsx",
-  "app/(dashboard)/reports/expeditor-shipments/page.tsx",
   "app/(dashboard)/reports/universal-visits/page.tsx",
   "app/(dashboard)/reports/universal-bonuses/page.tsx",
   "app/(dashboard)/reports/universal-returns/page.tsx"
@@ -36,7 +34,6 @@ const wave4Adapters = [
 
 const wave5Adapters = [
   "app/(dashboard)/reports/shelf-returns/page.tsx",
-  "app/(dashboard)/reports/excel-export/page.tsx",
   "app/(dashboard)/reports/visits-2/page.tsx",
   "app/(dashboard)/reports/visit-totals/page.tsx",
   "app/(dashboard)/reports/client-sales-3/page.tsx"
@@ -129,6 +126,12 @@ describe("FlatReportPage wave-1 adapters + source-contract", () => {
     expect(src).not.toMatch(/useQuery/);
   });
 
+  it("photo report uses dedicated PhotoReportWorkspace (not FlatReportPage shell)", () => {
+    const src = readAdapter("app/(dashboard)/reports/photo/page.tsx");
+    expect(src).toMatch(/PhotoReportWorkspace/);
+    expect(src).not.toMatch(/FlatReportPage/);
+  });
+
   it("wave-3 sales-compare dual dateRange + sku-3 valueFrom columns", () => {
     const compare = readAdapter("app/(dashboard)/reports/sales-compare/page.tsx");
     expect(compare).toMatch(/fromKey:\s*["']from_a["']/);
@@ -150,16 +153,11 @@ describe("FlatReportPage wave-1 adapters + source-contract", () => {
     expect(src).not.toMatch(/useQuery/);
   });
 
-  it("wave-4 universal-bonuses group_by + expeditor-shipments valueFrom", () => {
+  it("wave-4 universal-bonuses group_by", () => {
     const bonuses = readAdapter("app/(dashboard)/reports/universal-bonuses/page.tsx");
     expect(bonuses).toMatch(/paramKey:\s*["']group_by["']/);
     expect(bonuses).toMatch(/columns:\s*\(\{\s*applied\s*\}\)/);
     expect(bonuses).toMatch(/clientTableSearch/);
-
-    const shipments = readAdapter("app/(dashboard)/reports/expeditor-shipments/page.tsx");
-    expect(shipments).toMatch(/valueFrom:/);
-    expect(shipments).toMatch(/expeditor_ids/);
-    expect(shipments).toMatch(/paramKey:\s*["']date_type["']/);
   });
 
   it.each(wave5Adapters)("%s is thin FlatReport wave-5 adapter", (rel) => {

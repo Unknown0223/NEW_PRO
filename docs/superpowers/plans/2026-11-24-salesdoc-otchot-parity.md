@@ -26,11 +26,11 @@
 | 2 | Отчет по возвратам (возврат с полки) | `shelf-returns` | `/report/defect` | [x] Done 2026-11-24 |
 | 3 | Отчет по количеству заказов | `order-qty` | `/report/report/type` | [x] Done 2026-11-24 |
 | 4 | По Sku 3.0 | `sku-3` | `/report/volumeReport/version2` (Sku 2.0) | [x] Done 2026-11-24 |
-| 5 | Отгрузки по экспедиторам | `expeditor-shipments` | (probe) | [ ] Next |
-| 6 | Excel экспорт | `excel-export` | (probe) | [ ] |
-| 7 | По инвентарю | `inventory` | (probe) | [ ] |
-| 8 | Фотоотчёты | `photo` | (probe) | [ ] |
-| 9 | Отчёт по задачам | `tasks` | (probe) | [ ] |
+| 5 | Отгрузки по экспедиторам | `expeditor-shipments` | `/report/expeditor` | [x] Done 2026-11-25 |
+| 6 | Excel экспорт | `excel-export` | `/report/export/version1` | [x] Done 2026-11-25 |
+| 7 | По инвентарю | `inventory` | `/clients/Inventorization` | [x] Done 2026-11-25 |
+| 8 | Фотоотчёты | `photo` | `/report/photoReport` | [x] Done 2026-11-25 |
+| 9 | Отчёт по задачам | `tasks` | `/report/tasksReport` | [x] Done 2026-11-25 |
 | 10 | По бонусам | `bonuses` | (probe) | [ ] |
 | 11+ | Qolgan wave FlatReport stublar | — | menyu tartibi | [ ] |
 
@@ -106,8 +106,12 @@ Har otchot uchun bir xil sikl:
 
 ## Task 7: Keyingi otchotlar — TODO
 
-- [ ] #5 `expeditor-shipments` — probe + parity (inventory: qisman chrome)
-- [ ] #6 `excel-export` — probe + parity
+- [x] #5 `expeditor-shipments` — probe `/report/expeditor`; dedicated matrix (dual header + category tree + invoice footer); date radios + COALESCE; Доступ already
+- [x] #6 `excel-export` — Version1 columns + date radios/table prefs/client search; COALESCE dates; Доступ already
+- [x] #7 `inventory` — FlatReport polish (date radios, prefs, address, shipped COALESCE, seed) 2026-11-25
+- [x] #8 `photo` — mosaic + table workspace, thumb_url content proxy, seed 2026-11-25
+- [x] #9 `tasks` — FlatReport polish (client_code fix, prefs/grid, completed_at, seed) 2026-11-25
+- [ ] #10 `bonuses` — probe + parity **Next**
 - [ ] Qolgan navbat (jadval) birma-bir, review oralig‘ida
 
 ## Verification (har task oxiri)

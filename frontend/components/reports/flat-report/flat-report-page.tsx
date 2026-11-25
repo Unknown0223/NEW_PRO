@@ -77,9 +77,28 @@ export function FlatReportPage(config: FlatReportConfig) {
     setApplied((a) => applyOptionsDefaults(a, config.filterFields, filtersQ.data));
   }, [filtersQ.data, config.filterFields]);
 
+  const reportQ = useQuery({
+    queryKey: [`report-${config.apiPath}`, tenantSlug, applied],
+    enabled: Boolean(tenantSlug && hydrated),
+    staleTime: STALE.report,
+    queryFn: async () => {
+      const p = new URLSearchParams();
+      appendParams(p, applied);
+      const { data } = await api.get<{ data: ReportData }>(
+        `/api/${tenantSlug}/reports/${config.apiPath}?${p.toString()}`
+      );
+      return data.data;
+    }
+  });
+
   const columnsAll = useMemo(
-    () => resolveColumns(config.columns, { applied, filterOptions: filtersQ.data }),
-    [config.columns, applied, filtersQ.data]
+    () =>
+      resolveColumns(config.columns, {
+        applied,
+        filterOptions: filtersQ.data,
+        reportData: reportQ.data
+      }),
+    [config.columns, applied, filtersQ.data, reportQ.data]
   );
 
   const columnDefs: ColumnDefItem[] = useMemo(
@@ -111,19 +130,19 @@ export function FlatReportPage(config: FlatReportConfig) {
       .filter((c): c is NonNullable<typeof c> => Boolean(c));
   }, [columnsAll, columnPrefs.visibleColumnOrder]);
 
-  const reportQ = useQuery({
-    queryKey: [`report-${config.apiPath}`, tenantSlug, applied],
-    enabled: Boolean(tenantSlug && hydrated),
-    staleTime: STALE.report,
-    queryFn: async () => {
-      const p = new URLSearchParams();
-      appendParams(p, applied);
-      const { data } = await api.get<{ data: ReportData }>(
-        `/api/${tenantSlug}/reports/${config.apiPath}?${p.toString()}`
-      );
-      return data.data;
+  const invoiceCountSum = useMemo(() => {
+    const ct = reportQ.data?.column_totals;
+    if (!ct || typeof ct !== "object") return null;
+    let sum = 0;
+    let found = false;
+    for (const v of Object.values(ct as Record<string, { invoice_count?: unknown }>)) {
+      if (v && typeof v === "object" && "invoice_count" in v) {
+        found = true;
+        sum += Number(v.invoice_count) || 0;
+      }
     }
-  });
+    return found ? sum : null;
+  }, [reportQ.data]);
 
   const multiItemsByKey = useMemo(() => {
     const opts = filtersQ.data;
@@ -267,6 +286,11 @@ export function FlatReportPage(config: FlatReportConfig) {
                 </span>
               );
             })}
+            {invoiceCountSum != null ? (
+              <span className="text-muted-foreground">
+                <span className="text-foreground/80">Накладных:</span> {invoiceCountSum}
+              </span>
+            ) : null}
           </div>
         </div>
 

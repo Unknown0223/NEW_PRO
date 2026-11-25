@@ -2,6 +2,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "../../config/database";
 import { enrichScopedReportActor, buildScopedAgentExistsSql } from "../access/access-agent-scope";
 import type { ReportActor } from "./client-sales-4-report.service";
+import { buildPhotoReportThumbUrl } from "./photo-report.content";
 import type { PhotoReportFilters, PhotoReportRow } from "./photo-report.types";
 
 function parseDate(v?: string): Date | null {
@@ -93,10 +94,16 @@ function buildWhere(tenantId: number, f: PhotoReportFilters, actor?: ReportActor
   return Prisma.join(parts, " AND ");
 }
 
-export async function getPhotoReport(tenantId: number, f: PhotoReportFilters, actor?: ReportActor) {
+export async function getPhotoReport(
+  tenantId: number,
+  f: PhotoReportFilters,
+  actor?: ReportActor,
+  tenantSlug?: string
+) {
   const scopedActor = actor ? await enrichScopedReportActor(tenantId, actor) : undefined;
   const whereSql = buildWhere(tenantId, f, scopedActor);
   const offset = (f.page - 1) * f.limit;
+  const slug = (tenantSlug ?? "").trim();
 
   type Raw = {
     photo_id: number;
@@ -106,12 +113,14 @@ export async function getPhotoReport(tenantId: number, f: PhotoReportFilters, ac
     created_at: Date;
     client_category: string | null;
     territory: string | null;
+    user_id: number | null;
     user_name: string | null;
     user_role: string | null;
     category: string | null;
     deleted_at: Date | null;
     content_purged_at: Date | null;
     total_count: bigint;
+    agent_photo_count: bigint;
   };
 
   const rows = await prisma.$queryRaw<Raw[]>`
@@ -123,12 +132,14 @@ export async function getPhotoReport(tenantId: number, f: PhotoReportFilters, ac
       pr.created_at,
       COALESCE(c.category, '') AS client_category,
       COALESCE(NULLIF(c.city, ''), NULLIF(c.region, ''), NULLIF(c.zone, ''), '') AS territory,
+      pr.created_by_user_id AS user_id,
       COALESCE(u.name, '') AS user_name,
       COALESCE(u.role, '') AS user_role,
       COALESCE(NULLIF(btrim(pr.caption), ''), 'Без категории') AS category,
       pr.deleted_at,
       pr.content_purged_at,
-      COUNT(*) OVER()::bigint AS total_count
+      COUNT(*) OVER()::bigint AS total_count,
+      COUNT(*) OVER (PARTITION BY pr.created_by_user_id)::bigint AS agent_photo_count
     FROM client_photo_reports pr
     JOIN clients c ON c.id = pr.client_id
     LEFT JOIN users u ON u.id = pr.created_by_user_id
@@ -137,21 +148,30 @@ export async function getPhotoReport(tenantId: number, f: PhotoReportFilters, ac
     LIMIT ${f.limit} OFFSET ${offset}
   `;
 
-  const mapped: PhotoReportRow[] = rows.map((r, idx) => ({
-    row_number: offset + idx + 1,
-    photo_id: r.photo_id,
-    client_id: r.client_id,
-    client_code: r.client_code ?? "",
-    client_name: r.client_name,
-    created_at: r.created_at.toISOString(),
-    client_category: r.client_category ?? "",
-    territory: r.territory ?? "",
-    user_name: r.user_name ?? "",
-    user_role: roleLabel(r.user_role),
-    category: r.category ?? "Без категории",
-    status_label: r.deleted_at ? "Архив" : "Активный",
-    content_purged: r.content_purged_at != null
-  }));
+  const mapped: PhotoReportRow[] = rows.map((r, idx) => {
+    const content_purged = r.content_purged_at != null;
+    const archived = r.deleted_at != null;
+    return {
+      row_number: offset + idx + 1,
+      photo_id: r.photo_id,
+      client_id: r.client_id,
+      client_code: r.client_code ?? "",
+      client_name: r.client_name,
+      created_at: r.created_at.toISOString(),
+      client_category: r.client_category ?? "",
+      territory: r.territory ?? "",
+      user_id: r.user_id != null ? Number(r.user_id) : null,
+      user_name: r.user_name ?? "",
+      user_role: roleLabel(r.user_role),
+      category: r.category ?? "Без категории",
+      status_label: archived ? "Архив" : "Активный",
+      content_purged,
+      thumb_url: slug
+        ? buildPhotoReportThumbUrl(slug, r.photo_id, content_purged || archived)
+        : null,
+      agent_photo_count: Number(r.agent_photo_count ?? 0)
+    };
+  });
 
   return {
     period_from: f.from,

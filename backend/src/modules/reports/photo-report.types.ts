@@ -29,9 +29,14 @@ export type PhotoReportRow = {
   created_at: string;
   client_category: string;
   territory: string;
+  user_id: number | null;
   user_name: string;
   user_role: string;
   category: string;
   status_label: string;
   content_purged: boolean;
+  /** Auth image proxy; null when purged / missing. */
+  thumb_url: string | null;
+  /** Shu filtrdagi shu xodim fotolari soni (sahifa emas, to‘liq). */
+  agent_photo_count: number;
 };

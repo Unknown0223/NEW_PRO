@@ -58,7 +58,7 @@ Qiymatlar: `ha` | `yoq` | `qisman` | `—` (Custom / Virtual / skip).
 | `sku-3` | wave-3; matrix→flat product cols; dual header/banner yo‘q | ha | qisman | — | qisman |
 | `order-qty` | FlatReportPage wave-3 | ha | ha | — | ha |
 | `inventory` | FlatReportPage wave-3 | ha | ha | — | ha |
-| `photo` | FlatReportPage wave-3 | ha | ha | — | ha |
+| `photo` | PhotoReportWorkspace table + agent gallery (2026-11-25) | ha | qisman | — | ha |
 | `tasks` | FlatReportPage wave-3 | ha | ha | — | ha |
 | `sales-compare` | wave-3; dual dateRange A/B | ha | ha | — | ha |
 | `expeditor-share` | FlatReportPage wave-4 | ha | ha | — | ha |

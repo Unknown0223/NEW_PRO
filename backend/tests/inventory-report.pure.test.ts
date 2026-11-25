@@ -1,5 +1,32 @@
 import { describe, expect, it } from "vitest";
+import type { Prisma } from "@prisma/client";
+import { inventoryDateExpr } from "../src/modules/reports/inventory.dates";
 import { parseInventoryQuery } from "../src/modules/reports/inventory.parse";
+
+function sqlText(sql: Prisma.Sql): string {
+  const any = sql as unknown as { strings?: string[] };
+  if (any.strings) {
+    let out = "";
+    for (let i = 0; i < any.strings.length; i++) {
+      out += any.strings[i];
+    }
+    return out;
+  }
+  return String(sql);
+}
+
+describe("inventoryDateExpr", () => {
+  it("shipped_date uses COALESCE shipped/delivered", () => {
+    const text = sqlText(inventoryDateExpr("shipped_date"));
+    expect(text).toMatch(/COALESCE/i);
+    expect(text).toMatch(/shipped_at/);
+    expect(text).toMatch(/delivered_at/);
+  });
+
+  it("order_date uses o.created_at", () => {
+    expect(sqlText(inventoryDateExpr("order_date"))).toMatch(/created_at/);
+  });
+});
 
 describe("inventory-report parseInventoryQuery", () => {
   it("defaults date_type to order_date and client_active to all", () => {

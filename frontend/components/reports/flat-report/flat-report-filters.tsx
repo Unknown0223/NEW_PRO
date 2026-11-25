@@ -50,6 +50,24 @@ export function FlatReportFilters({
     if (field.kind === "select" && field.paramKey === "date_type" && dateTypeAsRadio) return false;
     return field.kind === "select" || field.kind === "multiSelect" || field.kind === "search" || field.kind === "bands";
   });
+  const xlCols = config.filterGridCols === 6 ? "xl:grid-cols-6" : "xl:grid-cols-9";
+
+  const actions = (
+    <div className="flex justify-end gap-2">
+      <Button variant="outline" size="icon" className="h-8 w-8" onClick={onReset}>
+        <RotateCcw className="h-3.5 w-3.5" />
+      </Button>
+      {canExport ? (
+        <Button variant="outline" className="h-8 text-xs" disabled={exporting || fetching} onClick={onExport}>
+          <FileSpreadsheet className="mr-1 h-3.5 w-3.5" />
+          Excel
+        </Button>
+      ) : null}
+      <Button className="h-8 text-xs" onClick={onApply}>
+        Применить
+      </Button>
+    </div>
+  );
 
   return (
     <div className="space-y-2 rounded border bg-card p-3">
@@ -86,10 +104,11 @@ export function FlatReportFilters({
             />
           );
         })}
+        {actions}
       </div>
 
       {gridFields.length > 0 ? (
-        <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-4 md:grid-cols-6 xl:grid-cols-9">
+        <div className={cn("grid grid-cols-2 gap-1.5 sm:grid-cols-4 md:grid-cols-6", xlCols)}>
           {gridFields.map((field) => {
             if (field.kind === "select") {
               const options =
@@ -159,21 +178,6 @@ export function FlatReportFilters({
           })}
         </div>
       ) : null}
-
-      <div className="flex justify-end gap-2">
-        <Button variant="outline" size="icon" className="h-8 w-8" onClick={onReset}>
-          <RotateCcw className="h-3.5 w-3.5" />
-        </Button>
-        {canExport ? (
-          <Button variant="outline" className="h-8 text-xs" disabled={exporting || fetching} onClick={onExport}>
-            <FileSpreadsheet className="mr-1 h-3.5 w-3.5" />
-            Excel
-          </Button>
-        ) : null}
-        <Button className="h-8 text-xs" onClick={onApply}>
-          Применить
-        </Button>
-      </div>
     </div>
   );
 }

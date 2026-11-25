@@ -21,6 +21,26 @@ export type ExcelExportFilters = {
   limit: number;
 };
 
+/** SalesDoc Version1 status cards. */
+export type ExcelExportStatusBucket =
+  | "all"
+  | "new"
+  | "shipped"
+  | "delivered"
+  | "returned"
+  | "cancelled";
+
+export type ExcelExportStatusSummary = {
+  id: ExcelExportStatusBucket;
+  label: string;
+  /** Statuses applied when card is selected (`all` → clear filter). */
+  statuses: string[];
+  amount: string;
+  qty: string;
+  volume: string;
+  akb: number;
+};
+
 export type ExcelExportRow = {
   row_number: number;
   order_id: number;

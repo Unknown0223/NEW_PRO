@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { parseTasksReportQuery } from "../src/modules/reports/tasks-report.parse";
+import { TASKS_FILTER_CLIENTS_SELECT_SQL } from "../src/modules/reports/tasks-report.filters";
+
+describe("tasks-report filter clients SQL", () => {
+  it("selects client_code (not clients.code)", () => {
+    expect(TASKS_FILTER_CLIENTS_SELECT_SQL).toMatch(/client_code/i);
+    expect(TASKS_FILTER_CLIENTS_SELECT_SQL).not.toMatch(/\bc\.code\b/);
+  });
+});
 
 describe("tasks-report parseTasksReportQuery", () => {
   it("defaults empty filters and page", () => {
