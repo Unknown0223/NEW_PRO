@@ -268,6 +268,11 @@ export const dashboardUsersNav: {
           showIfAnyPermission: [...NAV_PERM.staffExpeditor]
         },
         {
+          href: "/settings/expeditor-partners",
+          label: "Ulashish partnyorlari",
+          showIfAnyPermission: [...NAV_PERM.staffExpeditor]
+        },
+        {
           href: "/settings/spravochnik/supervisors",
           label: "Супервайзер",
           showIfAnyPermission: [...NAV_PERM.staffSupervisor]

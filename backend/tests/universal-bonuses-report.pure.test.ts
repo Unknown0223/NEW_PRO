@@ -1,5 +1,36 @@
 import { describe, expect, it } from "vitest";
 import { parseUniversalBonusesReportQuery } from "../src/modules/reports/universal-bonuses-report.service";
+import {
+  UNIVERSAL_BONUSES_PIVOT_FIELDS,
+  universalBonusesStatusLabel
+} from "../src/modules/reports/universal-bonuses-report.dataset";
+
+describe("universal-bonuses pivot fields", () => {
+  it("pivot fields match design starter ids", () => {
+    expect(UNIVERSAL_BONUSES_PIVOT_FIELDS.map((f) => f.id)).toEqual([
+      "order_id",
+      "order_status",
+      "product_name",
+      "sku",
+      "category_name",
+      "client_name",
+      "client_category",
+      "agent_name",
+      "qty",
+      "volume_m3",
+      "line_total",
+      "created_at",
+      "shipped_at"
+    ]);
+    expect(UNIVERSAL_BONUSES_PIVOT_FIELDS.find((f) => f.id === "qty")?.dataType).toBe("number");
+  });
+
+  it("status label is Russian name not machine code", () => {
+    expect(universalBonusesStatusLabel("delivered")).toBe("Доставлен");
+    expect(universalBonusesStatusLabel("delivering")).toBe("Отгружен");
+    expect(universalBonusesStatusLabel("new")).toBe("Новый");
+  });
+});
 
 describe("universal-bonuses parseUniversalBonusesReportQuery", () => {
   it("defaults empty filters, product group, created_at date", () => {

@@ -46,8 +46,8 @@ const config: FlatReportConfig = {
   exportFilename: "po-bonusam.xlsx",
   tablePrefsId: "report.bonuses.v1",
   dateTypeAsRadio: true,
-  /** 11 filtr → xl 6 ustun ≈ 2 qator. */
-  filterGridCols: 6,
+  /** group_by + multi-selectlar → xl 9 ≈ 1–2 qator. */
+  filterGridCols: 9,
   filterFields: [
     { kind: "dateRange" },
     { kind: "select", paramKey: "date_type", optionsFrom: "date_types", defaultValue: "created_at" },
@@ -70,19 +70,19 @@ const config: FlatReportConfig = {
       kind: "multiSelect",
       paramKey: "territory_1_list",
       optionsFrom: "territory_1",
-      placeholder: "Территория 1"
+      placeholder: "Зона"
     },
     {
       kind: "multiSelect",
       paramKey: "territory_2_list",
       optionsFrom: "territory_2",
-      placeholder: "Территория 2"
+      placeholder: "Область"
     },
     {
       kind: "multiSelect",
       paramKey: "territory_3_list",
       optionsFrom: "territory_3",
-      placeholder: "Территория 3"
+      placeholder: "Город"
     }
   ],
   columns: ({ applied }) => bonusesColumns(String(applied.group_by ?? "product")),

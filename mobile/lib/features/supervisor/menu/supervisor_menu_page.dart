@@ -249,6 +249,12 @@ class SupervisorMenuPage extends ConsumerWidget {
                 ),
                 const Divider(height: 1),
                 tile(
+                  icon: Icons.swap_horiz,
+                  title: 'Замещение (cover)',
+                  onTap: () => context.push('/cover'),
+                ),
+                const Divider(height: 1),
+                tile(
                   icon: Icons.dashboard_outlined,
                   title: 'Дашборд',
                   onTap: () => context.push('/dashboard'),

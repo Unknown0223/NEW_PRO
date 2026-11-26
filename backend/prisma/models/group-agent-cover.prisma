@@ -1,0 +1,20 @@
+/// Wave 3 MVP: agent marshrutini SVR bajaradi (kunlik cover).
+model AgentSvrCover {
+  id                  Int       @id @default(autoincrement())
+  tenant_id           Int
+  agent_user_id       Int
+  svr_user_id         Int
+  status              String    @default("kutilmoqda") @db.VarChar(32)
+  cover_date          DateTime  @db.Date
+  requested_by_user_id Int
+  agent_face_ok       Boolean   @default(false)
+  svr_face_ok         Boolean   @default(false)
+  accepted_at         DateTime?
+  ended_at            DateTime?
+  created_at          DateTime  @default(now())
+  updated_at          DateTime  @updatedAt
+
+  @@index([tenant_id, agent_user_id, cover_date])
+  @@index([tenant_id, svr_user_id, status])
+  @@map("agent_svr_covers")
+}

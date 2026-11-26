@@ -42,6 +42,7 @@ model ExpeditorShareOrder {
 
   @@unique([tenant_id, order_id, request_id])
   @@index([tenant_id, order_id, locked])
+  /// Partial unique (locked=true) → migration 20261126103000_expeditor_share_locked_order_uniq
   @@map("expeditor_share_orders")
 }
 

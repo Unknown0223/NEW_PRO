@@ -180,58 +180,61 @@ class TezyukMetricTiles extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Expanded(
-          child: _Tile(
-            title: 'Yig\'ilgan pul',
-            icon: Icons.payments_outlined,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  collected == null ? '—' : formatMoneySpaced(collected!),
-                  style: const TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.w600,
-                    color: TezyukColors.onSurface,
+    // SliverList/ListView beradi unbounded height — stretch o‘rniga IntrinsicHeight.
+    return IntrinsicHeight(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Expanded(
+            child: _Tile(
+              title: 'Yig\'ilgan pul',
+              icon: Icons.payments_outlined,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    collected == null ? '—' : formatMoneySpaced(collected!),
+                    style: const TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w600,
+                      color: TezyukColors.onSurface,
+                    ),
                   ),
-                ),
-                const Text(
-                  'so\'m • naqd va karta',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: TezyukColors.onSurfaceVariant,
+                  const Text(
+                    'so\'m • naqd va karta',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: TezyukColors.onSurfaceVariant,
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: _Tile(
-            title: 'Buyurtmalar',
-            icon: Icons.inventory_2_outlined,
-            child: Column(
-              children: [
-                _OrderRow(
-                  color: TezyukColors.success,
-                  label: 'Yetib borgan',
-                  value: '$delivered ta',
-                ),
-                const SizedBox(height: 4),
-                _OrderRow(
-                  color: TezyukColors.error,
-                  label: 'Qolgan',
-                  value: '$remaining ta',
-                ),
-              ],
+          const SizedBox(width: 12),
+          Expanded(
+            child: _Tile(
+              title: 'Buyurtmalar',
+              icon: Icons.inventory_2_outlined,
+              child: Column(
+                children: [
+                  _OrderRow(
+                    color: TezyukColors.success,
+                    label: 'Yetib borgan',
+                    value: '$delivered ta',
+                  ),
+                  const SizedBox(height: 4),
+                  _OrderRow(
+                    color: TezyukColors.error,
+                    label: 'Qolgan',
+                    value: '$remaining ta',
+                  ),
+                ],
+              ),
             ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }

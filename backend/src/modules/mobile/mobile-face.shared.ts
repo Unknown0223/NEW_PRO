@@ -8,6 +8,7 @@ export type FaceVerifyContext =
   | "territory_check"
   | "delivery_confirm"
   | "payment_accept"
+  | "cover_accept"
   | "web_login";
 
 export type FaceVerificationPolicy = {
@@ -102,6 +103,27 @@ export function isOrderSubmitFaceCheckpoint(input: {
   if (input.orderVerifyCount >= input.maxRandomOrdersPerDay) return false;
   const nextCount = input.orderActionCount + 1;
   return input.checkpoints.includes(nextCount);
+}
+
+/**
+ * Tenant Face ID o‘chiq bo‘lsa ko‘p kontekst soft-pass.
+ * `cover_accept` — hech qachon soft-bypass (dual face majburiy).
+ */
+export function softBypassFaceWhenPolicyDisabled(
+  context: FaceVerifyContext,
+  policyEnabled: boolean
+): boolean {
+  if (context === "cover_accept") return false;
+  return policyEnabled !== true;
+}
+
+/** `markFace(face_ok:true)` faqat recent approved cover_accept verify bilan. */
+export function canTrustCoverFaceOkMark(
+  faceOk: boolean,
+  hasRecentApprovedCoverVerify: boolean
+): boolean {
+  if (!faceOk) return true;
+  return hasRecentApprovedCoverVerify === true;
 }
 
 export function decodeBase64Image(b64: string): { buf: Buffer; contentType: string } {

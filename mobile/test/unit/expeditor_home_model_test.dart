@@ -56,8 +56,12 @@ void main() {
     final lines = mapShipmentLines([
       {'type': 'delivered', 'sum': 100, 'qty': 2},
       {'type': 'return', 'sum': 10, 'qty': 1},
+      {'type': 'shelf_return', 'sum': 5, 'qty': 1},
+      {'type': 'exchange_return', 'sum': 3, 'qty': 1},
     ]);
-    expect(lines.first.label, 'Yetkazildi');
-    expect(lines.last.label, 'Qaytarish');
+    expect(lines[0].label, 'Yetkazildi');
+    expect(lines[1].label, 'Qaytarish');
+    expect(lines[2].label, 'Polkadan qaytarish');
+    expect(lines[3].label, 'Obmen qaytarish');
   });
 }

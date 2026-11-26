@@ -1112,6 +1112,16 @@ class AuthNotifier extends StateNotifier<AuthState> {
         message: 'Синхронизация при входе: API ошибка',
         path: '/mobile/sync',
       );
+      // Ekspeditor: kirishdan keyin UI ochilsin (403/config xatosi Boshni bloklamasin).
+      if ((_session.state.user?.role ?? '') == 'expeditor') {
+        _session.markBootstrapped();
+        state = AuthState(
+          status: AuthStatus.syncComplete,
+          error: e.message,
+          errorInfo: UserFacingError.fromApi(e),
+        );
+        return;
+      }
       _setError(UserFacingError.fromApi(e));
     } catch (e, st) {
       ErrorReporter.instance?.reportCaught(

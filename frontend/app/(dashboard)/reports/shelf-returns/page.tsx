@@ -21,6 +21,7 @@ const config: FlatReportConfig = {
   exportPermission: "reports.vozvrat_s_polki.export",
   exportFilename: "vozvrat-s-polki.xlsx",
   tablePrefsId: "report.shelf-returns",
+  filterGridCols: 9,
   dateTypeAsRadio: true,
   filterFields: [
     { kind: "dateRange" },

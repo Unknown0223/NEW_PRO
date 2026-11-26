@@ -15,6 +15,8 @@ import { computeUserMonthPlan, type PlanMonthCache } from "./payroll-slot-plan";
 import { computeTeamMonthPlan } from "./payroll-team-plan";
 import { parseItemAmounts, parseKpiAmounts } from "./payroll.item-amounts.pure";
 import type { PayrollCalcInputs } from "./payroll.formula-vars";
+import { excludeCoveredAgentDays, shouldExcludeAgentDay } from "./payroll-cover.pure";
+import { listActiveCoverDatesForAgent } from "../mobile/cover/cover.service";
 
 export type TenantPayrollEnv = {
   timeZone: string;
@@ -223,9 +225,14 @@ export async function computeUserAttendance(
     days.map((d) => ({ ...d, lateMinutes: d.rec?.late_minutes ?? 0 })),
     latenessRules
   );
+  const coveredDates =
+    user.role === "agent" ? await listActiveCoverDatesForAgent(tenantId, user.id) : new Set<string>();
+  // Wave 3: cover kunlari agent oylikdan chiqariladi (excludeCoveredAgentDays).
+  const payableDates = new Set(excludeCoveredAgentDays(withLate.map((d) => d.date), coveredDates));
   let overtimeMinTotal = 0;
   for (const d of withLate) {
     if (d.date > today) break;
+    if (shouldExcludeAgentDay(!payableDates.has(d.date))) continue;
     const wVal = statusWorkValue(d.status, {
       lateExcused: d.lateExcused,
       penalizeUnexcusedLateAsHalfDay: latenessRules.penalizeUnexcusedLateAsHalfDay

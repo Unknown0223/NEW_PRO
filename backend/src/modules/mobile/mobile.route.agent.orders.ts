@@ -33,6 +33,11 @@ import {
   isFaceGateError,
   loadMobileConfigForFaceGate
 } from "./mobile-face.guard";
+import { CoverError } from "./cover/cover-codes";
+import {
+  assertAgentNotUnderActiveCover,
+  resolveCoverRouteScope
+} from "./cover/cover-guard";
 import {
   attachOrderVisit,
   isStrictOrderVisitRequest,
@@ -170,13 +175,20 @@ export async function registerMobileAgentOrderRoutes(app: FastifyInstance) {
         return sendApiError(reply, request, 400, "ValidationError", undefined, zodValidationExtras(parsed.error));
       }
       const viewer = getAccessUser(request);
-      const userId = Number.parseInt(viewer.sub, 10);
-      if (viewer.role !== "agent" || !Number.isFinite(userId) || userId < 1) {
+      const scope = await resolveCoverRouteScope(request.tenant!.id, viewer);
+      const allowed =
+        viewer.role === "agent" || (viewer.role === "supervisor" && scope.viaCover);
+      if (!allowed || scope.agentUserId < 1) {
         return sendApiError(reply, request, 403, "ForbiddenRole");
       }
+      const userId = scope.agentUserId;
       try {
+        if (viewer.role === "agent") {
+          await assertAgentNotUnderActiveCover(request.tenant!.id, userId);
+        }
         const mc = await loadMobileConfigForFaceGate(request.tenant!.id, userId);
-        await assertFaceGateForAction(request.tenant!.id, userId, "order_submit", mc);
+        const faceUserId = scope.viaCover ? scope.executorUserId : userId;
+        await assertFaceGateForAction(request.tenant!.id, faceUserId, "order_submit", mc);
         const visit = await prepareOrderVisit(
           request.tenant!.id,
           parsed.data.client_id,
@@ -184,11 +196,15 @@ export async function registerMobileAgentOrderRoutes(app: FastifyInstance) {
           mc,
           isStrictOrderVisitRequest(request)
         );
-        const row = await createMobileOrder(request.tenant!.id, userId, viewer.role, parsed.data);
+        const orderRole = scope.viaCover ? "agent" : viewer.role;
+        const row = await createMobileOrder(request.tenant!.id, userId, orderRole, parsed.data);
         await linkOrderVisitSafe(request, userId, row.id, visit);
-        await bumpOrderFaceActionCount(request.tenant!.id, userId, mc);
+        await bumpOrderFaceActionCount(request.tenant!.id, faceUserId, mc);
         return reply.status(201).send(row);
       } catch (e) {
+        if (e instanceof CoverError && e.code === "COVER_AGENT_BLOCKED") {
+          return sendApiError(reply, request, 403, e.code, e.message);
+        }
         if (isFaceGateError(e)) {
           return sendApiError(reply, request, 403, e.code, e.message);
         }
@@ -343,7 +359,6 @@ export async function registerMobileAgentOrderRoutes(app: FastifyInstance) {
           field: "offline_created_at"
         });
       }
-      const userId = Number(getAccessUser(request).sub);
       // Offline buyurtma vaqti qurilmadan keladi — kelajakdagi sana har doim
       // qurilma soati aldangani belgisi (offline zakaz kelajakda yaratilmaydi).
       // Server soatidan kichik «skew» bilan oldinga ketganini «hozir»ga
@@ -356,10 +371,17 @@ export async function registerMobileAgentOrderRoutes(app: FastifyInstance) {
       }
 
       const viewer = getAccessUser(request);
-      if (viewer.role !== "agent") {
+      const scope = await resolveCoverRouteScope(request.tenant!.id, viewer);
+      const allowed =
+        viewer.role === "agent" || (viewer.role === "supervisor" && scope.viaCover);
+      if (!allowed || scope.agentUserId < 1) {
         return sendApiError(reply, request, 403, "ForbiddenRole");
       }
+      const userId = scope.agentUserId;
       try {
+        if (viewer.role === "agent") {
+          await assertAgentNotUnderActiveCover(request.tenant!.id, userId);
+        }
         await assertDocWritableByDate(request, "orders", offlineCreated);
         const rawClient = parsed.data.client_local_id ?? parsed.data.client_id!;
         const visitClientId = typeof rawClient === "number" ? rawClient : Number.parseInt(String(rawClient), 10);
@@ -389,6 +411,9 @@ export async function registerMobileAgentOrderRoutes(app: FastifyInstance) {
         await linkOrderVisitSafe(request, userId, result.id, visit);
         return reply.status(201).send(result);
       } catch (e) {
+        if (e instanceof CoverError && e.code === "COVER_AGENT_BLOCKED") {
+          return sendApiError(reply, request, 403, e.code, e.message);
+        }
         if (isDocumentEditPeriodLockedError(e)) return sendDocumentEditPeriodLocked(reply, request, e);
         if (e instanceof OrderVisitError) return sendOrderVisitError(reply, request, e);
         const msg = getErrorCode(e) ?? "";

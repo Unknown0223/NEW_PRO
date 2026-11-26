@@ -3,6 +3,7 @@ import { z } from "zod";
 import { sendApiError, zodValidationExtras } from "../../lib/api-error";
 import { ensureTenantContext } from "../../lib/tenant-context";
 import { getAccessUser } from "../auth/auth.prehandlers";
+import { resolveCoverRouteScope } from "./cover/cover-guard";
 import { mobileOrderCreateContextQuerySchema } from "./mobile.route.agent.schemas";
 import { getMobileAgentConfigPayload, getMobileOrderCreateContext } from "./mobile.service";
 import { mobileAgentConfigPreHandler, mobileOfflineOrderPreHandler } from "./mobile.route.shared";
@@ -16,7 +17,12 @@ export async function registerMobileAgentConfigRoutes(app: FastifyInstance) {
       if (!ensureTenantContext(request, reply)) return;
       const versionQ = z.object({ version: z.string().max(64).optional() }).safeParse(request.query);
       const clientVersion = versionQ.success ? versionQ.data.version : undefined;
-      const userId = Number(getAccessUser(request).sub);
+      const viewer = getAccessUser(request);
+      const scope = await resolveCoverRouteScope(request.tenant!.id, viewer);
+      const userId =
+        viewer.role === "supervisor" && scope.viaCover
+          ? scope.agentUserId
+          : Number(viewer.sub);
       const result = await getMobileAgentConfigPayload(request.tenant!.id, userId, clientVersion, {
         origin: resolveRequestOrigin(request.headers)
       });
@@ -35,6 +41,9 @@ export async function registerMobileAgentConfigRoutes(app: FastifyInstance) {
         work_utc_offset_hours: result.work_utc_offset_hours,
         tenant_references: result.tenant_references,
         agent_cities: result.agent_cities,
+        ...(scope.viaCover
+          ? { cover_acting_as_agent_id: scope.agentUserId, cover_executor_user_id: scope.executorUserId }
+          : {}),
         ...(result.app_update ? { app_update: result.app_update } : {})
       });
     }
@@ -49,12 +58,14 @@ export async function registerMobileAgentConfigRoutes(app: FastifyInstance) {
       if (!parsed.success) {
         return sendApiError(reply, request, 400, "ValidationError", undefined, zodValidationExtras(parsed.error));
       }
-      const userId = Number(getAccessUser(request).sub);
-      const role = getAccessUser(request).role;
-      if (role !== "agent") {
+      const viewer = getAccessUser(request);
+      const scope = await resolveCoverRouteScope(request.tenant!.id, viewer);
+      const allowed =
+        viewer.role === "agent" || (viewer.role === "supervisor" && scope.viaCover);
+      if (!allowed || scope.agentUserId < 1) {
         return sendApiError(reply, request, 403, "ForbiddenRole");
       }
-      const bundle = await getMobileOrderCreateContext(request.tenant!.id, userId, {
+      const bundle = await getMobileOrderCreateContext(request.tenant!.id, scope.agentUserId, {
         clientId: parsed.data.selected_client_id,
         warehouseId: parsed.data.selected_warehouse_id
       });

@@ -12,9 +12,11 @@ const config: FlatReportConfig = {
   apiPath: "universal-visits",
   exportPermission: "reports.universalnyy_vizity.export",
   exportFilename: "universalnyy-vizity.xlsx",
+  tablePrefsId: "report.universal-visits.v1",
+  filterGridCols: 9,
   filterFields: [
     { kind: "dateRange" },
-    { kind: "search", placeholder: "Агент" },
+
     {
       kind: "multiSelect",
       paramKey: "supervisor_ids",
@@ -39,19 +41,19 @@ const config: FlatReportConfig = {
       kind: "multiSelect",
       paramKey: "territory_1_list",
       optionsFrom: "territory_1",
-      placeholder: "Территория 1"
+      placeholder: "Зона"
     },
     {
       kind: "multiSelect",
       paramKey: "territory_2_list",
       optionsFrom: "territory_2",
-      placeholder: "Территория 2"
+      placeholder: "Область"
     },
     {
       kind: "multiSelect",
       paramKey: "territory_3_list",
       optionsFrom: "territory_3",
-      placeholder: "Территория 3"
+      placeholder: "Город"
     }
   ],
   columns: [

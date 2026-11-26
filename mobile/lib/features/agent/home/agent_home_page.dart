@@ -27,6 +27,7 @@ import 'home_visit_metrics_provider.dart';
 import 'last_created_order_banner.dart';
 import 'sync_count_provider.dart';
 import 'sync_window_denied_banner.dart';
+import '../../cover/cover_active_banner.dart';
 
 String planDashboardLine(AgentDashboardResult dash, String? planVersion) {
   final base =
@@ -244,6 +245,7 @@ class _AgentHomePageState extends ConsumerState<AgentHomePage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              const CoverActiveBanner(),
               if (createdBanner != null)
                 AgentSurfaceCard(
                   padding: const EdgeInsets.fromLTRB(12, 10, 8, 10),

@@ -10,7 +10,11 @@ describe("bonuses FlatReport chrome contract", () => {
     expect(src).toMatch(/FlatReportPage/);
     expect(src).toMatch(/tablePrefsId:\s*"report\.bonuses\.v1"/);
     expect(src).toMatch(/dateTypeAsRadio:\s*true/);
-    expect(src).toMatch(/filterGridCols:\s*6/);
+    expect(src).toMatch(/filterGridCols:\s*9/);
+    expect(src).toMatch(/placeholder:\s*"Зона"/);
+    expect(src).toMatch(/placeholder:\s*"Область"/);
+    expect(src).toMatch(/placeholder:\s*"Город"/);
+    expect(src).not.toMatch(/Территория [123]/);
     expect(src).toMatch(/paramKey:\s*["']group_by["']/);
     expect(src).toMatch(/columns:\s*\(\{\s*applied\s*\}\)/);
     expect(src).toMatch(/clientTableSearch/);

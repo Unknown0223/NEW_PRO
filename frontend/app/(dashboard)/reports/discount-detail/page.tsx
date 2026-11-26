@@ -8,9 +8,11 @@ const config: FlatReportConfig = {
   apiPath: "discount-detail",
   exportPermission: "reports.detalnyy_skidki.export",
   exportFilename: "detalnyy-skidki.xlsx",
+  tablePrefsId: "report.discount-detail.v1",
+  filterGridCols: 9,
   filterFields: [
     { kind: "dateRange" },
-    { kind: "search", placeholder: "Заказ / клиент / агент" },
+
     { kind: "multiSelect", paramKey: "agent_ids", optionsFrom: "agents", placeholder: "Агент" }
   ],
   columns: [

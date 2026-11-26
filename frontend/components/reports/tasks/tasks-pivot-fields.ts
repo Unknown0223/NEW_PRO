@@ -1,6 +1,9 @@
 import type { PivotConfig, PivotField } from "@salec/pivot-engine";
 import { flattenConfigZones } from "@/lib/pivot-flat-layout";
 import { resolveLayoutForm } from "@/lib/pivot-layout-form";
+import type { LayoutOptionsSelection } from "@/components/reports/virtual-pivot-layout-options-dialog";
+
+export type { LayoutOptionsSelection };
 
 /** SalesDoc tasksReport flat default column order. */
 export const TASKS_DEFAULT_FLAT_FIELD_IDS = [
@@ -58,14 +61,87 @@ export function buildTasksFlatPivotConfig(base?: Partial<PivotConfig>): PivotCon
   });
 }
 
+export function selectionFromConfig(config: PivotConfig): LayoutOptionsSelection {
+  const layout = resolveLayoutForm(config.options);
+  return {
+    layoutForm: layout,
+    grandTotals:
+      !config.options.showGrandTotal && !config.options.showColumnTotals
+        ? "none"
+        : config.options.showGrandTotal && config.options.showColumnTotals
+          ? "both"
+          : config.options.showColumnTotals && !config.options.showGrandTotal
+            ? "columns"
+            : "rows",
+    subtotals: !config.options.showSubtotals
+      ? "none"
+      : config.options.subtotalScope === "rows"
+        ? "rows"
+        : config.options.subtotalScope === "columns"
+          ? "columns"
+          : "both"
+  };
+}
+
+function totalsFromSelection(sel: LayoutOptionsSelection) {
+  return {
+    showGrandTotal: sel.grandTotals === "both" || sel.grandTotals === "rows",
+    showColumnTotals: sel.grandTotals === "both" || sel.grandTotals === "columns",
+    showSubtotals: sel.subtotals !== "none",
+    subtotalScope: (sel.subtotals === "none" ? "both" : sel.subtotals) as
+      | "both"
+      | "rows"
+      | "columns"
+  };
+}
+
+/** Tasks Apply path 2: zones from flat/classic builders; compact = classic + flags. */
+export function applyTasksLayoutOptions(
+  from: PivotConfig | undefined,
+  sel: LayoutOptionsSelection
+): PivotConfig {
+  const totals = totalsFromSelection(sel);
+  if (sel.layoutForm === "flat") {
+    const flat = buildTasksFlatPivotConfig({
+      filters: from?.filters ?? [],
+      reportFilters: from?.reportFilters ?? [],
+      calculatedMeasures: from?.calculatedMeasures
+    });
+    // flattenConfigZones forces totals off — re-apply dialog selection
+    return {
+      ...flat,
+      options: {
+        ...flat.options,
+        ...totals,
+        compactMode: false,
+        layoutForm: "flat",
+        drillDown: false
+      }
+    };
+  }
+  const classic = buildTasksClassicPivotConfig(from);
+  return {
+    ...classic,
+    options: {
+      ...classic.options,
+      ...totals,
+      layoutForm: sel.layoutForm,
+      compactMode: sel.layoutForm === "compact",
+      drillDown: classic.options.drillDown ?? true
+    }
+  };
+}
+
 /** Classic needs ≥1 value measure — otherwise PivotEngine returns empty. */
 export function buildTasksClassicPivotConfig(from?: PivotConfig): PivotConfig {
   const available = new Set(TASKS_PIVOT_FIELDS.map((f) => f.id));
   const preferRows = ["status_label", "assignee_name", "task_type"].filter((id) =>
     available.has(id)
   );
+  const fromLayout = from ? resolveLayoutForm(from.options) : null;
+  const keepRows = fromLayout === "classic" || fromLayout === "compact";
   const baseRows =
-    from && resolveLayoutForm(from.options) === "classic" && from.rows.length
+    from && keepRows && from.rows.length
       ? from.rows.filter((id) => available.has(id))
       : preferRows;
   const values =

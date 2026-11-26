@@ -1,12 +1,13 @@
 import type { FastifyInstance } from "fastify";
-import type { VisitsReportFilters } from "../../contracts/reports.schemas";
-import { visitsReportQuerySchema } from "../../contracts/reports.schemas";
+import { visitsDetailQuerySchema, visitsReportQuerySchema } from "../../contracts/reports.schemas";
 import { actorUserIdOrNull } from "../../lib/request-actor";
 import { getAccessUser } from "../auth/auth.prehandlers";
 import { ensureTenantContext } from "../../lib/tenant-context";
+import type { VisitsDetailFilters, VisitsReportFilters } from "./visits-report.types";
 import {
   exportVisitsReportXlsx,
   getVisitsReport,
+  getVisitsReportDetail,
   getVisitsReportFilterOptions
 } from "./visits-report.service";
 import { createReportRouteGuards, parseReportQueryOr400, reportQueryRaw } from "./reports.route.shared";
@@ -16,6 +17,23 @@ export function registerVisitsReportRoutes(
   guards: ReturnType<typeof createReportRouteGuards> = createReportRouteGuards()
 ) {
   const { reportViewPreHandler, reportExportPreHandler } = guards;
+
+  app.get("/api/:slug/reports/visits/detail", { preHandler: reportViewPreHandler }, async (request, reply) => {
+    if (!ensureTenantContext(request, reply)) return;
+    const q = parseReportQueryOr400<VisitsDetailFilters>(
+      reply,
+      request,
+      visitsDetailQuerySchema,
+      reportQueryRaw(request)
+    );
+    if (!q) return;
+    const u = getAccessUser(request);
+    const data = await getVisitsReportDetail(request.tenant!.id, q, {
+      userId: actorUserIdOrNull(request),
+      role: u.role
+    });
+    return reply.send({ data });
+  });
 
   app.get("/api/:slug/reports/visits/filter-options", { preHandler: reportViewPreHandler }, async (request, reply) => {
     if (!ensureTenantContext(request, reply)) return;

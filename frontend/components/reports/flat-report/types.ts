@@ -1,5 +1,7 @@
 /** ADR-010 FlatReport config — M1 kinds: dateRange | search | multiSelect | select | bands */
 
+import type { ReactNode } from "react";
+
 export type FlatReportDateRangeField = {
   kind: "dateRange";
   /** Query param for start; default `from`. */
@@ -38,6 +40,8 @@ export type FlatReportSelectField = {
   /** Hardcoded options when filter-options has no list (e.g. client_activity). */
   staticOptions?: Array<{ id: string; label: string }>;
   defaultValue: string;
+  /** Ixcham gridda maydon nomi (Год / Месяц) — tanlangan qiymat ustida. */
+  placeholder?: string;
 };
 
 export type FlatReportBandsField = {
@@ -114,8 +118,12 @@ export type FlatReportConfig = {
   showTableFooter?: boolean;
   /** Optional client-side row filter (API `search` still separate). */
   clientTableSearch?: FlatReportClientTableSearch;
-  /** Optional per-column cell override; wins over `column.format`. */
-  formatters?: Record<string, (value: unknown, row: Record<string, unknown>) => string>;
+  /** Optional per-column cell override; wins over `column.format`. May depend on applied filters. */
+  formatters?:
+    | Record<string, (value: unknown, row: Record<string, unknown>) => ReactNode>
+    | ((
+        applied: Record<string, string | number | string[]>
+      ) => Record<string, (value: unknown, row: Record<string, unknown>) => ReactNode>);
   /** Optional row class (e.g. last_days highlight). */
   rowClassName?: (
     row: Record<string, unknown>,

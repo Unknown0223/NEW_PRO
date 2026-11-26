@@ -8,18 +8,26 @@ Maqsad: qilingan / qilinayotgan rejalarni va review e’tirozlarini bir joyda sa
 | # | Reja / ish | Holat |
 |---|------------|--------|
 | Отчёт #5–#8 | expeditor-shipments, excel-export, inventory, photo | Done (prod `bd366220` + keyingi polish) |
-| #9 tasks | Virtual Pivot + konstruktor chrome + Options | Done (kod shu commit) |
+| #9 tasks | Virtual Pivot + konstruktor chrome + Options + Отчёты/Сохр./Поделиться | Done |
 | #10 bonuses | FlatReport polish; dublikat qidiruv olib tashlangan | Done |
+| #11 universal-bonuses | Virtual Pivot (line grain) + dataset API | Done |
+| #12 visits | FlatReport polish + visit seed | Done |
+| #12b visits drill-down | Modal + `…/visits/detail` (SD type) | Done |
+| #13 daily-visits | FlatReport polish (prefs/grid, Год/Месяц) | Done |
+| #14 prices | FlatReport polish (prefs/grid, seed) | Done |
+| #15 outlet-class | FlatReport polish (prefs/grid, Зона–Город) | Done |
+| #16+ FlatReport close-out | 13 adapter chrome batch | Done |
 | TezYuk W0–1 | flavor, theme, home/visits/queue chrome | Kod bor — in progress / review |
 | TezYuk W2 Ulashish | share state, routes, partners, mobile share | Kod + migration bor — WIP (deploy park qilingan edi) |
 | UI katalog 1:1 | Stitch moslashuv rejasi | Reja/spec bor — qisman kod |
 
 ## Qilinayotgan / keyingi
 
-- Отчёт **#11+** — qolgan FlatReport stublar (parity jadvali).
+- Отчёт FlatReport wave **yopildi** (2026-11-26). Keyingi: custom workspace / sariq stub / commit-deploy.
 - Tasks: server «Сохранить отчёт» / saved pivot slice — 1-wave **skip**.
-- TezYuk Ulashish: end-to-end QA, prod migrate, APK flavor smoke.
+- TezYuk Ulashish: **kod close-out 2026-11-26** (+ recipients nomlari, lokal smoke skript). Hali: **prod migrate/deploy**, qurilma E2E (ikkita TezYuk). Batafsil: `2026-11-26-tezyuk-closeout-otchot.md`.
 - `tmp-wip-tezyuk-share/` — faqat lokal park; **repoga kirmaydi**.
+- Qaytarish: misleading web-only copy tuzatildi; return foto stub (API maydoni yo‘q); BE contract testlar qo‘shildi.
 
 ## Review e’tirozlari va javob
 

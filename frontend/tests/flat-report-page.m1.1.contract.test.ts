@@ -27,7 +27,6 @@ const wave4Adapters = [
   "app/(dashboard)/reports/expeditor-share/page.tsx",
   "app/(dashboard)/reports/expeditor-visits/page.tsx",
   "app/(dashboard)/reports/universal-visits/page.tsx",
-  "app/(dashboard)/reports/universal-bonuses/page.tsx",
   "app/(dashboard)/reports/universal-returns/page.tsx"
 ] as const;
 
@@ -82,9 +81,14 @@ describe("FlatReportPage wave-1 adapters + source-contract", () => {
     expect(page).toMatch(/FlatReportFilters/);
     expect(page).toMatch(/TableColumnSettingsDialog/);
     expect(page).toMatch(/useUserTablePrefs/);
-    expect(filters).toMatch(/xl:grid-cols-9/);
     expect(filters).toMatch(/gridFields/);
     expect(filters).toMatch(/Дата применяется по/);
+    // One-row filters: no flex-1 squeeze; ring must not bleed into gaps
+    expect(filters).toMatch(/oneFilterRow/);
+    expect(filters).not.toMatch(/flex-1 basis-0/);
+    expect(filters).toMatch(/shrink-0/);
+    const multi = readFileSync(join(flatReportDir, "multi-filter.tsx"), "utf8");
+    expect(multi).toMatch(/ring-offset-0/);
   });
 
   it.each(wave1Adapters)("%s is thin FlatReport adapter (M1.3)", (rel) => {
@@ -158,11 +162,10 @@ describe("FlatReportPage wave-1 adapters + source-contract", () => {
     expect(src).not.toMatch(/useQuery/);
   });
 
-  it("wave-4 universal-bonuses group_by", () => {
-    const bonuses = readAdapter("app/(dashboard)/reports/universal-bonuses/page.tsx");
-    expect(bonuses).toMatch(/paramKey:\s*["']group_by["']/);
-    expect(bonuses).toMatch(/columns:\s*\(\{\s*applied\s*\}\)/);
-    expect(bonuses).toMatch(/clientTableSearch/);
+  it("universal-bonuses uses Virtual Pivot workspace (not FlatReportPage)", () => {
+    const src = readAdapter("app/(dashboard)/reports/universal-bonuses/page.tsx");
+    expect(src).toMatch(/UniversalBonusesVirtualPivotWorkspace/);
+    expect(src).not.toMatch(/FlatReportPage/);
   });
 
   it.each(wave5Adapters)("%s is thin FlatReport wave-5 adapter", (rel) => {

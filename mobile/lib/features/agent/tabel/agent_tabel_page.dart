@@ -3,7 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/api/mobile_api.dart';
 import '../../../core/auth/session.dart';
+import '../../../core/config/app_product.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/tezyuk_colors.dart';
+import '../../expeditor/shared/tezyuk_expeditor_chrome.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/time/work_region_time.dart';
 import '../../../core/ui/agent_ui.dart';
@@ -32,10 +35,14 @@ class AgentTabelPage extends ConsumerWidget {
       orElse: () => _employeeLine(fallbackName, fallbackCode),
     );
 
+    final title = expeditorLabel(
+      'Табель · ${tabelMonthTitle(month)}',
+      'Davomat · ${tabelMonthTitle(month)}',
+    );
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: expeditorPageBackground(),
       appBar: AgentAppBar(
-        title: 'Табель · ${tabelMonthTitle(month)}',
+        title: title,
         showBack: true,
         belowTitle: _MonthSwitcher(
           month: month,
@@ -58,8 +65,10 @@ class AgentTabelPage extends ConsumerWidget {
         onRefresh: () async => ref.invalidate(tabelDataProvider),
         child: dataAsync.when(
           data: (data) => _content(context, data, month),
-          loading: () => const Center(
-            child: CircularProgressIndicator(color: AppColors.primary),
+          loading: () => Center(
+            child: CircularProgressIndicator(
+              color: isTezyukProduct ? TezyukColors.primary : AppColors.primary,
+            ),
           ),
           error: (e, _) => AgentErrorPanel(
             error: e,

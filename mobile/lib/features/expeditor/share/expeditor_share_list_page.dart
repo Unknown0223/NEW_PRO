@@ -4,8 +4,8 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/api/expeditor_share_api.dart';
 import '../../../core/auth/session.dart';
-import '../../../core/theme/app_colors.dart';
 import '../../../core/ui/agent_ui_extended.dart';
+import '../shared/tezyuk_expeditor_chrome.dart';
 import '../shell/expeditor_drawer.dart';
 import 'share_models.dart';
 
@@ -65,9 +65,10 @@ class _ExpeditorShareListPageState
     }
   }
 
-  Widget _list(List<ShareRequestSummary> rows) {
+  Widget _list(List<ShareRequestSummary> rows, {required bool inbox}) {
+    final accent = expeditorChromeAccent();
     if (_loading) {
-      return const Center(child: CircularProgressIndicator());
+      return Center(child: CircularProgressIndicator(color: accent));
     }
     if (_error != null) {
       return Center(child: Text(_error!));
@@ -76,16 +77,30 @@ class _ExpeditorShareListPageState
       return AgentEmptyState.fill(message: 'Ulashish so\'rovi yo\'q');
     }
     return RefreshIndicator(
+      color: accent,
       onRefresh: _load,
       child: ListView.separated(
+        padding: const EdgeInsets.all(12),
         itemCount: rows.length,
-        separatorBuilder: (_, __) => const Divider(height: 1),
+        separatorBuilder: (_, __) => const SizedBox(height: 8),
         itemBuilder: (ctx, i) {
           final r = rows[i];
-          return ListTile(
-            title: Text('#${r.id} · ${shareStatusLabel(r.status)}'),
-            subtitle: Text('${r.orderCount} zakaz'),
-            onTap: () => context.push('/exp-share/${r.id}'),
+          return Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: () => context.push('/exp-share/${r.id}'),
+              borderRadius: BorderRadius.circular(14),
+              child: Ink(
+                decoration: expeditorListCardDecoration(),
+                child: ListTile(
+                  title: Text(
+                    '${r.counterpartLabel(inbox: inbox)} · ${shareStatusLabel(r.status)}',
+                  ),
+                  subtitle: Text('${r.orderCount} buyurtma'),
+                  trailing: Icon(Icons.chevron_right, color: accent),
+                ),
+              ),
+            ),
           );
         },
       ),
@@ -94,16 +109,19 @@ class _ExpeditorShareListPageState
 
   @override
   Widget build(BuildContext context) {
+    final accent = expeditorChromeAccent();
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: expeditorPageBackground(),
       drawer: const ExpeditorDrawer(),
       appBar: AppBar(
-        title: const Text('Ulashish'),
+        title: Text(expeditorLabel('Передачи', 'Ulashish')),
         bottom: TabBar(
           controller: _tabs,
-          tabs: const [
-            Tab(text: 'Kiruvchi'),
-            Tab(text: 'Chiquvchi'),
+          indicatorColor: accent,
+          labelColor: accent,
+          tabs: [
+            Tab(text: expeditorLabel('Входящие', 'Kiruvchi')),
+            Tab(text: expeditorLabel('Исходящие', 'Chiquvchi')),
           ],
         ),
         actions: [
@@ -115,7 +133,10 @@ class _ExpeditorShareListPageState
       ),
       body: TabBarView(
         controller: _tabs,
-        children: [_list(_inbox), _list(_outbox)],
+        children: [
+          _list(_inbox, inbox: true),
+          _list(_outbox, inbox: false),
+        ],
       ),
     );
   }

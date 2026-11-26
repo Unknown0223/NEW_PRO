@@ -59,10 +59,12 @@ const config: FlatReportConfig = {
   apiPath: "visit-totals",
   exportPermission: "reports.itogi_vizitov.export",
   exportFilename: "itogi-vizitov.xlsx",
+  tablePrefsId: "report.visit-totals.v1",
+  filterGridCols: 9,
   defaultLimit: 10,
   filterFields: [
     { kind: "dateRange", defaultRange: "today" },
-    { kind: "search", placeholder: "Агент" },
+
     { kind: "multiSelect", paramKey: "agent_ids", optionsFrom: "agents", placeholder: "Агент" },
     {
       kind: "multiSelect",

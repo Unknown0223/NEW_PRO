@@ -15,10 +15,11 @@ import '../../core/theme/app_colors.dart';
 import '../../core/time/server_clock.dart';
 import '../../core/ui/agent_ui_extended.dart';
 import '../auth/auth_provider.dart';
-import '../agent/shell/agent_app_bar.dart';
+import '../expeditor/shared/tezyuk_expeditor_chrome.dart';
 import 'attendance_api_service.dart';
 import 'attendance_gate_page.dart';
 import 'attendance_gate_steps.dart';
+import 'attendance_hub_chrome.dart';
 import 'attendance_models.dart';
 import 'attendance_offline_queue.dart';
 import 'dual_capture.dart';
@@ -78,14 +79,49 @@ class _AttendanceHubScreenState extends ConsumerState<AttendanceHubScreen> {
   Tab _tabFor(AttendanceMethodTab kind) {
     switch (kind) {
       case AttendanceMethodTab.photo:
-        return const Tab(icon: Icon(Icons.camera_front), text: 'Фото + Face ID');
+        return Tab(
+          icon: const Icon(Icons.camera_front, size: 20),
+          text: expeditorLabel('Фото + Face ID', 'Foto + Face ID'),
+        );
       case AttendanceMethodTab.video:
-        return const Tab(icon: Icon(Icons.videocam), text: 'Видео + 3-код');
+        return Tab(
+          icon: const Icon(Icons.videocam, size: 20),
+          text: expeditorLabel('Видео + 3-код', 'Video + 3-kod'),
+        );
       case AttendanceMethodTab.kiosk:
-        return const Tab(icon: Icon(Icons.groups), text: 'Киоск бригады');
+        return Tab(
+          icon: const Icon(Icons.groups, size: 20),
+          text: expeditorLabel('Киоск бригады', 'Brigada kioski'),
+        );
       case AttendanceMethodTab.requests:
-        return const Tab(icon: Icon(Icons.event_note), text: 'Заявки');
+        return Tab(
+          icon: const Icon(Icons.event_note, size: 20),
+          text: expeditorLabel('Заявки', 'Arizalar'),
+        );
     }
+  }
+
+  PreferredSizeWidget _hubAppBar({
+    required bool showBack,
+    String? shiftSubtitle,
+    String? badge,
+    PreferredSizeWidget? bottom,
+  }) {
+    return StitchAttendanceAppBar(
+      title: attendanceHubTitle(),
+      subtitle: shiftSubtitle,
+      showBack: showBack,
+      badgeLabel: badge,
+      bottom: bottom,
+    );
+  }
+
+  String? _statusBadgeFor(MobileAttendanceState st) {
+    final hasIn = attendanceHasValidIn(st.todayPunches);
+    if (!hasIn) return null;
+    final out = attendancePunchClockLabel(st.todayPunches, direction: 'OUT');
+    if (out != '—') return null;
+    return expeditorLabel('На смене', 'Ishda');
   }
 
   Widget _viewFor(AttendanceMethodTab kind, MobileAttendanceState st) {
@@ -117,14 +153,32 @@ class _AttendanceHubScreenState extends ConsumerState<AttendanceHubScreen> {
             Icon(
               st.terminalOnly ? Icons.fingerprint : Icons.block,
               size: 56,
-              color: Colors.teal.shade700,
+              color: attendanceBrandPrimary(),
             ),
             const SizedBox(height: 16),
-            Text(title, textAlign: TextAlign.center, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+            Text(
+              title,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w700,
+                color: attendanceOnSurface(),
+              ),
+            ),
             const SizedBox(height: 8),
-            Text(body, textAlign: TextAlign.center, style: TextStyle(color: Colors.grey.shade700)),
+            Text(
+              body,
+              textAlign: TextAlign.center,
+              style: TextStyle(color: attendanceOnSurfaceVariant()),
+            ),
             const SizedBox(height: 16),
-            Text('Смена: ${st.shiftName} (${st.shiftStart} – ${st.shiftEnd})', style: const TextStyle(fontSize: 13)),
+            Text(
+              '${expeditorLabel('Смена', 'Smena')}: ${st.shiftName} (${st.shiftStart} – ${st.shiftEnd})',
+              style: TextStyle(
+                fontSize: 13,
+                color: attendanceOnSurfaceVariant(),
+              ),
+            ),
           ],
         ),
       ),
@@ -664,13 +718,13 @@ class _AttendanceHubScreenState extends ConsumerState<AttendanceHubScreen> {
 
     return stateAsync.when(
       loading: () => _wrapGate(Scaffold(
-        backgroundColor: AppColors.background,
-        appBar: AgentAppBar(title: 'Табель и Посещаемость', showBack: showBack),
+        backgroundColor: attendancePageBg(),
+        appBar: _hubAppBar(showBack: showBack),
         body: const Center(child: CircularProgressIndicator()),
       )),
       error: (err, _) => _wrapGate(Scaffold(
-        backgroundColor: AppColors.background,
-        appBar: AgentAppBar(title: 'Табель и Посещаемость', showBack: showBack),
+        backgroundColor: attendancePageBg(),
+        appBar: _hubAppBar(showBack: showBack),
         body: AgentErrorPanel(
           error: err,
           onRetry: () => ref.invalidate(mobileAttendanceStateProvider),
@@ -686,14 +740,16 @@ class _AttendanceHubScreenState extends ConsumerState<AttendanceHubScreen> {
           });
         }
 
+        final shiftSub =
+            '${expeditorLabel('Смена', 'Smena')}: ${st.shiftStart}–${st.shiftEnd}';
+
         if (widget.gateMode) {
           return _wrapGate(Scaffold(
-            backgroundColor: AppColors.background,
-            appBar: AppBar(
-              backgroundColor: AppColors.surface,
-              foregroundColor: AppColors.textTitle,
-              title: const Text('Приход · Face ID'),
-              automaticallyImplyLeading: showBack,
+            backgroundColor: attendancePageBg(),
+            appBar: StitchAttendanceAppBar(
+              title: expeditorLabel('Приход · Face ID', 'Kelish · Face ID'),
+              subtitle: shiftSub,
+              showBack: showBack,
             ),
             body: Column(
               children: [
@@ -725,8 +781,11 @@ class _AttendanceHubScreenState extends ConsumerState<AttendanceHubScreen> {
 
         if (st.punchDisabled || st.terminalOnly) {
           return _wrapGate(Scaffold(
-            backgroundColor: AppColors.background,
-            appBar: AgentAppBar(title: 'Табель и Посещаемость', showBack: showBack),
+            backgroundColor: attendancePageBg(),
+            appBar: _hubAppBar(
+              showBack: showBack,
+              shiftSubtitle: shiftSub,
+            ),
             body: _buildModeBlocked(st),
           ));
         }
@@ -734,8 +793,11 @@ class _AttendanceHubScreenState extends ConsumerState<AttendanceHubScreen> {
         final tabs = st.visibleTabs();
         if (tabs.isEmpty) {
           return _wrapGate(Scaffold(
-            backgroundColor: AppColors.background,
-            appBar: AgentAppBar(title: 'Табель и Посещаемость', showBack: showBack),
+            backgroundColor: attendancePageBg(),
+            appBar: _hubAppBar(
+              showBack: showBack,
+              shiftSubtitle: shiftSub,
+            ),
             body: _buildModeBlocked(st),
           ));
         }
@@ -743,21 +805,13 @@ class _AttendanceHubScreenState extends ConsumerState<AttendanceHubScreen> {
           key: ValueKey(tabs.map((e) => e.name).join(',')),
           length: tabs.length,
           child: Scaffold(
-            backgroundColor: AppColors.background,
-            appBar: AppBar(
-              backgroundColor: AppColors.surface,
-              foregroundColor: AppColors.textTitle,
-              title: const Text('Табель и Посещаемость'),
-              automaticallyImplyLeading: showBack,
-              actions: const [],
+            backgroundColor: attendancePageBg(),
+            appBar: _hubAppBar(
+              showBack: showBack,
+              shiftSubtitle: shiftSub,
+              badge: _statusBadgeFor(st),
               bottom: tabs.length > 1
-                  ? TabBar(
-                      isScrollable: true,
-                      labelColor: AppColors.primary,
-                      unselectedLabelColor: AppColors.textSecondary,
-                      indicatorColor: AppColors.primary,
-                      tabs: tabs.map(_tabFor).toList(),
-                    )
+                  ? attendanceStitchTabBar(tabs: tabs.map(_tabFor).toList())
                   : null,
             ),
             body: Column(
@@ -766,10 +820,17 @@ class _AttendanceHubScreenState extends ConsumerState<AttendanceHubScreen> {
                   Container(
                     width: double.infinity,
                     color: AppColors.primarySoft,
-                    padding: const EdgeInsets.all(10),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 10,
+                    ),
                     child: Text(
                       _statusBanner!,
-                      style: const TextStyle(color: AppColors.primaryDark, fontWeight: FontWeight.w600),
+                      style: TextStyle(
+                        color: attendanceBrandPrimaryContainer(),
+                        fontWeight: FontWeight.w600,
+                        fontSize: 13,
+                      ),
                     ),
                   ),
                 Expanded(
@@ -795,20 +856,37 @@ class _AttendanceHubScreenState extends ConsumerState<AttendanceHubScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.face_retouching_natural, size: 56, color: Colors.teal.shade700),
+            Icon(
+              Icons.face_retouching_natural,
+              size: 56,
+              color: attendanceBrandPrimary(),
+            ),
             const SizedBox(height: 16),
-            const Text(
-              'Подтвердите лицо для входа в приложение',
+            Text(
+              expeditorLabel(
+                'Подтвердите лицо для входа в приложение',
+                'Ilovaga kirish uchun yuzni tasdiqlang',
+              ),
               textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w700,
+                color: attendanceOnSurface(),
+              ),
             ),
             const SizedBox(height: 8),
             Text(
               st.terminalOnly
-                  ? 'Отметка через терминал. Для приложения — одно селфи Face ID.'
-                  : 'Способ отметки отключён. Для входа подтвердите Face ID.',
+                  ? expeditorLabel(
+                      'Отметка через терминал. Для приложения — одно селфи Face ID.',
+                      'Belgi terminal orqali. Ilova uchun bitta Face ID selfi.',
+                    )
+                  : expeditorLabel(
+                      'Способ отметки отключён. Для входа подтвердите Face ID.',
+                      'Belgi usuli o\'chirilgan. Kirish uchun Face ID tasdiqlang.',
+                    ),
               textAlign: TextAlign.center,
-              style: TextStyle(color: Colors.grey.shade700),
+              style: TextStyle(color: attendanceOnSurfaceVariant()),
             ),
             const SizedBox(height: 20),
             FilledButton.icon(
@@ -823,8 +901,13 @@ class _AttendanceHubScreenState extends ConsumerState<AttendanceHubScreen> {
                         if (mounted) setState(() => _submitting = false);
                       }
                     },
+              style: attendancePrimaryButtonStyle(),
               icon: const Icon(Icons.camera_alt),
-              label: Text(_submitting ? 'Проверка…' : 'Открыть камеру'),
+              label: Text(
+                _submitting
+                    ? expeditorLabel('Проверка…', 'Tekshiruv…')
+                    : expeditorLabel('Открыть камеру', 'Kamerani ochish'),
+              ),
             ),
           ],
         ),
@@ -837,98 +920,150 @@ class _AttendanceHubScreenState extends ConsumerState<AttendanceHubScreen> {
         ? LivenessHelper.buildSequence(st.livenessDirections)
         : _livenessSequence;
     final nextIsIn = st.todayPunches.isEmpty;
+    final livenessDone = _completedLiveness.length >= st.livenessDirections;
+    final dualDone = _backPhotoB64 != null && _frontPhotoB64 != null;
+    final inColor = attendanceBrandPrimary();
+    const outColor = Color(0xFFB45309);
+
     return ListView(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 28),
       children: [
-        Card(
-          child: ListTile(
-            leading: const Icon(Icons.schedule, color: Colors.teal),
-            title: Text('Смена: ${st.shiftName} (${st.shiftStart} – ${st.shiftEnd})'),
-            subtitle: Text(
-              'Отметок сегодня: ${st.todayPunches.length} · Следующее: ${nextIsIn ? "ПРИХОД" : "УХОД"}',
-            ),
-          ),
-        ),
-        const SizedBox(height: 12),
-        Row(
-          children: [
-            Expanded(
-              child: _PunchDirectionCard(
-                title: 'ПРИХОД',
-                subtitle: 'Начало смены',
-                color: const Color(0xFF0F766E),
-                icon: Icons.login_rounded,
-                selected: nextIsIn,
-                enabled: nextIsIn && !_submitting,
-                onTap: () => _submitPhotoPunch(st, direction: 'IN'),
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: _PunchDirectionCard(
-                title: 'УХОД',
-                subtitle: 'Конец смены',
-                color: const Color(0xFFB45309),
-                icon: Icons.logout_rounded,
-                selected: !nextIsIn,
-                enabled: !nextIsIn && !_submitting,
-                onTap: () => _submitPhotoPunch(st, direction: 'OUT'),
-              ),
-            ),
-          ],
+        AttendanceShiftHero(
+          shiftName: st.shiftName,
+          shiftStart: st.shiftStart,
+          shiftEnd: st.shiftEnd,
+          marksToday: st.todayPunches.length,
+          nextIsIn: nextIsIn,
+          inTimeLabel:
+              attendancePunchClockLabel(st.todayPunches, direction: 'IN'),
+          outTimeLabel:
+              attendancePunchClockLabel(st.todayPunches, direction: 'OUT'),
         ),
         const SizedBox(height: 16),
-        Text(
-          '1. Проверка живости лица (${st.livenessDirections} поворота + селфи):',
-          style: const TextStyle(fontWeight: FontWeight.bold),
-        ),
-        const SizedBox(height: 6),
-        Wrap(
-          spacing: 6,
-          runSpacing: 6,
-          children: dirs
-              .map((d) => Chip(
-                    label: Text(LivenessHelper.labelsRu[d] ?? d, style: const TextStyle(fontSize: 11)),
-                    backgroundColor: _completedLiveness.contains(d) ? Colors.teal.shade100 : null,
-                  ))
-              .toList(),
-        ),
-        FilledButton.tonalIcon(
-          onPressed: () => _runLiveness(st),
-          icon: const Icon(Icons.face_retouching_natural),
-          label: Text(_completedLiveness.length >= st.livenessDirections
-              ? 'Liveness OK — повторить'
-              : 'Начать liveness (${_completedLiveness.length}/${st.livenessDirections})'),
-        ),
-        const SizedBox(height: 12),
-        Text(
-          '2. Двойная съёмка (задняя + фронт):',
-          style: const TextStyle(fontWeight: FontWeight.bold),
-        ),
-        const SizedBox(height: 6),
-        OutlinedButton.icon(
-          onPressed: _runDualCapture,
-          icon: const Icon(Icons.cameraswitch),
-          label: Text(
-            _backPhotoB64 != null && _frontPhotoB64 != null
-                ? 'Двойная съёмка: OK'
-                : 'Снять объект + селфи',
+        AttendanceSectionCard(
+          title: expeditorLabel('Дневная отметка', 'Kunlik otmetka'),
+          subtitle: expeditorLabel(
+            'Face ID + GPS проверка',
+            'Face ID + GPS tekshiruvi',
+          ),
+          badge: 'Face ID',
+          child: Row(
+            children: [
+              Expanded(
+                child: AttendancePunchDirectionCard(
+                  title: expeditorLabel('ПРИХОД', 'KELISH'),
+                  subtitle: expeditorLabel('Начало смены', 'Smena boshi'),
+                  color: inColor,
+                  icon: Icons.login_rounded,
+                  selected: nextIsIn,
+                  enabled: nextIsIn && !_submitting,
+                  onTap: () => _submitPhotoPunch(st, direction: 'IN'),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: AttendancePunchDirectionCard(
+                  title: expeditorLabel('УХОД', 'KETISH'),
+                  subtitle: expeditorLabel('Конец смены', 'Smena oxiri'),
+                  color: outColor,
+                  icon: Icons.logout_rounded,
+                  selected: !nextIsIn,
+                  enabled: !nextIsIn && !_submitting,
+                  onTap: () => _submitPhotoPunch(st, direction: 'OUT'),
+                ),
+              ),
+            ],
           ),
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 16),
+        AttendanceSectionCard(
+          title: expeditorLabel(
+            '1. Проверка живости (${st.livenessDirections} поворота + селфи)',
+            '1. Liveness (${st.livenessDirections} burilish + selfi)',
+          ),
+          badge: livenessDone ? 'OK' : null,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: dirs
+                    .map(
+                      (d) => AttendanceLivenessChip(
+                        label: LivenessHelper.labelsRu[d] ?? d,
+                        done: _completedLiveness.contains(d),
+                      ),
+                    )
+                    .toList(),
+              ),
+              const SizedBox(height: 12),
+              FilledButton.icon(
+                onPressed: () => _runLiveness(st),
+                style: attendancePrimaryButtonStyle(),
+                icon: const Icon(Icons.face_retouching_natural, size: 20),
+                label: Text(
+                  livenessDone
+                      ? expeditorLabel(
+                          'Liveness OK — повторить',
+                          'Liveness OK — qayta',
+                        )
+                      : expeditorLabel(
+                          'Начать liveness (${_completedLiveness.length}/${st.livenessDirections})',
+                          'Liveness boshlash (${_completedLiveness.length}/${st.livenessDirections})',
+                        ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 16),
+        AttendanceSectionCard(
+          title: expeditorLabel(
+            '2. Двойная съёмка (задняя + фронт)',
+            '2. Ikki kamera (orqa + front)',
+          ),
+          badge: dualDone ? 'OK' : null,
+          child: OutlinedButton.icon(
+            onPressed: _runDualCapture,
+            style: attendanceSecondaryButtonStyle(),
+            icon: const Icon(Icons.cameraswitch, size: 20),
+            label: Text(
+              dualDone
+                  ? expeditorLabel('Двойная съёмка: OK', 'Ikki surat: OK')
+                  : expeditorLabel(
+                      'Снять объект + селфи',
+                      'Ob\'ekt + selfi olish',
+                    ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 16),
         TextField(
           controller: _commentCtrl,
-          decoration: const InputDecoration(
-            labelText: 'Комментарий (обязателен вне гео-зоны)',
-            border: OutlineInputBorder(),
+          decoration: attendanceFieldDecoration(
+            label: expeditorLabel(
+              'Комментарий (обязателен вне гео-зоны)',
+              'Izoh (geo-zonadan tashqarida majburiy)',
+            ),
           ),
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 12),
         Text(
           nextIsIn
-              ? 'Сначала пройдите шаги выше, затем нажмите зелёную кнопку ПРИХОД.'
-              : 'Сначала пройдите шаги выше, затем нажмите оранжевую кнопку УХОД.',
-          style: TextStyle(color: Colors.grey.shade700, fontSize: 13),
+              ? expeditorLabel(
+                  'Сначала пройдите шаги выше, затем нажмите зелёную кнопку ПРИХОД.',
+                  'Avval yuqoridagi qadamlarni bajaring, keyin yashil KELISH tugmasini bosing.',
+                )
+              : expeditorLabel(
+                  'Сначала пройдите шаги выше, затем нажмите оранжевую кнопку УХОД.',
+                  'Avval yuqoridagi qadamlarni bajaring, keyin apelsin KETISH tugmasini bosing.',
+                ),
+          style: TextStyle(
+            color: attendanceOnSurfaceVariant(),
+            fontSize: 12,
+            height: 1.35,
+          ),
         ),
       ],
     );
@@ -936,55 +1071,112 @@ class _AttendanceHubScreenState extends ConsumerState<AttendanceHubScreen> {
 
   Widget _buildVideoTab(MobileAttendanceState st) {
     if (!st.videoEnabled) {
-      return const Center(child: Text('Видео-отметка отключена администратором.'));
+      return Center(
+        child: Text(
+          expeditorLabel(
+            'Видео-отметка отключена администратором.',
+            'Video belgi admin tomonidan o\'chirilgan.',
+          ),
+        ),
+      );
     }
     return ListView(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 28),
       children: [
-        Card(
-          color: Colors.indigo.shade50,
-          child: Padding(
-            padding: const EdgeInsets.all(16),
+        AttendanceSectionCard(
+          title: expeditorLabel('Видео + код', 'Video + kod'),
+          subtitle: expeditorLabel(
+            'Произнесите дневной код на видео',
+            'Bugungi kodni videoda ayting',
+          ),
+          badge: 'Video',
+          child: Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: AppColors.primarySoft,
+              borderRadius: BorderRadius.circular(12),
+            ),
             child: Column(
               children: [
-                const Text('Ваш дневной 3-значный код (произнесите на видео):'),
+                Text(
+                  expeditorLabel(
+                    'Ваш дневной 3-значный код:',
+                    'Bugungi 3-xonali kod:',
+                  ),
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: attendanceOnSurfaceVariant(),
+                  ),
+                ),
                 const SizedBox(height: 6),
                 Text(
                   '${st.dayCode ?? "---"}',
-                  style: const TextStyle(fontSize: 36, fontWeight: FontWeight.w900, letterSpacing: 6),
+                  style: TextStyle(
+                    fontSize: 36,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: 6,
+                    color: attendanceBrandPrimary(),
+                    fontFeatures: const [FontFeature.tabularFigures()],
+                  ),
                 ),
-                Text('Длительность: ${st.videoMinSec}–${st.videoMaxSec} сек · Режим: ${st.captureMode}'),
+                Text(
+                  expeditorLabel(
+                    'Длительность: ${st.videoMinSec}–${st.videoMaxSec} сек · Режим: ${st.captureMode}',
+                    'Davomiylik: ${st.videoMinSec}–${st.videoMaxSec} s · Rejim: ${st.captureMode}',
+                  ),
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: attendanceOnSurfaceVariant(),
+                  ),
+                ),
               ],
             ),
           ),
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 16),
         TextField(
           controller: _spokenCodeCtrl,
           keyboardType: TextInputType.number,
-          decoration: InputDecoration(
-            labelText: 'Подтвердите 3-значный код (${st.dayCode ?? ""})',
-            border: const OutlineInputBorder(),
+          decoration: attendanceFieldDecoration(
+            label: expeditorLabel(
+              'Подтвердите 3-значный код (${st.dayCode ?? ""})',
+              '3-xonali kodni tasdiqlang (${st.dayCode ?? ""})',
+            ),
           ),
         ),
         const SizedBox(height: 12),
         OutlinedButton.icon(
           onPressed: () => _runVideoCapture(st),
-          icon: const Icon(Icons.videocam),
+          style: attendanceSecondaryButtonStyle(),
+          icon: const Icon(Icons.videocam, size: 20),
           label: Text(
             _frontVideoB64 != null
-                ? 'Видео готово${_backVideoB64 != null ? " (фронт+зад)" : " (фронт)"} — перезаписать'
-                : 'Записать видео (фронт → задняя)',
+                ? expeditorLabel(
+                    'Видео готово${_backVideoB64 != null ? " (фронт+зад)" : " (фронт)"} — перезаписать',
+                    'Video tayyor — qayta yozish',
+                  )
+                : expeditorLabel(
+                    'Записать видео (фронт → задняя)',
+                    'Video yozish (front → orqa)',
+                  ),
           ),
         ),
         const SizedBox(height: 12),
         FilledButton.icon(
           onPressed: _submitting ? null : () => _submitVideoPunch(st),
-          icon: const Icon(Icons.send),
+          style: attendancePrimaryButtonStyle(),
+          icon: const Icon(Icons.send, size: 20),
           label: Text(
             st.todayPunches.isEmpty
-                ? 'Отправить видео · ПРИХОД'
-                : 'Отправить видео · УХОД',
+                ? expeditorLabel(
+                    'Отправить видео · ПРИХОД',
+                    'Video yuborish · KELISH',
+                  )
+                : expeditorLabel(
+                    'Отправить видео · УХОД',
+                    'Video yuborish · KETISH',
+                  ),
           ),
         ),
       ],
@@ -1084,134 +1276,129 @@ class _AttendanceHubScreenState extends ConsumerState<AttendanceHubScreen> {
       builder: (ctx, snap) {
         final rows = snap.data ?? const [];
         return ListView(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 28),
           children: [
-            DropdownButtonFormField<String>(
-              value: _reqType,
-              items: const [
-                DropdownMenuItem(value: 'vacation', child: Text('Отпуск')),
-                DropdownMenuItem(value: 'sick', child: Text('Больничный')),
-                DropdownMenuItem(value: 'trip', child: Text('Командировка')),
-                DropdownMenuItem(value: 'overtime', child: Text('Сверхурочные')),
-              ],
-              onChanged: (v) => setState(() => _reqType = v ?? 'vacation'),
-              decoration: const InputDecoration(labelText: 'Тип заявки', border: OutlineInputBorder()),
-            ),
-            const SizedBox(height: 8),
-            TextField(
-              controller: _reasonCtrl,
-              decoration: const InputDecoration(labelText: 'Причина', border: OutlineInputBorder()),
-            ),
-            const SizedBox(height: 8),
-            FilledButton(
-              onPressed: _submitting
-                  ? null
-                  : () async {
-                      setState(() => _submitting = true);
-                      try {
-                        final today = st.todayYmd;
-                        await ref.read(attendanceApiProvider).createMyRequest(
-                              type: _reqType,
-                              fromDate: today,
-                              toDate: today,
-                              reason: _reasonCtrl.text,
-                            );
-                        setState(() => _statusBanner = 'Заявка отправлена.');
-                        ref.invalidate(mobileAttendanceStateProvider);
-                      } catch (e) {
-                        if (mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
-                        }
-                      } finally {
-                        if (mounted) setState(() => _submitting = false);
-                      }
-                    },
-              child: const Text('Отправить заявку'),
-            ),
-            const Divider(height: 32),
-            const Text('Мои заявки', style: TextStyle(fontWeight: FontWeight.bold)),
-            ...rows.map(
-              (r) => ListTile(
-                dense: true,
-                title: Text('${r['type'] ?? ''} · ${r['status'] ?? ''}'),
-                subtitle: Text('${r['from_date'] ?? ''} → ${r['to_date'] ?? ''}'),
+            AttendanceSectionCard(
+              title: expeditorLabel('Новая заявка', 'Yangi ariza'),
+              subtitle: expeditorLabel(
+                'Отпуск, больничный и другие типы',
+                'Tatil, kasallik va boshqa turlar',
               ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  DropdownButtonFormField<String>(
+                    value: _reqType,
+                    items: [
+                      DropdownMenuItem(
+                        value: 'vacation',
+                        child: Text(expeditorLabel('Отпуск', 'Tatil')),
+                      ),
+                      DropdownMenuItem(
+                        value: 'sick',
+                        child: Text(expeditorLabel('Больничный', 'Kasallik')),
+                      ),
+                      DropdownMenuItem(
+                        value: 'trip',
+                        child: Text(
+                          expeditorLabel('Командировка', 'Xizmat safari'),
+                        ),
+                      ),
+                      DropdownMenuItem(
+                        value: 'overtime',
+                        child: Text(
+                          expeditorLabel('Сверхурочные', 'Qo\'shimcha ish'),
+                        ),
+                      ),
+                    ],
+                    onChanged: (v) => setState(() => _reqType = v ?? 'vacation'),
+                    decoration: attendanceFieldDecoration(
+                      label: expeditorLabel('Тип заявки', 'Ariza turi'),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: _reasonCtrl,
+                    decoration: attendanceFieldDecoration(
+                      label: expeditorLabel('Причина', 'Sabab'),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  FilledButton(
+                    onPressed: _submitting
+                        ? null
+                        : () async {
+                            setState(() => _submitting = true);
+                            try {
+                              final today = st.todayYmd;
+                              await ref.read(attendanceApiProvider).createMyRequest(
+                                    type: _reqType,
+                                    fromDate: today,
+                                    toDate: today,
+                                    reason: _reasonCtrl.text,
+                                  );
+                              setState(() => _statusBanner = expeditorLabel(
+                                    'Заявка отправлена.',
+                                    'Ariza yuborildi.',
+                                  ));
+                              ref.invalidate(mobileAttendanceStateProvider);
+                            } catch (e) {
+                              if (mounted) {
+                                ScaffoldMessenger.of(context)
+                                    .showSnackBar(SnackBar(content: Text('$e')));
+                              }
+                            } finally {
+                              if (mounted) setState(() => _submitting = false);
+                            }
+                          },
+                    style: attendancePrimaryButtonStyle(),
+                    child: Text(
+                      expeditorLabel('Отправить заявку', 'Arizani yuborish'),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+            AttendanceSectionCard(
+              title: expeditorLabel('Мои заявки', 'Mening arizalarim'),
+              child: rows.isEmpty
+                  ? Text(
+                      expeditorLabel(
+                        'Пока нет заявок',
+                        'Hali arizalar yo\'q',
+                      ),
+                      style: TextStyle(color: attendanceOnSurfaceVariant()),
+                    )
+                  : Column(
+                      children: [
+                        for (var i = 0; i < rows.length; i++) ...[
+                          if (i > 0)
+                            Divider(height: 1, color: attendanceOutline()),
+                          ListTile(
+                            contentPadding: EdgeInsets.zero,
+                            dense: true,
+                            title: Text(
+                              '${rows[i]['type'] ?? ''} · ${rows[i]['status'] ?? ''}',
+                              style: TextStyle(
+                                fontWeight: FontWeight.w600,
+                                color: attendanceOnSurface(),
+                              ),
+                            ),
+                            subtitle: Text(
+                              '${rows[i]['from_date'] ?? ''} → ${rows[i]['to_date'] ?? ''}',
+                              style: TextStyle(
+                                color: attendanceOnSurfaceVariant(),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
             ),
           ],
         );
       },
-    );
-  }
-}
-
-class _PunchDirectionCard extends StatelessWidget {
-  final String title;
-  final String subtitle;
-  final Color color;
-  final IconData icon;
-  final bool selected;
-  final bool enabled;
-  final VoidCallback onTap;
-
-  const _PunchDirectionCard({
-    required this.title,
-    required this.subtitle,
-    required this.color,
-    required this.icon,
-    required this.selected,
-    required this.enabled,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final bg = selected ? color : color.withValues(alpha: 0.12);
-    final fg = selected ? Colors.white : color;
-    return Material(
-      color: bg,
-      borderRadius: BorderRadius.circular(16),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(16),
-        onTap: enabled ? onTap : null,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 12),
-          child: Column(
-            children: [
-              Icon(icon, size: 36, color: fg),
-              const SizedBox(height: 8),
-              Text(
-                title,
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: 0.6,
-                  color: fg,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                subtitle,
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 12,
-                  color: selected ? Colors.white70 : color.withValues(alpha: 0.8),
-                ),
-              ),
-              if (selected) ...[
-                const SizedBox(height: 8),
-                Text(
-                  'Сейчас',
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                    color: Colors.white.withValues(alpha: 0.9),
-                  ),
-                ),
-              ],
-            ],
-          ),
-        ),
-      ),
     );
   }
 }

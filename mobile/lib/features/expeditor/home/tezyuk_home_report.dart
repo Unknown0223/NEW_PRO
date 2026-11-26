@@ -4,6 +4,7 @@ import '../../../core/theme/tezyuk_colors.dart';
 import '../../agent/orders/order_create_models.dart' show formatMoneySpaced;
 import '../home/expeditor_home_sheets.dart';
 import 'expeditor_home_model.dart';
+import 'tezyuk_shipment_report_filter.dart';
 
 class TezyukYuklarHisoboti extends StatefulWidget {
   final List<HomeShipmentLine> lines;
@@ -121,7 +122,8 @@ class _TezyukYuklarHisobotiState extends State<TezyukYuklarHisoboti> {
   }
 
   List<Widget> _umumiy() {
-    if (widget.lines.isEmpty) {
+    final lines = filterVisibleShipmentLines(widget.lines);
+    if (lines.isEmpty) {
       return const [
         Text(
           'Hisobot ma\'lumoti yo\'q',
@@ -130,9 +132,9 @@ class _TezyukYuklarHisobotiState extends State<TezyukYuklarHisoboti> {
       ];
     }
     final out = <Widget>[];
-    for (var i = 0; i < widget.lines.length; i++) {
-      final line = widget.lines[i];
-      final last = i == widget.lines.length - 1;
+    for (var i = 0; i < lines.length; i++) {
+      final line = lines[i];
+      final last = i == lines.length - 1;
       out.add(
         Padding(
           padding: EdgeInsets.only(top: 10, bottom: last ? 0 : 10),

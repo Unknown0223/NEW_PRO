@@ -365,7 +365,8 @@ export function usePivot(
   // Klassik: birinchi ochilishda expand (katta daraxtlarda faqat 1-daraja).
   // Data rebuild da eskirgan keylarni tozalaymiz.
   useEffect(() => {
-    if (resolveLayoutForm(config.options) !== "classic") {
+    const layout = resolveLayoutForm(config.options);
+    if (layout !== "classic" && layout !== "compact") {
       classicSeededExpandRef.current = false;
       return;
     }

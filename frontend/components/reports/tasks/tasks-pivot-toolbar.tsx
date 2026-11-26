@@ -1,5 +1,6 @@
 "use client";
 
+import type { ReactNode } from "react";
 import {
   CalendarCog,
   Copy,
@@ -13,12 +14,13 @@ import {
 } from "lucide-react";
 import { getPivotStrings } from "@salec/pivot-engine";
 import { VirtualPivotToolbarButton as ToolbarButton } from "@/components/reports/virtual-pivot-toolbar-button";
+import { VirtualPivotFormatMenu } from "@/components/reports/virtual-pivot-format-menu";
 import {
   TableStyleGallery,
   TableStyleToolbarIcon
 } from "@/components/pivot/PivotTable/TableStyleGallery";
 
-export type TasksPivotToolbarMenu = "export" | "format" | "tableStyle" | "options" | null;
+export type TasksPivotToolbarMenu = "export" | "format" | "tableStyle" | null;
 
 type Props = {
   layoutLabel: string;
@@ -27,6 +29,8 @@ type Props = {
   isComputing: boolean;
   isExporting: boolean;
   isFullscreen: boolean;
+  hierarchyExpanded: boolean;
+  hierarchyDisabled: boolean;
   toolbarMenu: TasksPivotToolbarMenu;
   setToolbarMenu: (m: TasksPivotToolbarMenu) => void;
   tableStyleId: string;
@@ -36,13 +40,22 @@ type Props = {
   onExportCsv: () => void;
   onExportPdf: () => void;
   onExportHtml: () => void;
+  onExportPng?: () => void;
+  showExportPng?: boolean;
   onCopy: () => void;
+  onToggleHierarchy: () => void;
   onOpenDateFormat: () => void;
+  onOpenFormatMenu: () => void;
   onOpenCellFormat: () => void;
+  onOpenConditional: () => void;
+  onViewTable: () => void;
+  onViewChart: () => void;
+  onToggleColumnTotals: () => void;
+  onOpenOptions: () => void;
   onOpenFields: () => void;
   onToggleFullscreen: () => void;
-  onSetLayoutFlat: () => void;
-  onSetLayoutClassic: () => void;
+  /** Отчёты / Сохр. как (dialoglar bilan) */
+  savedChrome?: ReactNode;
 };
 
 export function TasksPivotToolbar({
@@ -52,6 +65,8 @@ export function TasksPivotToolbar({
   isComputing,
   isExporting,
   isFullscreen,
+  hierarchyExpanded,
+  hierarchyDisabled,
   toolbarMenu,
   setToolbarMenu,
   tableStyleId,
@@ -61,13 +76,21 @@ export function TasksPivotToolbar({
   onExportCsv,
   onExportPdf,
   onExportHtml,
+  onExportPng,
+  showExportPng,
   onCopy,
+  onToggleHierarchy,
   onOpenDateFormat,
+  onOpenFormatMenu,
   onOpenCellFormat,
+  onOpenConditional,
+  onViewTable,
+  onViewChart,
+  onToggleColumnTotals,
+  onOpenOptions,
   onOpenFields,
   onToggleFullscreen,
-  onSetLayoutFlat,
-  onSetLayoutClassic
+  savedChrome
 }: Props) {
   const t = getPivotStrings().toolbar;
   const busy = isComputing || isExporting;
@@ -76,6 +99,7 @@ export function TasksPivotToolbar({
     <div className="flex min-h-14 flex-wrap items-stretch justify-between gap-2 border-b border-border bg-background px-1 pb-1">
       <div className="flex items-stretch">
         <div className="relative flex">
+          {savedChrome}
           {canExport ? (
             <ToolbarButton
               icon={isExporting ? <Loader2 className="animate-spin" /> : <Download />}
@@ -89,6 +113,20 @@ export function TasksPivotToolbar({
             label="Копировать"
             onClick={onCopy}
             disabled={!hasData || busy}
+          />
+          <ToolbarButton
+            icon={hierarchyExpanded ? <Minimize2 /> : <Maximize2 />}
+            label={hierarchyExpanded ? "Сверн." : "Развер."}
+            title={
+              hierarchyDisabled
+                ? "Нет иерархии: в «Поля» добавьте ≥2 поля в строки (классическая/компактная)"
+                : hierarchyExpanded
+                  ? "Свернуть все"
+                  : "Развернуть все"
+            }
+            onClick={onToggleHierarchy}
+            disabled={hierarchyDisabled || busy}
+            active={hierarchyExpanded}
           />
           {canExport && toolbarMenu === "export" ? (
             <div className="absolute left-0 top-full z-30 mt-1 w-44 rounded-sm border border-border bg-popover p-1 text-xs shadow-lg">
@@ -132,6 +170,18 @@ export function TasksPivotToolbar({
               >
                 {t.html}
               </button>
+              {showExportPng && onExportPng ? (
+                <button
+                  type="button"
+                  className="block w-full rounded px-2 py-1.5 text-left hover:bg-muted"
+                  onClick={() => {
+                    onExportPng();
+                    setToolbarMenu(null);
+                  }}
+                >
+                  PNG
+                </button>
+              ) : null}
             </div>
           ) : null}
         </div>
@@ -165,16 +215,8 @@ export function TasksPivotToolbar({
       <div className="flex items-stretch">
         <div className="relative flex">
           <ToolbarButton icon={<CalendarCog />} label="Формат даты" onClick={onOpenDateFormat} />
-          <ToolbarButton
-            icon={<SlidersHorizontal />}
-            label="Формат"
-            onClick={() => setToolbarMenu(toolbarMenu === "format" ? null : "format")}
-          />
-          <ToolbarButton
-            icon={<Settings2 />}
-            label="Опции"
-            onClick={() => setToolbarMenu(toolbarMenu === "options" ? null : "options")}
-          />
+          <ToolbarButton icon={<SlidersHorizontal />} label="Формат" onClick={onOpenFormatMenu} />
+          <ToolbarButton icon={<Settings2 />} label="Опции" onClick={onOpenOptions} />
           <ToolbarButton icon={<TableProperties />} label="Поля" onClick={onOpenFields} />
           <ToolbarButton
             icon={isFullscreen ? <Minimize2 /> : <Maximize2 />}
@@ -182,44 +224,15 @@ export function TasksPivotToolbar({
             onClick={onToggleFullscreen}
             active={isFullscreen}
           />
-          {toolbarMenu === "format" ? (
-            <div className="absolute right-20 top-full z-30 mt-1 w-52 rounded-sm border border-border bg-popover p-1 text-xs shadow-lg">
-              <button
-                type="button"
-                className="block w-full rounded px-2 py-1.5 text-left hover:bg-muted"
-                onClick={() => {
-                  onOpenCellFormat();
-                  setToolbarMenu(null);
-                }}
-              >
-                Формат ячеек…
-              </button>
-            </div>
-          ) : null}
-          {toolbarMenu === "options" ? (
-            <div className="absolute right-12 top-full z-30 mt-1 w-52 rounded-sm border border-border bg-popover p-1 text-xs shadow-lg">
-              <button
-                type="button"
-                className="block w-full rounded px-2 py-1.5 text-left hover:bg-muted"
-                onClick={() => {
-                  onSetLayoutFlat();
-                  setToolbarMenu(null);
-                }}
-              >
-                Табличная форма
-              </button>
-              <button
-                type="button"
-                className="block w-full rounded px-2 py-1.5 text-left hover:bg-muted"
-                onClick={() => {
-                  onSetLayoutClassic();
-                  setToolbarMenu(null);
-                }}
-              >
-                Классическая
-              </button>
-            </div>
-          ) : null}
+          <VirtualPivotFormatMenu
+            open={toolbarMenu === "format"}
+            onOpenChange={(o) => setToolbarMenu(o ? "format" : null)}
+            onOpenCellFormat={onOpenCellFormat}
+            onOpenConditional={onOpenConditional}
+            onViewTable={onViewTable}
+            onViewChart={onViewChart}
+            onToggleColumnTotals={onToggleColumnTotals}
+          />
         </div>
       </div>
     </div>

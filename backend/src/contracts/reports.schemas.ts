@@ -30,8 +30,8 @@ import { parseBonusesReportQuery } from "../modules/reports/bonuses-report.servi
 import type { BonusesReportFilters } from "../modules/reports/bonuses-report.service";
 import { parseCumulativeBonusQuery } from "../modules/reports/cumulative-bonus.service";
 import type { CumulativeBonusFilters } from "../modules/reports/cumulative-bonus.service";
-import { parseVisitsReportQuery } from "../modules/reports/visits-report.service";
-import type { VisitsReportFilters } from "../modules/reports/visits-report.service";
+import { parseVisitsDetailQuery, parseVisitsReportQuery } from "../modules/reports/visits-report.service";
+import type { VisitsDetailFilters, VisitsReportFilters } from "../modules/reports/visits-report.service";
 import { parseDailyVisitsReportQuery } from "../modules/reports/daily-visits-report.service";
 import type { DailyVisitsReportFilters } from "../modules/reports/daily-visits-report.service";
 import { parsePricesReportQuery } from "../modules/reports/prices-report.service";
@@ -308,6 +308,10 @@ export type { VisitsReportFilters };
 export const visitsReportQuerySchema = queryRecord.transform((q) =>
   parseVisitsReportQuery(q as Record<string, string | undefined>)
 );
+
+/** GET `/api/:slug/reports/visits/detail` */
+export type { VisitsDetailFilters };
+export const visitsDetailQuerySchema = querySchemaFromParser(parseVisitsDetailQuery);
 
 /** GET `/api/:slug/reports/daily-visits` */
 export type { DailyVisitsReportFilters };

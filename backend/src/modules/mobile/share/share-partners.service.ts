@@ -1,4 +1,5 @@
 import { prisma } from "../../../config/database";
+import { sharePersonDisplayName } from "./share-display.pure";
 
 export async function listExpeditorSharePartners(
   tenantId: number,
@@ -25,14 +26,10 @@ export async function listExpeditorSharePartners(
     mode: "partners" as const,
     partners: rows.map((r) => {
       const u = byId.get(r.partner_expeditor_user_id);
-      const name =
-        [u?.last_name, u?.first_name].filter(Boolean).join(" ").trim() ||
-        u?.name ||
-        "";
       return {
         id: r.id,
         partner_user_id: r.partner_expeditor_user_id,
-        name
+        name: sharePersonDisplayName(u)
       };
     })
   };

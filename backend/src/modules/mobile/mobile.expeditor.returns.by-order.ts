@@ -37,7 +37,13 @@ export async function createMobileExpeditorReturnByOrder(
   const cfg = await loadExpeditorMobileConfig(tenantId, expeditorUserId);
   if (cfg.orders?.allow_return_from_shelf !== true) throw new Error("RETURN_DISABLED");
 
-  const order = await assertExpeditorOwnsOrder(tenantId, expeditorUserId, orderId);
+  const { loadOrderAfterShareGuard } = await import("./share/share-guard");
+  const order = await loadOrderAfterShareGuard(
+    tenantId,
+    expeditorUserId,
+    orderId,
+    assertExpeditorOwnsOrder
+  );
   if (order.status !== "delivered") throw new Error("BAD_STATUS");
 
   const { autoReq, manualReq, targetByProduct } = parseReturnByOrderLineRequests(input.lines);
@@ -97,7 +103,13 @@ export async function previewMobileExpeditorReturnByOrder(
   const cfg = await loadExpeditorMobileConfig(tenantId, expeditorUserId);
   if (cfg.orders?.allow_return_from_shelf !== true) throw new Error("RETURN_DISABLED");
 
-  const order = await assertExpeditorOwnsOrder(tenantId, expeditorUserId, orderId);
+  const { loadOrderAfterShareGuard } = await import("./share/share-guard");
+  const order = await loadOrderAfterShareGuard(
+    tenantId,
+    expeditorUserId,
+    orderId,
+    assertExpeditorOwnsOrder
+  );
   if (order.status !== "delivered") throw new Error("BAD_STATUS");
 
   const emptyDiscount = {

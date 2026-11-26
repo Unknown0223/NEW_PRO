@@ -19,7 +19,12 @@ import type {
   PivotFilter,
   CustomizeCellFn
 } from "@salec/pivot-engine";
-import { getFieldMembers, getPivotStrings, resolvePivotValueLabel } from "@salec/pivot-engine";
+import {
+  collectExpandableRowKeys,
+  getFieldMembers,
+  getPivotStrings,
+  resolvePivotValueLabel
+} from "@salec/pivot-engine";
 import { FilterEditor } from "@/components/pivot/PivotFilters";
 import { useFocusTrap } from "@/hooks/useFocusTrap";
 import { formatPivotMemberLabel } from "@/lib/pivot-member-labels";
@@ -1366,7 +1371,8 @@ export const PivotTable = forwardRef<PivotTableHandle, Props>(function PivotTabl
           >
             Детализация
           </button>
-          {contextMenu.rowKey ? (
+          {contextMenu.rowKey &&
+          collectExpandableRowKeys(data.rows).includes(contextMenu.rowKey) ? (
             <button
               type="button"
               className={styles.contextMenuItem}

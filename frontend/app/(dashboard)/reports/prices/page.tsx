@@ -12,9 +12,10 @@ const config: FlatReportConfig = {
   apiPath: "prices",
   exportPermission: "reports.po_cenam.export",
   exportFilename: "po-cenam.xlsx",
+  tablePrefsId: "report.prices.v1",
+  filterGridCols: 9,
   filterFields: [
     { kind: "dateRange" },
-    { kind: "search", placeholder: "Товар / SKU" },
     {
       kind: "multiSelect",
       paramKey: "price_types",

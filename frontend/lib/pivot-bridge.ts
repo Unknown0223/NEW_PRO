@@ -213,14 +213,24 @@ export function savedReportConfigToPivotConfig(config: unknown): PivotConfig | n
   return null;
 }
 
+/** Konstruktor default dataset. */
+export const REPORT_BUILDER_DATASET_ID = "orders_sales_lines";
+/** Отчёт по задачам Virtual Pivot saqlanganlari. */
+export const TASKS_PIVOT_DATASET_ID = "tasks_report";
+/** Универсальный бонус Virtual Pivot saqlanganlari. */
+export const UNIVERSAL_BONUSES_PIVOT_DATASET_ID = "universal_bonuses";
+
 /** Saqlangan otchyot — faqat pivot forma shabloni (filtr/davr saqlanmaydi). */
-function buildSavedPivotReportPayload(pivotConfig: PivotConfig) {
+function buildSavedPivotReportPayload(
+  pivotConfig: PivotConfig,
+  datasetId: string = REPORT_BUILDER_DATASET_ID
+) {
   return {
     dataSource: { type: "salec-pivot-engine" },
     // Bo‘sh emas: WDR detector uchun zones yo‘q, lekin salecPivotConfig birinchi o‘qiladi.
     slice: {},
     salecPivotConfig: pivotConfig,
-    datasetId: "orders_sales_lines"
+    datasetId
   };
 }
 
@@ -228,13 +238,14 @@ function buildSavedPivotReportPayload(pivotConfig: PivotConfig) {
 export async function savePivotConfigReport(
   tenantSlug: string,
   name: string,
-  pivotConfig: PivotConfig
+  pivotConfig: PivotConfig,
+  opts?: { datasetId?: string }
 ) {
   const { data } = await api.post<{ data: { id: number; name: string } }>(
     `/api/${tenantSlug}/reports/report-builder/saved`,
     {
       name,
-      config: buildSavedPivotReportPayload(pivotConfig)
+      config: buildSavedPivotReportPayload(pivotConfig, opts?.datasetId)
     }
   );
   return data.data;
@@ -245,13 +256,14 @@ export async function updatePivotConfigReport(
   tenantSlug: string,
   id: number,
   name: string,
-  pivotConfig: PivotConfig
+  pivotConfig: PivotConfig,
+  opts?: { datasetId?: string }
 ) {
   const { data } = await api.put<{ data: { id: number; name: string } }>(
     `/api/${tenantSlug}/reports/report-builder/saved/${id}`,
     {
       name,
-      config: buildSavedPivotReportPayload(pivotConfig)
+      config: buildSavedPivotReportPayload(pivotConfig, opts?.datasetId)
     }
   );
   return data.data;

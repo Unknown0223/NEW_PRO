@@ -1,16 +1,33 @@
 "use client";
 
+import { useState } from "react";
 import { FlatReportPage } from "@/components/reports/flat-report/flat-report-page";
 import type { FlatReportConfig } from "@/components/reports/flat-report/types";
+import { VisitsMetricLink } from "@/components/reports/visits/visits-metric-link";
+import {
+  VisitsDetailModal,
+  type VisitsDetailOpen,
+  type VisitsDetailType
+} from "@/components/reports/visits/visits-detail-modal";
 
-const config: FlatReportConfig = {
+const METRIC_TYPE: Record<string, VisitsDetailType> = {
+  okb: "okb",
+  akb: "only_order",
+  refusals: "rejected",
+  photo_reports: "only_photo",
+  not_visited: "not_visited",
+  visited: "visited"
+};
+
+const baseConfig: Omit<FlatReportConfig, "formatters"> = {
   title: "По визитам",
   apiPath: "visits",
   exportPermission: "reports.po_vizitam.export",
   exportFilename: "po-vizitam.xlsx",
+  tablePrefsId: "report.visits.v1",
+  filterGridCols: 9,
   filterFields: [
     { kind: "dateRange" },
-    { kind: "search", placeholder: "Агент" },
     {
       kind: "multiSelect",
       paramKey: "supervisor_ids",
@@ -35,19 +52,19 @@ const config: FlatReportConfig = {
       kind: "multiSelect",
       paramKey: "territory_1_list",
       optionsFrom: "territory_1",
-      placeholder: "Территория 1"
+      placeholder: "Зона"
     },
     {
       kind: "multiSelect",
       paramKey: "territory_2_list",
       optionsFrom: "territory_2",
-      placeholder: "Территория 2"
+      placeholder: "Область"
     },
     {
       kind: "multiSelect",
       paramKey: "territory_3_list",
       optionsFrom: "territory_3",
-      placeholder: "Территория 3"
+      placeholder: "Город"
     }
   ],
   columns: [
@@ -80,5 +97,48 @@ const config: FlatReportConfig = {
 };
 
 export default function ReportVisitsPage() {
-  return <FlatReportPage {...config} />;
+  const [detail, setDetail] = useState<VisitsDetailOpen | null>(null);
+
+  const config: FlatReportConfig = {
+    ...baseConfig,
+    formatters: (applied) => {
+      const make = (colKey: string) => {
+        const render = (value: unknown, row: Record<string, unknown>) => {
+          const type = METRIC_TYPE[colKey];
+          if (!type) return String(value ?? "");
+          const agentId = Number(row.agent_id);
+          return (
+            <VisitsMetricLink
+              value={value}
+              onOpen={() =>
+                setDetail({
+                  type,
+                  agentId,
+                  agentName: String(row.agent_name ?? ""),
+                  applied
+                })
+              }
+            />
+          );
+        };
+        render.displayName = `VisitsMetric_${colKey}`;
+        return render;
+      };
+      return {
+        okb: make("okb"),
+        akb: make("akb"),
+        refusals: make("refusals"),
+        photo_reports: make("photo_reports"),
+        not_visited: make("not_visited"),
+        visited: make("visited")
+      };
+    }
+  };
+
+  return (
+    <>
+      <FlatReportPage {...config} />
+      <VisitsDetailModal open={detail} onOpenChange={setDetail} />
+    </>
+  );
 }

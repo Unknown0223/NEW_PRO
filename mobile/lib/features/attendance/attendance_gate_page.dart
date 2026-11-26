@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 
+import '../../core/config/app_product.dart';
 import '../../core/theme/app_colors.dart';
+import '../../core/theme/tezyuk_colors.dart';
+import '../expeditor/shared/tezyuk_expeditor_chrome.dart';
 import 'attendance_gate_steps.dart';
 import 'attendance_models.dart';
 import 'punch_face_result.dart';
@@ -42,7 +45,14 @@ class AttendanceGatePage extends StatelessWidget {
       );
     }
     if (steps.isEmpty) {
-      return const Center(child: Text('Нет доступного способа отметки'));
+      return Center(
+        child: Text(
+          expeditorLabel(
+            'Нет доступного способа отметки',
+            'Belgi uchun usul yo\'q',
+          ),
+        ),
+      );
     }
     final idx = stepIndex.clamp(0, steps.length - 1);
     final step = steps[idx];
@@ -54,7 +64,10 @@ class AttendanceGatePage extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Text(
-            'Смена: ${state.shiftName}',
+            expeditorLabel(
+              'Смена: ${state.shiftName}',
+              'Smena: ${state.shiftName}',
+            ),
             textAlign: TextAlign.center,
             style: const TextStyle(
               fontSize: 15,
@@ -105,9 +118,17 @@ class AttendanceGatePage extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 6),
-                  const Text(
-                    'Произнесите этот код на видео',
-                    style: TextStyle(color: AppColors.textMuted, fontSize: 13),
+                  Text(
+                    expeditorLabel(
+                      'Произнесите этот код на видео',
+                      'Videoda ushbu kodni ayting',
+                    ),
+                    style: TextStyle(
+                      color: isTezyukProduct
+                          ? TezyukColors.onSurfaceVariant
+                          : AppColors.textMuted,
+                      fontSize: 13,
+                    ),
                   ),
                 ],
                 if (statusText != null) ...[
@@ -129,8 +150,10 @@ class AttendanceGatePage extends StatelessWidget {
             child: LinearProgressIndicator(
               value: progress,
               minHeight: 6,
-              backgroundColor: AppColors.surfaceMuted,
-              color: AppColors.primary,
+              backgroundColor: isTezyukProduct
+                  ? TezyukColors.surfaceContainer
+                  : AppColors.surfaceMuted,
+              color: isTezyukProduct ? TezyukColors.primary : AppColors.primary,
             ),
           ),
           const SizedBox(height: 8),
@@ -143,13 +166,16 @@ class AttendanceGatePage extends StatelessWidget {
           FilledButton(
             onPressed: submitting ? null : onPrimary,
             style: FilledButton.styleFrom(
-              backgroundColor: AppColors.primary,
+              backgroundColor:
+                  isTezyukProduct ? TezyukColors.primary : AppColors.primary,
               foregroundColor: Colors.white,
               minimumSize: const Size.fromHeight(52),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
             ),
             child: Text(
-              submitting ? 'Подождите…' : _buttonLabel(step),
+              submitting
+                  ? expeditorLabel('Подождите…', 'Kuting…')
+                  : _buttonLabel(step),
               style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
             ),
           ),
@@ -175,11 +201,11 @@ class AttendanceGatePage extends StatelessWidget {
     switch (step.kind) {
       case AttendanceGateStepKind.liveness:
       case AttendanceGateStepKind.workplace:
-        return 'Открыть камеру';
+        return expeditorLabel('Открыть камеру', 'Kamerani ochish');
       case AttendanceGateStepKind.video:
-        return 'Записать видео';
+        return expeditorLabel('Записать видео', 'Videoga yozish');
       case AttendanceGateStepKind.submit:
-        return 'Отметить ПРИХОД';
+        return expeditorLabel('Отметить ПРИХОД', 'KELISH belgisini qo\'yish');
     }
   }
 }

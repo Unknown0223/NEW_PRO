@@ -17,17 +17,30 @@ const config: FlatReportConfig = {
   apiPath: "daily-visits",
   exportPermission: "reports.po_dnevnomu_poseshcheniyu.export",
   exportFilename: "po-dnevnomu-poseshcheniyu.xlsx",
+  tablePrefsId: "report.daily-visits.v1",
+  filterGridCols: 9,
   filterFields: [
-    { kind: "select", paramKey: "year", optionsFrom: "years", defaultValue: defaultYear },
-    { kind: "select", paramKey: "month", optionsFrom: "months", defaultValue: defaultMonth },
+    {
+      kind: "select",
+      paramKey: "year",
+      optionsFrom: "years",
+      defaultValue: defaultYear,
+      placeholder: "Год"
+    },
+    {
+      kind: "select",
+      paramKey: "month",
+      optionsFrom: "months",
+      defaultValue: defaultMonth,
+      placeholder: "Месяц"
+    },
     {
       kind: "multiSelect",
       paramKey: "visit_kinds",
       optionsFrom: "visit_kinds",
       placeholder: "Тип визита"
     },
-    { kind: "multiSelect", paramKey: "agent_ids", optionsFrom: "agents", placeholder: "Агент" },
-    { kind: "search", placeholder: "Агент" }
+    { kind: "multiSelect", paramKey: "agent_ids", optionsFrom: "agents", placeholder: "Агент" }
   ],
   columns: [
     { key: "row_number", header: "#", cellClassName: "text-muted-foreground" },

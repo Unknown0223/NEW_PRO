@@ -22,6 +22,7 @@ const config: FlatReportConfig = {
   exportFilename: "prodazhi-po-klientam-3.xlsx",
   rowsKey: "clients",
   tablePrefsId: "report.client-sales-3",
+  filterGridCols: 9,
   dateTypeAsRadio: true,
   filterFields: [
     { kind: "dateRange" },

@@ -12,9 +12,11 @@ const config: FlatReportConfig = {
   apiPath: "expeditor-visits",
   exportPermission: "reports.vizity_ekspedirov.export",
   exportFilename: "vizity-ekspedirov.xlsx",
+  tablePrefsId: "report.expeditor-visits.v1",
+  filterGridCols: 9,
   filterFields: [
     { kind: "dateRange" },
-    { kind: "search", placeholder: "Доставщик" },
+
     {
       kind: "multiSelect",
       paramKey: "expeditor_ids",

@@ -42,6 +42,11 @@ import {
 } from "@/components/reports/virtual-pivot-format-dialogs";
 import { VirtualPivotDateFormatDialog } from "@/components/reports/virtual-pivot-date-format-dialog";
 import {
+  VirtualPivotLayoutOptionsDialog,
+  type LayoutOptionsSelection
+} from "@/components/reports/virtual-pivot-layout-options-dialog";
+import { VirtualPivotFormatMenu } from "@/components/reports/virtual-pivot-format-menu";
+import {
   DEFAULT_PIVOT_DATE_FORMAT,
   applyDateFormatToConfig,
   applyDateFormatToRows,
@@ -165,114 +170,6 @@ function ToolbarButton({
   );
 }
 
-/** WebDataRocks / Arena «Настройки разметки» — pixel-close radio column. */
-function OptionGroup({
-  title,
-  name,
-  value,
-  onChange,
-  items
-}: {
-  title: string;
-  name: string;
-  value: string;
-  onChange: (value: string) => void;
-  items: readonly (readonly [string, string])[];
-}) {
-  return (
-    <div className="min-w-0" style={{ verticalAlign: "top" }}>
-      <div
-        style={{
-          color: "#999",
-          fontSize: 14,
-          textTransform: "uppercase",
-          marginBottom: 25,
-          fontFamily: "Arial, Helvetica, sans-serif",
-          letterSpacing: 0
-        }}
-      >
-        {title}
-      </div>
-      <ul className="m-0 list-none p-0">
-        {items.map(([itemValue, label]) => {
-          const checked = value === itemValue;
-          return (
-            <li key={itemValue} style={{ marginBottom: 12 }}>
-              <div className="relative">
-                <input
-                  id={`${name}-${itemValue}`}
-                  type="radio"
-                  name={name}
-                  checked={checked}
-                  onChange={() => onChange(itemValue)}
-                  className="peer absolute opacity-0"
-                  style={{ width: 0, height: 0 }}
-                />
-                <label
-                  htmlFor={`${name}-${itemValue}`}
-                  className="relative inline-block cursor-pointer"
-                  style={{
-                    color: "#111",
-                    fontSize: 14,
-                    padding: "4px 0 4px 35px",
-                    lineHeight: 1.2,
-                    fontFamily: "Arial, Helvetica, sans-serif",
-                    fontWeight: checked ? 700 : 400
-                  }}
-                >
-                  <span
-                    aria-hidden
-                    className="absolute left-0 top-1/2 block -translate-y-1/2 rounded-full bg-white"
-                    style={{
-                      width: 22,
-                      height: 22,
-                      border: "1px solid #d5d5d5"
-                    }}
-                  />
-                  {checked ? (
-                    <span
-                      aria-hidden
-                      className="absolute top-1/2 block -translate-y-1/2 rounded-full"
-                      style={{
-                        width: 14,
-                        height: 14,
-                        left: 5,
-                        background: "#555"
-                      }}
-                    />
-                  ) : null}
-                  {label}
-                </label>
-              </div>
-            </li>
-          );
-        })}
-      </ul>
-    </div>
-  );
-}
-
-/** Arena Universal Sales Report «Настройки разметки» radio labels. */
-const GRAND_TOTAL_OPTIONS = [
-  ["none", "Не показывать общий итог"],
-  ["both", "Показать общий итог"],
-  ["rows", "Показать только для рядов"],
-  ["columns", "Показать только для столбцов"]
-] as const;
-
-const SUBTOTAL_OPTIONS = [
-  ["none", "Не показывать промежуточный итог"],
-  ["both", "Показать промежуточный итог"],
-  ["rows", "Показать только промежуточный итог рядов"],
-  ["columns", "Показать только промежуточный итог столбцов"]
-] as const;
-
-const LAYOUT_FORM_OPTIONS = [
-  ["compact", "Компактная форма"],
-  ["classic", "Классическая форма"],
-  ["flat", "Табличная форма"]
-] as const;
-
 export function VirtualPivotReportBuilder() {
   const builderPerms = usePermissions();
   const canExport = builderPerms.has("reports.konstruktor.export");
@@ -317,9 +214,11 @@ export function VirtualPivotReportBuilder() {
   const [optionsOpen, setOptionsOpen] = useState(false);
   const [fieldsOpen, setFieldsOpen] = useState(false);
   const [fieldsInitialConfig, setFieldsInitialConfig] = useState<PivotConfig | null>(null);
-  const [grandTotals, setGrandTotals] = useState<"none" | "both" | "rows" | "columns">("both");
-  const [subtotals, setSubtotals] = useState<"none" | "both" | "rows" | "columns">("both");
-  const [schema, setSchema] = useState<PivotLayoutForm>("flat");
+  const [layoutOptionsInitial, setLayoutOptionsInitial] = useState<LayoutOptionsSelection>({
+    layoutForm: "flat",
+    grandTotals: "both",
+    subtotals: "both"
+  });
   const [formatCellsOpen, setFormatCellsOpen] = useState(false);
   const [dateFormatOpen, setDateFormatOpen] = useState(false);
   const [dateFormat, setDateFormat] = useState<PivotDateFormatState>(DEFAULT_PIVOT_DATE_FORMAT);
@@ -1083,67 +982,73 @@ export function VirtualPivotReportBuilder() {
 
   const openOptions = useCallback(() => {
     const layout = resolveLayoutForm(config.options);
-    setGrandTotals(
-      !config.options.showGrandTotal && !config.options.showColumnTotals
-        ? "none"
-        : config.options.showGrandTotal && config.options.showColumnTotals
-          ? "both"
-          : config.options.showColumnTotals && !config.options.showGrandTotal
-            ? "columns"
-            : "rows"
-    );
-    setSubtotals(
-      !config.options.showSubtotals
+    setLayoutOptionsInitial({
+      layoutForm: layout,
+      grandTotals:
+        !config.options.showGrandTotal && !config.options.showColumnTotals
+          ? "none"
+          : config.options.showGrandTotal && config.options.showColumnTotals
+            ? "both"
+            : config.options.showColumnTotals && !config.options.showGrandTotal
+              ? "columns"
+              : "rows",
+      subtotals: !config.options.showSubtotals
         ? "none"
         : config.options.subtotalScope === "rows"
           ? "rows"
           : config.options.subtotalScope === "columns"
             ? "columns"
             : "both"
-    );
-    setSchema(layout);
+    });
     setOptionsOpen(true);
   }, [config]);
 
-  const applyOptions = useCallback(() => {
-    const nextLayout = schema;
-    const leavingFlat = isLeavingFlatLayout(config, nextLayout);
-    let next: typeof config = {
-      ...config,
-      options: {
-        ...config.options,
-        showGrandTotal: grandTotals === "both" || grandTotals === "rows",
-        showColumnTotals: grandTotals === "both" || grandTotals === "columns",
-        showSubtotals: subtotals !== "none",
-        subtotalScope: subtotals === "none" ? "both" : subtotals,
-        layoutForm: nextLayout,
-        compactMode: nextLayout === "compact"
-      }
-    };
-    if (nextLayout === "flat") {
-      next = flattenConfigZones(next);
-    } else if (leavingFlat && (nextLayout === "classic" || nextLayout === "compact")) {
-      next = restoreFromPreFlatSnapshot(config, nextLayout, pivotFields);
-      next = {
-        ...next,
+  const applyOptions = useCallback(
+    (sel: LayoutOptionsSelection) => {
+      const nextLayout = sel.layoutForm;
+      const leavingFlat = isLeavingFlatLayout(config, nextLayout);
+      const showGrandTotal = sel.grandTotals === "both" || sel.grandTotals === "rows";
+      const showColumnTotals = sel.grandTotals === "both" || sel.grandTotals === "columns";
+      const showSubtotals = sel.subtotals !== "none";
+      const subtotalScope = sel.subtotals === "none" ? "both" : sel.subtotals;
+      let next: typeof config = {
+        ...config,
         options: {
-          ...next.options,
-          showGrandTotal: grandTotals === "both" || grandTotals === "rows",
-          showColumnTotals: grandTotals === "both" || grandTotals === "columns",
-          showSubtotals: subtotals !== "none",
-          subtotalScope: subtotals === "none" ? "both" : subtotals
+          ...config.options,
+          showGrandTotal,
+          showColumnTotals,
+          showSubtotals,
+          subtotalScope,
+          layoutForm: nextLayout,
+          compactMode: nextLayout === "compact"
         }
       };
-    }
-    updateConfig(next);
-    if (nextLayout === "flat") collapseAll();
-    if (nextLayout === "classic") {
-      window.setTimeout(() => {
-        if (expandableRowKeys.length <= 2_000) expandAll();
-      }, 0);
-    }
-    setOptionsOpen(false);
-  }, [collapseAll, config, expandAll, expandableRowKeys.length, grandTotals, schema, subtotals, updateConfig]);
+      if (nextLayout === "flat") {
+        next = flattenConfigZones(next);
+      } else if (leavingFlat && (nextLayout === "classic" || nextLayout === "compact")) {
+        next = restoreFromPreFlatSnapshot(config, nextLayout, pivotFields);
+        next = {
+          ...next,
+          options: {
+            ...next.options,
+            showGrandTotal,
+            showColumnTotals,
+            showSubtotals,
+            subtotalScope
+          }
+        };
+      }
+      updateConfig(next);
+      if (nextLayout === "flat") collapseAll();
+      if (nextLayout === "classic") {
+        window.setTimeout(() => {
+          if (expandableRowKeys.length <= 2_000) expandAll();
+        }, 0);
+      }
+      setOptionsOpen(false);
+    },
+    [collapseAll, config, expandAll, expandableRowKeys.length, pivotFields, updateConfig]
+  );
 
   const openFields = useCallback(() => {
     setFieldsInitialConfig(config);
@@ -1373,34 +1278,21 @@ export function VirtualPivotReportBuilder() {
                 onClick={handleToggleFullscreen}
                 active={isWorkspaceExpanded}
               />
-              {toolbarMenu === "format" ? (
-                <div className="absolute right-20 top-full z-30 mt-1 w-52 rounded-sm border border-border bg-popover p-1 text-xs shadow-lg">
-                  <button
-                    className="block w-full rounded px-2 py-1.5 text-left hover:bg-muted"
-                    onClick={() => {
-                      setCellFormat({ ...DEFAULT_CELL_FORMAT, ...cellFormatFromConfig(config) });
-                      setFormatCellsOpen(true);
-                      setToolbarMenu(null);
-                    }}
-                  >
-                    Формат ячеек…
-                  </button>
-                  <button
-                    className="block w-full rounded px-2 py-1.5 text-left hover:bg-muted"
-                    onClick={() => {
-                      setDraftConditionalRules([...(config.options.conditionalFormats ?? [])]);
-                      setConditionalOpen(true);
-                      setToolbarMenu(null);
-                    }}
-                  >
-                    Условное форматирование…
-                  </button>
-                  <div className="my-1 border-t border-border" />
-                  <button className="block w-full rounded px-2 py-1.5 text-left hover:bg-muted" onClick={() => { setViewMode("table"); setToolbarMenu(null); }}>Таблица</button>
-                  <button className="block w-full rounded px-2 py-1.5 text-left hover:bg-muted" onClick={() => { setViewMode("chart"); setToolbarMenu(null); }}>Диаграмма</button>
-                  <button className="block w-full rounded px-2 py-1.5 text-left hover:bg-muted" onClick={() => { toggleColumnTotals(); setToolbarMenu(null); }}>Итоги по столбцам</button>
-                </div>
-              ) : null}
+              <VirtualPivotFormatMenu
+                open={toolbarMenu === "format"}
+                onOpenChange={(o) => setToolbarMenu(o ? "format" : null)}
+                onOpenCellFormat={() => {
+                  setCellFormat({ ...DEFAULT_CELL_FORMAT, ...cellFormatFromConfig(config) });
+                  setFormatCellsOpen(true);
+                }}
+                onOpenConditional={() => {
+                  setDraftConditionalRules([...(config.options.conditionalFormats ?? [])]);
+                  setConditionalOpen(true);
+                }}
+                onViewTable={() => setViewMode("table")}
+                onViewChart={() => setViewMode("chart")}
+                onToggleColumnTotals={() => toggleColumnTotals()}
+              />
             </div>
           </div>
         </div>
@@ -1775,128 +1667,12 @@ export function VirtualPivotReportBuilder() {
           }}
         />
 
-        <Dialog open={optionsOpen} onOpenChange={setOptionsOpen}>
-          <DialogContent
-            showCloseButton={false}
-            overlayClassName="bg-black/25"
-            className={cn(
-              "gap-0 overflow-visible rounded-none border border-[#d5d5d5] bg-white p-0 shadow-[0_4px_16px_rgba(0,0,0,0.25)]",
-              "!inset-0 !left-0 !right-0 !top-0 !bottom-0 !m-auto !h-fit",
-              "!translate-x-0 !translate-y-0 !transform-none",
-              "data-open:!animate-none data-closed:!animate-none !duration-0 !ring-0",
-              "w-[620px] max-w-[calc(100%-2rem)] sm:max-w-[620px]"
-            )}
-            style={{
-              transform: "none",
-              padding: "22px 28px 28px",
-              boxSizing: "border-box",
-              fontFamily: "Arial, Helvetica, sans-serif"
-            }}
-          >
-            {/* Header — Arena original */}
-            <div className="relative" style={{ minHeight: 40, marginBottom: 28 }}>
-              <DialogTitle
-                className="m-0 block p-0"
-                style={{
-                  color: "#111",
-                  fontSize: 20,
-                  fontWeight: 700,
-                  padding: "6px 0",
-                  lineHeight: 1.2,
-                  paddingRight: 210
-                }}
-              >
-                Настройки разметки
-              </DialogTitle>
-              <div
-                className="absolute right-0 top-0 flex"
-                style={{ fontSize: 0 }}
-              >
-                <button
-                  type="button"
-                  onClick={applyOptions}
-                  className="inline-block cursor-pointer text-center uppercase outline-none"
-                  style={{
-                    height: 38,
-                    minWidth: 90,
-                    marginRight: 20,
-                    padding: "10px 12px",
-                    fontSize: 14,
-                    fontWeight: 700,
-                    letterSpacing: 0.5,
-                    color: "#fff",
-                    background: "#555",
-                    border: "none",
-                    borderRadius: 4,
-                    fontFamily: "Arial, Helvetica, sans-serif"
-                  }}
-                >
-                  Применить
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setOptionsOpen(false)}
-                  className="inline-block cursor-pointer text-center uppercase outline-none"
-                  style={{
-                    height: 38,
-                    minWidth: 90,
-                    padding: "10px 12px",
-                    fontSize: 14,
-                    fontWeight: 700,
-                    letterSpacing: 0.5,
-                    color: "#555",
-                    background: "#DBDBDB",
-                    border: "none",
-                    borderRadius: 4,
-                    fontFamily: "Arial, Helvetica, sans-serif"
-                  }}
-                >
-                  Отмена
-                </button>
-              </div>
-            </div>
-
-            {/* Body — Arena original: 2 ustun + Разметки chap pastda */}
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "1fr 1fr",
-                gridTemplateRows: "auto auto",
-                columnGap: 40,
-                rowGap: 36,
-                fontSize: 14
-              }}
-            >
-              <div style={{ gridColumn: 1, gridRow: 1 }}>
-                <OptionGroup
-                  title="Общий итог"
-                  name="grand-totals"
-                  value={grandTotals}
-                  onChange={(v) => setGrandTotals(v as typeof grandTotals)}
-                  items={GRAND_TOTAL_OPTIONS}
-                />
-              </div>
-              <div style={{ gridColumn: 2, gridRow: 1 }}>
-                <OptionGroup
-                  title="Промежуточный итог"
-                  name="subtotals"
-                  value={subtotals}
-                  onChange={(v) => setSubtotals(v as typeof subtotals)}
-                  items={SUBTOTAL_OPTIONS}
-                />
-              </div>
-              <div style={{ gridColumn: 1, gridRow: 2 }}>
-                <OptionGroup
-                  title="Разметки"
-                  name="schema"
-                  value={schema}
-                  onChange={(v) => setSchema(v as PivotLayoutForm)}
-                  items={LAYOUT_FORM_OPTIONS}
-                />
-              </div>
-            </div>
-          </DialogContent>
-        </Dialog>
+        <VirtualPivotLayoutOptionsDialog
+          open={optionsOpen}
+          onOpenChange={setOptionsOpen}
+          initial={layoutOptionsInitial}
+          onApply={applyOptions}
+        />
 
         <VirtualPivotFieldsModal
           open={fieldsOpen}

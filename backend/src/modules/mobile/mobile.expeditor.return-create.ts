@@ -21,7 +21,13 @@ export async function createMobileExpeditorPartialReturn(
   const cfg = await loadExpeditorMobileConfig(tenantId, expeditorUserId);
   if (cfg.orders?.allow_partial_return_edit === false) throw new Error("RETURN_DISABLED");
 
-  const order = await assertExpeditorOwnsOrder(tenantId, expeditorUserId, orderId);
+  const { loadOrderAfterShareGuard } = await import("./share/share-guard");
+  const order = await loadOrderAfterShareGuard(
+    tenantId,
+    expeditorUserId,
+    orderId,
+    assertExpeditorOwnsOrder
+  );
   if (order.status !== "delivered" && order.status !== "delivering") throw new Error("BAD_STATUS");
 
   const reason = input.reason.trim();

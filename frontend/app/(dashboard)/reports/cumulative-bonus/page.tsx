@@ -42,11 +42,13 @@ const config: FlatReportConfig = {
   apiPath: "cumulative-bonus",
   exportPermission: "reports.nakopitelnyy_bonus.export",
   exportFilename: "nakopitelnyy-bonus.xlsx",
+  tablePrefsId: "report.cumulative-bonus.v1",
+  filterGridCols: 9,
   filterFields: [
     { kind: "dateRange" },
     { kind: "select", paramKey: "date_type", optionsFrom: "date_types", defaultValue: "created_at" },
     { kind: "select", paramKey: "group_by", optionsFrom: "group_by", defaultValue: "client" },
-    { kind: "search", placeholder: "Клиент / агент" },
+
     { kind: "multiSelect", paramKey: "statuses", optionsFrom: "statuses", placeholder: "Статус" },
     { kind: "multiSelect", paramKey: "agent_ids", optionsFrom: "agents", placeholder: "Агент" },
     {
@@ -65,19 +67,19 @@ const config: FlatReportConfig = {
       kind: "multiSelect",
       paramKey: "territory_1_list",
       optionsFrom: "territory_1",
-      placeholder: "Территория 1"
+      placeholder: "Зона"
     },
     {
       kind: "multiSelect",
       paramKey: "territory_2_list",
       optionsFrom: "territory_2",
-      placeholder: "Территория 2"
+      placeholder: "Область"
     },
     {
       kind: "multiSelect",
       paramKey: "territory_3_list",
       optionsFrom: "territory_3",
-      placeholder: "Территория 3"
+      placeholder: "Город"
     }
   ],
   columns: ({ applied }) => cumulativeColumns(String(applied.group_by ?? "client")),

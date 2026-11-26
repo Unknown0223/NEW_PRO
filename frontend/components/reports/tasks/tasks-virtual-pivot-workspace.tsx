@@ -3,8 +3,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
-import type { PivotConfig, PivotField } from "@salec/pivot-engine";
-import { summarizePivotFilter } from "@salec/pivot-engine";
+import type { ConditionalFormatRule, PivotConfig, PivotField } from "@salec/pivot-engine";
+import {
+  collectExpandableRowKeys,
+  hasChartableData,
+  pivotToChartData,
+  summarizePivotFilter
+} from "@salec/pivot-engine";
 import { api } from "@/lib/api";
 import { usePermissions } from "@/lib/use-permissions";
 import { STALE } from "@/lib/query-stale";
@@ -17,20 +22,10 @@ import {
   buildEmptyDraft,
   mapMultiOptions
 } from "@/components/reports/flat-report/flat-report-helpers";
+import { PivotChart } from "@/components/pivot/PivotChart";
 import { PivotTable, type PivotTableHandle } from "@/components/pivot/PivotTable";
-import { VirtualPivotFieldsModal } from "@/components/reports/virtual-pivot-fields-modal";
-import {
-  DEFAULT_CELL_FORMAT,
-  VirtualPivotFormatCellsDialog,
-  applyCellFormatToConfig,
-  cellFormatFromConfig
-} from "@/components/reports/virtual-pivot-format-dialogs";
-import { VirtualPivotDateFormatDialog } from "@/components/reports/virtual-pivot-date-format-dialog";
-import {
-  DEFAULT_PIVOT_DATE_FORMAT,
-  applyDateFormatToConfig,
-  dateFormatStateFromConfig
-} from "@/lib/pivot-date-format";
+import type { LayoutOptionsSelection } from "@/components/reports/virtual-pivot-layout-options-dialog";
+import { TasksPivotDialogs } from "./tasks-pivot-dialogs";
 import { usePivot } from "@/hooks/pivot/usePivot";
 import { usePivotExport } from "@/hooks/pivot/usePivotExport";
 import { resolveLayoutForm } from "@/lib/pivot-layout-form";
@@ -42,14 +37,13 @@ import {
 import { cn } from "@/lib/utils";
 import { TASKS_FILTER_CONFIG } from "./tasks-filter-config";
 import {
-  buildTasksClassicPivotConfig,
+  applyTasksLayoutOptions,
   buildTasksFlatPivotConfig,
+  selectionFromConfig,
   TASKS_PIVOT_FIELDS
 } from "./tasks-pivot-fields";
-import {
-  TasksPivotToolbar,
-  type TasksPivotToolbarMenu
-} from "./tasks-pivot-toolbar";
+import { TasksPivotSavedChrome } from "./tasks-pivot-saved-chrome";
+import { TasksPivotToolbar, type TasksPivotToolbarMenu } from "./tasks-pivot-toolbar";
 
 type DatasetPayload = {
   fields: Array<{ id: string; label: string; dataType: string }>;
@@ -67,6 +61,13 @@ export function TasksVirtualPivotWorkspace() {
   const [fieldsOpen, setFieldsOpen] = useState(false);
   const [dateFormatOpen, setDateFormatOpen] = useState(false);
   const [formatCellsOpen, setFormatCellsOpen] = useState(false);
+  const [conditionalOpen, setConditionalOpen] = useState(false);
+  const [optionsOpen, setOptionsOpen] = useState(false);
+  const [layoutInitial, setLayoutInitial] = useState<LayoutOptionsSelection>(() =>
+    selectionFromConfig(buildTasksFlatPivotConfig())
+  );
+  const [draftConditionalRules, setDraftConditionalRules] = useState<ConditionalFormatRule[]>([]);
+  const [viewMode, setViewMode] = useState<"table" | "chart">("table");
   const [toolbarMenu, setToolbarMenu] = useState<TasksPivotToolbarMenu>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [tableStyleId, setTableStyleId] = useState(WDR_DEFAULT_TABLE_STYLE_ID);
@@ -74,9 +75,10 @@ export function TasksVirtualPivotWorkspace() {
   const [applied, setApplied] = useState(draft);
   const [fieldsSnapshot, setFieldsSnapshot] = useState<PivotConfig>(() => buildTasksFlatPivotConfig());
   const pivotTableRef = useRef<PivotTableHandle>(null);
-  const shellRef = useRef<HTMLDivElement>(null);
+  const chartRef = useRef<HTMLDivElement>(null);
 
-  const { exportExcel, exportCsv, exportPdf, exportHtml, isExporting } = usePivotExport();
+  const { exportExcel, exportCsv, exportPdf, exportHtml, exportChartPng, isExporting } =
+    usePivotExport();
 
   useEffect(() => {
     setTableStyleId(loadPivotTableStyleId());
@@ -141,11 +143,13 @@ export function TasksVirtualPivotWorkspace() {
     toggleRow,
     setSortBy,
     expandAll,
+    collapseAll,
     hasData,
     addCalculatedPreset,
     addCalculatedMeasure,
     removeCalculatedMeasure,
-    updateCalculatedMeasure
+    updateCalculatedMeasure,
+    toggleColumnTotals
   } = usePivot(rawRows, pivotFields, {
     initialConfig: buildTasksFlatPivotConfig(),
     suspendCompute: fieldsOpen
@@ -158,6 +162,18 @@ export function TasksVirtualPivotWorkspace() {
       : currentLayoutForm === "compact"
         ? "Компактная"
         : "Классическая";
+
+  const expandableRowKeys = useMemo(
+    () => (pivotData?.rows?.length ? collectExpandableRowKeys(pivotData.rows) : []),
+    [pivotData]
+  );
+  const hierarchyExpanded =
+    expandableRowKeys.length > 0 && expandableRowKeys.some((key) => expandedRows.has(key));
+
+  const chartData = useMemo(
+    () => (pivotData ? pivotToChartData(pivotData) : null),
+    [pivotData]
+  );
 
   const filterSummaries = useMemo(() => {
     const map: Record<string, string> = {};
@@ -180,34 +196,22 @@ export function TasksVirtualPivotWorkspace() {
 
   const stamp = () => new Date().toISOString().slice(0, 10);
 
-  const onExportExcel = useCallback(() => {
-    void exportExcel(pivotData, {
-      filename: `otchet-po-zadacham-${stamp()}.xlsx`,
-      expandedRows
-    });
-  }, [exportExcel, pivotData, expandedRows]);
-
-  const onExportCsv = useCallback(() => {
-    void exportCsv(pivotData, { filename: `otchet-po-zadacham-${stamp()}.csv` });
-  }, [exportCsv, pivotData]);
-
-  const onExportPdf = useCallback(() => {
-    void exportPdf(pivotData, {
-      filename: `otchet-po-zadacham-${stamp()}.pdf`,
-      title: cfg.title
-    });
-  }, [exportPdf, pivotData, cfg.title]);
-
-  const onExportHtml = useCallback(() => {
-    void exportHtml(pivotData, {
-      filename: `otchet-po-zadacham-${stamp()}.html`,
-      title: cfg.title
-    });
-  }, [exportHtml, pivotData, cfg.title]);
+  const onApplyLayout = useCallback(
+    (sel: LayoutOptionsSelection) => {
+      const next = applyTasksLayoutOptions(config, sel);
+      updateConfig(next);
+      if (sel.layoutForm === "flat") collapseAll();
+      if (sel.layoutForm === "classic" && expandableRowKeys.length <= 2_000) {
+        window.setTimeout(() => expandAll(), 0);
+      }
+      setOptionsOpen(false);
+      setViewMode("table");
+    },
+    [collapseAll, config, expandAll, expandableRowKeys.length, updateConfig]
+  );
 
   return (
     <div
-      ref={shellRef}
       className={cn(
         "flex h-full min-h-0 flex-col gap-3 p-4",
         isFullscreen && "fixed inset-0 z-50 overflow-auto bg-background"
@@ -257,6 +261,10 @@ export function TasksVirtualPivotWorkspace() {
           isComputing={isComputing || datasetQ.isFetching}
           isExporting={isExporting}
           isFullscreen={isFullscreen}
+          hierarchyExpanded={hierarchyExpanded}
+          hierarchyDisabled={
+            isComputing || !hasData || expandableRowKeys.length === 0 || currentLayoutForm === "flat"
+          }
           toolbarMenu={toolbarMenu}
           setToolbarMenu={setToolbarMenu}
           tableStyleId={tableStyleId}
@@ -268,20 +276,45 @@ export function TasksVirtualPivotWorkspace() {
             setTableStyleId(WDR_DEFAULT_TABLE_STYLE_ID);
             persistPivotTableStyleId(WDR_DEFAULT_TABLE_STYLE_ID);
           }}
-          onExportExcel={onExportExcel}
-          onExportCsv={onExportCsv}
-          onExportPdf={onExportPdf}
-          onExportHtml={onExportHtml}
+          onExportExcel={() =>
+            void exportExcel(pivotData, { filename: `tasks-${stamp()}.xlsx`, expandedRows })
+          }
+          onExportCsv={() => void exportCsv(pivotData, { filename: `tasks-${stamp()}.csv` })}
+          onExportPdf={() =>
+            void exportPdf(pivotData, { filename: `tasks-${stamp()}.pdf`, title: cfg.title })
+          }
+          onExportHtml={() =>
+            void exportHtml(pivotData, { filename: `tasks-${stamp()}.html`, title: cfg.title })
+          }
+          showExportPng={viewMode === "chart"}
+          onExportPng={() =>
+            void exportChartPng(chartRef.current, { filename: `tasks-${stamp()}.png` })
+          }
           onCopy={() => void pivotTableRef.current?.copySelection()}
+          onToggleHierarchy={() => {
+            if (hierarchyExpanded) collapseAll();
+            else if (expandableRowKeys.length <= 2_000) expandAll();
+          }}
           onOpenDateFormat={() => setDateFormatOpen(true)}
+          onOpenFormatMenu={() => setToolbarMenu(toolbarMenu === "format" ? null : "format")}
           onOpenCellFormat={() => setFormatCellsOpen(true)}
+          onOpenConditional={() => {
+            setDraftConditionalRules([...(config.options.conditionalFormats ?? [])]);
+            setConditionalOpen(true);
+          }}
+          onViewTable={() => setViewMode("table")}
+          onViewChart={() => setViewMode("chart")}
+          onToggleColumnTotals={toggleColumnTotals}
+          onOpenOptions={() => {
+            setLayoutInitial(selectionFromConfig(config));
+            setOptionsOpen(true);
+          }}
           onOpenFields={() => {
             setFieldsSnapshot(config);
             setFieldsOpen(true);
           }}
           onToggleFullscreen={() => setIsFullscreen((v) => !v)}
-          onSetLayoutFlat={() => updateConfig(buildTasksFlatPivotConfig(config))}
-          onSetLayoutClassic={() => updateConfig(buildTasksClassicPivotConfig(config))}
+          savedChrome={<TasksPivotSavedChrome config={config} onLoadConfig={updateConfig} />}
         />
 
         {(datasetQ.isFetching || isComputing) && (
@@ -292,7 +325,18 @@ export function TasksVirtualPivotWorkspace() {
         )}
 
         <div className="min-h-0 flex-1 overflow-hidden">
-          {pivotData && hasData ? (
+          {viewMode === "chart" && chartData && hasChartableData(chartData) ? (
+            <PivotChart
+              ref={chartRef}
+              data={chartData}
+              chartType="bar"
+              className="h-full min-h-[280px]"
+            />
+          ) : viewMode === "chart" ? (
+            <p className="p-6 text-sm text-muted-foreground">
+              Нет данных для диаграммы — Формат → Таблица.
+            </p>
+          ) : pivotData && hasData ? (
             <PivotTable
               ref={pivotTableRef}
               data={pivotData}
@@ -315,68 +359,38 @@ export function TasksVirtualPivotWorkspace() {
                   ? "Нет данных за выбранный период. Проверьте даты и нажмите «Применить»."
                   : isComputing
                     ? "Расчёт сводной…"
-                    : currentLayoutForm === "classic" && !config.values.length
-                      ? "Классическая форма: добавьте поле в «Значения» (Поля) или выберите «Табличная форма»."
-                      : "Нет строк для отображения — откройте «Поля» или переключите «Опции» → Табличная форма."}
+                    : "Нет строк — откройте «Поля» или «Опции» → Настройки разметки."}
             </p>
           )}
         </div>
       </div>
 
-      <VirtualPivotFieldsModal
-        open={fieldsOpen}
-        schema={currentLayoutForm}
-        fields={pivotFields}
+      <TasksPivotDialogs
+        fieldsOpen={fieldsOpen}
+        setFieldsOpen={setFieldsOpen}
+        currentLayoutForm={currentLayoutForm}
+        pivotFields={pivotFields}
         config={config}
-        onAddField={addField}
-        onRemoveField={removeField}
-        onUpdateAggregation={updateValueAggregation}
-        onAddCalculatedPreset={addCalculatedPreset}
-        onAddCalculatedMeasure={addCalculatedMeasure}
-        onUpdateCalculatedMeasure={updateCalculatedMeasure}
-        onRemoveCalculatedMeasure={removeCalculatedMeasure}
-        onReorderFields={reorderFields}
-        onValuesAxisLayoutChange={(layout) => {
-          updateConfig({
-            options: {
-              ...config.options,
-              valuesPosition: layout.position,
-              valuesAxisIndex: layout.valuesAxisIndex
-            }
-          });
-          if (layout.position === "rows") window.setTimeout(() => expandAll(), 0);
-        }}
-        onSetFlatColumnOrder={setFlatColumnOrder}
-        onConfigureFilter={() => undefined}
+        fieldsSnapshot={fieldsSnapshot}
         filterSummaries={filterSummaries}
-        onApply={() => setFieldsOpen(false)}
-        onCancel={() => {
-          updateConfig(fieldsSnapshot);
-          setFieldsOpen(false);
+        pivotHandlers={{
+          addField, removeField, updateValueAggregation, addCalculatedPreset,
+          addCalculatedMeasure, updateCalculatedMeasure, removeCalculatedMeasure,
+          reorderFields, setFlatColumnOrder, updateConfig
         }}
-      />
-
-      <VirtualPivotFormatCellsDialog
-        open={formatCellsOpen}
-        onOpenChange={setFormatCellsOpen}
-        initial={{ ...DEFAULT_CELL_FORMAT, ...cellFormatFromConfig(config) }}
-        valueFields={config.values.map((v) => ({
-          id: v.fieldId,
-          label: pivotFields.find((f) => f.id === v.fieldId)?.label ?? v.label ?? v.fieldId
-        }))}
-        onApply={(state) => {
-          updateConfig(applyCellFormatToConfig(config, state));
-          setFormatCellsOpen(false);
-        }}
-      />
-
-      <VirtualPivotDateFormatDialog
-        open={dateFormatOpen}
-        onOpenChange={setDateFormatOpen}
-        initial={dateFormatStateFromConfig(config) ?? DEFAULT_PIVOT_DATE_FORMAT}
-        onApply={(state) => {
-          updateConfig(applyDateFormatToConfig(config, pivotFields, state));
-        }}
+        expandAll={expandAll}
+        optionsOpen={optionsOpen}
+        setOptionsOpen={setOptionsOpen}
+        layoutInitial={layoutInitial}
+        onApplyLayout={onApplyLayout}
+        formatCellsOpen={formatCellsOpen}
+        setFormatCellsOpen={setFormatCellsOpen}
+        conditionalOpen={conditionalOpen}
+        setConditionalOpen={setConditionalOpen}
+        draftConditionalRules={draftConditionalRules}
+        setDraftConditionalRules={setDraftConditionalRules}
+        dateFormatOpen={dateFormatOpen}
+        setDateFormatOpen={setDateFormatOpen}
       />
     </div>
   );

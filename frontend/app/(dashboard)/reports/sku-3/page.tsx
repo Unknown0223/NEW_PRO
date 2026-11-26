@@ -58,6 +58,7 @@ const config: FlatReportConfig = {
   exportFilename: "po-sku-3.xlsx",
   exportLimit: 2000,
   tablePrefsId: "report.sku-3",
+  filterGridCols: 9,
   filterFields: [
     { kind: "dateRange" },
     {
@@ -103,7 +104,7 @@ const config: FlatReportConfig = {
       optionsFrom: "territory_3",
       placeholder: "Город"
     },
-    { kind: "search", placeholder: "Клиент" }
+
   ],
   columns: sku3Columns,
   totalsKeys: ["okb", "akb"],

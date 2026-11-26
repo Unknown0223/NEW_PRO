@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { DemoApplyCancelBar } from "@/components/reports/demo-dialog-actions";
+import { formatCellFormatSample } from "@/lib/cell-format-sample";
 import { withHeatmapPresets } from "@/lib/pivot-heatmap-presets";
 
 const selectClass =
@@ -224,6 +225,14 @@ export function VirtualPivotFormatCellsDialog({
             onChange={(e) => set("pattern", e.target.value)}
             placeholder="#,##0.00"
           />
+
+          <label className="self-center text-muted-foreground">Образец</label>
+          <div
+            className="flex h-8 items-center rounded-md border border-[#e2e2e2] bg-[#fafafa] px-2 text-xs tabular-nums"
+            style={{ textAlign: state.align }}
+          >
+            {formatCellFormatSample(state)}
+          </div>
         </div>
       </DialogContent>
     </Dialog>

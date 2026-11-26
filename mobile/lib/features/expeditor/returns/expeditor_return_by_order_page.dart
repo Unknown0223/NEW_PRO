@@ -13,8 +13,10 @@ import '../../../core/ui/agent_ui_extended.dart';
 import '../../agent/orders/order_create_models.dart' show formatMoneySpaced;
 import '../config/expeditor_config_enforcement.dart';
 import '../expeditor_providers.dart';
+import '../shared/tezyuk_expeditor_chrome.dart';
 import '../shell/expeditor_drawer.dart';
 import 'expeditor_bonus_calc_sheet.dart';
+import 'expeditor_return_by_order_l10n.dart';
 
 /// Qaytarish usuli:
 /// - [byProducts] — savdo va bonus dona alohida belgilanadi (qo'lda);
@@ -84,15 +86,17 @@ class _ExpeditorReturnByOrderPageState
     showAgentToast(context, msg, accentColor: color);
   }
 
+  Color get _accent => expeditorChromeAccent();
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: expeditorPageBackground(),
       drawer: const ExpeditorDrawer(),
       appBar: AppBar(
         title: Text(_orderId == null
-            ? 'Возврат с полки по заказу'
-            : 'Возврат · заказ',),
+            ? ExpeditorReturnByOrderL10n.pageTitlePickOrder()
+            : ExpeditorReturnByOrderL10n.pageTitleComposition()),
       ),
       body: _orderId == null ? _orderPicker() : _composition(_orderId!),
     );
@@ -102,8 +106,8 @@ class _ExpeditorReturnByOrderPageState
   Widget _orderPicker() {
     final async = ref.watch(expeditorReturnByOrderOrdersProvider);
     return async.when(
-      loading: () => const Center(
-          child: CircularProgressIndicator(color: AppColors.expeditorAccent),),
+      loading: () => Center(
+          child: CircularProgressIndicator(color: _accent),),
       error: (e, _) => _errorView(e),
       data: (data) {
         final orders = ((data['orders'] as List?) ?? const [])
@@ -120,8 +124,7 @@ class _ExpeditorReturnByOrderPageState
                 SizedBox(
                   height: MediaQuery.sizeOf(context).height * 0.6,
                   child: AgentEmptyState.fill(
-                      message:
-                          'Нет заказов, доступных для возврата по текущим настройкам',),
+                      message: ExpeditorReturnByOrderL10n.emptyOrders(),),
                 ),
               ],
             ),
@@ -143,7 +146,7 @@ class _ExpeditorReturnByOrderPageState
                             height: MediaQuery.sizeOf(context).height * 0.5,
                             child: AgentEmptyState.fill(
                                 message:
-                                    'По выбранным фильтрам заказов нет',),
+                                    ExpeditorReturnByOrderL10n.emptyFiltered(),),
                           ),
                         ],
                       )
@@ -152,14 +155,13 @@ class _ExpeditorReturnByOrderPageState
                         itemCount: shown.length,
                         itemBuilder: (_, i) {
                           final o = shown[i];
-                          return Card(
+                          return Container(
                             margin: const EdgeInsets.only(bottom: 8),
+                            decoration: expeditorListCardDecoration(),
                             child: ListTile(
                               leading: CircleAvatar(
-                                backgroundColor: AppColors.expeditorAccent
-                                    .withValues(alpha: 0.1),
-                                child: const Icon(Icons.receipt_long,
-                                    color: AppColors.expeditorAccent,),
+                                backgroundColor: _accent.withValues(alpha: 0.1),
+                                child: Icon(Icons.receipt_long, color: _accent),
                               ),
                               title: Text('№ ${o['number'] ?? o['id']}',
                                   style: const TextStyle(
@@ -241,20 +243,19 @@ class _ExpeditorReturnByOrderPageState
         children: [
           Row(
             children: [
-              const Icon(Icons.tune,
-                  size: 16, color: AppColors.expeditorAccent,),
+              Icon(Icons.tune, size: 16, color: _accent),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(_modeLabel(mode),
-                    style: AppTypography.caption
-                        .copyWith(color: AppColors.expeditorAccent),),
+                    style: AppTypography.caption.copyWith(color: _accent),),
               ),
               TextButton.icon(
                 onPressed: () => _openFilterSheet(orders),
                 icon: const Icon(Icons.filter_list, size: 18),
-                label: Text(_hasActiveFilter ? 'Фильтр •' : 'Фильтр'),
+                label: Text(
+                    ExpeditorReturnByOrderL10n.filterButton(_hasActiveFilter),),
                 style: TextButton.styleFrom(
-                  foregroundColor: AppColors.expeditorAccent,
+                  foregroundColor: _accent,
                   padding: const EdgeInsets.symmetric(horizontal: 8),
                   minimumSize: const Size(0, 32),
                 ),
@@ -292,9 +293,9 @@ class _ExpeditorReturnByOrderPageState
     return Chip(
       label: Text(label, style: const TextStyle(fontSize: 12)),
       backgroundColor: AppColors.surface,
-      side: const BorderSide(color: AppColors.expeditorAccent),
-      labelStyle: const TextStyle(color: AppColors.expeditorAccent),
-      deleteIconColor: AppColors.expeditorAccent,
+      side: BorderSide(color: _accent),
+      labelStyle: TextStyle(color: _accent),
+      deleteIconColor: _accent,
       onDeleted: onClear,
       materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
       visualDensity: VisualDensity.compact,
@@ -592,8 +593,8 @@ class _ExpeditorReturnByOrderPageState
   Widget _composition(int orderId) {
     final async = ref.watch(expeditorReturnCompositionProvider(orderId));
     return async.when(
-      loading: () => const Center(
-          child: CircularProgressIndicator(color: AppColors.expeditorAccent),),
+      loading: () => Center(
+          child: CircularProgressIndicator(color: _accent),),
       error: (e, _) => _errorView(e, allowBack: widget.initialOrderId == null),
       data: (data) {
         final items = ((data['items'] as List?) ?? const [])
@@ -601,7 +602,7 @@ class _ExpeditorReturnByOrderPageState
             .toList();
         if (items.isEmpty) {
           return AgentEmptyState.fill(
-              message: 'Нет товаров, доступных к возврату',);
+              message: ExpeditorReturnByOrderL10n.noItems(),);
         }
         return _form(orderId, data, items);
       },
@@ -708,7 +709,8 @@ class _ExpeditorReturnByOrderPageState
                         color: AppColors.expeditorAccent,),
                     const SizedBox(width: 10),
                     Expanded(
-                      child: Text('Заказ № $orderNo',
+                      child: Text(
+                          ExpeditorReturnByOrderL10n.orderChip(orderNo),
                           style: const TextStyle(
                               fontWeight: FontWeight.w800, fontSize: 15,),),
                     ),
@@ -722,13 +724,19 @@ class _ExpeditorReturnByOrderPageState
                 padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
                 child: Text(
                     fullOrder
-                        ? 'Полный возврат заказа — всё автоматически'
+                        ? ExpeditorReturnByOrderL10n.hintFullReturn()
                         : byOrder
-                            ? 'По категориям — количество к возврату'
-                            : 'Товары к возврату',
-                    style: const TextStyle(
-                        fontWeight: FontWeight.w800,
-                        color: AppColors.expeditorAccent,),),
+                            ? ExpeditorReturnByOrderL10n.hintByOrder()
+                            : ExpeditorReturnByOrderL10n.hintByProducts(),
+                    style: TextStyle(
+                        fontWeight: FontWeight.w800, color: _accent),),
+              ),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                child: Text(
+                  ExpeditorReturnByOrderL10n.photoNotRequiredNote(),
+                  style: TextStyle(fontSize: 11, color: Colors.black54),
+                ),
               ),
               if (!fullOrder && !byOrder && hasAnyBonus) ...[
                 _bonusCashToggle(),
@@ -794,7 +802,7 @@ class _ExpeditorReturnByOrderPageState
             duration: const Duration(milliseconds: 150),
             padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 2),
             decoration: BoxDecoration(
-              color: selected ? AppColors.expeditorAccent : Colors.transparent,
+              color: selected ? _accent : Colors.transparent,
               borderRadius: BorderRadius.circular(9),
             ),
             child: Column(
@@ -825,9 +833,11 @@ class _ExpeditorReturnByOrderPageState
       ),
       child: Row(
         children: [
-          seg('По\nпродуктам', Icons.checklist_rtl, _ReturnMethod.byProducts),
-          seg('По\nзаказу', Icons.category_outlined, _ReturnMethod.byOrder),
-          seg('Полный\nзаказ', Icons.all_inbox_outlined,
+          seg(ExpeditorReturnByOrderL10n.tabByProducts(), Icons.checklist_rtl,
+              _ReturnMethod.byProducts,),
+          seg(ExpeditorReturnByOrderL10n.tabByOrder(), Icons.category_outlined,
+              _ReturnMethod.byOrder,),
+          seg(ExpeditorReturnByOrderL10n.tabFullOrder(), Icons.all_inbox_outlined,
               _ReturnMethod.fullOrder,),
         ],
       ),
@@ -856,7 +866,9 @@ class _ExpeditorReturnByOrderPageState
     final groups = <String, List<Map<String, dynamic>>>{};
     for (final p in products) {
       final name = (p['category_name'] as String?)?.trim();
-      final key = (name == null || name.isEmpty) ? 'Без категории' : name;
+      final key = (name == null || name.isEmpty)
+          ? ExpeditorReturnByOrderL10n.uncategorized()
+          : name;
       if (!groups.containsKey(key)) {
         order.add(key);
         groups[key] = [];
@@ -905,11 +917,12 @@ class _ExpeditorReturnByOrderPageState
                       color: AppColors.expeditorAccent.withValues(alpha: 0.12),
                       borderRadius: BorderRadius.circular(20),
                     ),
-                    child: Text('${_fmtQty(catQty)} шт',
-                        style: const TextStyle(
+                    child: Text(
+                        ExpeditorReturnByOrderL10n.qtyPcs(_fmtQty(catQty)),
+                        style: TextStyle(
                             fontSize: 12,
                             fontWeight: FontWeight.w700,
-                            color: AppColors.expeditorAccent,),),
+                            color: _accent),),
                   ),
               ],
             ),
@@ -958,10 +971,10 @@ class _ExpeditorReturnByOrderPageState
                     color: AppColors.expeditorAccent.withValues(alpha: 0.12),
                     borderRadius: BorderRadius.circular(8),
                   ),
-                  child: Text('${_fmtQty(qty)} шт',
-                      style: const TextStyle(
-                          fontWeight: FontWeight.w800,
-                          color: AppColors.expeditorAccent,),),
+                  child: Text(
+                      ExpeditorReturnByOrderL10n.qtyPcs(_fmtQty(qty)),
+                      style: TextStyle(
+                          fontWeight: FontWeight.w800, color: _accent),),
                 )
               else
                 AgentEditableQuantityStepper(
@@ -1522,8 +1535,8 @@ class _ExpeditorReturnByOrderPageState
                         child: CircularProgressIndicator(
                             strokeWidth: 2, color: Colors.white,),
                       )
-                    : const Text('Оформить возврат',
-                        style: TextStyle(
+                    : Text(ExpeditorReturnByOrderL10n.submitReturn(),
+                        style: const TextStyle(
                             fontSize: 16, fontWeight: FontWeight.w700,),),
               ),
             ),
@@ -1946,7 +1959,7 @@ class _ExpeditorReturnByOrderPageState
       ref,
       context: context,
       required: policy.fingerprintRequired,
-      reason: 'Подтвердите возврат',
+      reason: ExpeditorReturnByOrderL10n.confirmReturn(),
     );
     if (!confirmed) return;
 
@@ -2019,7 +2032,7 @@ class _ExpeditorReturnByOrderPageState
                   _swap.clear();
                   _method = _ReturnMethod.byProducts;
                 }),
-                child: const Text('К списку заказов'),
+                child: Text(ExpeditorReturnByOrderL10n.backToOrders()),
               ),
             ],
           ],

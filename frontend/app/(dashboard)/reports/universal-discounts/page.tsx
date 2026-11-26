@@ -8,9 +8,11 @@ const config: FlatReportConfig = {
   apiPath: "universal-discounts",
   exportPermission: "reports.universalnyy_skidki.export",
   exportFilename: "universalnyy-skidki.xlsx",
+  tablePrefsId: "report.universal-discounts.v1",
+  filterGridCols: 9,
   filterFields: [
     { kind: "dateRange" },
-    { kind: "search", placeholder: "Заказ / клиент / агент" },
+
     { kind: "multiSelect", paramKey: "agent_ids", optionsFrom: "agents", placeholder: "Агент" }
   ],
   columns: [

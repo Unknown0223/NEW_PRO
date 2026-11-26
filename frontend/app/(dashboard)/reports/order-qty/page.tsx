@@ -14,6 +14,7 @@ const config: FlatReportConfig = {
   exportPermission: "reports.kolichestvo_zakazov.export",
   exportFilename: "kolichestvo-zakazov.xlsx",
   tablePrefsId: "report.order-qty",
+  filterGridCols: 9,
   filterFields: [
     { kind: "dateRange" },
     { kind: "multiSelect", paramKey: "statuses", optionsFrom: "statuses", placeholder: "Статус" },

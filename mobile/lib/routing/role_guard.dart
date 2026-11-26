@@ -24,6 +24,7 @@ class _RoleRoutes {
     '/notifications',
     '/tabel',
     '/attendance',
+    '/cover',
     '/kpi',
     '/kpi/calc',
     '/orders/create',
@@ -65,6 +66,7 @@ class _RoleRoutes {
     '/sv-clients',
     '/sv-notifications',
     '/agents',
+    '/cover',
   };
   static const cashier = {
     '/home',
@@ -91,6 +93,10 @@ class _RoleRoutes {
     final allowed = forRole(role);
     if (location == '/home' || location == '/profile') return null;
     if (location.startsWith('/attendance')) return null;
+    if ((role == 'agent' || role == 'supervisor') &&
+        location.startsWith('/cover')) {
+      return null;
+    }
     if (role == 'agent' && location.startsWith('/clients/')) return null;
     if (role == 'agent' && location.startsWith('/visits/')) return null;
     if (role == 'agent' && location.startsWith('/orders/')) return null;

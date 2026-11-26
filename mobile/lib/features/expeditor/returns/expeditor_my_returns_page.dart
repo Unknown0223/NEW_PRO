@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/config/app_product.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/tezyuk_colors.dart';
 import '../../agent/orders/order_create_models.dart' show formatMoneySpaced;
 import '../expeditor_providers.dart';
+import '../shared/tezyuk_expeditor_chrome.dart';
 import '../shell/expeditor_drawer.dart';
 
 /// «Mening qaytarishlarim» — ekspeditor omborga TOPSHIRADIGAN qaytarish
@@ -15,17 +18,19 @@ class ExpeditorMyReturnsPage extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final async = ref.watch(expeditorMyReturnsProvider);
+    final accent = expeditorChromeAccent();
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: expeditorPageBackground(),
       drawer: const ExpeditorDrawer(),
       appBar: AppBar(
-        title: const Text('Mening qaytarishlarim'),
-        backgroundColor: AppColors.surface,
-        foregroundColor: AppColors.textPrimary,
-        elevation: 0,
+        title: Text(
+          expeditorLabel('Мои возвраты', 'Mening qaytarishlarim'),
+        ),
       ),
       body: async.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
+        loading: () => Center(
+          child: CircularProgressIndicator(color: accent),
+        ),
         error: (e, _) => _ErrorView(
           message: e.toString(),
           onRetry: () => ref.invalidate(expeditorMyReturnsProvider),
@@ -35,6 +40,7 @@ class ExpeditorMyReturnsPage extends ConsumerWidget {
             return const _EmptyView();
           }
           return RefreshIndicator(
+            color: accent,
             onRefresh: () async => ref.invalidate(expeditorMyReturnsProvider),
             child: ListView.separated(
               padding: const EdgeInsets.all(12),
@@ -71,12 +77,10 @@ class _ReturnCard extends StatelessWidget {
         ? double.tryParse(row['refund_amount'].toString())
         : null;
 
+    final primaryColor =
+        isTezyukProduct ? TezyukColors.primary : AppColors.primary;
     return Container(
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppColors.border),
-      ),
+      decoration: expeditorListCardDecoration(),
       child: Theme(
         data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
         child: ExpansionTile(
@@ -162,10 +166,10 @@ class _ReturnCard extends StatelessWidget {
                     ),
                     Text(
                       _fmtQty(double.tryParse(it['qty']?.toString() ?? '0') ?? 0),
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.w700,
-                        color: AppColors.primary,
+                        color: primaryColor,
                       ),
                     ),
                   ],

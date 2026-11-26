@@ -16,6 +16,11 @@ import {
 } from "./mobile.service";
 import { mobileAgentConfigPreHandler } from "./mobile.route.shared";
 import { clientUniqueHttp } from "../clients/clients.write.uniques";
+import { CoverError } from "./cover/cover-codes";
+import {
+  assertAgentNotUnderActiveCover,
+  resolveCoverRouteScope
+} from "./cover/cover-guard";
 
 export async function registerMobileAgentClientRoutes(app: FastifyInstance) {
 
@@ -28,18 +33,27 @@ export async function registerMobileAgentClientRoutes(app: FastifyInstance) {
     async (request, reply) => {
       if (!ensureTenantContext(request, reply)) return;
       const viewer = getAccessUser(request);
-      if (viewer.role !== "agent") {
+      const scope = await resolveCoverRouteScope(request.tenant!.id, viewer);
+      const allowed =
+        viewer.role === "agent" || (viewer.role === "supervisor" && scope.viaCover);
+      if (!allowed || scope.agentUserId < 1) {
         return sendApiError(reply, request, 403, "ForbiddenRole");
       }
       const parsed = mobileCreateClientBodySchema.safeParse(request.body ?? {});
       if (!parsed.success) {
         return sendApiError(reply, request, 400, "ValidationError", undefined, zodValidationExtras(parsed.error));
       }
-      const userId = Number.parseInt(viewer.sub, 10);
+      const userId = scope.agentUserId;
       try {
+        if (viewer.role === "agent") {
+          await assertAgentNotUnderActiveCover(request.tenant!.id, userId);
+        }
         const row = await createMobileAgentClient(request.tenant!.id, userId, parsed.data);
         return reply.status(201).send(row);
       } catch (e) {
+        if (e instanceof CoverError && e.code === "COVER_AGENT_BLOCKED") {
+          return sendApiError(reply, request, 403, e.code, e.message);
+        }
         const msg = e instanceof Error ? e.message : "";
         const uniq = clientUniqueHttp(msg);
         if (uniq) return sendApiError(reply, request, 409, uniq.error, uniq.message);
@@ -121,11 +135,16 @@ export async function registerMobileAgentClientRoutes(app: FastifyInstance) {
     async (request, reply) => {
       if (!ensureTenantContext(request, reply)) return;
       const viewer = getAccessUser(request);
-      if (viewer.role !== "agent") {
+      const scope = await resolveCoverRouteScope(request.tenant!.id, viewer);
+      const allowed =
+        viewer.role === "agent" || (viewer.role === "supervisor" && scope.viaCover);
+      if (!allowed || scope.agentUserId < 1) {
         return sendApiError(reply, request, 403, "ForbiddenRole");
       }
-      const userId = Number.parseInt(viewer.sub, 10);
-      const data = await listMobileAgentClientLedgerBalances(request.tenant!.id, userId);
+      const data = await listMobileAgentClientLedgerBalances(
+        request.tenant!.id,
+        scope.agentUserId
+      );
       return reply.send({ data });
     }
   );
@@ -139,11 +158,13 @@ export async function registerMobileAgentClientRoutes(app: FastifyInstance) {
     async (request, reply) => {
       if (!ensureTenantContext(request, reply)) return;
       const viewer = getAccessUser(request);
-      if (viewer.role !== "agent") {
+      const scope = await resolveCoverRouteScope(request.tenant!.id, viewer);
+      const allowed =
+        viewer.role === "agent" || (viewer.role === "supervisor" && scope.viaCover);
+      if (!allowed || scope.agentUserId < 1) {
         return sendApiError(reply, request, 403, "ForbiddenRole");
       }
-      const userId = Number.parseInt(viewer.sub, 10);
-      const data = await listMobileAgentDebtors(request.tenant!.id, userId);
+      const data = await listMobileAgentDebtors(request.tenant!.id, scope.agentUserId);
       return reply.send({ data });
     }
   );
@@ -157,14 +178,16 @@ export async function registerMobileAgentClientRoutes(app: FastifyInstance) {
     async (request, reply) => {
       if (!ensureTenantContext(request, reply)) return;
       const viewer = getAccessUser(request);
-      if (viewer.role !== "agent") {
+      const scope = await resolveCoverRouteScope(request.tenant!.id, viewer);
+      const allowed =
+        viewer.role === "agent" || (viewer.role === "supervisor" && scope.viaCover);
+      if (!allowed || scope.agentUserId < 1) {
         return sendApiError(reply, request, 403, "ForbiddenRole");
       }
-      const userId = Number.parseInt(viewer.sub, 10);
       const raw = request.query as Record<string, string | undefined>;
       const data = await listOrderDebtsReport(request.tenant!.id, {
         ...raw,
-        agent_id: String(userId),
+        agent_id: String(scope.agentUserId),
         page: raw.page ?? "1",
         limit: raw.limit ?? "50"
       });

@@ -3,6 +3,7 @@
  */
 import { describe, expect, it } from "vitest";
 import {
+  appendParams,
   applyOptionsDefaults,
   buildEmptyDraft,
   mapMultiOptions,
@@ -124,6 +125,15 @@ describe("applyOptionsDefaults", () => {
   });
 });
 
+describe("appendParams multi filters", () => {
+  it("joins array filter values with commas (not repeated keys)", () => {
+    const p = new URLSearchParams();
+    appendParams(p, { statuses: ["new", "delivered"], from: "2026-11-01" });
+    expect(p.get("statuses")).toBe("new,delivered");
+    expect(p.toString()).not.toMatch(/statuses=.*&statuses=/);
+  });
+});
+
 describe("mapMultiOptions", () => {
   it("maps value/label pairs (balance_filters)", () => {
     const items = mapMultiOptions([
@@ -134,5 +144,15 @@ describe("mapMultiOptions", () => {
       { id: "debt", title: "Долг", searchText: "Долг" },
       { id: "all", title: "Все", searchText: "Все" }
     ]);
+  });
+
+  it("shows name only — code stays in searchText", () => {
+    const items = mapMultiOptions([{ id: 42, name: "Andijon", code: "AND-01" }]);
+    expect(items[0]).toEqual({
+      id: "42",
+      title: "Andijon",
+      searchText: "Andijon AND-01"
+    });
+    expect(items[0].title).not.toContain("AND-01");
   });
 });

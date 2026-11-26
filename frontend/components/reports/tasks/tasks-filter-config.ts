@@ -36,7 +36,8 @@ export const TASKS_FILTER_CONFIG = {
   apiPath: "tasks",
   exportPermission: "reports.otchet_po_zadacham.export",
   exportFilename: "otchet-po-zadacham.xlsx",
-  filterGridCols: 6,
+  /** 6 multi-select → xl 9 ≈ 1 qator. */
+  filterGridCols: 9,
   filterFields: TASKS_FILTER_FIELDS,
   columns: [],
   totalsKeys: [],

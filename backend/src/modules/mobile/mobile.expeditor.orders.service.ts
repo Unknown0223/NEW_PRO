@@ -326,7 +326,13 @@ export async function createMobileExpeditorReloadFromVehicle(
   const cfg = await loadExpeditorMobileConfig(tenantId, expeditorUserId);
   if (cfg.orders?.allow_reload_from_vehicle === false) throw new Error("RELOAD_DISABLED");
 
-  const order = await assertExpeditorOwnsOrder(tenantId, expeditorUserId, orderId);
+  const { loadOrderAfterShareGuard } = await import("./share/share-guard");
+  const order = await loadOrderAfterShareGuard(
+    tenantId,
+    expeditorUserId,
+    orderId,
+    assertExpeditorOwnsOrder
+  );
   if (order.status !== "delivered") throw new Error("BAD_STATUS");
 
   if (input.note?.trim()) {

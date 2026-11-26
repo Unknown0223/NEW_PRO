@@ -10,6 +10,7 @@ import { loadExpeditorMobileConfig } from "./mobile.expeditor.service";
 import { parseExpeditorAssignmentRules } from "../staff/staff.shared.helpers";
 import { collectWarehouseIdsForUsers } from "../linkage/linkage.warehouse-ids";
 import { resolveIdsPreferBindings } from "../linkage/workplace-bindings";
+import { aggregateExchangeShipmentSides } from "./mobile.expeditor.exchange-shipment.pure";
 
 const COMPLETED_STATUSES = ["delivered", "returned"] as const;
 const RETURN_TYPES = ["return", "partial_return", "return_by_order"] as const;
@@ -53,6 +54,20 @@ export async function getMobileExpeditorDashboard(tenantId: number, expeditorUse
     },
     select: { id: true, status: true, total_sum: true, order_type: true }
   });
+
+  const exchangeOrders = await prisma.order.findMany({
+    where: {
+      tenant_id: tenantId,
+      expeditor_user_id: expeditorUserId,
+      order_type: "exchange",
+      status: { not: "cancelled" }
+    },
+    select: {
+      id: true,
+      items: { select: { exchange_line_kind: true, total: true, is_bonus: true } }
+    }
+  });
+  const exchangeSides = aggregateExchangeShipmentSides(exchangeOrders);
 
   const countBy = (statuses: string[]) =>
     orders.filter((o) => statuses.includes(o.status)).length;
@@ -148,10 +163,36 @@ export async function getMobileExpeditorDashboard(tenantId: number, expeditorUse
     shipment_report: [
       { type: "shipped", label: "Отгружено", qty: countBy(["picking"]), sum: sumBy(["picking"]) },
       { type: "delivered", label: "Доставлено", qty: countBy(["delivered"]), sum: sumBy(["delivered"]) },
-      { type: "return", label: "Возврат", qty: returnOrders.filter((o) => o.order_type === "return").length, sum: returnOrders.filter((o) => o.order_type === "return").reduce((s, o) => s + Number(o.total_sum), 0) },
-      { type: "shelf_return", label: "Возврат с полки", qty: returnOrders.filter((o) => o.order_type === "return_by_order").length, sum: returnOrders.filter((o) => o.order_type === "return_by_order").reduce((s, o) => s + Number(o.total_sum), 0) },
-      { type: "exchange_ship", label: "Обмен отгруз", qty: 0, sum: 0 },
-      { type: "exchange_return", label: "Обмен возврат", qty: 0, sum: 0 },
+      // partial_return ham «Возврат» qatoriga (RETURN_TYPES ichida, lekin avval filterda tushib qolardi).
+      {
+        type: "return",
+        label: "Возврат",
+        qty: returnOrders.filter((o) => o.order_type === "return" || o.order_type === "partial_return")
+          .length,
+        sum: returnOrders
+          .filter((o) => o.order_type === "return" || o.order_type === "partial_return")
+          .reduce((s, o) => s + Number(o.total_sum), 0)
+      },
+      {
+        type: "shelf_return",
+        label: "Возврат с полки",
+        qty: returnOrders.filter((o) => o.order_type === "return_by_order").length,
+        sum: returnOrders
+          .filter((o) => o.order_type === "return_by_order")
+          .reduce((s, o) => s + Number(o.total_sum), 0)
+      },
+      {
+        type: "exchange_ship",
+        label: "Обмен отгруз",
+        qty: exchangeSides.exchange_ship.qty,
+        sum: exchangeSides.exchange_ship.sum
+      },
+      {
+        type: "exchange_return",
+        label: "Обмен возврат",
+        qty: exchangeSides.exchange_return.qty,
+        sum: exchangeSides.exchange_return.sum
+      },
       { type: "on_board", label: "На борту", qty: countBy(["delivering"]), sum: sumBy(["delivering"]) },
       { type: "remaining", label: "Осталось доставить", qty: countBy(["picking", "delivering"]), sum: sumBy(["picking", "delivering"]) }
     ],

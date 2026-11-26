@@ -15,7 +15,7 @@ const config: FlatReportConfig = {
   tablePrefsId: "report.inventory.v2",
   dateTypeAsRadio: true,
   /** 11 filtr → xl 6 ustun = 2 to‘liq qator (qidiruv jadvalda). */
-  filterGridCols: 6,
+  filterGridCols: 9,
   filterFields: [
     { kind: "dateRange" },
     { kind: "select", paramKey: "date_type", optionsFrom: "date_types", defaultValue: "order_date" },

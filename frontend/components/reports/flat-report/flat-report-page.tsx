@@ -301,7 +301,13 @@ export function FlatReportPage(config: FlatReportConfig) {
         ) : null}
 
         <FlatReportTable
-          config={config}
+          config={{
+            ...config,
+            formatters:
+              typeof config.formatters === "function"
+                ? config.formatters(applied)
+                : config.formatters
+          }}
           columns={visibleColumns}
           rows={rows}
           applied={applied}

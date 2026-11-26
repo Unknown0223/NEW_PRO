@@ -19,6 +19,8 @@ const config: FlatReportConfig = {
   apiPath: "universal-returns",
   exportPermission: "reports.universalnyy_vozvrat.export",
   exportFilename: "universalnyy-vozvrat.xlsx",
+  tablePrefsId: "report.universal-returns.v1",
+  filterGridCols: 9,
   filterFields: [
     { kind: "dateRange" },
     {
@@ -27,7 +29,7 @@ const config: FlatReportConfig = {
       optionsFrom: "date_types",
       defaultValue: "shipped_date"
     },
-    { kind: "search", placeholder: "Клиент / товар / № заказа" },
+
     { kind: "multiSelect", paramKey: "statuses", optionsFrom: "statuses", placeholder: "Статус" },
     { kind: "multiSelect", paramKey: "agent_ids", optionsFrom: "agents", placeholder: "Агент" },
     {

@@ -49,6 +49,7 @@ List<AgentMenuItem> agentMenuItems(MobileConfig? config) {
       label: 'Отметка посещаемости (Приход / Уход)',
       route: '/attendance',
     ),
+    const AgentMenuItem(label: 'Замещение (cover)', route: '/cover'),
     const AgentMenuItem(label: 'Настройки', route: '/settings'),
   ];
   return items.where((it) => it.visible?.call(config) ?? true).toList();

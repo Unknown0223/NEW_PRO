@@ -36,6 +36,8 @@ import '../features/agent/warehouse/agent_warehouse_stock_page.dart';
 import '../features/agent/report/agent_report_page.dart';
 import '../features/agent/tabel/agent_tabel_page.dart';
 import '../features/attendance/attendance_hub_screen.dart';
+import '../features/cover/cover_home_page.dart';
+import '../features/cover/cover_detail_page.dart';
 import '../features/agent/kpi/agent_kpi_page.dart';
 import '../features/agent/kpi/agent_kpi_calc_page.dart';
 import '../features/agent/kpi/agent_kpi_route_page.dart';
@@ -414,6 +416,19 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         builder: (_, state) => AttendanceHubScreen(
           gateMode: state.uri.queryParameters['gate'] == '1',
         ),
+      ),
+      GoRoute(
+        path: '/cover',
+        parentNavigatorKey: rootNavigatorKey,
+        builder: (_, __) => const CoverHomePage(),
+      ),
+      GoRoute(
+        path: '/cover/:id',
+        parentNavigatorKey: rootNavigatorKey,
+        builder: (ctx, state) {
+          final id = int.tryParse(state.pathParameters['id'] ?? '') ?? 0;
+          return CoverDetailPage(coverId: id);
+        },
       ),
       GoRoute(
         path: '/deliveries/:id',

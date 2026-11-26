@@ -4,6 +4,9 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/api/expeditor_share_api.dart';
 import '../../../core/auth/session.dart';
+import '../../../core/config/app_product.dart';
+import '../../../core/theme/tezyuk_colors.dart';
+import '../shared/tezyuk_expeditor_chrome.dart';
 import 'share_models.dart';
 
 class ExpeditorShareDetailPage extends ConsumerStatefulWidget {
@@ -60,39 +63,141 @@ class _ExpeditorShareDetailPageState
     }
   }
 
+  Future<void> _requestReturn() async {
+    final slug = ref.read(sessionProvider).tenantSlug ?? '';
+    setState(() => _busy = true);
+    try {
+      await ref
+          .read(expeditorShareApiProvider)
+          .requestReturn(slug, widget.requestId);
+      await _load();
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _error = '$e');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _acceptReturn() async {
+    final slug = ref.read(sessionProvider).tenantSlug ?? '';
+    setState(() => _busy = true);
+    try {
+      await ref
+          .read(expeditorShareApiProvider)
+          .acceptReturn(slug, widget.requestId);
+      await _load();
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _error = '$e');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final status = (_data?['status'] ?? '').toString();
+    final accent = expeditorChromeAccent();
     return Scaffold(
-      appBar: AppBar(title: Text('Ulashish #${widget.requestId}')),
+      backgroundColor: expeditorPageBackground(),
+      appBar: AppBar(
+        title: Text(
+          expeditorLabel(
+            'Передача #${widget.requestId}',
+            'Ulashish #${widget.requestId}',
+          ),
+        ),
+      ),
       body: _error != null
           ? Center(child: Text(_error!))
           : _data == null
-              ? const Center(child: CircularProgressIndicator())
+              ? Center(child: CircularProgressIndicator(color: accent))
               : ListView(
                   padding: const EdgeInsets.all(16),
                   children: [
-                    Text(
-                      shareStatusLabel(status),
-                      style: const TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w700,
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: expeditorListCardDecoration(),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Text(
+                            shareStatusLabel(status),
+                            style: const TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            expeditorLabel(
+                              'Заказов: ${(_data!['orders'] as List?)?.length ?? 0}',
+                              'Buyurtmalar: ${(_data!['orders'] as List?)?.length ?? 0}',
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-                    const SizedBox(height: 12),
-                    Text('Zakazlar: ${(_data!['orders'] as List?)?.length ?? 0}'),
-                    const SizedBox(height: 24),
+                    const SizedBox(height: 16),
                     if (status == 'korildi' || status == 'kutilmoqda')
                       FilledButton(
                         onPressed: _busy ? null : _acceptAll,
-                        child: const Text('Hammasini qabul qilish'),
+                        style: isTezyukProduct
+                            ? FilledButton.styleFrom(
+                                backgroundColor: TezyukColors.primary,
+                                foregroundColor: TezyukColors.onPrimary,
+                              )
+                            : null,
+                        child: Text(
+                          expeditorLabel(
+                            'Принять все',
+                            'Hammasini qabul qilish',
+                          ),
+                        ),
                       ),
                     if (status == 'yuk_kutilmoqda') ...[
                       const SizedBox(height: 8),
                       OutlinedButton(
-                        onPressed: () =>
-                            context.push('/exp-share/${widget.requestId}/handoff'),
-                        child: const Text('Yuk / foto topshirish'),
+                        onPressed: () => context.push(
+                          '/exp-share/${widget.requestId}/handoff',
+                        ),
+                        child: Text(
+                          expeditorLabel(
+                            'Передача груза / фото',
+                            'Yuk / foto topshirish',
+                          ),
+                        ),
+                      ),
+                    ],
+                    if (status == 'faol') ...[
+                      const SizedBox(height: 8),
+                      OutlinedButton(
+                        onPressed: _busy ? null : _requestReturn,
+                        child: Text(
+                          expeditorLabel(
+                            'Запросить возврат заказов',
+                            'Buyurtmalarni qaytarishni so‘rash',
+                          ),
+                        ),
+                      ),
+                    ],
+                    if (status == 'qaytarish_kutilmoqda') ...[
+                      const SizedBox(height: 8),
+                      FilledButton(
+                        onPressed: _busy ? null : _acceptReturn,
+                        style: isTezyukProduct
+                            ? FilledButton.styleFrom(
+                                backgroundColor: TezyukColors.primary,
+                                foregroundColor: TezyukColors.onPrimary,
+                              )
+                            : null,
+                        child: Text(
+                          expeditorLabel(
+                            'Принять возврат',
+                            'Qaytarishni qabul qilish',
+                          ),
+                        ),
                       ),
                     ],
                   ],

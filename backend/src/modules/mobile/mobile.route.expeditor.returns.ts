@@ -19,6 +19,7 @@ import {
   listMobileExpeditorReturns,
   previewMobileExpeditorReturnByOrder
 } from "./mobile.expeditor.service";
+import { ShareError } from "./share/share-codes";
 import { mobileSyncPreHandler } from "./mobile.route.shared";
 
 export async function registerMobileExpeditorReturnRoutes(app: FastifyInstance) {
@@ -99,6 +100,9 @@ export async function registerMobileExpeditorReturnRoutes(app: FastifyInstance) 
         );
         return reply.send(row);
       } catch (e) {
+        if (e instanceof ShareError) {
+          return sendApiError(reply, request, 403, e.code);
+        }
         if (e instanceof Error && e.message === "NOT_FOUND") {
           return sendApiError(reply, request, 404, "NotFound");
         }
@@ -161,6 +165,9 @@ export async function registerMobileExpeditorReturnRoutes(app: FastifyInstance) 
         return reply.send(row);
       } catch (e) {
         if (isDocumentEditPeriodLockedError(e)) return sendDocumentEditPeriodLocked(reply, request, e);
+        if (e instanceof ShareError) {
+          return sendApiError(reply, request, 403, e.code);
+        }
         if (e instanceof Error && e.message === "NOT_FOUND") {
           return sendApiError(reply, request, 404, "NotFound");
         }
@@ -233,6 +240,9 @@ export async function registerMobileExpeditorReturnRoutes(app: FastifyInstance) 
         );
         return reply.send(row);
       } catch (e) {
+        if (e instanceof ShareError) {
+          return sendApiError(reply, request, 403, e.code);
+        }
         if (e instanceof Error && e.message === "NOT_FOUND") {
           return sendApiError(reply, request, 404, "NotFound");
         }

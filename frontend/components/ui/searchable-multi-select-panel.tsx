@@ -14,6 +14,7 @@ import { createPortal } from "react-dom";
 import { ChevronDown, Search } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { matchesSearchTokens } from "@/lib/search-text";
+import { computeMultiSelectPopoverWidth } from "@/lib/multi-select-popover-width";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -204,7 +205,7 @@ export function SearchableMultiSelectPanel<T extends string | number = number>({
     const r = t.getBoundingClientRect();
     const vw = typeof window !== "undefined" ? window.innerWidth : 1200;
     const vh = typeof window !== "undefined" ? window.innerHeight : 800;
-    const w = Math.min(Math.max(r.width, minPopoverWidth, 380), Math.min(560, vw - 16));
+    const w = computeMultiSelectPopoverWidth(r.width, minPopoverWidth, vw);
     let left = r.left;
     if (left + w > vw - 8) left = Math.max(8, vw - w - 8);
 
@@ -216,17 +217,19 @@ export function SearchableMultiSelectPanel<T extends string | number = number>({
       top = above >= 8 ? above : Math.max(8, vh - popHeight - 8);
     }
 
-    setCoords({ top, left, width: w });
+    setCoords((prev) =>
+      prev.top === top && prev.left === left && prev.width === w ? prev : { top, left, width: w }
+    );
   }, [minPopoverWidth]);
 
   useLayoutEffect(() => {
     if (!open) return;
     updatePosition();
     const raf = requestAnimationFrame(() => updatePosition());
+    // Faqat trigger — popRef RO + setCoords loop «kengayib-torayib» beradi.
     const ro =
       typeof ResizeObserver !== "undefined" ? new ResizeObserver(() => updatePosition()) : null;
     if (ro && triggerRef.current) ro.observe(triggerRef.current);
-    if (ro && popRef.current) ro.observe(popRef.current);
     window.addEventListener("scroll", updatePosition, true);
     window.addEventListener("resize", updatePosition);
     return () => {
@@ -461,12 +464,18 @@ export function SearchableMultiSelectPanel<T extends string | number = number>({
             if (!disabled) setOpenTracked((v) => !v);
           }}
         >
-          {hideOuterLabel && selected.size > 0 && label ? (
+          {hideOuterLabel && label ? (
             <span className="pointer-events-none absolute left-2 top-0 -translate-y-1/2 bg-inherit px-1 text-[11px] font-medium leading-none text-muted-foreground">
               {label}
             </span>
           ) : null}
-          <span className={cn("min-w-0 flex-1 truncate", selected.size === 0 ? "text-muted-foreground" : hideOuterLabel && "pt-1")}>
+          <span
+            className={cn(
+              "min-w-0 flex-1 truncate",
+              selected.size === 0 ? "text-muted-foreground" : null,
+              hideOuterLabel && label ? "pt-1" : null
+            )}
+          >
             {selected.size === 0 ? triggerPlaceholder || label : triggerSummary}
           </span>
           <ChevronDown
@@ -533,12 +542,18 @@ export function SearchableMultiSelectPanel<T extends string | number = number>({
           if (!disabled) setOpenTracked((v) => !v);
         }}
       >
-        {hideOuterLabel && selected.size > 0 && label ? (
+        {hideOuterLabel && label ? (
           <span className="pointer-events-none absolute left-2 top-0 z-[1] -translate-y-1/2 bg-inherit px-1 text-[11px] font-medium leading-none text-muted-foreground">
             {label}
           </span>
         ) : null}
-        <span className={cn("min-w-0 flex-1 truncate", selected.size === 0 ? "text-muted-foreground" : hideOuterLabel && "pt-1")}>
+        <span
+          className={cn(
+            "min-w-0 flex-1 truncate",
+            selected.size === 0 ? "text-muted-foreground" : null,
+            hideOuterLabel && label ? "pt-1" : null
+          )}
+        >
           {selected.size === 0 ? triggerPlaceholder || label : triggerSummary}
         </span>
         <ChevronDown

@@ -1,21 +1,19 @@
 import { prisma } from "../../../config/database";
 import {
-  SHARE_HANDOFF_INCOMPLETE,
   SHARE_INVALID_TRANSITION,
   SHARE_NOT_SAME_WAREHOUSE,
   SHARE_ORDER_ALREADY_LOCKED,
   SHARE_ORDER_NOT_ELIGIBLE,
   SHARE_REQUEST_EXPIRED,
-  SHARE_SENDER_CANNOT_ACT,
   ShareError
 } from "./share-codes";
-import { applyPartialAccept } from "./share-accept.pure";
-import { validateHandoffPair } from "./share-handoff.pure";
 import {
   assertOrderShareActionAllowed,
   type ShareLockRow
 } from "./share-lock.pure";
+import { sharePersonDisplayName } from "./share-display.pure";
 import { eligibleRecipients } from "./share-partner-eligibility.pure";
+import { emitShareNotification } from "./share-notify";
 import { transitionShare, type ShareStatus } from "./share-state.pure";
 
 export async function locksForOrders(
@@ -160,6 +158,13 @@ export async function createShareRequest(input: {
         locked: true
       }))
     });
+    void emitShareNotification({
+      tenantId,
+      userId: receiverUserId,
+      code: "SHARE_REQUEST_NEW",
+      requestId: req.id,
+      body: `${orderIds.length} buyurtma`
+    });
     return req;
   });
 }
@@ -173,12 +178,85 @@ export async function listShareRequests(input: {
     input.box === "inbox"
       ? { tenant_id: input.tenantId, receiver_user_id: input.userId }
       : { tenant_id: input.tenantId, sender_user_id: input.userId };
-  return prisma.expeditorShareRequest.findMany({
+  const rows = await prisma.expeditorShareRequest.findMany({
     where,
     include: { orders: true },
     orderBy: { created_at: "desc" },
     take: 100
   });
+  if (rows.length === 0) return [];
+  const ids = Array.from(
+    new Set(rows.flatMap((r) => [r.sender_user_id, r.receiver_user_id]))
+  );
+  const users = await prisma.user.findMany({
+    where: { tenant_id: input.tenantId, id: { in: ids } },
+    select: { id: true, name: true, first_name: true, last_name: true }
+  });
+  const byId = new Map(users.map((u) => [u.id, u]));
+  return rows.map((r) => ({
+    ...r,
+    sender_name: sharePersonDisplayName(byId.get(r.sender_user_id)),
+    receiver_name: sharePersonDisplayName(byId.get(r.receiver_user_id))
+  }));
+}
+
+/** Ulashish qabulchilari — faqat nom (picker-labels). */
+export async function listEligibleShareRecipients(input: {
+  tenantId: number;
+  senderUserId: number;
+}): Promise<Array<{ user_id: number; name: string }>> {
+  const sender = await prisma.user.findFirst({
+    where: {
+      tenant_id: input.tenantId,
+      id: input.senderUserId,
+      role: "expeditor"
+    },
+    select: { warehouse_id: true }
+  });
+  if (!sender) return [];
+
+  const partners = await prisma.expeditorSharePartner.findMany({
+    where: {
+      tenant_id: input.tenantId,
+      owner_expeditor_user_id: input.senderUserId
+    },
+    select: { partner_expeditor_user_id: true }
+  });
+
+  const candidates = await prisma.user.findMany({
+    where: {
+      tenant_id: input.tenantId,
+      role: "expeditor",
+      is_active: true,
+      NOT: { id: input.senderUserId }
+    },
+    select: {
+      id: true,
+      warehouse_id: true,
+      name: true,
+      first_name: true,
+      last_name: true
+    }
+  });
+
+  const ownWh = sender.warehouse_id != null ? [sender.warehouse_id] : [];
+  const eligible = eligibleRecipients(
+    ownWh,
+    partners.map((p) => ({ userId: p.partner_expeditor_user_id })),
+    candidates.map((c) => ({
+      userId: c.id,
+      warehouseIds: c.warehouse_id != null ? [c.warehouse_id] : []
+    }))
+  );
+  const allowed = new Set(eligible.map((e) => e.userId));
+  return candidates
+    .filter((c) => allowed.has(c.id))
+    .map((c) => ({
+      user_id: c.id,
+      name: sharePersonDisplayName(c)
+    }))
+    .filter((r) => r.name.length > 0)
+    .sort((a, b) => a.name.localeCompare(b.name, "uz"));
 }
 
 export async function getShareRequest(input: {
@@ -231,8 +309,8 @@ export async function cancelShareRequest(input: {
     "CANCEL",
     "sender"
   );
-  return prisma.$transaction(async (tx) => {
-    const updated = await tx.expeditorShareRequest.update({
+  const updated = await prisma.$transaction(async (tx) => {
+    const row = await tx.expeditorShareRequest.update({
       where: { id: req.id },
       data: { status: next }
     });
@@ -240,152 +318,20 @@ export async function cancelShareRequest(input: {
       where: { request_id: req.id },
       data: { locked: false }
     });
-    return updated;
+    return row;
   });
-}
-
-export async function acceptShareRequest(input: {
-  tenantId: number;
-  userId: number;
-  requestId: number;
-  acceptedOrderIds: number[];
-}) {
-  const req = await prisma.expeditorShareRequest.findFirst({
-    where: { tenant_id: input.tenantId, id: input.requestId },
-    include: { orders: true }
+  void emitShareNotification({
+    tenantId: input.tenantId,
+    userId: req.receiver_user_id,
+    code: "SHARE_CANCELLED",
+    requestId: req.id
   });
-  if (!req) throw new ShareError("NOT_FOUND");
-  if (req.receiver_user_id !== input.userId) {
-    throw new ShareError(SHARE_SENDER_CANNOT_ACT);
-  }
-  const orderIds = req.orders.map((o) => o.order_id);
-  const plan = applyPartialAccept({
-    orderIds,
-    acceptedIds: input.acceptedOrderIds
-  });
-
-  let next: ShareStatus;
-  if (plan.kind === "reject") {
-    next = transitionShare(req.status as ShareStatus, "REJECT", "receiver");
-  } else if (plan.kind === "partial") {
-    next = transitionShare(req.status as ShareStatus, "ACCEPT_PARTIAL", "receiver");
-    next = transitionShare(next, "START_HANDOFF", "receiver");
-  } else {
-    next = transitionShare(req.status as ShareStatus, "ACCEPT_FULL", "receiver");
-    next = transitionShare(next, "START_HANDOFF", "receiver");
-  }
-
-  return prisma.$transaction(async (tx) => {
-    for (const oid of plan.accepted) {
-      await tx.expeditorShareOrder.updateMany({
-        where: { request_id: req.id, order_id: oid },
-        data: { accepted: true, locked: true }
-      });
-    }
-    for (const oid of plan.rejectedUnlock) {
-      await tx.expeditorShareOrder.updateMany({
-        where: { request_id: req.id, order_id: oid },
-        data: { accepted: false, locked: false }
-      });
-    }
-    if (plan.kind === "reject") {
-      await tx.expeditorShareOrder.updateMany({
-        where: { request_id: req.id },
-        data: { locked: false }
-      });
-    }
-    return tx.expeditorShareRequest.update({
-      where: { id: req.id },
-      data: { status: next },
-      include: { orders: true }
-    });
-  });
-}
-
-export async function rejectShareRequest(input: {
-  tenantId: number;
-  userId: number;
-  requestId: number;
-}) {
-  return acceptShareRequest({
-    ...input,
-    acceptedOrderIds: []
-  });
-}
-
-export async function upsertShareHandoff(input: {
-  tenantId: number;
-  userId: number;
-  requestId: number;
-  lat: number;
-  lng: number;
-  photoKey: string;
-}) {
-  const req = await prisma.expeditorShareRequest.findFirst({
-    where: { tenant_id: input.tenantId, id: input.requestId },
-    include: { handoffs: true }
-  });
-  if (!req) throw new ShareError("NOT_FOUND");
-  const party =
-    req.sender_user_id === input.userId
-      ? "sender"
-      : req.receiver_user_id === input.userId
-        ? "receiver"
-        : null;
-  if (!party) throw new ShareError("NOT_FOUND");
-  if (req.status !== "yuk_kutilmoqda") {
-    throw new ShareError(SHARE_HANDOFF_INCOMPLETE);
-  }
-
-  await prisma.expeditorShareHandoff.upsert({
-    where: {
-      tenant_id_request_id_party: {
-        tenant_id: input.tenantId,
-        request_id: req.id,
-        party
-      }
-    },
-    create: {
-      tenant_id: input.tenantId,
-      request_id: req.id,
-      party,
-      lat: input.lat,
-      lng: input.lng,
-      photo_key: input.photoKey
-    },
-    update: {
-      lat: input.lat,
-      lng: input.lng,
-      photo_key: input.photoKey
-    }
-  });
-
-  const refreshed = await prisma.expeditorShareRequest.findFirstOrThrow({
-    where: { id: req.id },
-    include: { handoffs: true }
-  });
-  const sender = refreshed.handoffs.find((h) => h.party === "sender");
-  const receiver = refreshed.handoffs.find((h) => h.party === "receiver");
-  if (
-    sender?.lat != null &&
-    sender.lng != null &&
-    sender.photo_key &&
-    receiver?.lat != null &&
-    receiver.lng != null &&
-    receiver.photo_key
-  ) {
-    validateHandoffPair(
-      { lat: sender.lat, lng: sender.lng, photo_key: sender.photo_key },
-      { lat: receiver.lat, lng: receiver.lng, photo_key: receiver.photo_key }
-    );
-    const next = transitionShare("yuk_kutilmoqda", "HANDOFF_OK", party);
-    return prisma.expeditorShareRequest.update({
-      where: { id: req.id },
-      data: { status: next },
-      include: { orders: true, handoffs: true }
-    });
-  }
-  return refreshed;
+  return updated;
 }
 
 export { assertOrderShareActionAllowed, SHARE_ORDER_ALREADY_LOCKED };
+export {
+  acceptShareRequest,
+  rejectShareRequest,
+  upsertShareHandoff
+} from "./share-accept-handoff.service";

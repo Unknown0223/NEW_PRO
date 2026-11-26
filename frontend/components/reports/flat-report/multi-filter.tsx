@@ -11,13 +11,16 @@ export function MultiFilter(props: {
   onChange: (v: string[]) => void;
   /** Ixcham grid ichida (h-8). */
   compact?: boolean;
+  /** Controlled ochilish (accordion — bitta ochiq). */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }) {
   return (
     <SearchableMultiSelectPanel
       label={props.placeholder}
       hideOuterLabel
       hidePopoverHeader
-      triggerPlaceholder={props.placeholder}
+      triggerPlaceholder="Все"
       items={props.items}
       selected={new Set(props.selectedValues)}
       onSelectedChange={(next) => {
@@ -25,11 +28,17 @@ export function MultiFilter(props: {
         props.onChange(Array.from(resolved));
       }}
       searchable
-      searchPlaceholder={props.placeholder}
-      minPopoverWidth={260}
+      searchPlaceholder="Поиск"
+      filterItemsBySearch
+      resetAllLabel="Сбросить"
+      minPopoverWidth={0}
       maxListHeightClass="max-h-44"
+      open={props.open}
+      onOpenChange={props.onOpenChange}
       className={cn(props.compact && "min-w-0")}
-      triggerClassName={cn(props.compact && "h-8 min-h-8 px-2 text-xs")}
+      triggerClassName={cn(
+        props.compact && "h-8 min-h-8 px-2 text-xs ring-offset-0 focus-visible:ring-offset-0"
+      )}
     />
   );
 }

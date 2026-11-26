@@ -12,9 +12,11 @@ const config: FlatReportConfig = {
   apiPath: "expeditor-share",
   exportPermission: "reports.doli_ekspedirov.export",
   exportFilename: "doli-ekspedirov.xlsx",
+  tablePrefsId: "report.expeditor-share.v1",
+  filterGridCols: 9,
   filterFields: [
     { kind: "dateRange" },
-    { kind: "search", placeholder: "Доставщик" },
+
     {
       kind: "multiSelect",
       paramKey: "expeditor_ids",

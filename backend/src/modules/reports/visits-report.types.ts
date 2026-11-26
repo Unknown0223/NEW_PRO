@@ -45,3 +45,29 @@ export type VisitsReportTotals = {
   not_visited: number;
   planned: number;
 };
+
+/** SalesDoc ajaxPlannedNewVisits `type` (empty → okb). */
+export type VisitsDetailType =
+  | "okb"
+  | "only_order"
+  | "rejected"
+  | "only_photo"
+  | "not_visited"
+  | "visited";
+
+export type VisitsDetailFilters = VisitsReportFilters & {
+  agent_id: number;
+  type: VisitsDetailType;
+};
+
+export type VisitsDetailRow = {
+  client_id: number;
+  client_name: string;
+  visited_at: string | null;
+  order_sum: string;
+  refusal_label: string;
+  photo_count: number;
+  inventory_label: string;
+  last_purchase_sum: string;
+  last_purchase_at: string | null;
+};

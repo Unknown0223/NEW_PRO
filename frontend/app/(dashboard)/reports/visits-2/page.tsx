@@ -28,10 +28,12 @@ const config: FlatReportConfig = {
   apiPath: "visits-2",
   exportPermission: "reports.vizity.export",
   exportFilename: "po-vizitam-2.xlsx",
+  tablePrefsId: "report.visits-2.v1",
+  filterGridCols: 9,
   defaultLimit: 10,
   filterFields: [
     { kind: "dateRange" },
-    { kind: "search", placeholder: "Клиент / агент / телефон" },
+
     { kind: "multiSelect", paramKey: "agent_ids", optionsFrom: "agents", placeholder: "Агент" },
     {
       kind: "multiSelect",

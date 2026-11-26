@@ -56,12 +56,26 @@ class TezyukHomePage extends ConsumerWidget {
         },
         child: dash.when(
           skipLoadingOnReload: true,
-          loading: () => const Center(child: CircularProgressIndicator()),
+          loading: () => ListView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            children: const [
+              SizedBox(height: 180),
+              Center(child: CircularProgressIndicator()),
+            ],
+          ),
           error: (e, _) => ListView(
             physics: const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.fromLTRB(16, 120, 16, 24),
             children: [
-              const SizedBox(height: 120),
-              Center(child: Text('Xato: $e')),
+              const Text(
+                'Bosh sahifa',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'Ma\'lumot yuklanmadi. Pastga tortib yangilang.\n$e',
+                style: const TextStyle(color: TezyukColors.onSurfaceVariant),
+              ),
             ],
           ),
           data: (d) {
@@ -93,44 +107,46 @@ class TezyukHomePage extends ConsumerWidget {
               slivers: [
                 SliverAppBar(
                   pinned: true,
+                  toolbarHeight: 56,
                   backgroundColor: TezyukColors.background,
                   surfaceTintColor: Colors.transparent,
                   leading: Builder(
                     builder: (ctx) => IconButton(
                       onPressed: () => Scaffold.of(ctx).openDrawer(),
-                      style: IconButton.styleFrom(
-                        backgroundColor: TezyukColors.surfaceBright,
-                        side: const BorderSide(
-                          color: TezyukColors.outlineVariant,
-                        ),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
                       icon: const Icon(Icons.menu),
                     ),
                   ),
+                  titleSpacing: 0,
                   title: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Text('Bosh sahifa'),
+                      const Text(
+                        'Bosh sahifa',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w700,
+                          height: 1.15,
+                        ),
+                      ),
                       Row(
                         children: [
                           Container(
-                            width: 8,
-                            height: 8,
+                            width: 7,
+                            height: 7,
                             decoration: const BoxDecoration(
                               color: TezyukColors.success,
                               shape: BoxShape.circle,
                             ),
                           ),
-                          const SizedBox(width: 6),
+                          const SizedBox(width: 5),
                           Text(
                             syncLabel,
                             style: const TextStyle(
-                              fontSize: 14,
+                              fontSize: 12,
                               fontWeight: FontWeight.w700,
                               fontFamily: 'monospace',
+                              height: 1.15,
                               color: TezyukColors.primary,
                             ),
                           ),
@@ -142,18 +158,19 @@ class TezyukHomePage extends ConsumerWidget {
                     IconButton(
                       tooltip: 'Sinxronlash',
                       onPressed: () => _openSync(context, ref),
+                      visualDensity: VisualDensity.compact,
                       style: IconButton.styleFrom(
                         backgroundColor: TezyukColors.primary,
                         foregroundColor: Colors.white,
                         shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
+                          borderRadius: BorderRadius.circular(10),
                         ),
                       ),
                       icon: const Icon(Icons.sync),
                     ),
-                    const SizedBox(width: 4),
+                    const SizedBox(width: 2),
                     const ExpeditorNotificationsBell(),
-                    const SizedBox(width: 8),
+                    const SizedBox(width: 4),
                   ],
                 ),
                 SliverPadding(

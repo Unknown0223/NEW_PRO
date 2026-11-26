@@ -32,17 +32,24 @@ const config: FlatReportConfig = {
   apiPath: "outlet-class",
   exportPermission: "reports.klassifikatsiya_tt.export",
   exportFilename: "klassifikatsiya-tt.xlsx",
+  tablePrefsId: "report.outlet-class.v1",
+  filterGridCols: 9,
   filterFields: [
     { kind: "dateRange" },
-    { kind: "select", paramKey: "group_by", optionsFrom: "group_by", defaultValue: "client" },
+    {
+      kind: "select",
+      paramKey: "group_by",
+      optionsFrom: "group_by",
+      defaultValue: "client",
+      placeholder: "Группировка"
+    },
     {
       kind: "bands",
       paramKey: "bands",
       defaultValue: "A:1000000,B:500000,C:100000,D:0",
       defaultFromOptionsKey: "default_bands",
-      placeholder: "A:1000000,B:500000,…"
+      placeholder: "Пороги"
     },
-    { kind: "search", placeholder: "Клиент / агент" },
     { kind: "multiSelect", paramKey: "statuses", optionsFrom: "statuses", placeholder: "Статус" },
     { kind: "multiSelect", paramKey: "agent_ids", optionsFrom: "agents", placeholder: "Агент" },
     {
@@ -55,19 +62,19 @@ const config: FlatReportConfig = {
       kind: "multiSelect",
       paramKey: "territory_1_list",
       optionsFrom: "territory_1",
-      placeholder: "Территория 1"
+      placeholder: "Зона"
     },
     {
       kind: "multiSelect",
       paramKey: "territory_2_list",
       optionsFrom: "territory_2",
-      placeholder: "Территория 2"
+      placeholder: "Область"
     },
     {
       kind: "multiSelect",
       paramKey: "territory_3_list",
       optionsFrom: "territory_3",
-      placeholder: "Территория 3"
+      placeholder: "Город"
     }
   ],
   columns: ({ applied }) => outletColumns(String(applied.group_by ?? "client")),

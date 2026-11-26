@@ -28,6 +28,7 @@ import {
   storagePrefix,
   workRegionDateString,
   isOrderSubmitFaceCheckpoint,
+  softBypassFaceWhenPolicyDisabled,
   type FaceVerifyContext
 } from "./mobile-face.shared";
 import { normalizeFullTabelSettings } from "../tabel/tabel-settings.pure";
@@ -37,7 +38,9 @@ export {
   facePolicyFromMobileConfig,
   resolveFaceVerificationPolicy,
   workRegionDateString,
-  isOrderSubmitFaceCheckpoint
+  isOrderSubmitFaceCheckpoint,
+  softBypassFaceWhenPolicyDisabled,
+  canTrustCoverFaceOkMark
 } from "./mobile-face.shared";
 
 async function loadTenantRequireFaceLogin(tenantId: number): Promise<boolean> {
@@ -195,7 +198,9 @@ export async function checkFaceVerificationRequired(
   opts?: { order_id?: number; client_id?: number }
 ): Promise<{ required: boolean; reason?: string }> {
   const policy = await resolvePolicyForUser(tenantId, userId, mobileConfig);
-  if (!policy.enabled) return { required: false };
+  if (softBypassFaceWhenPolicyDisabled(context, policy.enabled)) {
+    return { required: false };
+  }
 
   const ref = await getFaceReferenceMeta(tenantId, userId);
   if (!ref.has_reference) {
@@ -237,7 +242,11 @@ export async function checkFaceVerificationRequired(
     return { required: true, reason: "territory_check" };
   }
 
-  if (context === "delivery_confirm" || context === "payment_accept") {
+  if (
+    context === "delivery_confirm" ||
+    context === "payment_accept" ||
+    context === "cover_accept"
+  ) {
     return { required: true, reason: context };
   }
 

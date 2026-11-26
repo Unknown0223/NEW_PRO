@@ -24,6 +24,8 @@ const config: FlatReportConfig = {
   apiPath: "sales-compare",
   exportPermission: "reports.sravnitelnyy_analiz.export",
   exportFilename: "sravnitelnyy-analiz-prodazh.xlsx",
+  tablePrefsId: "report.sales-compare.v1",
+  filterGridCols: 9,
   filterFields: [
     {
       kind: "dateRange",
@@ -34,7 +36,7 @@ const config: FlatReportConfig = {
     },
     { kind: "dateRange", fromKey: "from_b", toKey: "to_b", label: "Период B" },
     { kind: "select", paramKey: "group_by", optionsFrom: "group_by", defaultValue: "product" },
-    { kind: "search", placeholder: "Поиск" },
+
     { kind: "multiSelect", paramKey: "agent_ids", optionsFrom: "agents", placeholder: "Агент" },
     {
       kind: "multiSelect",

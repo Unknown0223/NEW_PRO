@@ -1,5 +1,19 @@
 import { describe, expect, it } from "vitest";
 import { parseDailyVisitsReportQuery } from "../src/modules/reports/daily-visits-report.parse";
+import {
+  DAILY_VISITS_MONTH_OPTIONS,
+  MONTH_NAMES_RU
+} from "../src/modules/reports/daily-visits-report.month-options";
+
+describe("daily-visits month filter labels", () => {
+  it("exposes 12 months with Russian names (ids stay 1–12)", () => {
+    expect(DAILY_VISITS_MONTH_OPTIONS).toHaveLength(12);
+    expect(DAILY_VISITS_MONTH_OPTIONS[0]).toEqual({ id: "1", label: "Январь" });
+    expect(DAILY_VISITS_MONTH_OPTIONS[10]).toEqual({ id: "11", label: "Ноябрь" });
+    expect(DAILY_VISITS_MONTH_OPTIONS.map((m) => m.label)).toEqual([...MONTH_NAMES_RU]);
+    expect(DAILY_VISITS_MONTH_OPTIONS.every((m) => m.label !== m.id)).toBe(true);
+  });
+});
 
 describe("daily-visits-report parseDailyVisitsReportQuery", () => {
   it("defaults to current month bounds and empty filters", () => {

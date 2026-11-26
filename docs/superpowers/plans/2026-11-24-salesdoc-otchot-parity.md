@@ -32,7 +32,12 @@
 | 8 | Фотоотчёты | `photo` | `/report/photoReport` | [x] Done 2026-11-25 |
 | 9 | Отчёт по задачам | `tasks` | `/report/tasksReport` | [x] Virtual Pivot 2026-11-25 |
 | 10 | По бонусам | `bonuses` | `/report/bonusReport` | [x] Done 2026-11-25 |
-| 11+ | Qolgan wave FlatReport stublar | — | menyu tartibi | [ ] |
+| 11 | Универсальный отчет по бонусам | `universal-bonuses` | `/report/bonus` | [x] Virtual Pivot 2026-11-26 |
+| 12 | По визитам | `visits` | `/report/agent/visit` | [x] Done 2026-11-26 (+ drill-down modal) |
+| 13 | По дневному посещению | `daily-visits` | `/report/reportVisit` | [x] Done 2026-11-26 (FlatReport polish; flat ≠ SD matrix) |
+| 14 | По ценам | `prices` | `/report/price` | [x] Done 2026-11-26 (FlatReport polish; flat ≠ SD matrix) |
+| 15 | Классификация торговых точек | `outlet-class` | — | [x] Done 2026-11-26 (FlatReport polish) |
+| 16+ | Qolgan FlatReport wave close-out | `expeditor-visits`…`visits-2` + `sku-3` | menyu | [x] Done 2026-11-26 (prefs/grid/search/Зона) |
 
 Har otchot uchun bir xil sikl:
 
@@ -112,8 +117,16 @@ Har otchot uchun bir xil sikl:
 - [x] #8 `photo` — mosaic + table workspace, thumb_url content proxy, seed 2026-11-25
 - [x] #9 `tasks` — Virtual Pivot rewrite + konstruktor chrome; classic Options fix 2026-11-25 (FlatReport polish superseded)
 - [x] #10 `bonuses` — FlatReport polish (date radios, prefs, shipped COALESCE, seed; search dublikat olib tashlandi) 2026-11-25
-- [ ] #11+ qolgan FlatReport stublar — **Next**
-- [ ] Qolgan navbat (jadval) birma-bir, review oralig‘ida
+- [x] #9 follow-up — tasks Отчёты/Сохр./Поделиться (`tasks_report` datasetId) 2026-11-26
+- [x] #11 `universal-bonuses` — Virtual Pivot line dataset (`oi.is_bonus`) + workspace 2026-11-26
+- [x] #12 `visits` — FlatReport polish (prefs/grid/Зона–Город, search dublikat olib tashlandi, seed) 2026-11-26
+- [x] #12b `visits` drill-down modal — `GET …/visits/detail` + metric click 2026-11-26
+- [x] #13 `daily-visits` — FlatReport polish (prefs/grid, Год/Месяц, oy RU) 2026-11-26
+- [x] #14 `prices` — FlatReport polish (prefs/grid, search dublikat olib tashlandi, seed) 2026-11-26
+- [x] #15 `outlet-class` — FlatReport polish (prefs/grid, Зона–Город, search olib tashlandi) 2026-11-26
+- [x] #16+ FlatReport wave close-out — 13 adapter (prefs/grid 9, search drop, Зона–Город) 2026-11-26
+- [ ] Custom / non-FlatReport (staff-attendance, excel-export workspace, photo, VP) — alohida
+- [ ] Sariq stublar (tare/feedback/nr) — deferred
 - Holat/e’tirozlar: `docs/superpowers/plans/2026-11-25-otchot-tezyuk-status-va-etirozlar.md`
 
 ## Verification (har task oxiri)

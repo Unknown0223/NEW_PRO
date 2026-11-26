@@ -5,9 +5,12 @@ import 'package:go_router/go_router.dart';
 import '../../../core/api/expeditor_api.dart';
 import '../../../core/auth/biometric_transaction_confirm.dart';
 import '../../../core/auth/session.dart';
+import '../../../core/config/app_product.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
+import '../../../core/theme/tezyuk_colors.dart';
 import '../config/expeditor_config_enforcement.dart';
+import '../shared/tezyuk_expeditor_chrome.dart';
 import '../expeditor_providers.dart';
 import '../shared/expeditor_order_picker.dart';
 import '../shell/expeditor_drawer.dart';
@@ -79,7 +82,7 @@ class _ExpeditorReturnsPageState extends ConsumerState<ExpeditorReturnsPage> {
         ref,
         context: context,
         required: policy.fingerprintRequired,
-        reason: 'Подтвердите возврат',
+        reason: expeditorLabel('Подтвердите возврат', 'Qaytarishni tasdiqlang'),
       );
       if (!confirmed) return;
       final lines = _collectReturnItems(items);
@@ -119,7 +122,8 @@ class _ExpeditorReturnsPageState extends ConsumerState<ExpeditorReturnsPage> {
         ref,
         context: context,
         required: policy.fingerprintRequired,
-        reason: 'Подтвердите догруз',
+        reason:
+            expeditorLabel('Подтвердите догруз', 'Qo\'shimcha yuklashni tasdiqlang'),
       );
       if (!confirmed) return;
       await ref.read(expeditorApiProvider).reloadFromVehicle(
@@ -153,10 +157,16 @@ class _ExpeditorReturnsPageState extends ConsumerState<ExpeditorReturnsPage> {
     final orderId = _orderIdFromRoute();
     final slug = session.tenantSlug ?? '';
 
+    final warnColor = isTezyukProduct ? TezyukColors.warning : AppColors.warning;
+    final accent = expeditorChromeAccent();
+
     if (!policy.returnsEnabled) {
       return Scaffold(
+        backgroundColor: expeditorPageBackground(),
         drawer: const ExpeditorDrawer(),
-        appBar: AppBar(title: const Text('Qaytarishlar')),
+        appBar: AppBar(
+          title: Text(expeditorLabel('Возвраты', 'Qaytarishlar')),
+        ),
         body: const Center(child: Text('Qaytarish admin panelda o\'chirilgan')),
       );
     }
@@ -173,8 +183,13 @@ class _ExpeditorReturnsPageState extends ConsumerState<ExpeditorReturnsPage> {
     final detail = ref.watch(expeditorOrderDetailProvider(orderId));
 
     return Scaffold(
+      backgroundColor: expeditorPageBackground(),
       drawer: const ExpeditorDrawer(),
-      appBar: AppBar(title: Text('Qaytarish #$orderId')),
+      appBar: AppBar(
+        title: Text(
+          expeditorLabel('Возврат #$orderId', 'Qaytarish #$orderId'),
+        ),
+      ),
       body: detail.when(
         data: (order) {
           final rawItems = (order['items'] as List?)?.cast<Map>() ?? [];
@@ -198,11 +213,22 @@ class _ExpeditorReturnsPageState extends ConsumerState<ExpeditorReturnsPage> {
                       _CapabilityRow('Qisman qaytarish', policy.allowPartialReturn),
                       _CapabilityRow('Avtomobildan yuklash', policy.allowReloadFromVehicle),
                       if (policy.allowReturnFromShelf)
-                        const Padding(
-                          padding: EdgeInsets.only(top: 6),
-                          child: Text(
-                            'Polkadan qaytarish — veb-panel orqali «Vozvrat s polki»',
-                            style: TextStyle(fontSize: 11),
+                        Padding(
+                          padding: const EdgeInsets.only(top: 6),
+                          child: TextButton(
+                            onPressed: () => context.push('/exp-return-by-order'),
+                            style: TextButton.styleFrom(
+                              padding: EdgeInsets.zero,
+                              alignment: Alignment.centerLeft,
+                              foregroundColor: accent,
+                            ),
+                            child: Text(
+                              expeditorLabel(
+                                'Возврат с полки — открыть в приложении',
+                                'Polkadan qaytarish — ilovada ochish',
+                              ),
+                              style: const TextStyle(fontSize: 12),
+                            ),
                           ),
                         ),
                     ],
@@ -271,7 +297,10 @@ class _ExpeditorReturnsPageState extends ConsumerState<ExpeditorReturnsPage> {
                     onPressed: _submitting ? null : () => _submitReturn(orderId, slug, items),
                     icon: const Icon(Icons.replay),
                     label: const Text('QAYTARISHNI YUBORISH'),
-                    style: ElevatedButton.styleFrom(backgroundColor: AppColors.warning),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: warnColor,
+                      foregroundColor: Colors.white,
+                    ),
                   ),
                 ],
                 if (policy.allowReloadFromVehicle) ...[
@@ -286,7 +315,7 @@ class _ExpeditorReturnsPageState extends ConsumerState<ExpeditorReturnsPage> {
             ),
           );
         },
-        loading: () => const Center(child: CircularProgressIndicator()),
+        loading: () => Center(child: CircularProgressIndicator(color: accent)),
         error: (e, _) => Center(child: Text('Xato: $e')),
       ),
     );

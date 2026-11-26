@@ -10,6 +10,7 @@ import '../../auth/auth_provider.dart';
 import '../shared/supervisor_api_parse.dart';
 import '../shared/supervisor_ui.dart';
 import '../supervisor_providers.dart';
+import '../../cover/cover_active_banner.dart';
 
 /// CACTUS «Главная» — KPI + kategoriyalar (mavjud API).
 class SupervisorHomePage extends ConsumerStatefulWidget {
@@ -138,6 +139,7 @@ class _SupervisorHomePageState extends ConsumerState<SupervisorHomePage> with Si
             return ListView(
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
               children: [
+                const CoverActiveBanner(),
                 SvCard(
                   child: Row(
                     children: [

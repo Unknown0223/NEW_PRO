@@ -30,7 +30,8 @@ const faceContextSchema = z.enum([
   "order_submit",
   "territory_check",
   "delivery_confirm",
-  "payment_accept"
+  "payment_accept",
+  "cover_accept"
 ]);
 
 const faceCheckBodySchema = z.object({

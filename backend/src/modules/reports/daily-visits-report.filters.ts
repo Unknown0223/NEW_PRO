@@ -1,6 +1,7 @@
 import { prisma } from "../../config/database";
 import type { ReportActor } from "./client-sales-4-report.service";
 import { resolveFilterOptionsScope, staffWhereForFilterOptions } from "../access/access-filter-options-scope";
+import { DAILY_VISITS_MONTH_OPTIONS } from "./daily-visits-report.month-options";
 
 export async function getDailyVisitsReportFilterOptions(tenantId: number, actor?: ReportActor) {
   const scope = await resolveFilterOptionsScope(tenantId, actor);
@@ -18,10 +19,7 @@ export async function getDailyVisitsReportFilterOptions(tenantId: number, actor?
       { id: "planned", label: "Запланированные визиты" },
       { id: "unplanned", label: "Внеплановые визиты" }
     ],
-    months: Array.from({ length: 12 }, (_, i) => ({
-      id: String(i + 1),
-      label: String(i + 1)
-    })),
+    months: DAILY_VISITS_MONTH_OPTIONS,
     years: years.map((y) => ({ id: String(y), label: String(y) })),
     agents: agents.map((a) => ({ id: a.id, name: a.name, code: a.code ?? "" }))
   };

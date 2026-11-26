@@ -8,6 +8,8 @@ void main() {
       'status': 'kutilmoqda',
       'sender_user_id': 1,
       'receiver_user_id': 2,
+      'sender_name': 'Aliyev Anvar',
+      'receiver_name': 'Karimov Botir',
       'orders': [
         {'order_id': 10},
         {'order_id': 11},
@@ -16,6 +18,8 @@ void main() {
     expect(s.id, 5);
     expect(s.status, 'kutilmoqda');
     expect(s.orderCount, 2);
+    expect(s.counterpartLabel(inbox: true), 'Aliyev Anvar');
+    expect(s.counterpartLabel(inbox: false), 'Karimov Botir');
     expect(shareStatusLabel('faol'), 'Faol');
   });
 }
