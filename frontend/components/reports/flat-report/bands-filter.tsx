@@ -26,7 +26,8 @@ type Props = {
 const DEFAULT_RAW = "A:1000000,B:500000,C:100000,D:0";
 
 /**
- * Klass chegaralari: yopiq — qisqa yorliq; bosilsa panel ochiladi, yana bosilsa yopiladi.
+ * Klass chegaralari: bosilsa ochiladi, yana bosilsa yopiladi.
+ * Portal — filtr qatori `overflow-x-auto` ichida kesilmasin.
  */
 export function BandsFilter({
   label = "Пороги",
@@ -42,18 +43,20 @@ export function BandsFilter({
   const triggerRef = useRef<HTMLButtonElement>(null);
   const popRef = useRef<HTMLDivElement>(null);
   const listId = useId();
-  const [coords, setCoords] = useState({ top: 0, left: 0, width: 280 });
+  const [coords, setCoords] = useState({ top: 0, left: 0, width: 300 });
   const [draft, setDraft] = useState<OutletClassBandDraft[]>(() => parseOutletClassBandsString(value));
-  const [editTexts, setEditTexts] = useState<string[]>([]);
+  const [editTexts, setEditTexts] = useState<string[]>(() =>
+    parseOutletClassBandsString(value).map((b) => String(Math.round(b.minSum)))
+  );
 
   useEffect(() => setMounted(true), []);
 
   const setOpen = useCallback(
     (next: boolean) => {
       if (openProp === undefined) setUncontrolledOpen(next);
-      onOpenChange?.(next);
+      if (next !== open) onOpenChange?.(next);
     },
-    [onOpenChange, openProp]
+    [onOpenChange, open, openProp]
   );
 
   useEffect(() => {
@@ -69,7 +72,7 @@ export function BandsFilter({
     const r = t.getBoundingClientRect();
     const vw = window.innerWidth;
     const vh = window.innerHeight;
-    const w = Math.min(Math.max(r.width, 280), Math.min(360, vw - 16));
+    const w = Math.min(Math.max(r.width, 300), Math.min(360, vw - 16));
     let left = r.left;
     if (left + w > vw - 8) left = Math.max(8, vw - w - 8);
     const gap = 6;
@@ -88,11 +91,11 @@ export function BandsFilter({
     if (!open) return;
     updatePosition();
     const raf = requestAnimationFrame(updatePosition);
-    window.addEventListener("scroll", updatePosition, true);
+    window.addEventListener("scroll", updatePosition);
     window.addEventListener("resize", updatePosition);
     return () => {
       cancelAnimationFrame(raf);
-      window.removeEventListener("scroll", updatePosition, true);
+      window.removeEventListener("scroll", updatePosition);
       window.removeEventListener("resize", updatePosition);
     };
   }, [open, updatePosition]);
@@ -102,17 +105,21 @@ export function BandsFilter({
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") setOpen(false);
     };
-    const onDoc = (e: MouseEvent) => {
-      const node = e.target as Node;
-      if (triggerRef.current?.contains(node)) return;
-      if (popRef.current?.contains(node)) return;
-      setOpen(false);
-    };
     document.addEventListener("keydown", onKey);
-    document.addEventListener("mousedown", onDoc);
+    let onDoc: ((e: MouseEvent) => void) | null = null;
+    const timer = window.setTimeout(() => {
+      onDoc = (e: MouseEvent) => {
+        const node = e.target as Node;
+        if (triggerRef.current?.contains(node)) return;
+        if (popRef.current?.contains(node)) return;
+        setOpen(false);
+      };
+      document.addEventListener("mousedown", onDoc);
+    }, 0);
     return () => {
+      window.clearTimeout(timer);
+      if (onDoc) document.removeEventListener("mousedown", onDoc);
       document.removeEventListener("keydown", onKey);
-      document.removeEventListener("mousedown", onDoc);
     };
   }, [open, setOpen]);
 
@@ -142,7 +149,7 @@ export function BandsFilter({
       id={listId}
       role="dialog"
       aria-label={label}
-      className="fixed z-[500] flex flex-col overflow-hidden rounded-lg border border-border bg-card text-card-foreground shadow-lg ring-1 ring-black/5"
+      className="fixed z-[600] flex flex-col overflow-hidden rounded-lg border border-border bg-card text-card-foreground shadow-lg ring-1 ring-black/5"
       style={{ top: coords.top, left: coords.left, width: coords.width }}
     >
       <div className="border-b border-border/80 bg-muted/40 px-3 py-2">
@@ -208,16 +215,16 @@ export function BandsFilter({
         type="button"
         className={cn(
           "relative flex min-h-8 w-full min-w-0 items-center justify-between gap-2 rounded-lg border border-input bg-background px-2 py-1.5 text-left text-xs shadow-sm outline-none transition-colors",
-          "hover:bg-muted/40 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
-          open && "ring-2 ring-ring ring-offset-2",
-          compact && "h-8 min-h-8 px-2 text-xs ring-offset-0 focus-visible:ring-offset-0"
+          "hover:bg-muted/40 focus-visible:ring-2 focus-visible:ring-ring",
+          open && "ring-2 ring-ring",
+          compact && "h-8 min-h-8 px-2 text-xs"
         )}
         aria-expanded={open}
         aria-controls={listId}
         aria-haspopup="dialog"
         onClick={() => setOpen(!open)}
       >
-        <span className="pointer-events-none absolute left-2 top-0 z-[1] -translate-y-1/2 bg-inherit px-1 text-[11px] font-medium leading-none text-muted-foreground">
+        <span className="pointer-events-none absolute left-2 top-0 z-[1] -translate-y-1/2 bg-card px-1 text-[11px] font-medium leading-none text-muted-foreground">
           {label}
         </span>
         <span className="min-w-0 flex-1 truncate pt-1" title={summary}>

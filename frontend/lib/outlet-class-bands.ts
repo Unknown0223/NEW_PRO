@@ -62,3 +62,27 @@ export function formatThresholdShort(n: number): string {
 export function defaultOutletClassBandsString(): string {
   return serializeOutletClassBands(DEFAULT_BANDS);
 }
+
+/**
+ * Jadval «Класс» uchun SalesDoc uslubi: `< 1 млн`, `500 тыс – 1 млн`, `≥ 1 млн`.
+ * `className` — API dan kelgan A/B/C/D (yoki boshqa band nomi).
+ */
+export function formatOutletClassRowLabel(
+  className: string,
+  bandsRaw?: string | null
+): string {
+  const name = String(className ?? "").trim();
+  if (!name) return "—";
+  const bands = parseOutletClassBandsString(bandsRaw);
+  const idx = bands.findIndex((b) => b.name === name);
+  if (idx < 0) return name;
+  const cur = bands[idx]!;
+  const higher = idx > 0 ? bands[idx - 1] : undefined;
+  if (!higher) {
+    return cur.minSum <= 0 ? formatThresholdShort(0) : `≥ ${formatThresholdShort(cur.minSum)}`;
+  }
+  if (cur.minSum <= 0) {
+    return `< ${formatThresholdShort(higher.minSum)}`;
+  }
+  return `${formatThresholdShort(cur.minSum)} – ${formatThresholdShort(higher.minSum)}`;
+}

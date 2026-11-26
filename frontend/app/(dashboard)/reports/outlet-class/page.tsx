@@ -2,6 +2,7 @@
 
 import { FlatReportPage } from "@/components/reports/flat-report/flat-report-page";
 import type { FlatReportColumn, FlatReportConfig } from "@/components/reports/flat-report/types";
+import { formatOutletClassRowLabel } from "@/lib/outlet-class-bands";
 
 function outletColumns(groupBy: string): FlatReportColumn[] {
   const metrics: FlatReportColumn[] = [
@@ -13,13 +14,13 @@ function outletColumns(groupBy: string): FlatReportColumn[] {
   if (groupBy === "class") {
     return [
       { key: "row_number", header: "#", cellClassName: "text-muted-foreground" },
-      { key: "class_name", header: "Класс", cellClassName: "font-medium" },
+      { key: "class_name", header: "Классификация", cellClassName: "font-medium" },
       ...metrics
     ];
   }
   return [
     { key: "row_number", header: "#", cellClassName: "text-muted-foreground" },
-    { key: "class_name", header: "Класс" },
+    { key: "class_name", header: "Классификация" },
     { key: "client_name", header: "Клиент", cellClassName: "font-medium" },
     { key: "agent_name", header: "Агент" },
     { key: "client_category", header: "Категория" },
@@ -40,7 +41,7 @@ const config: FlatReportConfig = {
       kind: "select",
       paramKey: "group_by",
       optionsFrom: "group_by",
-      defaultValue: "client",
+      defaultValue: "class",
       placeholder: "Группировка"
     },
     {
@@ -77,7 +78,11 @@ const config: FlatReportConfig = {
       placeholder: "Город"
     }
   ],
-  columns: ({ applied }) => outletColumns(String(applied.group_by ?? "client")),
+  columns: ({ applied }) => outletColumns(String(applied.group_by ?? "class")),
+  formatters: (applied) => ({
+    class_name: (value) =>
+      formatOutletClassRowLabel(String(value ?? ""), String(applied.bands ?? ""))
+  }),
   totalsKeys: ["client_count", "order_count", "sales_sum"],
   totalsLabels: { client_count: "Клиентов", order_count: "Заказов", sales_sum: "Сумма" },
   rowKey: "row_number",

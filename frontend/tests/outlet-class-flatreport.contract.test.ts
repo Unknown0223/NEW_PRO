@@ -14,6 +14,8 @@ describe("outlet-class FlatReport chrome contract", () => {
     expect(src).toMatch(/filterGridCols:\s*9/);
     expect(src).toMatch(/placeholder:\s*"Группировка"/);
     expect(src).toMatch(/placeholder:\s*"Пороги"/);
+    expect(src).toMatch(/formatOutletClassRowLabel/);
+    expect(src).toMatch(/defaultValue:\s*"class"/);
     expect(src).not.toMatch(/A:1000000,B:500000,…/);
     expect(src).toMatch(/placeholder:\s*"Зона"/);
     expect(src).toMatch(/placeholder:\s*"Область"/);

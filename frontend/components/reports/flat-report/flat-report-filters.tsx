@@ -219,7 +219,7 @@ export function FlatReportFilters({
 
       {gridFields.length > 0 ? (
         oneFilterRow ? (
-          <div className="flex flex-nowrap items-end gap-2 overflow-x-auto overflow-y-visible pt-2.5 pb-1">
+          <div className="flex flex-nowrap items-end gap-2 overflow-x-auto pt-2.5 pb-1">
             {gridFields.map((field) => {
               const key =
                 "paramKey" in field ? String(field.paramKey ?? field.kind) : field.kind;

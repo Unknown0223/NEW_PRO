@@ -226,16 +226,17 @@ export function SearchableMultiSelectPanel<T extends string | number = number>({
     if (!open) return;
     updatePosition();
     const raf = requestAnimationFrame(() => updatePosition());
-    // Faqat trigger — popRef RO + setCoords loop «kengayib-torayib» beradi.
+    // Faqat trigger — popRef RO + nested scroll capture «kengayib-surilib» beradi.
     const ro =
       typeof ResizeObserver !== "undefined" ? new ResizeObserver(() => updatePosition()) : null;
     if (ro && triggerRef.current) ro.observe(triggerRef.current);
-    window.addEventListener("scroll", updatePosition, true);
+    // Capture emas — filtr qatori overflow-x scroll titratmasin.
+    window.addEventListener("scroll", updatePosition);
     window.addEventListener("resize", updatePosition);
     return () => {
       cancelAnimationFrame(raf);
       ro?.disconnect();
-      window.removeEventListener("scroll", updatePosition, true);
+      window.removeEventListener("scroll", updatePosition);
       window.removeEventListener("resize", updatePosition);
     };
   }, [open, updatePosition]);
@@ -253,15 +254,20 @@ export function SearchableMultiSelectPanel<T extends string | number = number>({
       return () => document.removeEventListener("keydown", onKey);
     }
 
-    const onDoc = (e: MouseEvent) => {
-      const node = e.target as Node;
-      if (triggerRef.current?.contains(node)) return;
-      if (popRef.current?.contains(node)) return;
-      setOpenTracked(false);
-    };
-    document.addEventListener("mousedown", onDoc);
+    // Ochuvchi click tugagach ulang — bir xil gesture da darhol yopilmasin.
+    let onDoc: ((e: MouseEvent) => void) | null = null;
+    const timer = window.setTimeout(() => {
+      onDoc = (e: MouseEvent) => {
+        const node = e.target as Node;
+        if (triggerRef.current?.contains(node)) return;
+        if (popRef.current?.contains(node)) return;
+        setOpenTracked(false);
+      };
+      document.addEventListener("mousedown", onDoc);
+    }, 0);
     return () => {
-      document.removeEventListener("mousedown", onDoc);
+      window.clearTimeout(timer);
+      if (onDoc) document.removeEventListener("mousedown", onDoc);
       document.removeEventListener("keydown", onKey);
     };
   }, [open, setOpenTracked, inline]);

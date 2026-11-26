@@ -31,7 +31,7 @@ export function MultiFilter(props: {
       searchPlaceholder="Поиск"
       filterItemsBySearch
       resetAllLabel="Сбросить"
-      minPopoverWidth={0}
+      minPopoverWidth={220}
       maxListHeightClass="max-h-44"
       open={props.open}
       onOpenChange={props.onOpenChange}
