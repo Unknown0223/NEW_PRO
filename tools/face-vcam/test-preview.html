@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="uz">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Face VCam — kamera diagnostika</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        font-family: system-ui, Segoe UI, sans-serif;
+        line-height: 1.45;
+      }
+      body {
+        margin: 0 auto;
+        max-width: 720px;
+        padding: 1.25rem;
+      }
+      h1 {
+        font-size: 1.25rem;
+        margin: 0 0 0.5rem;
+      }
+      .hint {
+        font-size: 0.9rem;
+        opacity: 0.85;
+        margin-bottom: 1rem;
+      }
+      label {
+        display: block;
+        font-weight: 600;
+        margin-bottom: 0.35rem;
+      }
+      select,
+      button {
+        font: inherit;
+        padding: 0.45rem 0.65rem;
+      }
+      select {
+        width: 100%;
+        max-width: 100%;
+        margin-bottom: 0.75rem;
+      }
+      .row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        margin-bottom: 1rem;
+      }
+      video {
+        width: 100%;
+        max-width: 640px;
+        aspect-ratio: 16 / 9;
+        background: #111;
+        border-radius: 6px;
+        display: block;
+      }
+      #status {
+        margin-top: 1rem;
+        padding: 0.65rem 0.75rem;
+        border-radius: 6px;
+        background: rgba(127, 127, 127, 0.15);
+        white-space: pre-wrap;
+        font-size: 0.9rem;
+        min-height: 2.5em;
+      }
+      #status.err {
+        background: rgba(200, 60, 60, 0.18);
+      }
+      #status.ok {
+        background: rgba(40, 140, 70, 0.18);
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Face VCam — kamera diagnostika</h1>
+    <p class="hint">
+      Yandex Browser da oching. Face VCam <strong>On air</strong> bo‘lganda ro‘yxatdan
+      <strong>Unity Video Capture</strong> ni tanlang — preview qora bo‘lmasligi kerak.
+    </p>
+
+    <label for="device">Video kirish qurilmasi</label>
+    <select id="device" aria-label="Video kirish qurilmasi">
+      <option value="">— qurilmalar yuklanmoqda —</option>
+    </select>
+
+    <div class="row">
+      <button type="button" id="btnRefresh">Qurilmalarni yangilash</button>
+      <button type="button" id="btnStart">Start preview</button>
+      <button type="button" id="btnStop" disabled>Stop</button>
+    </div>
+
+    <video id="preview" playsinline autoplay muted></video>
+    <div id="status" role="status">Tayyor.</div>
+
+    <script>
+      (function () {
+        const PREFERRED_LABEL = "Unity Video Capture";
+        const selectEl = document.getElementById("device");
+        const videoEl = document.getElementById("preview");
+        const statusEl = document.getElementById("status");
+        const btnRefresh = document.getElementById("btnRefresh");
+        const btnStart = document.getElementById("btnStart");
+        const btnStop = document.getElementById("btnStop");
+
+        let activeStream = null;
+
+        function setStatus(text, kind) {
+          statusEl.textContent = text;
+          statusEl.classList.remove("err", "ok");
+          if (kind) statusEl.classList.add(kind);
+        }
+
+        function stopPreview() {
+          if (activeStream) {
+            activeStream.getTracks().forEach(function (t) {
+              t.stop();
+            });
+            activeStream = null;
+          }
+          videoEl.srcObject = null;
+          btnStop.disabled = true;
+        }
+
+        function videoInputs(devices) {
+          return devices.filter(function (d) {
+            return d.kind === "videoinput";
+          });
+        }
+
+        function preferredDeviceId(inputs) {
+          const hit = inputs.find(function (d) {
+            return d.label && d.label.indexOf(PREFERRED_LABEL) !== -1;
+          });
+          return hit ? hit.deviceId : inputs[0] ? inputs[0].deviceId : "";
+        }
+
+        function fillSelect(inputs, selectedId) {
+          selectEl.innerHTML = "";
+          if (!inputs.length) {
+            const opt = document.createElement("option");
+            opt.value = "";
+            opt.textContent = "(video qurilma topilmadi)";
+            selectEl.appendChild(opt);
+            return;
+          }
+          inputs.forEach(function (d, i) {
+            const opt = document.createElement("option");
+            opt.value = d.deviceId;
+            const name = (d.label && d.label.trim()) || "Kamera " + (i + 1);
+            opt.textContent = name;
+            selectEl.appendChild(opt);
+          });
+          const pick =
+            selectedId ||
+            preferredDeviceId(inputs) ||
+            inputs[0].deviceId;
+          selectEl.value = pick;
+          const chosen = inputs.find(function (d) {
+            return d.deviceId === pick;
+          });
+          if (chosen && chosen.label && chosen.label.indexOf(PREFERRED_LABEL) !== -1) {
+            setStatus(
+              "Tanlangan: " + chosen.label + " (Face VCam uchun tavsiya).",
+              "ok"
+            );
+          } else if (chosen && chosen.label) {
+            setStatus(
+              "Tanlangan: " +
+                chosen.label +
+                ". " +
+                PREFERRED_LABEL +
+                " topilmadi — drayverni tekshiring.",
+              null
+            );
+          }
+        }
+
+        async function ensureMediaDevices() {
+          if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+            throw new Error("Bu muhitda getUserMedia yo‘q (HTTPS yoki localhost kerak bo‘lishi mumkin).");
+          }
+        }
+
+        async function listDevices(requestPermission) {
+          await ensureMediaDevices();
+          if (requestPermission) {
+            try {
+              const tmp = await navigator.mediaDevices.getUserMedia({ video: true });
+              tmp.getTracks().forEach(function (t) {
+                t.stop();
+              });
+            } catch (e) {
+              setStatus("Kamera ruxsati: " + (e.message || e), "err");
+            }
+          }
+          const devices = await navigator.mediaDevices.enumerateDevices();
+          const inputs = videoInputs(devices);
+          const prev = selectEl.value;
+          fillSelect(inputs, prev || preferredDeviceId(inputs));
+          return inputs;
+        }
+
+        async function startPreview() {
+          stopPreview();
+          const deviceId = selectEl.value;
+          if (!deviceId) {
+            setStatus("Avval video qurilma tanlang.", "err");
+            return;
+          }
+          const constraints = {
+            video: {
+              deviceId: { exact: deviceId },
+              width: { ideal: 1280 },
+              height: { ideal: 720 }
+            },
+            audio: false
+          };
+          try {
+            const stream = await navigator.mediaDevices.getUserMedia(constraints);
+            activeStream = stream;
+            videoEl.srcObject = stream;
+            await videoEl.play();
+            btnStop.disabled = false;
+            const track = stream.getVideoTracks()[0];
+            const label = track && track.label ? track.label : deviceId;
+            const ok =
+              label.indexOf(PREFERRED_LABEL) !== -1 ||
+              (selectEl.selectedOptions[0] &&
+                selectEl.selectedOptions[0].textContent.indexOf(PREFERRED_LABEL) !== -1);
+            setStatus(
+              "Preview ishlayapti: " +
+                label +
+                (ok ? " — Unity Video Capture." : ""),
+              ok ? "ok" : null
+            );
+          } catch (e) {
+            let msg = e.message || String(e);
+            if (e.name === "NotReadableError") {
+              msg +=
+                " — boshqa virtual kamera (OBS va h.k.) o‘chirilganini va Face VCam Start ekanini tekshiring.";
+            }
+            setStatus("Start xato: " + msg, "err");
+          }
+        }
+
+        btnRefresh.addEventListener("click", function () {
+          listDevices(true).catch(function (e) {
+            setStatus(String(e.message || e), "err");
+          });
+        });
+        btnStart.addEventListener("click", function () {
+          startPreview();
+        });
+        btnStop.addEventListener("click", stopPreview);
+
+        window.addEventListener("beforeunload", stopPreview);
+
+        listDevices(true).catch(function (e) {
+          setStatus(String(e.message || e), "err");
+        });
+      })();
+    </script>
+  </body>
+</html>
