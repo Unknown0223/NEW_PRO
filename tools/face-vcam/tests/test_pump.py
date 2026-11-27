@@ -6,6 +6,7 @@ import numpy as np
 import pytest
 
 from face_vcam.pump import frame_to_rgb, load_video, playback_hold_frames, run_pump
+from face_vcam.screen_tint import ScreenTintSampler
 
 
 def test_playback_hold_frames_slows_down():
@@ -28,6 +29,15 @@ def test_frame_to_rgb_resizes_and_is_rgb():
     # BGR blue -> RGB blue channel
     assert rgb[360, 640, 2] == 255
     assert rgb[360, 640, 0] == 0
+
+
+def test_frame_to_rgb_zoom_crops_center():
+    frame_bgr = np.zeros((200, 200, 3), dtype=np.uint8)
+    frame_bgr[80:120, 80:120, 1] = 255  # green block in center
+    rgb = frame_to_rgb(frame_bgr, 100, 100, zoom=2.0)
+    assert rgb.shape == (100, 100, 3)
+    # After 2x center crop, green should dominate mid pixel
+    assert rgb[50, 50, 1] == 255
 
 
 def test_load_video_missing_path_raises():
@@ -156,6 +166,79 @@ def test_run_pump_missing_backend_raises(mock_camera_cls, mock_load_video):
             stop_event=stop,
             backend="unitycapture",
         )
+
+
+@patch("face_vcam.pump.pyvirtualcam.Camera")
+@patch("face_vcam.pump.load_video")
+def test_run_pump_applies_screen_tint_when_enabled(mock_load_video, mock_camera_cls):
+    frame_bgr = np.full((48, 64, 3), 100, dtype=np.uint8)
+    cap = MagicMock()
+    cap.read.side_effect = [(True, frame_bgr), (False, None)]
+    mock_load_video.return_value = cap
+
+    cam = MagicMock()
+    mock_camera_cls.return_value.__enter__.return_value = cam
+    mock_camera_cls.return_value.__exit__.return_value = False
+
+    sampler = MagicMock(spec=ScreenTintSampler)
+    sampler.latest_rgb.return_value = (255, 0, 0)
+
+    stop = threading.Event()
+
+    run_pump(
+        video_path="clip.mp4",
+        loop=False,
+        width=64,
+        height=48,
+        fps=30.0,
+        stop_event=stop,
+        backend="unitycapture",
+        speed=1.0,
+        screen_tint=True,
+        tint_alpha=0.5,
+        tint_sampler=sampler,
+    )
+
+    assert cam.send.called
+    sent = cam.send.call_args_list[0].args[0]
+    assert sent.shape == (48, 64, 3)
+    assert int(sent[:, :, 0].mean()) > 120
+    assert int(sent[:, :, 2].mean()) < 90
+
+
+@patch("face_vcam.pump.pyvirtualcam.Camera")
+@patch("face_vcam.pump.load_video")
+def test_run_pump_skips_tint_when_no_color(mock_load_video, mock_camera_cls):
+    frame_bgr = np.full((48, 64, 3), 42, dtype=np.uint8)
+    cap = MagicMock()
+    cap.read.side_effect = [(True, frame_bgr), (False, None)]
+    mock_load_video.return_value = cap
+
+    cam = MagicMock()
+    mock_camera_cls.return_value.__enter__.return_value = cam
+    mock_camera_cls.return_value.__exit__.return_value = False
+
+    sampler = MagicMock(spec=ScreenTintSampler)
+    sampler.latest_rgb.return_value = None
+
+    stop = threading.Event()
+
+    run_pump(
+        video_path="clip.mp4",
+        loop=False,
+        width=64,
+        height=48,
+        fps=30.0,
+        stop_event=stop,
+        backend="unitycapture",
+        speed=1.0,
+        screen_tint=True,
+        tint_sampler=sampler,
+    )
+
+    sent = cam.send.call_args_list[0].args[0]
+    expected = frame_to_rgb(frame_bgr, 64, 48)
+    np.testing.assert_array_equal(sent, expected)
 
 
 @patch("face_vcam.pump.load_video")

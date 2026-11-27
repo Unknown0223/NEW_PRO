@@ -2,8 +2,15 @@
 
 from __future__ import annotations
 
+import threading
+import time
+from collections.abc import Callable
+
 import cv2
 import numpy as np
+
+_SAMPLER_HZ = 12.0
+_SAMPLER_INTERVAL = 1.0 / _SAMPLER_HZ
 
 
 def _patch_extent(height: int, width: int) -> int:
@@ -60,3 +67,63 @@ def apply_tint(
     tint = np.array(color_rgb, dtype=np.float64)
     blended = (1.0 - alpha) * frame_rgb.astype(np.float64) + alpha * tint
     return np.clip(blended, 0, 255).astype(np.uint8)
+
+
+def _mss_grab_primary_bgr() -> np.ndarray:
+    import mss
+
+    with mss.mss() as sct:
+        shot = sct.grab(sct.monitors[1])
+        bgra = np.asarray(shot, dtype=np.uint8)
+        return cv2.cvtColor(bgra, cv2.COLOR_BGRA2BGR)
+
+
+class ScreenTintSampler:
+    """Background ~12 Hz screen grab; publishes latest flash RGB under a lock."""
+
+    def __init__(
+        self,
+        *,
+        grab_bgr: Callable[[], np.ndarray] | None = None,
+    ) -> None:
+        self._grab_bgr = grab_bgr or _mss_grab_primary_bgr
+        self._lock = threading.Lock()
+        self._latest: tuple[int, int, int] | None = None
+        self._stop = threading.Event()
+        self._thread: threading.Thread | None = None
+
+    def start(self) -> None:
+        if self._thread is not None and self._thread.is_alive():
+            return
+        self._stop.clear()
+        with self._lock:
+            self._latest = None
+        self._thread = threading.Thread(target=self._run, name="screen-tint-sampler", daemon=True)
+        self._thread.start()
+
+    def stop(self) -> None:
+        self._stop.set()
+        if self._thread is not None:
+            self._thread.join(timeout=2.0)
+            self._thread = None
+        with self._lock:
+            self._latest = None
+
+    def latest_rgb(self) -> tuple[int, int, int] | None:
+        with self._lock:
+            return self._latest
+
+    def _run(self) -> None:
+        while not self._stop.is_set():
+            t0 = time.monotonic()
+            try:
+                frame_bgr = self._grab_bgr()
+                color = sample_flash_rgb(frame_bgr)
+            except Exception:
+                color = None
+            with self._lock:
+                self._latest = color
+            elapsed = time.monotonic() - t0
+            wait = max(0.0, _SAMPLER_INTERVAL - elapsed)
+            if self._stop.wait(wait):
+                break

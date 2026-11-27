@@ -1,6 +1,8 @@
+import time
+
 import numpy as np
 
-from face_vcam.screen_tint import apply_tint, sample_flash_rgb
+from face_vcam.screen_tint import ScreenTintSampler, apply_tint, sample_flash_rgb
 
 
 def _paint_yellow_edges(frame: np.ndarray) -> None:
@@ -47,3 +49,52 @@ def test_apply_tint_alpha_one_solid():
     expected = np.full(frame.shape, color, dtype=np.uint8)
     np.testing.assert_array_equal(out, expected)
     assert out.dtype == np.uint8
+
+
+def test_sampler_injected_grab_returns_flash_then_none_after_stop():
+    frame = np.full((480, 640, 3), (40, 40, 40), dtype=np.uint8)
+    _paint_yellow_edges(frame)
+
+    sampler = ScreenTintSampler(grab_bgr=lambda: frame.copy())
+    sampler.start()
+    try:
+        deadline = time.monotonic() + 1.0
+        rgb = None
+        while time.monotonic() < deadline:
+            rgb = sampler.latest_rgb()
+            if rgb is not None:
+                break
+            time.sleep(0.02)
+        assert rgb is not None
+        r, g, b = rgb
+        assert abs(r - 255) <= 40
+    finally:
+        sampler.stop()
+
+    assert sampler.latest_rgb() is None
+
+
+def test_sampler_capture_error_clears_latest():
+    calls = {"n": 0}
+
+    def flaky_grab():
+        calls["n"] += 1
+        if calls["n"] == 1:
+            frame = np.full((120, 160, 3), (40, 40, 40), dtype=np.uint8)
+            _paint_yellow_edges(frame)
+            return frame
+        raise RuntimeError("capture failed")
+
+    sampler = ScreenTintSampler(grab_bgr=flaky_grab)
+    sampler.start()
+    try:
+        deadline = time.monotonic() + 1.0
+        while time.monotonic() < deadline and sampler.latest_rgb() is None:
+            time.sleep(0.02)
+        assert sampler.latest_rgb() is not None
+        deadline = time.monotonic() + 1.0
+        while time.monotonic() < deadline and calls["n"] < 2:
+            time.sleep(0.02)
+        assert sampler.latest_rgb() is None
+    finally:
+        sampler.stop()
