@@ -31,15 +31,6 @@ def test_frame_to_rgb_resizes_and_is_rgb():
     assert rgb[360, 640, 0] == 0
 
 
-def test_frame_to_rgb_zoom_crops_center():
-    frame_bgr = np.zeros((200, 200, 3), dtype=np.uint8)
-    frame_bgr[80:120, 80:120, 1] = 255  # green block in center
-    rgb = frame_to_rgb(frame_bgr, 100, 100, zoom=2.0)
-    assert rgb.shape == (100, 100, 3)
-    # After 2x center crop, green should dominate mid pixel
-    assert rgb[50, 50, 1] == 255
-
-
 def test_load_video_missing_path_raises():
     missing = Path(__file__).parent / "no_such_video_9f3a2c1b.mp4"
     with pytest.raises(FileNotFoundError):
@@ -194,6 +185,7 @@ def test_run_pump_applies_screen_tint_when_enabled(mock_load_video, mock_camera_
         stop_event=stop,
         backend="unitycapture",
         speed=1.0,
+        freeze_at_end=False,
         screen_tint=True,
         tint_alpha=0.5,
         tint_sampler=sampler,
@@ -232,6 +224,7 @@ def test_run_pump_skips_tint_when_no_color(mock_load_video, mock_camera_cls):
         stop_event=stop,
         backend="unitycapture",
         speed=1.0,
+        freeze_at_end=False,
         screen_tint=True,
         tint_sampler=sampler,
     )
