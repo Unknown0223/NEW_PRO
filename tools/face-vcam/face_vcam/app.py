@@ -31,8 +31,9 @@ class FaceVcamApp:
         self._status_poll_after_id: str | None = None
 
         self.path_var = tk.StringVar(value=DEFAULT_VIDEO_PATH)
-        self.loop_var = tk.BooleanVar(value=True)
-        self.freeze_var = tk.BooleanVar(value=False)
+        # Face ID: loop rewind resets oval / repeats the challenge
+        self.loop_var = tk.BooleanVar(value=False)
+        self.freeze_var = tk.BooleanVar(value=True)
         self.speed_var = tk.StringVar(value="0.5")
         self.screen_tint_var = tk.BooleanVar(value=True)
         self.status_var = tk.StringVar(value="Idle")
