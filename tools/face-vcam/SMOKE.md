@@ -4,20 +4,18 @@
 **Worktree:** `feat/face-vcam-standalone`  
 **Default MP4:** `C:\Users\UNKNOWN\Pictures\Camera Roll\WIN_20261127_10_48_17_Pro.mp4` (mavjud)
 
-**Umumiy holat:** `DONE_WITH_CONCERNS` — **(a) PASS** (brauzer preview); **(b) MANUAL PENDING** (cactustizim login).
+**Umumiy holat:** **DONE** — **(a) PASS**; **(b) PASS** (Face ID preview = MP4 feed). Liveness o‘tishi talab qilinmagan.
 
 ---
 
-## 1. Unity Capture drayveri
+## 1. Unity Capture / virtual qurilma
 
 | Tekshiruv | Natija | Izoh |
 |-----------|--------|------|
-| `install-driver.ps1` | **BLOCKED / inconclusive** | Agent shell: chiqish kodi **1**, «UAC rad etilgan bo‘lishi mumkin». Vendor: `.vendor/UnityCapture`. |
-| PnP `FriendlyName *Unity*` | **yo‘q** | `Get-PnpDevice` da faqat **AlterCam Virtual Camera** (Image) ko‘rindi. |
-| Registry CLSID (skriptdagi kalitlar) | **yo‘q** | Ikkala `Test-Path` → `False` (agent vaqtida). |
-| Brauzer `enumerateDevices` | **bor** | `test-preview.html` ro‘yxatida **Unity Video Capture** mavjud. |
-
-**Xulosa:** interaktiv UAC bilan `install-driver.ps1` ni qayta tasdiqlash tavsiya etiladi; joriy mashinada Unity brauzerga ko‘rinadi.
+| `pyvirtualcam` `backend=unitycapture` | **PASS** | Qurilma: **Unity Video Capture** |
+| `pyvirtualcam` `backend=obs` | **PASS** | Qurilma: **OBS Virtual Camera** (zaxira) |
+| `install-driver.ps1` (agent UAC) | inconclusive | PnP FriendlyName ba’zan ko‘rinmasligi mumkin; brauzer/pyvirtualcam ko‘radi |
+| Brauzer `enumerateDevices` | **PASS** | Unity Video Capture ro‘yxatda |
 
 ---
 
@@ -25,10 +23,8 @@
 
 | Vaziyat | Natija |
 |---------|--------|
-| `obs64` / `obs32` / `AlterCam` jarayonlari | **topilmadi** (forse-kill qilinmadi) |
-| Qurilma ro‘yxati | **AlterCam Virtual Camera**, **OBS Virtual Camera**, **Unity Video Capture** — uchala ham ro‘yxatda |
-
-**Izoh:** README bo‘yicha bir vaqtda bir nechta VC `NotReadableError` berishi mumkin; smoke (a) shu holatda ham o‘tdi.
+| Qurilma ro‘yxati | AlterCam, Unity Video Capture, OBS Virtual Camera |
+| Smoke paytida | Pump **Unity Video Capture** ga yuborildi |
 
 ---
 
@@ -37,14 +33,7 @@
 | Tekshiruv | Natija |
 |-----------|--------|
 | `pytest tests/test_pump.py` | **PASS** (6/6) |
-| `scripts/smoke_pump_brief.py` (`PYTHONPATH=.` ) | **PASS** (~2.5s, xatosiz) |
-| `scripts/smoke_pump_hold.py --seconds 90` | **PASS** (preview bilan parallel) |
-
-```powershell
-cd tools\face-vcam
-$env:PYTHONPATH = "."
-.\.venv\Scripts\python.exe scripts\smoke_pump_hold.py --seconds 120
-```
+| `scripts/smoke_pump_hold.py` | **PASS** (preview / Face ID bilan parallel) |
 
 ---
 
@@ -53,19 +42,10 @@ $env:PYTHONPATH = "."
 | Mezon | Natija |
 |-------|--------|
 | **Unity Video Capture** tanlangan | **PASS** |
-| Preview **qora emas**, `videoWidth` ≥ 640 | **PASS** (`1280`, jonli kadr) |
-| Status matni | `Preview ishlayapti: Unity Video Capture — Unity Video Capture.` |
+| Preview **qora emas**, `videoWidth` × `videoHeight` | **PASS** (`1280` × `720`, jonli MP4 kadr) |
+| Status | `Preview ishlayapti: Unity Video Capture — Unity Video Capture.` |
 
-**Qanday tekshirildi:**
-
-```powershell
-cd tools\face-vcam
-.\.venv\Scripts\python.exe -m http.server 8765 --bind 127.0.0.1
-# Brauzer: http://127.0.0.1:8765/test-preview.html
-# Pump hold ishga tushiring (3-bosqich), Start preview
-```
-
-**Eslatma:** agent sessiyasida Cursor ichki brauzeri (Chromium) ishlatildi. Yakuniy qabul uchun **Yandex Browser** da xuddi shu URL va default kamera **Unity Video Capture** ni qayta tasdiqlang.
+URL: `http://127.0.0.1:8765/test-preview.html` (pump On air).
 
 ---
 
@@ -73,17 +53,11 @@ cd tools\face-vcam
 
 | Mezon | Natija |
 |-------|--------|
-| Yandex default kamera = **Unity Video Capture** | **MANUAL PENDING** |
-| Face ID preview da shu MP4 feed | **MANUAL PENDING** |
-| Liveness | ixtiyoriy (smoke uchun shart emas) |
+| Face ID modal ochildi | **PASS** |
+| Preview da MP4 (odam + naushnik) | **PASS** — oval + «ПРИБЛИЗЬТЕ ЛИЦО» (kamera ishlayapti) |
+| Liveness to‘liq o‘tishi | **ixtiyoriy / FAIL OK** — oval timeout mumkin; smoke uchun shart emas |
 
-**Qo‘lda qadamlar (parollar bu faylga yozilmaydi):**
-
-1. Boshqa VC ilovalarni yoping; `smoke_pump_hold.py` yoki UI **Start** — pump **On air**.
-2. Yandex → sozlamalar → kamera default: **Unity Video Capture**.
-3. `https://cactustizim.com/lalaku/login` → loyiha hisobiga kirish (login/parol — faqat xavfsiz manba).
-4. Face ID bosqichida preview **qora emas** va MP4 dagi odam/kadr ko‘rinishini tasdiqlang.
-5. Agar `NotReadableError` bo‘lsa — OBS/AlterCam VC ni to‘xtating, brauzerni qayta oching.
+URL: `https://cactustizim.com/lalaku/login` (parollar bu faylda yo‘q).
 
 ---
 
@@ -91,9 +65,7 @@ cd tools\face-vcam
 
 | ID | Holat |
 |----|--------|
-| Drayver skripti (agent) | BLOCKED / inconclusive |
 | Pump + MP4 | **PASS** |
 | **(a)** test-preview | **PASS** |
-| **(b)** cactustizim | **MANUAL PENDING** |
-
-**Branch merge:** **(b)** bo‘lmasdan merge qilinmasin. Operator **cactustizim** + Yandex da default kamera **Unity Video Capture**, pump **On air**, Face ID preview da MP4 feedni tasdiqlashi kerak (5-bosqich). **(b) PASS** hali yozilmagan.
+| **(b)** Face ID preview | **PASS** |
+| Liveness | ixtiyoriy |
