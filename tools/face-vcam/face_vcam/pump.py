@@ -43,7 +43,13 @@ def run_pump(
     stop_event: threading.Event,
     backend: str = "unitycapture",
     speed: float = 0.5,
+    freeze_at_end: bool = True,
 ) -> None:
+    """Stream MP4 into a virtual webcam.
+
+    Face ID: prefer loop=False + freeze_at_end=True so the clip does not
+    rewind (rewind resets oval / «НЕ ДВИГАЙТЕСЬ» and looks like a cycle).
+    """
     hold = playback_hold_frames(speed)
     cap = load_video(video_path)
     try:
@@ -60,19 +66,24 @@ def run_pump(
             ) from exc
 
         with cam_ctx as cam:
+            last_rgb: np.ndarray | None = None
             while not stop_event.is_set():
                 ok, frame = cap.read()
                 if not ok:
                     if loop:
                         cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
                         continue
+                    if freeze_at_end and last_rgb is not None:
+                        while not stop_event.is_set():
+                            cam.send(last_rgb)
+                            cam.sleep_until_next_frame()
                     break
 
-                rgb = frame_to_rgb(frame, width, height)
+                last_rgb = frame_to_rgb(frame, width, height)
                 for _ in range(hold):
                     if stop_event.is_set():
                         break
-                    cam.send(rgb)
+                    cam.send(last_rgb)
                     cam.sleep_until_next_frame()
     finally:
         cap.release()

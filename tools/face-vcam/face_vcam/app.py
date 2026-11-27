@@ -26,7 +26,9 @@ class FaceVcamApp:
         self._on_air = False
 
         self.path_var = tk.StringVar(value=DEFAULT_VIDEO_PATH)
-        self.loop_var = tk.BooleanVar(value=True)
+        # Face ID: loop rewind resets oval / repeats the challenge
+        self.loop_var = tk.BooleanVar(value=False)
+        self.freeze_var = tk.BooleanVar(value=True)
         self.speed_var = tk.StringVar(value="0.5")
         self.status_var = tk.StringVar(value="Idle")
 
@@ -45,6 +47,9 @@ class FaceVcamApp:
         ttk.Checkbutton(opts_frame, text="Loop", variable=self.loop_var).pack(
             side=tk.LEFT
         )
+        ttk.Checkbutton(
+            opts_frame, text="Oxirida muzlat", variable=self.freeze_var
+        ).pack(side=tk.LEFT, padx=(12, 0))
         ttk.Label(opts_frame, text="Sekinlash:").pack(side=tk.LEFT, padx=(16, 4))
         speed_box = ttk.Combobox(
             opts_frame,
@@ -115,10 +120,12 @@ class FaceVcamApp:
         self._on_air = True
         self.start_btn.state(["disabled"])
         loop = self.loop_var.get()
+        freeze_at_end = self.freeze_var.get()
 
         def worker() -> None:
             try:
-                self._schedule_status(f"On air ({speed}×)")
+                mode = "freeze" if freeze_at_end and not loop else ("loop" if loop else "once")
+                self._schedule_status(f"On air ({speed}×, {mode})")
                 run_pump(
                     video_path=video_path,
                     loop=loop,
@@ -127,6 +134,7 @@ class FaceVcamApp:
                     fps=PUMP_FPS,
                     stop_event=self.stop_event,
                     speed=speed,
+                    freeze_at_end=freeze_at_end,
                 )
                 if not self.stop_event.is_set():
                     self._schedule_status("Idle")

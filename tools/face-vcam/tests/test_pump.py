@@ -102,6 +102,43 @@ def test_run_pump_sends_frames_until_stop(mock_load_video, mock_camera_cls, tmp_
     assert cam.sleep_until_next_frame.call_count >= 2
 
 
+@patch("face_vcam.pump.pyvirtualcam.Camera")
+@patch("face_vcam.pump.load_video")
+def test_run_pump_freeze_at_end_holds_last_frame(mock_load_video, mock_camera_cls):
+    frames = [
+        np.full((48, 64, 3), 10, dtype=np.uint8),
+        np.full((48, 64, 3), 200, dtype=np.uint8),
+    ]
+    reads = iter([(True, frames[0]), (True, frames[1]), (False, None)])
+
+    cap = MagicMock()
+    cap.read.side_effect = lambda: next(reads)
+    mock_load_video.return_value = cap
+
+    cam = MagicMock()
+    mock_camera_cls.return_value.__enter__.return_value = cam
+    mock_camera_cls.return_value.__exit__.return_value = False
+
+    stop = threading.Event()
+    threading.Timer(0.08, stop.set).start()
+
+    run_pump(
+        video_path="clip.mp4",
+        loop=False,
+        width=64,
+        height=48,
+        fps=30.0,
+        stop_event=stop,
+        backend="unitycapture",
+        speed=1.0,
+        freeze_at_end=True,
+    )
+
+    assert cam.send.call_count >= 3
+    last = cam.send.call_args_list[-1].args[0]
+    assert int(last.mean()) >= 180
+
+
 @patch("face_vcam.pump.load_video")
 @patch("face_vcam.pump.pyvirtualcam.Camera")
 def test_run_pump_missing_backend_raises(mock_camera_cls, mock_load_video):
