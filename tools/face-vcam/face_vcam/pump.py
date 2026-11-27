@@ -45,7 +45,7 @@ def run_pump(
                 fps=fps,
                 backend=backend,
             )
-        except RuntimeError as exc:
+        except Exception as exc:
             raise RuntimeError(
                 f"Unity Capture virtual camera is not available ({backend}): {exc}"
             ) from exc

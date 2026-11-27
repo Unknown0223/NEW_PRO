@@ -28,11 +28,18 @@ def test_load_video_missing_path_raises():
         load_video(str(missing))
 
 
-def test_load_video_unreadable_raises(tmp_path):
-    bad = tmp_path / "not_a_video.txt"
-    bad.write_text("not video data", encoding="utf-8")
-    with pytest.raises(RuntimeError):
-        load_video(str(bad))
+@patch("face_vcam.pump.cv2.VideoCapture")
+def test_load_video_unreadable_raises(mock_video_capture, tmp_path):
+    existing = tmp_path / "unreadable.mp4"
+    existing.write_bytes(b"not a real container")
+    cap = MagicMock()
+    cap.isOpened.return_value = False
+    mock_video_capture.return_value = cap
+
+    with pytest.raises(RuntimeError, match="Cannot read video file"):
+        load_video(str(existing))
+
+    cap.release.assert_called_once()
 
 
 @patch("face_vcam.pump.pyvirtualcam.Camera")
@@ -91,6 +98,25 @@ def test_run_pump_sends_frames_until_stop(mock_load_video, mock_camera_cls, tmp_
 def test_run_pump_missing_backend_raises(mock_camera_cls, mock_load_video):
     mock_load_video.return_value = MagicMock()
     mock_camera_cls.side_effect = RuntimeError("no device")
+    stop = threading.Event()
+    stop.set()
+    with pytest.raises(RuntimeError, match="Unity Capture"):
+        run_pump(
+            video_path="C:\\fake\\video.mp4",
+            loop=False,
+            width=640,
+            height=480,
+            fps=30.0,
+            stop_event=stop,
+            backend="unitycapture",
+        )
+
+
+@patch("face_vcam.pump.load_video")
+@patch("face_vcam.pump.pyvirtualcam.Camera")
+def test_run_pump_camera_init_oserror_wrapped(mock_camera_cls, mock_load_video):
+    mock_load_video.return_value = MagicMock()
+    mock_camera_cls.side_effect = OSError("backend dll missing")
     stop = threading.Event()
     stop.set()
     with pytest.raises(RuntimeError, match="Unity Capture"):
