@@ -5,7 +5,15 @@ from unittest.mock import MagicMock, patch
 import numpy as np
 import pytest
 
-from face_vcam.pump import frame_to_rgb, load_video, run_pump
+from face_vcam.pump import frame_to_rgb, load_video, playback_hold_frames, run_pump
+
+
+def test_playback_hold_frames_slows_down():
+    assert playback_hold_frames(1.0) == 1
+    assert playback_hold_frames(0.5) == 2
+    assert playback_hold_frames(0.25) == 4
+    with pytest.raises(ValueError):
+        playback_hold_frames(0)
 
 
 def test_frame_to_rgb_resizes_and_is_rgb():
@@ -83,14 +91,15 @@ def test_run_pump_sends_frames_until_stop(mock_load_video, mock_camera_cls, tmp_
             fps=30.0,
             stop_event=stop,
             backend="unitycapture",
+            speed=0.5,
         )
     finally:
         timer.cancel()
     cap.release()
 
     assert mock_camera_cls.called
-    assert cam.send.call_count >= 1
-    assert cam.sleep_until_next_frame.call_count >= 1
+    assert cam.send.call_count >= 2
+    assert cam.sleep_until_next_frame.call_count >= 2
 
 
 @patch("face_vcam.pump.load_video")

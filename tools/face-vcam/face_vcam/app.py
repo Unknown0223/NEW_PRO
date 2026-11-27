@@ -27,6 +27,7 @@ class FaceVcamApp:
 
         self.path_var = tk.StringVar(value=DEFAULT_VIDEO_PATH)
         self.loop_var = tk.BooleanVar(value=True)
+        self.speed_var = tk.StringVar(value="0.5")
         self.status_var = tk.StringVar(value="Idle")
 
         pad = {"padx": 8, "pady": 4}
@@ -44,6 +45,16 @@ class FaceVcamApp:
         ttk.Checkbutton(opts_frame, text="Loop", variable=self.loop_var).pack(
             side=tk.LEFT
         )
+        ttk.Label(opts_frame, text="Sekinlash:").pack(side=tk.LEFT, padx=(16, 4))
+        speed_box = ttk.Combobox(
+            opts_frame,
+            textvariable=self.speed_var,
+            values=("0.25", "0.5", "0.75", "1.0"),
+            width=5,
+            state="readonly",
+        )
+        speed_box.pack(side=tk.LEFT)
+        ttk.Label(opts_frame, text="×").pack(side=tk.LEFT, padx=(2, 0))
 
         btn_frame = ttk.Frame(root)
         btn_frame.pack(fill=tk.X, **pad)
@@ -92,6 +103,14 @@ class FaceVcamApp:
             self._set_status("Choose a video file.")
             return
 
+        try:
+            speed = float(self.speed_var.get())
+            if speed <= 0:
+                raise ValueError
+        except ValueError:
+            self._set_status("Sekinlash qiymati noto‘g‘ri (masalan 0.5).")
+            return
+
         self.stop_event.clear()
         self._on_air = True
         self.start_btn.state(["disabled"])
@@ -99,7 +118,7 @@ class FaceVcamApp:
 
         def worker() -> None:
             try:
-                self._schedule_status("On air")
+                self._schedule_status(f"On air ({speed}×)")
                 run_pump(
                     video_path=video_path,
                     loop=loop,
@@ -107,6 +126,7 @@ class FaceVcamApp:
                     height=PUMP_HEIGHT,
                     fps=PUMP_FPS,
                     stop_event=self.stop_event,
+                    speed=speed,
                 )
                 if not self.stop_event.is_set():
                     self._schedule_status("Idle")

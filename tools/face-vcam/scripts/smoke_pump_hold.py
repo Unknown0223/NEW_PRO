@@ -14,6 +14,7 @@ from face_vcam.pump import run_pump
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--seconds", type=float, default=120.0)
+    parser.add_argument("--speed", type=float, default=0.5, help="playback rate (0.5 = half)")
     args = parser.parse_args()
 
     stop = threading.Event()
@@ -36,6 +37,7 @@ def main() -> int:
                 height=720,
                 fps=30,
                 stop_event=stop,
+                speed=args.speed,
             )
         except BaseException as exc:
             err.append(exc)

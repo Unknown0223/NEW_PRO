@@ -26,6 +26,13 @@ def frame_to_rgb(frame_bgr: np.ndarray, width: int, height: int) -> np.ndarray:
     return np.asarray(rgb, dtype=np.uint8)
 
 
+def playback_hold_frames(speed: float) -> int:
+    """How many virtual-cam ticks to hold each source frame (speed 1.0 → 1)."""
+    if speed <= 0:
+        raise ValueError("speed must be > 0")
+    return max(1, int(round(1.0 / float(speed))))
+
+
 def run_pump(
     *,
     video_path: str,
@@ -35,7 +42,9 @@ def run_pump(
     fps: float,
     stop_event: threading.Event,
     backend: str = "unitycapture",
+    speed: float = 0.5,
 ) -> None:
+    hold = playback_hold_frames(speed)
     cap = load_video(video_path)
     try:
         try:
@@ -60,7 +69,10 @@ def run_pump(
                     break
 
                 rgb = frame_to_rgb(frame, width, height)
-                cam.send(rgb)
-                cam.sleep_until_next_frame()
+                for _ in range(hold):
+                    if stop_event.is_set():
+                        break
+                    cam.send(rgb)
+                    cam.sleep_until_next_frame()
     finally:
         cap.release()
