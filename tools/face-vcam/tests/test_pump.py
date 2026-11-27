@@ -140,6 +140,46 @@ def test_run_pump_freeze_at_end_holds_last_frame(mock_load_video, mock_camera_cl
     assert int(last.mean()) >= 180
 
 
+@patch("face_vcam.pump.pyvirtualcam.Camera")
+@patch("face_vcam.pump.load_video")
+def test_run_pump_freeze_hold_applies_screen_tint(mock_load_video, mock_camera_cls):
+    frame_bgr = np.full((48, 64, 3), 80, dtype=np.uint8)
+    cap = MagicMock()
+    cap.read.side_effect = [(True, frame_bgr), (False, None)]
+    mock_load_video.return_value = cap
+
+    cam = MagicMock()
+    mock_camera_cls.return_value.__enter__.return_value = cam
+    mock_camera_cls.return_value.__exit__.return_value = False
+
+    sampler = MagicMock(spec=ScreenTintSampler)
+    sampler.latest_rgb.return_value = (0, 255, 0)
+
+    stop = threading.Event()
+    threading.Timer(0.08, stop.set).start()
+
+    run_pump(
+        video_path="clip.mp4",
+        loop=False,
+        width=64,
+        height=48,
+        fps=30.0,
+        stop_event=stop,
+        backend="unitycapture",
+        speed=1.0,
+        freeze_at_end=True,
+        screen_tint=True,
+        tint_alpha=0.5,
+        tint_sampler=sampler,
+    )
+
+    assert cam.send.call_count >= 2
+    for call in cam.send.call_args_list:
+        sent = call.args[0]
+        assert int(sent[:, :, 1].mean()) > int(sent[:, :, 0].mean())
+        assert int(sent[:, :, 1].mean()) > int(sent[:, :, 2].mean())
+
+
 @patch("face_vcam.pump.load_video")
 @patch("face_vcam.pump.pyvirtualcam.Camera")
 def test_run_pump_missing_backend_raises(mock_camera_cls, mock_load_video):

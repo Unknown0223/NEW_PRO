@@ -32,7 +32,7 @@
 
 | Tekshiruv | Natija |
 |-----------|--------|
-| `pytest tests/test_pump.py` | **PASS** (6/6) |
+| `pytest tests/test_pump.py` | **PASS** (11/11) |
 | `scripts/smoke_pump_hold.py` | **PASS** (preview / Face ID bilan parallel) |
 | Screen tint yoqiq, Face ID rang chaqnashi | **manual** — status `tint=#RRGGBB`; flash yo‘q → `tint=off` |
 

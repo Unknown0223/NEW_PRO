@@ -23,14 +23,29 @@ def _edge_patch_means(frame_bgr: np.ndarray) -> list[np.ndarray]:
     top_mid_start = max(0, width // 2 - ps // 2)
     top_mid_end = min(width, top_mid_start + ps)
 
+    side_mid_start = max(0, height // 2 - ps // 2)
+    side_mid_end = min(height, side_mid_start + ps)
+
     patches = [
         frame_bgr[0:ps, 0:ps],
         frame_bgr[0:ps, width - ps : width],
         frame_bgr[height - ps : height, 0:ps],
         frame_bgr[height - ps : height, width - ps : width],
         frame_bgr[0:ps, top_mid_start:top_mid_end],
+        frame_bgr[side_mid_start:side_mid_end, 0:ps],
+        frame_bgr[side_mid_start:side_mid_end, width - ps : width],
     ]
     return [patch.mean(axis=(0, 1)) for patch in patches]
+
+
+def _patch_passes_flash_gate(
+    mean_bgr: np.ndarray, *, min_sat: int, min_val: int
+) -> bool:
+    pixel = np.clip(mean_bgr, 0, 255).astype(np.uint8).reshape(1, 1, 3)
+    hsv = cv2.cvtColor(pixel, cv2.COLOR_BGR2HSV)
+    sat = int(hsv[0, 0, 1])
+    val = int(hsv[0, 0, 2])
+    return sat >= min_sat and val >= min_val
 
 
 def sample_flash_rgb(
@@ -46,14 +61,15 @@ def sample_flash_rgb(
         return None
 
     means = _edge_patch_means(frame_bgr)
-    mean_bgr = np.mean(means, axis=0)
-    pixel = np.clip(mean_bgr, 0, 255).astype(np.uint8).reshape(1, 1, 3)
-    hsv = cv2.cvtColor(pixel, cv2.COLOR_BGR2HSV)
-    sat = int(hsv[0, 0, 1])
-    val = int(hsv[0, 0, 2])
-    if sat < min_sat or val < min_val:
+    flash_means = [
+        m
+        for m in means
+        if _patch_passes_flash_gate(m, min_sat=min_sat, min_val=min_val)
+    ]
+    if not flash_means:
         return None
 
+    mean_bgr = np.median(np.stack(flash_means, axis=0), axis=0)
     b, g, r = mean_bgr
     return (int(round(r)), int(round(g)), int(round(b)))
 
@@ -121,6 +137,8 @@ class ScreenTintSampler:
                 color = sample_flash_rgb(frame_bgr)
             except Exception:
                 color = None
+            if self._stop.is_set():
+                break
             with self._lock:
                 self._latest = color
             elapsed = time.monotonic() - t0
