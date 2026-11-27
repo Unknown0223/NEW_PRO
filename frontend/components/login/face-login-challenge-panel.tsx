@@ -167,46 +167,26 @@ export function FaceLoginChallengePanel({ gate, onApproved, onCancel }: Props) {
     setMode("qr");
   }, []);
 
-  async function enrollReference(payload: {
-    image_base64: string;
-    liveness_steps: string[];
-    landmarks?: Array<{ x: number; y: number }>;
-  }) {
-    setBusy(true);
-    setError(null);
-    try {
-      await api.post("/auth/face-login/reference", {
-        challenge_token: challenge.token,
-        image_base64: payload.image_base64
-      });
-      setChallenge((c) => ({ ...c, has_reference: true }));
-      setWebcamOutcome(null);
-      setRetryToken((n) => n + 1);
-      setError(null);
-      void payload.liveness_steps;
-      void payload.landmarks;
-    } catch (err) {
-      setWebcamOutcome("failure");
-      setError(faceVerifyError(err, "Не удалось сохранить эталонное фото"));
-    } finally {
-      setBusy(false);
-    }
-  }
-
   async function submitWebcam(payload: {
     image_base64: string;
     liveness_steps: string[];
     landmarks?: Array<{ x: number; y: number }>;
   }) {
-    if (!challenge.has_reference) {
-      await enrollReference(payload);
-      return;
-    }
     setBusy(true);
     setError(null);
     /* Outcome ni bu yerda null qilmang — kamera effektini qayta ishga tushirib,
        verify paytida bo‘sh kadr oqimini ochib yuboradi. */
     try {
+      /* Birinchi muvaffaqiyatli kadr: etalon yo‘q bo‘lsa saqlaymiz, so‘ng
+         SHU kadr bilan verify — ikkinchi to‘liq liveness siklini ochmaymiz. */
+      if (!challenge.has_reference) {
+        await api.post("/auth/face-login/reference", {
+          challenge_token: challenge.token,
+          image_base64: payload.image_base64
+        });
+        setChallenge((c) => ({ ...c, has_reference: true }));
+      }
+
       const { data } = await api.post("/auth/face-login/verify", {
         challenge_token: challenge.token,
         image_base64: payload.image_base64,
@@ -280,7 +260,7 @@ export function FaceLoginChallengePanel({ gate, onApproved, onCancel }: Props) {
             {userLabel}:{" "}
             {challenge.has_reference
               ? "после пароля нужна проверка лица по эталону."
-              : "сначала сохраните эталонное селфи, затем подтвердите лицо."}
+              : "первое успешное селфи станет эталоном и сразу подтвердит вход."}
           </DialogDescription>
         </DialogHeader>
 

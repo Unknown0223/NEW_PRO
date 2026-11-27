@@ -1,12 +1,14 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { FaceCameraPicker } from "@/components/login/face-camera-picker";
 import { FaceLivenessPreview } from "@/components/login/face-liveness-preview";
 import { FaceLivenessStatus } from "@/components/login/face-liveness-status";
 import { captureVideoJpeg } from "@/lib/face-capture-crop";
 import { LIVENESS_LABELS } from "@/lib/face-login";
 import { analyzeVideoFrame, getFaceLandmarker } from "@/lib/face-liveness-landmarker";
 import { POSE_THRESHOLDS } from "@/lib/face-liveness-pose";
+import { useFaceLivenessCamera } from "@/lib/use-face-liveness-camera";
 import { useFaceLivenessDetection } from "@/lib/use-face-liveness-detection";
 
 type Props = {
@@ -59,8 +61,6 @@ export function FaceLivenessPanel({
 
   const [stepIdx, setStepIdx] = useState(0);
   const [doneSteps, setDoneSteps] = useState<string[]>([]);
-  const [ready, setReady] = useState(false);
-  const [camError, setCamError] = useState<string | null>(null);
   const [stepConfirmed, setStepConfirmed] = useState(false);
   const [advancing, setAdvancing] = useState(false);
   const [flashProgress, setFlashProgress] = useState<number | null>(null);
@@ -79,13 +79,6 @@ export function FaceLivenessPanel({
     doneStepsRef.current = doneSteps;
   }, [doneSteps]);
 
-  const stopCamera = useCallback(() => {
-    streamRef.current?.getTracks().forEach((t) => t.stop());
-    streamRef.current = null;
-    const video = videoRef.current;
-    if (video) video.srcObject = null;
-  }, []);
-
   const resetFlow = useCallback(() => {
     stepIdxRef.current = 0;
     doneStepsRef.current = [];
@@ -98,111 +91,32 @@ export function FaceLivenessPanel({
     setAdvancing(false);
     setFlashProgress(null);
     setPhase("liveness");
-    /* Kamera qayta ochilguncha detektor ishlamasin — bo‘sh/eski kadr ketmasin. */
-    setReady(false);
   }, []);
 
-  useEffect(() => {
-    if (retryToken > 0 && !outcome) resetFlow();
-  }, [retryToken, outcome, resetFlow]);
-
-  const attachStream = useCallback(async (stream: MediaStream) => {
-    const video = videoRef.current;
-    if (!video) return false;
-    video.srcObject = stream;
-    video.muted = true;
-    video.defaultMuted = true;
-    video.playsInline = true;
-    video.setAttribute("playsinline", "true");
-    video.setAttribute("webkit-playsinline", "true");
-    try {
-      await video.play();
-    } catch {
-      /* autoplay may wait for gesture */
-    }
-    return video.readyState >= 2 || video.videoWidth > 0;
-  }, []);
-
-  const setVideoNode = useCallback(
-    (node: HTMLVideoElement | null) => {
-      videoRef.current = node;
-      if (node && streamRef.current) {
-        void attachStream(streamRef.current).then((ok) => {
-          if (ok) setReady(true);
-        });
-      }
-    },
-    [attachStream]
-  );
+  const {
+    ready,
+    setReady,
+    camError,
+    cameraDevices,
+    deviceId,
+    stopCamera,
+    setVideoNode,
+    onCameraDeviceChange
+  } = useFaceLivenessCamera({
+    videoRef,
+    streamRef,
+    outcome,
+    retryToken,
+    onCameraError: (msg) => onCameraErrorRef.current?.(msg),
+    onResetFlow: resetFlow
+  });
 
   useEffect(() => {
-    if (outcome) {
-      stopCamera();
+    if (retryToken > 0 && !outcome) {
+      resetFlow();
       setReady(false);
-      return;
     }
-    let cancelled = false;
-    let retryTimer: ReturnType<typeof setTimeout> | undefined;
-    let settleTimer: ReturnType<typeof setTimeout> | undefined;
-    setReady(false);
-
-    (async () => {
-      if (typeof navigator === "undefined" || !navigator.mediaDevices?.getUserMedia) {
-        const msg = "Камера недоступна в этом браузере. Используйте QR на телефон.";
-        setCamError(msg);
-        onCameraErrorRef.current?.(msg);
-        return;
-      }
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: {
-            facingMode: { ideal: "user" },
-            width: { ideal: 720 },
-            height: { ideal: 720 }
-          },
-          audio: false
-        });
-        if (cancelled) {
-          stream.getTracks().forEach((t) => t.stop());
-          return;
-        }
-        streamRef.current = stream;
-        const attached = await attachStream(stream);
-        if (cancelled) return;
-        const markReady = () => {
-          if (cancelled) return;
-          const v = videoRef.current;
-          if (!v || v.readyState < 2 || v.videoWidth < 16) return;
-          /* Qisqa settle — birinchi yorug‘/auto-exposure kadri serverga ketmasin. */
-          settleTimer = setTimeout(() => {
-            if (!cancelled) setReady(true);
-          }, 280);
-        };
-        if (attached) {
-          markReady();
-        } else {
-          retryTimer = setTimeout(() => {
-            if (cancelled || !streamRef.current) return;
-            void attachStream(streamRef.current).then(() => {
-              markReady();
-            });
-          }, 120);
-        }
-      } catch {
-        const msg = "Нет доступа к камере. Разрешите камеру или используйте QR на телефон.";
-        setCamError(msg);
-        onCameraErrorRef.current?.(msg);
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-      if (retryTimer) clearTimeout(retryTimer);
-      if (settleTimer) clearTimeout(settleTimer);
-      stopCamera();
-      setReady(false);
-    };
-  }, [attachStream, stopCamera, outcome, retryToken]);
+  }, [retryToken, outcome, resetFlow, setReady]);
 
   const emitCapture = useCallback(
     (steps: string[], landmarks?: Array<{ x: number; y: number }>) => {
@@ -222,7 +136,7 @@ export function FaceLivenessPanel({
         ...(landmarks?.length ? { landmarks } : {})
       });
     },
-    [stopCamera]
+    [setReady, stopCamera]
   );
 
   const completeStep = useCallback(
@@ -365,6 +279,14 @@ export function FaceLivenessPanel({
 
   return (
     <div className={compact ? "space-y-3" : "space-y-4"}>
+      {!camError && !outcome ? (
+        <FaceCameraPicker
+          devices={cameraDevices}
+          value={deviceId}
+          disabled={verifying || Boolean(busy)}
+          onChange={onCameraDeviceChange}
+        />
+      ) : null}
       <FaceLivenessPreview
         setVideoNode={setVideoNode}
         camError={camError}
