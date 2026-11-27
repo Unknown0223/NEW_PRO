@@ -149,3 +149,8 @@ tmp/
 # Local Cursor skill junctions (canonical: .agents/skills)
 .cursor/skills/
 
+
+# Git worktrees + SDD scratch
+.worktrees/
+.superpowers/
+
