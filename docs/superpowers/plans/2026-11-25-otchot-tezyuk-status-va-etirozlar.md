@@ -15,7 +15,7 @@ Maqsad: qilingan / qilinayotgan rejalarni va review e’tirozlarini bir joyda sa
 | #12b visits drill-down | Modal + `…/visits/detail` (SD type) | Done |
 | #13 daily-visits | FlatReport polish (prefs/grid, Год/Месяц) | Done |
 | #14 prices | FlatReport polish (prefs/grid, seed) | Done |
-| #15 outlet-class | FlatReport polish (prefs/grid, Зона–Город) | Done |
+| #15 outlet-class | FlatReport + SD ustunlar (id/territory/доля категорий) | Done 2026-11-27 |
 | #16+ FlatReport close-out | 13 adapter chrome batch | Done |
 | TezYuk W0–1 | flavor, theme, home/visits/queue chrome | Kod bor — in progress / review |
 | TezYuk W2 Ulashish | share state, routes, partners, mobile share | Kod + migration bor — WIP (deploy park qilingan edi) |
@@ -23,7 +23,7 @@ Maqsad: qilingan / qilinayotgan rejalarni va review e’tirozlarini bir joyda sa
 
 ## Qilinayotgan / keyingi
 
-- Отчёт FlatReport wave **yopildi** (2026-11-26). Keyingi: custom workspace / sariq stub / commit-deploy.
+- Отчёт FlatReport wave **yopildi** (2026-11-26). `#4` visits-2 cascade + visit-totals BAD_RANGE — Done 2026-11-27. `#3` CustomReport — deferred. Keyingi: custom workspace / sariq stub / commit-deploy.
 - Tasks: server «Сохранить отчёт» / saved pivot slice — 1-wave **skip**.
 - TezYuk Ulashish: **kod close-out 2026-11-26** (+ recipients nomlari, lokal smoke skript). Hali: **prod migrate/deploy**, qurilma E2E (ikkita TezYuk). Batafsil: `2026-11-26-tezyuk-closeout-otchot.md`.
 - `tmp-wip-tezyuk-share/` — faqat lokal park; **repoga kirmaydi**.

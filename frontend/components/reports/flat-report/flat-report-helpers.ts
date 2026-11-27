@@ -164,6 +164,69 @@ export function mapMultiOptions(raw: unknown): MultiItem[] {
   });
 }
 
+function asStringList(v: unknown): string[] {
+  return Array.isArray(v) ? v.map(String) : [];
+}
+
+/** Territory multiSelect options filtered by selected zone/region (cascade). */
+export function applyTerritoryCascadeToMultiItems(
+  draft: DraftState,
+  filterOptions: Record<string, unknown> | undefined,
+  multiItemsByKey: Record<string, MultiItem[]>
+): Record<string, MultiItem[]> {
+  if (!filterOptions) return multiItemsByKey;
+  const zones = asStringList(draft.territory_1_list);
+  const regions = asStringList(draft.territory_2_list);
+  const next = { ...multiItemsByKey };
+
+  const regionsByZone = filterOptions.regions_by_zone as Record<string, string[]> | undefined;
+  const t2By1 = filterOptions.territory_2_by_1 as Record<string, string[]> | undefined;
+  if (zones.length > 0) {
+    const allowed = new Set<string>();
+    for (const z of zones) {
+      for (const r of regionsByZone?.[z] ?? t2By1?.[z] ?? []) allowed.add(r);
+    }
+    if (allowed.size > 0) {
+      next.territory_2_list = (multiItemsByKey.territory_2_list ?? []).filter((x) =>
+        allowed.has(x.id)
+      );
+    }
+  }
+
+  const citiesBy = filterOptions.cities_by_zone_region as Record<string, string[]> | undefined;
+  if (regions.length > 0 && citiesBy) {
+    const allowed = new Set<string>();
+    const zoneKeys = zones.length > 0 ? zones : [""];
+    for (const z of zoneKeys) {
+      for (const r of regions) {
+        for (const c of citiesBy[`${z}|||${r}`] ?? []) allowed.add(c);
+      }
+    }
+    if (allowed.size > 0) {
+      next.territory_3_list = (multiItemsByKey.territory_3_list ?? []).filter((x) =>
+        allowed.has(x.id)
+      );
+    }
+  }
+
+  return next;
+}
+
+/** Drop region/city draft values that are no longer in cascade-allowed sets. */
+export function pruneTerritoryCascadeDraft(
+  draft: DraftState,
+  multiItemsByKey: Record<string, MultiItem[]>
+): DraftState {
+  const t2 = new Set((multiItemsByKey.territory_2_list ?? []).map((x) => x.id));
+  const t3 = new Set((multiItemsByKey.territory_3_list ?? []).map((x) => x.id));
+  const regions = asStringList(draft.territory_2_list).filter((id) => t2.has(id));
+  const cities = asStringList(draft.territory_3_list).filter((id) => t3.has(id));
+  const prevR = asStringList(draft.territory_2_list);
+  const prevC = asStringList(draft.territory_3_list);
+  if (regions.length === prevR.length && cities.length === prevC.length) return draft;
+  return { ...draft, territory_2_list: regions, territory_3_list: cities };
+}
+
 export function mapSelectOptions(raw: unknown): Array<{ id: string; label: string }> {
   return mapMultiOptions(raw).map((x) => ({ id: x.id, label: x.title }));
 }

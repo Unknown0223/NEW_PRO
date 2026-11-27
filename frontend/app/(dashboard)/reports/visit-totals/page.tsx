@@ -2,8 +2,7 @@
 
 /**
  * FlatReport wave-5 adapter (ADR-010 / ADR-012).
- * Parity: filtrlar qisman (BAD_RANGE banner / Card chrome yo‘q) · chrome ha ·
- * oylik/dialog — (defaultRange today) · export+RBAC ha
+ * Parity: BAD_RANGE → FlatReportPage error Card; defaultRange today · chrome ha · export+RBAC ha
  */
 import { FlatReportPage } from "@/components/reports/flat-report/flat-report-page";
 import type { FlatReportColumn, FlatReportConfig } from "@/components/reports/flat-report/types";

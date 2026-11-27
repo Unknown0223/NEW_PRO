@@ -36,7 +36,7 @@
 | 12 | По визитам | `visits` | `/report/agent/visit` | [x] Done 2026-11-26 (+ drill-down modal) |
 | 13 | По дневному посещению | `daily-visits` | `/report/reportVisit` | [x] Done 2026-11-26 (FlatReport polish; flat ≠ SD matrix) |
 | 14 | По ценам | `prices` | `/report/price` | [x] Done 2026-11-26 (FlatReport polish; flat ≠ SD matrix) |
-| 15 | Классификация торговых точек | `outlet-class` | — | [x] Done 2026-11-26 (FlatReport polish) |
+| 15 | Классификация торговых точек | `outlet-class` | — | [x] Done 2026-11-27 (SD columns: id/territory/counts/доля категорий) |
 | 16+ | Qolgan FlatReport wave close-out | `expeditor-visits`…`visits-2` + `sku-3` | menyu | [x] Done 2026-11-26 (prefs/grid/search/Зона) |
 
 Har otchot uchun bir xil sikl:
@@ -123,8 +123,10 @@ Har otchot uchun bir xil sikl:
 - [x] #12b `visits` drill-down modal — `GET …/visits/detail` + metric click 2026-11-26
 - [x] #13 `daily-visits` — FlatReport polish (prefs/grid, Год/Месяц, oy RU) 2026-11-26
 - [x] #14 `prices` — FlatReport polish (prefs/grid, search dublikat olib tashlandi, seed) 2026-11-26
-- [x] #15 `outlet-class` — FlatReport polish (prefs/grid, Зона–Город, search olib tashlandi) 2026-11-26
+- [x] #15 `outlet-class` — FlatReport polish + SalesDoc ustunlar (id/territory/client_count/доля категорий) 2026-11-27
 - [x] #16+ FlatReport wave close-out — 13 adapter (prefs/grid 9, search drop, Зона–Город) 2026-11-26
+- [x] #4 gaps — `visits-2` territoryCascade + `visit-totals` BAD_RANGE error Card 2026-11-27
+- [ ] CustomReport (#3): agent-orders / client-sales-2/4 / expeditor-returns — **deferred (A)**
 - [ ] Custom / non-FlatReport (staff-attendance, excel-export workspace, photo, VP) — alohida
 - [ ] Sariq stublar (tare/feedback/nr) — deferred
 - Holat/e’tirozlar: `docs/superpowers/plans/2026-11-25-otchot-tezyuk-status-va-etirozlar.md`

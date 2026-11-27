@@ -1,31 +1,53 @@
 "use client";
 
 import { FlatReportPage } from "@/components/reports/flat-report/flat-report-page";
-import type { FlatReportColumn, FlatReportConfig } from "@/components/reports/flat-report/types";
+import type {
+  FlatReportColumn,
+  FlatReportColumnsContext,
+  FlatReportConfig
+} from "@/components/reports/flat-report/types";
 import { formatOutletClassRowLabel } from "@/lib/outlet-class-bands";
 
-function outletColumns(groupBy: string): FlatReportColumn[] {
-  const metrics: FlatReportColumn[] = [
-    { key: "order_count", header: "Заказов", align: "right", format: "number" },
-    { key: "product_count", header: "Продуктов", align: "right", format: "number" },
+function outletColumns(ctx: FlatReportColumnsContext): FlatReportColumn[] {
+  const groupBy = String(ctx.applied.group_by ?? "class");
+  const catCols = Array.isArray(ctx.reportData?.category_columns)
+    ? (ctx.reportData!.category_columns as string[])
+    : [];
+
+  const base: FlatReportColumn[] = [
+    { key: "row_number", header: "#", cellClassName: "text-muted-foreground" },
+    { key: "class_name", header: "Классификация", cellClassName: "font-medium" },
+    { key: "client_code", header: "Идентификация клиента" },
+    { key: "territory", header: "Территория" },
+    { key: "client_count", header: "Кол-во клиентов", align: "right", format: "number" },
+    { key: "order_count", header: "Кол-во заказов", align: "right", format: "number" },
+    { key: "product_count", header: "Кол-во продуктов", align: "right", format: "number" },
     { key: "sales_sum", header: "Сумма", align: "right", format: "money" },
     { key: "avg_check", header: "Средний чек", align: "right", format: "money" }
   ];
-  if (groupBy === "class") {
-    return [
-      { key: "row_number", header: "#", cellClassName: "text-muted-foreground" },
-      { key: "class_name", header: "Классификация", cellClassName: "font-medium" },
-      ...metrics
-    ];
+
+  if (groupBy === "client") {
+    base.splice(
+      2,
+      0,
+      { key: "client_name", header: "Клиент", cellClassName: "font-medium" },
+      { key: "agent_name", header: "Агент" }
+    );
   }
-  return [
-    { key: "row_number", header: "#", cellClassName: "text-muted-foreground" },
-    { key: "class_name", header: "Классификация" },
-    { key: "client_name", header: "Клиент", cellClassName: "font-medium" },
-    { key: "agent_name", header: "Агент" },
-    { key: "client_category", header: "Категория" },
-    ...metrics
-  ];
+
+  for (const name of catCols) {
+    base.push({
+      key: `cat_${name}`,
+      header: name,
+      align: "right",
+      format: "number",
+      valueFrom: (row) => {
+        const shares = row.category_shares as Record<string, string> | undefined;
+        return shares?.[name] ?? "0";
+      }
+    });
+  }
+  return base;
 }
 
 const config: FlatReportConfig = {
@@ -33,7 +55,7 @@ const config: FlatReportConfig = {
   apiPath: "outlet-class",
   exportPermission: "reports.klassifikatsiya_tt.export",
   exportFilename: "klassifikatsiya-tt.xlsx",
-  tablePrefsId: "report.outlet-class.v1",
+  tablePrefsId: "report.outlet-class.v2",
   filterGridCols: 9,
   filterFields: [
     { kind: "dateRange" },
@@ -78,7 +100,7 @@ const config: FlatReportConfig = {
       placeholder: "Город"
     }
   ],
-  columns: ({ applied }) => outletColumns(String(applied.group_by ?? "class")),
+  columns: (ctx) => outletColumns(ctx),
   formatters: (applied) => ({
     class_name: (value) =>
       formatOutletClassRowLabel(String(value ?? ""), String(applied.bands ?? ""))
@@ -89,7 +111,7 @@ const config: FlatReportConfig = {
   countLabel: "Всего",
   showTableFooter: false,
   clientTableSearch: {
-    rowKeys: ["class_name", "client_name", "agent_name", "client_category"],
+    rowKeys: ["class_name", "client_code", "client_name", "territory", "agent_name", "client_category"],
     placeholder: "Фильтр в таблице…"
   }
 };

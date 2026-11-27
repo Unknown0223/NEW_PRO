@@ -156,3 +156,42 @@ describe("mapMultiOptions", () => {
     expect(items[0].title).not.toContain("AND-01");
   });
 });
+
+describe("territory cascade helpers", () => {
+  it("filters oblast/city by selected zone/region", async () => {
+    const { applyTerritoryCascadeToMultiItems, pruneTerritoryCascadeDraft } = await import(
+      "@/components/reports/flat-report/flat-report-helpers"
+    );
+    const base = {
+      territory_1_list: [
+        { id: "Z1", title: "Z1" },
+        { id: "Z2", title: "Z2" }
+      ],
+      territory_2_list: [
+        { id: "R1", title: "R1" },
+        { id: "R2", title: "R2" }
+      ],
+      territory_3_list: [
+        { id: "C1", title: "C1" },
+        { id: "C2", title: "C2" }
+      ]
+    };
+    const opts = {
+      regions_by_zone: { Z1: ["R1"] },
+      cities_by_zone_region: { "Z1|||R1": ["C1"] }
+    };
+    const cascaded = applyTerritoryCascadeToMultiItems(
+      { territory_1_list: ["Z1"], territory_2_list: ["R1", "R2"], territory_3_list: ["C1", "C2"] },
+      opts,
+      base
+    );
+    expect(cascaded.territory_2_list?.map((x) => x.id)).toEqual(["R1"]);
+    expect(cascaded.territory_3_list?.map((x) => x.id)).toEqual(["C1"]);
+    const pruned = pruneTerritoryCascadeDraft(
+      { territory_1_list: ["Z1"], territory_2_list: ["R1", "R2"], territory_3_list: ["C1", "C2"] },
+      cascaded
+    );
+    expect(pruned.territory_2_list).toEqual(["R1"]);
+    expect(pruned.territory_3_list).toEqual(["C1"]);
+  });
+});

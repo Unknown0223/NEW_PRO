@@ -15,14 +15,17 @@ import { useUserTablePrefs } from "@/hooks/use-user-table-prefs";
 import { monthToDateRange } from "@/components/dashboard/shared/date-ranges";
 import { cn } from "@/lib/utils";
 import type { FlatReportConfig, FlatReportSelectField } from "./types";
+import { getUserFacingError } from "@/lib/error-utils";
 import {
   appendParams,
   applyOptionsDefaults,
+  applyTerritoryCascadeToMultiItems,
   buildEmptyDraft,
   filterRowsByClientSearch,
   mapMultiOptions,
   mapSelectOptions,
   money,
+  pruneTerritoryCascadeDraft,
   readReportTotal,
   resolveColumns,
   resolveReportRows,
@@ -151,8 +154,23 @@ export function FlatReportPage(config: FlatReportConfig) {
       if (field.kind !== "multiSelect") continue;
       map[field.paramKey] = mapMultiOptions(opts?.[field.optionsFrom]);
     }
-    return map;
-  }, [config.filterFields, filtersQ.data]);
+    if (!config.territoryCascade) return map;
+    return applyTerritoryCascadeToMultiItems(draft, opts, map);
+  }, [config.filterFields, config.territoryCascade, filtersQ.data, draft]);
+
+  const setDraftWithCascade: typeof setDraft = (updater) => {
+    setDraft((prev) => {
+      const next = typeof updater === "function" ? updater(prev) : updater;
+      if (!config.territoryCascade) return next;
+      const base: Record<string, MultiItem[]> = {};
+      for (const field of config.filterFields) {
+        if (field.kind !== "multiSelect") continue;
+        base[field.paramKey] = mapMultiOptions(filtersQ.data?.[field.optionsFrom]);
+      }
+      const cascaded = applyTerritoryCascadeToMultiItems(next, filtersQ.data, base);
+      return pruneTerritoryCascadeDraft(next, cascaded);
+    });
+  };
 
   const dateTypeField = config.filterFields.find(
     (f): f is FlatReportSelectField => f.kind === "select" && f.paramKey === "date_type"
@@ -220,7 +238,7 @@ export function FlatReportPage(config: FlatReportConfig) {
       <FlatReportFilters
         config={config}
         draft={draft}
-        setDraft={setDraft}
+        setDraft={config.territoryCascade ? setDraftWithCascade : setDraft}
         filterOptions={filtersQ.data}
         multiItemsByKey={multiItemsByKey}
         dateTypeField={dateTypeField}
@@ -297,6 +315,12 @@ export function FlatReportPage(config: FlatReportConfig) {
         {reportQ.data?.need_products === true ? (
           <div className="rounded border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
             Выберите один или несколько продуктов в фильтре и нажмите «Применить».
+          </div>
+        ) : null}
+
+        {reportQ.isError ? (
+          <div className="rounded border border-destructive/40 bg-destructive/5 px-3 py-2 text-sm text-destructive">
+            {getUserFacingError(reportQ.error, "Не удалось загрузить отчёт")}
           </div>
         ) : null}
 

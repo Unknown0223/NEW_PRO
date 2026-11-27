@@ -12,28 +12,31 @@ export async function exportOutletClassReportXlsx(
   const f = parseOutletClassReportQuery({ ...rawQ, page: "1", limit: String(cap) });
   const report = await getOutletClassReport(tenantId, f, actor);
   const truncated = report.total > cap;
+  const cats = report.category_columns;
 
   const headers = [
     "#",
-    "Класс",
-    "Клиент",
-    "Агент",
-    "Категория",
-    "Заказов",
-    "Продуктов",
+    "Классификация",
+    "Идентификация клиента",
+    "Территория",
+    "Кол-во клиентов",
+    "Кол-во заказов",
+    "Кол-во продуктов",
     "Сумма",
-    "Средний чек"
+    "Средний чек",
+    ...cats.map((c) => `${c} %`)
   ];
   const rows = report.rows.map((r) => [
     r.row_number,
     r.class_name,
-    r.client_name,
-    r.agent_name,
-    r.client_category,
+    r.client_code || r.client_name,
+    r.territory,
+    r.client_count,
     r.order_count,
     r.product_count,
     r.sales_sum,
-    r.avg_check
+    r.avg_check,
+    ...cats.map((c) => r.category_shares[c] ?? "0")
   ]);
 
   const wb = XLSX.utils.book_new();

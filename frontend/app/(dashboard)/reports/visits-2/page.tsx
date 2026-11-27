@@ -2,8 +2,7 @@
 
 /**
  * FlatReport wave-5 adapter (ADR-010 / ADR-012).
- * Parity: filtrlar qisman (territory cascade / sort UI yo‘q; product_category_refs) · chrome ha ·
- * oylik/dialog — · export+RBAC ha
+ * Parity: territory cascade ha; sort UI yo‘q; product_category_refs · chrome ha · export+RBAC ha
  */
 import { FlatReportPage } from "@/components/reports/flat-report/flat-report-page";
 import type { FlatReportConfig } from "@/components/reports/flat-report/types";
@@ -30,6 +29,7 @@ const config: FlatReportConfig = {
   exportFilename: "po-vizitam-2.xlsx",
   tablePrefsId: "report.visits-2.v1",
   filterGridCols: 9,
+  territoryCascade: true,
   defaultLimit: 10,
   filterFields: [
     { kind: "dateRange" },

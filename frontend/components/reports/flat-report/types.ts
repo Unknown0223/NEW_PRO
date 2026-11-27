@@ -146,4 +146,9 @@ export type FlatReportConfig = {
    * Use 6 when many filters must fit in exactly two equal rows.
    */
   filterGridCols?: 6 | 9;
+  /**
+   * Зона → Область → Город: `territory_*` multiSelect options cascade
+   * from filter-options maps (`regions_by_zone` / `cities_by_zone_region`).
+   */
+  territoryCascade?: boolean;
 };
