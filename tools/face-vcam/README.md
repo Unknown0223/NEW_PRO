@@ -47,6 +47,10 @@ Yoki venv ichida: `python -m face_vcam.app`
 1. Boshqa virtual kameralarni to‘xtating (OBS Virtual Camera, AlterCam va h.k.) — bir vaqtda ikkita VC ko‘pincha `NotReadableError` beradi.
 2. MP4 tanlang va **Start** (pump **On air** bo‘lganda Start tugmasi o‘chiriladi).
 
+### Screen tint (Face ID rang chaqnashi)
+
+Default **Screen tint** yoqiq. Asosiy monitor chet patch’laridan yuqori toʻyinganlikdagi rang olinadi va virtual kameraga aralashtiriladi (`tint_alpha=0.45`). Statusda `tint=#RRGGBB` (chaqnash) yoki `tint=off` (oddiy login/UI). Face ID rang testida ekrandagi flash bilan feed sinxronlashadi; tint kerak emas bo‘lsa checkboxni o‘chiring.
+
 ## 4. Brauzer: Yandex
 
 - Yandex Browser → kamera sozlamalari → default qurilma: **`Unity Video Capture`**.
