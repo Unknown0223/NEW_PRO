@@ -7,7 +7,7 @@ import cv2
 import numpy as np
 import pyvirtualcam
 
-from face_vcam.screen_tint import ScreenTintSampler, apply_tint
+from face_vcam.screen_tint import ScreenTintSampler, apply_tint_wipe
 
 
 def load_video(path: str) -> cv2.VideoCapture:
@@ -22,8 +22,43 @@ def load_video(path: str) -> cv2.VideoCapture:
     return cap
 
 
-def frame_to_rgb(frame_bgr: np.ndarray, width: int, height: int) -> np.ndarray:
-    resized = cv2.resize(frame_bgr, (width, height), interpolation=cv2.INTER_AREA)
+def frame_to_rgb(
+    frame_bgr: np.ndarray,
+    width: int,
+    height: int,
+    zoom: float = 1.0,
+) -> np.ndarray:
+    """
+    Cover-fit into width×height (no letterbox/pillarbox black bars), then zoom.
+    """
+    src = frame_bgr
+    h, w = src.shape[:2]
+    target_aspect = float(width) / float(height)
+    src_aspect = float(w) / float(h)
+    if src_aspect > target_aspect:
+        new_w = max(1, int(round(h * target_aspect)))
+        x0 = (w - new_w) // 2
+        src = src[:, x0 : x0 + new_w]
+    elif src_aspect < target_aspect:
+        new_h = max(1, int(round(w / target_aspect)))
+        # Bias slightly upward so face stays in frame (ПРИБЛИЗЬТЕ)
+        y0 = max(0, (h - new_h) // 2 - new_h // 10)
+        if y0 + new_h > h:
+            y0 = h - new_h
+        src = src[y0 : y0 + new_h, :]
+
+    z = float(zoom)
+    if z > 1.0:
+        h2, w2 = src.shape[:2]
+        crop_w = max(1, int(round(w2 / z)))
+        crop_h = max(1, int(round(h2 / z)))
+        x0 = max(0, (w2 - crop_w) // 2)
+        y0 = max(0, (h2 - crop_h) // 2 - crop_h // 8)
+        if y0 + crop_h > h2:
+            y0 = max(0, h2 - crop_h)
+        src = src[y0 : y0 + crop_h, x0 : x0 + crop_w]
+
+    resized = cv2.resize(src, (width, height), interpolation=cv2.INTER_LINEAR)
     rgb = cv2.cvtColor(resized, cv2.COLOR_BGR2RGB)
     return np.asarray(rgb, dtype=np.uint8)
 
@@ -37,10 +72,11 @@ def _rgb_for_send(
 ) -> np.ndarray:
     if not screen_tint or tint_sampler is None:
         return frame_rgb
-    color = tint_sampler.latest_rgb()
-    if color is None:
+    wipe = tint_sampler.latest_wipe()
+    if wipe is None:
         return frame_rgb
-    return apply_tint(frame_rgb, color, tint_alpha)
+    top_rgb, bot_rgb, split = wipe
+    return apply_tint_wipe(frame_rgb, top_rgb, bot_rgb, split, tint_alpha)
 
 
 def playback_hold_frames(speed: float) -> int:
@@ -62,14 +98,13 @@ def run_pump(
     speed: float = 0.5,
     freeze_at_end: bool = True,
     screen_tint: bool = False,
-    tint_alpha: float = 0.45,
+    tint_alpha: float = 0.55,
     tint_sampler: ScreenTintSampler | None = None,
+    zoom: float = 1.18,
 ) -> None:
-    """Stream MP4 into a virtual webcam.
-
-    Face ID: prefer loop=False + freeze_at_end=True so the clip does not
-    rewind (rewind resets oval / «НЕ ДВИГАЙТЕСЬ» and looks like a cycle).
-    """
+    """Stream MP4 into a virtual webcam (optional screen-tint + center zoom)."""
+    if zoom < 1.0:
+        raise ValueError("zoom must be >= 1.0")
     hold = playback_hold_frames(speed)
     cap = load_video(video_path)
     try:
@@ -105,7 +140,7 @@ def run_pump(
                             cam.sleep_until_next_frame()
                     break
 
-                last_rgb = frame_to_rgb(frame, width, height)
+                last_rgb = frame_to_rgb(frame, width, height, zoom=zoom)
                 for _ in range(hold):
                     if stop_event.is_set():
                         break

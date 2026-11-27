@@ -2,7 +2,7 @@
 
 **Sana:** 2026-11-27  
 **Worktree:** `feat/face-vcam-standalone`  
-**Default MP4:** `C:\Users\UNKNOWN\Pictures\Camera Roll\WIN_20261127_10_48_17_Pro.mp4` (mavjud)
+**Default MP4:** `C:\Users\UNKNOWN\Videos\2026-11-27 11-51-28.mp4` (mavjud, 1920×1080)
 
 **Umumiy holat:** **DONE** — **(a) PASS**; **(b) PASS** (Face ID preview = MP4 feed). Liveness o‘tishi talab qilinmagan.
 
@@ -34,7 +34,7 @@
 |-----------|--------|
 | `pytest tests/test_pump.py` | **PASS** (11/11) |
 | `scripts/smoke_pump_hold.py` | **PASS** (preview / Face ID bilan parallel) |
-| Screen tint yoqiq, Face ID rang chaqnashi | **manual** — status `tint=#RRGGBB`; flash yo‘q → `tint=off` |
+| Screen tint yoqiq, Face ID rang chaqnashi | **manual** — status `tint=top#…/bot#…`; `logs/tint.log`; flash yo‘q → `tint=off` |
 
 ---
 
@@ -59,6 +59,19 @@ URL: `http://127.0.0.1:8765/test-preview.html` (pump On air).
 | Liveness to‘liq o‘tishi | **ixtiyoriy / FAIL OK** — oval timeout mumkin; smoke uchun shart emas |
 
 URL: `https://cactustizim.com/lalaku/login` (parollar bu faylda yo‘q).
+
+### Stack eslatma (2026-11-27)
+
+Cactus **Nuxt** (`/_nuxt/…`), bu repo Face ID emas:
+- UI: «Проверка Face ID» + rang flash + «ПРИБЛИЗЬТЕ» (MediaPipe «Поверните голову» emas)
+- Route: `/:tenant/auth/face-liveness` (masalan `/lalaku/auth/face-liveness`)
+- API base: `/api/web/` — Face verify:
+  - `teams/face-biometrics/verification/init-session`
+  - `teams/face-biometrics/verification/verify`
+- «Слишком много неудачных попыток» = **parol** lockout (Face mismatch emas)
+- Screen tint: Amplify freshness-canvas **pure 0/255** (F12); HSV keep-V (yuz ko‘rinadi);
+  `alpha≈0.55`; hold `0.02s`; sampler `90Hz` + pin-mss + modal ROI; wipe `split`; zoom `1.18`;
+  chiqish `1920×1080`
 
 ---
 

@@ -8,11 +8,9 @@ from tkinter import filedialog, ttk
 from face_vcam.pump import run_pump
 from face_vcam.screen_tint import ScreenTintSampler
 
-DEFAULT_VIDEO_PATH = (
-    r"C:\Users\UNKNOWN\Pictures\Camera Roll\WIN_20261127_10_48_17_Pro.mp4"
-)
-PUMP_WIDTH = 1280
-PUMP_HEIGHT = 720
+DEFAULT_VIDEO_PATH = r"C:\Users\UNKNOWN\Videos\2026-11-27 11-51-28.mp4"
+PUMP_WIDTH = 1920
+PUMP_HEIGHT = 1080
 PUMP_FPS = 30.0
 TINT_STATUS_MS = 500
 
@@ -112,11 +110,14 @@ class FaceVcamApp:
         sampler = self._tint_sampler
         if sampler is None:
             return "tint=off"
-        rgb = sampler.latest_rgb()
-        if rgb is None:
+        bands = sampler.latest_bands()
+        if bands is None:
             return "tint=off"
-        r, g, b = rgb
-        return f"tint=#{r:02X}{g:02X}{b:02X}"
+        top, bot = bands
+        return (
+            f"tint=top#{top[0]:02X}{top[1]:02X}{top[2]:02X}"
+            f"/bot#{bot[0]:02X}{bot[1]:02X}{bot[2]:02X}"
+        )
 
     def _cancel_tint_poll(self) -> None:
         if self._status_poll_after_id is not None:

@@ -1,3 +1,9 @@
 .vendor/
 .venv/
 __pycache__/
+logs/
+scripts/_xatolik*_frames/
+scripts/_xatolik*_frames2/
+scripts/_zoom_compare/
+scripts/_selfcheck/
+

@@ -49,7 +49,7 @@ Yoki venv ichida: `python -m face_vcam.app`
 
 ### Screen tint (Face ID rang chaqnashi)
 
-Default **Screen tint** yoqiq. Asosiy monitor chet patch’laridan yuqori toʻyinganlikdagi rang olinadi va virtual kameraga aralashtiriladi (`tint_alpha=0.45`). Statusda `tint=#RRGGBB` (chaqnash) yoki `tint=off` (oddiy login/UI). Face ID rang testida ekrandagi flash bilan feed sinxronlashadi; tint kerak emas bo‘lsa checkboxni o‘chiring.
+Default **Screen tint** yoqiq. Face ID **yuqori/past ikki rang** flash qiladi — sampler shu splitni o‘qiydi va videoga **yumshoq luma-tint** qo‘yadi (`tint_alpha≈0.48`, yuz o‘qiladi). Status: `tint=top#…/bot#…` yoki `tint=off`. Log: `tools/face-vcam/logs/tint.log`. Tint kerak emas bo‘lsa checkboxni o‘chiring.
 
 ## 4. Brauzer: Yandex
 

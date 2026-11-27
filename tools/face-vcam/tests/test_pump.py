@@ -17,6 +17,16 @@ def test_playback_hold_frames_slows_down():
         playback_hold_frames(0)
 
 
+def test_frame_to_rgb_cover_has_no_black_letterbox():
+    frame_bgr = np.full((720, 1600, 3), (40, 180, 220), dtype=np.uint8)
+    rgb = frame_to_rgb(frame_bgr, 1280, 720, zoom=1.9)
+    assert rgb.shape == (720, 1280, 3)
+    assert float(rgb[0, :].mean()) > 30
+    assert float(rgb[-1, :].mean()) > 30
+    assert float(rgb[:, 0].mean()) > 30
+    assert float(rgb[:, -1].mean()) > 30
+
+
 def test_frame_to_rgb_resizes_and_is_rgb():
     # BGR 100x50 -> RGB 1280x720
     frame_bgr = np.zeros((50, 100, 3), dtype=np.uint8)
@@ -153,7 +163,7 @@ def test_run_pump_freeze_hold_applies_screen_tint(mock_load_video, mock_camera_c
     mock_camera_cls.return_value.__exit__.return_value = False
 
     sampler = MagicMock(spec=ScreenTintSampler)
-    sampler.latest_rgb.return_value = (0, 255, 0)
+    sampler.latest_wipe.return_value = ((0, 255, 0), (0, 255, 0), 1.0)
 
     stop = threading.Event()
     threading.Timer(0.08, stop.set).start()
@@ -212,7 +222,7 @@ def test_run_pump_applies_screen_tint_when_enabled(mock_load_video, mock_camera_
     mock_camera_cls.return_value.__exit__.return_value = False
 
     sampler = MagicMock(spec=ScreenTintSampler)
-    sampler.latest_rgb.return_value = (255, 0, 0)
+    sampler.latest_wipe.return_value = ((255, 0, 0), (255, 0, 0), 1.0)
 
     stop = threading.Event()
 
@@ -234,8 +244,10 @@ def test_run_pump_applies_screen_tint_when_enabled(mock_load_video, mock_camera_
     assert cam.send.called
     sent = cam.send.call_args_list[0].args[0]
     assert sent.shape == (48, 64, 3)
-    assert int(sent[:, :, 0].mean()) > 120
-    assert int(sent[:, :, 2].mean()) < 90
+    # HSV keep-V: red hue without washing face — R dominates G/B
+    assert int(sent[:, :, 0].mean()) > int(sent[:, :, 1].mean())
+    assert int(sent[:, :, 0].mean()) > int(sent[:, :, 2].mean())
+    assert int(sent[:, :, 0].mean()) > 90
 
 
 @patch("face_vcam.pump.pyvirtualcam.Camera")
@@ -251,7 +263,7 @@ def test_run_pump_skips_tint_when_no_color(mock_load_video, mock_camera_cls):
     mock_camera_cls.return_value.__exit__.return_value = False
 
     sampler = MagicMock(spec=ScreenTintSampler)
-    sampler.latest_rgb.return_value = None
+    sampler.latest_wipe.return_value = None
 
     stop = threading.Event()
 
