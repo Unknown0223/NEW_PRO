@@ -23,7 +23,14 @@ pip install -r requirements.txt
 powershell -ExecutionPolicy Bypass -File .\install-driver.ps1
 ```
 
-Skript Unity Capture ni `tools/face-vcam/.vendor/UnityCapture/` ga yuklab, `Install\Install.bat` ni administrator sifatida ishga tushiradi. **UAC** chiqsa — «Ha» / tasdiqlang.
+Skript Unity Capture ni **pin qilingan** GitHub arxividan `tools/face-vcam/.vendor/UnityCapture/` ga yuklab, `Install\Install.bat` ni administrator sifatida ishga tushiradi. **UAC** chiqsa — «Ha» / tasdiqlang.
+
+| Pin | Qiymat |
+|-----|--------|
+| Commit | `3ed54c325e0ad71afcf4f246c07e5e17b3d7f2d2` (upstream `master`, 2026-11-27) |
+| Zip SHA256 | `a688b857e6d1a9f544d8bb0d28fd10892276db2c2b9ddd537c6cb5520dd25ef7` |
+
+Yangilash: `git ls-remote https://github.com/schellingb/UnityCapture.git refs/heads/master`, keyin `install-driver.ps1` dagi URL, papka nomi va SHA256 ni qo‘lda yangilang.
 
 Agar qurilma allaqachon bor bo‘lsa, skript `OK` deb chiqadi (kod 0).
 
@@ -31,15 +38,19 @@ Agar qurilma allaqachon bor bo‘lsa, skript `OK` deb chiqadi (kod 0).
 
 ## 3. Face VCam ilovasini ishga tushirish
 
-Keyingi bosqichda `run.ps1` va UI qo‘shiladi. Hozircha tartib:
+```powershell
+powershell -ExecutionPolicy Bypass -File .\run.ps1
+```
+
+Yoki venv ichida: `python -m face_vcam.app`
 
 1. Boshqa virtual kameralarni to‘xtating (OBS Virtual Camera, AlterCam va h.k.) — bir vaqtda ikkita VC ko‘pincha `NotReadableError` beradi.
-2. MP4 tanlang va **Start** (kelajakdagi `run.ps1` / `face_vcam.app`).
+2. MP4 tanlang va **Start** (pump **On air** bo‘lganda Start tugmasi o‘chiriladi).
 
 ## 4. Brauzer: Yandex
 
 - Yandex Browser → kamera sozlamalari → default qurilma: **`Unity Video Capture`**.
-- Diagnostika: `tools/face-vcam/test-preview.html` (keyingi taskda qo‘shiladi) — ro‘yxatdan **Unity Video Capture** ni tanlang, preview da video bo‘lishi kerak.
+- Diagnostika: `tools/face-vcam/test-preview.html` — ro‘yxatdan **Unity Video Capture** ni tanlang, preview da video bo‘lishi kerak (pump ishlab turishi lozim).
 
 ## 5. Face ID smoke (`cactustizim`)
 
@@ -55,6 +66,8 @@ Face VCam **On air** bo‘lganda, Yandex default kamerasi **Unity Video Capture*
 | **(a)** | `test-preview.html` da **Unity Video Capture** + **jonli video** (qora emas) |
 | **(b)** | Face ID preview da **shu feed** (liveness o‘tishi **majburiy emas**) |
 
+**Merge / qabul:** **(b)** hozircha **qo‘lda** — inson **cactustizim** da Yandex orqali **Unity Video Capture** tanlab Face ID preview ni tasdiqlashi kerak. Batafsil: `SMOKE.md`.
+
 ## Muammolar
 
 | Belgi | Yechim |
@@ -67,7 +80,8 @@ Face VCam **On air** bo‘lganda, Yandex default kamerasi **Unity Video Capture*
 
 | Fayl | Vazifa |
 |------|--------|
-| `install-driver.ps1` | Unity Capture yuklash va o‘rnatish |
+| `install-driver.ps1` | Pin qilingan Unity Capture yuklash va o‘rnatish |
+| `run.ps1` | venv + Tkinter UI |
 | `requirements.txt` | OpenCV, NumPy, pyvirtualcam |
-| `test-preview.html` | getUserMedia diagnostika (keyinroq) |
-| `run.ps1` | venv + ilova (keyinroq) |
+| `test-preview.html` | getUserMedia diagnostika |
+| `SMOKE.md` | (a)+(b) smoke checklist |

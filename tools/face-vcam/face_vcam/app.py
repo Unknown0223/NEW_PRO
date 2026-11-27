@@ -94,6 +94,7 @@ class FaceVcamApp:
 
         self.stop_event.clear()
         self._on_air = True
+        self.start_btn.state(["disabled"])
         loop = self.loop_var.get()
 
         def worker() -> None:
@@ -113,6 +114,7 @@ class FaceVcamApp:
                 self._schedule_status(str(exc))
             finally:
                 self._on_air = False
+                self.root.after(0, lambda: self.start_btn.state(["!disabled"]))
 
         self._pump_thread = threading.Thread(target=worker, daemon=True)
         self._pump_thread.start()

@@ -95,3 +95,5 @@ cd tools\face-vcam
 | Pump + MP4 | **PASS** |
 | **(a)** test-preview | **PASS** |
 | **(b)** cactustizim | **MANUAL PENDING** |
+
+**Branch merge:** **(b)** bo‘lmasdan merge qilinmasin. Operator **cactustizim** + Yandex da default kamera **Unity Video Capture**, pump **On air**, Face ID preview da MP4 feedni tasdiqlashi kerak (5-bosqich). **(b) PASS** hali yozilmagan.

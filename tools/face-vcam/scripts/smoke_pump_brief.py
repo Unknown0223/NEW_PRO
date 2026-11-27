@@ -20,8 +20,8 @@ def main() -> int:
             run_pump(
                 video_path=DEFAULT_VIDEO_PATH,
                 loop=True,
-                width=640,
-                height=480,
+                width=1280,
+                height=720,
                 fps=30,
                 stop_event=stop,
             )

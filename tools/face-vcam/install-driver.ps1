@@ -10,12 +10,15 @@
 $ErrorActionPreference = "Stop"
 
 $DeviceName = "Unity Video Capture"
-$UnityCaptureZipUrl = "https://github.com/schellingb/UnityCapture/archive/refs/heads/master.zip"
+# Pinned upstream (schellingb/UnityCapture master @ 2026-11-27 via git ls-remote)
+$UnityCaptureCommitSha = "3ed54c325e0ad71afcf4f246c07e5e17b3d7f2d2"
+$UnityCaptureZipSha256 = "a688b857e6d1a9f544d8bb0d28fd10892276db2c2b9ddd537c6cb5520dd25ef7"
+$UnityCaptureZipUrl = "https://github.com/schellingb/UnityCapture/archive/$UnityCaptureCommitSha.zip"
 $ScriptDir = $PSScriptRoot
 $VendorRoot = Join-Path $ScriptDir ".vendor"
 $VendorDir = Join-Path $VendorRoot "UnityCapture"
 $InstallBat = Join-Path $VendorDir "Install\Install.bat"
-$ArchiveFolderName = "UnityCapture-master"
+$ArchiveFolderName = "UnityCapture-$UnityCaptureCommitSha"
 
 function Test-UnityVideoCapturePresent {
     $pnp = @(Get-PnpDevice -ErrorAction SilentlyContinue | Where-Object {
@@ -47,8 +50,14 @@ function Ensure-UnityCaptureSources {
     $zipPath = Join-Path $VendorRoot "$ArchiveFolderName.zip"
     $extracted = Join-Path $VendorRoot $ArchiveFolderName
 
-    Write-Host "Unity Capture yuklanmoqda (GitHub: schellingb/UnityCapture)..."
+    Write-Host "Unity Capture yuklanmoqda (pin: $UnityCaptureCommitSha)..."
     Invoke-WebRequest -Uri $UnityCaptureZipUrl -OutFile $zipPath -UseBasicParsing
+
+    $hash = (Get-FileHash -LiteralPath $zipPath -Algorithm SHA256).Hash.ToLower()
+    if ($hash -ne $UnityCaptureZipSha256) {
+        Remove-Item -LiteralPath $zipPath -Force -ErrorAction SilentlyContinue
+        throw "Unity Capture zip SHA256 mos kelmadi (kutilgan: $UnityCaptureZipSha256, olindi: $hash)"
+    }
 
     if (Test-Path -LiteralPath $extracted) {
         Remove-Item -LiteralPath $extracted -Recurse -Force
